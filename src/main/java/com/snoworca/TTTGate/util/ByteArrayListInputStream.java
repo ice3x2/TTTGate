@@ -1,4 +1,4 @@
-package com.snoworca.util;
+package com.snoworca.TTTGate.util;
 
 import java.io.IOException;
 import java.io.InputStream;

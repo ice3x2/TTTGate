@@ -1,4 +1,4 @@
-package com.snoworca;
+package com.snoworca.TTTGate;
 
 import lombok.Getter;
 import lombok.SneakyThrows;

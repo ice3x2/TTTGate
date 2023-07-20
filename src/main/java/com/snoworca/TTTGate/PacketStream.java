@@ -1,7 +1,7 @@
-package com.snoworca;
+package com.snoworca.TTTGate;
 
 
-import com.snoworca.util.ByteArrayListInputStream;
+import com.snoworca.TTTGate.util.ByteArrayListInputStream;
 import lombok.SneakyThrows;
 
 import java.io.ByteArrayInputStream;

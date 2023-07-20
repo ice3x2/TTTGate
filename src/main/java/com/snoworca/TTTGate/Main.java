@@ -1,4 +1,4 @@
-package com.snoworca;
+package com.snoworca.TTTGate;
 
 import io.vertx.core.Vertx;
 import io.vertx.core.net.NetServer;
@@ -16,13 +16,19 @@ public class Main {
                 // 연결 종료
                 socket.close();
             });
+
+
         });
 
-        server.listen(8888, "localhost", result -> {
-            if (result.succeeded()) {
+        server.listen(8888, "localhost", handler -> {
+
+
+
+
+            if (handler.succeeded()) {
                 System.out.println("Server started on port 8888");
             } else {
-                System.err.println("Server failed to start: " + result.cause().getMessage());
+                System.err.println("Server failed to start: " + handler.cause().getMessage());
             }
         });
     }

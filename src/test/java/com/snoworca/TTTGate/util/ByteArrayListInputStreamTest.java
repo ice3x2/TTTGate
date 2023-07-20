@@ -1,4 +1,4 @@
-package com.snoworca.util;
+package com.snoworca.TTTGate.util;
 
 import org.junit.jupiter.api.Test;
 
