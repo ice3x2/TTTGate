@@ -1,6 +1,6 @@
 package com.snoworca.TTTGate.server;
 
-import com.snoworca.TTTGate.TransferEvent;
+import com.snoworca.TTTGate.OnTransferListener;
 import com.snoworca.TTTGate.TransferState;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
@@ -17,42 +17,57 @@ public class PortServer {
 
 
     private EventLoopGroup bossGroup = new NioEventLoopGroup(1);
-    private EventLoopGroup workerGroup = new NioEventLoopGroup();
+    private EventLoopGroup workerGroup = new NioEventLoopGroup(100);
 
     private ConcurrentHashMap<Integer, ChannelHandlerContext> channels = new ConcurrentHashMap<>();
-    private TransferEvent event;
+    private OnTransferListener event;
+
+    public static PortServer create() {
+        return new PortServer();
+    }
 
 
+    private PortServer() {
 
+    }
 
-    public void start() {
+    public ChannelFuture start(int port, OnTransferListener event) {
+        this.event = event;
         ServerBootstrap bootstrap = new ServerBootstrap();
         bootstrap.group(bossGroup, workerGroup)
                 .channel(NioServerSocketChannel.class)
-                .childHandler(new ChannelInitializer<SocketChannel>() {
-                    @Override
-                    public void initChannel(SocketChannel ch) {
-                        PortServer.this.initChannel(ch);
-                    }
-                });
+                .childHandler(channelChannelInitializer);
 
-        ChannelFuture future = bootstrap.bind(8888);
+
+
+        ChannelFuture future = bootstrap.bind(port);
+        return future;
     }
 
-    private void initChannel(SocketChannel ch) {
-        ChannelPipeline pipeline = ch.pipeline();
-        pipeline.addLast(new PortServerHandler(PortServer.this::event));
-    }
+    private final ChannelInitializer<SocketChannel> channelChannelInitializer = new ChannelInitializer<SocketChannel>() {
+        @Override
+        public void initChannel(SocketChannel ch) {
+            ChannelPipeline pipeline = ch.pipeline();
+            pipeline.addLast(new PortServerHandler(PortServer.this::event));
+        }
+    };
+
 
     private void event(ChannelHandlerContext ctx, int id, TransferState state, byte[] data) {
-        if(state == TransferState.Open) {
-            channels.put(id, ctx);
-        } else if(state == TransferState.Close) {
-            event.onEvent(id, state, null);
-            channels.remove(id);
-        } else if(state == TransferState.Receive) {
-            event.onEvent(id, state, data);
-        }
+        workerGroup.execute(()-> {
+            System.out.println("tid: " + Thread.currentThread().getId() + " id: " + id);
+            if(state == TransferState.Open) {
+                channels.put(id, ctx);
+                event.onEvent(id, state, null);
+            } else if(state == TransferState.Close) {
+                event.onEvent(id, state, null);
+                channels.remove(id);
+            } else if(state == TransferState.Receive) {
+                event.onEvent(id, state, data);
+                channels.remove(id);
+            }
+        });
+
     }
 
     public void closeClient(int id) {
@@ -62,11 +77,14 @@ public class PortServer {
         }
     }
 
-    public void send(int id, byte[] data) {
+    public boolean send(int id, byte[] data) {
         ChannelHandlerContext ctx = channels.get(id);
         if(ctx != null) {
-            ctx.writeAndFlush(Unpooled.copiedBuffer(data));
+            ctx.channel().writeAndFlush(Unpooled.copiedBuffer(data));
+
+            return true;
         }
+        return false;
     }
 
 
@@ -76,6 +94,8 @@ public class PortServer {
         private final int id = TopID.getAndIncrement();
         private ChannelTransferEvent event;
 
+        private boolean connected = false;
+
         PortServerHandler(ChannelTransferEvent event) {
             this.event = event;
         }
@@ -84,9 +104,9 @@ public class PortServer {
         @Override
         public void channelActive(ChannelHandlerContext ctx) throws Exception {
             super.channelActive(ctx);
+            this.connected = true;
             event.onEvent(ctx, id, TransferState.Open, null);
         }
-
 
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) {
@@ -98,17 +118,32 @@ public class PortServer {
         }
 
         @Override
-        public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-            super.channelInactive(ctx);
-            event.onEvent(ctx, id, TransferState.Close, null);
-        }
-
-        @Override
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
             cause.printStackTrace();
             ctx.close();
+            callClose(ctx);
         }
-    }
 
+        private void callClose(ChannelHandlerContext ctx) {
+            if(connected) {
+                event.onEvent(ctx, id, TransferState.Close, null);
+                connected = false;
+            }
+        }
+
+        @Override
+        public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+            super.channelInactive(ctx);
+            callClose(ctx);
+        }
+
+        @Override
+        public void channelUnregistered(ChannelHandlerContext ctx) throws Exception {
+            super.channelUnregistered(ctx);
+            callClose(ctx);
+        }
+
+
+    }
 
 }

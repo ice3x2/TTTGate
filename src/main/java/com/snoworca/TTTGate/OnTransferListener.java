@@ -1,7 +1,5 @@
 package com.snoworca.TTTGate;
 
-import io.netty.channel.ChannelHandlerContext;
-
-public interface TransferEvent {
+public interface OnTransferListener {
     void onEvent(int id, TransferState state, byte[] data);
 }

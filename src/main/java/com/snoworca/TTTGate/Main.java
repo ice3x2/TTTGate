@@ -1,35 +1,35 @@
 package com.snoworca.TTTGate;
 
-import io.vertx.core.Vertx;
-import io.vertx.core.net.NetServer;
+
+import com.snoworca.TTTGate.server.PortServer;
 
 public class Main {
-    public static void main(String[] args) {
-        NetServer server = Vertx.vertx().createNetServer();
 
-        server.connectHandler(socket -> {
-            socket.handler(buffer -> {
-                String message = buffer.toString().trim();
-                System.out.println("Received message from client: " + message);
-                // 클라이언트에게 응답 메시지 전송
-                socket.write("Server: Message received");
-                // 연결 종료
-                socket.close();
-            });
+    static int num = 0;
+    public static void main(String[] args) throws InterruptedException {
 
+        PortServer portServer = PortServer.create();
 
-        });
-
-        server.listen(8888, "localhost", handler -> {
-
-
-
-
-            if (handler.succeeded()) {
-                System.out.println("Server started on port 8888");
-            } else {
-                System.err.println("Server failed to start: " + handler.cause().getMessage());
+        portServer.start(9010, (id, state, data) -> {
+            if(state == TransferState.Open) {
+                System.out.println("id: " + id + " open");
             }
-        });
+            else if(state == TransferState.Receive) {
+                    System.out.println("id: " + id + " Receive::" + new String(data));
+                    String message = "<html><body><h1>ID:" + id + "</h1></body></html>";
+                    portServer.send(id, ("HTTP/1.1 200 OK\r\nConnection: keep-alive\r\nContent-Type: text/html\r\nContent-Length: " + message.getBytes().length + "\r\n\r\n").getBytes());
+                    portServer.send(id, message.getBytes());
+            }
+            else if(state == TransferState.Close) {
+                System.out.println("id: " + id + " close");
+            }
+        }).addListener((future)->{
+            if(future.isSuccess()){
+                System.out.println("Server started");
+            }else{
+                future.cause().printStackTrace();
+            }
+        }).sync();
+
     }
 }
