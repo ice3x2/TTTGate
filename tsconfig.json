@@ -1,0 +1,22 @@
+{
+
+  "compilerOptions": {
+    "target": "ESNext",
+    "useDefineForClassFields": true,
+    "module": "commonjs",
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true, /* 동일한 파일에 대한 일관되지 않은 케이스 참조를 허용하지 않음  */
+    "strict": true,
+    "skipLibCheck": false,   /* 선언 파일 유형 검사 스킵 */
+    "allowJs": true,
+    "checkJs": true,
+    "isolatedModules": false                         /* Skip type checking all .d.ts files. */,
+    "moduleResolution": "Node",
+    "composite": true,
+    // 클래스 멤버 변수 초기화가 되지 않아도 에러를 발생시키지 않는다.
+    "strictPropertyInitialization": false,
+    "outDir": "./build",
+  },
+  "include": ["src/**/*.d.ts", "src/**/*.ts", "src/**/*.js", "src/**/*.svelte"],
+}

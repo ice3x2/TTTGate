@@ -1,0 +1,136 @@
+@import url('https://fonts.googleapis.com/css2?family=Ubuntu:wght@300&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Ubuntu:ital,wght@0,300;1,300&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Ubuntu:ital,wght@0,300;0,400;1,300&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Ubuntu:ital,wght@0,300;0,400;1,300;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Ubuntu:ital,wght@0,300;0,400;0,500;1,300;1,500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Ubuntu:ital,wght@0,300;0,400;0,500;0,700;1,300;1,500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Ubuntu:ital,wght@0,300;0,400;0,500;0,700;1,300;1,500;1,700&display=swap');
+
+
+:root {
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: #222;
+  font-family: 'Ubuntu', sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
+
+
+div {
+  box-sizing: border-box;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+input {
+  height: 24px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  margin: 0;
+}
+
+select {
+  height: 28px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  background: white;
+  margin: 0;
+}
+
+input::file-selector-button {
+  height: 22px;
+  font-size: 11px;
+  margin: 1px;
+  border-radius: 5px;
+  border: 1px solid #999;
+  background: #eee;
+}
+
+input::file-selector-button:hover {
+  border: 1px solid #777;
+  background: #999;
+  color: #fff;
+}
+
+input::file-selector-button:active {
+  border: 1px solid #555;
+  background: #444;
+  color: #fff;
+}
+
+button {
+  cursor: pointer;
+  height: 28px;
+  border-radius: 5px;
+  border: 1px solid #999;
+  margin: 0;
+  background: #eee;
+}
+
+button:hover:enabled {
+  border: 1px solid #777;
+  background: #999;
+  color: #fff;
+}
+
+button:active:enabled {
+    border: 1px solid #555;
+    background: #444;
+    color: #fff;
+}
+
+
+
+.input-box {
+  display:block;
+  margin-bottom: 20px;
+}
+.check-box {
+  display:block;
+  margin-top: 5px;
+  margin-bottom: 5px;
+  position: relative;
+  height: 20px
+}
+
+.form-label {
+  display: block;
+  font-size: 14px;
+  color: #333;
+}
+
+
+
+.main-card {
+  text-align: left;
+  position: inherit;
+  display: inline-block;
+  box-sizing: border-box;
+  flex-direction: column;
+  padding: 15px;
+  min-height: 200px;
+  width: 100%;
+  max-width: 1024px;
+
+  border-radius: 5px;
+
+  border: 1px solid #ccc;
+
+}
+
+
+
+@media screen and (max-width: 480px) {
+  .main-card {
+    width: 95%;
+  }
+}
