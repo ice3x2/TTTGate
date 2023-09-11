@@ -34,6 +34,9 @@ class CertificationStore {
     private _adminCert: CertInfo = CertificationStore.makeEmptyCertFileInfo();
     private _tempCert: CertInfo | undefined = undefined;
 
+    private _adminCertFile: File = new File(Environment.path.certDir, ADMIN_CERT_FILE_INFO_FILE_NAME);
+    private _externalCertFile: File = new File(Environment.path.certDir, EXTERNAL_CERT_FILE_INFO_FILE_NAME);
+
 
     private static makeEmptyCertFileInfo() : CertInfo {
         return {
@@ -85,6 +88,26 @@ class CertificationStore {
 
     public getTempCert() : CertInfo {
         return ObjectUtil.cloneDeep(this._tempCert!);
+    }
+
+    public async reset() {
+        this._externalCert = {};
+        this._adminCert = CertificationStore.makeEmptyCertFileInfo();
+        this._tempCert =  await this.makeTempCert();
+
+        if(this._adminCertFile.exists()) {
+            this._adminCertFile.delete();
+        }
+
+        if(this._externalCertFile.exists()) {
+            this._externalCertFile.delete();
+        }
+        let certDir = new File(Environment.path.certDir);
+        if(certDir.exists()) {
+            Files.deleteAll(certDir);
+            certDir.mkdirs();
+        }
+
     }
 
     public async load() {
@@ -167,7 +190,7 @@ class CertificationStore {
         }
         this.removeCertFile(this._adminCert, 'admin');
         this._adminCert = certInfo;
-        await this.save(new File(Environment.path.configDir, ADMIN_CERT_FILE_INFO_FILE_NAME), this._adminCert);
+        await this.save(this._adminCertFile, this._adminCert);
         await this.writeCertFile(this._adminCert, 'admin');
         return true;
     }
@@ -181,7 +204,7 @@ class CertificationStore {
             this.removeCertFile(oldInfo, 'external');
         }
         this._externalCert[port] = certInfo;
-        await this.save(new File(Environment.path.configDir, EXTERNAL_CERT_FILE_INFO_FILE_NAME), this._externalCert);
+        await this.save(this._externalCertFile, this._externalCert);
         await this.writeCertFile(this._externalCert[port], 'external');
         return true;
 
@@ -194,13 +217,13 @@ class CertificationStore {
             this.removeCertFile(oldInfo, 'external');
         }
         delete this._externalCert[port];
-        await this.save(new File(Environment.path.configDir, EXTERNAL_CERT_FILE_INFO_FILE_NAME), this._externalCert);
+        await this.save(this._externalCertFile, this._externalCert);
     }
 
     public async removeForAdminServer() {
         this.removeCertFile(this._adminCert, 'admin');
         this._adminCert = CertificationStore.makeEmptyCertFileInfo();
-        await this.save(new File(Environment.path.configDir, ADMIN_CERT_FILE_INFO_FILE_NAME), this._adminCert);
+        await this.save(this._adminCertFile, this._adminCert);
     }
 
 
@@ -213,7 +236,7 @@ class CertificationStore {
             this.removeCertFile(oldInfo, 'external');
         }
         this._externalCert[port] = certInfo;
-        await this.save(new File(Environment.path.configDir, EXTERNAL_CERT_FILE_INFO_FILE_NAME), this._externalCert);
+        await this.save(this._externalCertFile, this._externalCert);
         await this.writeCertFile(this._externalCert[port], 'external');
         return true;
     }
@@ -221,7 +244,7 @@ class CertificationStore {
 
 
     public async loadExternalCert() {
-        let file = new File(Environment.path.configDir,EXTERNAL_CERT_FILE_INFO_FILE_NAME);
+        let file = new File(Environment.path.certDir,EXTERNAL_CERT_FILE_INFO_FILE_NAME);
         if(file.exists()) {
             let data : string | undefined  = await Files.toString(file);
             if(data) {
@@ -234,7 +257,7 @@ class CertificationStore {
 
 
     public async loadAdminCert() {
-        let file = new File(Environment.path.configDir,ADMIN_CERT_FILE_INFO_FILE_NAME);
+        let file = new File(Environment.path.certDir,ADMIN_CERT_FILE_INFO_FILE_NAME);
         if(file.exists()) {
             let data : string | undefined  = await Files.toString(file);
             if(data) {

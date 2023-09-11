@@ -1,15 +1,15 @@
 <script lang="ts">
 
-    type Options = {
+    type RewriteRule = {
         from: string;
         to: string;
-        regex: boolean;
+        //regex: boolean;
     }
     export let maxWidth = 280;
-    export let options : Array<Options> = [{
+    export let options : Array<RewriteRule> = [{
         from: '',
         to: '',
-        regex: false
+        //regex: false
     }];
 
     $:{
@@ -17,7 +17,7 @@
             options = [{
                 from: '',
                 to: '',
-                regex: false
+                //regex: false
             }];
         }
     }
@@ -27,7 +27,7 @@
         options = [...options, {
             from: '',
             to: '',
-            regex: false
+            //regex: false
         }];
     }
 
@@ -56,11 +56,12 @@
                 <input type="text" style="width: {maxWidth - 25}px" bind:value={option.from}>
                 <div class="form-label">To</div>
                 <input type="text" style="width: {maxWidth - 25}px;" bind:value={option.to}>
-                <div style="margin-top: 10px;margin-bottom: 10px;position: relative ">
-                    <div style="position: relative; height: 20px; left: 0">
+                <div style="margin-top: 10px;margin-bottom: 38px;position: relative ">
+
+                    <!--<div style="position: relative; height: 20px; left: 0">
                         <input type="checkbox"  style="width: 14px;"  bind:checked={option.regex}>
                         <div style="display: inline-block;position: relative; top: -8px; font-size: 10pt">Regex</div>
-                    </div>
+                    </div>-->
                     {#if index === options.length -1}
                         <button style="position: absolute; right: 0px; top: 0" on:click={onClickAdd}>Add</button>
                     {:else }
@@ -69,6 +70,7 @@
                 </div>
             </div>
         {/each}
+        <div style="font-size: 10pt; line-height: 11pt;color: #555 ">You can use a JavaScript-formatted regular expression in the 'From' input box.</div>
     </div>
 
 </div>

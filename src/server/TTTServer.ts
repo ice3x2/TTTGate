@@ -1,6 +1,6 @@
 import {ExternalPortServerPool, ExternalPortServerStatus } from "./ExternalPortServerPool";
 import TunnelServer from "./TunnelServer";
-import {ServerOption, Options} from "../option/Options";
+import {ServerOption, TunnelingOption} from "../option/TunnelingOption";
 import SocketState from "../util/SocketState";
 import {CertificationStore, CertInfo} from "./CertificationStore";
 import ServerOptionStore from "./ServerOptionStore";
@@ -22,6 +22,7 @@ class TTTServer {
     private _externalPortServerPool : ExternalPortServerPool;
     private _tunnelServer : TunnelServer;
     private _sessions : Set<number> = new Set<number>();
+    private _allowClientNamesMap : Map<number, Array<string>> = new Map<number, Array<string>>();
 
 
     public static create(serverOption: ServerOption) : TTTServer {
@@ -34,14 +35,23 @@ class TTTServer {
         let tempCert = CertificationStore.instance.getTempCert();
         this._tunnelServer = TunnelServer.create({port: serverOption.port,key: serverOption.key,tls: serverOption.tls}, tempCert);
         this._externalPortServerPool.setOnHandlerEventCallback(this.onHandlerEventOnExternalPortServer)
-        this._externalPortServerPool.setOnNewSessionCallback(this.onNewSession)
+        this._externalPortServerPool.setOnNewSessionCallback(this.onNewSession);
         this._tunnelServer.onSessionCloseCallback = this.onSessionClosed;
         this._tunnelServer.onReceiveDataCallback = this.onSessionDataReceived;
+        serverOption.tunnelingOptions.forEach((option) => {
+            if(option.allowedClientNames && option.allowedClientNames.length > 0) {
+                this._allowClientNamesMap.set(option.forwardPort, option.allowedClientNames!);
+            }
+        });
+
+
     }
 
-    private onNewSession = (id: number, opt: Options) : void => {
+    private onNewSession = (id: number, opt: TunnelingOption) : void => {
+
         this._sessions.add(id);
-        let success = this._tunnelServer.open(id, {host: opt.destinationAddress,port: opt.destinationPort!,tls: opt.tls });
+        let allowClientNames = this._allowClientNamesMap.get(opt.forwardPort);
+        let success = this._tunnelServer.open(id, {host: opt.destinationAddress,port: opt.destinationPort!,tls: opt.tls },allowClientNames);
         if(!success) {
             this._sessions.delete(id);
             this._externalPortServerPool.closeSession(id);
@@ -92,18 +102,38 @@ class TTTServer {
 
 
     public async stopExternalPortServer(port: number) : Promise<boolean> {
+        this._allowClientNamesMap.delete(port);
         return await this._externalPortServerPool.stop(port);
     }
 
+    public async activeExternalPortServer(port: number, timeout: number) : Promise<boolean> {
+        return await this._externalPortServerPool.active(port, timeout);
+    }
 
-    public async restartExternalPortServer(port: number) : Promise<boolean>  {
+    public async inactiveExternalPortServer(port: number) : Promise<boolean> {
+        return await this._externalPortServerPool.inactive(port);
+    }
+
+
+    public async updateAndRestartExternalPortServer(port: number) : Promise<boolean>  {
         let optionStore =  ServerOptionStore.instance;
         let tunnelOption = optionStore.getTunnelingOption(port);
         if(!tunnelOption) {
             return false;
         }
+        this._allowClientNamesMap.delete(port);
+        if(tunnelOption.allowedClientNames && tunnelOption.allowedClientNames.length > 0) {
+            this._allowClientNamesMap.set(port, tunnelOption.allowedClientNames);
+        }
+        let lastServerStatus = this._externalPortServerPool.getServerStatus(port);
         await this._externalPortServerPool.stop(port);
-        return await this._externalPortServerPool.startServer(tunnelOption, CertificationStore.instance.getExternalCert(port));
+        let success = await this._externalPortServerPool.startServer(tunnelOption, CertificationStore.instance.getExternalCert(port));
+        if(success && lastServerStatus && lastServerStatus.online) {
+            this._externalPortServerPool.setActiveTimeout(port, lastServerStatus.activeTimeout);
+            if(!tunnelOption.inactiveOnStartup)  await this._externalPortServerPool.active(port);
+
+        }
+        return success;
     }
 
 

@@ -198,6 +198,7 @@ class SocketHandler {
         this._socket.destroy();
         this._event = ()=>{};
         this._waitQueue.clear();
+        this._bundle.clear();
     }
 
     public get port() {

@@ -49,7 +49,7 @@ class CtrlPacket {
     private _cmd: CtrlCmd;
     private _data: Buffer = Buffer.alloc(0);
     private _id: number = -1;
-    private _ackCtrlOpt: {ip: string, key: string} | undefined = undefined;
+    private _ackCtrlOpt: {name: string, key: string} | undefined = undefined;
 
     private _openOpt : ConnectOpt | undefined = undefined;
 
@@ -84,13 +84,13 @@ class CtrlPacket {
     }
 
 
-    public static createAckCtrl(id: number,ip: string, key: string) : CtrlPacket {
+    public static createAckCtrl(id: number,name: string, key: string) : CtrlPacket {
         let packet = new CtrlPacket();
         packet._cmd = CtrlCmd.AckCtrl;
         packet._id = id;
-        packet._ackCtrlOpt = {ip, key};
+        packet._ackCtrlOpt = {name, key};
         let writer = new BufferWriter();
-        writer.writeString(ip);
+        writer.writeString(name);
         writer.writeString(key);
         packet._data = writer.toBuffer();
         return packet;
@@ -131,6 +131,10 @@ class CtrlPacket {
 
     public get ackKey() : string | undefined {
         return this._ackCtrlOpt?.key;
+    }
+
+    public get clientName() : string | undefined {
+        return this._ackCtrlOpt?.name;
     }
 
 
@@ -196,11 +200,11 @@ class CtrlPacket {
         return {host, port, tls: tls};
     }
 
-    private static parseAckCtrlData(data: Buffer) :  {ip: string, key: string}  {
+    private static parseAckCtrlData(data: Buffer) :  {name: string, key: string}  {
         let reader = new BufferReader(data);
-        let ip = reader.readString();
+        let name = reader.readString();
         let key = reader.readString();
-        return {ip, key};
+        return {name, key};
     }
 
 

@@ -1,5 +1,5 @@
 import SocketHandler from "../../util/SocketHandler";
-import {HttpOption, Options, CustomHeader} from "../../option/Options";
+import {HttpOption, TunnelingOption, CustomHeader} from "../../option/TunnelingOption";
 import {HttpHeader, HttpPipe, HttpRequestHeader, HttpResponseHeader, MessageType} from "./HttpPipe";
 import HttpUtil from "./HttpUtil";
 import httpUtil from "./HttpUtil";
@@ -35,7 +35,7 @@ class HttpHandler {
         this._event = event;
     }
 
-    public static create(socketHandler: SocketHandler,tunnelOption: Options) : HttpHandler {
+    public static create(socketHandler: SocketHandler,tunnelOption: TunnelingOption) : HttpHandler {
         let handler = new HttpHandler(socketHandler);
         handler._option = !tunnelOption.httpOption ? handler._option : tunnelOption.httpOption!;
 

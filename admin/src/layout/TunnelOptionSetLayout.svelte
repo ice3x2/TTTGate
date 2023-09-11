@@ -2,7 +2,7 @@
 
     import HeaderAppender from "./HeaderAppender.svelte";
     import BodyReplaceAppender from "./BodyReplaceAppender.svelte";
-    import type {TunnelingOption, ExternalServerStatus} from "../controller/TunnelingOption";
+    import type {Options, TunnelingStatus} from "../controller/Options";
     import {onMount} from "svelte";
     import ServerOptionCtrl from "../controller/ServerOptionCtrl";
     import ObjectUtil from "../controller/ObjectUtil";
@@ -11,20 +11,32 @@
     import {type CertInfo, InvalidSession} from "../controller/Types";
     import InputCertFile from "./InputCertFile.svelte";
     import CertificationCtrl from "../controller/CertificationCtrl";
+    import Switch from "../component/Switch.svelte";
+    import Timer from "./Timer.svelte";
+    import {assignWith} from "lodash";
 
-    type TunnelingOptionEx = TunnelingOption & {updatable?: boolean, isSync?: boolean, certInfo?: CertInfo};
+    type Timers = {
+        [key: number]: Timer
+    }
 
-    let _externalServerStatuses : {[key: number]: ExternalServerStatus} = {};
+    type TunnelingOptionEx = Options & {updatable?: boolean, isSync?: boolean, certInfo?: CertInfo, allowedClientNamesQuery?: string, activeTimeout?: number};
 
+    let _externalServerStatuses : {[key: number]: TunnelingStatus} = {};
 
+    let _serverTime : number = 0;
     let _tunnelOptions : Array<TunnelingOptionEx> = [];
     let _originTunnelOptions : Array<TunnelingOptionEx> = [];
     let _isInit = false;
     let _loading = false;
+    let _transitionLoading = false;
+
 
     let _showAlert = false;
     let _alertMessage = "";
     let _alertButton = "Ok";
+
+    let _timerElements : Timers = {};
+
 
     let _intervalId : NodeJS.Timeout = null;
     let _onCloseAlert = () => {};
@@ -35,6 +47,7 @@
             return;
         }
         await _loadTunnelingOption();
+        await _loadExternalServerStatus();
         _startExternalServerStatusUpdate();
         _isInit = true;
     });
@@ -63,13 +76,18 @@
             for(let tunnelOption of _tunnelOptions) {
                 tunnelOption.isSync = true;
                 tunnelOption.updatable = true;
+                tunnelOption.allowedClientNamesQuery = tunnelOption.allowedClientNames?.join("; ");
+                if(!tunnelOption.allowedClientNamesQuery) tunnelOption.allowedClientNamesQuery = "";
+                else tunnelOption.allowedClientNamesQuery += ";";
             }
             _originTunnelOptions = ObjectUtil.cloneDeep(_tunnelOptions);
+
             await _loadCertInfoAll();
             _checkUpdatable();
 
             _loading = false;
         } catch (e) {
+            console.error(e);
             _loading = false;
             if(e instanceof InvalidSession) {
                 _sessionOut();
@@ -88,7 +106,6 @@
     }
 
     let _loadCertInfo = async (port: number) => {
-        console.log(port)
         try {
             let tunnelOption : TunnelingOptionEx = _tunnelOptions.find((option) => option.forwardPort === port);
             tunnelOption.certInfo = await CertificationCtrl.instance.loadExternalServerCert(port);
@@ -108,6 +125,7 @@
         _loadExternalServerStatus();
         if(!_intervalId) {
             _intervalId = setInterval(async () => {
+                if (_loading) return;
                 if (await _loadExternalServerStatus(true) == false) {
                     clearInterval(_intervalId);
                 }
@@ -117,12 +135,19 @@
 
     let _loadExternalServerStatus = async (ignoreError?: true) : Promise<boolean> => {
         try {
-            let externalServerStatuses : {[port: number] : ExternalServerStatus }= {};
-            let statues : Array<ExternalServerStatus>  = await ServerOptionCtrl.instance.loadExternalServerStatus();
-            for(let status of statues) {
+            let externalServerStatuses : {[port: number] : TunnelingStatus }= {};
+            let result : {serverTime: number,statuses: Array<TunnelingStatus>}  = await ServerOptionCtrl.instance.loadTunnelingStatus();
+            _serverTime = result.serverTime;
+            for(let status of result.statuses) {
                 externalServerStatuses[status.port] = status;
+                if(status && status.active) {
+                    if(_timerElements[status.port]) {
+                        _timerElements[status.port].update(_getTimeout(status), status.activeTimeout);
+                    }
+                }
             }
             _externalServerStatuses = externalServerStatuses;
+
             return true;
         } catch (e) {
             if(ignoreError) {
@@ -154,7 +179,9 @@
                 destinationAddress: '127.0.0.1',
                 destinationPort: 8080,
                 isSync: false,
-                updatable: true
+                updatable: true,
+                allowedClientNamesQuery: ""
+
             });
 
         _tunnelOptions = [..._tunnelOptions];
@@ -177,7 +204,7 @@
         }
     }
 
-    let _onChangeProtocol = (option: TunnelingOption) => {
+    let _onChangeProtocol = (option: Options) => {
         if(option.protocol == 'https') {
             let old = option.tls;
             option.tls = true;
@@ -245,6 +272,7 @@
     let _onClickApply = async (index: number) => {
         _loading = true;
         let tunnelOption = _tunnelOptions[index];
+        tunnelOption.allowedClientNames = tunnelOption.allowedClientNamesQuery.split(";").map((name) => name.trim()).filter((name) => name !== "");
         try {
             await _removeOldServerPort();
             if(tunnelOption.tls) {
@@ -260,8 +288,13 @@
                 }
             }
             let result = await ServerOptionCtrl.instance.updateTunnelingOption(tunnelOption);
+
             _loading = false;
             if (result.success) {
+
+                if(_timerElements[tunnelOption.forwardPort] && _externalServerStatuses[tunnelOption.forwardPort]?.activeTimeout) {
+                    _timerElements[tunnelOption.forwardPort].reset(_externalServerStatuses[tunnelOption.forwardPort].activeTimeout);
+                }
                 _originTunnelOptions = ObjectUtil.cloneDeep(_tunnelOptions);
                 _alert("Success to apply tunneling option");
             } else {
@@ -270,6 +303,7 @@
             await _loadTunnelingOption();
             await _loadExternalServerStatus();
         } catch (e) {
+            console.error(e);
             _loading = false;
             if(e instanceof InvalidSession) {
                 _sessionOut();
@@ -318,6 +352,10 @@
     }
 
     let _startupTime = (uptime : number) : string => {
+        if(!uptime) {
+            return "0s";
+        }
+
         let time = Date.now() - uptime;
         if(time > 1000 * 60 * 60 * 24) {
             return Math.floor(time / (1000 * 60 * 60 * 24)) + "d, " + Math.floor((time % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)) + "h";
@@ -349,15 +387,72 @@
 
     }
 
+    let _getTimeout = (status : TunnelingStatus ) : number => {
+        let timeout = status.activeStart + (status.activeTimeout * 1000) - _serverTime;
+        if(timeout < 0) {
+            timeout = 0;
+        }
+        timeout = Math.floor(timeout / 1000);
+        return timeout;
+
+    }
+
+    let _onChangeActive = async (active: boolean, port: number, time? : number) => {
+
+
+        if(active) {
+            let status = _externalServerStatuses[port];
+            if (status && _timerElements[status.port]) {
+                _timerElements[status.port].update(_getTimeout(status), status.activeTimeout);
+            }
+        }
+
+
+        let oldActive = _externalServerStatuses[port].active;
+        if(oldActive == active && time == undefined) {
+            console.log('time: ' + time)
+            return;
+        }
+        time = time ?? _externalServerStatuses[port].activeTimeout;
+        try {
+            _loading = true;
+            _transitionLoading = true;
+            let result = await ServerOptionCtrl.instance.activeExternalPortServer(active,port,time);
+            await _loadExternalServerStatus();
+            if (result.success) {
+                _externalServerStatuses[port].active = active;
+            } else {
+                _externalServerStatuses[port].active = oldActive;
+            }
+            if(time > 0) {
+
+            }
+
+            _loading = false;
+            _transitionLoading = false;
+        } catch (e) {
+            console.error(e);
+            _loading = false;
+            _transitionLoading = false;
+            if(e instanceof InvalidSession) {
+                _sessionOut();
+                return;
+            }
+            _connectionFail();
+        }
+
+    }
+
+
 
 
 </script>
 
 <main>
 
-    <div class="main-card">
+    <div class="">
         <div>
-            <div style="display: inline-block; margin-bottom: 10px;">
+            <div style="display: inline-block; margin-top: 20px; margin-bottom: 10px;">
                 <h2>
                     Tunneling settings
                 </h2>
@@ -367,42 +462,69 @@
 
 
         {#each _tunnelOptions as option, index}
-        <div style="width: 600px;margin-bottom: 20px; ">
+        <div style="width: 100%;margin-bottom: 20px; ">
 
 
             <div style="font-size: 16pt;">
-                <div style="display: inline-block; min-width: 25px;font-weight: 900">
-                {index + 1}.
+
+                <div style="display: block">
+                    <div style="display: inline; min-width: 25px;font-weight: 900">
+                    {index + 1}.
+                    </div>
+                    <div style="display: inline; color: #444">
+                        {option.forwardPort}  ⬌ {option.destinationAddress}:{option.destinationPort} ({option.protocol.toUpperCase()})
+                    </div>
                 </div>
-                <div style="display: inline; color: #444">
-                    {option.forwardPort}  ⬌ {option.destinationAddress}:{option.destinationPort} ({option.protocol.toUpperCase()})
-                </div>
-                <div style="font-size: 18px; font-weight: 400; margin-left: 28px; margin-top: -5px;">
-                    {#if _externalServerStatuses[option.forwardPort]}
-                        {#if _externalServerStatuses[option.forwardPort].online}
-                            <span style="color: darkgreen;">Online</span>
-                        {:else }
-                            <span style="color: darkred">Error</span>
+
+
+
+                <div class="round-box" style="margin-bottom: 5px">
+                    <div style="font-size: 18pt; font-weight: 400; margin-top: -5px; display: inline-block">
+                        {#if _externalServerStatuses[option.forwardPort]}
+                            {#if _externalServerStatuses[option.forwardPort].online}
+                                <span style="color: darkgreen;">Online</span>
+                            {:else }
+                                <span style="color: darkred">Error</span>
+                            {/if}
+                            <span class="sub-status">
+                                Uptime: { _startupTime(_externalServerStatuses[option.forwardPort].uptime)},
+                                &nbsp;
+                                Sessions: { _externalServerStatuses[option.forwardPort].sessions},
+                                &nbsp;
+                                RX: { _toSize(_externalServerStatuses[option.forwardPort].rx)},
+                                &nbsp;
+                                TX: { _toSize(_externalServerStatuses[option.forwardPort].tx)}
+                                &nbsp;
+                            </span>
+
+                        {:else}
+                            <span style="color: gray">Offline</span>
                         {/if}
-                        <span style=" font-size: 10pt;">
-                            <span style="font-size: 9pt">({ _startupTime(_externalServerStatuses[option.forwardPort].uptime)}) </span> &nbsp;
-                            Sessions: { _externalServerStatuses[option.forwardPort].sessions},
-                            &nbsp;
-                            RX: { _toSize(_externalServerStatuses[option.forwardPort].rx)},
-                            &nbsp;
-                            TX: { _toSize(_externalServerStatuses[option.forwardPort].tx)}
-                            &nbsp;
-                        </span>
+                    </div>
 
-                    {:else}
-                        <span style="color: gray">Offline</span>
+
+                    {#if _externalServerStatuses[option.forwardPort]?.online}
+                        <div style="display:  block; position: relative; height: 34px; min-width: 370px">
+                            <span class="status-label" >Activation:</span>
+                            <div style="display: inline; position: relative;">
+                                <Switch on={_externalServerStatuses[option.forwardPort]?.active} on:change={(e) => _onChangeActive(e.detail.on, option.forwardPort)} style="position: absolute; margin-left: 5px; margin-top: 3px"></Switch>
+                            </div>
+                            {#if _externalServerStatuses[option.forwardPort] && _externalServerStatuses[option.forwardPort].active}
+                                <div class="status-label" style="display: inline-block; margin-left: 65px">Timeout:</div>
+                                <div style="display: inline">
+                                <Timer bind:this={_timerElements[option.forwardPort]}
+                                       on:change={(e) => { _onChangeActive(true, option.forwardPort, e.detail.time)}}
+                                       style="position: absolute; margin-left: 5px; margin-top: 3px"></Timer>
+                                </div>
+                            {/if}
+                        </div>
                     {/if}
-
                 </div>
+
             </div>
 
+            <div  class="round-box">
 
-            <div  style="display: inline-block;margin-left: 25px; width: calc(100% - 25px);background: #fdfdfd;  border-radius: 5px; padding: 10px;border: 1px solid #bbb; box-shadow: 0 1px 2px rgba(0,0,0,0.1); ">
 
                 <div class="input-box" style="margin-bottom: 0">
                     <label for="input-external-port" class="form-label"  >External Server Port</label>
@@ -427,6 +549,13 @@
                     <label for="input-destination-port" class="form-label">Destination Port</label>
                     <input type="number" min="0" max="65535" id="input-destination-port" class="form-control" on:keyup={_enforceMinMax} bind:value={option.destinationPort}>
                 </div>
+
+                <div class="input-box">
+                    <label for="input-allow-client-names" class="form-label">Allowed client names <span style="font-size: 8pt">(Separate names with a semicolon(;))</span></label>
+                    <input type="text"  id="input-allow-client-names" class="form-control" bind:value={option.allowedClientNamesQuery}>
+                </div>
+
+
 
                 <div class="input-box" >
                     <label for="select-protocol" class="form-label">Protocol type</label>
@@ -475,8 +604,11 @@
                     </div>
 
                 {/if}
-
-                <div style="margin-bottom: 20px;">
+                <div class=""  style="">
+                    <input type="checkbox"  style="width: 14px;" on:change={()=> { }} bind:checked={option.inactiveOnStartup}  >
+                    <div style="display: inline-block;position: relative; top: -7px; font-size: 10pt">Inactive on startup</div>
+                </div>
+                <div >
                     <button style="width: 160px" on:click={() => _onClickApply(index)} disabled={!_tunnelOptions[index].updatable} >{_tunnelOptions[index].isSync ? ' Apply and Restart ' : 'Start' }</button>
                     <button style="width: 140px" on:click={() => _onClickRemove(index)}>{_tunnelOptions[index].isSync ? 'Stop and ' : '' }Remove</button>
                 </div>
@@ -488,7 +620,7 @@
 
 
 
-        <button style="margin-left: {_tunnelOptions.length === 0 ? '0px' : '23px' }; margin-top: 8px; width:  180px" on:click={_addEmptyOption}>Add tunneling service</button>
+        <button style="margin-top: 8px; width:  180px" on:click={_addEmptyOption}>Add tunneling service</button>
     </div>
 
     <AlertLayout bind:show={_showAlert} bind:button={_alertButton} on:close={_onCloseAlert}>
@@ -496,7 +628,7 @@
     </AlertLayout>
 
 
-    <Loading bind:show={_loading}></Loading>
+    <Loading bind:show={_loading} bind:transition={_transitionLoading}></Loading>
 
 
 
@@ -504,10 +636,7 @@
 </main>
 
 <style>
-    input {
-        width: 80%;
-        max-width: 320px;
-    }
+
 
 
     h3 {
@@ -519,6 +648,7 @@
         width: 80%;
         max-width: 325px;
     }
+
 
 
     ul {
@@ -579,11 +709,24 @@
 
     }
 
+    .sub-status {
+        font-size: 11pt;
+    }
 
+    .status-label {
+        font-size: 15pt;
+    }
 
     @media screen and (max-width: 480px) {
         .card {
             width: 95%;
+        }
+        .sub-status {
+            font-size: 8pt;
+        }
+
+        .status-label {
+            font-size: 11pt;
         }
     }
 </style>

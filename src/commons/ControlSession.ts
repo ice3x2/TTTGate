@@ -7,6 +7,7 @@ class ControlSession extends Session {
 
     // @ts-ignore
     private readonly _packetStream : CtrlPacketStreamer = new CtrlPacketStreamer();
+    private _clientName : string = "";
     public static createControlSession(id: number) : ControlSession {
         console.log("[server]",`ControlSession: create: ${id}`);
         let session = new ControlSession(id);
@@ -14,11 +15,17 @@ class ControlSession extends Session {
         return session;
     }
 
+    public get clientName() : string {
+        return this._clientName;
+    }
+
+    public set clientName(name: string) {
+        this._clientName = name;
+    }
+
     constructor(id: number) {
         super(id);
     }
-
-
 
     /**
      *

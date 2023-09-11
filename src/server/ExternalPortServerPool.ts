@@ -1,14 +1,15 @@
 import {TCPServer} from "../util/TCPServer";
 import SocketState from "../util/SocketState";
 import SocketHandler from "../util/SocketHandler";
-import {Options} from "../option/Options";
+import {TunnelingOption} from "../option/TunnelingOption";
 import HttpHandler from "./http/HttpHandler";
 import {logger} from "../commons/Logger";
-import {CertInfo} from "./CertificationStore";
+import {CertificationStore, CertInfo} from "./CertificationStore";
+import ObjectUtil from "../util/ObjectUtil";
 
 
 interface NewSessionCallback {
-    (id:  number, opt: Options) : void;
+    (id:  number, opt: TunnelingOption) : void;
 }
 
 interface OnHandlerEventCallback {
@@ -23,24 +24,28 @@ type ExternalPortServerStatus = {
     online: boolean,
     sessions: number,
     uptime: number,
+    active: boolean,
+    activeStart: number,
+    activeTimeout: number,
     rx: number,
     tx: number,
 }
 
 class ExternalPortServerPool {
 
-    private _portServerMap : Map<number, TCPServer> = new Map<number, TCPServer>();
-    private _statusMap : Map<number, ExternalPortServerStatus> = new Map<number, ExternalPortServerStatus>();
-    private _handlerMap : Map<number, SocketHandler | HttpHandler> = new Map<number, SocketHandler>();
+    private _portServerMap  = new Map<number, TCPServer>();
+    private _statusMap  = new Map<number, ExternalPortServerStatus>();
+    private _handlerMap = new Map<number, SocketHandler | HttpHandler>();
+    private _activeTimeoutMap  = new Map<number, any>();
     private _onNewSessionCallback : NewSessionCallback | null = null;
     private _onHandlerEventCallback : OnHandlerEventCallback | null = null;
 
-    public static create(options: Array<Options>) : ExternalPortServerPool {
+    public static create(options: Array<TunnelingOption>) : ExternalPortServerPool {
         return new ExternalPortServerPool(options);
     }
 
 
-    private constructor(options: Array<Options>) {
+    private constructor(options: Array<TunnelingOption>) {
         for(let option of options) {
             try {
                 option = this.optionAdjust(option);
@@ -51,7 +56,7 @@ class ExternalPortServerPool {
         }
     }
 
-    public async startServer(option: Options, certInfo?: CertInfo) : Promise<boolean> {
+    public async startServer(option: TunnelingOption, certInfo?: CertInfo) : Promise<boolean> {
         let server = this._portServerMap.get(option.forwardPort);
         if(server && !server.isEnd()) {
             return false;
@@ -68,7 +73,9 @@ class ExternalPortServerPool {
             portServer.setOnServerEvent(this.onServerEvent);
             portServer.setOnHandlerEvent(this.onHandlerEvent);
             portServer.setBundle(OPTION_BUNDLE_KEY, option);
-            this._statusMap.set(option.forwardPort, {port: option.forwardPort, online: false, sessions: 0, rx: 0, tx: 0, uptime: 0});
+            if(!option.inactiveOnStartup) option.inactiveOnStartup = false;
+            this._statusMap.set(option.forwardPort, {port: option.forwardPort, online: false, sessions: 0, rx: 0, tx: 0, uptime: 0,
+                active: !option.inactiveOnStartup, activeTimeout: 0, activeStart: option.inactiveOnStartup? Date.now() : 0});
             portServer.start((err?: Error) => {
                 if(err) {
                     logger.error(`ExternalPortServer::startServer - port: ${option.forwardPort}, error:  ${err}`);
@@ -80,7 +87,9 @@ class ExternalPortServerPool {
                     status.online = true;
                     status.uptime = Date.now();
                 }
-                logger.info(`ExternalPortServer::startServer - port: ${option.forwardPort}, option: ${JSON.stringify(option)}`);
+                let simpleOption = ObjectUtil.cloneDeep(option) as any;
+                delete simpleOption['certInfo'];
+                logger.info(`ExternalPortServer::startServer - port: ${option.forwardPort}, option: ${JSON.stringify(simpleOption)}`);
                 this._portServerMap.set(option.forwardPort, portServer);
 
 
@@ -90,7 +99,7 @@ class ExternalPortServerPool {
     }
 
 
-    private optionAdjust(option: Options) : Options {
+    private optionAdjust(option: TunnelingOption) : TunnelingOption {
         if(option.tls == undefined) {
             option.tls = false;
         }
@@ -121,9 +130,8 @@ class ExternalPortServerPool {
 
     public getServerStatus(port: number) : ExternalPortServerStatus  {
         let status = this._statusMap.get(port);
-
         if(!status) {
-            return {port: port, online: false, sessions: 0, rx: 0, tx: 0, uptime: 0};
+            return {port: port, online: false, sessions: 0, rx: 0, tx: 0, uptime: 0, active: false, activeTimeout : 0, activeStart: 0};
         }
         return status;
 
@@ -162,6 +170,8 @@ class ExternalPortServerPool {
             if(status) {
                 status.rx += data.length;
             }
+
+
             this._onHandlerEventCallback?.(handler.id, state, data);
         } else if(this._handlerMap.has(handler.id) && handler.isEnd()) {
             this.updateCount(handler.getBundle(OPTION_BUNDLE_KEY).forwardPort, false);
@@ -173,7 +183,7 @@ class ExternalPortServerPool {
 
     private onServerEvent = (server: TCPServer, state: SocketState, handlerOpt?: SocketHandler) : void => {
         if(SocketState.Listen == state) {
-            logger.info(`ExternalPortServer::Listen - port: ${server.port}, option: ${JSON.stringify(server.getBundle(OPTION_BUNDLE_KEY))}`);
+            logger.info(`ExternalPortServer::Listen - port: ${server.port}`);
         }
         if(server.isEnd()) {
             let error = server.getError();
@@ -192,7 +202,13 @@ class ExternalPortServerPool {
                 server.stop();
                 return;
             }
-            option = option as Options;
+            let status = this._statusMap.get(server.port);
+            if(status && !status.active) {
+                handler.close();
+                return;
+            }
+
+            option = option as TunnelingOption;
             handler.setBundle(OPTION_BUNDLE_KEY, option);
             handler.setBundle(PORT_BUNDLE_KEY, server.port);
 
@@ -219,20 +235,12 @@ class ExternalPortServerPool {
         status.sessions = Math.max(0, status.sessions);
     }
 
-
     public async stop(port: number) : Promise<boolean> {
         let server = this._portServerMap.get(port);
         if(!server) {
             return false;
         }
-        let removeHandlers : Array<SocketHandler | HttpHandler> = [];
-        this._handlerMap.forEach((handler: SocketHandler | HttpHandler, id: number) => {
-            let option = handler.getBundle(OPTION_BUNDLE_KEY);
-            if(option && option.forwardPort == port) {
-                removeHandlers.push(handler);
-            }
-        });
-        await this.closeHandlers(removeHandlers);
+        await this.removeHandlerByForwardPort(port);
         return new Promise((resolve, reject) => {
             server?.stop((err?: Error) => {
                 resolve(err != undefined);
@@ -240,23 +248,77 @@ class ExternalPortServerPool {
         })
     }
 
-    private async closeHandlers(handlers: Array<SocketHandler | HttpHandler>) : Promise<void> {
+    private async closeHandlers(ids: Array<number>) : Promise<void> {
+        let handlers : Array<SocketHandler | HttpHandler> = [];
+        for(let id of ids) {
+            let handler = this._handlerMap.get(id);
+            if(handler) {
+                handlers.push(handler);
+                handler.close();
+            }
+        }
         return new Promise((resolve, reject) => {
-            let removeHandlerSize = handlers.length;
-            if(removeHandlerSize == 0) {
+            if(handlers.length == 0) {
                 resolve();
                 return;
             }
-            for(let handler of handlers) {
+            while(handlers.length > 0) {
+                let handler = handlers.pop()!;
                 handler.close(()=> {
-                    removeHandlerSize--;
-                    if(removeHandlerSize == 0) {
+                    if(handlers.length == 0) {
                         resolve();
                         return;
                     }
                 });
             }
         });
+    }
+
+    private async removeHandlerByForwardPort(port: number) : Promise<void> {
+        let ids = Array.from(this._handlerMap.values())
+            .filter((handler: SocketHandler | HttpHandler)=> handler.getBundle(OPTION_BUNDLE_KEY)?.forwardPort == port )
+            .map((handler: SocketHandler | HttpHandler) => { return handler.id; });
+        await this.closeHandlers(ids);
+    }
+
+    public async inactive(port: number) : Promise<boolean> {
+        let status = this._statusMap.get(port);
+        if(!status) {
+            return false;
+        }
+        status.active = false;
+        await this.removeHandlerByForwardPort(port);
+        return true;
+    }
+
+
+    public setActiveTimeout(port: number, timeout: number) : boolean {
+        let status = this._statusMap.get(port);
+        if(!status) {
+            return false;
+        }
+        status.activeTimeout = timeout;
+        return true;
+    }
+
+    public async active(port: number, timeout?: number) : Promise<boolean> {
+        let status = this._statusMap.get(port);
+        if(!status) {
+            return false;
+        }
+        if(timeout == undefined) timeout = status.activeTimeout;
+        let timeoutCtrl = this._activeTimeoutMap.get(port);
+        if(timeoutCtrl != undefined) clearTimeout(timeoutCtrl);
+        status.active = true;
+        status.activeTimeout = timeout;
+        status.activeStart = Date.now();
+        if(timeout > 0){
+            timeoutCtrl = setTimeout(async () => {
+                await this.inactive(port);
+            }, timeout * 1000);
+            this._activeTimeoutMap.set(port, timeoutCtrl);
+        }
+        return true;
     }
 
 

@@ -64,6 +64,19 @@ class Files {
     }
 
 
+    public static deleteAll(file: File) {
+        if(file.isFile()) {
+            file.delete();
+        } else if(file.isDirectory()) {
+            let files = file.listFiles();
+            for(let f of files) {
+                this.deleteAll(f);
+                f.delete();
+            }
+        }
+
+    }
+
 }
 
 

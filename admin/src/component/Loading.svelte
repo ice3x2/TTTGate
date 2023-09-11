@@ -3,6 +3,7 @@
     import {onMount} from "svelte";
 
     export let show = false;
+    export let transition = false;
 
     let _imageElement: HTMLImageElement;
     let _rotationDegree = 0;
@@ -25,8 +26,8 @@
 
 </script>
 <main style="display: {show ? 'flex' : 'none'}">
-    <div class="background"></div>
-    <div class="progress">
+    <div class="background" style="{transition ? 'opacity: 0.0 !important;' : ''}"></div>
+    <div class="progress"  style="{transition ? 'opacity: 0.0 !important;' : ''}">
         <img src={loadingImg} bind:this={_imageElement} />
     </div>
 </main>

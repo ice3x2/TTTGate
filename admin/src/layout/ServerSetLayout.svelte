@@ -190,11 +190,12 @@
 
 <main>
 
-    <div class="main-card">
+    <h2>
+        Server settings
+    </h2>
+    <div class="round-box">
 
-        <h2>
-            Server settings
-        </h2>
+
         <div class="input-box">
             <label for="input-key" class="form-label">Tunnel server-client authentication key</label>
             <input type="text" id="input-key" class="form-control" aria-describedby="passwordHelpBlock" bind:value={_serverOption.key}>
@@ -223,7 +224,7 @@
         </div>
 
         <br/>
-        <div style="width: 100%">
+        <div style="width: 100%; margin-top: 10px">
             <div style="display: inline-block">
                 <button style="width: 100px" disabled={!_isNewValue} on:click={_apply}>Apply</button>
             </div>
@@ -244,8 +245,7 @@
 
 <style>
     input {
-        width: 80%;
-        max-width: 320px;
+        width: calc(100% - 10px);
     }
 
 

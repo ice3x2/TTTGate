@@ -19,7 +19,7 @@
     <div class="background"></div>
     <div class="popup-box" style="height: {height}px; width: {width}px;">
         <div class="content-box" >
-            <div style="display: flex; color: #333">
+            <div style="color: #333">
             <slot ></slot>
             </div>
         </div>

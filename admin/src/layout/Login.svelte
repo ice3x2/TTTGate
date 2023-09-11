@@ -101,19 +101,41 @@
     main {
         box-sizing: border-box;
         top: calc(50% - 90px);
-        left: calc(50% - 190px);
+
         border: 1px solid #ccc;
         position: absolute;
         flex-direction: column;
         text-align: left;
         padding: 15px;
         height: 180px;
-        width: 380px;
+
         max-width: 100%;
         background: #f7f7f7;
         border-radius: 5px;
         box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    }
 
+    @media screen and (max-width: 400px) {
+        main {
+            min-width: 300px;
+            left: calc(50% - 150px);
+            width: 300px;
+        }
+
+        #login-message {
+            font-size: 8pt;
+        }
+    }
+
+    @media screen and (min-width: 401px) {
+        main {
+            left: calc(50% - 190px);
+            width: 380px;
+        }
+
+        #login-message {
+            font-size: 10pt;
+        }
     }
 
 </style>

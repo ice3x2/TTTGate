@@ -1,5 +1,5 @@
 import { type ServerOption, InvalidSession } from "./Types";
-import type {ExternalServerStatus, TunnelingOption} from "./TunnelingOption";
+import type {TunnelingStatus, Options} from "./Options";
 
 
 class ServerOptionCtrl {
@@ -14,7 +14,7 @@ class ServerOptionCtrl {
         port: 0,
         tls: false
     }
-    private _tunnelingOptions : Array<TunnelingOption> = [];
+    private _tunnelingOptions : Array<Options> = [];
 
     private constructor() {
 
@@ -48,7 +48,7 @@ class ServerOptionCtrl {
     }
 
 
-    public async getTunnelingOption() : Promise<Array<TunnelingOption>> {
+    public async getTunnelingOption() : Promise<Array<Options>> {
         let res = await fetch("/api/tunnelingOption", {
             method: "GET",
             credentials: "same-origin"
@@ -141,7 +141,7 @@ class ServerOptionCtrl {
         return json;
     }
 
-    public async updateTunnelingOption(tunnelingOption : TunnelingOption) : Promise<{success: boolean, message: string}> {
+    public async updateTunnelingOption(tunnelingOption : Options) : Promise<{success: boolean, message: string}> {
         let res = await fetch("/api/tunnelingOption", {
             method: "POST",
             credentials: "same-origin",
@@ -157,7 +157,7 @@ class ServerOptionCtrl {
         return json;
     }
 
-    public async removeTunnelingOption(tunnelingOption : TunnelingOption | {forwardPort: number}) : Promise<{success: boolean, message: string, forwardPort: number}> {
+    public async removeTunnelingOption(tunnelingOption : Options | {forwardPort: number}) : Promise<{success: boolean, message: string, forwardPort: number}> {
         let res = await fetch("/api/tunnelingOption", {
             method: "DELETE",
             credentials: "same-origin",
@@ -174,7 +174,7 @@ class ServerOptionCtrl {
     }
 
 
-    public async loadExternalServerStatus() : Promise<Array<ExternalServerStatus>> {
+    public async loadTunnelingStatus() : Promise<{serverTime: number,statuses: Array<TunnelingStatus>}> {
         let res = await fetch("/api/externalServerStatuses", {
             method: "GET",
             credentials: "same-origin"
@@ -183,12 +183,30 @@ class ServerOptionCtrl {
         if(!json || res.status == 401) {
             throw new InvalidSession();
         }
-        return json['statuses'] as Array<ExternalServerStatus>;
+        return {serverTime : json['serverTime'] as number, statuses:  json['statuses'] as Array<TunnelingStatus>};
+    }
+
+    public async activeExternalPortServer(active: boolean, port: number, timeout?: number) : Promise<{success: boolean, message: string}> {
+
+        timeout = timeout ?? 0;
+        let res = await fetch(`/api/tunneling/active/${port}`, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({active: active,timeout: timeout})
+        });
+        let json = await res.json();
+        if(!json || res.status == 401) {
+            throw new InvalidSession();
+        }
+        return json;
     }
 
 
 
-    public static checkValidTunnelingOption(tunnelingOption: TunnelingOption) : boolean {
+    public static checkValidTunnelingOption(tunnelingOption: Options) : boolean {
         if(tunnelingOption.tls == undefined)
             return false;
         if(tunnelingOption.forwardPort == undefined || tunnelingOption.forwardPort <= 0 || tunnelingOption.forwardPort > 65535)
@@ -217,7 +235,6 @@ class ServerOptionCtrl {
             if(tunnelingOption.httpOption.replaceAccessControlAllowOrigin == undefined)
                 return false;
         }
-
         return true;
 
     }

@@ -141,11 +141,11 @@ class TunnelServer {
     }
 
 
-    public open(id: number, opt : ConnectOpt) : boolean {
+    public open(id: number,opt : ConnectOpt, allowClientNames?: Array<string>) : boolean {
         if(!this.available()) {
             return false;
         }
-        let handler = this.getNextHandler();
+        let handler = this.getNextHandler(allowClientNames);
         if(handler == null) {
             return false;
         }
@@ -188,11 +188,22 @@ class TunnelServer {
     }
 
     private _nextSelectIdx = 0;
-    private getNextHandler() : SocketHandler | null {
+
+
+    private getNextHandler(allowClientNames?: Array<string>) : SocketHandler | null {
         if(this._ctrlSessionMap.size == 0) {
             return null;
         }
-        let ids: Array<number> = Array.from(this._ctrlSessionMap.keys());
+        let ids: Array<number> = [];
+        if(!allowClientNames || allowClientNames.length == 0) {
+           ids =  Array.from(this._ctrlSessionMap.keys());
+        }  else {
+            this._ctrlSessionMap.forEach((session, id) => {
+                if(allowClientNames.includes(session.clientName)) {
+                    ids.push(id);
+                }
+            });
+        }
         if(ids.length == 1) {
             return this._ctrlHandlerMap.get(ids[0])!;
         }
@@ -271,12 +282,14 @@ class TunnelServer {
                     if(ctrlPacket.cmd == CtrlCmd.AckCtrl) {
                         if(ctrlPacket.ackKey != this._key) {
                             logger.error(`TunnelServer::onHandlerEvent - Not Found CtrlSession. id: ${ctrlHandlerID}`);
-                            //console.log("[server]",`TunnelServer::onHandlerEvent - Invalid Key. id: ${ctrlHandlerID}`);
                             this.closeCtrlHandler(handler);
                             return;
                         }
                         ctrlSession.state = SessionState.Connected;
-                        logger.info(`TunnelServer::onHandlerEvent - Change state => Connected, id: ${ctrlHandlerID}`);
+                        if(ctrlPacket.clientName) {
+                            ctrlSession.clientName = ctrlPacket.clientName;
+                        }
+                        logger.info(`TunnelServer::onHandlerEvent - Change state => Connected, id: ${ctrlHandlerID}, client name: ${ctrlPacket.clientName}`);
                     } else {
                         logger.info(`TunnelServer::onHandlerEvent - Change state => Close. id: ${ctrlHandlerID}`);
                         this.closeCtrlHandler(handler);

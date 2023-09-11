@@ -111,6 +111,9 @@ class AdminServer {
         } else if (url.startsWith("/api/externalCert/")) {
             await this.onUpdateExternalServerCert(req, res);
             return;
+        } else if (url.startsWith("/api/tunneling/active/")) {
+            await this.onActiveTunneling(req, res);
+            return;
         }
     }
 
@@ -259,7 +262,7 @@ class AdminServer {
 
 
         try {
-            isSuccess = await this._tttServer?.restartExternalPortServer(tunnelingOption.forwardPort)!;
+            isSuccess = await this._tttServer?.updateAndRestartExternalPortServer(tunnelingOption.forwardPort)!;
         } catch (e) {
             isSuccess = false;
         }
@@ -323,11 +326,11 @@ class AdminServer {
         res.end(JSON.stringify({success: true, certInfo: certInfo, message: ''}));
     }
 
-    private getPortInPath = async (req: IncomingMessage, res: ServerResponse) : Promise<number | undefined> => {
+    private getPortInPath = async (req: IncomingMessage, res: ServerResponse, pathStart: string) : Promise<number | undefined> => {
         if(!await this.checkSession(req, res)) {
             return undefined;
         }
-        let portStr = req.url?.substring('/api/externalCert/'.length);
+        let portStr = req.url?.substring(pathStart.length);
         let port = portStr == undefined ? undefined : parseInt(portStr);
         if(port == undefined || isNaN(port)) {
             res.writeHead(400, {'Content-Type': 'application/json'});
@@ -337,8 +340,32 @@ class AdminServer {
         return port;
     }
 
+
+
+    private onActiveTunneling = async (req: IncomingMessage, res: ServerResponse) => {
+        let port = await this.getPortInPath(req, res,'/api/tunneling/active/');
+        if(port == undefined) return;
+        let json = await AdminServer.readJson(req);
+        let timeout = json['timeout'];
+        let active = json['active'];
+        if(timeout == undefined || isNaN(timeout)) {
+            timeout = 0;
+        }
+        let success = false;
+        if(!this._tttServer) {
+            success = false;
+        }
+        else if(active == true) {
+            success = await this._tttServer.activeExternalPortServer(port, timeout);
+        } else {
+            success = await this._tttServer.inactiveExternalPortServer(port);
+        }
+        res.writeHead(200, {'Content-Type': 'application/json'});
+        res.end(JSON.stringify({success: success, message: ''}));
+    }
+
     private onDeleteExternalServerCert = async (req: IncomingMessage, res: ServerResponse) => {
-        let port = await this.getPortInPath(req, res);
+        let port = await this.getPortInPath(req, res,'/api/externalCert/');
         if(port == undefined) return;
         await CertificationStore.instance.removeForExternalServer(port);
         res.writeHead(200, {'Content-Type': 'application/json'});
@@ -346,7 +373,7 @@ class AdminServer {
     }
 
     private onUpdateExternalServerCert = async (req: IncomingMessage, res: ServerResponse) => {
-        let port = await this.getPortInPath(req, res);
+        let port = await this.getPortInPath(req, res,'/api/externalCert/');
         if(port == undefined) return;
         let json = await AdminServer.readJson(req);
         let certInfo = json['certInfo'];
@@ -355,8 +382,9 @@ class AdminServer {
         res.end(JSON.stringify({success: success, message: success ? '' : 'Invalid certificate'}));
     }
 
+
     private onGetExternalServerCert = async (req: IncomingMessage, res: ServerResponse) => {
-        let port = await this.getPortInPath(req, res);
+        let port = await this.getPortInPath(req, res,'/api/externalCert/');
         if(port == undefined) return;
         let certStore = CertificationStore.instance;
         let certInfo = certStore.getExternalCert(port);
@@ -473,7 +501,7 @@ class AdminServer {
         }
         let statuses = this._tttServer?.externalServerStatuses();
         res.writeHead(200, {'Content-Type': 'application/json'});
-        res.end(JSON.stringify({success: true, statuses: statuses, message: ''}));
+        res.end(JSON.stringify({success: true,serverTime: Date.now(), statuses: statuses, message: ''}));
     }
 
 

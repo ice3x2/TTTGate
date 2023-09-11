@@ -1,6 +1,6 @@
 import Environment from "../Environment";
 import File from "../util/File";
-import {ServerOption, Options, HttpOption, CustomHeader, DEFAULT_KEY} from "../option/Options";
+import {ServerOption, TunnelingOption, HttpOption, CustomHeader, DEFAULT_KEY} from "../option/TunnelingOption";
 import YAML from "yaml";
 import Files from "../util/Files";
 import ObjectUtil from "../util/ObjectUtil";
@@ -57,7 +57,7 @@ class ServerOptionStore {
         return false;
     }
 
-    public updateTunnelingOption(tunnelingOption: Options): boolean {
+    public updateTunnelingOption(tunnelingOption: TunnelingOption): boolean {
         let result = this.verificationTunnelingOption(tunnelingOption);
         if(result.success) {
             let index = this._serverOption.tunnelingOptions.findIndex((option) => option.forwardPort == tunnelingOption.forwardPort);
@@ -72,8 +72,8 @@ class ServerOptionStore {
         return false;
     }
 
-    public getTunnelingOptions() : Array<Options> {
-        let result : Array<Options> = [];
+    public getTunnelingOptions() : Array<TunnelingOption> {
+        let result : Array<TunnelingOption> = [];
         for(let option of this._serverOption.tunnelingOptions) {
             result.push(ObjectUtil.cloneDeep(option));
         }
@@ -81,7 +81,7 @@ class ServerOptionStore {
     }
 
 
-    public getTunnelingOption(forwardPort: number) : Options | undefined {
+    public getTunnelingOption(forwardPort: number) : TunnelingOption | undefined {
         for(let option of this._serverOption.tunnelingOptions) {
             if(option.forwardPort == forwardPort) {
                 return ObjectUtil.cloneDeep(option);
@@ -111,11 +111,18 @@ class ServerOptionStore {
         }
     }
 
-    private save() : void {
+    public save() : void {
         let yamlString : string = YAML.stringify(this._serverOption);
-
-
         Files.writeSync(this._configFile, yamlString);
+    }
+
+    public reset() : void {
+        logger.info(`ServerOptionStore::reset`);
+        if(this._configFile.isFile()) {
+            this._configFile.delete();
+        }
+        this.makeDefaultOption();
+        this.save();
     }
 
     private load() : boolean {
@@ -166,7 +173,7 @@ class ServerOptionStore {
         return {success: true, message: "", serverOption: option};
     }
 
-    public verificationTunnelingOption(option: Options) : {success: boolean,forwardPort: number, message: string} {
+    public verificationTunnelingOption(option: TunnelingOption) : {success: boolean,forwardPort: number, message: string} {
         if(!option.forwardPort) {
             return {success: false,forwardPort: -1, message: "forwardPort is undefined"};
         }
@@ -175,6 +182,12 @@ class ServerOptionStore {
         }
         if(option.forwardPort < 0 || option.forwardPort > 65535) {
             return {success: false,forwardPort:option.forwardPort, message: "forwardPort is invalid (0 ~ 65535)"};
+        }
+        if(option.inactiveOnStartup == undefined) {
+            option.inactiveOnStartup = false;
+        }
+        if(!option.allowedClientNames) {
+            option.allowedClientNames = [];
         }
         if(option.protocol == "http" && option.destinationPort == undefined) {
             option.destinationPort = 80;
@@ -199,7 +212,6 @@ class ServerOptionStore {
             option.httpOption = {};
         }
         this.normalizationOfHttpOption(option.httpOption);
-
         return {success: true,forwardPort:option.forwardPort, message: ""};
     }
 
@@ -230,7 +242,7 @@ class ServerOptionStore {
         this._serverOption = {
             key: DEFAULT_KEY,
             adminPort: 9300,
-            port: 9123,
+            port: 9126,
             tls : false,
             tunnelingOptions: []
         }

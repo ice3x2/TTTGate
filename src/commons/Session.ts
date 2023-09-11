@@ -6,13 +6,13 @@ class Session {
     public readonly id : number;
     public state: SessionState = SessionState.None;
     public createTime: number = Date.now();
+
     public readonly sessionID : number = Math.random();
 
     private readonly _sendBufferOnWaitConnected : Dequeue<Buffer> = new Dequeue<Buffer>();
 
     constructor(id: number) {
         this.id = id;
-
     }
 
 

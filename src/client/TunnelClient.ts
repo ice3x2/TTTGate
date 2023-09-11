@@ -3,7 +3,7 @@ import SocketState from "../util/SocketState";
 import {Buffer} from "buffer";
 import {CtrlCmd, CtrlPacket, CtrlPacketStreamer} from "../commons/CtrlPacket";
 import SessionState from "../option/SessionState";
-import {ClientOption} from "../option/Options";
+import {ClientOption} from "../option/TunnelingOption";
 import {ConnectOpt} from "../option/ConnectOpt";
 import ClientSession from "../commons/ClientSession";
 import {logger} from "../commons/Logger";
@@ -189,7 +189,7 @@ class TunnelClient {
 
 
     private sendAckCtrl(handler: SocketHandler, id: number, key : string) : void {
-        handler.sendData(CtrlPacket.createAckCtrl(id, handler.localAddr, key).toBuffer(), (handler, success, err) => {
+        handler.sendData(CtrlPacket.createAckCtrl(id, this._option.name, key).toBuffer(), (handler, success, err) => {
             if (!success) {
                 this.failHandshake(err);
                 return;
