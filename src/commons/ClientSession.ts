@@ -9,7 +9,7 @@ class ClientSession extends Session {
     public connectOpt : ConnectOpt =  {host: "", port: 0, tls: false};
 
     public static createClientSession(id: number) : ClientSession {
-        console.log("[server]",`ControlSession: create: ${id}`);
+        //console.log("[server]",`ControlSession: create: ${id}`);
         let session = new ClientSession(id);
         return session;
     }

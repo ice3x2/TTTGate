@@ -107,6 +107,10 @@ class TunnelClient {
     }
 
 
+    public get state () : CtrlState {
+        return this._state;
+    }
+
 
     private failHandshake(err?: Error) : void {
         this._state = CtrlState.None

@@ -3,21 +3,22 @@ import Dequeue from "./Dequeue";
 import SocketState from "./SocketState";
 import {ConnectOpt} from "../option/ConnectOpt";
 import * as tls from "tls";
+import {FileCache, CacheRecord} from "./FileCache";
 
 
 
 
 
+type FileCacheRecordID = number;
 
-class WaitItem {
-    public buffer: Buffer;
-    public onWriteComplete : OnWriteComplete | undefined;
 
-    constructor(buffer: Buffer, onWriteComplete?: OnWriteComplete) {
-        this.buffer = buffer;
-        this.onWriteComplete = onWriteComplete;
-    }
+type WaitItem = {
+    buffer: Buffer;
+    cacheID : FileCacheRecordID;
+    onWriteComplete : OnWriteComplete | undefined;
 }
+
+const EMPTY_BUFFER = Buffer.alloc(0);
 
 
 
@@ -30,6 +31,12 @@ interface OnSocketEvent {
 class SocketHandler {
 
     private static LAST_ID: number = 1;
+
+
+    private static MaxMemoryBufferSize: number = 0;
+    private static CurrentMemoryBufferSize: number = 0;
+    private static FileCache : FileCache | null = null;
+
 
     private readonly _port: number;
     private readonly _addr: string;
@@ -46,10 +53,15 @@ class SocketHandler {
     private _event: OnSocketEvent;
 
     private _waitQueue: Dequeue<WaitItem> = new Dequeue<WaitItem>();
+    private _fileCacheIds: Array<FileCacheRecordID> = [];
 
     private _writeLock : boolean = false;
     private _endWait : boolean = false;
 
+
+    public static set fileCache(fileCache: FileCache)  {
+        SocketHandler.FileCache = fileCache;
+    }
 
     public get isServer() : boolean {
         return this._isServer;
@@ -181,7 +193,7 @@ class SocketHandler {
                 this._state = SocketState.End;
                 this._event(this, SocketState.End);
             }
-            this._waitQueue.clear();
+            this.clearWaitQueue();
         });
     }
 
@@ -197,7 +209,7 @@ class SocketHandler {
         this._socket.removeAllListeners();
         this._socket.destroy();
         this._event = ()=>{};
-        this._waitQueue.clear();
+        this.clearWaitQueue();
         this._bundle.clear();
     }
 
@@ -230,31 +242,43 @@ class SocketHandler {
         this._socket.end(callback);
     }
 
+    private static isOverMemoryBufferSize(size: number) : boolean {
+        return SocketHandler.CurrentMemoryBufferSize + size > SocketHandler.MaxMemoryBufferSize;
+    }
 
 
 
-    private _bufferLength : number = 0;
 
     public sendData(data: Buffer,onWriteComplete? : OnWriteComplete ) : void {
+        this.sendData3(data, onWriteComplete);
+    }
+
+
+
+    public sendData2(data: Buffer,onWriteComplete? : OnWriteComplete ) : void {
         if(this._state == SocketState.Closed || this.state == SocketState.Error) {
             onWriteComplete?.(this, false);
             return;
         }
-        this._waitQueue.pushBack(new WaitItem(data!, onWriteComplete));
+        let waitItem = {
+            buffer: data,
+            cacheID: -1,
+            onWriteComplete: onWriteComplete
+        }
 
-        this._bufferLength += data!.length;
+        this._waitQueue.pushBack(waitItem);
 
         if(this._writeLock) {
 
             return;
         }
 
-        this.sendPop();
+        this.sendPop2();
 
 
     }
 
-    private sendPop() : void {
+    private sendPop2() : void {
         let waitItem = this._waitQueue.popFront();
         if(!waitItem) {
             if(this._endWait) {
@@ -270,7 +294,6 @@ class SocketHandler {
             return;
         }
 
-        this._bufferLength -= waitItem.buffer.length;
         if(!this._socket.write(waitItem.buffer, (error) => {
             let onWriteComplete = waitItem!.onWriteComplete;
             if(error) {
@@ -280,7 +303,7 @@ class SocketHandler {
             } else {
                 onWriteComplete?.(this, true);
                 process.nextTick(()=> {
-                    this.sendPop();
+                    this.sendPop2();
                 });
 
             }
@@ -295,10 +318,241 @@ class SocketHandler {
     }
 
 
+    public sendData1(data: Buffer,onWriteComplete? : OnWriteComplete ) : void {
+        if(this._state == SocketState.Closed || this.state == SocketState.Error) {
+            onWriteComplete?.(this, false);
+            return;
+        }
+
+
+        this.pushBuffer(data, onWriteComplete).then(async (waitItem) => {
+            if(this._writeLock) {
+                return;
+            }
+            await this.sendPop1();
+        });
+
+
+
+    }
+
+    private async sendPop1() : Promise<void> {
+
+        let waitItem = await this.popBuffer();
+        if(!waitItem) {
+            if(this._endWait) {
+                this._socket.end();
+            }
+            this._writeLock = false;
+            return;
+        }
+
+        if(this.isEnd()) {
+            //this._waitQueue.clear();
+            waitItem.onWriteComplete?.(this, false);
+            return;
+        }
+
+        let onWriteComplete = waitItem!.onWriteComplete;
+        try {
+            process.nextTick(async ()=> {
+                await this.socketWrite(waitItem!.buffer);
+                onWriteComplete?.(this, true);
+                process.nextTick(async ()=> {
+                    await this.sendPop1();
+                });
+            });
+
+        } catch (error) {
+            console.log(error);
+            onWriteComplete?.(this, false, error as Error);
+            this.procError(error);
+        }
+
+        /*
+
+        if(!this._socket.write(waitItem.buffer, (error) => {
+            let onWriteComplete = waitItem!.onWriteComplete;
+            if(error) {
+                console.log(error);
+                onWriteComplete?.(this, false, error);
+                this.procError(error);
+            } else {
+                onWriteComplete?.(this, true);
+                process.nextTick(async ()=> {
+                    await this.sendPop();
+                });
+
+            }
+
+        })) {
+            /*if(this._failWaitQueue.size() > 1000) {
+                console.log(this._failWaitQueue.size())
+            }
+
+            this._failWaitQueue.pushBack(new WaitItem(data, onWriteComplete));*/
+        //}*/
+    }
+
+    private async socketWrite(data: Buffer) : Promise<boolean> {
+        return new Promise<boolean>((resolve, reject) => {
+            try {
+                if (this._socket.write(data, (error) => {
+                    if (error) {
+                        reject(error);
+                    } else {
+                        resolve(true);
+                    }
+                })) {
+                    resolve(true);
+                }
+            } catch (e) {
+                reject(e);
+            }
+        });
+    }
 
     public isConnected() : boolean {
         return this._state == SocketState.Connected;
     }
+
+
+    private clearWaitQueue() : void {
+        if(SocketHandler.FileCache) {
+            this._fileCacheIds.forEach((id) => {
+                SocketHandler.FileCache?.remove(id);
+            });
+            this._fileCacheIds = [];
+        }
+        this._waitQueue.clear();
+    }
+
+    private async pushBuffer(buffer: Buffer, onWriteComplete? : OnWriteComplete) : Promise<WaitItem> {
+        let recordID = -1;
+        if(SocketHandler.FileCache && SocketHandler.isOverMemoryBufferSize(buffer.length)) {
+            let record = await SocketHandler.FileCache.write(buffer);
+            recordID = record.id;
+            this._fileCacheIds.push(recordID);
+        } else {
+            SocketHandler.CurrentMemoryBufferSize += buffer.length;
+        }
+        let waitItem = {
+            buffer: recordID != -1 ? EMPTY_BUFFER : buffer,
+            cacheID: recordID,
+            onWriteComplete: onWriteComplete
+        }
+
+        this._waitQueue.pushBack(waitItem);
+        return waitItem;
+    }
+
+    private async popBuffer() : Promise<WaitItem | undefined> {
+        let waitItem = this._waitQueue.popFront();
+        if(!waitItem) {
+            return undefined;
+        }
+        if(waitItem.cacheID != -1 && SocketHandler.FileCache) {
+            let buffer = await SocketHandler.FileCache?.read(waitItem.cacheID);
+            SocketHandler.FileCache?.remove(waitItem.cacheID);
+            waitItem.buffer = buffer ?? EMPTY_BUFFER;
+            return waitItem;
+        }
+        SocketHandler.CurrentMemoryBufferSize -= waitItem.buffer.length;
+        return waitItem;
+    }
+
+
+
+
+
+    public sendData3(data: Buffer,onWriteComplete? : OnWriteComplete ) : void {
+        if(this._state == SocketState.Closed || this.state == SocketState.Error) {
+            onWriteComplete?.(this, false);
+            return;
+        }
+
+        this.pushBufferSync(data, onWriteComplete);
+        if(this._writeLock) {
+            return;
+        }
+        this.sendPop3();
+    }
+
+    private  sendPop3() : void {
+
+        let waitItem =  this.popBufferSync();
+        if(!waitItem) {
+            if(this._endWait) {
+                this._socket.end();
+            }
+            this._writeLock = false;
+            return;
+        }
+
+        if(this.isEnd()) {
+            //this._waitQueue.clear();
+            waitItem.onWriteComplete?.(this, false);
+            return;
+        }
+
+        if(!this._socket.write(waitItem.buffer, (error) => {
+            let onWriteComplete = waitItem!.onWriteComplete;
+            if(error) {
+                console.log(error);
+                onWriteComplete?.(this, false, error);
+                this.procError(error);
+            } else {
+                onWriteComplete?.(this, true);
+                process.nextTick( ()=> {
+                     this.sendPop3();
+                });
+
+            }
+
+        })) {
+            /*if(this._failWaitQueue.size() > 1000) {
+                console.log(this._failWaitQueue.size())
+            }
+
+            this._failWaitQueue.pushBack(new WaitItem(data, onWriteComplete));*/
+        }
+    }
+
+
+    private pushBufferSync(buffer: Buffer, onWriteComplete? : OnWriteComplete) : WaitItem {
+        let recordID = -1;
+        if(SocketHandler.FileCache && SocketHandler.isOverMemoryBufferSize(buffer.length)) {
+            let record = SocketHandler.FileCache.writeSync(buffer);
+            recordID = record.id;
+            this._fileCacheIds.push(recordID);
+        } else {
+            SocketHandler.CurrentMemoryBufferSize += buffer.length;
+        }
+        let waitItem = {
+            buffer: recordID != -1 ? EMPTY_BUFFER : buffer,
+            cacheID: recordID,
+            onWriteComplete: onWriteComplete
+        }
+
+        this._waitQueue.pushBack(waitItem);
+        return waitItem;
+    }
+
+    private  popBufferSync() : WaitItem | undefined {
+        let waitItem = this._waitQueue.popFront();
+        if(!waitItem) {
+            return undefined;
+        }
+        if(waitItem.cacheID != -1 && SocketHandler.FileCache) {
+            let buffer = SocketHandler.FileCache?.readSync(waitItem.cacheID);
+            SocketHandler.FileCache?.remove(waitItem.cacheID);
+            waitItem.buffer = buffer ?? EMPTY_BUFFER;
+            return waitItem;
+        }
+        SocketHandler.CurrentMemoryBufferSize -= waitItem.buffer.length;
+        return waitItem;
+    }
+
 }
 
 

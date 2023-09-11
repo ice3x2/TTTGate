@@ -25,14 +25,14 @@ class Session {
     }
 
     public pushWaitBuffer(buffer: Buffer) : void {
-        console.log("[server]",`ControlSession: pushWaitBuffer: ${this.id}, length: ${buffer.length}`)
+        //console.log("[server]",`ControlSession: pushWaitBuffer: ${this.id}, length: ${buffer.length}`)
         this._sendBufferOnWaitConnected.pushBack(buffer);
     }
 
     public popWaitBuffer() : Buffer | undefined {
 
         let buffer =  this._sendBufferOnWaitConnected.popFront();
-        console.log("[server]",`ControlSession: popWaitBuffer: ${this.id}, length: ${buffer ? buffer.length : 0}`)
+        //console.log("[server]",`ControlSession: popWaitBuffer: ${this.id}, length: ${buffer ? buffer.length : 0}`)
         return buffer;
     }
 

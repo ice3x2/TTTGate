@@ -1,4 +1,4 @@
-import {FileCache, Record} from "../util/FileCache";
+import {FileCache, CacheRecord} from "../util/FileCache";
 
 let  app = async () => {
 

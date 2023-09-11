@@ -9,6 +9,7 @@ const Environment = {
     path : {
         logDir : Path.join(process.cwd(),DEV_MODE ? '.' : '..', 'logs'),
         configDir : Path.join(process.cwd(),DEV_MODE ? '.' : '..', 'config'),
+        cacheDir : Path.join(process.cwd(),DEV_MODE ? '.' : '..', 'cache'),
         certDir : Path.join(process.cwd(),DEV_MODE ? '.' : '..','cert'),
         adminCertDir : Path.join(process.cwd(),DEV_MODE ? '.' : '..','cert', 'admin'),
         externalCertDir : Path.join(process.cwd(),DEV_MODE ? '.' : '..','cert', 'external'),
