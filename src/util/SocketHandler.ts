@@ -264,9 +264,10 @@ class SocketHandler {
     }
 
 
-    private _isBusy : boolean = false;
+    //private _isBusy : boolean = false;
     private _writeCount : number = 0;
     private _bufferFull : boolean = false;
+
 
 
 
@@ -305,10 +306,10 @@ class SocketHandler {
 
 
 
-        if(!this._isBusy || !this._enableFileCache) {
+        if(!this._bufferFull || !this._enableFileCache) {
             this.sendPop3();
         }
-        if(this._isBusy && !this._waitQueue.isEmpty() && this._waitQueue.size() % 100 == 0) {
+        if(this._bufferFull && !this._waitQueue.isEmpty() && this._waitQueue.size() % 100 == 0) {
             console.log("queue: " + this._waitQueue.size());
         }
 
@@ -332,11 +333,10 @@ class SocketHandler {
             return;
         }
 
-        this._isBusy = true;
+
         this._writeCount++;
         if(!this._socket.write(waitItem.buffer, (error) => {
             --this._writeCount;
-            this._isBusy = false;
             let onWriteComplete = waitItem!.onWriteComplete;
             if(error) {
                 console.log(error);
@@ -352,9 +352,7 @@ class SocketHandler {
                 this._socket.once('drain', () => {
                     this._bufferFull = false;
 
-                    if(!this._isBusy) {
-                        this.sendPopRecursion();
-                    }
+                    this.sendPopRecursion();
 
                     console.log('drain, left queue: ' + this._waitQueue.size());
 
