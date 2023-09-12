@@ -11,6 +11,9 @@ import {FileCache, CacheRecord} from "./FileCache";
 
 type FileCacheRecordID = number;
 
+interface onWaitItemComplete {
+    (waitItem: WaitItem| undefined) : void;
+}
 
 type WaitItem = {
     buffer: Buffer;
@@ -355,14 +358,11 @@ class SocketHandler {
 
         let onWriteComplete = waitItem!.onWriteComplete;
         try {
-            process.nextTick(async ()=> {
-                await this.socketWrite(waitItem!.buffer);
-                onWriteComplete?.(this, true);
-                process.nextTick(async ()=> {
-                    await this.sendPop1();
-                });
+            await this.socketWrite(waitItem!.buffer);
+            onWriteComplete?.(this, true);
+            setImmediate(async ()=> {
+                await this.sendPop1();
             });
-
         } catch (error) {
             console.log(error);
             onWriteComplete?.(this, false, error as Error);
@@ -393,6 +393,86 @@ class SocketHandler {
             this._failWaitQueue.pushBack(new WaitItem(data, onWriteComplete));*/
         //}*/
     }
+
+
+
+
+
+    public sendData5(data: Buffer,onWriteComplete? : OnWriteComplete ) : void {
+        if(this._state == SocketState.Closed || this.state == SocketState.Error) {
+            onWriteComplete?.(this, false);
+            return;
+        }
+
+
+        this.pushBuffer5(data, onWriteComplete);
+
+        if(this._writeLock) {
+            return;
+        }
+
+        this.sendPop5();
+
+
+    }
+
+    private _onPop5 : boolean = false;
+    private sendPop5()  {
+        if(this._onPop5) {
+            return;
+        }
+        this._onPop5 = true;
+
+         this.popBuffer5((waitItem) => {
+             if (!waitItem) {
+                 if (this._endWait) {
+                     this._socket.end();
+                 }
+                 this._writeLock = false;
+                 return;
+             }
+
+             if (this.isEnd()) {
+                 //this._waitQueue.clear();
+                 waitItem.onWriteComplete?.(this, false);
+                 return;
+             }
+
+
+             if(!this._socket.write(waitItem.buffer, (error) => {
+                 this._onPop5 = false;
+                 let onWriteComplete = waitItem!.onWriteComplete;
+                 if(error) {
+                     console.log(error);
+                     onWriteComplete?.(this, false, error);
+                     this.procError(error);
+                 } else {
+                     onWriteComplete?.(this, true);
+                     setImmediate( ()=> {
+                         this.sendPop5();
+                     });
+
+                 }
+
+             })) {
+                 this._onPop5 = false;
+                 /*if(this._failWaitQueue.size() > 1000) {
+                     console.log(this._failWaitQueue.size())
+                 }
+
+                 this._failWaitQueue.pushBack(new WaitItem(data, onWriteComplete));*/
+             }
+         });
+
+
+
+
+
+    }
+
+
+
+
 
     private async socketWrite(data: Buffer) : Promise<boolean> {
         return new Promise<boolean>((resolve, reject) => {
@@ -426,6 +506,58 @@ class SocketHandler {
         }
         this._waitQueue.clear();
     }
+
+
+    private pushBuffer5(buffer: Buffer, onWriteComplete? : OnWriteComplete) : WaitItem {
+        let recordID = -1;
+        let waitItem = {
+            buffer: EMPTY_BUFFER,
+            cacheID: 0,
+            onWriteComplete: onWriteComplete
+        }
+        if(SocketHandler.FileCache && SocketHandler.isOverMemoryBufferSize(buffer.length)) {
+            SocketHandler.FileCache.write(buffer).then((record) => {
+                waitItem.cacheID = record.id;
+                this._fileCacheIds.push(recordID);
+            });
+        } else {
+            waitItem.cacheID = -1;
+            waitItem.buffer = buffer;
+            SocketHandler.CurrentMemoryBufferSize += buffer.length;
+        }
+        this._waitQueue.pushBack(waitItem);
+        return waitItem;
+    }
+
+
+    private popBuffer5(onCallback: onWaitItemComplete , waitItem?: WaitItem) : void {
+        if(waitItem == undefined) {
+            waitItem = this._waitQueue.popFront();
+        }
+        if (!waitItem) {
+            onCallback(undefined);
+            return ;
+        }
+        if(waitItem.cacheID == 0) {
+            setImmediate(async () => {
+                this.popBuffer5(onCallback, waitItem);
+            });
+            return;
+        }
+        else if(waitItem.cacheID > 0) {
+            SocketHandler.FileCache?.read(waitItem.cacheID).then((buffer) => {
+                waitItem!.buffer = buffer ?? EMPTY_BUFFER;
+                onCallback(waitItem!);
+                SocketHandler.FileCache?.remove(waitItem!.cacheID);
+            });
+            return;
+        }
+        SocketHandler.CurrentMemoryBufferSize -= waitItem.buffer.length;
+        onCallback(waitItem!);
+
+
+    }
+
 
     private async pushBuffer(buffer: Buffer, onWriteComplete? : OnWriteComplete) : Promise<WaitItem> {
         let recordID = -1;

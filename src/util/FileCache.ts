@@ -15,7 +15,7 @@ const EMPTY_BUFFER = Buffer.allocUnsafe(0);
 
 class FileCache {
 
-    private _lastId: number = 0;
+    private _lastId: number = 1;
     private readonly _filePath: string;
     private readonly _fileDescriptor: number;
 
