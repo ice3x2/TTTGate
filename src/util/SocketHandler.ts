@@ -187,6 +187,7 @@ class SocketHandler {
         socket.on('error', (error)=> {
             this.procError(error)
         });
+
         socket.on('close', ()=> {
             if(this._state != SocketState.Closed && this._state != SocketState.Error) {
                 this._state = SocketState.Closed;
@@ -282,7 +283,7 @@ class SocketHandler {
             return;
         }
 
-        if(!this._isBusy) {
+        if(!this._isBusy && !this._bufferFull) {
             this.sendPop2();
         }
 
@@ -321,11 +322,24 @@ class SocketHandler {
                 process.nextTick(()=> {
                     this.sendPop2();
                 });
-
             }
 
         })) {
-            this._isBusy = false;
+
+            if(!this._bufferFull) {
+                this._bufferFull = true;
+                this._socket.once('drain', () => {
+                    this._bufferFull = false;
+
+                    if(!this._waitQueue.isEmpty()) {
+                        this.sendPopRecursion();
+                    } else {
+                        this._isBusy = false;
+                    }
+
+                });
+            }
+
             /*if(this._failWaitQueue.size() > 1000) {
                 console.log(this._failWaitQueue.size())
             }
@@ -627,7 +641,7 @@ class SocketHandler {
         if(!this._isBusy || !this._enableFileCache) {
             this.sendPop3();
         }
-        if(this._isBusy) {
+        if(this._isBusy && !this._waitQueue.isEmpty() && this._waitQueue.size() % 100 == 0) {
             console.log("queue: " + this._waitQueue.size());
         }
 
@@ -661,18 +675,11 @@ class SocketHandler {
                 this.procError(error);
             } else {
                 onWriteComplete?.(this, true);
-                setImmediate( ()=> {
-                     this.sendPop3();
-                });
-
+                this.sendPopRecursion();
             }
-
         })) {
             if(this._isBusy && !this._bufferFull) {
-                this._socket.once('drain', () => {
-                    this._bufferFull = false;
-                    this.sendPop3();
-                });
+                this._bufferFull = true;
             }
 
             /*if(this._failWaitQueue.size() > 1000) {
@@ -682,6 +689,19 @@ class SocketHandler {
             this._failWaitQueue.pushBack(new WaitItem(data, onWriteComplete));*/
         }
     }
+
+    private sendPopRecursion() : void {
+        if(this._enableFileCache) {
+            setImmediate(() => {
+                this.sendPop3();
+            });
+        } else {
+            process.nextTick(()=> {
+                this.sendPop3();
+            });
+        }
+    }
+
 
 
     private pushBufferSync(buffer: Buffer, onWriteComplete? : OnWriteComplete) : WaitItem {
