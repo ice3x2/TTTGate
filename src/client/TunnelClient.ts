@@ -222,13 +222,17 @@ class TunnelClient {
         if (!session || !this._ctrlHandler) {
             return false;
         }
-        let packet = CtrlPacket.createDataCtrl(id, data);
+        let packets = CtrlPacket.createDataCtrl(id, data);
         if(session.state == SessionState.HalfOpened) {
             console.log('[Client:TunnelClient]',   `PushWaitBuffer: id - ${id}`);
-            session.pushWaitBuffer(packet.toBuffer());
+            for(let packet of packets) {
+                session.pushWaitBuffer(packet.toBuffer());
+            }
             return true;
         }
-        this._ctrlHandler.sendData(packet.toBuffer());
+        for(let packet of packets) {
+            this._ctrlHandler.sendData(packet.toBuffer());
+        }
         return true;
 
     }

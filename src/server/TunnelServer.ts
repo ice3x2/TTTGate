@@ -95,7 +95,7 @@ class TunnelServer {
     }
 
     public sendBuffer(sessionId: number, buffer: Buffer) : boolean {
-        let packet = CtrlPacket.createDataCtrl(sessionId, buffer);
+        let packets = CtrlPacket.createDataCtrl(sessionId, buffer);
         if(!this.available()) {
             return false;
         }
@@ -109,9 +109,13 @@ class TunnelServer {
                 this._sessionMap.delete(sessionId);
                 return false;
             }
-            handler.sendData(packet.toBuffer());
+            for(let packet of packets) {
+                handler.sendData(packet.toBuffer());
+            }
         } else {
-            session.pushWaitBuffer(packet.toBuffer());
+            for(let packet of packets) {
+                session.pushWaitBuffer(packet.toBuffer());
+            }
         }
         return true;
     }

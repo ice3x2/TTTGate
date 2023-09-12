@@ -80,8 +80,10 @@ class FileCache {
                 capacity: buffer.length,
                 id: this._lastId++
             };
+            this._cacheSize += buffer.length;
         }
         fs.writeSync(this._fileDescriptor, buffer, 0, buffer.length, block.position);
+        fs.fstatSync(this._fileDescriptor);
         this._cacheMap.set(block.id, block);
         return block;
     }
@@ -110,6 +112,7 @@ class FileCache {
             }
         await this.writeAll(this._fileDescriptor, block.position, buffer);
             this._cacheMap.set(block.id, block);
+
         return block;
 
     }

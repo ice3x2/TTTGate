@@ -8,6 +8,19 @@ import Environment from "./Environment";
 SocketHandler.fileCache = FileCache.create(Path.join(Environment.path.cacheDir,new Date().getDate() + '' + Math.random() + '.tmp'));
 
 
+let _byteToMB = (byte: number) : number => {
+    return Math.round(byte / 1024 / 1024 * 100) / 100;
+}
+
+let _printMemoryUsage = () => {
+    let mem = process.memoryUsage();
+    console.log(`Memory: rss: ${_byteToMB(mem.rss)}, heapTotal: ${_byteToMB(mem.heapTotal)}, heapUsed: ${_byteToMB(mem.heapUsed)}, external: ${_byteToMB(mem.external)} free: ${_byteToMB(mem.rss - mem.heapTotal)}`);
+}
+
+setInterval(() => {
+    _printMemoryUsage();
+}, 3000);
+
 
 let _findTypeByArgv = () : 'server' | 'client' | 'none' => {
     let items : Array<string> = process.argv;

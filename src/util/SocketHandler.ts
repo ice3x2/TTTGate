@@ -52,6 +52,8 @@ class SocketHandler {
     private _bundle: Map<string, any> = new Map<string, any>();
     private _isServer : boolean = false;
 
+    private _enableFileCache : boolean = false;
+
 
     private _event: OnSocketEvent;
 
@@ -79,6 +81,10 @@ class SocketHandler {
         this._event = event;
     }
 
+
+    public set enableFileCache(value: boolean) {
+        this._enableFileCache = value;
+    }
 
 
     public static connect(options: ConnectOpt, event : OnSocketEvent) : SocketHandler {
@@ -276,10 +282,15 @@ class SocketHandler {
             return;
         }
 
-        this.sendPop2();
+        if(!this._isBusy) {
+            this.sendPop2();
+        }
 
 
     }
+
+    private _isBusy : boolean = false;
+    private _bufferFull : boolean = false;
 
     private sendPop2() : void {
         let waitItem = this._waitQueue.popFront();
@@ -297,7 +308,9 @@ class SocketHandler {
             return;
         }
 
+        this._isBusy = true;
         if(!this._socket.write(waitItem.buffer, (error) => {
+            this._isBusy = false;
             let onWriteComplete = waitItem!.onWriteComplete;
             if(error) {
                 console.log(error);
@@ -312,6 +325,7 @@ class SocketHandler {
             }
 
         })) {
+            this._isBusy = false;
             /*if(this._failWaitQueue.size() > 1000) {
                 console.log(this._failWaitQueue.size())
             }
@@ -607,7 +621,17 @@ class SocketHandler {
         if(this._writeLock) {
             return;
         }
-        this.sendPop3();
+
+
+
+        if(!this._isBusy || !this._enableFileCache) {
+            this.sendPop3();
+        }
+        if(this._isBusy) {
+            console.log("queue: " + this._waitQueue.size());
+        }
+
+
     }
 
     private  sendPop3() : void {
@@ -627,7 +651,9 @@ class SocketHandler {
             return;
         }
 
+        this._isBusy = true;
         if(!this._socket.write(waitItem.buffer, (error) => {
+            this._isBusy = false;
             let onWriteComplete = waitItem!.onWriteComplete;
             if(error) {
                 console.log(error);
@@ -635,13 +661,20 @@ class SocketHandler {
                 this.procError(error);
             } else {
                 onWriteComplete?.(this, true);
-                process.nextTick( ()=> {
+                setImmediate( ()=> {
                      this.sendPop3();
                 });
 
             }
 
         })) {
+            if(this._isBusy && !this._bufferFull) {
+                this._socket.once('drain', () => {
+                    this._bufferFull = false;
+                    this.sendPop3();
+                });
+            }
+
             /*if(this._failWaitQueue.size() > 1000) {
                 console.log(this._failWaitQueue.size())
             }
@@ -653,7 +686,7 @@ class SocketHandler {
 
     private pushBufferSync(buffer: Buffer, onWriteComplete? : OnWriteComplete) : WaitItem {
         let recordID = -1;
-        if(SocketHandler.FileCache && SocketHandler.isOverMemoryBufferSize(buffer.length)) {
+        if(this._enableFileCache && SocketHandler.FileCache && !this._waitQueue.isEmpty()  && SocketHandler.isOverMemoryBufferSize(buffer.length) ) {
             let record = SocketHandler.FileCache.writeSync(buffer);
             recordID = record.id;
             this._fileCacheIds.push(recordID);

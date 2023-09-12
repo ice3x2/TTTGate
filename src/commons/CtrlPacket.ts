@@ -35,6 +35,8 @@ enum CtrlCmd {
     Failed
 }
 
+const MAX_PAYLOAD_SIZE = 64000;
+
 class CtrlPacket {
 
     private static readonly EMPTY_BUFFER = Buffer.alloc(0);
@@ -104,12 +106,26 @@ class CtrlPacket {
         return packet;
     }
 
-    public static createDataCtrl(id: number, data: Buffer) : CtrlPacket {
-        let packet = new CtrlPacket();
+    public static createDataCtrl(id: number, data: Buffer) : Array<CtrlPacket> {
+        let packets = new Array<CtrlPacket>();
+        let offset = 0;
+        while(offset < data.length) {
+            let packet = new CtrlPacket();
+            packet._cmd = CtrlCmd.Data;
+            packet._id = id;
+            let length = Math.min(data.length - offset, MAX_PAYLOAD_SIZE);
+            packet._data = data.subarray(offset, offset + length);
+            offset += length;
+            packets.push(packet);
+        }
+        return packets;
+
+        /*let packet = new CtrlPacket();
         packet._cmd = CtrlCmd.Data;
         packet._id = id;
         packet._data = data;
-        return packet;
+        return packet;*/
+
     }
 
     public static createOpen( id: number, opt: ConnectOpt) : CtrlPacket {
@@ -157,7 +173,7 @@ class CtrlPacket {
         result._id = reader.readUInt32();
         let dataLength = reader.readUInt32();
         // unt32 max value
-        if(dataLength > 4294967295) {
+        if(dataLength > MAX_PAYLOAD_SIZE + this.HEADER_LEN) {
             return {packet: null, remain: emptyBuffer, state: ParsedState.Error, error: new Error("Data length too large")};
         }
         if(result._cmd == CtrlCmd.SyncCtrl && dataLength != 0) {
