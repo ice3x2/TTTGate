@@ -162,6 +162,7 @@ class HttpPipe {
     }
 
     public write (buffer: Buffer) : void {
+
         try {
             this._buffer = Buffer.concat([this._buffer, buffer]);
             if (this._state == ParseState.SEARCHING_FOR_HEADER) {

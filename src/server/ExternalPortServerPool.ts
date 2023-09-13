@@ -209,7 +209,7 @@ class ExternalPortServerPool {
             }
             option = option as TunnelingOption;
 
-            handler.enableFileCache = true;
+            handler.setCacheOption(option.cacheOption);
             handler.setBundle(OPTION_BUNDLE_KEY, option);
             handler.setBundle(PORT_BUNDLE_KEY, server.port);
 

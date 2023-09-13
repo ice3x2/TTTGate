@@ -37,9 +37,18 @@ type ServerOption = {
     adminTls?: boolean,
     port: number,
     tls : boolean,
-    tunnelingOptions: Array<TunnelingOption>
+    tunnelingOptions: Array<TunnelingOption>,
+    globalMemCacheLimit?: number
+
 
 }
+
+type CacheOption = {
+    fileCache: boolean;
+    maxMemCacheSize: number;
+    enable : boolean;
+}
+
 
 type TunnelingOption = {
     forwardPort: number,
@@ -49,7 +58,8 @@ type TunnelingOption = {
     destinationPort?: number;
     allowedClientNames?: Array<string>;
     inactiveOnStartup?: boolean;
-    tls?: boolean;
+    tls?: boolean,
+    cacheOption?: CacheOption
 }
 
 const DEFAULT_KEY = "hello-TTTGate";

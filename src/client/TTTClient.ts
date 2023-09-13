@@ -57,6 +57,7 @@ class TTTClient {
 
     private onSessionCloseCallback = (id: number) : void => {
         this._endPointClientPool.close(id);
+        logger.info(`TTTClient:: TunnelClient closed, and close EndPointClientPool id: ${id}`);
         console.log("[Client:TTTClient]", `TunnelClient closed, and close EndPointClientPool id: ${id}`);
     }
 

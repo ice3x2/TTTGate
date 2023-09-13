@@ -79,7 +79,7 @@ class HttpHandler {
 
     private onSocketEventFromSocketHandler = (handler: SocketHandler, state: SocketState, data?: any) : void => {
 
-        if(state == SocketState.Receive) {
+        if(state == SocketState.Receive && !this._socketHandler.isEnd()) {
             if(this._isUpgrade) {
                 this._event?.(handler, state, data);
                 return;
@@ -90,6 +90,10 @@ class HttpHandler {
             //console.log("HttpHandler.onSocketEventFromSocketHandler: " + data.toString());
             this._currentHttpPipe.write(data);
         } else {
+            if(this._socketHandler.isEnd() || SocketState.End == state || SocketState.Error == state || SocketState.Closed == state) {
+                this.release();
+            }
+
             this._event?.(handler, state);
         }
     }
@@ -259,6 +263,9 @@ class HttpHandler {
 
 
     public sendData(data: Buffer) : void {
+        if(this._socketHandler.isEnd() || this._socketHandler.isUnavailable()) {
+            return;
+        }
         if(this._isUpgrade) {
             this._socketHandler.sendData(data);
             return;
@@ -274,15 +281,20 @@ class HttpHandler {
     }
 
     public end() : void {
-        this._currentHttpPipe.reset(MessageType.Request);
-        this._httpMessageType = MessageType.Request;
+        this.release();
         this._socketHandler.end();
     }
 
     public close(callback? : ()=> void) : void {
+        this.release();
+        this._socketHandler.close(callback);
+    }
+
+    private release() : void {
         this._currentHttpPipe.reset(MessageType.Request);
         this._httpMessageType = MessageType.Request;
-        this._socketHandler.close(callback);
+        this._isUpgrade = false;
+
     }
 
 

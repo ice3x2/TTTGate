@@ -4,6 +4,8 @@ import SocketState from "./SocketState";
 import {ConnectOpt} from "../option/ConnectOpt";
 import * as tls from "tls";
 import {FileCache, CacheRecord} from "./FileCache";
+import Path from "path";
+import {logger} from "../commons/Logger";
 
 
 
@@ -29,6 +31,14 @@ interface OnSocketEvent {
     (handler: SocketHandler, state: SocketState, data?: any) : void;
 }
 
+interface CacheOption {
+    fileCache?: boolean;
+    maxMemCacheSize?: number;
+    enable : boolean;
+    fileCacheDirectory?: string;
+}
+
+
 
 // noinspection JSUnusedGlobalSymbols
 class SocketHandler {
@@ -36,9 +46,10 @@ class SocketHandler {
     private static LAST_ID: number = 1;
 
 
-    private static MaxMemoryBufferSize: number = 0;
-    private static CurrentMemoryBufferSize: number = 0;
-    private static FileCache : FileCache | null = null;
+    private static MaxGlobalMemoryBufferSize: number = 1024 * 1024 * 512; // 512MB
+    private static GlobalMemoryBufferSize: number = 0;
+
+    private static TempDir: string = Path.join(process.cwd(), "tmp");
 
 
     private readonly _port: number;
@@ -52,21 +63,30 @@ class SocketHandler {
     private _bundle: Map<string, any> = new Map<string, any>();
     private _isServer : boolean = false;
 
-    private _enableFileCache : boolean = false;
+
 
 
     private _event: OnSocketEvent;
 
     private _waitQueue: Dequeue<WaitItem> = new Dequeue<WaitItem>();
-    private _fileCacheIds: Array<FileCacheRecordID> = [];
 
-    private _writeLock : boolean = false;
+
     private _endWait : boolean = false;
 
+    private _fileCache : FileCache | null = null;
+    private _bufferFull : boolean = false;
 
-    public static set fileCache(fileCache: FileCache)  {
-        SocketHandler.FileCache = fileCache;
+    private _maxMemoryBufferSize: number = 10 * 1024 * 1024; // 10MB
+    private _memoryBufferSize: number = 0;
+    private _unavailableState: boolean = false;
+
+    private _cacheOption: CacheOption = {
+        fileCache: false,
+        maxMemCacheSize: 10 * 1024 * 1024,
+        enable: false,
+        fileCacheDirectory: SocketHandler.TempDir
     }
+
 
     public get isServer() : boolean {
         return this._isServer;
@@ -81,10 +101,28 @@ class SocketHandler {
         this._event = event;
     }
 
+    public static set DefaultCacheDirectory(path: string) {
+        SocketHandler.TempDir = path;
 
-    public set enableFileCache(value: boolean) {
-        this._enableFileCache = value;
     }
+
+    public static set GlobalMemCacheLimit(limit: number) {
+        SocketHandler.GlobalMemoryBufferSize = limit;
+    }
+
+    public setCacheOption(option: CacheOption) : void {
+        if(option.fileCache == undefined) option.fileCache = this._cacheOption.fileCache;
+        if(option.fileCacheDirectory == undefined) option.fileCacheDirectory = this._cacheOption.fileCacheDirectory;
+        if(option.maxMemCacheSize == undefined) option.maxMemCacheSize = this._cacheOption.maxMemCacheSize;
+        this._cacheOption = option;
+        if(this._cacheOption.enable && this._cacheOption.fileCache) {
+            this._fileCache = FileCache.create(this._cacheOption.fileCacheDirectory!);
+        }
+    }
+
+
+
+
 
 
     public static connect(options: ConnectOpt, event : OnSocketEvent) : SocketHandler {
@@ -158,6 +196,10 @@ class SocketHandler {
         return this._bundle.has(key);
     }
 
+    public isUnavailable() : boolean {
+        return this._unavailableState;
+    }
+
     public isEnd() : boolean {
         return this._state == SocketState.Closed || this._state == SocketState.End || this._state == SocketState.Error;
     }
@@ -185,6 +227,7 @@ class SocketHandler {
 
         });
         socket.on('error', (error)=> {
+            console.error(error);
             this.procError(error)
         });
 
@@ -218,9 +261,11 @@ class SocketHandler {
     private release() : void {
         this._socket.removeAllListeners();
         this._socket.destroy();
+        this._state = SocketState.Closed;
         this._event = ()=>{};
         this.clearWaitQueue();
         this._bundle.clear();
+
     }
 
     public get port() {
@@ -239,8 +284,8 @@ class SocketHandler {
 
     public end() : void {
         this._endWait = true;
-        process.nextTick(()=> {
-            if(this._writeLock || !this._waitQueue.isEmpty()) {
+        setImmediate(()=> {
+            if(!this._waitQueue.isEmpty() && !this._unavailableState) {
                 return;
             }
             this._socket.end();
@@ -248,28 +293,26 @@ class SocketHandler {
     }
 
     public close(callback? : () => void) : void {
-        this._waitQueue.clear();
+        this.clearWaitQueue();
         this._socket.end(callback);
     }
 
-    private static isOverMemoryBufferSize(size: number) : boolean {
-        return SocketHandler.CurrentMemoryBufferSize + size > SocketHandler.MaxMemoryBufferSize;
+    private static isOverGlobalMemoryBufferSize(size: number) : boolean {
+        return SocketHandler.GlobalMemoryBufferSize + size > SocketHandler.MaxGlobalMemoryBufferSize;
+    }
+
+
+
+    private isOverMemoryBufferSize(size: number) : boolean {
+        return this._memoryBufferSize + size > this._maxMemoryBufferSize || SocketHandler.isOverGlobalMemoryBufferSize(size);
     }
 
 
 
 
     public sendData(data: Buffer,onWriteComplete? : OnWriteComplete ) : void {
-        this.sendData3(data, onWriteComplete);
+        this.pushSendData(data, onWriteComplete);
     }
-
-
-    //private _isBusy : boolean = false;
-    private _writeCount : number = 0;
-    private _bufferFull : boolean = false;
-
-
-
 
 
     public isConnected() : boolean {
@@ -278,11 +321,12 @@ class SocketHandler {
 
 
     private clearWaitQueue() : void {
-        if(SocketHandler.FileCache) {
-            this._fileCacheIds.forEach((id) => {
-                SocketHandler.FileCache?.remove(id);
-            });
-            this._fileCacheIds = [];
+        if(this._memoryBufferSize > 0) {
+            this.appendUsageMemoryBufferSize(-this._memoryBufferSize);
+        }
+
+        if(this._fileCache) {
+            this._fileCache.delete();
         }
         this._waitQueue.clear();
     }
@@ -290,108 +334,118 @@ class SocketHandler {
 
 
 
-
-
-
-    public sendData3(data: Buffer,onWriteComplete? : OnWriteComplete ) : void {
-        if(this._state == SocketState.Closed || this.state == SocketState.Error) {
+    public pushSendData(data: Buffer, onWriteComplete? : OnWriteComplete ) : void {
+        if(this._unavailableState || this._state == SocketState.Closed || this.state == SocketState.Error) {
             onWriteComplete?.(this, false);
             return;
         }
 
-        this.pushBufferSync(data, onWriteComplete);
-        if(this._writeLock) {
+        if(!this.pushBufferSync(data, onWriteComplete)) {
+            onWriteComplete?.(this, false);
             return;
         }
 
 
-
-        if(!this._bufferFull || !this._enableFileCache) {
-            this.sendPop3();
+        if(!this._bufferFull || !this._cacheOption.fileCacheDirectory) {
+            this.popDataAndSend();
         }
-        if(this._bufferFull && !this._waitQueue.isEmpty() && this._waitQueue.size() % 100 == 0) {
+        if(this._bufferFull && !this._waitQueue.isEmpty() && this._waitQueue.size() % 1000 == 0) {
             console.log("queue: " + this._waitQueue.size());
         }
 
-
     }
 
-    private  sendPop3() : void {
+    private  popDataAndSend() : void {
 
         let waitItem =  this.popBufferSync();
         if(!waitItem) {
             if(this._endWait) {
                 this._socket.end();
             }
-            this._writeLock = false;
             return;
         }
 
-        if(this.isEnd()) {
+        if(this.isEnd() || this._unavailableState) {
             //this._waitQueue.clear();
             waitItem.onWriteComplete?.(this, false);
             return;
         }
 
 
-        this._writeCount++;
-        if(!this._socket.write(waitItem.buffer, (error) => {
-            --this._writeCount;
-            let onWriteComplete = waitItem!.onWriteComplete;
-            if(error) {
-                console.log(error);
-                onWriteComplete?.(this, false, error);
-                this.procError(error);
-            } else {
-                onWriteComplete?.(this, true);
-                this.sendPopRecursion();
-            }
-        })) {
-            if(!this._bufferFull) {
-                this._bufferFull = true;
-                this._socket.once('drain', () => {
-                    this._bufferFull = false;
-
+            if (!this._socket.write(waitItem.buffer, (error) => {
+                let onWriteComplete = waitItem!.onWriteComplete;
+                if (error) {
+                    if (this._endWait) {
+                        this.clearWaitQueue();
+                    }
+                    onWriteComplete?.(this, false, error);
+                    this.procError(error);
+                } else {
+                    onWriteComplete?.(this, true);
                     this.sendPopRecursion();
-
-                    console.log('drain, left queue: ' + this._waitQueue.size());
-
-
-
-
-                });
+                }
+            })) {
+                if (!this._cacheOption.enable) {
+                    return;
+                }
+                if (!this._bufferFull) {
+                    this._bufferFull = true;
+                    this._socket.once('drain', () => {
+                        this._bufferFull = false;
+                        this.sendPopRecursion();
+                    });
+                }
             }
 
-            /*if(this._failWaitQueue.size() > 1000) {
-                console.log(this._failWaitQueue.size())
-            }
-
-            this._failWaitQueue.pushBack(new WaitItem(data, onWriteComplete));*/
-        }
     }
 
     private sendPopRecursion() : void {
-        if(this._enableFileCache) {
+        if(this._cacheOption.enable && this._cacheOption.fileCache) {
             setImmediate(() => {
-                this.sendPop3();
+                this.popDataAndSend();
             });
         } else {
             process.nextTick(()=> {
-                this.sendPop3();
+                this.popDataAndSend();
             });
+        }
+    }
+
+    private appendUsageMemoryBufferSize(size: number) : void {
+        SocketHandler.GlobalMemoryBufferSize += size;
+        this._memoryBufferSize += size;
+        if(SocketHandler.GlobalMemoryBufferSize < 0) {
+            SocketHandler.GlobalMemoryBufferSize = 0;
+        }
+        if(this._memoryBufferSize < 0) {
+            this._memoryBufferSize = 0;
         }
     }
 
 
 
-    private pushBufferSync(buffer: Buffer, onWriteComplete? : OnWriteComplete) : WaitItem {
+    private pushBufferSync(buffer: Buffer, onWriteComplete? : OnWriteComplete) : boolean {
         let recordID = -1;
-        if(this._enableFileCache && SocketHandler.FileCache && !this._waitQueue.isEmpty()  && SocketHandler.isOverMemoryBufferSize(buffer.length) ) {
-            let record = SocketHandler.FileCache.writeSync(buffer);
+
+        if(this._cacheOption.fileCache && this._fileCache && !this._waitQueue.isEmpty()  && this.isOverMemoryBufferSize(buffer.length)) {
+            let record = this._fileCache.writeSync(buffer);
+            if(record.id == -1) {
+                return false;
+            }
             recordID = record.id;
-            this._fileCacheIds.push(recordID);
         } else {
-            SocketHandler.CurrentMemoryBufferSize += buffer.length;
+            if(this._cacheOption.enable && this._waitQueue.size() > 1 && this.isOverMemoryBufferSize(buffer.length)) {
+                if(SocketHandler.isOverGlobalMemoryBufferSize(buffer.length)) {
+                    logger.error(`SocketHandler: global memory buffer size is over. size: ${SocketHandler.GlobalMemoryBufferSize}, max: ${SocketHandler.MaxGlobalMemoryBufferSize}`);
+                } else {
+                    logger.error(`SocketHandler: ${this._id}  memory buffer size is over. size: ${this._memoryBufferSize}, max: ${this._maxMemoryBufferSize}`);
+                }
+                this.appendUsageMemoryBufferSize(-this._memoryBufferSize);
+                this._unavailableState = true;
+                this.end();
+                return false;
+            }
+            this.appendUsageMemoryBufferSize(buffer.length);
         }
         let waitItem = {
             buffer: recordID != -1 ? EMPTY_BUFFER : buffer,
@@ -400,21 +454,23 @@ class SocketHandler {
         }
 
         this._waitQueue.pushBack(waitItem);
-        return waitItem;
+        return true;
     }
+
+
 
     private  popBufferSync() : WaitItem | undefined {
         let waitItem = this._waitQueue.popFront();
         if(!waitItem) {
             return undefined;
         }
-        if(waitItem.cacheID != -1 && SocketHandler.FileCache) {
-            let buffer = SocketHandler.FileCache?.readSync(waitItem.cacheID);
-            SocketHandler.FileCache?.remove(waitItem.cacheID);
+        if(waitItem.cacheID != -1 && this._fileCache) {
+            let buffer = this._fileCache?.readSync(waitItem.cacheID);
+            this._fileCache?.remove(waitItem.cacheID);
             waitItem.buffer = buffer ?? EMPTY_BUFFER;
             return waitItem;
         }
-        SocketHandler.CurrentMemoryBufferSize -= waitItem.buffer.length;
+        this.appendUsageMemoryBufferSize(-waitItem.buffer.length);
         return waitItem;
     }
 

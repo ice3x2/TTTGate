@@ -17,11 +17,14 @@ class FileCache {
 
     private _lastId: number = 1;
     private readonly _filePath: string;
-    private readonly _fileDescriptor: number;
+    private _fileDescriptor: number = -1;
 
     private _emptyBlocks: Array<CacheRecord> = [];
     private _cacheMap = new Map<number, CacheRecord>();
     private _cacheSize: number = 0;
+
+    private _deleted : boolean = false;
+
 
     private findEmptyBlock(length: number) : CacheRecord | null {
         for(let i = 0; i < this._emptyBlocks.length; i++) {
@@ -42,7 +45,11 @@ class FileCache {
 
     private constructor(filePath: string) {
         this._filePath = filePath;
-        let file = new File(filePath);
+
+    }
+
+    private reset() : void {
+        let file = new File(this._filePath);
         let parent = file.getParentFile();
         if(!parent.isDirectory()) {
             parent.mkdirs();
@@ -57,11 +64,25 @@ class FileCache {
         if(!file.canWrite() || !file.canRead()) {
             throw new Error("can not read or write file " + file.toString());
         }
-        this._fileDescriptor = fs.openSync(file.toString(), 'r+');
+    }
 
+    private openIfNotFd() : void {
+        if(this._fileDescriptor == -1) {
+            this.reset();
+            this._fileDescriptor = fs.openSync(this._filePath, 'r+');
+        }
     }
 
     public writeSync(buffer: Buffer) : CacheRecord {
+        this.openIfNotFd();
+        if(this._deleted) {
+            return {
+                position: -1,
+                length: -1,
+                capacity: -1,
+                id: -1
+            };
+        }
         let block = this.findEmptyBlock(buffer.length);
         let length = buffer.length;
 
@@ -88,90 +109,12 @@ class FileCache {
         return block;
     }
 
-    public async write(buffer: Buffer) : Promise<CacheRecord> {
-
-            let block = this.findEmptyBlock(buffer.length);
-            let length = buffer.length;
 
 
-            if(block != null) {
-                block.length = length;
-                if(length < block.capacity) {
-                    buffer = Buffer.concat([buffer, Buffer.allocUnsafe(block.capacity - buffer.length)]);
-                }
-            } else {
-                if(length < MIN_CAPACITY) {
-                    buffer = Buffer.concat([buffer, Buffer.allocUnsafe(MIN_CAPACITY - buffer.length)]);
-                }
-                block = {
-                    position: this._cacheSize,
-                    length: length,
-                    capacity: buffer.length,
-                    id: this._lastId++
-                };
-            }
-        await this.writeAll(this._fileDescriptor, block.position, buffer);
-            this._cacheMap.set(block.id, block);
-
-        return block;
-
-    }
-
-    private async writeAll(fd: number,pos: number, buffer: Buffer) : Promise<void> {
-        let written = 0;
-        while(written < buffer.length) {
-           written += await this.writeBuffer(fd, pos, buffer);
+    public readSync(id : number) : Buffer | undefined {
+        if(this._deleted || this._fileDescriptor == -1) {
+            return undefined;
         }
-    }
-
-    private async writeBuffer(fd: number, pos: number, buffer: Buffer) : Promise<number> {
-        return new Promise<number>((resolve, reject) => {
-            fs.write(fd, buffer, 0, buffer.length, pos, (err, written, buffer) => {
-                if(err) {
-                    reject(err);
-                } else {
-                    resolve(written);
-                }
-            });
-        });
-    }
-
-    private async readAll(fd: number, pos: number, length: number) : Promise<Buffer> {
-        let buffer = EMPTY_BUFFER;
-        let read = 0;
-        while(read < length) {
-            let readBuffer = await this.readBuffer(fd, pos, length);
-            read += readBuffer.length;
-            buffer = Buffer.concat([buffer, readBuffer]);
-        }
-        return buffer;
-    }
-
-    private async readBuffer(fd: number, pos: number, length: number) : Promise<Buffer> {
-        return new Promise<Buffer>((resolve, reject) => {
-            let buffer = Buffer.allocUnsafe(length);
-            fs.read(fd, buffer, 0, length, pos, (err, bytesRead, buffer) => {
-                if(err) {
-                    reject(err);
-                } else {
-                    buffer = buffer.subarray(0, bytesRead);
-                    resolve(buffer);
-                }
-            });
-        });
-    }
-
-
-
-    public async read(id : number) : Promise<Buffer | undefined> {
-            let block = this._cacheMap.get(id);
-            if(block == undefined) {
-                return undefined;
-            }
-            return await this.readAll(this._fileDescriptor, block.position, block.length);
-    }
-
-    public  readSync(id : number) : Buffer | undefined {
         let block = this._cacheMap.get(id);
         if (block == undefined) {
             return undefined;
@@ -182,14 +125,39 @@ class FileCache {
     }
 
     public  remove(id : number) : boolean {
+        if(this._deleted) {
+            return false;
+        }
         let block = this._cacheMap.get(id);
         if(block == undefined) {
             return false;
         }
         this._cacheMap.delete(id);
         this._emptyBlocks.push(block);
+        if(this._cacheMap.size == 0) {
+            this._emptyBlocks = [];
+            this._cacheSize = 0;
+        }
         return true;
     }
+
+    public delete() : void {
+        if(this._deleted || this._fileDescriptor == -1)  {
+            return;
+        }
+        this._deleted = true;
+        this._cacheMap = new Map<number, CacheRecord>();
+        this._emptyBlocks = [];
+        this._cacheSize = 0;
+
+
+
+        fs.close(this._fileDescriptor, () => {
+            this._fileDescriptor = -1;
+            fs.unlink(this._filePath, () => {});
+        });
+    }
+
 
 
 }

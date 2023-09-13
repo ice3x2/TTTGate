@@ -115,10 +115,8 @@ class TCPServer {
         let handler = SocketHandler.bound(option,(handler, state, data) => {
             if(state == SocketState.Closed || state == SocketState.Error || state == SocketState.End) {
                 this._idHandlerMap.delete(handler.id);
-
             }
             this._onHandlerEvent?.(handler, state, data);
-
         });
         this._idHandlerMap.set(handler.id, handler);
         this._onServerEvent?.(this, SocketState.Bound, handler);
