@@ -17,6 +17,7 @@ type ServerOption = {
     adminTls: boolean;
     port: number;
     tls: boolean;
+    globalMemCacheLimit: number;
 }
 
 

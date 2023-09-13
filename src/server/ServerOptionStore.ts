@@ -157,6 +157,9 @@ class ServerOptionStore {
         if(!option.adminPort) {
             return {success: false, message: "adminPort is undefined"};
         }
+        if(option.globalMemCacheLimit == undefined || option.globalMemCacheLimit == null) {
+            option.globalMemCacheLimit = 0;
+        }
         if(option.adminPort < 0 || option.adminPort > 65535) {
             return {success: false, message: "adminPort is invalid (0 ~ 65535)"};
         }

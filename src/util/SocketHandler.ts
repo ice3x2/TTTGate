@@ -110,7 +110,10 @@ class SocketHandler {
         SocketHandler.GlobalMemoryBufferSize = limit;
     }
 
-    public setCacheOption(option: CacheOption) : void {
+    public setCacheOption(option?: CacheOption) : void {
+        if(option == undefined) {
+            return;
+        }
         if(option.fileCache == undefined) option.fileCache = this._cacheOption.fileCache;
         if(option.fileCacheDirectory == undefined) option.fileCacheDirectory = this._cacheOption.fileCacheDirectory;
         if(option.maxMemCacheSize == undefined) option.maxMemCacheSize = this._cacheOption.maxMemCacheSize;

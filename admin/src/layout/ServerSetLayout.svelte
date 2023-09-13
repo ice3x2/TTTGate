@@ -209,6 +209,8 @@
             <input type="checkbox" style="width: 14px" bind:checked={_serverOption.adminTls} >
             <div style="display: inline-block;position: relative; top: -7px; font-size: 10pt">Secure tunneling Server/Client</div>
         </div>
+
+
         {#if _serverOption.adminTls}
             <InputCertFile certInfo={_adminServerCert} on:update={_onUpdateAdminCert} ></InputCertFile>
         {/if}
@@ -218,13 +220,17 @@
             <label for="input-tunnel-port" class="form-label">Tunnel server port number</label>
             <input type="number" min="0" max="65535" id="input-tunnel-port" class="form-control" on:keyup={_enforceMinMax} bind:value={_serverOption.port}>
         </div>
-        <div class="check-box">
+        <div class="check-box" style="margin-bottom: 25px">
             <input type="checkbox" style="width: 14px" bind:checked={_serverOption.tls}>
             <div style="display: inline-block;position: relative; top: -7px; font-size: 10pt">Enable secure Tunnel server</div>
         </div>
 
-        <br/>
-        <div style="width: 100%; margin-top: 10px">
+        <div class="input-box">
+            <label for="input-global-cache-limit" class="form-label" >Global memory cache limit (MiB) </label>
+            <input type="number" min="1" max="99999" on:keyup={_enforceMinMax}  bind:value={_serverOption.globalMemCacheLimit}>
+        </div>
+
+        <div style="width: 100%; margin-top: 40px">
             <div style="display: inline-block">
                 <button style="width: 100px" disabled={!_isNewValue} on:click={_apply}>Apply</button>
             </div>
