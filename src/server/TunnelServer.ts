@@ -50,7 +50,7 @@ class TunnelServer {
         this._serverOption = option;
         this._certInfo = certInfo;
         this._key = option.key;
-        let tcpServerOption : ServerOption = {port: option.port, tls: option.tls, key: option.key, cert: certInfo.cert.value, ca: (certInfo.ca.value == '') ? undefined : certInfo.ca.value};
+        let tcpServerOption : ServerOption = {port: option.port, tls: option.tls, key: certInfo.key.value, cert: certInfo.cert.value, ca: (certInfo.ca.value == '') ? undefined : certInfo.ca.value};
         this._tunnelServer = TCPServer.create(tcpServerOption);
     }
 

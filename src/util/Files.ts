@@ -19,6 +19,16 @@ class Files {
         });
     }
 
+    static async read(file : File) : Promise<Buffer | undefined> {
+        if(!file.canRead()) return undefined
+        return new Promise((rev, rej) => {
+            fs.readFile(file.toString(),{encoding: 'binary'}, (err: any, data: any) => {
+                if(err) rej(err);
+                else rev(data);
+            });
+        });
+    }
+
     static toStringSync(file : File) {
         if(!file.canRead()) return;
         return fs.readFileSync(file.toString(),{encoding: 'utf-8'});

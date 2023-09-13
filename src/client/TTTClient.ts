@@ -5,9 +5,14 @@ import {Buffer} from "buffer";
 import EndPointClientPool from "./EndPointClientPool";
 import {ConnectOpt} from "../option/ConnectOpt";
 import {logger} from "../commons/Logger";
+import SocketHandler from "../util/SocketHandler";
+import Environment from "../Environment";
 
 
 const RECONNECT_INTERVAL : number = 3000;
+
+
+SocketHandler.DefaultCacheDirectory = Environment.path.clientCacheDir;
 class TTTClient {
     private readonly _endPointClientPool: EndPointClientPool = new EndPointClientPool();
     private readonly _clientOption: ClientOption;

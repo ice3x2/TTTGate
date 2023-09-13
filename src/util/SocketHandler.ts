@@ -103,11 +103,13 @@ class SocketHandler {
 
     public static set DefaultCacheDirectory(path: string) {
         SocketHandler.TempDir = path;
-
     }
+
+
 
     public static set GlobalMemCacheLimit(limit: number) {
         SocketHandler.GlobalMemoryBufferSize = limit;
+        logger.info(`SocketHandler:: set GlobalMemCacheLimit(${limit / 1024 / 1024}MiB)`);
     }
 
     public setCacheOption(option?: CacheOption) : void {

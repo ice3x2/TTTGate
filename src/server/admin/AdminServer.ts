@@ -8,6 +8,10 @@ import {CertificationStore, CertInfo, PemData} from "../CertificationStore";
 import ObjectUtil from "../../util/ObjectUtil";
 import UsablePortChecker from "../../util/UsablePortChecker";
 import TTTServer from "../TTTServer";
+import Environment from "../../Environment";
+import Path from "path";
+import File from "../../util/File";
+import Files from "../../util/Files";
 
 
 
@@ -145,9 +149,66 @@ class AdminServer {
         } else if (url.startsWith("/api/externalCert/")) {
             await this.onGetExternalServerCert(req, res);
             return;
+        } else {
+            await this.onGetWebResource(req, res, url);
+            return;
         }
         res.writeHead(404);
         res.end(`Not Found ${url}`);
+    }
+
+    private onGetWebResource = async (req: IncomingMessage, res: ServerResponse, url: string) => {
+        let realPath = Environment.path.webDir;
+        url.split('/').forEach((path) => {
+            if(path.length > 0) {
+                realPath = Path.join(realPath, path);
+            }
+        });
+        if(url.length == 0 || url == '/'){
+            realPath = Path.join(realPath, 'index.html');
+        }
+        let ext = Path.extname(realPath);
+        let contentType = 'octet/stream';
+        if(ext == '.html')
+            contentType = 'text/html; charset=utf-8';
+        else if(ext == '.js')
+            contentType = 'text/javascript; charset=utf-8';
+        else if(ext == '.css')
+            contentType = 'text/css; charset=utf-8';
+        else if(ext == '.png')
+            contentType = 'image/png';
+        else if(ext == '.jpg' || ext == '.jpeg')
+            contentType = 'image/jpeg';
+        else if(ext == '.gif')
+            contentType = 'image/gif';
+        else if(ext == '.svg')
+            contentType = 'image/svg+xml; charset=utf-8';
+        else if(ext == '.ico')
+            contentType = 'image/x-icon';
+        else if(ext == '.json')
+            contentType = 'application/json; charset=utf-8';
+        else if(ext == '.ttf')
+            contentType = 'font/ttf';
+
+        res.writeHead(200, {'Content-Type': contentType});
+        let file = new File(realPath);
+        if(!file.isFile()) {
+            res.writeHead(404);
+            res.end(`Not Found ${url}`);
+            return;
+        }
+        let body : Buffer | string | undefined = undefined;
+        if(contentType.startsWith('text')) {
+            body = await Files.toString(file);
+        } else {
+            let body = await Files.read(file);
+        }
+        if(body == undefined) {
+            res.writeHead(404);
+            res.end(`Not Found ${url}`);
+            return;
+        }
+        res.end(body);
     }
 
     private onUpdateAdminCert = async (req: IncomingMessage, res: ServerResponse) => {
@@ -547,7 +608,10 @@ class AdminServer {
             this._server.closeAllConnections();
             this._server.close((err) => {
                 logger.info(`AdminServer::Admin server closed on port ${this._port}`);
-                resolve(err == undefined);
+                setImmediate(() => {
+                    resolve(err == undefined);
+                });
+
             });
         });
     }

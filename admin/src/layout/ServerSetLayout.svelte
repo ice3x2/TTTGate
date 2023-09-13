@@ -226,7 +226,7 @@
         </div>
 
         <div class="input-box">
-            <label for="input-global-cache-limit" class="form-label" >Global memory cache limit (MiB) </label>
+            <label for="input-global-cache-limit" class="form-label" >Total buffer size limit (MiB) </label>
             <input type="number" min="1" max="99999" on:keyup={_enforceMinMax}  bind:value={_serverOption.globalMemCacheLimit}>
         </div>
 

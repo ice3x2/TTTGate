@@ -5,7 +5,6 @@ import {FileCache} from "./util/FileCache";
 import Path from "path";
 import Environment from "./Environment";
 
-SocketHandler.DefaultCacheDirectory = Environment.path.cacheDir;
 
 
 let _findTypeByArgv = () : 'server' | 'client' | 'none' => {

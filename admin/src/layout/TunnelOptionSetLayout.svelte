@@ -468,10 +468,10 @@
             <div style="font-size: 16pt;">
 
                 <div style="display: block">
-                    <div style="display: inline; min-width: 25px;font-weight: 900">
+                    <div class="tunneling-title" style="display: inline; min-width: 25px;font-weight: 900">
                     {index + 1}.
                     </div>
-                    <div style="display: inline; color: #444">
+                    <div class="tunneling-title" style="display: inline; color: #444">
                         {option.forwardPort}  ⬌ {option.destinationAddress}:{option.destinationPort} ({option.protocol.toUpperCase()})
                     </div>
                 </div>
@@ -551,7 +551,22 @@
                 </div>
 
                 <div class="input-box">
-                    <label for="input-allow-client-names" class="form-label">Allowed client names <span style="font-size: 8pt">(Separate names with a semicolon(;))</span></label>
+                    <label for="input-allow-client-names" class="form-label">Allowed Client names <span style="font-size: 8pt">(Separate names with a semicolon(;))</span></label>
+                    <input type="text"  id="input-allow-client-names" class="form-control" bind:value={option.allowedClientNamesQuery}>
+                </div>
+
+                <!--
+                <div class="input-box" >
+                    <label for="select-buffer-options-server" class="form-label">Buffer options (server)</label>
+                    <select  id="select-buffer-options-server"  style="min-width: calc(100% - 5px)" >
+                        <option value="0">Unlimited buffer size</option>
+                        <option value="1">Buffer size limit</option>
+                        <option value="2">File cache when buffer limit reached</option>
+                    </select>
+                </div>-->
+
+                <div class="input-box">
+                    <label for="input-allow-client-names" class="form-label">Buffer size limit (MiB)</label>
                     <input type="text"  id="input-allow-client-names" class="form-control" bind:value={option.allowedClientNamesQuery}>
                 </div>
 
@@ -559,7 +574,7 @@
 
                 <div class="input-box" >
                     <label for="select-protocol" class="form-label">Protocol type</label>
-                    <select  id="select-protocol" bind:value={option.protocol} on:change={()=>_onChangeProtocol(option)}>
+                    <select  id="select-protocol"  style="min-width: calc(100% - 5px)" bind:value={option.protocol} on:change={()=>_onChangeProtocol(option)}>
                         <option value="tcp">TCP</option>
                         <option value="http">HTTP (http/1.1)</option>
                         <option value="https">HTTPS (http/1.1)</option>
@@ -569,23 +584,23 @@
 
                 {#if option.protocol === 'https' || option .protocol === 'http'}
                     <h3>
-                        HTTP settings
+                        HTTP Options
                     </h3>
                     <div class="http-select-box">
                         <div class="http-select-box-vertical-line"></div>
                         <div class="input-box" >
                             <label for="select-change-host-in-body" class="form-label">Replace Host(address) in text body</label>
                             <select  id="select-change-host-in-body" >
-                                <option value="true">Enable</option>
-                                <option value="false">Disable</option>
+                                <option value="true">Enabled</option>
+                                <option value="false">Disabled</option>
                             </select>
                         </div>
 
                         <div class="input-box" >
                             <label for="select-change-acao" class="form-label">Replace Access-Control-Allow-Origin header</label>
                             <select  id="select-change-acao" >
-                                <option value="true">Enable</option>
-                                <option value="false">Disable</option>
+                                <option value="true">Enabled</option>
+                                <option value="false">Disabled</option>
                             </select>
                         </div>
 
@@ -604,10 +619,13 @@
                     </div>
 
                 {/if}
-                <div class=""  style="">
+                <div>
                     <input type="checkbox"  style="width: 14px;" on:change={()=> { }} bind:checked={option.inactiveOnStartup}  >
                     <div style="display: inline-block;position: relative; top: -7px; font-size: 10pt">Inactive on startup</div>
                 </div>
+
+
+
                 <div >
                     <button style="width: 160px" on:click={() => _onClickApply(index)} disabled={!_tunnelOptions[index].updatable} >{_tunnelOptions[index].isSync ? ' Apply and Restart ' : 'Start' }</button>
                     <button style="width: 140px" on:click={() => _onClickRemove(index)}>{_tunnelOptions[index].isSync ? 'Stop and ' : '' }Remove</button>
@@ -692,21 +710,10 @@
 
     }
 
-    .card {
-        text-align: left;
-        position: inherit;
+    .tunneling-title {
+        font-size: 16pt;
+        font-weight: 800;
         display: inline-block;
-        box-sizing: border-box;
-        flex-direction: column;
-        padding: 15px;
-        min-height: 200px;
-        width: 100%;
-        max-width: 1024px;
-
-        border-radius: 5px;
-
-        border: 1px solid #ccc;
-
     }
 
     .sub-status {
@@ -718,8 +725,9 @@
     }
 
     @media screen and (max-width: 480px) {
-        .card {
-            width: 95%;
+        .tunneling-title {
+            font-size: 12pt;
+
         }
         .sub-status {
             font-size: 8pt;
