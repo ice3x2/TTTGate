@@ -1,6 +1,6 @@
 import BufferWriter from "../util/BufferWriter";
 import BufferReader from "../util/BufferReader";
-import {ConnectOpt} from "../option/ConnectOpt";
+import ConnectOpt from "../util/ConnectOpt";
 import Dequeue from "../util/Dequeue";
 
 
@@ -18,6 +18,10 @@ type ParsingResult = {
     state : ParsedState
     error: any
 
+}
+
+interface OpenOpt extends ConnectOpt {
+    bufferLimit: number
 }
 
 
@@ -53,7 +57,7 @@ class CtrlPacket {
     private _id: number = -1;
     private _ackCtrlOpt: {name: string, key: string} | undefined = undefined;
 
-    private _openOpt : ConnectOpt | undefined = undefined;
+    private _openOpt : OpenOpt | undefined = undefined;
 
 
     public static createSyncCtrl(id: number) : CtrlPacket {
@@ -128,7 +132,7 @@ class CtrlPacket {
 
     }
 
-    public static createOpen( id: number, opt: ConnectOpt) : CtrlPacket {
+    public static createOpen( id: number, opt: OpenOpt) : CtrlPacket {
         let packet = new CtrlPacket();
         packet._cmd = CtrlCmd.Open;
         packet._id = id;
@@ -140,6 +144,7 @@ class CtrlPacket {
         writer.writeString(opt.host);
         writer.writeUInt16(opt.port);
         writer.writeBoolean(opt.tls);
+        writer.writeInt32(opt.bufferLimit);
         //writer.writeString(opt.protocol);
         packet._data = writer.toBuffer();
         return packet;
@@ -204,16 +209,17 @@ class CtrlPacket {
         return this._data;
     }
 
-    public get openOpt() : ConnectOpt | undefined {
+    public get openOpt() : OpenOpt | undefined {
         return this._openOpt;
     }
 
-    private static parseOpenData(data: Buffer) : ConnectOpt {
+    private static parseOpenData(data: Buffer) : OpenOpt {
         let reader = new BufferReader(data);
         let host = reader.readString();
         let port = reader.readUInt16();
         let tls = reader.readBoolean();
-        return {host, port, tls: tls};
+        let bufferLimit = reader.readInt32();
+        return {host, port,bufferLimit, tls: tls};
     }
 
     private static parseAckCtrlData(data: Buffer) :  {name: string, key: string}  {
@@ -299,4 +305,4 @@ class CtrlPacketStreamer {
     }
  }
 
-export { CtrlPacket, CtrlCmd, ParsedState, ParsingResult, CtrlPacketStreamer};
+export { CtrlPacket, CtrlCmd, ParsedState, ParsingResult, CtrlPacketStreamer, OpenOpt};

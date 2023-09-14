@@ -1,4 +1,4 @@
-import SocketHandler from "../../util/SocketHandler";
+import { SocketHandler } from  "../../util/SocketHandler";
 import {HttpOption, TunnelingOption, CustomHeader} from "../../option/TunnelingOption";
 import {HttpHeader, HttpPipe, HttpRequestHeader, HttpResponseHeader, MessageType} from "./HttpPipe";
 import HttpUtil from "./HttpUtil";

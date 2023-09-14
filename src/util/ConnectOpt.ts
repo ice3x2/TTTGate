@@ -9,4 +9,4 @@ type ConnectOpt = {
     key? : string;
 }
 
-export {ConnectOpt}
+export default ConnectOpt;

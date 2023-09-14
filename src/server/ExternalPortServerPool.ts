@@ -1,6 +1,6 @@
 import {TCPServer} from "../util/TCPServer";
 import SocketState from "../util/SocketState";
-import SocketHandler from "../util/SocketHandler";
+import { SocketHandler, CacheOption } from  "../util/SocketHandler";
 import {TunnelingOption} from "../option/TunnelingOption";
 import HttpHandler from "./http/HttpHandler";
 import {logger} from "../commons/Logger";
@@ -18,6 +18,7 @@ interface OnHandlerEventCallback {
 
 const OPTION_BUNDLE_KEY : string = "portTunnelOption";
 const PORT_BUNDLE_KEY : string = "portNumber";
+const CACHE_OPTION_BUNDLE_KEY : string = "c";
 
 type ExternalPortServerStatus = {
     port: number,
@@ -36,9 +37,12 @@ class ExternalPortServerPool {
     private _portServerMap  = new Map<number, TCPServer>();
     private _statusMap  = new Map<number, ExternalPortServerStatus>();
     private _handlerMap = new Map<number, SocketHandler | HttpHandler>();
+
     private _activeTimeoutMap  = new Map<number, any>();
     private _onNewSessionCallback : NewSessionCallback | null = null;
     private _onHandlerEventCallback : OnHandlerEventCallback | null = null;
+
+
 
     public static create(options: Array<TunnelingOption>) : ExternalPortServerPool {
         return new ExternalPortServerPool(options);
@@ -48,7 +52,7 @@ class ExternalPortServerPool {
     private constructor(options: Array<TunnelingOption>) {
         for(let option of options) {
             try {
-                option = this.optionAdjust(option);
+                option = this.optionNormalization(option);
             } catch (e) {
                 console.error(e);
             }
@@ -56,11 +60,32 @@ class ExternalPortServerPool {
         }
     }
 
+
+
+    private makeCacheOption(bufferSize?: number) : CacheOption {
+        let cacheOption : CacheOption = {
+            enable: false,
+            fileCache: false,
+            maxMemCacheSize: 0
+        }
+        if(bufferSize == -1 || bufferSize == undefined) {
+            return cacheOption;
+        }
+        cacheOption.enable = true;
+        cacheOption.fileCache = true;
+        cacheOption.maxMemCacheSize = bufferSize * 1024 * 1024;
+        return cacheOption;
+    }
+
     public async startServer(option: TunnelingOption, certInfo?: CertInfo) : Promise<boolean> {
+
         let server = this._portServerMap.get(option.forwardPort);
         if(server && !server.isEnd()) {
             return false;
         }
+
+
+
         return new Promise((resolve, reject) => {
             let options = {
                 port: option.forwardPort,
@@ -70,6 +95,7 @@ class ExternalPortServerPool {
                 ca: certInfo?.ca.value == '' ? undefined : certInfo?.ca.value
             }
             let portServer : TCPServer = TCPServer.create(options);
+            portServer.setBundle(CACHE_OPTION_BUNDLE_KEY, this.makeCacheOption(option.bufferLimitOnServer));
             portServer.setOnServerEvent(this.onServerEvent);
             portServer.setOnHandlerEvent(this.onHandlerEvent);
             portServer.setBundle(OPTION_BUNDLE_KEY, option);
@@ -99,7 +125,7 @@ class ExternalPortServerPool {
     }
 
 
-    private optionAdjust(option: TunnelingOption) : TunnelingOption {
+    private optionNormalization(option: TunnelingOption) : TunnelingOption {
         if(option.tls == undefined) {
             option.tls = false;
         }
@@ -209,7 +235,8 @@ class ExternalPortServerPool {
             }
             option = option as TunnelingOption;
 
-            handler.setCacheOption(option.cacheOption);
+            let cacheOption = server.getBundle(CACHE_OPTION_BUNDLE_KEY);
+            handler.setCacheOption(cacheOption);
             handler.setBundle(OPTION_BUNDLE_KEY, option);
             handler.setBundle(PORT_BUNDLE_KEY, server.port);
 

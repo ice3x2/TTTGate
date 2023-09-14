@@ -7,8 +7,11 @@ import Environment from "../Environment";
 import YAML from "yaml";
 import Files from "../util/Files";
 import CLI from "../util/CLI";
+import {SocketHandler} from "../util/SocketHandler";
 
 const CLIENT_OPTION_FILE_NAME = "client.yaml";
+
+
 
 let _printClientOptions = (clientOption: ClientOption) : void => {
     let options = '';
@@ -34,7 +37,7 @@ let _loadClientOptionFromFile = () : ClientOption | undefined => {
 
 
 
-let adjustClientOption = (clientOption: ClientOption) : ClientOption => {
+let normalizationClientOption = (clientOption: ClientOption) : ClientOption => {
     if(clientOption.key == undefined) {
         clientOption.key = DEFAULT_KEY;
     }
@@ -60,11 +63,12 @@ let _loadClientOption = () : ClientOption => {
         host: "localhost",
         port: 9126,
         tls: false,
-        name: TunnelNames[Math.floor(Math.random() * TunnelNames.length)]
+        name: TunnelNames[Math.floor(Math.random() * TunnelNames.length)],
+        globalMemCacheLimit: 512
     }
     let savedOption = _loadClientOptionFromFile();
     if(savedOption) {
-        clientOption = adjustClientOption(savedOption);
+        clientOption = normalizationClientOption(savedOption);
     }
 
     let argv = CLI.readSimpleOptions();
@@ -92,12 +96,26 @@ let _loadClientOption = () : ClientOption => {
     if(argv["name"]) {
         clientOption.name = argv["name"];
     }
+    if(argv["bufferLimit"]) {
+        clientOption.globalMemCacheLimit = Math.floor(parseInt(argv["bufferLimit"]));
+        if(isNaN(clientOption.globalMemCacheLimit)){
+            console.warn(`bufferLimit '${argv["bufferLimit"]}' is not number.`);
+            clientOption.globalMemCacheLimit = 512;
+        }
+        else if(clientOption.globalMemCacheLimit < -1) {
+            console.warn(`bufferLimit '${argv["bufferLimit"]}' is less than -1.`);
+            clientOption.globalMemCacheLimit = -1;
+        } else if(clientOption.globalMemCacheLimit > 1048576) {
+            clientOption.globalMemCacheLimit = 1048576
+        }
+    }
     if(argv["save"] != undefined && (argv["save"] == "" || argv["save"].toLowerCase() != "false")) {
         let file = new File(Environment.path.configDir, CLIENT_OPTION_FILE_NAME);
         let yamlString = YAML.stringify(clientOption);
         Files.writeSync(file, yamlString);
     }
     _printClientOptions(clientOption);
+    SocketHandler.GlobalMemCacheLimit = clientOption.globalMemCacheLimit * 1024 * 1024;
     return clientOption;
 }
 
@@ -105,6 +123,8 @@ let _loadClientOption = () : ClientOption => {
 let ClientApp : { start() : void} = {
 
     start() {
+        SocketHandler.DefaultCacheDirectory = Environment.path.clientCacheDir;
+        SocketHandler.GlobalMemCacheLimit = 512 * 1024 * 1024;
         let tttClient = TTTClient.create(_loadClientOption());
         tttClient.start();
     }

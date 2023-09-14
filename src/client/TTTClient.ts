@@ -3,16 +3,16 @@ import {ClientOption} from "../option/TunnelingOption";
 import SocketState from "../util/SocketState";
 import {Buffer} from "buffer";
 import EndPointClientPool from "./EndPointClientPool";
-import {ConnectOpt} from "../option/ConnectOpt";
+import ConnectOpt from "../util/ConnectOpt";
 import {logger} from "../commons/Logger";
-import SocketHandler from "../util/SocketHandler";
+import { SocketHandler } from  "../util/SocketHandler";
 import Environment from "../Environment";
+import {OpenOpt} from "../commons/CtrlPacket";
 
 
 const RECONNECT_INTERVAL : number = 3000;
 
 
-SocketHandler.DefaultCacheDirectory = Environment.path.clientCacheDir;
 class TTTClient {
     private readonly _endPointClientPool: EndPointClientPool = new EndPointClientPool();
     private readonly _clientOption: ClientOption;
@@ -56,7 +56,7 @@ class TTTClient {
         }
     }
 
-    private onSessionOpenCallback = (id: number, opt: ConnectOpt) : void => {
+    private onSessionOpenCallback = (id: number, opt: OpenOpt) : void => {
         this._endPointClientPool.open(id , opt);
     }
 

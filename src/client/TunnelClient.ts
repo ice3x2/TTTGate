@@ -1,10 +1,10 @@
-import SocketHandler from "../util/SocketHandler";
+import { SocketHandler } from  "../util/SocketHandler";
 import SocketState from "../util/SocketState";
 import {Buffer} from "buffer";
-import {CtrlCmd, CtrlPacket, CtrlPacketStreamer} from "../commons/CtrlPacket";
+import {CtrlCmd, CtrlPacket, CtrlPacketStreamer, OpenOpt} from "../commons/CtrlPacket";
 import SessionState from "../option/SessionState";
 import {ClientOption} from "../option/TunnelingOption";
-import {ConnectOpt} from "../option/ConnectOpt";
+import ConnectOpt from "../util/ConnectOpt";
 import ClientSession from "../commons/ClientSession";
 import {logger} from "../commons/Logger";
 
@@ -33,7 +33,7 @@ interface OnReceiveDataCallback {
 }
 
 interface OnSessionOpenCallback {
-    (id: number, opt: ConnectOpt) : void;
+    (id: number, opt: OpenOpt) : void;
 }
 
 //type OnSessionEventCallback = (id: number, state: SessionState, data: Buffer | ConnectOpt | null) => void;

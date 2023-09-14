@@ -1,7 +1,8 @@
-import SocketHandler from "../util/SocketHandler";
-import {ConnectOpt} from "../option/ConnectOpt";
+import {CacheOption, SocketHandler} from "../util/SocketHandler";
+import ConnectOpt from "../util/ConnectOpt";
 import SocketState from "../util/SocketState";
 import {Buffer} from "buffer";
+import {OpenOpt} from "../commons/CtrlPacket";
 
 
 const ID_BUNDLE_KEY : string = "i";
@@ -25,9 +26,26 @@ class EndPointClientPool {
         this._onEndPointClientStateChangeCallback = callback;
     }
 
-    public open(id: number, connectOpt: ConnectOpt ) {
+    private makeCacheOption(bufferSize?: number) : CacheOption {
+        let cacheOption : CacheOption = {
+            enable: false,
+            fileCache: false,
+            maxMemCacheSize: 1024 * 1024 * 10
+        }
+        if(bufferSize == -1 || bufferSize == undefined) {
+            return cacheOption;
+        }
+        cacheOption.enable = true;
+        cacheOption.fileCache = true;
+        cacheOption.maxMemCacheSize = bufferSize * 1024 * 1024;
+        return cacheOption;
+    }
+
+    public open(id: number, connectOpt: OpenOpt) {
+
         this._connectOptMap.set(id, connectOpt);
         let endPointClient = SocketHandler.connect(connectOpt,( client: SocketHandler, state: SocketState, data?: any) => {
+            client.setCacheOption(this.makeCacheOption(connectOpt.bufferLimit));
             this.onEndPointClientStateChange(id, client, state, data);
         });
         this._endPointClientMap.set(id, endPointClient);

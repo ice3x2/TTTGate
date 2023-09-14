@@ -49,9 +49,10 @@ class TTTServer {
 
     private onNewSession = (id: number, opt: TunnelingOption) : void => {
 
+        let bufferLimitOnClient = opt.bufferLimitOnClient == undefined ? -1 : opt.bufferLimitOnClient!;
         this._sessions.add(id);
         let allowClientNames = this._allowClientNamesMap.get(opt.forwardPort);
-        let success = this._tunnelServer.open(id, {host: opt.destinationAddress,port: opt.destinationPort!,tls: opt.tls },allowClientNames);
+        let success = this._tunnelServer.open(id, {host: opt.destinationAddress,port: opt.destinationPort!,tls: opt.tls,bufferLimit: bufferLimitOnClient},allowClientNames);
         if(!success) {
             this._sessions.delete(id);
             this._externalPortServerPool.closeSession(id);

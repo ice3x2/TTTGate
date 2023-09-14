@@ -158,7 +158,7 @@ class ServerOptionStore {
             return {success: false, message: "adminPort is undefined"};
         }
         if(option.globalMemCacheLimit == undefined) {
-            option.globalMemCacheLimit = 512 * 1024 * 1024;
+            option.globalMemCacheLimit = 512;
         }
         if(option.globalMemCacheLimit < 0) {
             option.globalMemCacheLimit = 0;
@@ -189,6 +189,13 @@ class ServerOptionStore {
         if(option.forwardPort < 0 || option.forwardPort > 65535) {
             return {success: false,forwardPort:option.forwardPort, message: "forwardPort is invalid (0 ~ 65535)"};
         }
+        if(option.bufferLimitOnServer == undefined) {
+            option.bufferLimitOnServer = -1;
+        }
+        if(option.bufferLimitOnClient == undefined) {
+            option.bufferLimitOnClient = -1;
+        }
+
         if(option.inactiveOnStartup == undefined) {
             option.inactiveOnStartup = false;
         }

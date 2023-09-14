@@ -1,11 +1,12 @@
 import net, {Socket} from "net";
 import Dequeue from "./Dequeue";
 import SocketState from "./SocketState";
-import {ConnectOpt} from "../option/ConnectOpt";
+import ConnectOpt from "./ConnectOpt";
 import * as tls from "tls";
 import {FileCache, CacheRecord} from "./FileCache";
 import Path from "path";
 import {logger} from "../commons/Logger";
+import ObjectUtil from "./ObjectUtil";
 
 
 
@@ -76,7 +77,6 @@ class SocketHandler {
     private _fileCache : FileCache | null = null;
     private _bufferFull : boolean = false;
 
-    private _maxMemoryBufferSize: number = 10 * 1024 * 1024; // 10MB
     private _memoryBufferSize: number = 0;
     private _unavailableState: boolean = false;
 
@@ -116,6 +116,7 @@ class SocketHandler {
         if(option == undefined) {
             return;
         }
+        option = ObjectUtil.cloneDeep(option);
         if(option.fileCache == undefined) option.fileCache = this._cacheOption.fileCache;
         if(option.fileCacheDirectory == undefined) option.fileCacheDirectory = this._cacheOption.fileCacheDirectory;
         if(option.maxMemCacheSize == undefined) option.maxMemCacheSize = this._cacheOption.maxMemCacheSize;
@@ -309,7 +310,7 @@ class SocketHandler {
 
 
     private isOverMemoryBufferSize(size: number) : boolean {
-        return this._memoryBufferSize + size > this._maxMemoryBufferSize || SocketHandler.isOverGlobalMemoryBufferSize(size);
+        return this._memoryBufferSize + size > this._cacheOption.maxMemCacheSize! || SocketHandler.isOverGlobalMemoryBufferSize(size);
     }
 
 
@@ -351,12 +352,12 @@ class SocketHandler {
         }
 
 
-        if(!this._bufferFull || !this._cacheOption.fileCacheDirectory) {
+        if(!this._bufferFull || !this._cacheOption.enable) {
             this.popDataAndSend();
         }
-        if(this._bufferFull && !this._waitQueue.isEmpty() && this._waitQueue.size() % 1000 == 0) {
+        /*if(this._bufferFull && !this._waitQueue.isEmpty() && this._waitQueue.size() % 1000 == 0) {
             console.log("queue: " + this._waitQueue.size());
-        }
+        }*/
 
     }
 
@@ -443,7 +444,7 @@ class SocketHandler {
                 if(SocketHandler.isOverGlobalMemoryBufferSize(buffer.length)) {
                     logger.error(`SocketHandler: global memory buffer size is over. size: ${SocketHandler.GlobalMemoryBufferSize}, max: ${SocketHandler.MaxGlobalMemoryBufferSize}`);
                 } else {
-                    logger.error(`SocketHandler: ${this._id}  memory buffer size is over. size: ${this._memoryBufferSize}, max: ${this._maxMemoryBufferSize}`);
+                    logger.error(`SocketHandler: ${this._id}  memory buffer size is over. size: ${this._memoryBufferSize}, max: ${this._cacheOption.maxMemCacheSize!}`);
                 }
                 this.appendUsageMemoryBufferSize(-this._memoryBufferSize);
                 this._unavailableState = true;
@@ -489,4 +490,4 @@ interface OnWriteComplete {
 
 
 
-export default SocketHandler;
+export {SocketHandler, CacheOption};

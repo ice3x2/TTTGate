@@ -57,7 +57,32 @@
         if(_isInit && _tunnelOptions.length > 0) {
             _checkUpdatable();
         }
+        for(let option of _tunnelOptions) {
+            option.destinationPort = _normalizePortNumber(option.destinationPort);
+            option.forwardPort = _normalizePortNumber(option.forwardPort);
+            option.bufferLimitOnClient = _normalizeMemBufferSize(option.bufferLimitOnClient);
+            option.bufferLimitOnServer = _normalizeMemBufferSize(option.bufferLimitOnServer);
+        }
+    }
 
+    let _normalizePortNumber = (port: number) => {
+        if(port < 0) {
+            return 0;
+        } else if(port > 65535) {
+            return 65535;
+        } else {
+            return port;
+        }
+    }
+
+    let _normalizeMemBufferSize = (size: number) => {
+        if(size < -1) {
+            return -1;
+        } else if(size > 1048576) {
+            return 1048576;
+        } else {
+            return size;
+        }
     }
 
 
@@ -528,7 +553,7 @@
 
                 <div class="input-box" style="margin-bottom: 0">
                     <label for="input-external-port" class="form-label"  >External Server Port</label>
-                    <input type="number" min="0" max="65535" id="input-external-port" class="form-control"  on:keyup={_enforceMinMax} bind:value={option.forwardPort}>
+                    <input type="number" id="input-external-port" class="form-control"  bind:value={option.forwardPort}>
                 </div>
                 <div class="input-box check-box"  style="margin-bottom: {option.tls ? 10 : 20}px">
                     <input type="checkbox" id="sdf" style="width: 14px;" on:change={()=> {_onChangeSecureTunneling(option.forwardPort) }} bind:checked={option.tls} disabled='{option.protocol !== "tcp"}' >
@@ -547,7 +572,7 @@
 
                 <div class="input-box">
                     <label for="input-destination-port" class="form-label">Destination Port</label>
-                    <input type="number" min="0" max="65535" id="input-destination-port" class="form-control" on:keyup={_enforceMinMax} bind:value={option.destinationPort}>
+                    <input type="number" id="input-destination-port" class="form-control" bind:value={option.destinationPort}>
                 </div>
 
                 <div class="input-box">
@@ -566,8 +591,23 @@
                 </div>-->
 
                 <div class="input-box">
-                    <label for="input-allow-client-names" class="form-label">Buffer size limit (MiB)</label>
-                    <input type="text"  id="input-allow-client-names" class="form-control" bind:value={option.allowedClientNamesQuery}>
+                    <div class="form-label">Mem Buffer size limit per Sessions (MiB)</div>
+
+                    <div style="width: calc(50% - 2px); display: inline-block;">
+                        <label for="input-buffer-limit-server" class="form-label" style="font-size: 10pt;color: #666666; " >Server</label>
+                        <input type="number" id="input-buffer-limit-server" class="form-control"  bind:value="{option.bufferLimitOnServer}">
+                    </div>
+                    <div style="width: calc(50% - 2px); display: inline-block;">
+                        <label for="input-buffer-limit-client" class="form-label" style="font-size: 10pt;color: #666666; ">Client</label>
+                        <input type="number" id="input-buffer-limit-client" class="form-control"  bind:value="{option.bufferLimitOnClient}">
+                    </div>
+                    <div style="color: #666;font-size: 10pt;margin-left: -10px">
+                        <ul>
+                            <li><span style="font-weight: 900">-1</span> : Unlimited memory buffer.</li>
+                            <li><span style="font-weight: 900">0</span> : Only file cache is used.</li>
+                            <li><span style="font-weight: 900">0&lt;n</span> : When memory buffer limit is exceeded, it uses file cache.</li>
+                        </ul>
+                    </div>
                 </div>
 
 

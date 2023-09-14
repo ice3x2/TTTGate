@@ -9,7 +9,7 @@ import CLI from "../util/CLI";
 import Files from "../util/Files";
 import File from "../util/File";
 import Environment from "../Environment";
-import SocketHandler from "../util/SocketHandler";
+import { SocketHandler } from  "../util/SocketHandler";
 import {Socket} from "net";
 
 
@@ -18,7 +18,6 @@ let oldOption : ServerOption;
 let oldAdminCertInfo : CertInfo;
 let tttServer : TTTServer;
 
-SocketHandler.DefaultCacheDirectory = Environment.path.serverCacheDir;
 
 
 let onServerOptionUpdate = async (newOption: ServerOption) => {
@@ -54,6 +53,8 @@ let startService = async (serverOption: ServerOption, adminCertInfo: CertInfo) =
 
 let ServerApp : {start() : Promise<void>} = {
     start : async (): Promise<void> => {
+        SocketHandler.DefaultCacheDirectory = Environment.path.serverCacheDir;
+
         let options = CLI.readSimpleOptions();
         let serverOptionStore = ServerOptionStore.instance;
         let certStore = CertificationStore.instance;

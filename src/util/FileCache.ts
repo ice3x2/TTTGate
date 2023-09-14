@@ -1,5 +1,6 @@
 import File from './File';
 import fs from 'fs';
+import Path from "path";
 
 
 
@@ -43,9 +44,8 @@ class FileCache {
     }
 
 
-    private constructor(filePath: string) {
-        this._filePath = filePath;
-
+    private constructor(directoryPath: string) {
+        this._filePath = Path.join(directoryPath,Date.now() + "." + Math.floor(((Math.random() * 10000000) + 100000000)) + ".cache");
     }
 
     private reset() : void {

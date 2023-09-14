@@ -55,6 +55,8 @@ type Options = {
     tls?: boolean;
     inactiveOnStartup?: boolean;
     allowedClientNames?: Array<string>;
+    bufferLimitOnServer?: number,
+    bufferLimitOnClient?: number
 }
 
 export type { ServerOption, Options, HttpOption, CustomHeader, TunnelingStatus, RewriteRule };

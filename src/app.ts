@@ -1,6 +1,6 @@
 import ClientApp from "./client/ClientApp";
 import ServerApp from "./server/ServerApp";
-import SocketHandler from "./util/SocketHandler";
+import { SocketHandler } from  "./util/SocketHandler";
 import {FileCache} from "./util/FileCache";
 import Path from "path";
 import Environment from "./Environment";
@@ -36,16 +36,17 @@ else {
     console.log('Usage: TTTGate [server|client] [options]');
     console.log('');
     console.log('    server: start server');
-    console.log('       -adminPort [port] : Admin server port');
-    console.log('       -reset            : Reset server options');
+    console.log('       -adminPort [port]  : Admin server port');
+    console.log('       -reset             : Reset server options');
     console.log('');
     console.log('    client: start client');
-    console.log('       -addr [host:port] : server address. (ex: host.com:1234)');
+    console.log('       -addr [host:port]  : server address. (ex: host.com:1234)');
     console.log('                           The port number is optional.         ');
-    console.log('       -tls              : use tls');
-    console.log('       -name [name]      : client name');
-    console.log('       -key  [key]       : authentication key');
-    console.log('       -save             : Save options to file');
+    console.log('       -tls               : use tls');
+    console.log('       -name [name]       : client name');
+    console.log('       -key  [key]        : authentication key');
+    console.log('       -bufferLimit [MiB] : Buffer limit size on memory.');
+    console.log('       -save              : Save options to file');
     console.log('');
 
 }

@@ -1,5 +1,5 @@
-import SocketHandler from "../util/SocketHandler";
-import {ConnectOpt} from "../option/ConnectOpt";
+import { SocketHandler } from  "../util/SocketHandler";
+import ConnectOpt from "../util/ConnectOpt";
 import SocketState from "../util/SocketState";
 
 

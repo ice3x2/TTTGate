@@ -1,10 +1,10 @@
 import SessionState from "../option/SessionState";
-import SocketHandler from "../util/SocketHandler";
+import { SocketHandler } from  "../util/SocketHandler";
 import {TCPServer, ServerOption} from "../util/TCPServer";
 import SocketState from "../util/SocketState";
-import {CtrlCmd, CtrlPacket} from "../commons/CtrlPacket";
+import {CtrlCmd, CtrlPacket, OpenOpt} from "../commons/CtrlPacket";
 import {Buffer} from "buffer";
-import {ConnectOpt} from "../option/ConnectOpt";
+import ConnectOpt from "../util/ConnectOpt";
 import ControlSession from "../commons/ControlSession";
 import ClientSession from "../commons/ClientSession";
 import {logger} from "../commons/Logger";
@@ -145,7 +145,7 @@ class TunnelServer {
     }
 
 
-    public open(id: number,opt : ConnectOpt, allowClientNames?: Array<string>) : boolean {
+    public open(id: number,opt : OpenOpt, allowClientNames?: Array<string>) : boolean {
         if(!this.available()) {
             return false;
         }

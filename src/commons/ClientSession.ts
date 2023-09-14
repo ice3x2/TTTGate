@@ -1,5 +1,5 @@
-import SessionState from "../option/SessionState";
-import {ConnectOpt} from "../option/ConnectOpt";
+
+import ConnectOpt from "../util/ConnectOpt";
 import Session from "./Session";
 
 
