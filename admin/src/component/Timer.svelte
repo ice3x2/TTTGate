@@ -155,13 +155,11 @@
         let dayValue = parseInt((document.getElementById(`input-timeout-day-${_id}`) as HTMLInputElement).value);
         let hourValue = parseInt((document.getElementById(`input-timeout-hour-${_id}`) as HTMLInputElement).value);
         let minValue = parseInt((document.getElementById(`input-timeout-min-${_id}`) as HTMLInputElement).value);
-        console.log({dayValue, hourValue, minValue})
         dayValue = isNaN(dayValue) ? 0 : dayValue;
         hourValue = isNaN(hourValue) ? 0 : hourValue;
         minValue = isNaN(minValue) ? 0 : minValue;
 
         let oldTime = _startTime;
-        console.log(oldTime)
 
         _startTime = (dayValue * 24 * 60 * 60) + (hourValue * 60 * 60) + (minValue * 60);
         if(_startTime != 0) {
@@ -172,7 +170,6 @@
             _leftTime = MAX_INFINITY_TIME;
         }
         if(oldTime != _startTime) {
-            console.log('change')
             _dispatcher('change', {time: _startTime});
         }
     }

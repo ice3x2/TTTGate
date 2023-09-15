@@ -190,12 +190,10 @@
 
 <main>
 
-    <h2>
+    <h2 class="title">
         Server settings
     </h2>
     <div class="round-box">
-
-
         <div class="input-box">
             <label for="input-key" class="form-label">Tunnel server-client authentication key</label>
             <input type="text" id="input-key" class="form-control" aria-describedby="passwordHelpBlock" bind:value={_serverOption.key}>
@@ -255,13 +253,6 @@
     }
 
 
-
-    h2 {
-        margin: 0 0 20px 0;
-        padding: 0;
-        font-size: 20pt;
-        color: #333;
-    }
 
     main {
         padding: 10px 10px 0 10px;

@@ -13,7 +13,7 @@
     import CertificationCtrl from "../controller/CertificationCtrl";
     import Switch from "../component/Switch.svelte";
     import Timer from "../component/Timer.svelte";
-    import {assignWith} from "lodash";
+
 
     type Timers = {
         [key: number]: Timer
@@ -34,12 +34,11 @@
     let _showAlert = false;
     let _alertMessage = "";
     let _alertButton = "Ok";
+    let _onCloseAlert = () => {};
+
 
     let _timerElements : Timers = {};
-
-
     let _intervalId : NodeJS.Timeout = null;
-    let _onCloseAlert = () => {};
 
 
     onMount(async ()=> {
@@ -475,14 +474,10 @@
 
 <main>
 
-    <div class="">
-        <div>
-            <div style="display: inline-block; margin-top: 20px; margin-bottom: 10px;">
-                <h2>
-                    Tunneling settings
-                </h2>
-            </div>
-        </div>
+    <div class="" style="margin-top: 20px">
+        <h2 class="title">
+            Tunneling settings
+        </h2>
         
 
 
@@ -694,13 +689,6 @@
 </main>
 
 <style>
-
-
-
-    h3 {
-        margin-bottom: 10px;
-        margin-top: 0;
-    }
 
     select {
         width: 80%;

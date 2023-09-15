@@ -59,4 +59,4 @@ type Options = {
     bufferLimitOnClient?: number
 }
 
-export type { ServerOption, Options, HttpOption, CustomHeader, TunnelingStatus, RewriteRule };
+export type { ServerOption, Options, HttpOption, CustomHeader, TunnelingStatus, RewriteRule};

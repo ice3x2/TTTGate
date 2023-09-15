@@ -29,6 +29,43 @@ class InvalidSession extends Error {
 }
 
 
+interface SysStatus {
+    cpuInfo : {
+        model: string;
+        speed: number;
+        cores: number;
+    },
+    osInfo: {
+        platform: string;
+        release: string;
+        type: string;
+        hostname: string;
+    },
+    cpu: number;
+    uptime: number;
+    heap: {
+        used: number;
+        total: number;
+    };
+    memory: {
+        free: number;
+        total: number;
+        process: number;
+    };
+    totalBuffer: {
+        used: number;
+        total: number;
+    };
+}
+
+interface ClientStatus {
+    id: number;
+    state: 'connecting' | 'connected' | 'end';
+    name: string,
+    uptime: number;
+    address: string;
+}
 
 
-export {type PemData,type ServerOption,type CertInfo,InvalidSession}
+
+export {type PemData,type ServerOption,type CertInfo,InvalidSession,type SysStatus,type ClientStatus}
