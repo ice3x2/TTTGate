@@ -12,7 +12,7 @@
     import InputCertFile from "./InputCertFile.svelte";
     import CertificationCtrl from "../controller/CertificationCtrl";
     import Switch from "../component/Switch.svelte";
-    import Timer from "./Timer.svelte";
+    import Timer from "../component/Timer.svelte";
     import {assignWith} from "lodash";
 
     type Timers = {

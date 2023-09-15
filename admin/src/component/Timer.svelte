@@ -1,9 +1,14 @@
 <script lang="ts">
     import {createEventDispatcher, onMount, afterUpdate} from "svelte";
     import infinity from '../assets/infinity.png';
-    import AlertLayout from "../component/AlertLayout.svelte";
+    import AlertLayout from "./AlertLayout.svelte";
+    import GlobalCounter from "../controller/GlobalCounter";
 
     export let style = '';
+
+
+
+
 
 
     let _time : number = 0;
@@ -22,8 +27,14 @@
 
     let _isShowSetTime = false;
 
+    let _id : number = GlobalCounter.incrementAndGet();
+
+
+
 
     let _dispatcher = createEventDispatcher();
+
+
 
 
 
@@ -43,6 +54,7 @@
 
 
     }
+
 
 
     let _mapValue = (value: number, in_min: number, in_max: number, out_min: number, out_max: number) => {
@@ -140,13 +152,17 @@
     }
 
     let _onCloseSetTimeoutAlert = () => {
-        let dayValue = parseInt((document.getElementById('input-timeout-day') as HTMLInputElement).value);
-        let hourValue = parseInt((document.getElementById('input-timeout-hour') as HTMLInputElement).value);
-        let minValue = parseInt((document.getElementById('input-timeout-min') as HTMLInputElement).value);
+        let dayValue = parseInt((document.getElementById(`input-timeout-day-${_id}`) as HTMLInputElement).value);
+        let hourValue = parseInt((document.getElementById(`input-timeout-hour-${_id}`) as HTMLInputElement).value);
+        let minValue = parseInt((document.getElementById(`input-timeout-min-${_id}`) as HTMLInputElement).value);
+        console.log({dayValue, hourValue, minValue})
         dayValue = isNaN(dayValue) ? 0 : dayValue;
         hourValue = isNaN(hourValue) ? 0 : hourValue;
         minValue = isNaN(minValue) ? 0 : minValue;
+
         let oldTime = _startTime;
+        console.log(oldTime)
+
         _startTime = (dayValue * 24 * 60 * 60) + (hourValue * 60 * 60) + (minValue * 60);
         if(_startTime != 0) {
             _timeMax = _startTime * TIME_WEIGHT;
@@ -156,6 +172,7 @@
             _leftTime = MAX_INFINITY_TIME;
         }
         if(oldTime != _startTime) {
+            console.log('change')
             _dispatcher('change', {time: _startTime});
         }
     }
@@ -187,9 +204,9 @@
         </div>
         <div style="width: 100%; text-align: center">
         <div style="display: block; font-size: 12pt">
-            <input id="input-timeout-day" type="number" min="0" max="99999" on:keyup={_enforceMinMax} style="width: 40px; text-align: right" value={Math.floor(_startTime / 60 / 60 / 24)}>d&nbsp;
-            <input id="input-timeout-hour" type="number" min="0" max="23" on:keyup={_enforceMinMax} style="width: 40px; text-align: right" value={Math.floor(_startTime / 60 / 60) % 24}>h&nbsp;
-            <input id="input-timeout-min" type="number" min="0" max="59" on:keyup={_enforceMinMax} style="width: 40px; text-align: right" value={Math.floor(_startTime / 60) % 60}>m&nbsp;
+            <input id="input-timeout-day-{_id}" type="number" min="0" max="99999" on:keyup={_enforceMinMax} style="width: 40px; text-align: right" value={Math.floor(_startTime / 60 / 60 / 24)}>d&nbsp;
+            <input id="input-timeout-hour-{_id}" type="number" min="0" max="23" on:keyup={_enforceMinMax} style="width: 40px; text-align: right" value={Math.floor(_startTime / 60 / 60) % 24}>h&nbsp;
+            <input id="input-timeout-min-{_id}" type="number" min="0" max="59" on:keyup={_enforceMinMax} style="width: 40px; text-align: right" value={Math.floor(_startTime / 60) % 60}>m&nbsp;
         </div>
         </div>
     </AlertLayout>

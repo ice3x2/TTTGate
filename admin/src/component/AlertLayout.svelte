@@ -10,8 +10,10 @@
     const dispatch = createEventDispatcher();
 
     let _onClose = () => {
-        show = false;
         dispatch("close");
+        setTimeout(() => {
+            show = false;
+        },0);
     }
 
 </script>
