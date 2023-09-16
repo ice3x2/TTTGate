@@ -22,6 +22,14 @@ interface OnSessionCloseCallback {
 }
 
 
+interface ClientStatus {
+    id: number;
+    state: 'connecting' | 'connected' | 'end';
+    name: string,
+    uptime: number;
+    address: string;
+}
+
 
 class TunnelServer {
 
@@ -79,6 +87,31 @@ class TunnelServer {
                 }
             });
         });
+    }
+
+    public clientStatuses() : Array<ClientStatus> {
+        let result : Array<ClientStatus> = [];
+        this._ctrlSessionMap.forEach((session, id) => {
+            result.push(
+                {
+                    id: id,
+                    state: TunnelServer.sessionStateToString(session.state),
+                    name: session.clientName,
+                    uptime: Date.now() - session.createTime,
+                    address: session.address
+                });
+        });
+        return result;
+    }
+
+    private static sessionStateToString(state: SessionState) : 'connecting' | 'connected' | 'end' {
+        if(state == SessionState.HalfOpened || state == SessionState.Handshaking) {
+            return 'connecting';
+        }
+        else if(state == SessionState.End || state == SessionState.Closed || state == SessionState.None) {
+            return 'end';
+        }
+        return 'connected';
     }
 
     // noinspection JSUnusedGlobalSymbols
@@ -234,6 +267,7 @@ class TunnelServer {
     private onClientHandlerBound = (handler: SocketHandler) : void => {
         this._ctrlHandlerMap.set(handler.id, handler);
         let ctrlSession = ControlSession.createControlSession(handler.id);
+        ctrlSession.address = handler.remoteAddress + ':' + handler.remotePort;
         this._ctrlSessionMap.set(handler.id, ctrlSession);
         logger.info(`TunnelServer::Bound - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
         this.sendSyncAndSyncSyncCmd(handler, ctrlSession);
@@ -337,4 +371,4 @@ class TunnelServer {
 
 }
 
-export default TunnelServer;
+export { TunnelServer, ClientStatus};

@@ -101,14 +101,22 @@ class SocketHandler {
         this._event = event;
     }
 
-    public static set DefaultCacheDirectory(path: string) {
+    public static set defaultCacheDirectory(path: string) {
         SocketHandler.TempDir = path;
     }
 
 
 
+    public static get globalMemoryBufferSize() : number {
+        return SocketHandler.GlobalMemoryBufferSize;
+    }
+
+    public static get maxGlobalMemoryBufferSize() : number {
+        return SocketHandler.MaxGlobalMemoryBufferSize;
+    }
+
     public static set GlobalMemCacheLimit(limit: number) {
-        SocketHandler.GlobalMemoryBufferSize = limit;
+        SocketHandler.MaxGlobalMemoryBufferSize = limit;
         logger.info(`SocketHandler:: set GlobalMemCacheLimit(${limit / 1024 / 1024}MiB)`);
     }
 

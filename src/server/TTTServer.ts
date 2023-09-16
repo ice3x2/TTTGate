@@ -1,5 +1,5 @@
 import {ExternalPortServerPool, ExternalPortServerStatus } from "./ExternalPortServerPool";
-import TunnelServer from "./TunnelServer";
+import {TunnelServer, ClientStatus} from "./TunnelServer";
 import {ServerOption, TunnelingOption} from "../option/TunnelingOption";
 import SocketState from "../util/SocketState";
 import {CertificationStore, CertInfo} from "./CertificationStore";
@@ -99,6 +99,10 @@ class TTTServer {
 
     public externalServerStatus(port: number) : ExternalPortServerStatus {
         return this._externalPortServerPool.getServerStatus(port);
+    }
+
+    public clientStatus() : Array<ClientStatus> {
+        return this._tunnelServer.clientStatuses();
     }
 
 

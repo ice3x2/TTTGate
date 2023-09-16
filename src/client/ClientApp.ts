@@ -123,7 +123,7 @@ let _loadClientOption = () : ClientOption => {
 let ClientApp : { start() : void} = {
 
     start() {
-        SocketHandler.DefaultCacheDirectory = Environment.path.clientCacheDir;
+        SocketHandler.defaultCacheDirectory = Environment.path.clientCacheDir;
         SocketHandler.GlobalMemCacheLimit = 512 * 1024 * 1024;
         let tttClient = TTTClient.create(_loadClientOption());
         tttClient.start();
