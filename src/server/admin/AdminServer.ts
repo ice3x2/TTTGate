@@ -12,6 +12,7 @@ import Environment from "../../Environment";
 import Path from "path";
 import File from "../../util/File";
 import Files from "../../util/Files";
+import {SysMonitor} from "../SysMonitor";
 
 
 
@@ -128,7 +129,10 @@ class AdminServer {
         if (url == "/api/serverOption") {
             await this.onGetServerOption(req, res);
             return;
-        } else if (url == "/api/tunnelingOption") {
+        } else if(url == '/api/systemStatus') {
+            await this.onGetSystemStatus(req, res);
+        }
+        else if (url == "/api/tunnelingOption") {
             await this.onGetTunnelingOption(req, res);
             return;
         } else if (url == "/api/externalServerStatuses") {
@@ -153,8 +157,7 @@ class AdminServer {
             await this.onGetWebResource(req, res, url);
             return;
         }
-        res.writeHead(404);
-        res.end(`Not Found ${url}`);
+
     }
 
     private onGetWebResource = async (req: IncomingMessage, res: ServerResponse, url: string) => {
@@ -168,28 +171,7 @@ class AdminServer {
             realPath = Path.join(realPath, 'index.html');
         }
         let ext = Path.extname(realPath);
-        let contentType = 'octet/stream';
-        if(ext == '.html')
-            contentType = 'text/html; charset=utf-8';
-        else if(ext == '.js')
-            contentType = 'text/javascript; charset=utf-8';
-        else if(ext == '.css')
-            contentType = 'text/css; charset=utf-8';
-        else if(ext == '.png')
-            contentType = 'image/png';
-        else if(ext == '.jpg' || ext == '.jpeg')
-            contentType = 'image/jpeg';
-        else if(ext == '.gif')
-            contentType = 'image/gif';
-        else if(ext == '.svg')
-            contentType = 'image/svg+xml; charset=utf-8';
-        else if(ext == '.ico')
-            contentType = 'image/x-icon';
-        else if(ext == '.json')
-            contentType = 'application/json; charset=utf-8';
-        else if(ext == '.ttf')
-            contentType = 'font/ttf';
-
+        let contentType = this.contentTypeFromExt(ext);
         res.writeHead(200, {'Content-Type': contentType});
         let file = new File(realPath);
         if(!file.isFile()) {
@@ -546,6 +528,18 @@ class AdminServer {
         res.end(JSON.stringify({success: true, serverOption:  pureServerOption, message: ''}));
     }
 
+
+    private onGetSystemStatus = async (req: IncomingMessage, res: ServerResponse) => {
+        if(!await this.checkSession(req, res)) {
+            return;
+        }
+        let status = await SysMonitor.instance.status();
+        let clientStatus = this._tttServer?.clientStatus();
+        res.writeHead(200, {'Content-Type': 'application/json'});
+        res.end(JSON.stringify({success: true, serverTime: Date.now(), system: status, clients: clientStatus, message: ''}));
+    }
+
+
     private onGetTunnelingOption = async (req: IncomingMessage, res: ServerResponse) => {
         if(!await this.checkSession(req, res)) {
             return;
@@ -614,6 +608,32 @@ class AdminServer {
 
             });
         });
+    }
+
+    private contentTypeFromExt = (ext: string) : string => {
+        ext = ext.toLowerCase();
+        let contentType = 'application/octet-stream';
+        if(ext == '.html')
+            contentType = 'text/html; charset=utf-8';
+        else if(ext == '.js')
+            contentType = 'text/javascript; charset=utf-8';
+        else if(ext == '.css')
+            contentType = 'text/css; charset=utf-8';
+        else if(ext == '.png')
+            contentType = 'image/png';
+        else if(ext == '.jpg' || ext == '.jpeg')
+            contentType = 'image/jpeg';
+        else if(ext == '.gif')
+            contentType = 'image/gif';
+        else if(ext == '.svg')
+            contentType = 'image/svg+xml; charset=utf-8';
+        else if(ext == '.ico')
+            contentType = 'image/x-icon';
+        else if(ext == '.json')
+            contentType = 'application/json; charset=utf-8';
+        else if(ext == '.ttf')
+            contentType = 'font/ttf';
+        return contentType;
     }
 
 
