@@ -34,6 +34,7 @@ interface SysStatus {
         model: string;
         speed: number;
         cores: number;
+        usage: number;
     },
     osInfo: {
         platform: string;
@@ -41,7 +42,10 @@ interface SysStatus {
         type: string;
         hostname: string;
     },
-    cpu: number;
+    cpu: {
+        total: number;
+        process: number;
+    },
     uptime: number;
     heap: {
         used: number;

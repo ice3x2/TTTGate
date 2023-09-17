@@ -1,8 +1,8 @@
 <script lang="ts">
     import {createEventDispatcher} from "svelte";
 
-    const width = 320;
-    const height = 150;
+    export let width = 320;
+    export let height = 150;
 
     export let show = false;
     export let button = 'Ok';

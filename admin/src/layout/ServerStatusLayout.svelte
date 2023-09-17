@@ -1,6 +1,7 @@
 <script lang="ts">
 import Gauge from "../component/Gauge.svelte";
 import ServerStatusCtrl from "../controller/ServerStatusCtrl";
+import CpuIcon from "../assets/cpu.png";
 
 import {InvalidSession,type ClientStatus,type  SysStatus} from "../controller/Types";
 import AlertLayout from "../component/AlertLayout.svelte";
@@ -11,13 +12,14 @@ let _showAlert = false;
 let _alertMessage = "";
 let _alertButton = "Ok";
 let _intervalId : any;
-
+let _alertHeight = 150;
 
 let _onCloseAlert = () => {};
 
 let _serverStatus : {system: SysStatus, clients: ClientStatus} | undefined;
 
 let _cpuPercentage = 0;
+let _cpuAllPercentage = 0;
 let _heapUsage = { used: 0,  total: 0 }
 let _bufferUsage = { used: 0,  total: 0 }
 let _memoryUsage = { free: 0,  total: 0, process: 0 }
@@ -41,7 +43,8 @@ let _startStatusUpdate = () => {
 let _loadServerStatus = async () : Promise<boolean> => {
     try {
         _serverStatus = await ServerStatusCtrl.instance.getStatus();
-        _cpuPercentage = _serverStatus.system.cpu;
+        _cpuPercentage = _serverStatus.system.cpu.process;
+        _cpuAllPercentage = _serverStatus.system.cpu.total;
         _heapUsage = _serverStatus.system.heap;
         _bufferUsage = _serverStatus.system.totalBuffer;
         _memoryUsage = _serverStatus.system.memory;
@@ -76,24 +79,41 @@ let _alert = (message: string, button?: string, onClose? : ()=> void) => {
     _showAlert = true;
 }
 
-let _byteToUnit = (length: number) : string => {
+let _byteToUnit = (length: number,hideUnit?: boolean) : string => {
     const tib = 1024 * 1024 * 1024 * 1024;
     const gib = 1024 * 1024 * 1024;
     const mib = 1024 * 1024;
     const kib = 1024;
     if(length > tib) {
-        return `${ExMath.round(length / tib, 1)}TiB`;
+        return `${ExMath.round(length / tib, 1)}${hideUnit? '':'TiB'}`;
     } else if(length > gib) {
-        return `${ExMath.round(length / gib, 1)}GiB`;
+        return `${ExMath.round(length / gib, 1)}${hideUnit? '':'GiB'}`;
     } else if(length > mib) {
-        return `${ExMath.round(length / mib, 1)}MiB`;
+        return `${ExMath.round(length / mib, 1)}${hideUnit? '':'MiB'}`;
     } else if(length > kib) {
-        return `${ExMath.round(length / kib, 1)}KiB`;
+        return `${ExMath.round(length / kib, 1)}${hideUnit?'': 'KiB'}`;
     } else {
-        return `${length}B`;
+        return `${length}${hideUnit? '':'B'}`;
     }
 }
 
+let onClickShowInfo = (e: Event) => {
+    _alertHeight = 500;
+    _alert(`<h4>HW Info</h4>
+            <div>CPU: ${_serverStatus.system.cpuInfo.model}</div>
+            <div>Clock: ${_serverStatus.system.cpuInfo.speed}</div>
+            <div>Cores: ${_serverStatus.system.cpuInfo.cores}</div>
+            <div>RAM: ${_byteToUnit(_serverStatus.system.memory.total)}</div>
+
+            <h4>OS Info</h4>
+            <div>Type: ${_serverStatus.system.osInfo.type}</div>
+            <div>Platform: ${_serverStatus.system.osInfo.platform}</div>
+            <div>Release: ${_serverStatus.system.osInfo.release}</div>
+            <div>hostname: ${_serverStatus.system.osInfo.hostname}</div>
+
+`, 'OK');
+
+}
 
 </script>
 
@@ -102,29 +122,30 @@ let _byteToUnit = (length: number) : string => {
         Status
     </h2>
     <div class="round-box">
-        <div class="gauge-box">
-            <div>CPU</div>
-            <Gauge style="width: 115px" value={_cpuPercentage} duration={900}></Gauge>
+        <div style="display: flex; align-items: center; cursor: pointer; margin-bottom: 5px" on:click={onClickShowInfo}>
+            <img src={CpuIcon} width="16" height="16" alt="info">
+            <span style="margin-left: 2px; font-size: 10pt; text-decoration: underline;color: #555;">INFO</span>
         </div>
         <div class="gauge-box">
-            <div>Memory</div>
-            <Gauge style="width: 115px" value={_memoryUsage.process} max={_memoryUsage.total} duration={900}></Gaug<div  class="status-value-box">{_byteToUnit(_memoryUsage.process)}/{_byteToUnit(_memoryUsage.total)}</div>
+
+            <Gauge style="" title="CPU" message="{`${_cpuPercentage}/${_cpuAllPercentage}%`}" value={_cpuPercentage} duration={900}></Gauge>
         </div>
         <div class="gauge-box">
-            <div>Heap</div>
-            <Gauge style="width: 115px" value={_heapUsage.used} max={_heapUsage.total} duration={900}></Gauge>
-            <div  class="status-value-box">{_byteToUnit(_heapUsage.used)}/{_byteToUnit(_heapUsage.total)}</div>
+            <Gauge style=""   title="Memory"  message={`${_byteToUnit(_memoryUsage.process,true)}/${_byteToUnit(_memoryUsage.total)}`}  value={_memoryUsage.process} max={_memoryUsage.total} duration={900}/>
+          <!--  <div  class="status-value-box">{_byteToUnit(_memoryUsage.process)}/{_byteToUnit(_memoryUsage.total)}</div>-->
+        </div>
+        <div class="gauge-box">
+            <Gauge style=""  title="Heap" message="{`${_byteToUnit(_heapUsage.used)}/${_byteToUnit(_heapUsage.total)}`}" value={_heapUsage.used} max={_heapUsage.total} duration={900}></Gauge>
         </div>
 
         <div class="gauge-box">
-            <div>Buffer</div>
-            <Gauge style="width: 115px" value={_bufferUsage.used} max={_bufferUsage.total} duration={900}></Gauge>
-            <div class="status-value-box">{_byteToUnit(_bufferUsage.used)}/{_byteToUnit(_bufferUsage.total)}</div>
+            <Gauge style="" title="Buffer"  message="{`${_byteToUnit(_bufferUsage.used)}/${_byteToUnit(_bufferUsage.total)}`}" value={_bufferUsage.used} max={_bufferUsage.total} duration={900}></Gauge>
+
         </div>
 
     </div>
 
-    <AlertLayout bind:show={_showAlert} bind:button={_alertButton} on:close={_onCloseAlert}>
+    <AlertLayout height={_alertHeight} bind:show={_showAlert} bind:button={_alertButton} on:close={_onCloseAlert}>
         {@html _alertMessage}
     </AlertLayout>
 
@@ -139,15 +160,12 @@ let _byteToUnit = (length: number) : string => {
         display: block;
     }
 
+
     .gauge-box {
         display: inline-block;
-        width: 118px;
+        width: calc(25% - 3px);
     }
 
-    .status-value-box {
-        margin-top: -10px;
-        position: absolute;
-        font-size: 8pt;
-    }
+
 
 </style>

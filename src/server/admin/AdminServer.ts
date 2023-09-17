@@ -12,7 +12,7 @@ import Environment from "../../Environment";
 import Path from "path";
 import File from "../../util/File";
 import Files from "../../util/Files";
-import {SysMonitor} from "../SysMonitor";
+import {SysMonitor} from "../../commons/SysMonitor";
 
 
 
@@ -172,7 +172,6 @@ class AdminServer {
         }
         let ext = Path.extname(realPath);
         let contentType = this.contentTypeFromExt(ext);
-        res.writeHead(200, {'Content-Type': contentType});
         let file = new File(realPath);
         if(!file.isFile()) {
             res.writeHead(404);
@@ -190,7 +189,10 @@ class AdminServer {
             res.end(`Not Found ${url}`);
             return;
         }
+        res.writeHead(200, {'Content-Type': contentType});
         res.end(body);
+
+
     }
 
     private onUpdateAdminCert = async (req: IncomingMessage, res: ServerResponse) => {

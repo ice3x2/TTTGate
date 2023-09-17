@@ -10,6 +10,9 @@
     export let value = 0;
     export let duration = 1000;
 
+    export let title = '';
+    export let message = '';
+
     let _needleElement: HTMLDivElement;
 
 
@@ -97,9 +100,9 @@
 </script>
 <svelte:options accessors/>
 <div class="main" style="{style}">
+    <div class="title">{title}</div>
     <div class="gauge-container">
         <div class="gauge"></div>
-
         <div class="tick-mark mark-center"></div>
         <div class="tick-mark mark-30"></div>
         <div class="tick-mark mark-60"></div>
@@ -114,22 +117,36 @@
     </div>
 
 
-    <div class="percent-box">{_percent}%</div>
+    <div class="percent-box">{_percent}<span style="font-size: 12pt">%</span></div>
+
+    <div class="message">{message}</div>
 
 
 </div>
 <style>
     .main {
         display: inline;
+        text-align: center;
+    }
+
+    .title {
+        font-size: 10pt;
+        width: 100%;
+        margin-left: 0;
+        text-align: left;
+        color: #222;
+        font-weight: 100;
+        margin-bottom: -5px;
     }
 
     .percent-box {
         display: inline-block;
         font-weight: bold;
-        font-size: 18pt;
+        font-size: 16pt;
     }
 
     .gauge-container {
+
         display: inline-block;
         position: relative;
         height: 25px;
@@ -144,8 +161,9 @@
         position: absolute;
         bottom: 0;
         left: 0;
-
     }
+
+
 
     .gauge-background {
         width: 28px;
@@ -223,6 +241,48 @@
         transform: rotate(60deg);
     }
 
+    .message {
+        font-size: 9pt;
+        width: 100%;
+        text-align: left;
+        color: #444;
+        font-weight: 100;
+        margin-top: -8px;
+    }
+
+    @media screen and (max-width: 580px) {
+        .percent-box {
+            display: block;
+            text-align: center;
+            margin-top: -5px;
+            font-size: 14pt;
+        }
+
+        .gauge-container {
+            display: block;
+            text-align: center;
+            width: 40px;
+            left: calc(50% - 25px);
+        }
+
+        .title {
+            text-align: center;
+            width: 100%;
+            margin-left: -5px;
+            font-size: 9pt;
+        }
+
+        .message {
+
+            font-size: 6pt;
+            padding: 0 2px 0 2px;
+            text-align: center;
+            width: 100%;
+            margin-left: -3px;
+        }
+
+
+    }
 
 
 
