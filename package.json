@@ -4,23 +4,23 @@
   "description": "",
   "main": "package.js",
   "bin": {
-    "server": "build/src/server/app.js"
+    "app": "build/src/app.js"
   },
   "pkg": {
     "scripts": "build/**/*.js",
-    "assets": "web/**/*",
     "targets": [
-      "node-linux-arm64",
-      "node-win-arm64",
-      "node-win-x64",
-      "node-linux-x64",
-      "node-alpine-x64"
+      "node18-linux-arm64",
+      "node18-win-arm64",
+      "node18-win-x64",
+      "node18-linux-x64",
+      "node18-alpine-x64"
     ],
     "outputPath": "dist/bin/"
   },
   "scripts": {
     "test": "jest --detectOpenHandles --forceExit",
     "build": "tsc -b",
+    "pkg": "pkg . ",
     "start": "node bin/src/sserver.js",
     "server": "tsnd --respawn  src/app.ts server -dev ",
     "client": "tsnd --respawn  src/app.ts client -dev "
