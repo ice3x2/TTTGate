@@ -119,9 +119,15 @@ class SysMonitor {
         let uptime = Date.now() - SysMonitor._startTime;
         let memory = process.memoryUsage().rss;
 
+
         try {
             const stat = await pidusage(process.pid);
-            cpu = ExMath.round(stat.cpu, 1);
+            cpu = stat.cpu;
+            let coreInfos = os.cpus();
+            if(coreInfos.length > 1) {
+                cpu = cpu / coreInfos.length;
+            }
+            cpu = ExMath.round(cpu, 1);
             memory = stat.memory;
         } catch (ignored) {}
         let currentUsage : Usage = {

@@ -356,6 +356,7 @@ class TunnelServer {
 
     private closeCtrlHandler = (handler: SocketHandler) : void => {
         this._ctrlHandlerMap.delete(handler.id);
+        this._ctrlSessionMap.delete(handler.id);
         let deleteSessionIDs : Array<number> = [];
         this._sessionMap.forEach((session, id) => {
             if(session.controlId == handler.id) {
