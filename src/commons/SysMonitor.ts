@@ -3,20 +3,22 @@ import {SocketHandler} from "../util/SocketHandler";
 import os, {NetworkInterfaceInfo} from "os";
 import ExMath from "../util/ExMath";
 import Dict = NodeJS.Dict;
-import net from "net";
 
-interface SysStatus {
-    cpuInfo : {
-        model: string;
-        speed: number;
-        cores: number;
-    },
-    osInfo: {
-        platform: string;
-        release: string;
-        type: string;
-        hostname: string;
-    },
+
+interface NetworkInterface {
+    address: string;
+    netmask: string;
+    family: string;
+    mac: string;
+    internal: boolean;
+    cidr: string;
+}
+
+interface NetworkInfo {
+    [name: string] : Array<NetworkInterface>;
+}
+
+interface Usage {
     memory: {
         free: number;
         total: number;
@@ -37,14 +39,31 @@ interface SysStatus {
     };
 }
 
+interface SysInfo {
+    osInfo: {
+        platform: string;
+        release: string;
+        type: string;
+        hostname: string;
+    },
+    ram: number,
+    cpuInfo : {
+        model: string;
+        speed: number;
+        cores: number;
+    },
+    network : NetworkInfo;
+}
+
 class SysMonitor {
 
     private static _instance: SysMonitor;
-    private readonly _startTime: number = Date.now();
+    private static readonly _startTime: number = Date.now();
     private prevCpuInfo = os.cpus();
 
-    private _lastStatus : SysStatus | null = null;
-    private _lastStatusTime : number = 0;
+    private _lastUsage : Usage | null = null;
+    private _sysInfoCache : SysInfo | null = null;
+    private _lastUsageReadTime : number = 0;
 
     private constructor() {
 
@@ -91,52 +110,30 @@ class SysMonitor {
     }
 
 
-    public async status() : Promise<SysStatus> {
-        if(this._lastStatus && Date.now() - this._lastStatusTime < 500) {
-            return this._lastStatus;
+    public async usage() : Promise<Usage> {
+        if(this._lastUsage && Date.now() - this._lastUsageReadTime < 500) {
+            return this._lastUsage;
         }
-        this._lastStatusTime = Date.now();
+        this._lastUsageReadTime = Date.now();
         let cpu = 0;
-        let uptime = Date.now() - this._startTime;
+        let uptime = Date.now() - SysMonitor._startTime;
         let memory = process.memoryUsage().rss;
-        let network : Dict<NetworkInterfaceInfo[]> =  os.networkInterfaces();
-        let keys =  Object.keys(network);
-        keys.forEach((key) => {
-            let info = network[key] as NetworkInterfaceInfo[];
-            //info.forEach()
 
-
-        });
         try {
-
             const stat = await pidusage(process.pid);
-            cpu = stat.cpu;
+            cpu = ExMath.round(stat.cpu, 1);
             memory = stat.memory;
         } catch (ignored) {}
-        let status= {
-            cpuInfo: {
-                model: os.cpus()[0].model,
-                speed: os.cpus()[0].speed,
-                cores: os.cpus().length,
-
-
-            },
-
-            osInfo: {
-                platform: os.platform(),
-                release: os.release(),
-                type: os.type(),
-                hostname: os.hostname()
-            },
+        let currentUsage : Usage = {
             cpu: {
                 total: this.cpuUsage(),
-                process: cpu
+                process:  cpu
             },
             uptime: uptime,
             memory: {
-              free: os.freemem(),
-              total: os.totalmem(),
-              process: memory
+                free: os.freemem(),
+                total: os.totalmem(),
+                process: memory
             },
             heap: {
                 used: process.memoryUsage().heapUsed,
@@ -146,9 +143,50 @@ class SysMonitor {
                 used: SocketHandler.globalMemoryBufferSize,
                 total: SocketHandler.maxGlobalMemoryBufferSize
             }
-        }
+        };
+        this._lastUsage = currentUsage;
+        return currentUsage;
+    }
 
-        this._lastStatus = status;
+
+    public async sysInfo() : Promise<SysInfo> {
+        if(this._sysInfoCache) {
+            return this._sysInfoCache;
+        }
+        let network : Dict<NetworkInterfaceInfo[]> =  os.networkInterfaces();
+        let keys =  Object.keys(network);
+        let networkInfo : NetworkInfo = {};
+        keys.forEach((key) => {
+            let info = network[key] as NetworkInterfaceInfo[];
+            networkInfo[key] = [];
+            info.forEach((item) => {
+                networkInfo[key].push({
+                    address: item.address,
+                    netmask: item.netmask,
+                    family: item.family,
+                    mac: item.mac,
+                    internal: item.internal,
+                    cidr: item.cidr ?? ''
+                });
+            });
+        });
+        let status : SysInfo = {
+            cpuInfo: {
+                model: os.cpus()[0].model,
+                speed: os.cpus()[0].speed,
+                cores: os.cpus().length,
+            },
+            ram: os.totalmem(),
+            osInfo: {
+                platform: os.platform(),
+                release: os.release(),
+                type: os.type(),
+                hostname: os.hostname()
+            },
+            network: networkInfo
+        };
+
+        this._sysInfoCache = status;
 
         return status;
     }
@@ -159,4 +197,4 @@ class SysMonitor {
 
 }
 
-export { SysMonitor , SysStatus};
+export { SysMonitor , SysInfo};

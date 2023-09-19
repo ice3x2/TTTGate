@@ -2,31 +2,34 @@
 import Gauge from "../component/Gauge.svelte";
 import ServerStatusCtrl from "../controller/ServerStatusCtrl";
 import CpuIcon from "../assets/cpu.png";
+import UptimeIcon from "../assets/uptime.png";
 
-import {InvalidSession,type ClientStatus,type  SysStatus} from "../controller/Types";
+import {InvalidSession, type ClientStatus, type SysInfo, type Usage, type NetworkInfo} from "../controller/Types";
 import AlertLayout from "../component/AlertLayout.svelte";
 import {onMount} from "svelte";
 import ExMath from "../controller/ExMath";
+import SysinfoPopup from "./SysinfoPopup.svelte";
 
+let _showSysInfo = false;
 let _showAlert = false;
 let _alertMessage = "";
 let _alertButton = "Ok";
 let _intervalId : any;
-let _alertHeight = 150;
+
 
 let _onCloseAlert = () => {};
 
-let _serverStatus : {system: SysStatus, clients: ClientStatus} | undefined;
-
-let _cpuPercentage = 0;
-let _cpuAllPercentage = 0;
-let _heapUsage = { used: 0,  total: 0 }
-let _bufferUsage = { used: 0,  total: 0 }
-let _memoryUsage = { free: 0,  total: 0, process: 0 }
+let _sysInfo : SysInfo;
+let _usage : Usage = undefined;
+let _clientStatuses : Array<ClientStatus> = [];
 
 onMount(async () => {
     if(!_intervalId) {
+
         _startStatusUpdate();
+    }
+    if(!_sysInfo) {
+        _sysInfo = await ServerStatusCtrl.instance.getSysInfo();
     }
 })
 let _startStatusUpdate = () => {
@@ -42,12 +45,8 @@ let _startStatusUpdate = () => {
 
 let _loadServerStatus = async () : Promise<boolean> => {
     try {
-        _serverStatus = await ServerStatusCtrl.instance.getStatus();
-        _cpuPercentage = _serverStatus.system.cpu.process;
-        _cpuAllPercentage = _serverStatus.system.cpu.total;
-        _heapUsage = _serverStatus.system.heap;
-        _bufferUsage = _serverStatus.system.totalBuffer;
-        _memoryUsage = _serverStatus.system.memory;
+        _usage = await ServerStatusCtrl.instance.getSysUsage();
+        _clientStatuses = await ServerStatusCtrl.instance.getClientStatus();
         return true;
     } catch (e) {
         if (e instanceof InvalidSession) {
@@ -98,21 +97,16 @@ let _byteToUnit = (length: number,hideUnit?: boolean) : string => {
 }
 
 let onClickShowInfo = (e: Event) => {
-    _alertHeight = 500;
-    _alert(`<h4>HW Info</h4>
-            <div>CPU: ${_serverStatus.system.cpuInfo.model}</div>
-            <div>Clock: ${_serverStatus.system.cpuInfo.speed}</div>
-            <div>Cores: ${_serverStatus.system.cpuInfo.cores}</div>
-            <div>RAM: ${_byteToUnit(_serverStatus.system.memory.total)}</div>
+    _showSysInfo = true;
+}
 
-            <h4>OS Info</h4>
-            <div>Type: ${_serverStatus.system.osInfo.type}</div>
-            <div>Platform: ${_serverStatus.system.osInfo.platform}</div>
-            <div>Release: ${_serverStatus.system.osInfo.release}</div>
-            <div>hostname: ${_serverStatus.system.osInfo.hostname}</div>
-
-`, 'OK');
-
+let _timeToDMH =(time: number) => {
+    time = time / 1000;
+    const day = Math.floor(time / (24 * 60 * 60));
+    const hour = Math.floor((time % (24 * 60 * 60)) / (60 * 60));
+    const min = Math.floor((time % (60 * 60)) / 60);
+    const sec = Math.floor(time % 60);
+    return `${day}d ${hour}h ${min}m ${sec}s`;
 }
 
 </script>
@@ -122,38 +116,76 @@ let onClickShowInfo = (e: Event) => {
         Status
     </h2>
     <div class="round-box">
-        <div style="display: flex; align-items: center; cursor: pointer; margin-bottom: 5px" on:click={onClickShowInfo}>
-            <img src={CpuIcon} width="16" height="16" alt="info">
-            <span style="margin-left: 2px; font-size: 10pt; text-decoration: underline;color: #555;">INFO</span>
-        </div>
-        <div class="gauge-box">
+        <div>
+            <div style="display: inline-block">
+                <div style="display: flex; align-items: center; cursor: pointer; margin-bottom: 5px" on:click={onClickShowInfo}>
+                    <img src={CpuIcon} width="16" height="16" alt="info">
+                    <span style="margin-left: 2px; font-size: 10pt; text-decoration: underline;color: #555;">INFO</span>
+                </div>
+            </div>
 
-            <Gauge style="" title="CPU" message="{`${_cpuPercentage}/${_cpuAllPercentage}%`}" value={_cpuPercentage} duration={900}></Gauge>
-        </div>
-        <div class="gauge-box">
-            <Gauge style=""   title="Memory"  message={`${_byteToUnit(_memoryUsage.process,true)}/${_byteToUnit(_memoryUsage.total)}`}  value={_memoryUsage.process} max={_memoryUsage.total} duration={900}/>
-          <!--  <div  class="status-value-box">{_byteToUnit(_memoryUsage.process)}/{_byteToUnit(_memoryUsage.total)}</div>-->
-        </div>
-        <div class="gauge-box">
-            <Gauge style=""  title="Heap" message="{`${_byteToUnit(_heapUsage.used)}/${_byteToUnit(_heapUsage.total)}`}" value={_heapUsage.used} max={_heapUsage.total} duration={900}></Gauge>
+            {#if _usage !== undefined}
+            <div style="display: inline-block; margin-left: 10px">
+                <div style="display: flex; align-items: center; margin-bottom: 5px">
+                    <img src={UptimeIcon} width="16" height="16" alt="info">
+                    <span style="margin-left: 2px; font-size: 10pt;color: #555;">{_timeToDMH(_usage.uptime)}</span>
+                </div>
+            </div>
+            {/if}
         </div>
 
-        <div class="gauge-box">
-            <Gauge style="" title="Buffer"  message="{`${_byteToUnit(_bufferUsage.used)}/${_byteToUnit(_bufferUsage.total)}`}" value={_bufferUsage.used} max={_bufferUsage.total} duration={900}></Gauge>
 
+        {#if _usage !== undefined}
+            <div class="gauge-box">
+                <Gauge style="" title="CPU" message="{`${ _usage.cpu.process}/${_usage.cpu.total}%`}" value={_usage.cpu.process} duration={900}></Gauge>
+            </div>
+            <div class="gauge-box">
+                <Gauge style=""   title="Memory"  message={`${_byteToUnit(_usage.memory.process)}/${_byteToUnit(_usage.memory.total)}`}  value={_usage.memory.process} max={_usage.memory.total} duration={900}/>
+              <!--  <div  class="status-value-box">{_byteToUnit(_memoryUsage.process)}/{_byteToUnit(_memoryUsage.total)}</div>-->
+            </div>
+            <div class="gauge-box">
+                <Gauge style=""  title="Heap" message="{`${_byteToUnit(_usage.heap.used)}/${_byteToUnit(_usage.heap.total)}`}" value={_usage.heap.used} max={_usage.heap.total} duration={900}></Gauge>
+            </div>
+
+            <div class="gauge-box">
+                <Gauge style="" title="Buffer"  message="{`${_byteToUnit(_usage.totalBuffer.used)}/${_byteToUnit(_usage.totalBuffer.total)}`}" value={_usage.totalBuffer.used} max={_usage.totalBuffer.total} duration={900}></Gauge>
+
+            </div>
+        {/if}
+
+        <div style="margin-top: 10px">
+            <div style="margin-top: 10px; font-size: 12pt; font-weight: bold">Client list</div>
+            <ul style="padding-left:20px; margin-top: 5px">
+            {#each _clientStatuses as client, index}
+                <li style="font-size: 11pt; font-weight: 100;">
+                ID: {client.id}, {client.name}
+                </li>
+                <ul style="padding-left: 18px; font-size: 10pt; line-height: 12pt; margin-bottom: 10px;color: #717171">
+                    <li><span style="font-weight: 600">state:</span> {client.state}</li>
+                    <li><span style="font-weight: 600">Address</span>: {client.address}</li>
+                    <li><span style="font-weight: 600">Uptime</span>: {_timeToDMH(client.uptime)}</li>
+                </ul>
+            {/each}
+            </ul>
         </div>
 
     </div>
 
-    <AlertLayout height={_alertHeight} bind:show={_showAlert} bind:button={_alertButton} on:close={_onCloseAlert}>
+    <AlertLayout bind:show={_showAlert} bind:button={_alertButton} on:close={_onCloseAlert}>
         {@html _alertMessage}
     </AlertLayout>
 
+    <SysinfoPopup show={_showSysInfo} sysInfo={_sysInfo}></SysinfoPopup>
 
 
 </main>
 
 <style>
+
+    li {
+
+    }
+
     main {
         margin-top: 20px;
         padding: 10px 10px 0 10px;

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="150" viewBox="0 0 200 150">
+    <!-- 아치형 모양의 천장 -->
+    <path d="M0,75 C0,35 100,35 100,75" fill="#ccc" />
+
+    <!-- 입구를 둘러싸는 벽돌 -->
+    <rect x="25" y="60" width="150" height="30" fill="#d3d3d3" />
+    <rect x="30" y="60" width="20" height="30" fill="#b3b3b3" />
+    <rect x="55" y="60" width="20" height="30" fill="#b3b3b3" />
+    <rect x="80" y="60" width="20" height="30" fill="#b3b3d3" />
+    <rect x="105" y="60" width="20" height="30" fill="#b3b3d3" />
+    <rect x="130" y="60" width="20" height="30" fill="#b3b3d3" />
+    <rect x="155" y="60" width="20" height="30" fill="#b3b3d3" />
+</svg>

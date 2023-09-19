@@ -129,8 +129,12 @@ class AdminServer {
         if (url == "/api/serverOption") {
             await this.onGetServerOption(req, res);
             return;
-        } else if(url == '/api/systemStatus') {
-            await this.onGetSystemStatus(req, res);
+        } else if(url == '/api/sysInfo') {
+            await this.onGetSysInfo(req, res);
+        } else if(url == '/api/sysUsage') {
+            await this.onGetSysUsage(req, res);
+        } else if(url == '/api/clientStatus') {
+            await this.onGetClientStatus(req, res);
         }
         else if (url == "/api/tunnelingOption") {
             await this.onGetTunnelingOption(req, res);
@@ -531,14 +535,34 @@ class AdminServer {
     }
 
 
-    private onGetSystemStatus = async (req: IncomingMessage, res: ServerResponse) => {
+    private onGetSysInfo = async (req: IncomingMessage, res: ServerResponse) => {
         if(!await this.checkSession(req, res)) {
             return;
         }
-        let status = await SysMonitor.instance.status();
-        let clientStatus = this._tttServer?.clientStatus();
+        let status = await SysMonitor.instance.sysInfo();
         res.writeHead(200, {'Content-Type': 'application/json'});
-        res.end(JSON.stringify({success: true, serverTime: Date.now(), system: status, clients: clientStatus, message: ''}));
+        let value = {success: true, message: ''} && status;
+        res.end(JSON.stringify(value));
+    }
+
+    private onGetSysUsage = async (req: IncomingMessage, res: ServerResponse) => {
+        if(!await this.checkSession(req, res)) {
+            return;
+        }
+        let status = await SysMonitor.instance.usage();
+        res.writeHead(200, {'Content-Type': 'application/json'});
+        let value = {success: true, message: ''} && status;
+        res.end(JSON.stringify(value));
+    }
+
+    private onGetClientStatus = async (req: IncomingMessage, res: ServerResponse) => {
+        if(!await this.checkSession(req, res)) {
+            return;
+        }
+        let status = this._tttServer?.clientStatus();
+        res.writeHead(200, {'Content-Type': 'application/json'});
+        let value = {success: true, message: ''} && status;
+        res.end(JSON.stringify(value));
     }
 
 

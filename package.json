@@ -1,5 +1,5 @@
 {
-  "name": "double-tip-tunnel-server",
+  "name": "TTTGate",
   "version": "1.0.0",
   "description": "",
   "main": "package.js",
@@ -8,9 +8,13 @@
   },
   "pkg": {
     "scripts": "build/**/*.js",
+    "assets": "web/**/*",
     "targets": [
       "node-linux-arm64",
-      "node-win-arm64"
+      "node-win-arm64",
+      "node-win-x64",
+      "node-linux-x64",
+      "node-alpine-x64"
     ],
     "outputPath": "dist/bin/"
   },

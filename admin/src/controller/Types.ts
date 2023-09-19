@@ -29,32 +29,34 @@ class InvalidSession extends Error {
 }
 
 
-interface SysStatus {
-    cpuInfo : {
-        model: string;
-        speed: number;
-        cores: number;
-        usage: number;
-    },
-    osInfo: {
-        platform: string;
-        release: string;
-        type: string;
-        hostname: string;
-    },
-    cpu: {
-        total: number;
-        process: number;
-    },
-    uptime: number;
-    heap: {
-        used: number;
-        total: number;
-    };
+
+interface NetworkInterface {
+    address: string;
+    netmask: string;
+    family: string;
+    mac: string;
+    internal: boolean;
+    cidr: string;
+}
+
+interface NetworkInfo {
+    [name: string] : Array<NetworkInterface>;
+}
+
+interface Usage {
     memory: {
         free: number;
         total: number;
         process: number;
+    },
+    cpu: {
+        total: number
+        process: number;
+    };
+    uptime: number;
+    heap: {
+        used: number;
+        total: number;
     };
     totalBuffer: {
         used: number;
@@ -62,6 +64,21 @@ interface SysStatus {
     };
 }
 
+interface SysInfo {
+    osInfo: {
+        platform: string;
+        release: string;
+        type: string;
+        hostname: string;
+    },
+    cpuInfo : {
+        model: string;
+        speed: number;
+        cores: number;
+    },
+    ram: number,
+    network : NetworkInfo;
+}
 interface ClientStatus {
     id: number;
     state: 'connecting' | 'connected' | 'end';
@@ -72,4 +89,4 @@ interface ClientStatus {
 
 
 
-export {type PemData,type ServerOption,type CertInfo,InvalidSession,type SysStatus,type ClientStatus}
+export {type PemData,type ServerOption,type CertInfo,InvalidSession,type SysInfo, type NetworkInfo, type Usage, type NetworkInterface,type ClientStatus}

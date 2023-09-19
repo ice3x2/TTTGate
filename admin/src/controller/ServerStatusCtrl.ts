@@ -1,11 +1,11 @@
 
-import {InvalidSession,type ClientStatus,type SysStatus} from "./Types";
+import {InvalidSession, type ClientStatus, type SysInfo, type Usage} from "./Types";
 
 
 class ServerStatusCtrl {
 
     private static _instance : ServerStatusCtrl;
-
+    private _sysInfoCache : SysInfo | null = null;
 
     private constructor() {
 
@@ -23,8 +23,8 @@ class ServerStatusCtrl {
 
 
 
-    public async getStatus() : Promise<{system: SysStatus, clients: ClientStatus}> {
-        let res = await fetch("/api/systemStatus", {
+    public async getSysUsage() : Promise<Usage> {
+        let res = await fetch("/api/sysUsage", {
             method: "GET",
             credentials: "same-origin"
         });
@@ -32,6 +32,38 @@ class ServerStatusCtrl {
         if(!json || res.status == 401) {
             throw new InvalidSession();
         }
+        this._sysInfoCache = json.system;
+        return json;
+
+    }
+
+
+    public async getSysInfo() : Promise<SysInfo> {
+        if(this._sysInfoCache) {
+            return this._sysInfoCache;
+        }
+        let res = await fetch("/api/sysInfo", {
+            method: "GET",
+            credentials: "same-origin"
+        });
+        let json = await res.json();
+        if(!json || res.status == 401) {
+            throw new InvalidSession();
+        }
+        this._sysInfoCache = json.system;
+        return json;
+    }
+
+    public async getClientStatus() : Promise<Array<ClientStatus>> {
+        let res = await fetch("/api/clientStatus", {
+            method: "GET",
+            credentials: "same-origin"
+        });
+        let json = await res.json();
+        if(!json || res.status == 401) {
+            throw new InvalidSession();
+        }
+        this._sysInfoCache = json.system;
         return json;
     }
 

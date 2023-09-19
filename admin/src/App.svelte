@@ -32,11 +32,11 @@
   <!--<ServerSetLayout/>-->
   <!--<TunnelOptionSetLayout/>-->
 
-    {#if _validSession == 'Valid'}
+    {#if _validSession === 'Valid'}
       <ServerSetLayout/>
       <ServerStatusLayout/>
       <TunnelOptionSetLayout/>
-    {:else if _validSession == 'Invalid'}
+    {:else if _validSession === 'Invalid'}
       <Login />
     {:else}
       <div>Checking...</div>
