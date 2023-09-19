@@ -8,7 +8,6 @@ enum ParsedState {
     Complete,
     Incomplete,
     Error
-
 }
 
 
@@ -36,7 +35,8 @@ enum CtrlCmd {
     Synchronized,
     Data,
     Close,
-    Failed
+    Failed,
+
 }
 
 const MAX_PAYLOAD_SIZE = 64000;
@@ -123,12 +123,6 @@ class CtrlPacket {
             packets.push(packet);
         }
         return packets;
-
-        /*let packet = new CtrlPacket();
-        packet._cmd = CtrlCmd.Data;
-        packet._id = id;
-        packet._data = data;
-        return packet;*/
 
     }
 
@@ -244,6 +238,7 @@ class CtrlPacket {
 }
 
 class CtrlPacketStreamer {
+
     private _dequeue : Dequeue<Buffer> = new Dequeue<Buffer>();
 
     public feed(buffer: Buffer) : void {

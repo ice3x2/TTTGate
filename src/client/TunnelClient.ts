@@ -145,7 +145,7 @@ class TunnelClient {
     private onCtrlHandlerEvent = (handler: SocketHandler, state: SocketState, data?: any) : void => {
         try {
             if (SocketState.Connected == state) {
-                handler.socket.setKeepAlive(true, 30000);
+                handler.socket.setKeepAlive(true, 15000);
                 this._state = CtrlState.Syncing;
             } else if (SocketState.Receive == state) {
                 let packetList : Array<CtrlPacket> = this._ctrlPacketStreamer.readCtrlPacketList(data);
