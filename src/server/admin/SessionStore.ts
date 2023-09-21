@@ -61,17 +61,20 @@ class SessionStore {
     }
 
 
-    public async isSessionValid(sessionKey: string) : Promise<boolean> {
-        let session = this._sessions.get(sessionKey);
-        if(session) {
-            if(session.timeout > Date.now()) {
-                session.timeout = Date.now() + DEFAULT_TIMEOUT;
-                return true;
-            } else {
-                this._sessions.delete(sessionKey);
+    public async isSessionValid(sessionKeyList: Array<string>) : Promise<boolean> {
+        let valid = false;
+        sessionKeyList.forEach((sessionKey) => {
+            let session = this._sessions.get(sessionKey);
+            if (session) {
+                if (session.timeout > Date.now()) {
+                    session.timeout = Date.now() + DEFAULT_TIMEOUT;
+                    valid = true;
+                } else {
+                    this._sessions.delete(sessionKey);
+                }
             }
-        }
-        return false;
+        });
+        return valid;
     }
 
 

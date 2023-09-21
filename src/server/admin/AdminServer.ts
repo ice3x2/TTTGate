@@ -217,10 +217,11 @@ class AdminServer {
 
     }
 
-    private static getSessionKey = (req: IncomingMessage) => {
+    private static getSessionKey = (req: IncomingMessage) : Array<string> => {
+        let result = new Array<string>();
         let cookie = req.headers['cookie'];
         if(cookie == undefined) {
-            return null;
+            return result;
         }
         let cookieParts = cookie.split(';');
         for (let i = 0; i < cookieParts.length; i++) {
@@ -230,11 +231,11 @@ class AdminServer {
                 let key = cookiePartParts[0].trim();
                 let value = cookiePartParts[1].trim();
                 if(key == 'sessionKey') {
-                    return value;
+                    result.push(value);
                 }
             }
         }
-        return null;
+        return result;
     }
 
     private onUpdateServerOption = async (req: IncomingMessage, res: ServerResponse) => {
@@ -486,7 +487,7 @@ class AdminServer {
         if(success) {
             let sessionKey = await sessionStore.newSession();
             res.writeHead(200, {'Content-Type': 'application/json',
-                'Set-Cookie': `sessionKey=${sessionKey}; Path=/api/; HttpOnly; SameSite=Strict;${ServerOptionStore.instance.serverOption.adminTls === true ? ' secure;' : '' }`});
+                'Set-Cookie': `sessionKey=${sessionKey};path=/api/; HttpOnly; SameSite=Strict;${ServerOptionStore.instance.serverOption.adminTls === true ? ' secure;' : '' }`});
             res.end(JSON.stringify({success: true}));
         } else {
             res.writeHead(401, {'Content-Type': 'application/json'});
