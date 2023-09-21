@@ -1,6 +1,6 @@
 import {TCPServer} from "../util/TCPServer";
 import SocketState from "../util/SocketState";
-import { SocketHandler, CacheOption } from  "../util/SocketHandler";
+import { SocketHandler } from  "../util/SocketHandler";
 import {TunnelingOption} from "../option/TunnelingOption";
 import HttpHandler from "./http/HttpHandler";
 import {logger} from "../commons/Logger";
@@ -18,7 +18,6 @@ interface OnHandlerEventCallback {
 
 const OPTION_BUNDLE_KEY : string = "portTunnelOption";
 const PORT_BUNDLE_KEY : string = "portNumber";
-const CACHE_OPTION_BUNDLE_KEY : string = "c";
 
 type ExternalPortServerStatus = {
     port: number,
@@ -62,20 +61,6 @@ class ExternalPortServerPool {
 
 
 
-    private makeCacheOption(bufferSize?: number) : CacheOption {
-        let cacheOption : CacheOption = {
-            enable: false,
-            fileCache: false,
-            maxMemCacheSize: 0
-        }
-        if(bufferSize == -1 || bufferSize == undefined) {
-            return cacheOption;
-        }
-        cacheOption.enable = true;
-        cacheOption.fileCache = true;
-        cacheOption.maxMemCacheSize = bufferSize * 1024 * 1024;
-        return cacheOption;
-    }
 
     public async startServer(option: TunnelingOption, certInfo?: CertInfo) : Promise<boolean> {
 
@@ -95,7 +80,7 @@ class ExternalPortServerPool {
                 ca: certInfo?.ca.value == '' ? undefined : certInfo?.ca.value
             }
             let portServer : TCPServer = TCPServer.create(options);
-            portServer.setBundle(CACHE_OPTION_BUNDLE_KEY, this.makeCacheOption(option.bufferLimitOnServer));
+
             portServer.setOnServerEvent(this.onServerEvent);
             portServer.setOnHandlerEvent(this.onHandlerEvent);
             portServer.setBundle(OPTION_BUNDLE_KEY, option);
@@ -224,19 +209,20 @@ class ExternalPortServerPool {
             let option = server.getBundle(OPTION_BUNDLE_KEY);
             if(!option) {
                 logger.error(`ExternalPortServer::Error - port: ${server.port}, Option is undefined`);
-                handler.close();
+                handler.destroy();
                 server.stop();
                 return;
             }
             let status = this._statusMap.get(server.port);
             if(status && !status.active) {
-                handler.close();
+                handler.destroy();
                 return;
             }
             option = option as TunnelingOption;
 
-            let cacheOption = server.getBundle(CACHE_OPTION_BUNDLE_KEY);
-            handler.setCacheOption(cacheOption);
+
+            let bundleSizeLimit = option.bufferLimitOnServer == undefined || option.bufferLimitOnServer < 1 ? - 1 :  option.bufferLimitOnServer * 1024 * 1024;
+            handler.setBufferSizeLimit(bundleSizeLimit);
             handler.setBundle(OPTION_BUNDLE_KEY, option);
             handler.setBundle(PORT_BUNDLE_KEY, server.port);
 
@@ -282,7 +268,7 @@ class ExternalPortServerPool {
             let handler = this._handlerMap.get(id);
             if(handler) {
                 handlers.push(handler);
-                handler.close();
+                handler.destroy();
             }
         }
         return new Promise((resolve, reject) => {
@@ -292,13 +278,9 @@ class ExternalPortServerPool {
             }
             while(handlers.length > 0) {
                 let handler = handlers.pop()!;
-                handler.close(()=> {
-                    if(handlers.length == 0) {
-                        resolve();
-                        return;
-                    }
-                });
+                handler.destroy();
             }
+            resolve();
         });
     }
 

@@ -1,4 +1,4 @@
-import {CacheOption, SocketHandler} from "../util/SocketHandler";
+import {SocketHandler} from "../util/SocketHandler";
 import ConnectOpt from "../util/ConnectOpt";
 import SocketState from "../util/SocketState";
 import {Buffer} from "buffer";
@@ -26,26 +26,12 @@ class EndPointClientPool {
         this._onEndPointClientStateChangeCallback = callback;
     }
 
-    private makeCacheOption(bufferSize?: number) : CacheOption {
-        let cacheOption : CacheOption = {
-            enable: false,
-            fileCache: false,
-            maxMemCacheSize: 1024 * 1024 * 10
-        }
-        if(bufferSize == -1 || bufferSize == undefined) {
-            return cacheOption;
-        }
-        cacheOption.enable = true;
-        cacheOption.fileCache = true;
-        cacheOption.maxMemCacheSize = bufferSize * 1024 * 1024;
-        return cacheOption;
-    }
 
     public open(id: number, connectOpt: OpenOpt) {
 
         this._connectOptMap.set(id, connectOpt);
         let endPointClient = SocketHandler.connect(connectOpt,( client: SocketHandler, state: SocketState, data?: any) => {
-            client.setCacheOption(this.makeCacheOption(connectOpt.bufferLimit));
+            client.setBufferSizeLimit(connectOpt.bufferLimit);
             this.onEndPointClientStateChange(id, client, state, data);
         });
         this._endPointClientMap.set(id, endPointClient);
@@ -95,7 +81,7 @@ class EndPointClientPool {
     public closeAll() {
         this._onEndPointClientStateChangeCallback = null;
         this._endPointClientMap.forEach((client: SocketHandler, key: number) => {
-            client.close();
+            client.destroy();
         });
         this._endPointClientMap.clear();
     }

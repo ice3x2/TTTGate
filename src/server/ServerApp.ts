@@ -53,7 +53,6 @@ let startService = async (serverOption: ServerOption, adminCertInfo: CertInfo) =
 
 let ServerApp : {start() : Promise<void>} = {
     start : async (): Promise<void> => {
-        SocketHandler.defaultCacheDirectory = Environment.path.serverCacheDir;
 
         let options = CLI.readSimpleOptions();
         let serverOptionStore = ServerOptionStore.instance;

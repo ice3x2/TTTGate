@@ -1,5 +1,5 @@
-import { SocketHandler } from  "../../util/SocketHandler";
-import {HttpOption, TunnelingOption, CustomHeader} from "../../option/TunnelingOption";
+import {SocketHandler} from "../../util/SocketHandler";
+import {CustomHeader, HttpOption, TunnelingOption} from "../../option/TunnelingOption";
 import {HttpHeader, HttpPipe, HttpRequestHeader, HttpResponseHeader, MessageType} from "./HttpPipe";
 import HttpUtil from "./HttpUtil";
 import httpUtil from "./HttpUtil";
@@ -93,8 +93,10 @@ class HttpHandler {
             if(this._socketHandler.isEnd() || SocketState.End == state || SocketState.Error == state || SocketState.Closed == state) {
                 this.release();
             }
-
             this._event?.(handler, state);
+            if(state == SocketState.Closed) {
+                this._event = null;
+            }
         }
     }
 
@@ -257,13 +259,13 @@ class HttpHandler {
         this._httpMessageType = MessageType.Request;
         this._currentHttpPipe.reset(MessageType.Request);
         console.error(error);
-        this._socketHandler.close();
+        this._socketHandler.destroy();
     }
 
 
 
     public sendData(data: Buffer) : void {
-        if(this._socketHandler.isEnd() || this._socketHandler.isUnavailable()) {
+        if(this._socketHandler.isEnd()) {
             return;
         }
         if(this._isUpgrade) {
@@ -285,16 +287,15 @@ class HttpHandler {
         this._socketHandler.end();
     }
 
-    public close(callback? : ()=> void) : void {
+    public destroy() : void {
         this.release();
-        this._socketHandler.close(callback);
+        this._socketHandler.destroy();
     }
 
     private release() : void {
         this._currentHttpPipe.reset(MessageType.Request);
         this._httpMessageType = MessageType.Request;
         this._isUpgrade = false;
-
     }
 
 

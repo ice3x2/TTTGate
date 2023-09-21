@@ -186,7 +186,7 @@ class TunnelClient {
             }
         } catch (e) {
             logger.error(`TunnelClient: onCtrlHandlerEvent: error: ${e}`);
-            handler.close();
+            handler.destroy();
         }
 
     }

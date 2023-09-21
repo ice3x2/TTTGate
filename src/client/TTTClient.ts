@@ -3,10 +3,7 @@ import {ClientOption} from "../option/TunnelingOption";
 import SocketState from "../util/SocketState";
 import {Buffer} from "buffer";
 import EndPointClientPool from "./EndPointClientPool";
-import ConnectOpt from "../util/ConnectOpt";
 import {logger} from "../commons/Logger";
-import { SocketHandler } from  "../util/SocketHandler";
-import Environment from "../Environment";
 import {OpenOpt} from "../commons/CtrlPacket";
 
 
