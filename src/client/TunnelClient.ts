@@ -7,6 +7,8 @@ import {ClientOption} from "../option/TunnelingOption";
 import ConnectOpt from "../util/ConnectOpt";
 import ClientSession from "../commons/ClientSession";
 import {logger} from "../commons/Logger";
+import Dequeue from "../util/Dequeue";
+import ControlSession from "../commons/ControlSession";
 
 
 enum CtrlState {
@@ -56,6 +58,8 @@ class TunnelClient {
     private _isOnline: boolean = false;
     private _ctrlHandler: SocketHandler | undefined = undefined;
     private _ctrlPacketStreamer : CtrlPacketStreamer = new CtrlPacketStreamer();
+    private _dataCommunicationHandlerCache : Array<SocketHandler> = [];
+    private _id : number = -1;
 
     private _onCtrlStateCallback? : OnCtrlStateCallback;
     private _onSessionCloseCallback? : OnSessionCloseCallback;
@@ -147,14 +151,18 @@ class TunnelClient {
             if (SocketState.Connected == state) {
                 handler.socket.setKeepAlive(true, 15000);
                 this._state = CtrlState.Syncing;
+                this.sendSyncAndSyncSyncCmd(handler);
             } else if (SocketState.Receive == state) {
                 let packetList : Array<CtrlPacket> = this._ctrlPacketStreamer.readCtrlPacketList(data);
                 for(let packet of packetList) {
                     if(this._state == CtrlState.Syncing && packet.cmd == CtrlCmd.SyncCtrl) {
                         this._state = CtrlState.SyncSyncing;
                     }
-                    else if(this._state == CtrlState.SyncSyncing && packet.cmd == CtrlCmd.SyncSyncCtrl) {
+                    else if(this._state == CtrlState.SyncSyncing && packet.cmd == CtrlCmd.SyncCtrlAck) {
                         this._state = CtrlState.Connecting
+                        // id 할당.
+                        this._id = packet.id;
+                        // ack 전송.
                         this.sendAckCtrl(handler, packet.id, this._option.key);
                     } else if(this._state == CtrlState.Connected && packet.cmd == CtrlCmd.Data) {
                         let session = this._sessionMap.get(packet.id);
@@ -188,7 +196,21 @@ class TunnelClient {
             logger.error(`TunnelClient: onCtrlHandlerEvent: error: ${e}`);
             handler.destroy();
         }
+    }
 
+    private sendSyncAndSyncSyncCmd(handler: SocketHandler) : void {
+        //console.log("[server]",'TunnelServer: makeCtrlHandler - change state => ' + SessionState[SessionState.HalfOpened]);
+        logger.info(`TunnelClient::sendSyncAndSyncSyncCmd - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`)
+        let sendBuffer = CtrlPacket.createSyncCtrl(handler!.id).toBuffer();
+        handler.sendData(sendBuffer, (handler, success, err) => {
+            if(!success) {
+                logger.error(`TunnelClient::sendSyncAndSyncSyncCmd Fail - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}, ${err}`);
+                this._ctrlHandler?.end();
+                return;
+            }
+            logger.info(`TunnelClient::sendSyncAndSyncSyncCmd Success - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`)
+            this._state = CtrlState.SyncSyncing;
+        });
     }
 
 
@@ -217,6 +239,7 @@ class TunnelClient {
 
 
 
+
     public send(id: number, data: Buffer) : boolean {
         let session =  this._sessionMap.get(id);
         if (!session || !this._ctrlHandler) {
@@ -231,10 +254,45 @@ class TunnelClient {
             return true;
         }
         for(let packet of packets) {
-            this._ctrlHandler.sendData(packet.toBuffer());
+            //this._ctrlHandler.sendData(packet.toBuffer());
+            this.sendToDataSession(packet);
         }
+
+
+
         return true;
 
+    }
+
+
+    private sendToDataSession(packet: CtrlPacket) : void {
+        let handler = this._dataCommunicationHandlerCache.shift();
+        if(handler) {
+            handler.sendData(packet.toBuffer(), (handler, success, err) => {
+                if(!err) {
+                    this._dataCommunicationHandlerCache.push(handler);
+                }
+            });
+        }
+        else {
+            SocketHandler.connect(this.makeConnectOpt(), (handler, state, data) => {
+                if(state == SocketState.Connected) {
+                    packet = CtrlPacket.createNewDataSession(this._id!);
+                    handler.sendData(packet.toBuffer(), (handler, success, err) => {
+                        if(!err) {
+                            this._dataCommunicationHandlerCache.push(handler);
+                        }
+                        if(!this._ctrlHandler?.isEnd()) {
+                            this.sendToDataSession(packet);
+                        }
+                    });
+                } else if(state == SocketState.Closed || state == SocketState.End) {
+                    this._dataCommunicationHandlerCache = this._dataCommunicationHandlerCache.filter((value) => {
+                        return value != handler;
+                    });
+                }
+            });
+        }
     }
 
 

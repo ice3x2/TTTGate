@@ -3,7 +3,6 @@ import SocketState from "./SocketState";
 import ConnectOpt from "./ConnectOpt";
 import * as tls from "tls";
 import {logger} from "../commons/Logger";
-import Dequeue from "./Dequeue";
 
 
 
@@ -76,7 +75,6 @@ class SocketHandler {
 
     public static connect(options: ConnectOpt, event : OnSocketEvent) : SocketHandler {
         let handlerRef: Array<SocketHandler> = [];
-
 
         let connected = () => {
             if(handlerRef.length > 0 && handlerRef[0]._state == SocketState.None) {

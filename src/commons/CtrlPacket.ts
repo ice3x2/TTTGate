@@ -28,10 +28,10 @@ enum CtrlCmd {
     // Server -> Client : SyncCtrl 클라이언트 최초 연결시 TunnelServer에서 보내는 패킷
     SyncCtrl,
     // Client -> Server : SyncCtrl 응답
-    SyncSyncCtrl,
+    SyncCtrlAck,
     AckCtrl,
-
     Open,
+    OpenDataSession,
     Synchronized,
     Data,
     Close,
@@ -67,9 +67,9 @@ class CtrlPacket {
         return packet;
     }
 
-    public static createSyncSyncCtrl(id: number) : CtrlPacket {
+    public static createSyncCtrlAck(id: number) : CtrlPacket {
         let packet = new CtrlPacket();
-        packet._cmd = CtrlCmd.SyncSyncCtrl;
+        packet._cmd = CtrlCmd.SyncCtrlAck;
         packet._id = id;
         return packet;
     }
@@ -123,7 +123,14 @@ class CtrlPacket {
             packets.push(packet);
         }
         return packets;
+    }
 
+    public static createNewDataSession(id: number) : CtrlPacket {
+        let packet = new CtrlPacket();
+        packet._cmd = CtrlCmd.OpenDataSession;
+        packet._id = id;
+        packet._data = CtrlPacket.EMPTY_BUFFER;
+        return packet;
     }
 
     public static createOpen( id: number, opt: OpenOpt) : CtrlPacket {

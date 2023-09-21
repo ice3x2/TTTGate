@@ -37,6 +37,7 @@ class TunnelServer {
     private _sessionMap : Map<number, ClientSession> = new Map<number, ClientSession>();
     private _ctrlSessionMap : Map<number, ControlSession> = new Map<number, ControlSession>();
     private _ctrlHandlerMap : Map<number, SocketHandler> = new Map<number, SocketHandler>();
+    private _dataHandlerListMap : Map<number, Array<SocketHandler>> = new Map<number, Array<SocketHandler>>();
     private _tunnelServer : TCPServer;
     private _certInfo : CertInfo;
     private readonly _key : string;
@@ -270,15 +271,12 @@ class TunnelServer {
         ctrlSession.address = handler.remoteAddress + ':' + handler.remotePort;
         this._ctrlSessionMap.set(handler.id, ctrlSession);
         logger.info(`TunnelServer::Bound - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
-        this.sendSyncAndSyncSyncCmd(handler, ctrlSession);
+        //this.sendSyncAndSyncSyncCmd(handler, ctrlSession);
     }
 
 
-    private sendSyncAndSyncSyncCmd(handler: SocketHandler, ctrlSession : ControlSession) : void {
-        //console.log("[server]",'TunnelServer: makeCtrlHandler - change state => ' + SessionState[SessionState.HalfOpened]);
-        logger.info(`TunnelServer::sendSyncAndSyncSyncCmd - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`)
-        ctrlSession.state = SessionState.HalfOpened;
-        let sendBuffer = CtrlPacket.createSyncCtrl(handler!.id).toBuffer();
+    private sendSyncCtrlAck(handler: SocketHandler, ctrlSession : ControlSession) : void {
+        let sendBuffer = CtrlPacket.createSyncCtrlAck(handler!.id).toBuffer();
         handler.sendData(sendBuffer, (handler, success, err) => {
             if(!success) {
                 logger.error(`TunnelServer::sendSyncAndSyncSyncCmd Fail - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}, ${err}`);
@@ -288,7 +286,6 @@ class TunnelServer {
             logger.info(`TunnelServer::sendSyncAndSyncSyncCmd Success - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`)
             //console.log("[server]",'TunnelServer: makeCtrlHandler - change state => ' + SessionState[SessionState.Handshaking]);
             ctrlSession.state = SessionState.Handshaking;
-            handler.sendData(CtrlPacket.createSyncSyncCtrl(handler!.id).toBuffer());
         });
     }
 
@@ -316,7 +313,19 @@ class TunnelServer {
             }
 
             for(let ctrlPacket of ctrlPackets!) {
-                if(ctrlSession.state == SessionState.Handshaking) {
+                if(ctrlSession.state == SessionState.HalfOpened) {
+                    if(ctrlPacket.cmd == CtrlCmd.SyncCtrl) {
+                        this.sendSyncCtrlAck(handler, ctrlSession);
+                    } else if(ctrlPacket.cmd == CtrlCmd.OpenDataSession) {
+
+                    }
+                    else {
+                        logger.info(`TunnelServer::onHandlerEvent - Change state => Close. id: ${ctrlHandlerID}`);
+                        this.closeCtrlHandler(handler);
+                        return;
+                    }
+                }
+                else if(ctrlSession.state == SessionState.Handshaking) {
                     if(ctrlPacket.cmd == CtrlCmd.AckCtrl) {
                         if(ctrlPacket.ackKey != this._key) {
                             logger.error(`TunnelServer::onHandlerEvent - Not Found CtrlSession. id: ${ctrlHandlerID}`);
