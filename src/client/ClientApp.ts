@@ -125,7 +125,10 @@ let ClientApp : { start() : void} = {
     start() {
         SocketHandler.GlobalMemCacheLimit = 512 * 1024 * 1024;
         let tttClient = TTTClient.create(_loadClientOption());
+
         tttClient.start();
+
+
     }
 }
 

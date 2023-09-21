@@ -34,7 +34,7 @@ class SocketHandler {
     private _event: OnSocketEvent;
 
 
-    private _pushBufferLengthDeque: Dequeue<number> = new Dequeue<number>();
+
     private _memoryBufferSize: number = 0;
     private _bufferSizeLimit: number = -1;
 
@@ -176,7 +176,6 @@ class SocketHandler {
             console.error(error);
             this.procError(error)
         });
-
         socket.on('close', ()=> {
             if(this._state != SocketState.Closed /* && this._state != SocketState.Error*/) {
                 this._state = SocketState.Closed;
@@ -200,10 +199,10 @@ class SocketHandler {
             logger.error(`SocketHandler:: procError() - ${error.message}`);
             logger.error(error.stack);
         }
-        this._state = SocketState.Closed;
         if(!this.isEnd()) {
             this._event(this, SocketState.Closed, error);
         }
+        this._state = SocketState.Closed;
         this.release();
     }
 
@@ -279,7 +278,9 @@ class SocketHandler {
                 return;
             }
         }
-        this.writeBuffer(data, onWriteComplete);
+        process.nextTick(()=> {
+            this.writeBuffer(data, onWriteComplete);
+        });
     }
 
 
@@ -297,12 +298,17 @@ class SocketHandler {
             return;
         }
 
+        let length = buffer.length;
+        if(this._bufferSizeLimit > 0) {
+            this.appendUsageMemoryBufferSize(length);
+        }
 
-        if(!this._socket.write(buffer, (error) => {
-            let length = this._pushBufferLengthDeque.popFront();
-            if(length) {
+
+        this._socket.write(buffer, (error) => {
+            if(this._bufferSizeLimit > 0) {
                 this.appendUsageMemoryBufferSize(-length);
             }
+
             if(error) {
                 if(this.isEnd()) {
                     onWriteComplete?.(this, false);
@@ -315,12 +321,7 @@ class SocketHandler {
                 return;
             }
             onWriteComplete?.(this, true);
-
-        }) && this._bufferSizeLimit > 0) {
-            let length = buffer.length;
-            this._pushBufferLengthDeque.pushBack(length);
-            this.appendUsageMemoryBufferSize(length);
-        }
+        });
 
     }
 
