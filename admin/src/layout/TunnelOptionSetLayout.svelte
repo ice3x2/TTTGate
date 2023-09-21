@@ -216,17 +216,6 @@
 
 
 
-    let _enforceMinMax = (e: KeyboardEvent) => {
-        let el = e.target as HTMLInputElement;
-        if (el.value != "") {
-            if (parseInt(el.value) < parseInt(el.min)) {
-                el.value = el.min;
-            }
-            if (parseInt(el.value) > parseInt(el.max)) {
-                el.value = el.max;
-            }
-        }
-    }
 
     let _onChangeProtocol = (option: Options) => {
         if(option.protocol == 'https') {
@@ -290,7 +279,6 @@
                 }
             }
         }
-
     }
 
     let _onClickApply = async (index: number) => {
@@ -540,11 +528,9 @@
                         </div>
                     {/if}
                 </div>
-
             </div>
 
             <div  class="round-box">
-
 
                 <div class="input-box" style="margin-bottom: 0">
                     <label for="input-external-port" class="form-label"  >External Server Port</label>
@@ -575,16 +561,6 @@
                     <input type="text"  id="input-allow-client-names" class="form-control" bind:value={option.allowedClientNamesQuery}>
                 </div>
 
-                <!--
-                <div class="input-box" >
-                    <label for="select-buffer-options-server" class="form-label">Buffer options (server)</label>
-                    <select  id="select-buffer-options-server"  style="min-width: calc(100% - 5px)" >
-                        <option value="0">Unlimited buffer size</option>
-                        <option value="1">Buffer size limit</option>
-                        <option value="2">File cache when buffer limit reached</option>
-                    </select>
-                </div>-->
-
                 <div class="input-box">
                     <div class="form-label">Mem Buffer size limit per Sessions (MiB)</div>
 
@@ -598,9 +574,8 @@
                     </div>
                     <div style="color: #666;font-size: 10pt;margin-left: -10px">
                         <ul>
-                            <li><span style="font-weight: 900">-1</span> : Unlimited memory buffer.</li>
-                            <li><span style="font-weight: 900">0</span> : Only file cache is used.</li>
-                            <li><span style="font-weight: 900">0&lt;n</span> : When memory buffer limit is exceeded, it uses file cache.</li>
+                            <li><span style="font-weight: 900">0>=n</span> : Unlimited memory buffer.</li>
+                            <li><span style="font-weight: 900">0&lt;n</span> : When the memory buffer limit is exceeded, the connection is closed.</li>
                         </ul>
                     </div>
                 </div>

@@ -303,7 +303,6 @@ class SocketHandler {
         }
 
 
-
         if(!this._socket.write(buffer, (error) => {
             let length = this._pushBufferLengthDeque.popFront();
             if(length) {

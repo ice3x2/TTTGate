@@ -54,3 +54,4 @@ cache/
 dist/
 
 .run/
+/web/
