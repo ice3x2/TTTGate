@@ -204,6 +204,9 @@
                 destinationPort: 8080,
                 isSync: false,
                 updatable: true,
+                inactiveOnStartup: false,
+                bufferLimitOnClient: 10,
+                bufferLimitOnServer: 10,
                 allowedClientNamesQuery: ""
 
             });
