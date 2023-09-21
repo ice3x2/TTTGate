@@ -76,7 +76,7 @@ class TTTClient {
         if(state == SocketState.Connected) {
             //console.log("[Client:EndPointClientPool]", `EndPointClientPool id: ${id} state: ${SocketState[state]}`);
             this._tunnelClient.syncSession(id);
-        } else if(state == SocketState.End || state == SocketState.Error || state == SocketState.Closed) {
+        } else if(state == SocketState.End || /*state == SocketState.Error ||*/ state == SocketState.Closed) {
             //console.log("[Client:EndPointClientPool]", `EndPointClientPool id: ${id} state: ${SocketState[state]}`);
             this._tunnelClient.closeSession(id);
         } else if(state == SocketState.Receive && data) {

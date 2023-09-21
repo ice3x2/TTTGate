@@ -70,7 +70,7 @@ class EndPointClientPool {
                 this._endPointClientMap.set(id, client);
             }
         }
-        if(SocketState.End == state || SocketState.Closed == state || SocketState.Error == state) {
+        if(SocketState.End == state || SocketState.Closed == state /*|| SocketState.Error == state*/) {
             this._endPointClientMap.delete(id);
             this._connectOptMap.delete(id);
         }

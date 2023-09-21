@@ -74,9 +74,6 @@ class SocketHandler {
 
 
 
-
-
-
     public static connect(options: ConnectOpt, event : OnSocketEvent) : SocketHandler {
         let handlerRef: Array<SocketHandler> = [];
 
@@ -150,7 +147,7 @@ class SocketHandler {
 
 
     public isEnd() : boolean {
-        return this._state == SocketState.Closed || this._state == SocketState.End || this._state == SocketState.Error;
+        return this._state == SocketState.Closed || this._state == SocketState.End; /* || this._state == SocketState.Error; */
     }
 
     public isSecure() : boolean {
@@ -181,7 +178,7 @@ class SocketHandler {
         });
 
         socket.on('close', ()=> {
-            if(this._state != SocketState.Closed && this._state != SocketState.Error) {
+            if(this._state != SocketState.Closed /* && this._state != SocketState.Error*/) {
                 this._state = SocketState.Closed;
                 this._event(this, SocketState.Closed);
             }
@@ -203,10 +200,10 @@ class SocketHandler {
             logger.error(`SocketHandler:: procError() - ${error.message}`);
             logger.error(error.stack);
         }
+        this._state = SocketState.Closed;
         if(!this.isEnd()) {
-            this._event(this, SocketState.Error, error);
+            this._event(this, SocketState.Closed, error);
         }
-        this._state = SocketState.Error;
         this.release();
     }
 
@@ -248,7 +245,7 @@ class SocketHandler {
     }
 
     public destroy() : void {
-        if(this._state == SocketState.Closed || this._state == SocketState.Error) {
+        if(this._state == SocketState.Closed /*|| this._state == SocketState.Error*/) {
             return;
         }
         this._socket.removeAllListeners();
@@ -270,10 +267,8 @@ class SocketHandler {
     }
 
 
-
-
     public sendData(data: Buffer,onWriteComplete? : OnWriteComplete ) : void {
-        if(this._bufferSizeLimit > -1) {
+        if(this._bufferSizeLimit > 0) {
             if(this.isOverMemoryBufferSize(data.length)) {
                 this.procError(new Error(`SocketHandler:: sendData() - over memory buffer size(${this._memoryBufferSize + data.length}/${this._bufferSizeLimit})`));
                 onWriteComplete?.(this, false);
@@ -309,6 +304,10 @@ class SocketHandler {
                 this.appendUsageMemoryBufferSize(-length);
             }
             if(error) {
+                if(this.isEnd()) {
+                    onWriteComplete?.(this, false);
+                    return;
+                }
                 logger.warn(`SocketHandler:: writeBuffer() - socket.write() error(${error.message})`);
                 logger.warn(error.stack);
                 this.procError(error, false);
@@ -317,7 +316,7 @@ class SocketHandler {
             }
             onWriteComplete?.(this, true);
 
-        }) && this._bufferSizeLimit > -1) {
+        }) && this._bufferSizeLimit > 0) {
             let length = buffer.length;
             this._pushBufferLengthDeque.pushBack(length);
             this.appendUsageMemoryBufferSize(length);

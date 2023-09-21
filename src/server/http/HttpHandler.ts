@@ -90,7 +90,7 @@ class HttpHandler {
             //console.log("HttpHandler.onSocketEventFromSocketHandler: " + data.toString());
             this._currentHttpPipe.write(data);
         } else {
-            if(this._socketHandler.isEnd() || SocketState.End == state || SocketState.Error == state || SocketState.Closed == state) {
+            if(this._socketHandler.isEnd() || SocketState.End == state || /*SocketState.Error == state ||*/ SocketState.Closed == state) {
                 this.release();
             }
             this._event?.(handler, state);

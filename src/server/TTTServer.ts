@@ -83,7 +83,7 @@ class TTTServer {
 
 
     private isEndState (state: SocketState) : boolean  {
-        return state == SocketState.Closed || state == SocketState.End || state == SocketState.Error;
+        return state == SocketState.Closed || state == SocketState.End  /*|| state == SocketState.Error;*/;
     }
 
 

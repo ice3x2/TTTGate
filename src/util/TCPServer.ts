@@ -3,6 +3,7 @@ import { SocketHandler } from  "./SocketHandler";
 import SocketState from "./SocketState";
 import * as tls from "tls";
 import CACertGenerator from "../commons/CACertGenerator";
+import {logger} from "../commons/Logger";
 
 
 interface OnServerEvent {
@@ -29,7 +30,7 @@ class TCPServer {
 
 
     public isEnd() : boolean {
-        return this._state == SocketState.Closed || this._state == SocketState.Error;
+        return this._state == SocketState.Closed || this._state == SocketState.End;
     }
 
     public getError()  : any {
@@ -87,11 +88,12 @@ class TCPServer {
         this._server.on('error', (error) => {
             this._error = error;
             if(!this.isEnd()) {
-                this._state = SocketState.Error;
-                this._onServerEvent?.(this, SocketState.Error);
+                logger.error(`TCPServer: error: ${error}`);
+                this._state = SocketState.Closed;
+                this._onServerEvent?.(this, SocketState.Closed);
                 this.release();
             }
-            this._state = SocketState.Error;
+            this._state = SocketState.Closed;
 
         });
         this._server.on('close', () => {
@@ -113,7 +115,7 @@ class TCPServer {
     private onBind = (socket: net.Socket) : void => {
         let option = {socket:socket, port: this._options.port, addr: "127.0.0.1", tls: this._options.tls ?? false };
         let handler = SocketHandler.bound(option,(handler, state, data) => {
-            if(state == SocketState.Closed || state == SocketState.Error || state == SocketState.End) {
+            if(state == SocketState.Closed || /*state == SocketState.Error ||*/ state == SocketState.End) {
                 this._idHandlerMap.delete(handler.id);
             }
             this._onHandlerEvent?.(handler, state, data);

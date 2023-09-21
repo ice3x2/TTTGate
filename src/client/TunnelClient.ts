@@ -178,7 +178,7 @@ class TunnelClient {
                         this._sessionMap.delete(packet.id);
                     }
                 }
-            } else if (SocketState.Closed == state || SocketState.Error == state || SocketState.End == state) {
+            } else if (SocketState.Closed == state || /* SocketState.Error == state ||*/ SocketState.End == state) {
                 this._state = CtrlState.None;
                 this._ctrlHandler = undefined;
                 this._isOnline = false;
