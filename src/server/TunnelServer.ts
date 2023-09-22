@@ -129,7 +129,7 @@ class TunnelServer {
     }
 
     public sendBuffer(sessionId: number, buffer: Buffer) : boolean {
-        let packets = CtrlPacket.createDataCtrl(sessionId, buffer);
+        let packets = CtrlPacket.createDataPacket(sessionId, buffer);
         if(!this.available()) {
             return false;
         }

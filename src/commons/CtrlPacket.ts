@@ -36,6 +36,9 @@ enum CtrlCmd {
     Data,
     Close,
     Failed,
+    NewDataHandlerAndOpen,
+    CreatedDataHandlerAndOpenSuccess,
+    CreatedDataHandlerAndOpenFailed
 
 }
 
@@ -110,7 +113,44 @@ class CtrlPacket {
         return packet;
     }
 
-    public static createDataCtrl(id: number, data: Buffer) : Array<CtrlPacket> {
+
+    /**
+     * 새로운 데이터 핸들러 만들기와 동시에 커넥션을 열기를 요청하는 패킷을 만든다.
+     * 서버에서 클라이언트로 보내는 패킷이다.
+     * @param sessionID
+     * @param opt
+     */
+    public static createNewDataHandlerAndOpenPacket(sessionID: number, opt: OpenOpt) : CtrlPacket {
+        let packet = new CtrlPacket();
+        packet._cmd = CtrlCmd.NewDataHandlerAndOpen;
+        packet._id = sessionID;
+        packet._openOpt = opt;
+        let writer = new BufferWriter();
+        writer.writeString(opt.host);
+        writer.writeUInt16(opt.port);
+        writer.writeBoolean(opt.tls ?? false);
+        writer.writeInt32(opt.bufferLimit);
+        packet._data = writer.toBuffer();
+        return packet;
+    }
+
+    /**
+     * 새로운 데이터 핸들러 만들기와 동시에 커넥션을 열기를 성공했다는 것을 알리는 패킷을 만든다.
+     * 클라이언트에서 서버로 보내는 패킷이다.
+     * @param clientID
+     */
+    public static createCreatedDataHandlerAndOpenSuccessPacket(clientID: number, sesionID) : CtrlPacket {
+        let packet = new CtrlPacket();
+        packet._cmd = CtrlCmd.CreatedDataHandlerAndOpenSuccess;
+        packet._id = clientID;
+        packet._data = CtrlPacket.EMPTY_BUFFER;
+        return packet;
+    }
+
+
+
+
+    public static createDataPacket(id: number, data: Buffer) : Array<CtrlPacket> {
         let packets = new Array<CtrlPacket>();
         let offset = 0;
         while(offset < data.length) {
