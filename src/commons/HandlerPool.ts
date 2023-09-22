@@ -65,8 +65,10 @@ class HandlerPool {
     }
 
     private sendNewDataHandlerAndOpen(sessionId: number) : void {
-        CtrlPacket.
+
 
 
     }
 }
+
+export {HandlerPool}

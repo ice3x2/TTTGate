@@ -31,14 +31,13 @@ enum CtrlCmd {
     SyncCtrlAck,
     AckCtrl,
     Open,
-    OpenDataSession,
-    Synchronized,
     Data,
-    Close,
-    Failed,
+    CloseSession,
     NewDataHandlerAndOpen,
     CreatedDataHandlerAndOpenSuccess,
-    CreatedDataHandlerAndOpenFailed
+    CreatedDataHandlerAndOpenFailed,
+
+    NonExistent
 
 }
 
@@ -51,52 +50,40 @@ class CtrlPacket {
     public static readonly PREFIX_LEN = Buffer.byteLength(CtrlPacket.PREFIX);
     // 4 bytes - prefix
     // 1 byte - command
-    // 4 bytes - id
+    // 2 bytes - ctrl id
+    // 4 bytes - session id
     // 4 bytes - data length
-    public static readonly HEADER_LEN = CtrlPacket.PREFIX_LEN + 1 + 4 + 4;
+    public static readonly HEADER_LEN = CtrlPacket.PREFIX_LEN + 1 + 2 + 4 + 4;
 
     private _cmd: CtrlCmd;
     private _data: Buffer = Buffer.alloc(0);
-    private _id: number = -1;
+    private _ctrlID: number = -1;
+    private _sessionID: number = -1;
     private _ackCtrlOpt: {name: string, key: string} | undefined = undefined;
 
     private _openOpt : OpenOpt | undefined = undefined;
 
 
-    public static createSyncCtrl(id: number) : CtrlPacket {
+    public static createSyncCtrl() : CtrlPacket {
         let packet = new CtrlPacket();
         packet._cmd = CtrlCmd.SyncCtrl;
-        packet._id = id;
         return packet;
     }
 
     public static createSyncCtrlAck(id: number) : CtrlPacket {
         let packet = new CtrlPacket();
         packet._cmd = CtrlCmd.SyncCtrlAck;
-        packet._id = id;
+        packet._ctrlID = id;
         return packet;
     }
 
 
-    public static createSynchronized(id: number) : CtrlPacket {
-        let packet = new CtrlPacket();
-        packet._cmd = CtrlCmd.Synchronized;
-        packet._id = id;
-        return packet;
-    }
-
-    public static createFailed(id: number) : CtrlPacket {
-        let packet = new CtrlPacket();
-        packet._cmd = CtrlCmd.Failed;
-        packet._id = id;
-        return packet;
-    }
 
 
     public static createAckCtrl(id: number,name: string, key: string) : CtrlPacket {
         let packet = new CtrlPacket();
         packet._cmd = CtrlCmd.AckCtrl;
-        packet._id = id;
+        packet._ctrlID = id;
         packet._ackCtrlOpt = {name, key};
         let writer = new BufferWriter();
         writer.writeString(name);
@@ -105,10 +92,10 @@ class CtrlPacket {
         return packet;
     }
 
-    public static createCloseCtrl(id: number) : CtrlPacket {
+    public static createCloseSession(id: number) : CtrlPacket {
         let packet = new CtrlPacket();
-        packet._cmd = CtrlCmd.Close;
-        packet._id = id;
+        packet._cmd = CtrlCmd.CloseSession;
+        packet._sessionID = id;
         packet._data = CtrlPacket.EMPTY_BUFFER;
         return packet;
     }
@@ -123,7 +110,7 @@ class CtrlPacket {
     public static createNewDataHandlerAndOpenPacket(sessionID: number, opt: OpenOpt) : CtrlPacket {
         let packet = new CtrlPacket();
         packet._cmd = CtrlCmd.NewDataHandlerAndOpen;
-        packet._id = sessionID;
+        packet._sessionID = sessionID;
         packet._openOpt = opt;
         let writer = new BufferWriter();
         writer.writeString(opt.host);
@@ -139,10 +126,10 @@ class CtrlPacket {
      * 클라이언트에서 서버로 보내는 패킷이다.
      * @param clientID
      */
-    public static createCreatedDataHandlerAndOpenSuccessPacket(clientID: number, sesionID) : CtrlPacket {
+    public static createCreatedDataHandlerAndOpenSuccessPacket(clientID: number, sessionID: number) : CtrlPacket {
         let packet = new CtrlPacket();
         packet._cmd = CtrlCmd.CreatedDataHandlerAndOpenSuccess;
-        packet._id = clientID;
+        packet._ctrlID = clientID;
         packet._data = CtrlPacket.EMPTY_BUFFER;
         return packet;
     }
@@ -150,13 +137,13 @@ class CtrlPacket {
 
 
 
-    public static createDataPacket(id: number, data: Buffer) : Array<CtrlPacket> {
+    public static createSessionData(sessionID: number, data: Buffer) : Array<CtrlPacket> {
         let packets = new Array<CtrlPacket>();
         let offset = 0;
         while(offset < data.length) {
             let packet = new CtrlPacket();
             packet._cmd = CtrlCmd.Data;
-            packet._id = id;
+            packet._sessionID = sessionID;
             let length = Math.min(data.length - offset, MAX_PAYLOAD_SIZE);
             packet._data = data.subarray(offset, offset + length);
             offset += length;
@@ -165,18 +152,11 @@ class CtrlPacket {
         return packets;
     }
 
-    public static createNewDataSession(id: number) : CtrlPacket {
-        let packet = new CtrlPacket();
-        packet._cmd = CtrlCmd.OpenDataSession;
-        packet._id = id;
-        packet._data = CtrlPacket.EMPTY_BUFFER;
-        return packet;
-    }
 
-    public static createOpen( id: number, opt: OpenOpt) : CtrlPacket {
+    public static createOpenSessionEndPoint(sessionID: number, opt: OpenOpt) : CtrlPacket {
         let packet = new CtrlPacket();
         packet._cmd = CtrlCmd.Open;
-        packet._id = id;
+        packet._sessionID = sessionID;
         packet._openOpt = opt;
 
         opt.tls = opt.tls == undefined ? false : opt.tls;
@@ -213,10 +193,11 @@ class CtrlPacket {
             return {packet: null, remain: emptyBuffer, state: ParsedState.Error, error: new Error("Invalid prefix")};
         }
         result._cmd = reader.readUInt8();
-        if(result._cmd < CtrlCmd.SyncCtrl || result._cmd > CtrlCmd.Failed) {
+        if(result._cmd < CtrlCmd.SyncCtrl || result._cmd >= CtrlCmd.NonExistent) {
             return {packet: null, remain: emptyBuffer, state: ParsedState.Error, error: new Error("Invalid command")};
         }
-        result._id = reader.readUInt32();
+        result._ctrlID = reader.readUInt16();
+        result._sessionID = reader.readUInt32();
         let dataLength = reader.readUInt32();
         // unt32 max value
         if(dataLength > MAX_PAYLOAD_SIZE + this.HEADER_LEN) {
@@ -242,8 +223,12 @@ class CtrlPacket {
         return this._cmd;
     }
 
-    public get id() : number {
-        return this._id;
+    public get sessionID() : number {
+        return this._sessionID;
+    }
+
+    public get ctrlID() : number {
+        return this._ctrlID;
     }
 
     public get data() : Buffer {
@@ -275,7 +260,8 @@ class CtrlPacket {
         let writer = new BufferWriter();
         writer.writeBuffer(CtrlPacket.PREFIX);
         writer.writeUInt8(this._cmd);
-        writer.writeUInt32(this._id);
+        writer.writeUInt16(this._ctrlID);
+        writer.writeUInt32(this._sessionID);
         writer.writeUInt32(this._data.length);
         writer.writeBuffer(this._data);
         return writer.toBuffer();

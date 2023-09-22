@@ -9,6 +9,7 @@ import ControlSession from "../commons/ControlSession";
 import ClientSession from "../commons/ClientSession";
 import {logger} from "../commons/Logger";
 import {CertInfo} from "./CertificationStore";
+import {HandlerPool} from "../commons/HandlerPool";
 
 
 
@@ -34,12 +35,12 @@ interface ClientStatus {
 class TunnelServer {
 
     private readonly _serverOption : {port: number, tls: boolean, key: string};
-    private _sessionMap : Map<number, ClientSession> = new Map<number, ClientSession>();
-    private _ctrlSessionMap : Map<number, ControlSession> = new Map<number, ControlSession>();
-    private _ctrlHandlerMap : Map<number, SocketHandler> = new Map<number, SocketHandler>();
-    private _dataHandlerListMap : Map<number, Array<SocketHandler>> = new Map<number, Array<SocketHandler>>();
+    //private _sessionMap : Map<number, ClientSession> = new Map<number, ClientSession>();
+    //private _ctrlSessionMap : Map<number, ControlSession> = new Map<number, ControlSession>();
+    private _handlerPoolMap : Map<number, HandlerPool> = new Map<number, HandlerPool>();
+    private _sessionAndHandlerPoolMap : Map<number, HandlerPool> = new Map<number, HandlerPool>();
+
     private _tunnelServer : TCPServer;
-    private _certInfo : CertInfo;
     private readonly _key : string;
 
     private _onSessionCloseCallback? : OnSessionCloseCallback;
@@ -57,7 +58,6 @@ class TunnelServer {
 
     private constructor(option:{port: number, tls: boolean, key: string}, certInfo: CertInfo) {
         this._serverOption = option;
-        this._certInfo = certInfo;
         this._key = option.key;
         let tcpServerOption : ServerOption = {port: option.port, tls: option.tls, key: certInfo.key.value, cert: certInfo.cert.value, ca: (certInfo.ca.value == '') ? undefined : certInfo.ca.value};
         this._tunnelServer = TCPServer.create(tcpServerOption);
@@ -129,7 +129,7 @@ class TunnelServer {
     }
 
     public sendBuffer(sessionId: number, buffer: Buffer) : boolean {
-        let packets = CtrlPacket.createDataPacket(sessionId, buffer);
+        let packets = CtrlPacket.createSessionData(sessionId, buffer);
         if(!this.available()) {
             return false;
         }
@@ -138,7 +138,7 @@ class TunnelServer {
             return false;
         }
         if(session.state == SessionState.HalfOpened || session.state == SessionState.Connected) {
-            let handler = this._ctrlHandlerMap.get(session.controlId);
+            let handler = this._handlerPoolMap.get(session.controlId);
             if(!handler) {
                 this._sessionMap.delete(sessionId);
                 return false;
@@ -162,13 +162,13 @@ class TunnelServer {
         if(!session) {
             return;
         }
-        let handler = this._ctrlHandlerMap.get(session.controlId);
+        let handler = this._handlerPoolMap.get(session.controlId);
         if(!handler) {
             this._sessionMap.delete(sessionId);
             return;
         }
         session.state = SessionState.End;
-        let packet : CtrlPacket = CtrlPacket.createCloseCtrl(sessionId);
+        let packet : CtrlPacket = CtrlPacket.createCloseSession(sessionId);
         handler.sendData(packet.toBuffer(), (handler, success, err?) => {
             if(!success) {
                 logger.error(`TunnelServer:: Send data error - id:${sessionId}, err:${err}`);
@@ -179,7 +179,7 @@ class TunnelServer {
     }
 
 
-    public open(id: number,opt : OpenOpt, allowClientNames?: Array<string>) : boolean {
+    public open(sessionID: number,opt : OpenOpt, allowClientNames?: Array<string>) : boolean {
         if(!this.available()) {
             return false;
         }
@@ -187,19 +187,19 @@ class TunnelServer {
         if(handler == null) {
             return false;
         }
-        let buffer = CtrlPacket.createOpen(id,opt).toBuffer();
-        let clientSession = ClientSession.createClientSession(id);
+        let buffer = CtrlPacket.createOpenSessionEndPoint(sessionID,opt).toBuffer();
+        let clientSession = ClientSession.createClientSession(sessionID);
         clientSession.connectOpt = opt;
         clientSession.controlId = handler.id;
-        this._sessionMap.set(id, clientSession);
+        this._sessionMap.set(sessionID, clientSession);
         handler.sendData(buffer, (handler, success, err?) => {
-            let session = this._sessionMap.get(id);
+            let session = this._sessionMap.get(sessionID);
             if(!session) {
-                logger.warning(`TunnelServer:: fail to send open. session is null => ${id}(${opt.host}:${opt.port}`);
+                logger.warning(`TunnelServer:: fail to send open. session is null => ${sessionID}(${opt.host}:${opt.port}`);
                 return;
             }
             else if(!success) {
-                logger.error(`TunnelServer:: fail to send open => ${id}(${opt.host}:${opt.port}) ${err}`);
+                logger.error(`TunnelServer:: fail to send open => ${sessionID}(${opt.host}:${opt.port}) ${err}`);
                 return;
             }
             else {
@@ -210,7 +210,7 @@ class TunnelServer {
                     waitBuffer = session.popWaitBuffer();
                 }
             }
-            logger.debug(`TunnelServer:: send Open => ${id}(${opt.host}:${opt.port})`);
+            logger.debug(`TunnelServer:: send Open => ${sessionID}(${opt.host}:${opt.port})`);
         })
         return true;
     }
@@ -243,10 +243,10 @@ class TunnelServer {
             });
         }
         if(ids.length == 1) {
-            return this._ctrlHandlerMap.get(ids[0])!;
+            return this._handlerPoolMap.get(ids[0])!;
         }
         let nextId = ids[++this._nextSelectIdx % ids.length];
-        return this._ctrlHandlerMap.get(nextId)!;
+        return this._handlerPoolMap.get(nextId)!;
     }
 
 
@@ -266,7 +266,7 @@ class TunnelServer {
 
 
     private onClientHandlerBound = (handler: SocketHandler) : void => {
-        this._ctrlHandlerMap.set(handler.id, handler);
+        this._handlerPoolMap.set(handler.id, handler);
         let ctrlSession = ControlSession.createControlSession(handler.id);
         ctrlSession.address = handler.remoteAddress + ':' + handler.remotePort;
         this._ctrlSessionMap.set(handler.id, ctrlSession);
@@ -289,6 +289,9 @@ class TunnelServer {
         });
     }
 
+    private getCtrlSession(handler: SocketHandler) : ControlSession | undefined {
+
+    }
 
 
     private onHandlerEvent = (handler: SocketHandler, state: SocketState, data?: any) : void => {
@@ -297,12 +300,10 @@ class TunnelServer {
             let ctrlHandlerID = handler.id;
             let ctrlSession = this._ctrlSessionMap.get(ctrlHandlerID);
             if(!ctrlSession) {
-                //console.log("[server]",`TunnelServer: Not Found CtrlSession. id: ${ctrlHandlerID}`);
                 logger.error(`TunnelServer::onHandlerEvent - Not Found CtrlSession. id: ${ctrlHandlerID}`);
                 handler.end();
                 return;
             }
-
             let ctrlPackets : Array<CtrlPacket> | undefined;
             try {
                 ctrlPackets = ctrlSession.readCtrlPacketList(data);
@@ -316,8 +317,6 @@ class TunnelServer {
                 if(ctrlSession.state == SessionState.HalfOpened) {
                     if(ctrlPacket.cmd == CtrlCmd.SyncCtrl) {
                         this.sendSyncCtrlAck(handler, ctrlSession);
-                    } else if(ctrlPacket.cmd == CtrlCmd.OpenDataSession) {
-
                     }
                     else {
                         logger.info(`TunnelServer::onHandlerEvent - Change state => Close. id: ${ctrlHandlerID}`);
@@ -345,7 +344,7 @@ class TunnelServer {
                 } else if(ctrlSession.state == SessionState.Connected) {
                     if(ctrlPacket.cmd == CtrlCmd.Data) {
                         this._onReceiveDataCallback?.(ctrlPacket.id, ctrlPacket.data);
-                    } else if(ctrlPacket.cmd == CtrlCmd.Close) {
+                    } else if(ctrlPacket.cmd == CtrlCmd.CloseSession) {
                         let clientSession = this._sessionMap.get(ctrlPacket.id);
                         if(clientSession) {
                             this._onSessionCloseCallback?.(ctrlPacket.id, clientSession.connectOpt);
@@ -364,7 +363,7 @@ class TunnelServer {
     }
 
     private closeCtrlHandler = (handler: SocketHandler) : void => {
-        this._ctrlHandlerMap.delete(handler.id);
+        this._handlerPoolMap.delete(handler.id);
         this._ctrlSessionMap.delete(handler.id);
         let deleteSessionIDs : Array<number> = [];
         this._sessionMap.forEach((session, id) => {

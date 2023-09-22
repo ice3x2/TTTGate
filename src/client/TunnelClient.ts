@@ -161,9 +161,9 @@ class TunnelClient {
                     else if(this._state == CtrlState.SyncSyncing && packet.cmd == CtrlCmd.SyncCtrlAck) {
                         this._state = CtrlState.Connecting
                         // id 할당.
-                        this._id = packet.id;
+                        this._id = packet.ctrlID;
                         // ack 전송.
-                        this.sendAckCtrl(handler, packet.id, this._option.key);
+                        this.sendAckCtrl(handler, this._id, this._option.key);
                     } else if(this._state == CtrlState.Connected && packet.cmd == CtrlCmd.Data) {
                         let session = this._sessionMap.get(packet.id);
                         if(!session) {
@@ -181,7 +181,7 @@ class TunnelClient {
                         session.connectOpt = packet.openOpt!;
                         this._sessionMap.set(packet.id, session);
                         this._onSessionOpenCallback?.(packet.id, packet.openOpt!);
-                    } else if(this._state == CtrlState.Connected && packet.cmd == CtrlCmd.Close) {
+                    } else if(this._state == CtrlState.Connected && packet.cmd == CtrlCmd.CloseSession) {
                         this._onSessionCloseCallback?.(packet.id);
                         this._sessionMap.delete(packet.id);
                     }
@@ -201,7 +201,7 @@ class TunnelClient {
     private sendSyncAndSyncSyncCmd(handler: SocketHandler) : void {
         //console.log("[server]",'TunnelServer: makeCtrlHandler - change state => ' + SessionState[SessionState.HalfOpened]);
         logger.info(`TunnelClient::sendSyncAndSyncSyncCmd - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`)
-        let sendBuffer = CtrlPacket.createSyncCtrl(handler!.id).toBuffer();
+        let sendBuffer = CtrlPacket.createSyncCtrl().toBuffer();
         handler.sendData(sendBuffer, (handler, success, err) => {
             if(!success) {
                 logger.error(`TunnelClient::sendSyncAndSyncSyncCmd Fail - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}, ${err}`);
@@ -233,7 +233,7 @@ class TunnelClient {
             return false;
         }
         session.state = SessionState.End;
-        this._ctrlHandler.sendData(CtrlPacket.createCloseCtrl(id).toBuffer());
+        this._ctrlHandler.sendData(CtrlPacket.createCloseSession(id).toBuffer());
         return true;
     }
 
@@ -245,7 +245,7 @@ class TunnelClient {
         if (!session || !this._ctrlHandler) {
             return false;
         }
-        let packets = CtrlPacket.createDataPacket(id, data);
+        let packets = CtrlPacket.createSessionData(id, data);
         if(session.state == SessionState.HalfOpened) {
             console.log('[Client:TunnelClient]',   `PushWaitBuffer: id - ${id}`);
             for(let packet of packets) {
