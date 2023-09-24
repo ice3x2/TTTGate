@@ -5,8 +5,6 @@ enum SessionState {
     HalfOpened ,
     Handshaking ,
     Connected ,
-    Receive ,
-    End,
     Closed
 }
 

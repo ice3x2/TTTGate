@@ -5,8 +5,7 @@ import {CtrlPacket, CtrlPacketStreamer} from "./CtrlPacket";
 
 class ControlSession extends Session {
 
-    // @ts-ignore
-    private readonly _packetStream : CtrlPacketStreamer = new CtrlPacketStreamer();
+
     private _clientName : string = "";
     private _address : string = "";
     public static createControlSession(id: number) : ControlSession {
@@ -35,14 +34,7 @@ class ControlSession extends Session {
         super(id);
     }
 
-    /**
-     *
-     * @param buffer
-     * @returns CtrlPacket list. 만약 buffer에 여러개의 패킷이 들어있다면 여러개의 패킷을 반환한다. 아닐경우 빈 리스트를 반한한다.
-     */
-    public readCtrlPacketList(buffer: Buffer) : Array<CtrlPacket>{
-        return this._packetStream.readCtrlPacketList(buffer);
-    }
+
 
 
 

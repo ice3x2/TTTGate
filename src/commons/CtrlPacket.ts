@@ -107,9 +107,10 @@ class CtrlPacket {
      * @param sessionID
      * @param opt
      */
-    public static createNewDataHandlerAndOpenPacket(sessionID: number, opt: OpenOpt) : CtrlPacket {
+    public static createNewDataHandlerAndOpenPacket(ctrlID: number, sessionID: number, opt: OpenOpt) : CtrlPacket {
         let packet = new CtrlPacket();
         packet._cmd = CtrlCmd.NewDataHandlerAndOpen;
+        packet._ctrlID = ctrlID;
         packet._sessionID = sessionID;
         packet._openOpt = opt;
         let writer = new BufferWriter();
@@ -153,10 +154,11 @@ class CtrlPacket {
     }
 
 
-    public static createOpenSessionEndPoint(sessionID: number, opt: OpenOpt) : CtrlPacket {
+    public static createOpenSessionEndPoint(ctrlID: number, sessionID: number, opt: OpenOpt) : CtrlPacket {
         let packet = new CtrlPacket();
         packet._cmd = CtrlCmd.Open;
         packet._sessionID = sessionID;
+        packet._ctrlID = ctrlID;
         packet._openOpt = opt;
 
         opt.tls = opt.tls == undefined ? false : opt.tls;
