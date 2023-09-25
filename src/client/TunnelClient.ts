@@ -233,7 +233,7 @@ class TunnelClient {
             return false;
         }
         session.state = SessionState.End;
-        this._ctrlHandler.sendData(CtrlPacket.createCloseSession(id).toBuffer());
+        this._ctrlHandler.sendData(CtrlPacket.closeSession(id).toBuffer());
         return true;
     }
 

@@ -92,10 +92,11 @@ class CtrlPacket {
         return packet;
     }
 
-    public static createCloseSession(id: number) : CtrlPacket {
+    public static closeSession(ctrlID: number, sessionID: number) : CtrlPacket {
         let packet = new CtrlPacket();
         packet._cmd = CtrlCmd.CloseSession;
-        packet._sessionID = id;
+        packet._ctrlID = ctrlID;
+        packet._sessionID = sessionID;
         packet._data = CtrlPacket.EMPTY_BUFFER;
         return packet;
     }

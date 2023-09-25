@@ -5,13 +5,10 @@ import SessionState from "../option/SessionState";
 import SocketState from "../util/SocketState";
 
 
-interface OnCloseSessionCallback {
-    (ctrlID: number, sessionID: number) : void;
-}
 
 const SESSION_ID_BUNDLE_KEY = 'S';
 
-class HandlerPool {
+class ClientHandlerPool {
 
     private readonly _id : number;
     private readonly _controlHandler: SocketHandler;
@@ -19,14 +16,12 @@ class HandlerPool {
     // 대기중인 핸들러 풀. 핸들러가 필요할때마다 여기서 꺼내서 사용한다.
     private _waitDataHandlerPool: Array<SocketHandler> = new Array<SocketHandler>();
     // 열린 핸들러 맵. 세션ID를 키로 사용한다.
-    private _openedHandlerMap : Map<number, SocketHandler> = new Map<number, SocketHandler>();
+    private _activatedSessionHandlerMap : Map<number, SocketHandler> = new Map<number, SocketHandler>();
     private _sessionMap : Map<number, DataSession> = new Map<number, DataSession>();
 
-    private _onCloseSessionCallback? : OnCloseSessionCallback;
 
-
-    public static create(id : number, controlHandler: SocketHandler) : HandlerPool {
-        return new HandlerPool(id, controlHandler);
+    public static create(id : number, controlHandler: SocketHandler) : ClientHandlerPool {
+        return new ClientHandlerPool(id, controlHandler);
     }
 
     private constructor(id : number, controlHandler: SocketHandler) {
@@ -35,24 +30,27 @@ class HandlerPool {
     }
 
     public putNewDataHandler(sessionID: number,openSuccess: boolean, handler: SocketHandler) : void {
-        handler.onSocketEvent = (handler, state, data) => { 
-            this.onSocketEvent(handler, state, data);
-        };
         if(sessionID < 0) {
             this.pushWaitDataHandler(handler);
             return;
         }
         let session = this._sessionMap.get(sessionID);
         if(!openSuccess || session == undefined) {
-            this.releaseSession(sessionID);
+            this.closeSession(sessionID);
             this.pushWaitDataHandler(handler);
             return;
         }
-        this._openedHandlerMap.set(sessionID, handler);
+        this._activatedSessionHandlerMap.set(sessionID, handler);
         this.flushWaitBuffer(handler, session);
         handler.setBundle(SESSION_ID_BUNDLE_KEY, sessionID);
         session.state = SessionState.Connected;
     }
+
+    public isSessionOpened(sessionID: number) : boolean {
+        return this._activatedSessionHandlerMap.get(sessionID) != undefined;
+    }
+
+
 
 
     private flushWaitBuffer(handler: SocketHandler, session: DataSession) : void {
@@ -63,34 +61,9 @@ class HandlerPool {
         }
     }
 
-    public onSocketEvent(handler: SocketHandler, state: SocketState, data?: any) : void {
-        if(state == SocketState.Closed || state == SocketState.End) {
-            let sessionID = this.findSessionID(handler);
-            if(sessionID != undefined) {
-                this.releaseSession(sessionID!);
-                this._openedHandlerMap.delete(sessionID);
-                this._onCloseSessionCallback?.(this._id, sessionID);
-            } else {
-                this.pushWaitDataHandler(handler);
-            }
-        } else if(state == SocketState.Receive) {
-            let sessionID = handler.getBundle(SESSION_ID_BUNDLE_KEY);
-            let session = this._sessionMap.get(sessionID);
-            let packets = session!.readCtrlPacketList(data!);
-            for(let packet of packets) {
-                this.onCtrlPacket(sessionID, handler, packet);
-            }
-        }
-    }
-
-    private onCtrlPacket(sessionID: number, handler: SocketHandler, packet: CtrlPacket) : void {
-        packet.cmd
-
-    }
-
 
     private findSessionID(handler: SocketHandler) : number | undefined {
-        for(let [key, value] of this._openedHandlerMap) {
+        for(let [key, value] of this._activatedSessionHandlerMap) {
             if(value == handler) {
                 return key;
             }
@@ -137,9 +110,9 @@ class HandlerPool {
             dataSession.pushWaitBuffer(data);
         }
         else {
-            let handler = this._openedHandlerMap.get(sessionID);
+            let handler = this._activatedSessionHandlerMap.get(sessionID);
             if(handler == undefined) {
-                this.releaseSession(sessionID);
+                this.closeSession(sessionID);
                 return false;
             }
             handler.sendData(data);
@@ -148,14 +121,37 @@ class HandlerPool {
     }
 
 
-    private releaseSession(sessionID : number) : void {
-        this._sessionMap.get(sessionID)!.state = SessionState.Closed;
-        this._sessionMap.delete(sessionID);
+    /**
+     * ExternalPortServer 로부터 세션을 닫으라는 명령을 받았을때 호출된다. (ExternalPortServer 의 핸들러가 close 될 때)
+     * @param sessionID
+     */
+    public closeSession(sessionID: number) : void {
+        let handler = this._activatedSessionHandlerMap.get(sessionID);
+        if(handler == undefined) {
+            return;
+        }
+        this._activatedSessionHandlerMap.delete(sessionID);
+        handler.sendData(CtrlPacket.closeSession(this._id, sessionID).toBuffer(), (handler, success, err) => {
+            if(!success) {
+                console.log('[ClientHandlerPool]', `closeSession: fail: ${err}`);
+                return;
+            }
+            this.pushWaitDataHandler(handler);
+        });
+
     }
 
-
-    public close(sessionID: number) : void {
-
+    /**
+     * 클라이언트 데이터 핸들러로부터 세션을 닫으라는 명령을 받았을때 호출된다.
+     * @param sessionID
+     */
+    public releaseSession(sessionID: number) : void {
+        let handler = this._activatedSessionHandlerMap.get(sessionID);
+        if(handler == undefined) {
+            return;
+        }
+        this._activatedSessionHandlerMap.delete(sessionID);
+        this.pushWaitDataHandler(handler);
     }
 
     public endAll() : void {
@@ -187,8 +183,8 @@ class HandlerPool {
         let packet = CtrlPacket.newDataHandlerAndConnectEndPoint(this._id, sessionId, opt).toBuffer();
         this._controlHandler.sendData(packet, (handler, success, err) => {
             if(!success) {
-                this.releaseSession(sessionId);
-                console.log('[HandlerPool]', `sendNewDataHandlerAndOpen: fail: ${err}`);
+                this.closeSession(sessionId);
+                console.log('[ClientHandlerPool]', `sendNewDataHandlerAndOpen: fail: ${err}`);
                 this._onCloseSessionCallback?.(this._id, sessionId);
                 return;
             }
@@ -200,8 +196,8 @@ class HandlerPool {
         let packet = CtrlPacket.connectEndPoint(this._id, sessionId, opt).toBuffer();
         handler.sendData(packet, (handler, success, err) => {
             if(!success) {
-                this.releaseSession(sessionId);
-                console.log('[HandlerPool]', `sendOpen: fail: ${err}`);
+                this.closeSession(sessionId);
+                console.log('[ClientHandlerPool]', `sendOpen: fail: ${err}`);
                 this._onCloseSessionCallback?.(this._id, sessionId);
                 return;
             }
@@ -212,4 +208,4 @@ class HandlerPool {
 
 }
 
-export {HandlerPool}
+export {ClientHandlerPool}
