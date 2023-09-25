@@ -1,6 +1,6 @@
 import SessionState from "../option/SessionState";
-import { SocketHandler } from  "../util/SocketHandler";
-import {TCPServer, ServerOption} from "../util/TCPServer";
+import {SocketHandler} from "../util/SocketHandler";
+import {ServerOption, TCPServer} from "../util/TCPServer";
 import SocketState from "../util/SocketState";
 import {CtrlCmd, CtrlPacket, CtrlPacketStreamer, OpenOpt} from "../commons/CtrlPacket";
 import {Buffer} from "buffer";
@@ -10,8 +10,7 @@ import ClientSession from "../commons/ClientSession";
 import {logger} from "../commons/Logger";
 import {CertInfo} from "./CertificationStore";
 import {HandlerPool} from "../commons/HandlerPool";
-
-
+import {clearInterval} from "timers";
 
 
 interface OnReceiveDataCallback {
@@ -34,6 +33,7 @@ interface ClientStatus {
 interface Client {
     handler: SocketHandler;
     created: number;
+    available: boolean;
 }
 
 const PACKET_READER_BUNDLE_KEY = 'R';
@@ -43,12 +43,15 @@ const HANDLER_STATUS_BUNDLE_KEY = 'S';
 class TunnelServer {
 
     private readonly _serverOption : {port: number, tls: boolean, key: string};
-    private _unknownClients : Array<Client> = new Array<Client>();
+    private _unknownClients : Set<Client> = new Set<Client>();
     private _handlerPoolMap : Map<number, HandlerPool> = new Map<number, HandlerPool>();
     private _sessionAndHandlerPoolMap : Map<number, HandlerPool> = new Map<number, HandlerPool>();
 
     private _tunnelServer : TCPServer;
     private readonly _key : string;
+
+    private _clientCheckIntervalId : NodeJS.Timeout | undefined;
+    private _clientTimeout : number = 30000;
 
     private _onSessionCloseCallback? : OnSessionCloseCallback;
     private _onReceiveDataCallback? : OnReceiveDataCallback;
@@ -85,6 +88,7 @@ class TunnelServer {
 
     public async start() : Promise<void> {
         return new Promise((resolve, reject) => {
+            this.startUnknownClientCheckInterval();
             this._tunnelServer.setOnServerEvent(this.onServerEvent);
             this._tunnelServer.setOnHandlerEvent(this.onHandlerEvent);
             this._tunnelServer.start((err) => {
@@ -95,6 +99,33 @@ class TunnelServer {
                 }
             });
         });
+    }
+
+    private startUnknownClientCheckInterval() {
+        if(this._clientCheckIntervalId) {
+            clearInterval(this._clientCheckIntervalId);
+            this._clientCheckIntervalId = undefined;
+        }
+        let currentTime = Date.now();
+        this._clientCheckIntervalId = setInterval(() => {
+            let cleanUpTargets : Array<Client> = [];
+            this._unknownClients.forEach((item) => {
+                if(!item.available && currentTime - item.created > this._clientTimeout) {
+                    cleanUpTargets.push(item);
+                }
+            });
+            for(let item of cleanUpTargets) {
+                this._unknownClients.splice(this._unknownClients.indexOf(item), 1);
+                item.handler.end();
+            }
+        });
+    }
+
+    private stopUnknownClientCheckInterval() {
+        if(this._clientCheckIntervalId) {
+            clearInterval(this._clientCheckIntervalId);
+            this._clientCheckIntervalId = undefined;
+        }
     }
 
     public clientStatuses() : Array<ClientStatus> {
@@ -116,7 +147,7 @@ class TunnelServer {
         if(state == SessionState.HalfOpened || state == SessionState.Handshaking) {
             return 'connecting';
         }
-        else if(state == SessionState.End || state == SessionState.Closed || state == SessionState.None) {
+        else if(state == SessionState.Closed || state == SessionState.None) {
             return 'end';
         }
         return 'connected';
@@ -126,6 +157,7 @@ class TunnelServer {
     public async close() : Promise<void> {
         logger.info(`TunnelServer::close`);
         return new Promise((resolve, reject) => {
+            this.stopUnknownClientCheckInterval();
             // noinspection JSUnusedLocalSymbols
             this._tunnelServer.stop((err) => {
                 logger.info(`TunnelServer::closed`);
@@ -273,15 +305,16 @@ class TunnelServer {
 
 
     private onClientHandlerBound = (handler: SocketHandler) : void => {
-        this._unknownClients.push({handler: handler, created: Date.now()});
+        this._unknownClients.push({handler: handler, created: Date.now(), available: false});
         handler.setBundle(PACKET_READER_BUNDLE_KEY, new CtrlPacketStreamer());
         logger.info(`TunnelServer::Bound - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
     }
 
     // todo: 주기적으로 체크해서 아무것도 아닌 클라이언트 연결을 끊고 제거한다.
 
-    private on
+    private onReceiveCtrlPacket = (handler: SocketHandler, ctrlPacket: CtrlPacket) : void => {
 
+    };
 
 
 
@@ -301,8 +334,32 @@ class TunnelServer {
 
 
     private onHandlerEvent = (handler: SocketHandler, state: SocketState, data?: any) : void => {
-
         if(SocketState.Receive == state) {
+            let ctrlPacketStreamer = handler.getBundle(PACKET_READER_BUNDLE_KEY) as CtrlPacketStreamer;
+            if(!ctrlPacketStreamer) {
+                logger.error(`TunnelServer::onHandlerEvent - Not Found CtrlPacketStreamer. id: ${handler.id}`);
+                handler.end();
+                return;
+            }
+            let packetList = ctrlPacketStreamer.readCtrlPacketList(data);
+            for(let packet of packetList) {
+                if(packet.cmd == CtrlCmd.SyncCtrl || packet.cmd == CtrlCmd.AckCtrl) {
+                    // 컨트롤 패킷 연결 시도.
+                }
+                else if(packet.cmd == CtrlCmd.SuccessOfNewDataHandlerAndConnectEndPoint || packet.cmd == CtrlCmd.FailOfNewDataHandlerAndConnectEndPoint) {
+                    // 데이터 핸들러 연결 시도.
+                }
+                else if(packet.cmd == CtrlCmd.Data){
+
+                }
+                else if(packet.cmd == CtrlCmd.CloseSession){
+
+                }
+            }
+
+
+
+
             let ctrlHandlerID = handler.id;
             let ctrlSession = this._ctrlSessionMap.get(ctrlHandlerID);
             if(!ctrlSession) {
