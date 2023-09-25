@@ -111,14 +111,14 @@ class HandlerPool {
         return this._name;
     }
 
-    public open(sessionID: number, opt : OpenOpt) : DataSession {
+    public sendConnectEndPoint(sessionID: number, opt : OpenOpt) : DataSession {
         let dataSession = DataSession.createClientSession(sessionID);
         this._sessionMap.set(sessionID, dataSession);
         let socketHandler = this.obtainHandler();
         if(socketHandler == undefined) {
-            this.sendNewDataHandlerAndOpen(sessionID, opt);
+            this.sendNewDataHandlerAndConnectEndPoint(sessionID, opt);
         } else {
-            this.sendOpen(socketHandler, sessionID, opt);
+            this.sendConnectEndPointPacket(socketHandler, sessionID, opt);
         }
         return dataSession;
     }
@@ -183,8 +183,8 @@ class HandlerPool {
         this._waitDataHandlerPool.push(handler);
     }
 
-    private sendNewDataHandlerAndOpen(sessionId: number,  opt : OpenOpt) : void {
-        let packet = CtrlPacket.createNewDataHandlerAndOpenPacket(this._id, sessionId, opt).toBuffer();
+    private sendNewDataHandlerAndConnectEndPoint(sessionId: number,  opt : OpenOpt) : void {
+        let packet = CtrlPacket.newDataHandlerAndConnectEndPoint(this._id, sessionId, opt).toBuffer();
         this._controlHandler.sendData(packet, (handler, success, err) => {
             if(!success) {
                 this.releaseSession(sessionId);
@@ -196,8 +196,8 @@ class HandlerPool {
         });
     }
 
-    private sendOpen(handler: SocketHandler, sessionId: number, opt : OpenOpt) : void {
-        let packet = CtrlPacket.createOpenSessionEndPoint(this._id, sessionId, opt).toBuffer();
+    private sendConnectEndPointPacket(handler: SocketHandler, sessionId: number, opt : OpenOpt) : void {
+        let packet = CtrlPacket.connectEndPoint(this._id, sessionId, opt).toBuffer();
         handler.sendData(packet, (handler, success, err) => {
             if(!success) {
                 this.releaseSession(sessionId);

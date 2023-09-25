@@ -175,7 +175,7 @@ class TunnelClient {
                         } else {
                             this._onReceiveDataCallback?.(packet.id, packet.data);
                         }
-                    } else if(this._state == CtrlState.Connected && packet.cmd == CtrlCmd.Open) {
+                    } else if(this._state == CtrlState.Connected && packet.cmd == CtrlCmd.ConnectEndPoint) {
                         let session = new ClientSession(packet.id);
                         session.state = SessionState.HalfOpened;
                         session.connectOpt = packet.openOpt!;

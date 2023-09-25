@@ -30,13 +30,13 @@ enum CtrlCmd {
     // Client -> Server : SyncCtrl 응답
     SyncCtrlAck,
     AckCtrl,
-    Open,
+    ConnectEndPoint,
     Data,
     CloseSession,
-    NewDataHandlerAndOpen,
-    CreatedDataHandlerAndOpenSuccess,
+    NewDataHandlerAndConnectEndPoint,
+    SuccessOfNewDataHandlerAndConnectEndPoint,
+    FailOfNewDataHandlerAndConnectEndPoint,
     CreatedDataHandlerAndOpenFailed,
-
     NonExistent
 
 }
@@ -104,12 +104,13 @@ class CtrlPacket {
     /**
      * 새로운 데이터 핸들러 만들기와 동시에 커넥션을 열기를 요청하는 패킷을 만든다.
      * 서버에서 클라이언트로 보내는 패킷이다.
-     * @param sessionID
+     * @param ctrlID 컨드롤 핸들러 ID
+     * @param sessionID 세션 핸들러 ID
      * @param opt
      */
-    public static createNewDataHandlerAndOpenPacket(ctrlID: number, sessionID: number, opt: OpenOpt) : CtrlPacket {
+    public static newDataHandlerAndConnectEndPoint(ctrlID: number, sessionID: number, opt: OpenOpt) : CtrlPacket {
         let packet = new CtrlPacket();
-        packet._cmd = CtrlCmd.NewDataHandlerAndOpen;
+        packet._cmd = CtrlCmd.NewDataHandlerAndConnectEndPoint;
         packet._ctrlID = ctrlID;
         packet._sessionID = sessionID;
         packet._openOpt = opt;
@@ -127,10 +128,11 @@ class CtrlPacket {
      * 클라이언트에서 서버로 보내는 패킷이다.
      * @param clientID
      */
-    public static createCreatedDataHandlerAndOpenSuccessPacket(clientID: number, sessionID: number) : CtrlPacket {
+    public static resultDataHandlerAndConnectEndPointPacket(clientID: number, sessionID: number, success: boolean) : CtrlPacket {
         let packet = new CtrlPacket();
-        packet._cmd = CtrlCmd.CreatedDataHandlerAndOpenSuccess;
+        packet._cmd = success ? CtrlCmd.SuccessOfNewDataHandlerAndConnectEndPoint : CtrlCmd.FailOfNewDataHandlerAndConnectEndPoint;
         packet._ctrlID = clientID;
+        packet._sessionID = sessionID;
         packet._data = CtrlPacket.EMPTY_BUFFER;
         return packet;
     }
@@ -154,9 +156,9 @@ class CtrlPacket {
     }
 
 
-    public static createOpenSessionEndPoint(ctrlID: number, sessionID: number, opt: OpenOpt) : CtrlPacket {
+    public static connectEndPoint(ctrlID: number, sessionID: number, opt: OpenOpt) : CtrlPacket {
         let packet = new CtrlPacket();
-        packet._cmd = CtrlCmd.Open;
+        packet._cmd = CtrlCmd.ConnectEndPoint;
         packet._sessionID = sessionID;
         packet._ctrlID = ctrlID;
         packet._openOpt = opt;
@@ -215,7 +217,7 @@ class CtrlPacket {
         if(result._cmd == CtrlCmd.AckCtrl) {
             result._ackCtrlOpt = CtrlPacket.parseAckCtrlData(result._data);
 
-        } else if(result._cmd == CtrlCmd.Open) {
+        } else if(result._cmd == CtrlCmd.ConnectEndPoint) {
             result._openOpt = CtrlPacket.parseOpenData(result._data);
         }
         return {packet: result, remain: reader.readBufferToEnd(), state: ParsedState.Complete,  error: null};

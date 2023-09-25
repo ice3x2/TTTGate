@@ -2,7 +2,7 @@ import SessionState from "../option/SessionState";
 import { SocketHandler } from  "../util/SocketHandler";
 import {TCPServer, ServerOption} from "../util/TCPServer";
 import SocketState from "../util/SocketState";
-import {CtrlCmd, CtrlPacket, OpenOpt} from "../commons/CtrlPacket";
+import {CtrlCmd, CtrlPacket, CtrlPacketStreamer, OpenOpt} from "../commons/CtrlPacket";
 import {Buffer} from "buffer";
 import ConnectOpt from "../util/ConnectOpt";
 import ControlSession from "../commons/ControlSession";
@@ -31,12 +31,19 @@ interface ClientStatus {
     address: string;
 }
 
+interface Client {
+    handler: SocketHandler;
+    created: number;
+}
+
+const PACKET_READER_BUNDLE_KEY = 'R';
+const HANDLER_STATUS_BUNDLE_KEY = 'S';
+
 
 class TunnelServer {
 
     private readonly _serverOption : {port: number, tls: boolean, key: string};
-    //private _sessionMap : Map<number, ClientSession> = new Map<number, ClientSession>();
-    //private _ctrlSessionMap : Map<number, ControlSession> = new Map<number, ControlSession>();
+    private _unknownClients : Array<Client> = new Array<Client>();
     private _handlerPoolMap : Map<number, HandlerPool> = new Map<number, HandlerPool>();
     private _sessionAndHandlerPoolMap : Map<number, HandlerPool> = new Map<number, HandlerPool>();
 
@@ -92,7 +99,7 @@ class TunnelServer {
 
     public clientStatuses() : Array<ClientStatus> {
         let result : Array<ClientStatus> = [];
-        this._ctrlSessionMap.forEach((session, id) => {
+        /*this._ctrlSessionMap.forEach((session, id) => {
             result.push(
                 {
                     id: id,
@@ -101,7 +108,7 @@ class TunnelServer {
                     uptime: Date.now() - session.createTime,
                     address: session.address
                 });
-        });
+        });*/
         return result;
     }
 
@@ -187,7 +194,7 @@ class TunnelServer {
         if(handler == null) {
             return false;
         }
-        let buffer = CtrlPacket.createOpenSessionEndPoint(sessionID,opt).toBuffer();
+        let buffer = CtrlPacket.connectEndPoint(sessionID,opt).toBuffer();
         let clientSession = ClientSession.createClientSession(sessionID);
         clientSession.connectOpt = opt;
         clientSession.controlId = handler.id;
@@ -266,13 +273,16 @@ class TunnelServer {
 
 
     private onClientHandlerBound = (handler: SocketHandler) : void => {
-        this._handlerPoolMap.set(handler.id, handler);
-        let ctrlSession = ControlSession.createControlSession(handler.id);
-        ctrlSession.address = handler.remoteAddress + ':' + handler.remotePort;
-        this._ctrlSessionMap.set(handler.id, ctrlSession);
+        this._unknownClients.push({handler: handler, created: Date.now()});
+        handler.setBundle(PACKET_READER_BUNDLE_KEY, new CtrlPacketStreamer());
         logger.info(`TunnelServer::Bound - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
-        //this.sendSyncAndSyncSyncCmd(handler, ctrlSession);
     }
+
+    // todo: 주기적으로 체크해서 아무것도 아닌 클라이언트 연결을 끊고 제거한다.
+
+    private on
+
+
 
 
     private sendSyncCtrlAck(handler: SocketHandler, ctrlSession : ControlSession) : void {
@@ -287,10 +297,6 @@ class TunnelServer {
             //console.log("[server]",'TunnelServer: makeCtrlHandler - change state => ' + SessionState[SessionState.Handshaking]);
             ctrlSession.state = SessionState.Handshaking;
         });
-    }
-
-    private getCtrlSession(handler: SocketHandler) : ControlSession | undefined {
-
     }
 
 
