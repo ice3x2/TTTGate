@@ -319,7 +319,15 @@ class TunnelServer {
             handler.end();
             return;
         }
-        let packetList = ctrlPacketStreamer.readCtrlPacketList(data);
+        let packetList : Array<CtrlPacket> = [];
+        try {
+            packetList = ctrlPacketStreamer.readCtrlPacketList(data);
+        } catch (e) {
+            logger.error(`TunnelServer::onHandlerEvent - CtrlPacketStreamer.readCtrlPacketList Fail. id: ${handler.id}, ${e}`);
+            // todo 핸들러 타입을 구분하여 처리해야한다. unknown: unknown 리스트에서 제거, control: , data
+            handler.end();
+            return;
+        }
         for(let i = 0, len = packetList.length; i < len; i++) {
             let packet = packetList[i];
             this.onReceivePacket(handler, packet);

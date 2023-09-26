@@ -27,6 +27,10 @@ class Session {
         return this._state;
     }
 
+    public set state(state: SessionState) {
+        this._state = state;
+    }
+
 
     public isConnected() : boolean {
         return this._state == SessionState.Connected;

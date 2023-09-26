@@ -2,7 +2,6 @@ import {SocketHandler} from "../util/SocketHandler";
 import {CtrlPacket, CtrlPacketStreamer, OpenOpt} from "./CtrlPacket";
 import DataSession from "./ClientSession";
 import SessionState from "../option/SessionState";
-import SocketState from "../util/SocketState";
 
 
 
@@ -162,10 +161,6 @@ class ClientHandlerPool {
         }
         this._activatedSessionHandlerMap.delete(sessionID);
         this.pushWaitDataHandler(handler);
-    }
-
-    public endAll() : void {
-
     }
 
 

@@ -8,7 +8,7 @@ import ConnectOpt from "../util/ConnectOpt";
 import ClientSession from "../commons/ClientSession";
 import {logger} from "../commons/Logger";
 import Dequeue from "../util/Dequeue";
-import ControlSession from "../commons/ControlSession";
+
 
 
 enum CtrlState {
@@ -39,6 +39,18 @@ interface OnSessionOpenCallback {
 }
 
 //type OnSessionEventCallback = (id: number, state: SessionState, data: Buffer | ConnectOpt | null) => void;
+
+enum HandlerType {
+    Control,
+    Data
+}
+
+
+const PACKET_READER_BUNDLE_KEY = 'R';
+const HANDLER_STATUS_BUNDLE_KEY = 'S';
+const HANDLER_TYPE_BUNDLE_KEY = 'T';
+const CTRL_ID_BUNDLE_KEY = 'I';
+
 
 
 
@@ -142,11 +154,38 @@ class TunnelClient {
         return true;
     }
 
+    private onCtrlHandlerEvent = (handler: SocketHandler, state: SocketState, data?: any) : void => {
+        if(state == SocketState.Connected) {
+            this.onConnectedCtrlHandler(handler);
+        }
+        else if(state == SocketState.Receive) {
+
+        }
+
+    }
+
+    private onReceiveFromCtrlHandler(handler: SocketHandler, data: Buffer) : void {
+        let sessionState : SessionState = handler.getBundle(HANDLER_STATUS_BUNDLE_KEY);
+        if(!sessionState) {
+            handler.destroy();
+            this.onCtrlStateCallback?.(this, 'closed');
+        }
+    }
+
+    private onConnectedCtrlHandler(handler: SocketHandler) {
+        handler.setBundle(PACKET_READER_BUNDLE_KEY, new CtrlPacketStreamer());
+        handler.setBundle(HANDLER_STATUS_BUNDLE_KEY, SessionState.HalfOpened);
+        handler.setBundle(HANDLER_TYPE_BUNDLE_KEY, HandlerType.Control);
+        this.sendSyncAndSyncSyncCmd(handler);
+    }
+
+
+
     // state 상태 변화.
     // 1. connected -> syncing : 최초 연결 상태에서 SyncCtrl 패킷을 받으면 Syncing 상태로 전환
     // 2. syncing -> syncsyncing : Syncing 상태에서 SyncSyncCtrl 패킷을 받으면 SyncSyncing 상태로 전환
     // 3. syncsyncing -> synced :  SyncSyncing 상태에서 AckSyncCtrl 패킷 전달이 성공하면 Synced 상태로 전환. 이 상태에서 통신 가능.
-    private onCtrlHandlerEvent = (handler: SocketHandler, state: SocketState, data?: any) : void => {
+    private onCtrlHandlerEvent_ = (handler: SocketHandler, state: SocketState, data?: any) : void => {
         try {
             if (SocketState.Connected == state) {
                 handler.socket.setKeepAlive(true, 15000);
