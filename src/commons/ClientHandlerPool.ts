@@ -29,6 +29,16 @@ class ClientHandlerPool {
         this._controlHandler = controlHandler;
     }
 
+    public endDataHandler(handler: SocketHandler) : void {
+        let sessionID = this.findSessionID(handler);
+        if(sessionID == undefined) {
+            this._waitDataHandlerPool.splice(this._waitDataHandlerPool.indexOf(handler), 1);
+            return;
+        }
+        this._activatedSessionHandlerMap.delete(sessionID);
+        handler.end();
+    }
+
     public putNewDataHandler(sessionID: number,openSuccess: boolean, handler: SocketHandler) : void {
         if(sessionID < 0) {
             this.pushWaitDataHandler(handler);
@@ -72,7 +82,7 @@ class ClientHandlerPool {
     }
 
 
-    private set name(name: string) {
+    public set name(name: string) {
         this._name = name;
     }
 
@@ -101,13 +111,13 @@ class ClientHandlerPool {
      * @param sessionID
      * @param data
      */
-    public send(sessionID: number, data: Buffer) : boolean {
+    public sendPacket(sessionID: number, packet: CtrlPacket) : boolean {
         let dataSession = this._sessionMap.get(sessionID);
         if(dataSession == undefined) {
             return false;
         }
         if(!dataSession.isConnected()) {
-            dataSession.pushWaitBuffer(data);
+            dataSession.pushWaitBuffer(packet.toBuffer());
         }
         else {
             let handler = this._activatedSessionHandlerMap.get(sessionID);
@@ -115,7 +125,7 @@ class ClientHandlerPool {
                 this.closeSession(sessionID);
                 return false;
             }
-            handler.sendData(data);
+            handler.sendData(packet.toBuffer());
         }
         return true;
     }
@@ -185,7 +195,6 @@ class ClientHandlerPool {
             if(!success) {
                 this.closeSession(sessionId);
                 console.log('[ClientHandlerPool]', `sendNewDataHandlerAndOpen: fail: ${err}`);
-                this._onCloseSessionCallback?.(this._id, sessionId);
                 return;
             }
             this._sessionMap.get(sessionId)!.state = SessionState.HalfOpened;
@@ -198,13 +207,22 @@ class ClientHandlerPool {
             if(!success) {
                 this.closeSession(sessionId);
                 console.log('[ClientHandlerPool]', `sendOpen: fail: ${err}`);
-                this._onCloseSessionCallback?.(this._id, sessionId);
                 return;
             }
             this._sessionMap.get(sessionId)!.state = SessionState.HalfOpened;
         });
     }
 
+    public destroy() : void {
+        for(let [key, value] of this._activatedSessionHandlerMap) {
+            value.sendData(CtrlPacket.closeSession(this._id, key).toBuffer(), () => {
+                value.end();
+            });
+        }
+        this._activatedSessionHandlerMap.clear();
+        this._sessionMap.clear();
+        this._controlHandler.destroy();
+    }
 
 }
 

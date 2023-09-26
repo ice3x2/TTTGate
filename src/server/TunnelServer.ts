@@ -44,6 +44,8 @@ interface Client {
 const PACKET_READER_BUNDLE_KEY = 'R';
 const HANDLER_STATUS_BUNDLE_KEY = 'S';
 const HANDLER_TYPE_BUNDLE_KEY = 'T';
+const CTRL_ID_BUNDLE_KEY = 'I';
+
 
 
 class TunnelServer {
@@ -94,7 +96,7 @@ class TunnelServer {
 
     public async start() : Promise<void> {
         return new Promise((resolve, reject) => {
-            this.startUnknownClientCheckInterval();
+            this.startClientCheckInterval();
             this._tunnelServer.setOnServerEvent(this.onServerEvent);
             this._tunnelServer.setOnHandlerEvent(this.onHandlerEvent);
             this._tunnelServer.start((err) => {
@@ -107,7 +109,7 @@ class TunnelServer {
         });
     }
 
-    private startUnknownClientCheckInterval() {
+    private startClientCheckInterval() {
         if(this._clientCheckIntervalId) {
             clearInterval(this._clientCheckIntervalId);
             this._clientCheckIntervalId = undefined;
@@ -127,7 +129,7 @@ class TunnelServer {
         });
     }
 
-    private stopUnknownClientCheckInterval() {
+    private stopClientCheckInterval() {
         if(this._clientCheckIntervalId) {
             clearInterval(this._clientCheckIntervalId);
             this._clientCheckIntervalId = undefined;
@@ -149,121 +151,73 @@ class TunnelServer {
         return result;
     }
 
-    private static sessionStateToString(state: SessionState) : 'connecting' | 'connected' | 'end' {
-        if(state == SessionState.HalfOpened || state == SessionState.Handshaking) {
-            return 'connecting';
-        }
-        else if(state == SessionState.Closed || state == SessionState.None) {
-            return 'end';
-        }
-        return 'connected';
-    }
 
-    // noinspection JSUnusedGlobalSymbols
     public async close() : Promise<void> {
         logger.info(`TunnelServer::close`);
         return new Promise((resolve, reject) => {
-            this.stopUnknownClientCheckInterval();
+            this.stopClientCheckInterval();
             // noinspection JSUnusedLocalSymbols
             this._tunnelServer.stop((err) => {
                 logger.info(`TunnelServer::closed`);
                 resolve();
             });
         });
-
     }
 
     public sendBuffer(sessionId: number, buffer: Buffer) : boolean {
-        let packets = CtrlPacket.createSessionData(sessionId, buffer);
         if(!this.available()) {
             return false;
         }
-        let session = this._sessionMap.get(sessionId);
-        if(!session || session.isEnd()) {
+        //let session =  //this._sessionMap.get(sessionId);
+        let ctrlID = this._sessionIDAndCtrlIDMap.get(sessionId);
+        if(ctrlID == undefined) {
             return false;
         }
-        if(session.state == SessionState.HalfOpened || session.state == SessionState.Connected) {
-            let handler = this._handlerPoolMap.get(session.controlId);
-            if(!handler) {
-                this._sessionMap.delete(sessionId);
+        let handlerPool = this._handlerPoolMap.get(ctrlID);
+        if(!handlerPool) {
+            return false;
+        }
+        let sessionDataPacketList = CtrlPacket.sessionData(ctrlID, sessionId, buffer);
+        for(let packet of sessionDataPacketList) {
+            if(!handlerPool.sendPacket(sessionId, packet)) {
                 return false;
-            }
-            for(let packet of packets) {
-                handler.sendData(packet.toBuffer());
-            }
-        } else {
-            for(let packet of packets) {
-                session.pushWaitBuffer(packet.toBuffer());
             }
         }
         return true;
     }
 
 
-
-
-
-
-    public open(sessionID: number,opt : OpenOpt, allowClientNames?: Array<string>) : boolean {
+    public openSession(sessionID: number, opt : OpenOpt, allowClientNames?: Array<string>) : boolean {
         if(!this.available()) {
             return false;
         }
-        let handler = this.getNextHandler(allowClientNames);
-        if(handler == null) {
+        let handlerPool = this.getNextHandlerPool(allowClientNames);
+        if(handlerPool == null) {
             return false;
         }
-        let buffer = CtrlPacket.connectEndPoint(sessionID,opt).toBuffer();
-        let clientSession = ClientSession.createClientSession(sessionID);
-        clientSession.connectOpt = opt;
-        clientSession.controlId = handler.id;
-        this._sessionMap.set(sessionID, clientSession);
-        handler.sendData(buffer, (handler, success, err?) => {
-            let session = this._sessionMap.get(sessionID);
-            if(!session) {
-                logger.warning(`TunnelServer:: fail to send open. session is null => ${sessionID}(${opt.host}:${opt.port}`);
-                return;
-            }
-            else if(!success) {
-                logger.error(`TunnelServer:: fail to send open => ${sessionID}(${opt.host}:${opt.port}) ${err}`);
-                return;
-            }
-            else {
-                session.state = SessionState.HalfOpened;
-                let waitBuffer : Buffer | undefined = session.popWaitBuffer();
-                while(waitBuffer) {
-                    handler.sendData(waitBuffer);
-                    waitBuffer = session.popWaitBuffer();
-                }
-            }
-            logger.debug(`TunnelServer:: send Open => ${sessionID}(${opt.host}:${opt.port})`);
-        })
+        handlerPool.sendConnectEndPoint(sessionID, opt);
         return true;
+
     }
 
     private available() : boolean {
-        let available = false;
-        this._ctrlSessionMap.forEach((session) => {
-            if(session.state == SessionState.Connected) {
-                available = true;
-            }
-        });
-        return available;
+        return this._handlerPoolMap.size > 0;
     }
 
     private _nextSelectIdx = 0;
 
 
-    private getNextHandler(allowClientNames?: Array<string>) : SocketHandler | null {
-        if(this._ctrlSessionMap.size == 0) {
+    private getNextHandlerPool(allowClientNames?: Array<string>) : ClientHandlerPool | null {
+        if(this._handlerPoolMap.size == 0) {
             return null;
         }
         let ids: Array<number> = [];
         if(!allowClientNames || allowClientNames.length == 0) {
-           ids =  Array.from(this._ctrlSessionMap.keys());
+           ids =  Array.from(this._handlerPoolMap.keys());
         }  else {
-            this._ctrlSessionMap.forEach((session, id) => {
-                if(allowClientNames.includes(session.clientName)) {
-                    ids.push(id);
+            this._handlerPoolMap.forEach((handlerPool, ctrlID) => {
+                if(allowClientNames.includes(handlerPool.name)) {
+                    ids.push(ctrlID);
                 }
             });
         }
@@ -307,8 +261,8 @@ class TunnelServer {
             let index =  this._unknownClients.findIndex((item) => item.handler.id == handler.id);
             if(!success) {
                 logger.error(`TunnelServer::sendSyncAndSyncSyncCmd Fail - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}, ${err}`);
-                this.closeCtrlHandler(handler);
                 this._unknownClients.splice(index, 1);
+                handler.destroy();
                 return;
             }
             this._unknownClients[index].lastUpdated = Date.now();
@@ -317,7 +271,7 @@ class TunnelServer {
         });
     }
 
-    private promoteToCtrlHandler(handler: SocketHandler) : void {
+    private promoteToCtrlHandler(handler: SocketHandler, clientName: string) : void {
         let index = this._unknownClients.findIndex((item) => item.handler.id == handler.id);
         if(index < 0) {
             logger.error(`TunnelServer::promoteToCtrlHandler - Not Found Client. id: ${handler.id}`);
@@ -325,8 +279,11 @@ class TunnelServer {
             return;
         }
         this._unknownClients.splice(index, 1);
+
         handler.setBundle(HANDLER_TYPE_BUNDLE_KEY, HandlerType.Control);
+        handler.setBundle(CTRL_ID_BUNDLE_KEY, handler.id);
         let ctrlHandlerPool = ClientHandlerPool.create(handler.id, handler);
+        ctrlHandlerPool.name = clientName;
         this._handlerPoolMap.set(handler.id, ctrlHandlerPool);
     }
 
@@ -339,6 +296,7 @@ class TunnelServer {
             handler.end();
             return;
         }
+        handler.setBundle(CTRL_ID_BUNDLE_KEY, ctrlID);
         handler.setBundle(HANDLER_TYPE_BUNDLE_KEY, HandlerType.Data);
         clientHandlerPool.putNewDataHandler(sessionID, connected, handler);
     }
@@ -397,7 +355,7 @@ class TunnelServer {
             handler.setBundle(HANDLER_STATUS_BUNDLE_KEY,SessionState.HalfOpened);
             this.sendSyncCtrlAck(handler);
         } else if(packet.cmd == CtrlCmd.AckCtrl) {
-            this.promoteToCtrlHandler(handler);
+            this.promoteToCtrlHandler(handler, packet.clientName!);
         }
         else if(packet.cmd == CtrlCmd.SuccessOfNewDataHandlerAndConnectEndPoint || packet.cmd == CtrlCmd.FailOfNewDataHandlerAndConnectEndPoint) {
             let connected = packet.cmd == CtrlCmd.SuccessOfNewDataHandlerAndConnectEndPoint;
@@ -417,39 +375,67 @@ class TunnelServer {
     }
 
 
+    /**
+     * 클라이언트 핸들러로부터 이벤트를 받았을때 호출된다.
+     * Receive 이벤트는 클라이언트로부터 데이터를 받았을때 호출된다.
+     * 그 외에는 close 이벤트가 호출된다.
+     * @param handler
+     * @param state
+     * @param data
+     */
     private onHandlerEvent = (handler: SocketHandler, state: SocketState, data?: any) : void => {
         if(SocketState.Receive == state) {
             this.onReceiveData(handler, data);
         } else {
             let handlerType = handler.getBundle(HANDLER_TYPE_BUNDLE_KEY) as HandlerType;
+            if(handlerType == HandlerType.Unknown) {
+                this._unknownClients.splice(this._unknownClients.findIndex((item) => item.handler.id == handler.id), 1);
+                return;
+            }
+            let ctrlID = handler.getBundle(CTRL_ID_BUNDLE_KEY) as number;
             if(handlerType == HandlerType.Control) {
-                // todo 여기서 컨트롤 핸들러를 닫고, 해당풀에 속해있는 모든 세션과 데이터 핸들러를 닫아야 한다.
+                this.destroyClientHandlerPool(ctrlID);
+            } else if(handlerType == HandlerType.Data) {
+                this.endDataHandler(ctrlID, handler);
             }
-
-
-            let ctrlSession = this._ctrlSessionMap.get(handler.id);
-            if(ctrlSession) {
-                ctrlSession.state = SessionState.End;
-            }
-            this.closeCtrlHandler(handler);
         }
     }
 
-    private closeCtrlHandler = (handler: SocketHandler) : void => {
-        this._handlerPoolMap.delete(handler.id);
-        this._ctrlSessionMap.delete(handler.id);
-        let deleteSessionIDs : Array<number> = [];
-        this._sessionMap.forEach((session, id) => {
-            if(session.controlId == handler.id) {
-                deleteSessionIDs.push(id);
-                this._onSessionCloseCallback?.(id, session.connectOpt);
-            }
-        })
-        for(let id of deleteSessionIDs) {
-            this._sessionMap.delete(id);
+    private endDataHandler(ctrlID: number, handler: SocketHandler) : void {
+        let clientHandlerPool = this._handlerPoolMap.get(ctrlID);
+        if(!clientHandlerPool) {
+            logger.error(`TunnelServer::onHandlerEvent - Not Found ClientHandlerPool. id: ${ctrlID}`);
+            handler.end();
+            return;
         }
-        handler.end();
+        clientHandlerPool.endDataHandler(handler);
     }
+
+    /**
+     * 핸들러 풀에서 인자로 받은 ctrlID 에 대항하는 풀을 제거하고, 내부의 모든 세션 종료 메시지를 보낸 후에 연결을 종료한다.
+     * @param ctrlID
+     * @private
+     */
+    private destroyClientHandlerPool(ctrlID: number) : void {
+        let handlerPool = this._handlerPoolMap.get(ctrlID);
+        if(!handlerPool) {
+            return;
+        }
+        let removeSessionIDs : Array<number> = [];
+        this._sessionIDAndCtrlIDMap.forEach((value, key) => {
+            if(value == ctrlID) {
+                removeSessionIDs.push(key);
+            }
+        });
+        for(let id of removeSessionIDs) {
+            this._sessionIDAndCtrlIDMap.delete(id);
+        }
+
+        this._handlerPoolMap.delete(ctrlID);
+        handlerPool.destroy();
+    }
+
+
 
 }
 

@@ -245,7 +245,7 @@ class TunnelClient {
         if (!session || !this._ctrlHandler) {
             return false;
         }
-        let packets = CtrlPacket.createSessionData(id, data);
+        let packets = CtrlPacket.sessionData(id, data);
         if(session.state == SessionState.HalfOpened) {
             console.log('[Client:TunnelClient]',   `PushWaitBuffer: id - ${id}`);
             for(let packet of packets) {

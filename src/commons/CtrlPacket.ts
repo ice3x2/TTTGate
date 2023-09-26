@@ -141,12 +141,13 @@ class CtrlPacket {
 
 
 
-    public static createSessionData(sessionID: number, data: Buffer) : Array<CtrlPacket> {
+    public static sessionData(ctrlID:number, sessionID: number, data: Buffer) : Array<CtrlPacket> {
         let packets = new Array<CtrlPacket>();
         let offset = 0;
         while(offset < data.length) {
             let packet = new CtrlPacket();
             packet._cmd = CtrlCmd.Data;
+            packet._ctrlID = ctrlID;
             packet._sessionID = sessionID;
             let length = Math.min(data.length - offset, MAX_PAYLOAD_SIZE);
             packet._data = data.subarray(offset, offset + length);
