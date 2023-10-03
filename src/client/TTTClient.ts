@@ -28,9 +28,9 @@ class TTTClient {
     public start() {
         this._tunnelClient = TunnelClient.create(this._clientOption);
         this._tunnelClient.onCtrlStateCallback = this.onCtrlStateCallback;
-        this._tunnelClient.onSessionOpenCallback = this.onSessionOpenCallback;
+        this._tunnelClient.onEndPointOpenCallback = this.onSessionOpenCallback;
         this._tunnelClient.onReceiveDataCallback = this.onSessionSendCallback;
-        this._tunnelClient.onSessionCloseCallback = this.onSessionCloseCallback;
+        this._tunnelClient.onEndPointCloseCallback = this.onSessionCloseCallback;
         this._endPointClientPool.onEndPointClientStateChangeCallback = this.onEndPointClientStateChangeCallback;
         logger.info(`TTTClient:: try connect to ${this._clientOption.host}:${this._clientOption.port}`);
         logger.info(`TTTClient:: option: ${JSON.stringify(this._clientOption)}`)

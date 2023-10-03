@@ -1,4 +1,4 @@
-import { SocketHandler } from  "../util/SocketHandler";
+import {SocketHandler} from "../util/SocketHandler";
 import SocketState from "../util/SocketState";
 import {Buffer} from "buffer";
 import {CtrlCmd, CtrlPacket, CtrlPacketStreamer, OpenOpt} from "../commons/CtrlPacket";
@@ -7,8 +7,8 @@ import {ClientOption} from "../option/TunnelingOption";
 import ConnectOpt from "../util/ConnectOpt";
 import ClientSession from "../commons/ClientSession";
 import {logger} from "../commons/Logger";
-import Dequeue from "../util/Dequeue";
-
+import {ClientHandlerPool} from "../commons/ClientHandlerPool";
+import {Socket} from "net";
 
 
 enum CtrlState {
@@ -17,6 +17,15 @@ enum CtrlState {
     Connected,  /** 서버와 연결 완료 */
     Syncing, /** 서버와 동기화 중 */
     SyncSyncing /** 서버와 동기화 완료 */
+}
+
+enum DataState {
+    None,
+    Wait,
+    Initializing,
+    ConnectingEndPoint,
+    OnlineSession,
+    Terminated
 }
 
 
@@ -38,6 +47,7 @@ interface OnSessionOpenCallback {
     (id: number, opt: OpenOpt) : void;
 }
 
+
 //type OnSessionEventCallback = (id: number, state: SessionState, data: Buffer | ConnectOpt | null) => void;
 
 enum HandlerType {
@@ -46,9 +56,17 @@ enum HandlerType {
 }
 
 
+type DataHandler = SocketHandler & {
+    sessionID?: number;
+    packetStreamer?: CtrlPacketStreamer;
+    dataState?: DataState;
+
+}
+
+
 const PACKET_READER_BUNDLE_KEY = 'R';
-const HANDLER_STATUS_BUNDLE_KEY = 'S';
 const HANDLER_TYPE_BUNDLE_KEY = 'T';
+const SESSION_ID_BUNDLE_KEY = 'S';
 const CTRL_ID_BUNDLE_KEY = 'I';
 
 
@@ -69,24 +87,30 @@ class TunnelClient {
     private _state : CtrlState = CtrlState.None;
     private _isOnline: boolean = false;
     private _ctrlHandler: SocketHandler | undefined = undefined;
+    private _waitDataHandlerArray : Array<DataHandler> = [];
+    private _waitDataHandlerMap : Map<number, SocketHandler> = new Map<number, SocketHandler>();
+    private _onlineSessionDataHandlerMap : Map<number, DataHandler> = new Map<number, SocketHandler>();
+
     private _ctrlPacketStreamer : CtrlPacketStreamer = new CtrlPacketStreamer();
     private _dataCommunicationHandlerCache : Array<SocketHandler> = [];
     private _id : number = -1;
 
     private _onCtrlStateCallback? : OnCtrlStateCallback;
-    private _onSessionCloseCallback? : OnSessionCloseCallback;
-    private _onSessionOpenCallback? : OnSessionOpenCallback;
+    private _onEndPointCloseCallback? : OnSessionCloseCallback;
+    private _onEndPointOpenCallback? : OnSessionOpenCallback;
     private _onReceiveDataCallback? : OnReceiveDataCallback;
 
     private _sessionMap : Map<number, ClientSession> = new Map<number, ClientSession>();
 
 
-    public set onSessionCloseCallback(value: OnSessionCloseCallback) {
-        this._onSessionCloseCallback = value;
+
+
+    public set onEndPointCloseCallback(value: OnSessionCloseCallback) {
+        this._onEndPointCloseCallback = value;
     }
 
-    public set onSessionOpenCallback(value: OnSessionOpenCallback) {
-        this._onSessionOpenCallback = value;
+    public set onEndPointOpenCallback(value: OnSessionOpenCallback) {
+        this._onEndPointOpenCallback = value;
     }
 
     public set onReceiveDataCallback(value: OnReceiveDataCallback) {
@@ -158,23 +182,76 @@ class TunnelClient {
         if(state == SocketState.Connected) {
             this.onConnectedCtrlHandler(handler);
         }
-        else if(state == SocketState.Receive) {
-
+        else if(state == SocketState.Receive && handler == this._ctrlHandler) {
+            this.onReceiveFromCtrlHandler(handler, data);
         }
 
     }
 
     private onReceiveFromCtrlHandler(handler: SocketHandler, data: Buffer) : void {
-        let sessionState : SessionState = handler.getBundle(HANDLER_STATUS_BUNDLE_KEY);
-        if(!sessionState) {
-            handler.destroy();
-            this.onCtrlStateCallback?.(this, 'closed');
+        let packetList :  Array<CtrlPacket> = this._ctrlHandler!.getBundle(PACKET_READER_BUNDLE_KEY)!.readCtrlPacketList(data);
+        for(let packet of packetList) {
+            if(this._state == CtrlState.SyncSyncing && packet.cmd == CtrlCmd.SyncCtrlAck) {
+                this._id = packet.ctrlID;
+                this.sendAckCtrl(handler, this._id, this._option.key);
+            }
+            if(this._state == CtrlState.Connected) {
+                if(packet.cmd == CtrlCmd.NewDataHandlerAndConnectEndPoint) {
+                    this.connectDataHandler(packet.sessionID, packet.openOpt!);
+                }
+                else if(packet.cmd == CtrlCmd.ConnectEndPoint) {
+                    // todo 엔드 포인트 연결.
+                } else if(packet.cmd == CtrlCmd.Data) {
+
+                } else if(packet.cmd == CtrlCmd.CloseSession) {
+
+                }
+            } else {
+                // todo 잘못된 패킷이 수신되었을 경우 처리해야함.
+            }
         }
     }
 
+
+
+
+
+    private connectDataHandler(sessionID: number, endPointConnectOpt: OpenOpt ) : void {
+        let dataHandler : DataHandler = SocketHandler.connect(this.makeConnectOpt(), (handler, state, data) => {
+            if(state == SocketState.Connected) {
+                dataHandler.dataState = DataState.Initializing;
+                this._onlineSessionDataHandlerMap.set(sessionID, dataHandler);
+                this._onEndPointOpenCallback?.(sessionID, endPointConnectOpt);
+            } else if(state == SocketState.Receive) {
+                this.onReceiveFromDataHandler(handler, data);
+            } else if(state == SocketState.Closed || state == SocketState.End) {
+                this.closeSessionByDataHandlerClosed(sessionID);
+            }
+        });
+        dataHandler.packetStreamer = new CtrlPacketStreamer();
+        dataHandler.sessionID = sessionID;
+        dataHandler.dataState = DataState.Initializing;
+    }
+
+
+    private closeSessionByDataHandlerClosed(sessionID: number) : void {
+        let dataHandler  = this._onlineSessionDataHandlerMap.get(sessionID);
+        this._onlineSessionDataHandlerMap.delete(sessionID);
+        if(!dataHandler) {
+            return;
+        }
+        dataHandler.dataState = DataState.Terminated;
+        this._onEndPointCloseCallback?.(sessionID);
+    }
+
+    private onReceiveFromDataHandler(handler: SocketHandler, data: Buffer) : void {
+
+    }
+
+
+
     private onConnectedCtrlHandler(handler: SocketHandler) {
         handler.setBundle(PACKET_READER_BUNDLE_KEY, new CtrlPacketStreamer());
-        handler.setBundle(HANDLER_STATUS_BUNDLE_KEY, SessionState.HalfOpened);
         handler.setBundle(HANDLER_TYPE_BUNDLE_KEY, HandlerType.Control);
         this.sendSyncAndSyncSyncCmd(handler);
     }
@@ -219,9 +296,9 @@ class TunnelClient {
                         session.state = SessionState.HalfOpened;
                         session.connectOpt = packet.openOpt!;
                         this._sessionMap.set(packet.id, session);
-                        this._onSessionOpenCallback?.(packet.id, packet.openOpt!);
+                        this._onEndPointOpenCallback?.(packet.id, packet.openOpt!);
                     } else if(this._state == CtrlState.Connected && packet.cmd == CtrlCmd.CloseSession) {
-                        this._onSessionCloseCallback?.(packet.id);
+                        this._onEndPointCloseCallback?.(packet.id);
                         this._sessionMap.delete(packet.id);
                     }
                 }
@@ -236,6 +313,7 @@ class TunnelClient {
             handler.destroy();
         }
     }
+
 
     private sendSyncAndSyncSyncCmd(handler: SocketHandler) : void {
         //console.log("[server]",'TunnelServer: makeCtrlHandler - change state => ' + SessionState[SessionState.HalfOpened]);
@@ -265,11 +343,16 @@ class TunnelClient {
     }
 
 
-
-    public closeSession(id: number) : boolean {
+    /**
+     * 외부(TTTClient)에서 세션을 종료한다.
+     * @param id
+     */
+    public closeSession(sessionID: number) : boolean {
         let session =  this._sessionMap.get(id);
         if(!session || !this._ctrlHandler) {
             return false;
+
+
         }
         session.state = SessionState.End;
         this._ctrlHandler.sendData(CtrlPacket.closeSession(id).toBuffer());
