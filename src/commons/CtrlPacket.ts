@@ -34,8 +34,13 @@ enum CtrlCmd {
     Data,
     CloseSession,
     NewDataHandlerAndConnectEndPoint,
+
     SuccessOfNewDataHandlerAndConnectEndPoint,
+    SuccessOfConnectEndPoint,
     FailOfNewDataHandlerAndConnectEndPoint,
+    FailOfConnectEndPoint,
+
+
     CreatedDataHandlerAndOpenFailed,
     NonExistent
 
@@ -93,12 +98,8 @@ class CtrlPacket {
     }
 
     public static closeSession(ctrlID: number, sessionID: number) : CtrlPacket {
-        let packet = new CtrlPacket();
-        packet._cmd = CtrlCmd.CloseSession;
-        packet._ctrlID = ctrlID;
-        packet._sessionID = sessionID;
-        packet._data = CtrlPacket.EMPTY_BUFFER;
-        return packet;
+        return CtrlPacket.createNoDataPacket(CtrlCmd.CloseSession, ctrlID, sessionID);
+
     }
 
 
@@ -129,10 +130,19 @@ class CtrlPacket {
      * 클라이언트에서 서버로 보내는 패킷이다.
      * @param clientID
      */
-    public static resultDataHandlerAndConnectEndPointPacket(clientID: number, sessionID: number, success: boolean) : CtrlPacket {
+    public static resultOfDataHandlerAndConnectEndPoint(ctrlID: number, sessionID: number, success: boolean) : CtrlPacket {
+        return CtrlPacket.createNoDataPacket(success ? CtrlCmd.SuccessOfNewDataHandlerAndConnectEndPoint : CtrlCmd.FailOfNewDataHandlerAndConnectEndPoint, ctrlID, sessionID);
+
+    }
+
+    public static resultOfConnectEndPoint(ctrlID: number, sessionID: number, success: boolean) : CtrlPacket {
+        return CtrlPacket.createNoDataPacket(success ? CtrlCmd.SuccessOfConnectEndPoint : CtrlCmd.FailOfConnectEndPoint, ctrlID, sessionID);
+    }
+
+    private static createNoDataPacket(cmd: CtrlCmd, ctrlID: number, sessionID: number) : CtrlPacket {
         let packet = new CtrlPacket();
-        packet._cmd = success ? CtrlCmd.SuccessOfNewDataHandlerAndConnectEndPoint : CtrlCmd.FailOfNewDataHandlerAndConnectEndPoint;
-        packet._ctrlID = clientID;
+        packet._cmd = cmd;
+        packet._ctrlID = ctrlID;
         packet._sessionID = sessionID;
         packet._data = CtrlPacket.EMPTY_BUFFER;
         return packet;

@@ -28,7 +28,7 @@ class TTTClient {
     public start() {
         this._tunnelClient = TunnelClient.create(this._clientOption);
         this._tunnelClient.onCtrlStateCallback = this.onCtrlStateCallback;
-        this._tunnelClient.onEndPointOpenCallback = this.onSessionOpenCallback;
+        this._tunnelClient.onConnectEndPointCallback = this.onSessionOpenCallback;
         this._tunnelClient.onReceiveDataCallback = this.onSessionSendCallback;
         this._tunnelClient.onEndPointCloseCallback = this.onSessionCloseCallback;
         this._endPointClientPool.onEndPointClientStateChangeCallback = this.onEndPointClientStateChangeCallback;
@@ -72,15 +72,15 @@ class TTTClient {
 
 
 
-    private onEndPointClientStateChangeCallback =  (id: number,state : SocketState,  data?: Buffer) : void => {
+    private onEndPointClientStateChangeCallback =  (sessionID: number,state : SocketState,  data?: Buffer) : void => {
         if(state == SocketState.Connected) {
             //console.log("[Client:EndPointClientPool]", `EndPointClientPool id: ${id} state: ${SocketState[state]}`);
-            this._tunnelClient.syncSession(id);
+            this._tunnelClient.syncEndpointSession(sessionID);
         } else if(state == SocketState.End || /*state == SocketState.Error ||*/ state == SocketState.Closed) {
             //console.log("[Client:EndPointClientPool]", `EndPointClientPool id: ${id} state: ${SocketState[state]}`);
-            this._tunnelClient.closeSession(id);
+            this._tunnelClient.closeEndPointSession(sessionID);
         } else if(state == SocketState.Receive && data) {
-            this._tunnelClient.send(id,data);
+            this._tunnelClient.sendData(sessionID,data);
         }
     }
 
