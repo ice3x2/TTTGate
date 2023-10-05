@@ -9,15 +9,16 @@ import ObjectUtil from "../util/ObjectUtil";
 
 
 interface NewSessionCallback {
-    (id:  number, opt: TunnelingOption) : void;
+    (sessionID:  number, opt: TunnelingOption) : void;
 }
 
 interface OnHandlerEventCallback {
-    (id:  number, state: SocketState, data? : Buffer) : void;
+    (sessionID:  number, state: SocketState, data? : Buffer) : void;
 }
 
 const OPTION_BUNDLE_KEY : string = "portTunnelOption";
 const PORT_BUNDLE_KEY : string = "portNumber";
+const SESSION_ID_BUNDLE_KEY : string = "ID";
 
 type ExternalPortServerStatus = {
     port: number,
@@ -31,6 +32,8 @@ type ExternalPortServerStatus = {
     tx: number,
 }
 
+
+
 class ExternalPortServerPool {
 
     private _portServerMap  = new Map<number, TCPServer>();
@@ -40,6 +43,8 @@ class ExternalPortServerPool {
     private _activeTimeoutMap  = new Map<number, any>();
     private _onNewSessionCallback : NewSessionCallback | null = null;
     private _onHandlerEventCallback : OnHandlerEventCallback | null = null;
+
+    private static LAST_SESSION_ID = 0;
 
 
 
@@ -168,27 +173,29 @@ class ExternalPortServerPool {
         if(handler) {
             handler.end();
         }
+        this._handlerMap.delete(id);
     }
 
 
 
 
     private onHandlerEvent = (handler: SocketHandler, state: SocketState, data?: any) : void => {
-        //console.log("[server:ExternalPort]",`onHandlerEvent: id: ${handler.id} state: ${SocketState[state]} , data : ${data ? data.length : 0}`);
+        //console.log("[server:ExternalPort]",`onHandlerEvent: id: ${sessionID} state: ${SocketState[state]} , data : ${data ? data.length : 0}`);
+        let sessionID = handler.getBundle(SESSION_ID_BUNDLE_KEY)!;
         if(SocketState.Receive == state) {
             let portNumber : number = handler.getBundle(PORT_BUNDLE_KEY);
             let status = this._statusMap.get(portNumber);
             if(status) {
                 status.rx += data.length;
             }
-
-
-            this._onHandlerEventCallback?.(handler.id, state, data);
-        } else if(this._handlerMap.has(handler.id) && handler.isEnd()) {
+            this._onHandlerEventCallback?.(sessionID, state, data);
+        } else if(this._handlerMap.has(sessionID) && (state == SocketState.End || state == SocketState.Closed)) {
             this.updateCount(handler.getBundle(OPTION_BUNDLE_KEY).forwardPort, false);
-            this._handlerMap.delete(handler.id);
-            this._onHandlerEventCallback?.(handler.id, state, data);
-            logger.info(`ExternalPortServer::End - id: ${handler.id}, port: ${handler.getBundle(OPTION_BUNDLE_KEY).forwardPort}`);
+            this._handlerMap.delete(sessionID);
+            this._onHandlerEventCallback?.(sessionID, state, data);
+            logger.info(`ExternalPortServer::End - id: ${sessionID}, port: ${handler.getBundle(OPTION_BUNDLE_KEY).forwardPort}`);
+        } else if(SocketState.Closed == state) {
+
         }
     }
 
@@ -206,6 +213,8 @@ class ExternalPortServerPool {
             this._portServerMap.delete(destPort);
         } else if(state == SocketState.Bound) {
             let handler = handlerOpt!;
+            let sessionID = ExternalPortServerPool.LAST_SESSION_ID++;
+            handler.setBundle(SESSION_ID_BUNDLE_KEY, sessionID);
             let option = server.getBundle(OPTION_BUNDLE_KEY);
             if(!option) {
                 logger.error(`ExternalPortServer::Error - port: ${server.port}, Option is undefined`);
@@ -227,16 +236,16 @@ class ExternalPortServerPool {
             handler.setBundle(PORT_BUNDLE_KEY, server.port);
 
             if(option.protocol == "http" || option.protocol == "https") {
-                logger.info(`ExternalPortServer::Bound HttpHandler - id:${handler.id}, port:${server.port}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
+                logger.info(`ExternalPortServer::Bound HttpHandler - id:${sessionID}, port:${server.port}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
                 let httpHandler = HttpHandler.create(handler, option);
                 httpHandler.onSocketEvent = this.onHandlerEvent;
-                this._handlerMap.set(httpHandler.id, httpHandler);
+                this._handlerMap.set(sessionID, httpHandler);
             } else {
-                logger.info(`ExternalPortServer::Bound SocketHandler - id:${handler.id}, port: ${server.port}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
-                this._handlerMap.set(handler.id, handler);
+                logger.info(`ExternalPortServer::Bound SocketHandler - id:${sessionID}, port: ${server.port}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
+                this._handlerMap.set(sessionID, handler);
             }
             this.updateCount(server.port, true);
-            this._onNewSessionCallback?.(handler.id, option);
+            this._onNewSessionCallback?.(sessionID, option);
         }
     }
 
@@ -285,9 +294,10 @@ class ExternalPortServerPool {
     }
 
     private async removeHandlerByForwardPort(port: number) : Promise<void> {
+
         let ids = Array.from(this._handlerMap.values())
             .filter((handler: SocketHandler | HttpHandler)=> handler.getBundle(OPTION_BUNDLE_KEY)?.forwardPort == port )
-            .map((handler: SocketHandler | HttpHandler) => { return handler.id; });
+            .map((handler: SocketHandler | HttpHandler) => { return handler.getBundle(SESSION_ID_BUNDLE_KEY)!; });
         await this.closeHandlers(ids);
     }
 

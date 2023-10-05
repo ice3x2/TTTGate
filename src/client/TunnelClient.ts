@@ -85,7 +85,7 @@ class TunnelClient {
     private _ctrlHandler: SocketHandler | undefined = undefined;
     private _waitDataHandlerList : Array<DataHandler> = [];
     private _waitDataHandlerMap : Map<number, SocketHandler> = new Map<number, SocketHandler>();
-    private _onlineSessionDataHandlerMap : Map<number, DataHandler> = new Map<number, SocketHandler>();
+    private _activatedSessionDataHandlerMap : Map<number, DataHandler> = new Map<number, SocketHandler>();
 
     private _ctrlPacketStreamer : CtrlPacketStreamer = new CtrlPacketStreamer();
 
@@ -159,19 +159,21 @@ class TunnelClient {
             console.error(`TunnelClient: syncSession: invalid state: ${this._state}`);
             return false;
         }
-        let dataHandler = this._onlineSessionDataHandlerMap.get(sessionID);
+        let dataHandler = this._activatedSessionDataHandlerMap.get(sessionID);
         if(!dataHandler) {
             return false;
         }
         let packet : CtrlPacket | undefined = undefined;
         if(dataHandler.dataHandlerState == DataHandlerState.Initializing) {
+            console.log("엔드포인트 생성 및 연결 성공 전송. 세션ID:" + sessionID);
             packet = CtrlPacket.resultOfDataHandlerAndConnectEndPoint(this._id, sessionID, true);
         } else {
+            console.log("엔드포인트 연결 성공 전송. 세션ID:" + sessionID);
             packet = CtrlPacket.resultOfConnectEndPoint(this._id, sessionID, true);
         }
         dataHandler.sendData(packet.toBuffer(), (handler, success, err) => {
             if(!success) {
-                this._onlineSessionDataHandlerMap.delete(sessionID);
+                this.deleteActivatedSessionDataHandler(sessionID);
                 dataHandler!.destroy();
             } else {
                 dataHandler!.dataHandlerState = DataHandlerState.OnlineSession;
@@ -218,13 +220,12 @@ class TunnelClient {
 
     private connectEndPoint(handler: DataHandler,packet: CtrlPacket) : void {
         let dataHandler = this.obtainWaitDataHandler(handler.id);
-        if(dataHandler) {
-            this._waitDataHandlerMap.set(packet.sessionID, dataHandler);
-        } else {
+        if(!dataHandler) {
             dataHandler = handler;
-            this._waitDataHandlerMap.set(packet.sessionID, handler);
         }
+        this._activatedSessionDataHandlerMap.set(packet.sessionID, dataHandler);
         dataHandler!.dataHandlerState = DataHandlerState.ConnectingEndPoint;
+        console.log('[client]',`TunnelClient: connectEndPoint: sessionID:${packet.sessionID}, remote:(${dataHandler!.socket.remoteAddress})${dataHandler!.socket.remotePort}`)
         this._onConnectEndPointCallback?.(packet.sessionID, packet.openOpt!);
     }
 
@@ -235,7 +236,8 @@ class TunnelClient {
             if(state == SocketState.Connected) {
                 dataHandler.dataHandlerState = DataHandlerState.Initializing;
                 dataHandler.sessionID = sessionID;
-                this._onlineSessionDataHandlerMap.set(sessionID, dataHandler);
+                this._activatedSessionDataHandlerMap.set(sessionID, dataHandler);
+                logger.info(`TunnelClient::connectDataHandler()\t Connected session data handler. sessionID:${sessionID}, remote:(${dataHandler.socket.remoteAddress})${dataHandler.socket.remotePort}, left activatedSessionDataHandlerMap:${this._activatedSessionDataHandlerMap.size}`)
                 this._onConnectEndPointCallback?.(sessionID, endPointConnectOpt);
             } else if(state == SocketState.Receive) {
                 this.onReceiveFromDataHandler(handler, data);
@@ -250,8 +252,7 @@ class TunnelClient {
 
 
     private closeSessionByDataHandlerClosed(sessionID: number) : void {
-        let dataHandler  = this._onlineSessionDataHandlerMap.get(sessionID);
-        this._onlineSessionDataHandlerMap.delete(sessionID);
+        let dataHandler  = this.deleteActivatedSessionDataHandler(sessionID);
         if(!dataHandler) {
             return;
         }
@@ -327,17 +328,39 @@ class TunnelClient {
         if(!dataHandler) {
             return false;
         }
-        this.closeEndPointSessionByUnknownHandler(dataHandler!, sessionID);
+        if(dataHandler.dataHandlerState == DataHandlerState.Initializing) {
+            console.log("엔드포인트 생성 및 연결 !실패! 전송. 세션ID:" + sessionID);
+            let packet = CtrlPacket.resultOfDataHandlerAndConnectEndPoint(this._id, sessionID, false);
+            dataHandler.sendData(packet.toBuffer(), (handler, success, err) => {
+                if(!success) {
+                    dataHandler!.dataHandlerState = DataHandlerState.Terminated
+                    dataHandler!.destroy();
+                    return;
+                }
+                this._waitDataHandlerList.push(dataHandler!);
+            });
+        }
+        else this.closeEndPointSessionByUnknownHandler(dataHandler!, sessionID);
         return true;
     }
 
     private changeCloseSessionState(sessionID: number) : DataHandler | undefined {
-        let dataHandler = this._onlineSessionDataHandlerMap.get(sessionID);
+        let dataHandler = this._activatedSessionDataHandlerMap.get(sessionID);
         if(!dataHandler || dataHandler.dataHandlerState == DataHandlerState.Terminated) {
             return undefined;
         }
-        this._onlineSessionDataHandlerMap.delete(sessionID);
+        this.deleteActivatedSessionDataHandler(sessionID);
         dataHandler!.dataHandlerState = DataHandlerState.Wait;
+    }
+
+    private deleteActivatedSessionDataHandler(sessionID: number) : DataHandler | undefined {
+        let dataHandler = this._activatedSessionDataHandlerMap.get(sessionID);
+        if(!dataHandler) {
+            return undefined;
+        }
+        this._activatedSessionDataHandlerMap.delete(sessionID);
+        logger.info(`TunnelClient::deleteActivatedSessionDataHandler - sessionID:${sessionID}, remote:(${dataHandler.socket.remoteAddress})${dataHandler.socket.remotePort}, left activatedSessionDataHandlerMap:${this._activatedSessionDataHandlerMap.size}`)
+        return dataHandler;
     }
 
 
@@ -358,7 +381,7 @@ class TunnelClient {
 
 
     public sendData(sessionID: number, data: Buffer) : boolean {
-        let dataHandler = this._onlineSessionDataHandlerMap.get(sessionID);
+        let dataHandler = this._activatedSessionDataHandlerMap.get(sessionID);
         if (!dataHandler) {
             return false;
         }

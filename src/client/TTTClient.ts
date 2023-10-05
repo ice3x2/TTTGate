@@ -65,7 +65,6 @@ class TTTClient {
 
     private onSessionSendCallback = (id: number, data: Buffer) : void => {
         this._endPointClientPool.send(id, data);
-
     }
 
 
@@ -74,10 +73,8 @@ class TTTClient {
 
     private onEndPointClientStateChangeCallback =  (sessionID: number,state : SocketState,  data?: Buffer) : void => {
         if(state == SocketState.Connected) {
-            //console.log("[Client:EndPointClientPool]", `EndPointClientPool id: ${id} state: ${SocketState[state]}`);
             this._tunnelClient.syncEndpointSession(sessionID);
         } else if(state == SocketState.End || /*state == SocketState.Error ||*/ state == SocketState.Closed) {
-            //console.log("[Client:EndPointClientPool]", `EndPointClientPool id: ${id} state: ${SocketState[state]}`);
             this._tunnelClient.closeEndPointSession(sessionID);
         } else if(state == SocketState.Receive && data) {
             this._tunnelClient.sendData(sessionID,data);

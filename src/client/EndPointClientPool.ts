@@ -27,20 +27,22 @@ class EndPointClientPool {
     }
 
 
-    public open(id: number, connectOpt: OpenOpt) {
+    public open(sessionID: number, connectOpt: OpenOpt) {
 
-        this._connectOptMap.set(id, connectOpt);
+        this._connectOptMap.set(sessionID, connectOpt);
+        console.log("엔드포인트 연결 시도: sessionID:" + sessionID + "    " + connectOpt.host + ":" + connectOpt.port);
         let endPointClient = SocketHandler.connect(connectOpt,( client: SocketHandler, state: SocketState, data?: any) => {
             client.setBufferSizeLimit(connectOpt.bufferLimit);
-            this.onEndPointClientStateChange(id, client, state, data);
+            this.onEndPointClientStateChange(sessionID, client, state, data);
         });
-        this._endPointClientMap.set(id, endPointClient);
+        this._endPointClientMap.set(sessionID, endPointClient);
 
     }
 
     public close(id: number) : boolean {
         let endPointClient = this._endPointClientMap.get(id);
         if(endPointClient) {
+            endPointClient.onSocketEvent = function (){};
             endPointClient.end();
             return this._endPointClientMap.delete(id);
         }
@@ -60,19 +62,25 @@ class EndPointClientPool {
     }
 
 
-    private onEndPointClientStateChange = (id: number, client: SocketHandler, state: SocketState, data? :any) : void => {
+    private onEndPointClientStateChange = (sessionID: number, client: SocketHandler, state: SocketState, data? :any) : void => {
         if(!client.hasBundle(ID_BUNDLE_KEY)) {
-            client.setBundle(ID_BUNDLE_KEY, id);
+            client.setBundle(ID_BUNDLE_KEY, sessionID);
         }
-        if(this._connectOptMap.has(id)) {
-            this._onEndPointClientStateChangeCallback?.(id,state,data);
-            if(!this._endPointClientMap.has(id)) {
-                this._endPointClientMap.set(id, client);
+        if(this._connectOptMap.has(sessionID)) {
+            // 임시 조건문
+            if(state == SocketState.Connected) {
+                console.log("엔드포인트 연결 성공!: sessionID:" + sessionID + "    ");
             }
+            this._onEndPointClientStateChangeCallback?.(sessionID,state,data);
+            if(!this._endPointClientMap.has(sessionID)) {
+                this._endPointClientMap.set(sessionID, client);
+            }
+        } else {
+            client.end();
         }
         if(SocketState.End == state || SocketState.Closed == state /*|| SocketState.Error == state*/) {
-            this._endPointClientMap.delete(id);
-            this._connectOptMap.delete(id);
+            this._endPointClientMap.delete(sessionID);
+            this._connectOptMap.delete(sessionID);
         }
     }
 

@@ -7,7 +7,7 @@ import {Buffer} from "buffer";
 import ClientSession from "../commons/ClientSession";
 import {logger} from "../commons/Logger";
 import {CertInfo} from "./CertificationStore";
-import {ClientHandlerPool} from "../commons/ClientHandlerPool";
+import {ClientHandlerPool} from "./ClientHandlerPool";
 import {clearInterval} from "timers";
 
 
@@ -195,6 +195,7 @@ class TunnelServer {
         if(handlerPool == null) {
             return false;
         }
+        this._sessionIDAndCtrlIDMap.set(sessionID, handlerPool.id);
         handlerPool.sendConnectEndPoint(sessionID, opt);
         return true;
 
@@ -309,7 +310,6 @@ class TunnelServer {
             return false;
         }
         return clientHandlerPool.isSessionOpened(sessionID);
-
     }
 
     private onReceiveData(handler: SocketHandler, data: Buffer) : void {
@@ -335,7 +335,8 @@ class TunnelServer {
     }
 
 
-    private closeSession(sessionId: number) : void {
+
+    public closeSession(sessionId: number) : void {
         this.releaseSession(sessionId, false);
     }
 
@@ -371,7 +372,17 @@ class TunnelServer {
             if(!connected) {
                 this._onSessionCloseCallback?.(packet.sessionID);
             }
-        } else if(packet.cmd == CtrlCmd.Data) {
+        }
+        else if(packet.cmd == CtrlCmd.SuccessOfConnectEndPoint) {
+            let handlerPool = this._handlerPoolMap.get(packet.ctrlID);
+            if(!handlerPool) {
+                logger.error(`TunnelServer::onHandlerEvent - Not Found ClientHandlerPool. id: ${handler.id}`);
+                handler.destroy();
+                return;
+            }
+            this.setNewDataHandler(handler,packet,true);
+        }
+        else if(packet.cmd == CtrlCmd.Data) {
             if(!this.checkClientHandlerPool(handler, packet.ctrlID, packet.sessionID)) {
                 this._onSessionCloseCallback?.(packet.sessionID);
                 return;

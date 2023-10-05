@@ -13,7 +13,7 @@ interface OnSocketEvent {
 // noinspection JSUnusedGlobalSymbols
 class SocketHandler {
 
-    private static LAST_ID: number = 1;
+    private static LAST_ID: number = 0;
 
     private static MaxGlobalMemoryBufferSize: number = 1024 * 1024 * 512; // 512MB
     private static GlobalMemoryBufferSize: number = 0;
@@ -23,7 +23,7 @@ class SocketHandler {
     private readonly _addr: string;
     private readonly _tls : boolean;
 
-    private readonly _id: number = SocketHandler.LAST_ID++;
+    private readonly _id: number = ++SocketHandler.LAST_ID;
     private _socket: net.Socket
     private _state: SocketState = SocketState.None;
     private _bundle: Map<string, any> = new Map<string, any>();
@@ -83,7 +83,7 @@ class SocketHandler {
         }
 
         let socket : net.Socket;
-        if(options.tls == true) {
+        if(options.tls && options.tls === true) {
             let option = {port: options.port, host: options.host, allowHalfOpen: false , keepAlive: true,noDelay: true, rejectUnauthorized: false};
             socket = tls.connect(option, connected);
         } else {
@@ -191,6 +191,7 @@ class SocketHandler {
                 this._state = SocketState.End;
                 this._event(this, SocketState.End);
             }
+
         });
     }
 
@@ -199,17 +200,17 @@ class SocketHandler {
             logger.error(`SocketHandler:: procError() - ${error.message}`);
             logger.error(error.stack);
         }
-        if(!this.isEnd()) {
+        //if(!this.isEnd()) {
             this._event(this, SocketState.Closed, error);
-        }
+        //}
         this._state = SocketState.Closed;
         this.release();
     }
 
     private release() : void {
         this._socket.removeAllListeners();
-        this._socket.destroy();
         this._state = SocketState.Closed;
+        this._socket.destroy();
         this._event = ()=>{};
         this._bundle.clear();
         this.resetBufferSize();
@@ -303,25 +304,30 @@ class SocketHandler {
             this.appendUsageMemoryBufferSize(length);
         }
 
+            try {
+                this._socket.write(buffer, (error) => {
+                    if (this._bufferSizeLimit > 0) {
+                        this.appendUsageMemoryBufferSize(-length);
+                    }
 
-        this._socket.write(buffer, (error) => {
-            if(this._bufferSizeLimit > 0) {
-                this.appendUsageMemoryBufferSize(-length);
+                    if (error) {
+                        if (this.isEnd()) {
+                            onWriteComplete?.(this, false);
+                            return;
+                        }
+                        logger.warn(`SocketHandler:: writeBuffer() - socket.write() error(${error.message})`);
+                        logger.warn(error.stack);
+                        this.procError(error, false);
+                        onWriteComplete?.(this, false, error);
+                        return;
+                    }
+                    onWriteComplete?.(this, true);
+                });
+            } catch(e) {
+                logger.warn(`SocketHandler:: writeBuffer() - socket.write() error(${e})`);
+                onWriteComplete?.(this, false);
             }
 
-            if(error) {
-                if(this.isEnd()) {
-                    onWriteComplete?.(this, false);
-                    return;
-                }
-                logger.warn(`SocketHandler:: writeBuffer() - socket.write() error(${error.message})`);
-                logger.warn(error.stack);
-                this.procError(error, false);
-                onWriteComplete?.(this, false, error);
-                return;
-            }
-            onWriteComplete?.(this, true);
-        });
 
     }
 

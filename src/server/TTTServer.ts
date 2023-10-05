@@ -43,12 +43,9 @@ class TTTServer {
                 this._allowClientNamesMap.set(option.forwardPort, option.allowedClientNames!);
             }
         });
-
-
     }
 
     private onNewSession = (id: number, opt: TunnelingOption) : void => {
-
         let bufferLimitOnClient = opt.bufferLimitOnClient == undefined || opt.bufferLimitOnClient < 1 ? -1 : opt.bufferLimitOnClient! * 1024 * 1024;
         this._sessions.add(id);
         let allowClientNames = this._allowClientNamesMap.get(opt.forwardPort);
@@ -68,7 +65,6 @@ class TTTServer {
                 this._externalPortServerPool.closeSession(id);
             }
         }
-
     }
 
     private onSessionClosed = (id: number) : void => {

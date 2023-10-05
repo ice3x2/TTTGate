@@ -62,8 +62,8 @@ class CtrlPacket {
 
     private _cmd: CtrlCmd;
     private _data: Buffer = Buffer.alloc(0);
-    private _ctrlID: number = -1;
-    private _sessionID: number = -1;
+    private _ctrlID: number = 0;
+    private _sessionID: number = 0;
     private _ackCtrlOpt: {name: string, key: string} | undefined = undefined;
 
     private _openOpt : OpenOpt | undefined = undefined;
@@ -229,7 +229,7 @@ class CtrlPacket {
         if(result._cmd == CtrlCmd.AckCtrl) {
             result._ackCtrlOpt = CtrlPacket.parseAckCtrlData(result._data);
 
-        } else if(result._cmd == CtrlCmd.ConnectEndPoint) {
+        } else if(result._cmd == CtrlCmd.ConnectEndPoint || result._cmd == CtrlCmd.NewDataHandlerAndConnectEndPoint) {
             result._openOpt = CtrlPacket.parseOpenData(result._data);
         }
         return {packet: result, remain: reader.readBufferToEnd(), state: ParsedState.Complete,  error: null};
