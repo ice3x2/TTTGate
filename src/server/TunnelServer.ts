@@ -4,7 +4,6 @@ import {ServerOption, TCPServer} from "../util/TCPServer";
 import SocketState from "../util/SocketState";
 import {CtrlCmd, CtrlPacket, CtrlPacketStreamer, OpenOpt} from "../commons/CtrlPacket";
 import {Buffer} from "buffer";
-import ClientSession from "../commons/ClientSession";
 import {logger} from "../commons/Logger";
 import {CertInfo} from "./CertificationStore";
 import {ClientHandlerPool} from "./ClientHandlerPool";

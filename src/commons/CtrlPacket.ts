@@ -36,12 +36,10 @@ enum CtrlCmd {
     NewDataHandlerAndConnectEndPoint,
 
     SuccessOfNewDataHandlerAndConnectEndPoint,
-    SuccessOfConnectEndPoint,
     FailOfNewDataHandlerAndConnectEndPoint,
-    FailOfConnectEndPoint,
+    SuccessOfConnectEndPoint,
 
 
-    CreatedDataHandlerAndOpenFailed,
     NonExistent
 
 }
@@ -135,8 +133,8 @@ class CtrlPacket {
 
     }
 
-    public static resultOfConnectEndPoint(ctrlID: number, sessionID: number, success: boolean) : CtrlPacket {
-        return CtrlPacket.createNoDataPacket(success ? CtrlCmd.SuccessOfConnectEndPoint : CtrlCmd.FailOfConnectEndPoint, ctrlID, sessionID);
+    public static resultOfConnectEndPoint(ctrlID: number, sessionID: number) : CtrlPacket {
+        return CtrlPacket.createNoDataPacket(CtrlCmd.SuccessOfConnectEndPoint, ctrlID, sessionID);
     }
 
     private static createNoDataPacket(cmd: CtrlCmd, ctrlID: number, sessionID: number) : CtrlPacket {

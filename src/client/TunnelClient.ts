@@ -169,7 +169,7 @@ class TunnelClient {
             packet = CtrlPacket.resultOfDataHandlerAndConnectEndPoint(this._id, sessionID, true);
         } else {
             console.log("엔드포인트 연결 성공 전송. 세션ID:" + sessionID);
-            packet = CtrlPacket.resultOfConnectEndPoint(this._id, sessionID, true);
+            packet = CtrlPacket.resultOfConnectEndPoint(this._id, sessionID);
         }
         dataHandler.sendData(packet.toBuffer(), (handler, success, err) => {
             if(!success) {
