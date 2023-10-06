@@ -266,7 +266,9 @@ class TunnelServer {
                 handler.destroy();
                 return;
             }
-            this._unknownClients[index].lastUpdated = Date.now();
+            if(index > -1 && this._unknownClients[index]) {
+                this._unknownClients[index].lastUpdated = Date.now();
+            }
             logger.info(`TunnelServer::sendSyncAndSyncSyncCmd Success - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`)
             handler.setBundle(HANDLER_STATUS_BUNDLE_KEY, SessionState.Handshaking);
         });
@@ -289,6 +291,10 @@ class TunnelServer {
     }
 
     private setNewDataHandler(handler: SocketHandler, packet: CtrlPacket, connected: boolean) : void {
+        let unknownClientIndex = this._unknownClients.findIndex((item) => item.handler.id == handler.id);
+        if(unknownClientIndex > -1) {
+            this._unknownClients.splice(unknownClientIndex, 1);
+        }
         let ctrlID = packet.ctrlID;
         let sessionID = packet.sessionID;
         let clientHandlerPool = this._handlerPoolMap.get(ctrlID);

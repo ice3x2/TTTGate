@@ -43,9 +43,28 @@ class FileCache {
         return new FileCache(filePath);
     }
 
+    private static convertDateToString(date: Date) : string {
+        let year = FileCache.tenDigitNumber(date.getFullYear() % 100);
+        let month = FileCache.tenDigitNumber(date.getMonth() + 1);
+        let day = FileCache.tenDigitNumber(date.getDate());
+        let hour = FileCache.tenDigitNumber(date.getHours());
+        let minute = FileCache.tenDigitNumber(date.getMinutes());
+        let second = FileCache.tenDigitNumber(date.getSeconds());
+
+
+        return `${year}${month}${day}${hour}${minute}${second}`;
+    }
+
+    private static tenDigitNumber(number: number) : string {
+        if(number < 10) {
+            return "0" + number;
+        }
+        return number.toString();
+    }
+
 
     private constructor(directoryPath: string) {
-        this._filePath = Path.join(directoryPath,Date.now() + "." + Math.floor(((Math.random() * 10000000) + 100000000)) + ".cache");
+        this._filePath = Path.join(directoryPath,process.pid + "." +  FileCache.convertDateToString(new Date()) + "." + Math.floor(((Math.random() * 10000000) + 100000000)) + ".cache");
     }
 
     private reset() : void {
@@ -149,9 +168,6 @@ class FileCache {
         this._cacheMap = new Map<number, CacheRecord>();
         this._emptyBlocks = [];
         this._cacheSize = 0;
-
-
-
         fs.close(this._fileDescriptor, () => {
             this._fileDescriptor = -1;
             fs.unlink(this._filePath, () => {});

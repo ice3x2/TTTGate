@@ -3,11 +3,23 @@ import SocketState from "./SocketState";
 import ConnectOpt from "./ConnectOpt";
 import * as tls from "tls";
 import {logger} from "../commons/Logger";
+import Path from "path";
+import {CacheRecord, FileCache} from "./FileCache";
+import Dequeue from "./Dequeue";
 
 
 
 interface OnSocketEvent {
     (handler: SocketHandler, state: SocketState, data?: any) : void;
+}
+
+type FileCacheRecordID = number;
+const EMPTY_BUFFER = Buffer.alloc(0);
+
+type WaitItem = {
+    buffer: Buffer;
+    cacheID : FileCacheRecordID;
+    onWriteComplete : OnWriteComplete | undefined;
 }
 
 // noinspection JSUnusedGlobalSymbols
@@ -17,6 +29,8 @@ class SocketHandler {
 
     private static MaxGlobalMemoryBufferSize: number = 1024 * 1024 * 512; // 512MB
     private static GlobalMemoryBufferSize: number = 0;
+
+    private _fileCacheDirPath : string = Path.join(process.cwd(),"cache");
 
 
     private readonly _port: number;
@@ -28,7 +42,8 @@ class SocketHandler {
     private _state: SocketState = SocketState.None;
     private _bundle: Map<string, any> = new Map<string, any>();
     private _isServer : boolean = false;
-
+    private _fileCache : FileCache | null = null;
+    private _waitQueue: Dequeue<WaitItem> = new Dequeue<WaitItem>();
 
     private _event: OnSocketEvent;
 
@@ -208,11 +223,14 @@ class SocketHandler {
     }
 
     private release() : void {
+        this.clearWaitQueue();
         this._socket.removeAllListeners();
         this._state = SocketState.Closed;
         this._socket.destroy();
         this._event = ()=>{};
         this._bundle.clear();
+        this._waitQueue.clear();
+        this._fileCache?.delete();
         this.resetBufferSize();
     }
 
@@ -268,27 +286,87 @@ class SocketHandler {
 
 
     public sendData(data: Buffer,onWriteComplete? : OnWriteComplete ) : void {
-        if(this._bufferSizeLimit > 0) {
+        if(this._bufferSizeLimit < 0) {
+            this.writeBuffer(data, (client, success, err) => {
+                onWriteComplete?.(client, success, err);
+            });
+            return;
+        }
+
             if(this.isOverMemoryBufferSize(data.length)) {
-                this.procError(new Error(`SocketHandler:: sendData() - over memory buffer size(${this._memoryBufferSize + data.length}/${this._bufferSizeLimit})`));
+                /*this.procError(new Error(`SocketHandler:: sendData() - over memory buffer size(${this._memoryBufferSize + data.length}/${this._bufferSizeLimit})`));
                 onWriteComplete?.(this, false);
-                return;
+                return;*/
             } else if(SocketHandler.isOverGlobalMemoryBufferSize(data.length)) {
-                this.procError(new Error(`SocketHandler:: sendData() - over global memory buffer size(${SocketHandler.GlobalMemoryBufferSize + data.length}/${SocketHandler.MaxGlobalMemoryBufferSize})`));
+                /*this.procError(new Error(`SocketHandler:: sendData() - over global memory buffer size(${SocketHandler.GlobalMemoryBufferSize + data.length}/${SocketHandler.MaxGlobalMemoryBufferSize})`));
                 onWriteComplete?.(this, false);
+                return;*/
+            }
+
+            let isEmptyBuffer = this._waitQueue.isEmpty();
+            if(this.isOverMemoryBufferSize(data.length) || SocketHandler.isOverGlobalMemoryBufferSize(data.length)) {
+                if(!this._fileCache) {
+                    this._fileCache = FileCache.create(this._fileCacheDirPath);
+                }
+                let record = this._fileCache.writeSync(data);
+                // todo : 파일 캐시 실패시 처리
+                /**if(record.id == -1) {
+                    return false;
+                }*/
+                this._waitQueue.pushBack({buffer: EMPTY_BUFFER, cacheID: record.id, onWriteComplete: onWriteComplete});
+            } else  {
+                this.appendUsageMemoryBufferSize(data.length);
+                this._waitQueue.pushBack({buffer: data, cacheID: -1, onWriteComplete: onWriteComplete});
+            }
+
+            if(this._waitQueue.size() == 1) {
+                process.nextTick(()=> {
+                    this.sendPopDataRecursive();
+                });
+            }
+
+
+    }
+
+    private sendPopDataRecursive() : void {
+        if(this._waitQueue.isEmpty() || this.isEnd()) {
+            return;
+        }
+        let waitItem = this.popBufferSync();
+        if(!waitItem) {
+            return;
+        }
+        let length = waitItem.buffer.length;
+        if(length == 0) {
+            this.procError(new Error("SocketHandler:: sendPopDataRecursive() - buffer length is zero."));
+            return;
+        }
+        this.writeBuffer(waitItem.buffer, (client, success, err) => {
+            waitItem!.onWriteComplete?.(client, success, err);
+            if(!success) {
                 return;
             }
-        }
-        process.nextTick(()=> {
-            this.writeBuffer(data, onWriteComplete);
+            this.appendUsageMemoryBufferSize(-length);
+            process.nextTick(()=> {
+                this.sendPopDataRecursive();
+            });
         });
     }
 
 
+    private clearWaitQueue() : void {
+        let waitItem = this._waitQueue.popFront()
+        while(waitItem) {
+            waitItem.onWriteComplete?.(this, false);
+            waitItem = this._waitQueue.popFront();
+        }
+        this._waitQueue.clear();
+        this.appendUsageMemoryBufferSize(-this._memoryBufferSize);
+    }
+
     public isConnected() : boolean {
         return this._state == SocketState.Connected;
     }
-
 
 
     private  writeBuffer(buffer: Buffer,onWriteComplete?: OnWriteComplete) : void {
@@ -299,17 +377,9 @@ class SocketHandler {
             return;
         }
 
-        let length = buffer.length;
-        if(this._bufferSizeLimit > 0) {
-            this.appendUsageMemoryBufferSize(length);
-        }
 
             try {
                 this._socket.write(buffer, (error) => {
-                    if (this._bufferSizeLimit > 0) {
-                        this.appendUsageMemoryBufferSize(-length);
-                    }
-
                     if (error) {
                         if (this.isEnd()) {
                             onWriteComplete?.(this, false);
@@ -348,6 +418,23 @@ class SocketHandler {
             SocketHandler.GlobalMemoryBufferSize = SocketHandler.MaxGlobalMemoryBufferSize;
         }
     }
+
+
+
+    private popBufferSync() : WaitItem | undefined {
+        let waitItem = this._waitQueue.popFront();
+        if(!waitItem) {
+            return undefined;
+        }
+        if(waitItem.cacheID != -1 && this._fileCache) {
+            let buffer = this._fileCache?.readSync(waitItem.cacheID);
+            this._fileCache?.remove(waitItem.cacheID);
+            waitItem.buffer = buffer ?? EMPTY_BUFFER;
+            return waitItem;
+        }
+        return waitItem;
+    }
+
 
 
 
