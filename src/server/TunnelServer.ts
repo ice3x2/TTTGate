@@ -238,7 +238,6 @@ class TunnelServer {
             //console.log("[server]",`TunnelServer: onServerEvent:  ${SocketState[state]}: ${this._port}`);
         } if(state == SocketState.Bound && handler) {
             logger.info(`TunnelServer::Bound - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
-            handler.socket.setKeepAlive(true, 15000);
             this.onClientHandlerBound(handler);
         }
     }

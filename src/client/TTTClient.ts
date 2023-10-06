@@ -39,7 +39,7 @@ class TTTClient {
 
     private onCtrlStateCallback = (client: TunnelClient, state: ConnectionState, error? : Error ) : void => {
         if(state == 'closed') {
-            logger.error(`TTTClient:: connection closed. \n${error ? error : ''}`);
+            logger.error(`TTTClient:: connection closed.`, error);
             this._endPointClientPool.closeAll();
             logger.info(`TTTClient:: try reconnect after ${RECONNECT_INTERVAL}ms`)
             setTimeout(() => {

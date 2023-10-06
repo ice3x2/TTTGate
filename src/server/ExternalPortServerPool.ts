@@ -94,7 +94,7 @@ class ExternalPortServerPool {
                 active: !option.inactiveOnStartup, activeTimeout: 0, activeStart: option.inactiveOnStartup? Date.now() : 0});
             portServer.start((err?: Error) => {
                 if(err) {
-                    logger.error(`ExternalPortServer::startServer - port: ${option.forwardPort}, error:  ${err}`);
+                    logger.error(`ExternalPortServer::startServer - port: ${option.forwardPort}`, err);
                     reject(err);
                     return;
                 }
@@ -208,7 +208,7 @@ class ExternalPortServerPool {
         if(server.isEnd()) {
             let error = server.getError();
             if(error) {
-                logger.error(`ExternalPortServer::Error - port: ${server.port}, error: ${error}`);
+                logger.error(`ExternalPortServer::Error - port: ${server.port}`,error);
             }
             else logger.info(`ExternalPortServer::End - port: ${server.port}`);
             let destPort = server.getBundle(OPTION_BUNDLE_KEY).destinationPort;

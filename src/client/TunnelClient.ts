@@ -284,7 +284,7 @@ class TunnelClient {
         let sendBuffer = CtrlPacket.createSyncCtrl().toBuffer();
         handler.sendData(sendBuffer, (handler, success, err) => {
             if(!success) {
-                logger.error(`TunnelClient::sendSyncAndSyncSyncCmd Fail - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}, ${err}`);
+                logger.error(`TunnelClient::sendSyncAndSyncSyncCmd Fail - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`, err);
                 this._ctrlHandler?.end();
                 return;
             }

@@ -6,6 +6,7 @@ import {logger} from "../commons/Logger";
 import Path from "path";
 import {CacheRecord, FileCache} from "./FileCache";
 import Dequeue from "./Dequeue";
+import Errors from "./Errors";
 
 
 
@@ -99,10 +100,10 @@ class SocketHandler {
 
         let socket : net.Socket;
         if(options.tls && options.tls === true) {
-            let option = {port: options.port, host: options.host, allowHalfOpen: false , keepAlive: true,noDelay: true, rejectUnauthorized: false};
+            let option = {port: options.port, host: options.host, allowHalfOpen: false , /*keepAlive: true,*/noDelay: true, rejectUnauthorized: false};
             socket = tls.connect(option, connected);
         } else {
-            let option = {port: options.port, host: options.host, allowHalfOpen: false , keepAlive: true,noDelay: true};
+            let option = {port: options.port, host: options.host, allowHalfOpen: false , /*keepAlive: true,*/noDelay: true};
             socket = net.connect(option, connected);
         }
 
@@ -112,7 +113,6 @@ class SocketHandler {
     }
 
     public static bound(options: {socket: net.Socket, port: number, addr: string, tls: boolean }, event: OnSocketEvent) : SocketHandler {
-        options.socket.setKeepAlive(true, 4000);
         options.socket.setNoDelay(true);
         let handler = new SocketHandler(options.socket, options.port, options.addr, options.tls, event);
         handler._state = SocketState.Connected;
@@ -213,7 +213,8 @@ class SocketHandler {
     private procError(error: Error, logging? : boolean) : void {
         if(logging !== false) {
             logger.error(`SocketHandler:: procError() - ${error.message}`);
-            logger.error(error.stack);
+            logger.error(Errors.toString(error));
+
         }
         //if(!this.isEnd()) {
             this._event(this, SocketState.Closed, error);

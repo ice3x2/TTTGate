@@ -11,6 +11,7 @@ import File from "../util/File";
 import Environment from "../Environment";
 import { SocketHandler } from  "../util/SocketHandler";
 import {Socket} from "net";
+import Errors from "../util/Errors";
 
 
 let adminServer : AdminServer;
@@ -30,7 +31,7 @@ let onServerOptionUpdate = async (newOption: ServerOption) => {
     } catch (err) {
         logger.error('serverApp::onServerOptionUpdate failed to start server. Reverting to old option');
         logger.error(err);
-        console.error(err);
+        console.error(Errors.toString(err));
         if(newOption != oldOption) {
             let serverOptionStore = ServerOptionStore.instance;
             serverOptionStore.onServerOptionUpdateCallback = undefined;

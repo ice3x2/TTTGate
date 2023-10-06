@@ -87,7 +87,7 @@ class HttpPipe {
 
     private _messageType : MessageType = MessageType.Request;
 
-    private _readTimeout : number = 15000;
+    private _readTimeout : number = 25000;
     private _lastRead : number = -1;
 
     private _chunkedSize : number = 0;
