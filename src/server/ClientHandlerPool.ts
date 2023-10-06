@@ -1,25 +1,19 @@
 import {SocketHandler} from "../util/SocketHandler";
 import {CtrlPacket, CtrlPacketStreamer, OpenOpt} from "../commons/CtrlPacket";;
-import SessionState from "../option/SessionState";
 import Dequeue from "../util/Dequeue";
-
-
-
-const SESSION_ID_BUNDLE_KEY = 'S';
-const WAIT_BUFFER_BUNDLE_KEY = 'W';
-const SESSION_STATE_BUNDLE_KEY = 'T';
+import {DataHandlerState, TunnelControlHandler, TunnelDataHandler} from "../types/TunnelHandler";
 
 
 
 class ClientHandlerPool {
 
     private readonly _id : number;
-    private readonly _controlHandler: SocketHandler;
+    private readonly _controlHandler: TunnelControlHandler;
     private _name : string = '';
     // 대기중인 핸들러 풀. 핸들러가 필요할때마다 여기서 꺼내서 사용한다.
-    private _waitDataHandlerPool: Array<SocketHandler> = new Array<SocketHandler>();
+    private _waitDataHandlerPool: Array<TunnelDataHandler> = new Array<TunnelDataHandler>();
     // 열린 핸들러 맵. 세션ID를 키로 사용한다.
-    private _activatedSessionHandlerMap : Map<number, SocketHandler> = new Map<number, SocketHandler>();
+    private _activatedSessionHandlerMap : Map<number, TunnelDataHandler> = new Map<number, TunnelDataHandler>();
 
     private _waitPacketQueueMap : Map<number, Dequeue<CtrlPacket>> = new Map<number, Dequeue<CtrlPacket>>();
 
@@ -44,19 +38,18 @@ class ClientHandlerPool {
         handler.end();
     }
 
-    public putNewDataHandler(sessionID: number,openSuccess: boolean, handler: SocketHandler) : void {
-        if(sessionID < 0) {
+    public putNewDataHandler(handler: TunnelDataHandler) : void {
+        if(handler.sessionID! < 0) {
             this.pushWaitDataHandler(handler);
             return;
         }
-        if(!openSuccess) {
-            this.closeSession(sessionID);
+        if(handler.dataHandlerState != DataHandlerState.OnlineSession) {
+            this.closeSession(handler.sessionID!);
             this.pushWaitDataHandler(handler);
             return;
         }
-        this._activatedSessionHandlerMap.set(sessionID, handler);
-        this.flushWaitBuffer(handler, sessionID);
-        handler.setBundle(SESSION_ID_BUNDLE_KEY, sessionID);
+        this._activatedSessionHandlerMap.set(handler.sessionID!, handler);
+        this.flushWaitBuffer(handler);
     }
 
     public isSessionOpened(sessionID: number) : boolean {
@@ -66,7 +59,8 @@ class ClientHandlerPool {
 
 
 
-    private flushWaitBuffer(handler: SocketHandler, sessionID : number) : void {
+    private flushWaitBuffer(handler: TunnelDataHandler) : void {
+        let sessionID = handler.sessionID!;
         let waitPacketQueue = this._waitPacketQueueMap.get(sessionID);
         if(waitPacketQueue == undefined) {
             return;
@@ -104,11 +98,11 @@ class ClientHandlerPool {
 
     public sendConnectEndPoint(sessionID: number, opt : OpenOpt) : void {
         this._waitPacketQueueMap.set(sessionID, new Dequeue<CtrlPacket>());
-        let socketHandler = this.obtainHandler();
-        if(socketHandler == undefined) {
+        let dataHandler = this.obtainHandler();
+        if(dataHandler == undefined) {
             this.sendNewDataHandlerAndConnectEndPoint(sessionID, opt);
         } else {
-            this.sendConnectEndPointPacket(socketHandler, sessionID, opt);
+            this.sendConnectEndPointPacket(dataHandler, sessionID, opt);
         }
     }
 
@@ -178,7 +172,7 @@ class ClientHandlerPool {
      * 핸들러풀에서 핸들러를 꺼내온다. 만약 핸들러풀에 핸들러가 없으면 undefined를 반환한다.
      * @private
      */
-    private obtainHandler() : SocketHandler | undefined {
+    private obtainHandler() : TunnelDataHandler | undefined {
         if(this._waitDataHandlerPool.length > 0) {
             return this._waitDataHandlerPool.shift();
         }
@@ -190,7 +184,8 @@ class ClientHandlerPool {
      * @param handler
      * @private
      */
-    private pushWaitDataHandler(handler: SocketHandler) : void {
+    private pushWaitDataHandler(handler: TunnelDataHandler) : void {
+        handler.dataHandlerState = DataHandlerState.Wait;
         this._waitDataHandlerPool.push(handler);
     }
 
@@ -202,32 +197,33 @@ class ClientHandlerPool {
                 console.log('[ClientHandlerPool]', `sendNewDataHandlerAndOpen: fail: ${err}`);
                 return;
             }
-            handler.setBundle(SESSION_STATE_BUNDLE_KEY, SessionState.HalfOpened);
+
+            //handler.setBundle(SESSION_STATE_BUNDLE_KEY, SessionState.HalfOpened);
 
         });
     }
 
-    private sendConnectEndPointPacket(handler: SocketHandler, sessionId: number, opt : OpenOpt) : void {
+    private sendConnectEndPointPacket(handler: TunnelDataHandler, sessionId: number, opt : OpenOpt) : void {
+        handler.dataHandlerState = DataHandlerState.ConnectingEndPoint;
         let packet = CtrlPacket.connectEndPoint(this._id, sessionId, opt).toBuffer();
         handler.sendData(packet, (socketHandler, success, err) => {
             if(!success) {
+                handler.dataHandlerState = DataHandlerState.Terminated;
                 this.closeSession(sessionId);
                 console.log('[ClientHandlerPool]', `sendOpen: fail: ${err}`);
                 return;
             }
-            handler.setBundle(SESSION_STATE_BUNDLE_KEY, SessionState.HalfOpened);
-
         });
     }
 
-    public destroy() : void {
+    public end() : void {
         for(let [key, value] of this._activatedSessionHandlerMap) {
-            value.sendData(CtrlPacket.closeSession(this._id, key).toBuffer(), () => {
-                value.end();
-            });
+            value.onSocketEvent = function () {};
+            value.end();
         }
         this._activatedSessionHandlerMap.clear();
-        this._controlHandler.destroy();
+        this._controlHandler.onSocketEvent = function () {};
+        this._controlHandler.end();
     }
 
 }

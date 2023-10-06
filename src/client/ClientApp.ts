@@ -1,4 +1,4 @@
-import {ClientOption, DEFAULT_KEY} from "../option/TunnelingOption";
+import {ClientOption, DEFAULT_KEY} from "../types/TunnelingOption";
 import TunnelNames from "./TunnelNames";
 import TTTClient from "./TTTClient";
 import {logger} from "../commons/Logger";

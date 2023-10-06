@@ -1,5 +1,5 @@
 import {ConnectionState, TunnelClient} from "./TunnelClient";
-import {ClientOption} from "../option/TunnelingOption";
+import {ClientOption} from "../types/TunnelingOption";
 import SocketState from "../util/SocketState";
 import {Buffer} from "buffer";
 import EndPointClientPool from "./EndPointClientPool";

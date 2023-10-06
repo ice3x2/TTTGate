@@ -1,6 +1,6 @@
 import {ExternalPortServerPool, ExternalPortServerStatus } from "./ExternalPortServerPool";
 import {TunnelServer, ClientStatus} from "./TunnelServer";
-import {ServerOption, TunnelingOption} from "../option/TunnelingOption";
+import {ServerOption, TunnelingOption} from "../types/TunnelingOption";
 import SocketState from "../util/SocketState";
 import {CertificationStore, CertInfo} from "./CertificationStore";
 import ServerOptionStore from "./ServerOptionStore";

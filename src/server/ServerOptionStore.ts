@@ -1,6 +1,6 @@
 import Environment from "../Environment";
 import File from "../util/File";
-import {ServerOption, TunnelingOption, HttpOption, CustomHeader, DEFAULT_KEY} from "../option/TunnelingOption";
+import {ServerOption, TunnelingOption, HttpOption, CustomHeader, DEFAULT_KEY} from "../types/TunnelingOption";
 import YAML from "yaml";
 import Files from "../util/Files";
 import ObjectUtil from "../util/ObjectUtil";

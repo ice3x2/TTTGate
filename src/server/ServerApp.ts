@@ -2,7 +2,7 @@ import TTTServer from "./TTTServer";
 import ServerOptionStore from "./ServerOptionStore";
 import AdminServer from "./admin/AdminServer";
 import {CertificationStore, CertInfo} from "./CertificationStore";
-import {ServerOption} from "../option/TunnelingOption";
+import {ServerOption} from "../types/TunnelingOption";
 import ObjectUtil from "../util/ObjectUtil";
 import {logger} from "../commons/Logger";
 import CLI from "../util/CLI";
