@@ -367,6 +367,7 @@ class TunnelServer {
             this.promoteToCtrlHandler(handler, packet.clientName!);
         }
         else if(packet.cmd == CtrlCmd.SuccessOfNewDataHandlerAndConnectEndPoint || packet.cmd == CtrlCmd.FailOfNewDataHandlerAndConnectEndPoint) {
+            console.log("[server]",`데이터 핸들러 연결 세션ID: ${packet.sessionID}  ${packet.cmd == CtrlCmd.SuccessOfNewDataHandlerAndConnectEndPoint ? '성공' : '실패'}`);
             let connected = packet.cmd == CtrlCmd.SuccessOfNewDataHandlerAndConnectEndPoint;
             this.setNewDataHandler(handler,packet,connected);
             if(!connected) {
@@ -374,6 +375,7 @@ class TunnelServer {
             }
         }
         else if(packet.cmd == CtrlCmd.SuccessOfConnectEndPoint) {
+            console.log("[server]",`데이터 핸들러 연결 성공 세션ID: ${packet.sessionID}`);
             let handlerPool = this._handlerPoolMap.get(packet.ctrlID);
             if(!handlerPool) {
                 logger.error(`TunnelServer::onHandlerEvent - Not Found ClientHandlerPool. id: ${handler.id}`);
@@ -389,6 +391,7 @@ class TunnelServer {
             }
             this._onReceiveDataCallback?.(packet.sessionID, packet.data);
         } else if(packet.cmd == CtrlCmd.CloseSession) {
+            console.log("[server]",`세션제거 요청 받음 id: ${packet.sessionID}`);
             this.releaseSession(packet.sessionID, true);
         }
     }

@@ -188,6 +188,10 @@ class TunnelClient {
         }
         else if(state == SocketState.Receive && handler == this._ctrlHandler) {
             this.onReceiveFromCtrlHandler(handler, data);
+        } else if(state == SocketState.Closed || state == SocketState.End) {
+            this._state = CtrlState.None;
+            this._ctrlHandler = undefined;
+            this._onCtrlStateCallback?.(this, 'closed');
         }
     }
 
@@ -223,6 +227,7 @@ class TunnelClient {
         if(!dataHandler) {
             dataHandler = handler;
         }
+        dataHandler.sessionID = packet.sessionID;
         this._activatedSessionDataHandlerMap.set(packet.sessionID, dataHandler);
         dataHandler!.dataHandlerState = DataHandlerState.ConnectingEndPoint;
         console.log('[client]',`TunnelClient: connectEndPoint: sessionID:${packet.sessionID}, remote:(${dataHandler!.socket.remoteAddress})${dataHandler!.socket.remotePort}`)
@@ -275,8 +280,17 @@ class TunnelClient {
                     handler.end();
                     return;
                 }
-            } else if(handler.dataHandlerState == DataHandlerState.Wait && packet.cmd == CtrlCmd.ConnectEndPoint) {
+            }
+            else if(handler.dataHandlerState == DataHandlerState.Wait && packet.cmd == CtrlCmd.ConnectEndPoint) {
                 this.connectEndPoint(handler, packet);
+            } else {
+                this.deleteActivatedSessionDataHandler(handler.sessionID!);
+                let idx = this._waitDataHandlerList.indexOf(handler);
+                if(idx > -1) {
+                    this._waitDataHandlerList.splice(idx, 1);
+                }
+                handler.end();
+                logger.error(`TunnelClient::onReceiveFromDataHandler - invalid state: ${handler.dataHandlerState}, sessionID:${handler.sessionID}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`)
             }
         }
     }

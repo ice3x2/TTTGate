@@ -58,6 +58,7 @@ class TTTClient {
     }
 
     private onSessionCloseCallback = (id: number) : void => {
+        console.log("[Client:TTTClient]", `세션제거 요청 받음 id: ${id}`)
         this._endPointClientPool.close(id);
         logger.info(`TTTClient:: TunnelClient closed, and close EndPointClientPool id: ${id}`);
         console.log("[Client:TTTClient]", `TunnelClient closed, and close EndPointClientPool id: ${id}`);

@@ -1,10 +1,10 @@
 import {TCPServer} from "../util/TCPServer";
 import SocketState from "../util/SocketState";
-import { SocketHandler } from  "../util/SocketHandler";
+import {SocketHandler} from "../util/SocketHandler";
 import {TunnelingOption} from "../option/TunnelingOption";
 import HttpHandler from "./http/HttpHandler";
 import {logger} from "../commons/Logger";
-import {CertificationStore, CertInfo} from "./CertificationStore";
+import {CertInfo} from "./CertificationStore";
 import ObjectUtil from "../util/ObjectUtil";
 
 
@@ -171,7 +171,8 @@ class ExternalPortServerPool {
     public closeSession(id: number) : void {
         let handler = this._handlerMap.get(id);
         if(handler) {
-            handler.end();
+            handler.onSocketEvent = function (){};
+            handler.destroy();
         }
         this._handlerMap.delete(id);
     }
@@ -192,8 +193,9 @@ class ExternalPortServerPool {
         } else if(this._handlerMap.has(sessionID) && (state == SocketState.End || state == SocketState.Closed)) {
             this.updateCount(handler.getBundle(OPTION_BUNDLE_KEY).forwardPort, false);
             this._handlerMap.delete(sessionID);
-            this._onHandlerEventCallback?.(sessionID, state, data);
+            this._onHandlerEventCallback?.(sessionID, SocketState.Closed, data);
             logger.info(`ExternalPortServer::End - id: ${sessionID}, port: ${handler.getBundle(OPTION_BUNDLE_KEY).forwardPort}`);
+            handler.destroy();
         } else if(SocketState.Closed == state) {
 
         }

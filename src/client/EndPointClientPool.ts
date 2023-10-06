@@ -41,10 +41,11 @@ class EndPointClientPool {
 
     public close(id: number) : boolean {
         let endPointClient = this._endPointClientMap.get(id);
+        this._endPointClientMap.delete(id);
         if(endPointClient) {
             endPointClient.onSocketEvent = function (){};
-            endPointClient.end();
-            return this._endPointClientMap.delete(id);
+            endPointClient.destroy();
+            return true;
         }
         return false;
     }

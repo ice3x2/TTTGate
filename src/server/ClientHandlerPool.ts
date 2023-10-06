@@ -144,11 +144,13 @@ class ClientHandlerPool {
             return;
         }
         this.deleteActivatedSessionHandler(sessionID);
+        console.log("[server]",`세션제거 요청을 클라이언트로 전송 id: ${sessionID}`);
         handler.sendData(CtrlPacket.closeSession(this._id, sessionID).toBuffer(), (handler, success, err) => {
             if(!success) {
                 console.log('[ClientHandlerPool]', `closeSession: fail: ${err}`);
                 return;
             }
+            console.log("[server]",`세션제거 요청 전송 완료 id: ${sessionID}`);
             this.pushWaitDataHandler(handler);
         });
     }
