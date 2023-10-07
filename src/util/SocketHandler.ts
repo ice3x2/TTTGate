@@ -46,12 +46,14 @@ class SocketHandler {
     private _fileCache : FileCache | null = null;
     private _waitQueue: Dequeue<WaitItem> = new Dequeue<WaitItem>();
 
+    private _endWaitingState = false;
+
     private _event: OnSocketEvent;
 
 
 
     private _memoryBufferSize: number = 0;
-    private _bufferSizeLimit: number = -1;
+    private _memBufferSizeLimit: number = -1;
 
 
 
@@ -83,7 +85,7 @@ class SocketHandler {
     }
 
     public setBufferSizeLimit(size: number) : void {
-        this._bufferSizeLimit = size;
+        this._memBufferSizeLimit = size;
 
     }
 
@@ -199,7 +201,9 @@ class SocketHandler {
             this.release();
         });
         socket.on('data',(data) => {
-            this._event(this, SocketState.Receive, data);
+            if(!this.isEnd()) {
+                this._event(this, SocketState.Receive, data);
+            }
         });
         socket.on('end', ()=> {
             if(!this.isEnd()) {
@@ -214,12 +218,13 @@ class SocketHandler {
         if(logging !== false) {
             logger.error(`SocketHandler:: procError() - ${error.message}`);
             logger.error(Errors.toString(error));
-
         }
-        //if(!this.isEnd()) {
+
+        if(this._state != SocketState.Closed) {
+            this._state = SocketState.Closed;
             this._event(this, SocketState.Closed, error);
-        //}
-        this._state = SocketState.Closed;
+        }
+
         this.release();
     }
 
@@ -257,11 +262,24 @@ class SocketHandler {
 
 
 
-    public end() : void {
-        setImmediate(()=> {
-            this._socket.end();
-        });
+    public end_() : void {
+        if(this._endWaitingState || !this._waitQueue.isEmpty()) {
+            this._endWaitingState = true;
+            return;
+        }
+        this._socket.end();
     }
+
+    public endImmediate() : void {
+        if(this.isEnd()) {
+            return;
+        }
+        this._socket.end();
+        this._state = SocketState.End;
+        this._event?.(this, SocketState.End);
+        this._waitQueue.clear();
+    }
+
 
     public destroy() : void {
         if(this._state == SocketState.Closed /*|| this._state == SocketState.Error*/) {
@@ -269,8 +287,10 @@ class SocketHandler {
         }
         this._socket.removeAllListeners();
         this._socket.destroy();
-        this._event(this, SocketState.Closed);
+
         this._state = SocketState.Closed;
+        this._event(this, SocketState.Closed);
+
         this._event = ()=>{};
         this._bundle.clear();
         this.resetBufferSize();
@@ -282,49 +302,54 @@ class SocketHandler {
     }
 
     private isOverMemoryBufferSize(size: number) : boolean {
-        return (this._memoryBufferSize + size > this._bufferSizeLimit);
+        return (this._memoryBufferSize + size > this._memBufferSizeLimit);
     }
 
 
     public sendData(data: Buffer,onWriteComplete? : OnWriteComplete ) : void {
-        if(this._bufferSizeLimit < 0) {
+        /*if(this._bufferSizeLimit < 0) {
             this.writeBuffer(data, (client, success, err) => {
                 onWriteComplete?.(client, success, err);
             });
             return;
+        }*/
+
+        if(this.isOverMemoryBufferSize(data.length)) {
+            /*this.procError(new Error(`SocketHandler:: sendData() - over memory buffer size(${this._memoryBufferSize + data.length}/${this._bufferSizeLimit})`));
+            onWriteComplete?.(this, false);
+            return;*/
+        } else if(SocketHandler.isOverGlobalMemoryBufferSize(data.length)) {
+            /*this.procError(new Error(`SocketHandler:: sendData() - over global memory buffer size(${SocketHandler.GlobalMemoryBufferSize + data.length}/${SocketHandler.MaxGlobalMemoryBufferSize})`));
+            onWriteComplete?.(this, false);
+            return;*/
         }
 
-            if(this.isOverMemoryBufferSize(data.length)) {
-                /*this.procError(new Error(`SocketHandler:: sendData() - over memory buffer size(${this._memoryBufferSize + data.length}/${this._bufferSizeLimit})`));
-                onWriteComplete?.(this, false);
-                return;*/
-            } else if(SocketHandler.isOverGlobalMemoryBufferSize(data.length)) {
-                /*this.procError(new Error(`SocketHandler:: sendData() - over global memory buffer size(${SocketHandler.GlobalMemoryBufferSize + data.length}/${SocketHandler.MaxGlobalMemoryBufferSize})`));
-                onWriteComplete?.(this, false);
-                return;*/
-            }
+        if(this.isEnd()) {
+            onWriteComplete?.(this, false);
+            return;
+        }
 
-            let isEmptyBuffer = this._waitQueue.isEmpty();
-            if(this.isOverMemoryBufferSize(data.length) || SocketHandler.isOverGlobalMemoryBufferSize(data.length)) {
-                if(!this._fileCache) {
-                    this._fileCache = FileCache.create(this._fileCacheDirPath);
-                }
-                let record = this._fileCache.writeSync(data);
-                // todo : 파일 캐시 실패시 처리
-                /**if(record.id == -1) {
-                    return false;
-                }*/
-                this._waitQueue.pushBack({buffer: EMPTY_BUFFER, cacheID: record.id, onWriteComplete: onWriteComplete});
-            } else  {
-                this.appendUsageMemoryBufferSize(data.length);
-                this._waitQueue.pushBack({buffer: data, cacheID: -1, onWriteComplete: onWriteComplete});
+        let isEmptyBuffer = this._waitQueue.isEmpty();
+        if(this._memBufferSizeLimit > 0 && (this.isOverMemoryBufferSize(data.length) || SocketHandler.isOverGlobalMemoryBufferSize(data.length))) {
+            if(!this._fileCache) {
+                this._fileCache = FileCache.create(this._fileCacheDirPath);
             }
+            let record = this._fileCache.writeSync(data);
+            // todo : 파일 캐시 실패시 처리
+            /**if(record.id == -1) {
+                return false;
+            }*/
+            this._waitQueue.pushBack({buffer: EMPTY_BUFFER, cacheID: record.id, onWriteComplete: onWriteComplete});
+        } else  {
+            this.appendUsageMemoryBufferSize(data.length);
+            this._waitQueue.pushBack({buffer: data, cacheID: -1, onWriteComplete: onWriteComplete});
+        }
 
-            if(this._waitQueue.size() == 1) {
-                process.nextTick(()=> {
-                    this.sendPopDataRecursive();
-                });
-            }
+        if(this._waitQueue.size() == 1) {
+            process.nextTick(()=> {
+                this.sendPopDataRecursive();
+            });
+        }
 
 
     }
@@ -335,6 +360,10 @@ class SocketHandler {
         }
         let waitItem = this.popBufferSync();
         if(!waitItem) {
+            // 종료 대기 상태고, 버퍼 큐가 비어있으면 소켓을 종료한다.
+            if(this._endWaitingState) {
+                this._socket.end();
+            }
             return;
         }
         let length = waitItem.buffer.length;
@@ -404,7 +433,7 @@ class SocketHandler {
 
 
     private appendUsageMemoryBufferSize(size: number) : void {
-        if(this._bufferSizeLimit < 0) {
+        if(this._memBufferSizeLimit < 0) {
             return;
         }
         this._memoryBufferSize += size;
