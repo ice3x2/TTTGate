@@ -77,7 +77,7 @@ class EndPointClientPool {
                 this._endPointClientMap.set(sessionID, client);
             }
         } else {
-            client.end();
+            client.end_();
         }
         if(SocketState.End == state || SocketState.Closed == state /*|| SocketState.Error == state*/) {
             this._endPointClientMap.delete(sessionID);

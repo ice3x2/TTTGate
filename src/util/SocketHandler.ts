@@ -263,7 +263,10 @@ class SocketHandler {
 
 
     public end_() : void {
-        if(this._endWaitingState || !this._waitQueue.isEmpty()) {
+        if(this._endWaitingState || this.isEnd()) {
+            return;
+        }
+        if(!this._waitQueue.isEmpty()) {
             this._endWaitingState = true;
             return;
         }

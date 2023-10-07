@@ -282,9 +282,9 @@ class HttpHandler {
 
     }
 
-    public end() : void {
+    public end_() : void {
         this.release();
-        this._socketHandler.end();
+        this._socketHandler.end_();
     }
 
     public destroy() : void {

@@ -35,7 +35,7 @@ class ClientHandlerPool {
             return;
         }
         this.deleteActivatedSessionHandler(sessionID);
-        handler.end();
+        handler.end_();
     }
 
     public putNewDataHandler(handler: TunnelDataHandler) : void {
@@ -219,11 +219,11 @@ class ClientHandlerPool {
     public end() : void {
         for(let [key, value] of this._activatedSessionHandlerMap) {
             value.onSocketEvent = function () {};
-            value.end();
+            value.end_();
         }
         this._activatedSessionHandlerMap.clear();
         this._controlHandler.onSocketEvent = function () {};
-        this._controlHandler.end();
+        this._controlHandler.end_();
     }
 
 }

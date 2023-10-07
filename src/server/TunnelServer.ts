@@ -123,7 +123,7 @@ class TunnelServer {
                     item.handler.handlerType == HandlerType.Data) {
                     continue;
                 }
-                item.handler.end();
+                item.handler.end_();
             }
         });
     }
@@ -276,7 +276,7 @@ class TunnelServer {
         let index = this._unknownClients.findIndex((item) => item.handler.id == handler.id);
         if(index < 0) {
             logger.error(`TunnelServer::promoteToCtrlHandler - Not Found Client. id: ${handler.id}`);
-            handler.end();
+            handler.end_();
             return;
         }
         this._unknownClients.splice(index, 1);
@@ -301,7 +301,7 @@ class TunnelServer {
         let clientHandlerPool = this._handlerPoolMap.get(dataHandler.ctrlID);
         if(!clientHandlerPool) {
             logger.error(`TunnelServer::onHandlerEvent - Not Found ClientHandlerPool. id: ${dataHandler.ctrlID}`);
-            dataHandler.end();
+            dataHandler.end_();
             return;
         }
         dataHandler.dataHandlerState = connected ? DataHandlerState.OnlineSession : DataHandlerState.Wait;
@@ -312,7 +312,7 @@ class TunnelServer {
         let clientHandlerPool = this._handlerPoolMap.get(ctrlID);
         if(!clientHandlerPool) {
             logger.error(`TunnelServer::onHandlerEvent - Not Found ClientHandlerPool. id: ${handler.id}`);
-            handler.end();
+            handler.end_();
             return false;
         }
         return clientHandlerPool.isSessionOpened(sessionID);
@@ -322,7 +322,7 @@ class TunnelServer {
         let ctrlPacketStreamer = handler.packetStreamer;
         if(!ctrlPacketStreamer) {
             logger.error(`TunnelServer::onHandlerEvent - Not Found CtrlPacketStreamer. id: ${handler.id}`);
-            handler.end();
+            handler.end_();
             return;
         }
         let packetList : Array<CtrlPacket> = [];

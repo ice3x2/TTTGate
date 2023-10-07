@@ -126,7 +126,7 @@ class TunnelClient {
 
     private failHandshake(err?: Error) : void {
         this._state = CtrlState.None
-        this._ctrlHandler?.end();
+        this._ctrlHandler?.end_();
         this._onCtrlStateCallback?.(this, 'closed', err);
     }
 
@@ -255,7 +255,7 @@ class TunnelClient {
                 } else {
                     this._onEndPointCloseCallback?.(handler.sessionID!, new Error(`invalid packet cmd: ${packet.cmd}`));
                     this.changeCloseSessionState(handler.sessionID!);
-                    handler.end();
+                    handler.end_();
                     return;
                 }
             }
@@ -267,7 +267,7 @@ class TunnelClient {
                 if(idx > -1) {
                     this._waitDataHandlerList.splice(idx, 1);
                 }
-                handler.end();
+                handler.end_();
                 logger.error(`TunnelClient::onReceiveFromDataHandler - invalid state: ${handler.dataHandlerState}, sessionID:${handler.sessionID}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`)
             }
         }
@@ -285,7 +285,7 @@ class TunnelClient {
         handler.sendData(sendBuffer, (handler, success, err) => {
             if(!success) {
                 logger.error(`TunnelClient::sendSyncAndSyncSyncCmd Fail - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`, err);
-                this._ctrlHandler?.end();
+                this._ctrlHandler?.end_();
                 return;
             }
             logger.info(`TunnelClient::sendSyncAndSyncSyncCmd Success - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`)
@@ -355,7 +355,7 @@ class TunnelClient {
         dataHandler.sendData(CtrlPacket.closeSession(this._id, sessionID).toBuffer(), (handler, success, err) => {
             if(!success) {
                 dataHandler!.dataHandlerState = DataHandlerState.Terminated
-                dataHandler!.end();
+                dataHandler!.end_();
             } else {
                 dataHandler!.dataHandlerState = DataHandlerState.Wait;
                 this._waitDataHandlerList.push(dataHandler!);

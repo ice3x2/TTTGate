@@ -171,8 +171,7 @@ class ExternalPortServerPool {
     public closeSession(id: number) : void {
         let handler = this._handlerMap.get(id);
         if(handler) {
-            handler.onSocketEvent = function (){};
-            handler.destroy();
+            handler.end_();
         }
         this._handlerMap.delete(id);
     }
@@ -226,7 +225,7 @@ class ExternalPortServerPool {
             }
             let status = this._statusMap.get(server.port);
             if(status && !status.active) {
-                handler.destroy();
+                handler.end_();
                 return;
             }
             option = option as TunnelingOption;
@@ -273,7 +272,7 @@ class ExternalPortServerPool {
         })
     }
 
-    private async closeHandlers(ids: Array<number>) : Promise<void> {
+    private async destroyHandlers(ids: Array<number>) : Promise<void> {
         let handlers : Array<SocketHandler | HttpHandler> = [];
         for(let id of ids) {
             let handler = this._handlerMap.get(id);
@@ -300,7 +299,7 @@ class ExternalPortServerPool {
         let ids = Array.from(this._handlerMap.values())
             .filter((handler: SocketHandler | HttpHandler)=> handler.getBundle(OPTION_BUNDLE_KEY)?.forwardPort == port )
             .map((handler: SocketHandler | HttpHandler) => { return handler.getBundle(SESSION_ID_BUNDLE_KEY)!; });
-        await this.closeHandlers(ids);
+        await this.destroyHandlers(ids);
     }
 
     public async inactive(port: number) : Promise<boolean> {
