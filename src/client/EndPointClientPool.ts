@@ -33,7 +33,7 @@ class EndPointClientPool {
         console.log("엔드포인트 연결 시도: sessionID:" + sessionID + "    " + connectOpt.host + ":" + connectOpt.port);
         let endPointClient = SocketHandler.connect(connectOpt,( client: SocketHandler, state: SocketState, data?: any) => {
             client.setBufferSizeLimit(connectOpt.bufferLimit);
-            this.onEndPointClientStateChange(sessionID, client, state, data);
+            this.onEndPointHandlerEvent(sessionID, client, state, data);
         });
         this._endPointClientMap.set(sessionID, endPointClient);
 
@@ -63,7 +63,7 @@ class EndPointClientPool {
     }
 
 
-    private onEndPointClientStateChange = (sessionID: number, client: SocketHandler, state: SocketState, data? :any) : void => {
+    private onEndPointHandlerEvent = (sessionID: number, client: SocketHandler, state: SocketState, data? :any) : void => {
         if(!client.hasBundle(ID_BUNDLE_KEY)) {
             client.setBundle(ID_BUNDLE_KEY, sessionID);
         }
@@ -77,11 +77,13 @@ class EndPointClientPool {
                 this._endPointClientMap.set(sessionID, client);
             }
         } else {
+
             client.end_();
         }
         if(SocketState.End == state || SocketState.Closed == state /*|| SocketState.Error == state*/) {
             this._endPointClientMap.delete(sessionID);
             this._connectOptMap.delete(sessionID);
+            this._onEndPointClientStateChangeCallback?.(sessionID,state);
         }
     }
 
