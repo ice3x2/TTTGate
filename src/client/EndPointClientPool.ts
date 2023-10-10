@@ -44,7 +44,7 @@ class EndPointClientPool {
         this._endPointClientMap.delete(id);
         if(endPointClient) {
             endPointClient.onSocketEvent = function (){};
-            endPointClient.destroy();
+            endPointClient.end_();
             return true;
         }
         return false;
@@ -53,11 +53,10 @@ class EndPointClientPool {
 
 
 
-
-
     public send(id: number, data: Buffer) {
         let endPointClient = this._endPointClientMap.get(id);
         if(endPointClient) {
+            console.log("엔드포인트 데이터 전송: sessionID:" + id + "    " + data.toString('utf-8'))
             endPointClient.sendData(data);
         }
     }
@@ -77,7 +76,6 @@ class EndPointClientPool {
                 this._endPointClientMap.set(sessionID, client);
             }
         } else {
-
             client.end_();
         }
         if(SocketState.End == state || SocketState.Closed == state /*|| SocketState.Error == state*/) {

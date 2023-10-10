@@ -358,15 +358,16 @@ class SocketHandler {
     }
 
     private sendPopDataRecursive() : void {
-        if(this._waitQueue.isEmpty() || this.isEnd()) {
-            return;
-        }
         let waitItem = this.popBufferSync();
         if(!waitItem) {
             // 종료 대기 상태고, 버퍼 큐가 비어있으면 소켓을 종료한다.
             if(this._endWaitingState) {
                 this._socket.end();
             }
+            return;
+        }
+        if(this.isEnd()) {
+            waitItem.onWriteComplete?.(this, false);
             return;
         }
         let length = waitItem.buffer.length;

@@ -338,6 +338,7 @@ class TunnelClient {
         }
         this.deleteActivatedSessionDataHandler(sessionID);
         dataHandler!.dataHandlerState = DataHandlerState.Wait;
+        return dataHandler;
     }
 
     private deleteActivatedSessionDataHandler(sessionID: number) : TunnelDataHandler | undefined {
