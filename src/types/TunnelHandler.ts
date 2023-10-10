@@ -28,11 +28,12 @@ enum HandlerType {
 
 
 type TunnelHandler = SocketHandler & {
-    packetStreamer?: CtrlPacketStreamer;
     handlerType?: HandlerType;
+    initialized?: boolean;
 }
 
 type TunnelControlHandler = TunnelHandler & {
+    packetStreamer?: CtrlPacketStreamer;
     handlerType?: HandlerType.Control;
     ctrlState?: CtrlState;
     ctrlID?: number;
@@ -40,7 +41,9 @@ type TunnelControlHandler = TunnelHandler & {
 
 type TunnelDataHandler = TunnelHandler & {
     sessionID?: number;
+    handlerID?: number;
     ctrlID?: number;
+    leftOverBuffer?: Buffer;
     dataHandlerState?: DataHandlerState;
     handlerType?: HandlerType.Data;
 }

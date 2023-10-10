@@ -31,7 +31,6 @@ enum CtrlCmd {
     SyncCtrlAck,
     AckCtrl,
     ConnectEndPoint,
-    Data,
     CloseSession,
     NewDataHandlerAndConnectEndPoint,
 
@@ -47,6 +46,8 @@ enum CtrlCmd {
 const MAX_PAYLOAD_SIZE = 64000;
 
 class CtrlPacket {
+
+    public static readonly PACKET_DELIMITER = 'C';
 
     private static readonly EMPTY_BUFFER = Buffer.alloc(0);
     public static readonly PREFIX = Buffer.from("CTRL");
@@ -147,23 +148,6 @@ class CtrlPacket {
     }
 
 
-
-
-    public static sessionData(ctrlID:number, sessionID: number, data: Buffer) : Array<CtrlPacket> {
-        let packets = new Array<CtrlPacket>();
-        let offset = 0;
-        while(offset < data.length) {
-            let packet = new CtrlPacket();
-            packet._cmd = CtrlCmd.Data;
-            packet._ctrlID = ctrlID;
-            packet._sessionID = sessionID;
-            let length = Math.min(data.length - offset, MAX_PAYLOAD_SIZE);
-            packet._data = data.subarray(offset, offset + length);
-            offset += length;
-            packets.push(packet);
-        }
-        return packets;
-    }
 
 
     public static connectEndPoint(ctrlID: number, sessionID: number, opt: OpenOpt) : CtrlPacket {
