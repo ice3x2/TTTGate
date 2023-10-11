@@ -36,7 +36,6 @@ type TunnelControlHandler = TunnelHandler & {
     packetStreamer?: CtrlPacketStreamer;
     handlerType?: HandlerType.Control;
     ctrlState?: CtrlState;
-    ctrlID?: number;
 }
 
 type TunnelDataHandler = TunnelHandler & {

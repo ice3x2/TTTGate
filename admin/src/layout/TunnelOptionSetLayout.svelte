@@ -578,7 +578,7 @@
                     <div style="color: #666;font-size: 10pt;margin-left: -10px">
                         <ul>
                             <li><span style="font-weight: 900">0>=n</span> : Unlimited memory buffer.</li>
-                            <li><span style="font-weight: 900">0&lt;n</span> : When the memory buffer limit is exceeded, the connection is closed.</li>
+                            <li><span style="font-weight: 900">0&lt;n</span> : If the memory buffer limit is exceeded, it is written to the file cache.</li>
                         </ul>
                     </div>
                 </div>

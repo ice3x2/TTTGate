@@ -7,22 +7,25 @@ class DataStatePacket {
 
     public static readonly PREFIX : string = "DATA_STATE";
     public static readonly PREFIX_LENGTH : number = Buffer.byteLength(DataStatePacket.PREFIX);
-    public static readonly LENGTH : number = DataStatePacket.PREFIX_LENGTH + 4 + 4 + 4; // 10(DATA_STATE) + 4(CTRL_ID) + 4(HANDLER_ID) + 4(SESSION_ID)
+    public static readonly LENGTH : number = DataStatePacket.PREFIX_LENGTH + 4 + 4 + 4; // 10(DATA_STATE) + 4(CTRL_ID) + 4(HANDLER_ID) + 4(FIRST_SESSION_ID)
     public _handlerID : number;
     public _ctrlID : number;
-    public _sessionID : number;
+    public _firstSessionID : number;
 
     private constructor() {}
 
     public get handlerID() : number { return this._handlerID; }
     public get ctrlID() : number { return this._ctrlID; }
-    public get sessionID() : number { return this._sessionID; }
+
+    public get firstSessionID() : number { return this._firstSessionID; }
 
 
-    public static create(ctrlID: number, handlerID: number,sessionID: number, key: string) {
+
+    public static create(ctrlID: number, handlerID: number, firstSessionID: number) : DataStatePacket {
         let packet = new DataStatePacket();
         packet._handlerID = handlerID;
         packet._ctrlID = ctrlID;
+        packet._firstSessionID = firstSessionID;
         return packet;
     }
 
@@ -31,7 +34,7 @@ class DataStatePacket {
         buffer.write(DataStatePacket.PREFIX,0,DataStatePacket.PREFIX_LENGTH);
         buffer.writeUInt32BE(this._ctrlID,DataStatePacket.PREFIX.length);
         buffer.writeUInt32BE(this._handlerID,DataStatePacket.PREFIX.length + 4);
-        buffer.writeUInt32BE(this._sessionID,DataStatePacket.PREFIX.length + 8);
+        buffer.writeUInt32BE(this._firstSessionID,DataStatePacket.PREFIX.length + 8);
         return buffer;
     }
 
@@ -46,7 +49,8 @@ class DataStatePacket {
         let packet = new DataStatePacket();
         packet._ctrlID = buffer.readUInt32BE(DataStatePacket.PREFIX_LENGTH);
         packet._handlerID = buffer.readUInt32BE(DataStatePacket.PREFIX_LENGTH + 4);
-        packet._sessionID = buffer.readUInt32BE(DataStatePacket.PREFIX_LENGTH + 8);
+        packet._firstSessionID = buffer.readUInt32BE(DataStatePacket.PREFIX_LENGTH + 8);
+
         return {packet: packet, remainBuffer: buffer.subarray(DataStatePacket.LENGTH)};
     }
 

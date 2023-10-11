@@ -81,10 +81,11 @@ interface SysInfo {
 }
 interface ClientStatus {
     id: number;
-    state: 'connecting' | 'connected' | 'end';
     name: string,
     uptime: number;
     address: string;
+    activeSessionCount: number;
+    dataHandlerCount: number;
 }
 
 

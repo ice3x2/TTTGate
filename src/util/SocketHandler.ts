@@ -14,6 +14,10 @@ interface OnSocketEvent {
     (handler: SocketHandler, state: SocketState, data?: any) : void;
 }
 
+interface OnDrainEvent {
+    (handler: SocketHandler, success: boolean) : void;
+}
+
 type FileCacheRecordID = number;
 const EMPTY_BUFFER = Buffer.alloc(0);
 
@@ -45,16 +49,20 @@ class SocketHandler {
     private _isServer : boolean = false;
     private _fileCache : FileCache | null = null;
     private _waitQueue: Dequeue<WaitItem> = new Dequeue<WaitItem>();
+    private _drainEventList : Array<OnDrainEvent> = [];
+
+    private _sendLength: number = 0;
+    private _receiveLength: number = 0;
 
     private _endWaitingState = false;
 
     private _event: OnSocketEvent;
 
 
-
     private _memoryBufferSize: number = 0;
     private _memBufferSizeLimit: number = -1;
-
+    private _isFullNativeBuffer : boolean = false;
+    private _inRunWriteBuffer : boolean = false;
 
 
     public get isServer() : boolean {
@@ -68,6 +76,14 @@ class SocketHandler {
 
     public set onSocketEvent(event: OnSocketEvent) {
         this._event = event;
+    }
+
+    public get sendLength() : number {
+        return this._sendLength;
+    }
+
+    public get receiveLength() : number {
+        return this._receiveLength;
     }
 
 
@@ -86,7 +102,19 @@ class SocketHandler {
 
     public setBufferSizeLimit(size: number) : void {
         this._memBufferSizeLimit = size;
+    }
 
+    /**
+     * 버퍼가 비워졌을 때 한 번만 호출되는 이벤트 리스너를 등록한다.
+     * 만약 버퍼가 비어있는 상태라면 즉시 호출된다.
+     * @param event
+     */
+    public addOnceDrainListener(event: OnDrainEvent) : void {
+        if(this._waitQueue.isEmpty() || this.isEnd()) {
+            event(this, true);
+            return;
+        }
+        this._drainEventList.push(event);
     }
 
 
@@ -96,6 +124,7 @@ class SocketHandler {
 
         let connected = () => {
             if(handlerRef.length > 0 && handlerRef[0]._state == SocketState.None) {
+                handlerRef[0]._state = SocketState.Connected;
                 event(handlerRef[0], SocketState.Connected);
             }
         }
@@ -193,7 +222,14 @@ class SocketHandler {
             console.error(error);
             this.procError(error)
         });
+        socket.on('drain', ()=> {
+            if(this._isFullNativeBuffer && this._inRunWriteBuffer) {
+                this._isFullNativeBuffer = false;
+                this.sendPopDataRecursive2(true);
+            }
+        });
         socket.on('close', ()=> {
+            this.callAllDrainEvent(this._waitQueue.isEmpty())
             if(this._state != SocketState.Closed /* && this._state != SocketState.Error*/) {
                 this._state = SocketState.Closed;
                 this._event(this, SocketState.Closed);
@@ -201,6 +237,7 @@ class SocketHandler {
             this.release();
         });
         socket.on('data',(data) => {
+            this._receiveLength += data.length;
             if(!this.isEnd()) {
                 this._event(this, SocketState.Receive, data);
             }
@@ -219,7 +256,7 @@ class SocketHandler {
             logger.error(`SocketHandler:: procError() - ${error.message}`);
             logger.error(Errors.toString(error));
         }
-
+        this.callAllDrainEvent(this._waitQueue.isEmpty())
         if(this._state != SocketState.Closed) {
             this._state = SocketState.Closed;
             this._event(this, SocketState.Closed, error);
@@ -288,6 +325,7 @@ class SocketHandler {
         if(this._state == SocketState.Closed /*|| this._state == SocketState.Error*/) {
             return;
         }
+        this.callAllDrainEvent(this._waitQueue.isEmpty());
         this._socket.removeAllListeners();
         this._socket.destroy();
 
@@ -310,60 +348,104 @@ class SocketHandler {
 
 
     public sendData(data: Buffer,onWriteComplete? : OnWriteComplete ) : void {
-        /*if(this._bufferSizeLimit < 0) {
-            this.writeBuffer(data, (client, success, err) => {
-                onWriteComplete?.(client, success, err);
-            });
-            return;
-        }*/
-
-        if(this.isOverMemoryBufferSize(data.length)) {
-            /*this.procError(new Error(`SocketHandler:: sendData() - over memory buffer size(${this._memoryBufferSize + data.length}/${this._bufferSizeLimit})`));
-            onWriteComplete?.(this, false);
-            return;*/
-        } else if(SocketHandler.isOverGlobalMemoryBufferSize(data.length)) {
-            /*this.procError(new Error(`SocketHandler:: sendData() - over global memory buffer size(${SocketHandler.GlobalMemoryBufferSize + data.length}/${SocketHandler.MaxGlobalMemoryBufferSize})`));
-            onWriteComplete?.(this, false);
-            return;*/
-        }
-
         if(this.isEnd()) {
             onWriteComplete?.(this, false);
             return;
         }
 
-        let isEmptyBuffer = this._waitQueue.isEmpty();
-        if(this._memBufferSizeLimit > 0 && (this.isOverMemoryBufferSize(data.length) || SocketHandler.isOverGlobalMemoryBufferSize(data.length))) {
+        if(this._memBufferSizeLimit > 0 && ((this.isOverMemoryBufferSize(data.length) || SocketHandler.isOverGlobalMemoryBufferSize(data.length)))) {
             if(!this._fileCache) {
                 this._fileCache = FileCache.create(this._fileCacheDirPath);
             }
+
             let record = this._fileCache.writeSync(data);
             // todo : 파일 캐시 실패시 처리
             /**if(record.id == -1) {
                 return false;
             }*/
+            //console.log("[SocketHandler]", `파일 캐시에 저장함. 파일 캐시 크기: ${record.position / 1024 / 1024}mb, 파일 캐시 ID: ${record.id}`);
             this._waitQueue.pushBack({buffer: EMPTY_BUFFER, cacheID: record.id, onWriteComplete: onWriteComplete});
         } else  {
             this.appendUsageMemoryBufferSize(data.length);
             this._waitQueue.pushBack({buffer: data, cacheID: -1, onWriteComplete: onWriteComplete});
         }
 
-        if(this._waitQueue.size() == 1) {
-            process.nextTick(()=> {
-                this.sendPopDataRecursive();
-            });
-        }
 
+        this.sendPopDataRecursive2();
 
     }
 
+    private callAllDrainEvent(success: boolean) : void {
+        while (this._drainEventList.length > 0) {
+            let event = this._drainEventList.shift()
+            if(event) {
+                event(this,success);
+            }
+        }
+    }
+
+
+    private sendPopDataRecursive2(force: boolean = false) : void {
+        if(this._inRunWriteBuffer && !force) {
+            return;
+        }
+        this._inRunWriteBuffer = true;
+        let waitItem = undefined;
+        do {
+            waitItem = this.popBufferSync();
+            if(!waitItem) {
+                this._inRunWriteBuffer = false;
+                // 종료 대기 상태고, 버퍼 큐가 비어있으면 소켓을 종료한다.
+                if(this._endWaitingState) {
+                    this._socket.end();
+                }
+                this.callAllDrainEvent(true);
+                return;
+            }
+            if(this.isEnd()) {
+                waitItem.onWriteComplete?.(this, false);
+                return;
+            }
+            let length = waitItem.buffer.length;
+            let isFileCache = waitItem.cacheID != -1;
+            if(length == 0) {
+                this.procError(new Error("SocketHandler:: sendPopDataRecursive() - buffer length is zero."));
+                return;
+            }
+            let onWriteComplete = waitItem.onWriteComplete;
+            this.writeBuffer(waitItem.buffer, (client, success, err) => {
+
+                onWriteComplete?.(client, success, err);
+                if(!success) {
+                    this._inRunWriteBuffer = false;
+                    this.callAllDrainEvent(this._waitQueue.isEmpty())
+                    return;
+                }
+                this._sendLength += length;
+                if(!isFileCache) {
+                    this.appendUsageMemoryBufferSize(-length);
+                }
+            });
+        } while (waitItem && !this._isFullNativeBuffer)
+    }
+
     private sendPopDataRecursive() : void {
+        if(this._inRunWriteBuffer) {
+            return;
+        }
+        this._inRunWriteBuffer = true;
+
+
+
+
         let waitItem = this.popBufferSync();
         if(!waitItem) {
+            this._inRunWriteBuffer = false;
             // 종료 대기 상태고, 버퍼 큐가 비어있으면 소켓을 종료한다.
             if(this._endWaitingState) {
                 this._socket.end();
             }
+            this.callAllDrainEvent(true);
             return;
         }
         if(this.isEnd()) {
@@ -371,19 +453,22 @@ class SocketHandler {
             return;
         }
         let length = waitItem.buffer.length;
+        let isFileCache = waitItem.cacheID != -1;
         if(length == 0) {
             this.procError(new Error("SocketHandler:: sendPopDataRecursive() - buffer length is zero."));
             return;
         }
         this.writeBuffer(waitItem.buffer, (client, success, err) => {
             waitItem!.onWriteComplete?.(client, success, err);
+
             if(!success) {
+                this.callAllDrainEvent(this._waitQueue.isEmpty())
                 return;
             }
-            this.appendUsageMemoryBufferSize(-length);
-            process.nextTick(()=> {
-                this.sendPopDataRecursive();
-            });
+            this._sendLength += length;
+            if(!isFileCache) {
+                this.appendUsageMemoryBufferSize(-length);
+            }
         });
     }
 
@@ -403,17 +488,15 @@ class SocketHandler {
     }
 
 
-    private  writeBuffer(buffer: Buffer,onWriteComplete?: OnWriteComplete) : void {
+    private  writeBuffer(buffer: Buffer,onWriteComplete?: OnWriteComplete)  {
 
 
         if(this.isEnd()) {
             onWriteComplete?.(this, false);
             return;
         }
-
-
             try {
-                this._socket.write(buffer, (error) => {
+                this._isFullNativeBuffer = !this._socket.write(buffer, (error) => {
                     if (error) {
                         if (this.isEnd()) {
                             onWriteComplete?.(this, false);
@@ -430,7 +513,9 @@ class SocketHandler {
             } catch(e) {
                 logger.warn(`SocketHandler:: writeBuffer() - socket.write() error(${e})`);
                 onWriteComplete?.(this, false);
+                this.procError(e as Error, false);
             }
+
 
 
     }
@@ -482,4 +567,4 @@ interface OnWriteComplete {
 
 
 
-export {SocketHandler, OnWriteComplete};
+export {SocketHandler, OnWriteComplete, OnDrainEvent, OnSocketEvent};

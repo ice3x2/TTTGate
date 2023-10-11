@@ -161,9 +161,10 @@ let _timeToDMH =(time: number) => {
                 ID: {client.id}, {client.name}
                 </li>
                 <ul style="padding-left: 18px; font-size: 10pt; line-height: 12pt; margin-bottom: 10px;color: #717171">
-                    <li><span style="font-weight: 600">state:</span> {client.state}</li>
                     <li><span style="font-weight: 600">Address</span>: {client.address}</li>
                     <li><span style="font-weight: 600">Uptime</span>: {_timeToDMH(client.uptime)}</li>
+                    <li><span style="font-weight: 600">Data handlers</span>: {client.dataHandlerCount}</li>
+                    <li><span style="font-weight: 600">Active session</span>: {client.activeSessionCount}</li>
                 </ul>
             {/each}
             </ul>

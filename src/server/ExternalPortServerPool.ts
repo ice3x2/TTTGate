@@ -6,6 +6,8 @@ import HttpHandler from "./http/HttpHandler";
 import {logger} from "../commons/Logger";
 import {CertInfo} from "./CertificationStore";
 import ObjectUtil from "../util/ObjectUtil";
+import {EndpointHandler, EndpointHttpHandler, EndPointInfo} from "../types/EndpointHandler";
+import {clearInterval} from "timers";
 
 
 interface NewSessionCallback {
@@ -13,7 +15,7 @@ interface NewSessionCallback {
 }
 
 interface OnHandlerEventCallback {
-    (sessionID:  number, state: SocketState, data? : Buffer) : void;
+    (sessionID:  number, state: SocketState,bundle? : {data? : Buffer, receiveLength: number}) : void;
 }
 
 const OPTION_BUNDLE_KEY : string = "portTunnelOption";
@@ -34,17 +36,26 @@ type ExternalPortServerStatus = {
 
 
 
+const SESSION_CLEANUP_INTERVAL = 5000;
+
 class ExternalPortServerPool {
 
     private _portServerMap  = new Map<number, TCPServer>();
     private _statusMap  = new Map<number, ExternalPortServerStatus>();
-    private _handlerMap = new Map<number, SocketHandler | HttpHandler>();
+    private _handlerMap = new Map<number, EndpointHandler | EndpointHttpHandler>();
 
     private _activeTimeoutMap  = new Map<number, any>();
     private _onNewSessionCallback : NewSessionCallback | null = null;
     private _onHandlerEventCallback : OnHandlerEventCallback | null = null;
 
+    private _closeWaitTimeout : number = 60 * 1000;
+
     private static LAST_SESSION_ID = 0;
+
+    private _sessionCleanupIntervalID : any = null;
+
+
+
 
 
 
@@ -60,8 +71,31 @@ class ExternalPortServerPool {
             } catch (e) {
                 console.error(e);
             }
-
         }
+
+        this.startSessionCleanup();
+
+
+    }
+
+
+    private startSessionCleanup() {
+        if(this._sessionCleanupIntervalID) clearInterval(this._sessionCleanupIntervalID);
+        this._sessionCleanupIntervalID = setInterval(() => {
+            let now = Date.now();
+            setInterval(() => {
+                let closeWaitHandlerList : Array<EndpointHandler | EndpointHttpHandler> = Array.from(this._handlerMap.values())
+                    .filter((handler: EndpointHandler | EndpointHttpHandler) => {
+                    if(handler.closeWait) {
+                        return true;
+                    }
+                    return false;
+                });
+                closeWaitHandlerList.forEach((handler: EndpointHandler | EndpointHttpHandler) => {
+                    this.closeIfSatisfiedLength(handler, now - handler.lastSendTime! > this._closeWaitTimeout);
+                });
+            },SESSION_CLEANUP_INTERVAL);
+        })
     }
 
 
@@ -157,7 +191,10 @@ class ExternalPortServerPool {
     public send(id: number, data: Buffer) : boolean {
         let handler = this._handlerMap.get(id);
         if(handler) {
-            handler.sendData(data);
+            handler.lastSendTime = Date.now();
+            handler.sendData(data, (handler: SocketHandler, success: boolean) => {
+                this.onSendDataCallback(handler, success);
+            });
             let portNumber : number = handler.getBundle(PORT_BUNDLE_KEY);
             let status = this._statusMap.get(portNumber);
             if(status) {
@@ -168,13 +205,30 @@ class ExternalPortServerPool {
         return false;
     }
 
-    public closeSession(id: number) : void {
+    private onSendDataCallback = (handler: SocketHandler,success: boolean) : void => {
+        if(success) {
+            this.closeIfSatisfiedLength(handler);
+        }
+    }
+
+    public closeSession(id: number, endLength: number) : void {
         let handler = this._handlerMap.get(id);
         if(handler) {
-            handler.end_();
+            handler.endLength = endLength;
+            handler.closeWait = true;
+            this.closeIfSatisfiedLength(handler);
         }
-        this._handlerMap.delete(id);
     }
+
+    private closeIfSatisfiedLength(endPointClient: EndpointHandler | EndpointHttpHandler, force: boolean = false) {
+        if((endPointClient.closeWait && endPointClient.endLength! <= endPointClient.sendLength) || force) {
+            console.log('세션 제거 완료: ' + endPointClient.sessionID + ' 남아있는 세션: ' + this._handlerMap.size);
+            endPointClient.end_();
+            this._handlerMap.delete(endPointClient.sessionID!);
+        }
+    }
+
+
 
 
 
@@ -188,11 +242,11 @@ class ExternalPortServerPool {
             if(status) {
                 status.rx += data.length;
             }
-            this._onHandlerEventCallback?.(sessionID, state, data);
-        } else if(this._handlerMap.has(sessionID) && (state == SocketState.End || state == SocketState.Closed)) {
+            this._onHandlerEventCallback?.(sessionID, state,{ data: data, receiveLength: handler.receiveLength});
+        } else if(sessionID && (state == SocketState.End || state == SocketState.Closed)) {
             this.updateCount(handler.getBundle(OPTION_BUNDLE_KEY).forwardPort, false);
             this._handlerMap.delete(sessionID);
-            this._onHandlerEventCallback?.(sessionID, SocketState.Closed, data);
+            this._onHandlerEventCallback?.(sessionID, SocketState.Closed, {data: data, receiveLength: handler.receiveLength!});
             logger.info(`ExternalPortServer::End - id: ${sessionID}, port: ${handler.getBundle(OPTION_BUNDLE_KEY).forwardPort}`);
             handler.destroy();
         } else if(SocketState.Closed == state) {
@@ -231,8 +285,8 @@ class ExternalPortServerPool {
             option = option as TunnelingOption;
 
 
-            let bundleSizeLimit = option.bufferLimitOnServer == undefined || option.bufferLimitOnServer < 1 ? - 1 :  option.bufferLimitOnServer * 1024 * 1024;
-            handler.setBufferSizeLimit(bundleSizeLimit);
+            let bufferSizeLimit = option.bufferLimitOnServer == undefined || option.bufferLimitOnServer < 1 ? - 1 :  option.bufferLimitOnServer * 1024 * 1024;
+            handler.setBufferSizeLimit(bufferSizeLimit);
             handler.setBundle(OPTION_BUNDLE_KEY, option);
             handler.setBundle(PORT_BUNDLE_KEY, server.port);
 
@@ -240,14 +294,23 @@ class ExternalPortServerPool {
                 logger.info(`ExternalPortServer::Bound HttpHandler - id:${sessionID}, port:${server.port}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
                 let httpHandler = HttpHandler.create(handler, option);
                 httpHandler.onSocketEvent = this.onHandlerEvent;
+                this.initEndPointInfo(httpHandler as EndpointHttpHandler, sessionID);
                 this._handlerMap.set(sessionID, httpHandler);
             } else {
                 logger.info(`ExternalPortServer::Bound SocketHandler - id:${sessionID}, port: ${server.port}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
+                this.initEndPointInfo(handler as EndpointHandler, sessionID);
                 this._handlerMap.set(sessionID, handler);
             }
             this.updateCount(server.port, true);
             this._onNewSessionCallback?.(sessionID, option);
         }
+    }
+
+    private initEndPointInfo(endpointInfo: EndPointInfo, sessionID: number) {
+        endpointInfo.closeWait = false;
+        endpointInfo.endLength = 0;
+        endpointInfo.lastSendTime = Date.now();
+        endpointInfo.sessionID = sessionID;
     }
 
     private updateCount(port: number, increase: boolean) : void {
@@ -344,6 +407,10 @@ class ExternalPortServerPool {
 
 
     public async stopAll() : Promise<void> {
+        if(this._sessionCleanupIntervalID) {
+            clearInterval(this._sessionCleanupIntervalID);
+            this._sessionCleanupIntervalID = null;
+        }
         logger.info(`ExternalPortServer::closeAll`);
         let callbackCount = this._portServerMap.size;
         if(callbackCount == 0) return;

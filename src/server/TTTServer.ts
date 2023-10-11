@@ -52,23 +52,23 @@ class TTTServer {
         let success = this._tunnelServer.openSession(id, {host: opt.destinationAddress,port: opt.destinationPort!,tls: opt.tls,bufferLimit: bufferLimitOnClient},allowClientNames);
         if(!success) {
             this._sessions.delete(id);
-            this._externalPortServerPool.closeSession(id);
+            this._externalPortServerPool.closeSession(id,0);
         }
     }
 
 
-    private onHandlerEventOnExternalPortServer = (id: number, state: SocketState, data? : Buffer) : void => {
+    private onHandlerEventOnExternalPortServer = (id: number, state: SocketState,bundle? : {data? : Buffer, receiveLength: number}) : void => {
         if(this.isEndState(state)) {
             this._tunnelServer.closeSession(id);
-        } else if(state == SocketState.Receive && data) {
-            if (!this._tunnelServer.sendBuffer(id, data)) {
-                this._externalPortServerPool.closeSession(id);
+        } else if(state == SocketState.Receive) {
+            if (!this._tunnelServer.sendBuffer(id, bundle!.data!)) {
+                this._externalPortServerPool.closeSession(id, bundle!.receiveLength);
             }
         }
     }
 
-    private onSessionClosed = (id: number) : void => {
-        this._externalPortServerPool.closeSession(id);
+    private onSessionClosed = (id: number, endLength: number) : void => {
+        this._externalPortServerPool.closeSession(id,endLength);
     }
 
     private onSessionDataReceived = (id: number, data: Buffer) : void => {

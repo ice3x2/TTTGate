@@ -7,7 +7,7 @@ import {logger} from "../commons/Logger";
 import {OpenOpt} from "../commons/CtrlPacket";
 
 
-const RECONNECT_INTERVAL : number = 3000;
+const RECONNECT_INTERVAL : number = 5000;
 
 
 class TTTClient {
@@ -57,9 +57,9 @@ class TTTClient {
         this._endPointClientPool.open(id , opt);
     }
 
-    private onSessionCloseCallback = (id: number) : void => {
+    private onSessionCloseCallback = (id: number, waitForSendLength: number) : void => {
         console.log("[Client:TTTClient]", `세션제거 요청 받음 id: ${id}`)
-        this._endPointClientPool.close(id);
+        this._endPointClientPool.close(id,waitForSendLength);
         logger.info(`TTTClient:: TunnelClient closed, and close EndPointClientPool id: ${id}`);
         console.log("[Client:TTTClient]", `TunnelClient closed, and close EndPointClientPool id: ${id}`);
     }
@@ -72,13 +72,13 @@ class TTTClient {
 
 
 
-    private onEndPointClientStateChangeCallback =  (sessionID: number,state : SocketState,  data?: Buffer) : void => {
+    private onEndPointClientStateChangeCallback =  (sessionID: number,state : SocketState, bundle?: {data?: Buffer, receiveLength: number}) : void => {
         if(state == SocketState.Connected) {
             this._tunnelClient.syncEndpointSession(sessionID);
         } else if(state == SocketState.End || /*state == SocketState.Error ||*/ state == SocketState.Closed) {
-            this._tunnelClient.closeEndPointSession(sessionID);
-        } else if(state == SocketState.Receive && data) {
-            this._tunnelClient.sendData(sessionID,data);
+            this._tunnelClient.closeEndPointSession(sessionID, bundle!.receiveLength);
+        } else if(state == SocketState.Receive) {
+            this._tunnelClient.sendData(sessionID,bundle?.data!);
         }
     }
 

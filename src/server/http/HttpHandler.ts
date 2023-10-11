@@ -4,6 +4,7 @@ import {HttpHeader, HttpPipe, HttpRequestHeader, HttpResponseHeader, MessageType
 import HttpUtil from "./HttpUtil";
 import httpUtil from "./HttpUtil";
 import SocketState from "../../util/SocketState";
+import {has} from "lodash";
 
 
 interface OnSocketEvent {
@@ -31,8 +32,20 @@ class HttpHandler {
     private _destinationAddress : string = "";
     private _option : HttpOption = {}
 
+    private _receiveLength: number = 0;
+    private _bufLength: number = 0;
+    private _sendLength: number = 0;
+
     public set onSocketEvent(event: OnSocketEvent) {
         this._event = event;
+    }
+
+    public get receiveLength() : number {
+        return this._receiveLength;
+    }
+
+    public get sendLength() : number {
+        return this._sendLength;
     }
 
     public static create(socketHandler: SocketHandler,tunnelOption: TunnelingOption) : HttpHandler {
@@ -81,19 +94,19 @@ class HttpHandler {
 
         if(state == SocketState.Receive && !this._socketHandler.isEnd()) {
             if(this._isUpgrade) {
-                this._event?.(handler, state, data);
+                this.callEvent(SocketState.Receive, data)
                 return;
             }
             if(this._currentHttpPipe.messageType == MessageType.Response) {
                 this._currentHttpPipe.reset(MessageType.Request);
             }
-            //console.log("HttpHandler.onSocketEventFromSocketHandler: " + data.toString());
             this._currentHttpPipe.write(data);
         } else {
             if(this._socketHandler.isEnd() || SocketState.End == state || /*SocketState.Error == state ||*/ SocketState.Closed == state) {
+                this._sendLength = this._bufLength;
                 this.release();
             }
-            this._event?.(handler, state);
+            this.callEvent(state);
             if(state == SocketState.Closed) {
                 this._event = null;
             }
@@ -106,6 +119,7 @@ class HttpHandler {
         if(header.type == MessageType.Request) {
             this.manipulateRequestHeader(<HttpRequestHeader>header);
         } else if(header.type == MessageType.Response) {
+
             this.manipulateResponseHeader(<HttpResponseHeader>header);
         }
     }
@@ -124,7 +138,14 @@ class HttpHandler {
         }
         this.appendCustomHeader(header, this._option.customRequestHeaders);
         let headerBuffer = HttpUtil.convertHttpHeaderToBuffer(header);
-        this._event?.(this._socketHandler, SocketState.Receive, headerBuffer);
+        this.callEvent(SocketState.Receive, headerBuffer)
+    }
+
+    private callEvent(state: SocketState, data?: any) : void {
+        if(state == SocketState.Receive) {
+            this._receiveLength += data.length;
+        }
+        this._event?.(this._socketHandler, state, data);
     }
 
 
@@ -154,7 +175,11 @@ class HttpHandler {
             }
         }
         let headerBuffer = HttpUtil.convertHttpHeaderToBuffer(header);
-        this._socketHandler.sendData(headerBuffer);
+        this._socketHandler.sendData(headerBuffer, (client, success) => {
+            if(success) {
+                this._sendLength = this._bufLength;
+            }
+        });
     }
 
 
@@ -227,9 +252,13 @@ class HttpHandler {
             this._bodyBuffer = Buffer.concat([this._bodyBuffer, data]);
         }
         else if(this._httpMessageType == MessageType.Request) {
-            this._event?.(this._socketHandler, SocketState.Receive, data);
+            this.callEvent(SocketState.Receive, data);
         } else {
-            this._socketHandler.sendData(data);
+            this._socketHandler.sendData(data, (client, success) => {
+                if(success) {
+                    this._sendLength = this._bufLength;
+                }
+            });
         }
         return true;
     }
@@ -269,14 +298,19 @@ class HttpHandler {
             return;
         }
         if(this._isUpgrade) {
-            this._socketHandler.sendData(data);
+            this._bufLength += data.length;
+            this._socketHandler.sendData(data, (client, success) => {
+                if(success) {
+                    this._sendLength = this._bufLength;
+                }
+            });
             return;
         }
         if(this._httpMessageType == MessageType.Request) {
             this._currentHttpPipe.reset(MessageType.Response);
             this._httpMessageType = MessageType.Response;
         }
-
+        this._bufLength += data.length;
         this._currentHttpPipe.write(data);
 
 
@@ -316,8 +350,13 @@ class HttpHandler {
             this._socketHandler.sendData(Buffer.from(sendBuffer.length.toString(16) + "\r\n"));
             this._socketHandler.sendData(sendBuffer);
             this._socketHandler.sendData(Buffer.from("\r\n"));
+
         }
-        this._socketHandler.sendData(Buffer.from("0\r\n\r\n"));
+        this._socketHandler.sendData(Buffer.from("0\r\n\r\n"),(client, success) => {
+            if(success) {
+                this._sendLength = this._bufLength;
+            }
+        });
         this._currentHttpHeader = null;
         this._bodyBuffer = Buffer.alloc(0);
         this._isReplaceHostInBody = false;
@@ -359,7 +398,6 @@ class HttpHandler {
                 return url;
             }
             newUrl = "://" + newUrl.replace(originHost, host);
-
             return newUrl;
         });
     }

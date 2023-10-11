@@ -87,9 +87,6 @@ class HttpPipe {
 
     private _messageType : MessageType = MessageType.Request;
 
-    private _readTimeout : number = 25000;
-    private _lastRead : number = -1;
-
     private _chunkedSize : number = 0;
     private _chunkedSizeRead : number = 0;
 
@@ -239,17 +236,8 @@ class HttpPipe {
                 throw err;
             }
         }
-        this._lastRead = Date.now();
     }
 
-    public checkTimeout() : void {
-        if(this._lastRead == -1 || this._state == ParseState.END || this._state == ParseState.UPGRADE) {
-            return;
-        }
-        else if(Date.now() - this._lastRead > this._readTimeout) {
-            this._onErrorCallback?.(new Error('Timeout'));
-        }
-    }
 
     private bufferToHttpHeader(buffer: Buffer) : HttpResponseHeader | HttpRequestHeader {
         let bufferList : Array<Buffer> = this.splitHeaderBuffer(buffer);
