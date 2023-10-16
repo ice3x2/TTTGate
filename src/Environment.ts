@@ -16,6 +16,7 @@ const Environment = {
         adminCertDir : Path.join(process.cwd(),DEV_MODE ? '.' : '..','cert', 'admin'),
         externalCertDir : Path.join(process.cwd(),DEV_MODE ? '.' : '..','cert', 'external'),
         webDir : Path.join(process.cwd(),DEV_MODE ? '.' : '..','web'),
+        binDir: Path.join(process.cwd(),DEV_MODE ? '.' : '..','bin'),
     }
 }
 
