@@ -1,0 +1,18 @@
+GET /webman/modules/BackgroundTaskMonitor/style.css?v=1661757678 HTTP/1.1
+Host: xp.snoworca.com
+Pragma: no-cache
+Cache-Control: no-cache
+sec-ch-ua: "Microsoft Edge";v="117", "Not;A=Brand";v="8", "Chromium";v="117"
+sec-ch-ua-mobile: ?0
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.60
+sec-ch-ua-platform: "Windows"
+Accept: text/css,*/*;q=0.1
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: no-cors
+Sec-Fetch-Dest: style
+Referer: https://xp.snoworca.com/
+Accept-Encoding: gzip, deflate, br
+Accept-Language: ko,en;q=0.9,en-US;q=0.8
+Cookie: Idea-e2c6e8cf=66c13068-234a-4a5f-ad9c-bb0747855d35; _SSID=_Tu-R3y4GC8IyU_1CclZIXEqwghDXAVez0cgc3TVySY; stay_login=0; did=5VEBTUzMrUYcEcfwIgkjwHNl6Gins1uBGKDZ-q3ub6W8OD9Y-Z-OFNfPM7jPv4__rwRbijejvJxXl0s7lgaVWw; _ga=GA1.1.56509094.1691978343; AEC=Ad49MVFdTTwoOSOOJzWu_Km84XqfiqwAp9qKcv6VI3w43rjpk4ma7JMcZd4; NID=511=S5Ix7QGiqASnhfsNkLy6y6ZWUJGllJlYdVh9VrIymLfRlUA4IjvUvq1wB1pOFqj_Kz4o4nlmvb-zHXPN_Zp3dN0xPJbXQj20GlbHNwlVljUS8DNKoYnGSblqNabd9EetpGzv-BBbKNzD84Jki4e29GSP3_pEJiz3qhnyQJecoUPN592F9PSh; _ga_N8TWFNHY1R=GS1.1.1694522006.8.0.1694522006.60.0.0; wcs_bt=536d56d79b61a4:1694522007|20805ebdf95378:1694522006; _ga_2DPJ06EMLF=GS1.1.1694524021.6.0.1694524021.0.0.0; _CrPoSt=cHJvdG9jb2w9aHR0cHM6OyBwb3J0PTkwMDE7IHBhdGhuYW1lPS87
+Connection: close
+

@@ -368,8 +368,8 @@ class HttpPipe {
             return ReadResult.End;
         }
         let chunkedSizeBuffer = this._buffer.subarray(0, idx);
-
-        this._chunkedSize = parseInt(chunkedSizeBuffer.toString(), 16);
+        let chunkedSizeStr = chunkedSizeBuffer.toString();
+        this._chunkedSize = parseInt(chunkedSizeStr, 16);
         if(isNaN(this._chunkedSize)) {
             throw new Error(`Invalid chunked size ${chunkedSizeBuffer.toString()}`);
         }

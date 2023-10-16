@@ -209,13 +209,13 @@ class TunnelClient {
                     if(!dataHandler) {
                         logger.error(`TunnelClient::onReceiveFromCtrlHandler - Fail close session. invalid sessionID: ${packet.sessionID}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
                     } else {
-                        dataHandler.addOnceDrainListener(() => {
-                            dataHandler!.dataHandlerState = DataHandlerState.Wait;
-                            this._activatedSessionDataHandlerMap.delete(packet.sessionID);
-                            //process.nextTick(() => {
-                                this._onEndPointCloseCallback?.(packet.sessionID, packet.waitReceiveLength);
-                            //});
-                        });
+
+                            //dataHandler!.dataHandlerState = DataHandlerState.Wait;
+                            //this._activatedSessionDataHandlerMap.delete(packet.sessionID);
+
+                            this._onEndPointCloseCallback?.(packet.sessionID, packet.waitReceiveLength);
+
+
                     }
                 } else {
                     //logger.warn(`TunnelClient::onReceiveFromCtrlHandler - invalid cmd: ${CtrlCmd[packet.cmd]}, sessionID:${packet.sessionID}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
@@ -358,18 +358,21 @@ class TunnelClient {
         } else if(dataHandler)  {
             let handlerID = dataHandler?.handlerID ?? 0;
             console.log("엔드포인트 세션 종료 요청. 세션ID:" + sessionID);
-
-
-                    this.sendCloseSession(handlerID, sessionID,waitForReceiveDataLength, dataHandler);
-
-
-
+            dataHandler.addOnceDrainListener(() => {
+                this.sendCloseSession(handlerID, sessionID,waitForReceiveDataLength, dataHandler);
+            });
         }
         return true;
     }
 
 
     private sendCloseSession(handlerID: number, sessionID: number, waitReceiveLength: number, dataHandler?: TunnelDataHandler) : void {
+
+        if(waitReceiveLength == 0) {
+            console.log('waitReceiveLength is 0. 이건 좀 말이 안 되는데?');
+        }
+
+
         this._ctrlHandler!.sendData(CtrlPacket.closeSession(handlerID, sessionID, waitReceiveLength).toBuffer(), (handler, success, err) => {
             if(!success) {
                 if(dataHandler) {
@@ -378,8 +381,8 @@ class TunnelClient {
                 return;
             }
             if(dataHandler) {
-                this._activatedSessionDataHandlerMap.delete(sessionID);
-                dataHandler.dataHandlerState = DataHandlerState.Wait;
+                //this._activatedSessionDataHandlerMap.delete(sessionID);
+                //dataHandler.dataHandlerState = DataHandlerState.Wait;
             }
         });
     }

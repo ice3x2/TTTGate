@@ -124,14 +124,19 @@ class EndPointClientPool {
             if(state == SocketState.Connected) {
                 console.log("엔드포인트 연결 성공!: sessionID:" + sessionID + "    ");
             }
-            this._onEndPointClientStateChangeCallback?.(sessionID,state,{data: data, receiveLength: (client as EndpointHandler).receiveLength!});
+            if(state != SocketState.End) {
+                this._onEndPointClientStateChangeCallback?.(sessionID, state, {
+                    data: data,
+                    receiveLength: (client as EndpointHandler).receiveLength!
+                });
+            }
             if(!this._endPointClientMap.has(sessionID)) {
                 this._endPointClientMap.set(sessionID, client as EndpointHandler);
             }
         } else {
             client.end_();
         }
-        if(SocketState.End == state || SocketState.Closed == state /*|| SocketState.Error == state*/) {
+        if(SocketState.Closed == state /*|| SocketState.Error == state*/) {
             this._endPointClientMap.delete(sessionID);
             this._connectOptMap.delete(sessionID);
             this._onEndPointClientStateChangeCallback?.(sessionID,state,{receiveLength: (client as EndpointHandler).receiveLength!});

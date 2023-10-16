@@ -313,7 +313,7 @@ class TunnelServer {
         handler.ctrlState = CtrlState.Connected;
         let ctrlHandlerPool = ClientHandlerPool.create(handler.id, handler);
         ctrlHandlerPool.onSessionCloseCallback = (sessionID: number, endLength:  number) => {
-            this._sessionIDAndCtrlIDMap.delete(sessionID);
+            //this._sessionIDAndCtrlIDMap.delete(sessionID);
             this._onSessionCloseCallback?.(sessionID, endLength);
         }
         ctrlHandlerPool.onReceiveDataCallback = (sessionID: number, data: Buffer) => {
@@ -469,9 +469,9 @@ class TunnelServer {
 
 
 
-    public closeSession(sessionId: number) : void {
+    public closeSession(sessionId: number, waitForLength: number) : void {
         let ctrlID = this._sessionIDAndCtrlIDMap.get(sessionId);
-        this._sessionIDAndCtrlIDMap.delete(sessionId);
+        //this._sessionIDAndCtrlIDMap.delete(sessionId);
         if(ctrlID == undefined) {
             return;
         }
@@ -479,7 +479,7 @@ class TunnelServer {
         if(pool == undefined) {
             return;
         }
-        pool.sendCloseSession(sessionId);
+        pool.sendCloseSession(sessionId, waitForLength);
     }
 
 

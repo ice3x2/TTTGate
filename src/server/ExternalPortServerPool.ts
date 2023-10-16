@@ -86,10 +86,13 @@ class ExternalPortServerPool {
             setInterval(() => {
                 let closeWaitHandlerList : Array<EndpointHandler | EndpointHttpHandler> = Array.from(this._handlerMap.values())
                     .filter((handler: EndpointHandler | EndpointHttpHandler) => {
+                        if(handler.closeWait && handler.sendLength == 0){
+                            console.log('아직 한 번도 데이터를 받지 못한 핸들러가 있다?! ' + handler.sessionID);
+                        }
                     if(handler.closeWait) {
                         return true;
                     }
-                    return false;
+
                 });
                 closeWaitHandlerList.forEach((handler: EndpointHandler | EndpointHttpHandler) => {
                     this.closeIfSatisfiedLength(handler, now - handler.lastSendTime! > this._closeWaitTimeout);
@@ -222,6 +225,9 @@ class ExternalPortServerPool {
 
     private closeIfSatisfiedLength(endPointClient: EndpointHandler | EndpointHttpHandler, force: boolean = false) {
         if((endPointClient.closeWait && endPointClient.endLength! <= endPointClient.sendLength) || force) {
+            if(endPointClient.endLength == 0) {
+                console.log('아직 한 번도 데이터를 받지 못한 핸들러가 있다?! ' + endPointClient.sessionID);
+            }
             console.log('세션 제거 완료: ' + endPointClient.sessionID + ' 남아있는 세션: ' + this._handlerMap.size);
             endPointClient.end_();
             this._handlerMap.delete(endPointClient.sessionID!);

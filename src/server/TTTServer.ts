@@ -59,10 +59,10 @@ class TTTServer {
 
     private onHandlerEventOnExternalPortServer = (id: number, state: SocketState,bundle? : {data? : Buffer, receiveLength: number}) : void => {
         if(this.isEndState(state)) {
-            this._tunnelServer.closeSession(id);
+            this._tunnelServer.closeSession(id, bundle!.receiveLength);
         } else if(state == SocketState.Receive) {
             if (!this._tunnelServer.sendBuffer(id, bundle!.data!)) {
-                this._externalPortServerPool.closeSession(id, bundle!.receiveLength);
+                //this._externalPortServerPool.closeSession(id, bundle!.receiveLength);
             }
         }
     }
@@ -73,7 +73,7 @@ class TTTServer {
 
     private onSessionDataReceived = (id: number, data: Buffer) : void => {
         if(!this._externalPortServerPool.send(id, data)) {
-            this._tunnelServer.closeSession(id);
+            //this._tunnelServer.closeSession(id, 0);
         }
     }
 

@@ -219,6 +219,12 @@ class SocketHandler {
 
         });
         socket.on('error', (error)=> {
+            // @ts-ignore
+            console.log("[SocketHandler]", `??left buffer : ${this._addr}:${this._port}`)
+            console.log("[SocketHandler]", `??left buffer : ${this._drainEventList.length}`)
+            console.log("[SocketHandler]", `??left buffer : ${this._memBufferSizeLimit}`)
+            console.log("[SocketHandler]", `??left buffer : ${this._memoryBufferSize}`)
+
             console.error(error);
             this.procError(error)
         });

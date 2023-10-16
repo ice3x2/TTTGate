@@ -4,9 +4,8 @@ import {HttpHeader, HttpPipe, HttpRequestHeader, HttpResponseHeader, MessageType
 import HttpUtil from "./HttpUtil";
 import httpUtil from "./HttpUtil";
 import SocketState from "../../util/SocketState";
-import {has} from "lodash";
 
-
+import fs from "fs";
 interface OnSocketEvent {
     (handler: SocketHandler, state: SocketState, data?: any) : void;
 }
@@ -35,6 +34,8 @@ class HttpHandler {
     private _receiveLength: number = 0;
     private _bufLength: number = 0;
     private _sendLength: number = 0;
+
+    private _debugBuffer : Buffer = Buffer.alloc(0);
 
     public set onSocketEvent(event: OnSocketEvent) {
         this._event = event;
@@ -143,6 +144,7 @@ class HttpHandler {
 
     private callEvent(state: SocketState, data?: any) : void {
         if(state == SocketState.Receive) {
+            this._debugBuffer = Buffer.concat([this._debugBuffer, data]);
             this._receiveLength += data.length;
         }
         this._event?.(this._socketHandler, state, data);
@@ -316,7 +318,29 @@ class HttpHandler {
 
     }
 
+    private static _debugCount = 0;
+    private static _isSuccess = false;
+
     public end_() : void {
+        if(this._receiveLength > 0 && this._sendLength < 1) {
+
+
+            console.log("여기 뭔가 이상하다!!");
+            console.log("receiveLength: " + this._receiveLength);
+            console.log("sendLength: " + this._sendLength);
+
+            let debugStr = this._debugBuffer.toString();
+            let buf = new Uint8Array(this._debugBuffer);
+            fs.writeFileSync("debug_" + (++HttpHandler._debugCount) +  ".deg", buf);
+            console.log(debugStr);
+        } else if(!HttpHandler._isSuccess)  {
+            //HttpHandler._isSuccess = true;
+            let buf = new Uint8Array(this._debugBuffer);
+            fs.writeFileSync("debug_success" +HttpHandler._debugCount + ".deg", buf)
+        }
+        this._debugBuffer = Buffer.alloc(0);
+
+
         this.release();
         this._socketHandler.end_();
     }
