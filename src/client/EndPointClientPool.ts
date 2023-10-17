@@ -13,6 +13,10 @@ interface OnEndPointClientStateChangeCallback {
     (id: number, state: number,bundle?: {data?: Buffer, receiveLength: number}) : void;
 }
 
+interface OnEndPointTerminateCallback {
+    (id: number) : void;
+}
+
 const SESSION_CLEANUP_INTERVAL : number = 5000;
 
 class EndPointClientPool {
@@ -20,16 +24,14 @@ class EndPointClientPool {
     private _connectOptMap: Map<number, ConnectOpt> = new Map<number, ConnectOpt>();
     private _endPointClientMap: Map<number, EndpointHandler> = new Map<number, EndpointHandler>();
     private _onEndPointClientStateChangeCallback: OnEndPointClientStateChangeCallback | null = null;
+    private _onEndPointTerminateCallback: OnEndPointTerminateCallback | null = null;
 
     private _sessionCleanupIntervalID : NodeJS.Timeout | null = null;
 
     private _closeWaitTimeout : number = 60 * 1000;
 
     public constructor() {
-
         this.startSessionCleanup();
-
-
     }
 
 
@@ -57,6 +59,10 @@ class EndPointClientPool {
         this._onEndPointClientStateChangeCallback = callback;
     }
 
+    public set onEndPointTerminateCallback (callback: OnEndPointTerminateCallback) {
+        this._onEndPointTerminateCallback = callback;
+    }
+
 
     public open(sessionID: number, connectOpt: OpenOpt) {
 
@@ -71,8 +77,6 @@ class EndPointClientPool {
         endPointClient.endLength = 0;
         endPointClient.sessionID = sessionID;
         this._endPointClientMap.set(sessionID, endPointClient);
-
-
     }
 
     public close(id: number, endLength: number) : boolean {
@@ -91,6 +95,7 @@ class EndPointClientPool {
         if((endPointClient.closeWait && endPointClient.endLength! <= endPointClient.sendLength) || force) {
             this._endPointClientMap.delete(endPointClient.sessionID!);
             endPointClient.end_();
+            this._onEndPointTerminateCallback?.(endPointClient.sessionID!)
         }
     }
 
@@ -132,9 +137,19 @@ class EndPointClientPool {
             client.end_();
         }
         if(SocketState.End == state || SocketState.Closed == state /*|| SocketState.Error == state*/) {
+            let hasSession = this._endPointClientMap.has(sessionID);
             this._endPointClientMap.delete(sessionID);
             this._connectOptMap.delete(sessionID);
-            this._onEndPointClientStateChangeCallback?.(sessionID,state,{receiveLength: (client as EndpointHandler).receiveLength!});
+            if(hasSession) {
+                this._onEndPointClientStateChangeCallback?.(sessionID,state,{receiveLength: (client as EndpointHandler).receiveLength!});
+                setImmediate(() => {
+                    this._onEndPointTerminateCallback?.(sessionID);
+                });
+            }
+
+
+
+
         }
     }
 
@@ -147,7 +162,6 @@ class EndPointClientPool {
         });
         this._endPointClientMap.clear();
     }
-
 
 
 

@@ -32,6 +32,7 @@ class TTTClient {
         this._tunnelClient.onReceiveDataCallback = this.onSessionSendCallback;
         this._tunnelClient.onEndPointCloseCallback = this.onSessionCloseCallback;
         this._endPointClientPool.onEndPointClientStateChangeCallback = this.onEndPointClientStateChangeCallback;
+        this._endPointClientPool.onEndPointTerminateCallback = this.onEndPointTerminateCallback;
         logger.info(`TTTClient:: try connect to ${this._clientOption.host}:${this._clientOption.port}`);
         logger.info(`TTTClient:: option: ${JSON.stringify(this._clientOption)}`)
         this._tunnelClient.connect();
@@ -68,8 +69,9 @@ class TTTClient {
         this._endPointClientPool.send(id, data);
     }
 
-
-
+    private onEndPointTerminateCallback = (sessionID: number) : void => {
+        this._tunnelClient.terminateEndPointSession(sessionID);
+    }
 
 
     private onEndPointClientStateChangeCallback =  (sessionID: number,state : SocketState, bundle?: {data?: Buffer, receiveLength: number}) : void => {

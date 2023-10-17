@@ -18,6 +18,10 @@ interface OnHandlerEventCallback {
     (sessionID:  number, state: SocketState,bundle? : {data? : Buffer, receiveLength: number}) : void;
 }
 
+interface OnTerminateSessionCallback {
+    (sessionID: number) : void;
+}
+
 const OPTION_BUNDLE_KEY : string = "portTunnelOption";
 const PORT_BUNDLE_KEY : string = "portNumber";
 const SESSION_ID_BUNDLE_KEY : string = "ID";
@@ -47,12 +51,15 @@ class ExternalPortServerPool {
     private _activeTimeoutMap  = new Map<number, any>();
     private _onNewSessionCallback : NewSessionCallback | null = null;
     private _onHandlerEventCallback : OnHandlerEventCallback | null = null;
-
+    private _onTerminateSessionCallback : OnTerminateSessionCallback | null = null;
     private _closeWaitTimeout : number = 60 * 1000;
 
     private static LAST_SESSION_ID = 0;
 
     private _sessionCleanupIntervalID : any = null;
+
+
+
 
 
 
@@ -170,13 +177,18 @@ class ExternalPortServerPool {
 
     }
 
-    public setOnNewSessionCallback(callback: NewSessionCallback) : void {
+    public set OnNewSessionCallback(callback: NewSessionCallback)  {
         this._onNewSessionCallback = callback;
     }
 
-    public setOnHandlerEventCallback(callback: OnHandlerEventCallback) : void {
+    public set OnHandlerEventCallback(callback: OnHandlerEventCallback)  {
         this._onHandlerEventCallback = callback;
     }
+
+    public set OnTerminateSessionCallback(callback: OnTerminateSessionCallback)  {
+        this._onTerminateSessionCallback = callback;
+    }
+
 
     public getServerStatus(port: number) : ExternalPortServerStatus  {
         let status = this._statusMap.get(port);
@@ -223,8 +235,10 @@ class ExternalPortServerPool {
     private closeIfSatisfiedLength(endPointClient: EndpointHandler | EndpointHttpHandler, force: boolean = false) {
         if((endPointClient.closeWait && endPointClient.endLength! <= endPointClient.sendLength) || force) {
             console.log('세션 제거 완료: ' + endPointClient.sessionID + ' 남아있는 세션: ' + this._handlerMap.size);
+            endPointClient.onSocketEvent = function () {}
             endPointClient.end_();
             this._handlerMap.delete(endPointClient.sessionID!);
+            this._onTerminateSessionCallback?.(endPointClient.sessionID!)
         }
     }
 
@@ -245,8 +259,16 @@ class ExternalPortServerPool {
             this._onHandlerEventCallback?.(sessionID, state,{ data: data, receiveLength: handler.receiveLength});
         } else if(sessionID && (state == SocketState.End || state == SocketState.Closed)) {
             this.updateCount(handler.getBundle(OPTION_BUNDLE_KEY).forwardPort, false);
-            this._handlerMap.delete(sessionID);
-            this._onHandlerEventCallback?.(sessionID, SocketState.Closed, {data: data, receiveLength: handler.receiveLength!});
+            if(this._handlerMap.has(sessionID)) {
+                this._onHandlerEventCallback?.(sessionID, SocketState.Closed, {
+                    data: data,
+                    receiveLength: handler.receiveLength!
+                });
+                this._handlerMap.delete(sessionID);
+                setImmediate(() => {
+                    this._onTerminateSessionCallback?.(sessionID);
+                });
+            }
             logger.info(`ExternalPortServer::End - id: ${sessionID}, port: ${handler.getBundle(OPTION_BUNDLE_KEY).forwardPort}`);
             handler.destroy();
         } else if(SocketState.Closed == state) {

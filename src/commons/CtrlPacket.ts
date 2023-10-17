@@ -32,7 +32,7 @@ enum CtrlCmd {
     AckCtrl,
     OpenSession,
     CloseSession,
-    NewDataHandlerAndOpenSession,
+    NewDataHandler,
     FailOfOpenSession,
     SuccessOfOpenSession,
     NonExistent
@@ -115,18 +115,11 @@ class CtrlPacket {
      * @param sessionID 세션 핸들러 ID
      * @param opt
      */
-    public static newDataHandlerAndOpenSession(ctrlID: number, sessionID: number, opt: OpenOpt) : CtrlPacket {
+    public static newDataHandler(ctrlID: number, sessionID: number) : CtrlPacket {
         let packet = new CtrlPacket();
-        packet._cmd = CtrlCmd.NewDataHandlerAndOpenSession;
+        packet._cmd = CtrlCmd.NewDataHandler;
         packet._ID = ctrlID;
         packet._sessionID = sessionID;
-        packet._openOpt = opt;
-        let writer = new BufferWriter();
-        writer.writeString(opt.host);
-        writer.writeUInt16(opt.port);
-        writer.writeBoolean(opt.tls ?? false);
-        writer.writeInt32(opt.bufferLimit);
-        packet._data = writer.toBuffer();
         return packet;
     }
 
@@ -209,7 +202,7 @@ class CtrlPacket {
         if(result._cmd == CtrlCmd.AckCtrl) {
             result._ackCtrlOpt = CtrlPacket.parseAckCtrlData(result._data);
 
-        } else if(result._cmd == CtrlCmd.OpenSession || result._cmd == CtrlCmd.NewDataHandlerAndOpenSession) {
+        } else if(result._cmd == CtrlCmd.OpenSession) {
             result._openOpt = CtrlPacket.parseOpenData(result._data);
         }
         return {packet: result, remain: reader.readBufferToEnd(), state: ParsedState.Complete,  error: null};

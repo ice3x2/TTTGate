@@ -56,7 +56,7 @@ class TunnelServer {
 
     private _clientCheckIntervalId : NodeJS.Timeout | undefined;
     private _clientTimeout : number = 30000;
-
+    private _nextSelectIdx = 0;
     private _onSessionCloseCallback? : OnSessionCloseCallback;
     private _onReceiveDataCallback? : OnReceiveDataCallback;
 
@@ -236,7 +236,7 @@ class TunnelServer {
         return this._clientHandlerPoolMap.size > 0;
     }
 
-    private _nextSelectIdx = 0;
+
 
 
     private getNextHandlerPool(allowClientNames?: Array<string>) : ClientHandlerPool | null {
@@ -313,7 +313,6 @@ class TunnelServer {
         handler.ctrlState = CtrlState.Connected;
         let ctrlHandlerPool = ClientHandlerPool.create(handler.id, handler);
         ctrlHandlerPool.onSessionCloseCallback = (sessionID: number, endLength:  number) => {
-            this._sessionIDAndCtrlIDMap.delete(sessionID);
             this._onSessionCloseCallback?.(sessionID, endLength);
         }
         ctrlHandlerPool.onReceiveDataCallback = (sessionID: number, data: Buffer) => {
@@ -406,9 +405,12 @@ class TunnelServer {
         else {
              let ctrlPool = this.findClientHandlerPool(handler.sessionID!);
              if(!ctrlPool) {
+                 this._onSessionCloseCallback?.(handler.sessionID!, 0);
                 return;
              }
-             ctrlPool.pushReceiveBuffer(handler.sessionID!, data);
+             if(!ctrlPool.pushReceiveBuffer(handler.sessionID!, data)) {
+                 this._onSessionCloseCallback?.(handler.sessionID!, 0);
+             }
              return;
         }
     }
@@ -429,7 +431,7 @@ class TunnelServer {
 
     /**
      * 컨트롤 핸들러에서 데이터를 받았을때 호출된다.
-     * @param handler
+     * @param handlerf
      * @param data
      * @private
      */
@@ -469,13 +471,33 @@ class TunnelServer {
 
 
 
-    public closeSession(sessionId: number) : void {
-        let ctrlID = this._sessionIDAndCtrlIDMap.get(sessionId);
+    public terminateSession(sessionId: number) : void {
+        let pool = this.findCtrlHandlerPool(sessionId);
         this._sessionIDAndCtrlIDMap.delete(sessionId);
-        if(ctrlID == undefined) {
+        if(pool == undefined) {
             return;
         }
-        let pool = this._clientHandlerPoolMap.get(ctrlID);
+        pool.terminateSession(sessionId);
+
+
+    }
+
+    private findCtrlHandlerPool(sessionId: number) : ClientHandlerPool | undefined {
+        let ctrlID = this._sessionIDAndCtrlIDMap.get(sessionId);
+        if(ctrlID == undefined) {
+            return undefined;
+        }
+        let clientHandlerPool = this._clientHandlerPoolMap.get(ctrlID);
+        if(!clientHandlerPool) {
+            return undefined;
+        }
+        return clientHandlerPool;
+    }
+
+
+
+    public closeSession(sessionId: number) : void {
+        let pool = this.findClientHandlerPool(sessionId);
         if(pool == undefined) {
             return;
         }

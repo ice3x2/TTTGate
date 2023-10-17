@@ -34,8 +34,9 @@ class TTTServer {
         this._externalPortServerPool = ExternalPortServerPool.create(serverOption.tunnelingOptions);
         let tempCert = CertificationStore.instance.getTempCert();
         this._tunnelServer = TunnelServer.create({port: serverOption.port,key: serverOption.key,tls: serverOption.tls}, tempCert);
-        this._externalPortServerPool.setOnHandlerEventCallback(this.onHandlerEventOnExternalPortServer)
-        this._externalPortServerPool.setOnNewSessionCallback(this.onNewSession);
+        this._externalPortServerPool.OnHandlerEventCallback = this.onHandlerEventOnExternalPortServer;
+        this._externalPortServerPool.OnNewSessionCallback = this.onNewSession;
+        this._externalPortServerPool.OnTerminateSessionCallback = this.OnTerminateSession;
         this._tunnelServer.onSessionCloseCallback = this.onSessionClosed;
         this._tunnelServer.onReceiveDataCallback = this.onSessionDataReceived;
         serverOption.tunnelingOptions.forEach((option) => {
@@ -44,6 +45,8 @@ class TTTServer {
             }
         });
     }
+
+
 
     private onNewSession = (id: number, opt: TunnelingOption) : void => {
         let bufferLimitOnClient = opt.bufferLimitOnClient == undefined || opt.bufferLimitOnClient < 1 ? -1 : opt.bufferLimitOnClient! * 1024 * 1024;
@@ -56,14 +59,17 @@ class TTTServer {
         }
     }
 
+    private OnTerminateSession = (sessionID: number) : void => {
+        this._tunnelServer.terminateSession(sessionID);
+        this._sessions.delete(sessionID);
+
+    }
 
     private onHandlerEventOnExternalPortServer = (id: number, state: SocketState,bundle? : {data? : Buffer, receiveLength: number}) : void => {
         if(this.isEndState(state)) {
             this._tunnelServer.closeSession(id);
         } else if(state == SocketState.Receive) {
-            if (!this._tunnelServer.sendBuffer(id, bundle!.data!)) {
-                this._externalPortServerPool.closeSession(id, bundle!.receiveLength);
-            }
+            this._tunnelServer.sendBuffer(id, bundle!.data!);
         }
     }
 
