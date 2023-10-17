@@ -265,10 +265,10 @@ class ExternalPortServerPool {
                     receiveLength: handler.receiveLength!
                 });
                 this._handlerMap.delete(sessionID);
-                setImmediate(() => {
-                    this._onTerminateSessionCallback?.(sessionID);
-                });
             }
+            setImmediate(() => {
+                this._onTerminateSessionCallback?.(sessionID);
+            });
             logger.info(`ExternalPortServer::End - id: ${sessionID}, port: ${handler.getBundle(OPTION_BUNDLE_KEY).forwardPort}`);
             handler.destroy();
         } else if(SocketState.Closed == state) {

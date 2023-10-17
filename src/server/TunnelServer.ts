@@ -42,7 +42,7 @@ interface Client {
 }
 
 const HANDLER_TYPE_BUNDLE_KEY = 'T';
-
+const UNKNOWN_CLIENT_TIMEOUT = 180000;
 
 class TunnelServer {
 
@@ -131,7 +131,7 @@ class TunnelServer {
                 }
                 item.handler.end_();
             }
-        });
+        },UNKNOWN_CLIENT_TIMEOUT);
     }
 
     /**
@@ -333,6 +333,7 @@ class TunnelServer {
     }
 
     private onReceiveAllHandler(handler: TunnelHandler, data: Buffer) : void {
+
         if(handler.handlerType == HandlerType.Unknown && data.length > 0) {
             let delimiter = data.toString('utf-8',0,1);
             if(delimiter == CtrlPacket.PACKET_DELIMITER) {
@@ -344,7 +345,8 @@ class TunnelServer {
                 dataHandler.handlerType = HandlerType.Data;
                 dataHandler.dataHandlerState = DataHandlerState.None;
             } else {
-                logger.error(`TunnelServer::onHandlerEvent - Unknown HandlerType. id: ${handler.id}`);
+                let str = data.toString('utf-8', 0, Math.min(data.length, 64)).trim().replaceAll('\n', '\\n').replaceAll('\r', '\\r');
+                logger.error(`TunnelServer::onHandlerEvent - Unknown packet. id: ${handler.id}, addr: ${handler.remoteAddress}:${handler.remotePort}, data: ${str}...`);
                 this.removeUnknownClient(handler);
                 handler.end_();
                 return;
@@ -496,12 +498,12 @@ class TunnelServer {
 
 
 
-    public closeSession(sessionId: number) : void {
+    public closeSession(sessionId: number, waitForLength: number) : void {
         let pool = this.findClientHandlerPool(sessionId);
         if(pool == undefined) {
             return;
         }
-        pool.sendCloseSession(sessionId);
+        pool.sendCloseSession(sessionId,waitForLength);
     }
 
 

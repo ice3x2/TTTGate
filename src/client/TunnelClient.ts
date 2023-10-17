@@ -221,6 +221,7 @@ class TunnelClient {
                     let dataHandler = this._activatedSessionDataHandlerMap.get(packet.sessionID);
                     if(!dataHandler) {
                         logger.error(`TunnelClient::onReceiveFromCtrlHandler - Fail close session. invalid sessionID: ${packet.sessionID}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
+                        this._onEndPointCloseCallback?.(packet.sessionID, 0);
                     } else {
                         dataHandler.addOnceDrainListener(() => {
                             dataHandler!.dataHandlerState = DataHandlerState.Wait;
@@ -372,14 +373,18 @@ class TunnelClient {
 
 
     private sendCloseSession(handlerID: number, sessionID: number, waitReceiveLength: number, dataHandler?: TunnelDataHandler) : void {
-        this._ctrlHandler!.sendData(CtrlPacket.closeSession(handlerID, sessionID, waitReceiveLength).toBuffer(), (handler, success, err) => {
-            if(!success) {
-                if(dataHandler) {
-                    this.deleteDataHandler(dataHandler!);
+        try {
+            this._ctrlHandler!.sendData(CtrlPacket.closeSession(handlerID, sessionID, waitReceiveLength).toBuffer(), (handler, success, err) => {
+                if (!success) {
+                    if (dataHandler) {
+                        this.deleteDataHandler(dataHandler!);
+                    }
+                    return;
                 }
-                return;
-            }
-        });
+            });
+        } catch (e) {
+            console.error(e);
+        }
     }
 
 

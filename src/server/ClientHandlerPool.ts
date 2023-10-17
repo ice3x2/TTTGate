@@ -34,7 +34,7 @@ class ClientHandlerPool {
     private _waitingDataBufferQueueMap : Map<number,{send: Dequeue<Buffer>, receive: Dequeue<Buffer>}> = new Map<number, {send: Dequeue<Buffer>, receive: Dequeue<Buffer>}>();
     private _dataHandlerMap : Map<number,TunnelDataHandler> = new Map<number,TunnelDataHandler>();
     private _bufferSize : number = 0;
-    private _pendingSessionIDMap : Map<number, {handlerID: number, sessionID: number, onlineSession: boolean,openOpt: OpenOpt }> = new Map<number, {handlerID: number, sessionID: number, onlineSession: boolean,openOpt: OpenOpt }>();
+    private _pendingSessionIDMap : Map<number, {handlerID: number, sessionID: number, openOpt: OpenOpt, available: boolean }> = new Map<number, {handlerID: number, sessionID: number, openOpt: OpenOpt,available: boolean }>();
     private _onSessionCloseCallback? : OnSessionCloseCallback;
     private _onDataReceiveCallback? : OnDataReceiveCallback;
 
@@ -202,10 +202,9 @@ class ClientHandlerPool {
         if(this._waitingDataBufferQueueMap.has(sessionID)) {
             return;
         }
-
         this._waitingDataBufferQueueMap.set(sessionID,{send: new Dequeue<Buffer>(), receive: new Dequeue<Buffer>()});
         let dataHandler = this.obtainHandler();
-        let pendingSessionState = {handlerID: 0, sessionID: sessionID, onlineSession: true, openOpt: opt};
+        let pendingSessionState = {handlerID: 0, sessionID: sessionID, openOpt: opt, available: true};
         this._pendingSessionIDMap.set(sessionID,pendingSessionState);
         if(dataHandler == undefined) {
             pendingSessionState.handlerID = ++ClientHandlerPool.LAST_DATA_HANDLER_ID;
@@ -231,24 +230,10 @@ class ClientHandlerPool {
             let connected = packet.cmd == CtrlCmd.SuccessOfOpenSession;
             if(!this.promoteDataHandler(handlerID,sessionID, connected)) {
                 console.log("[server]",`데이터 핸들러 연결 실패: ${handlerID}`);
-                // todo : 데이터 핸들러 연결 실패시 처리
-                return;
+                connected = false;
             }
             if(!connected) {
-                let queue = this._waitingDataBufferQueueMap.get(sessionID);
-                if(queue) {
-                    this._waitingDataBufferQueueMap.delete(sessionID);
-                    let data = queue.receive.popFront();
-                    while(data != undefined) {
-                        this._bufferSize -= data.length;
-                        data = queue.receive.popFront();
-                    }
-                    data = queue.send.popFront();
-                    while(data != undefined) {
-                        this._bufferSize -= data.length;
-                        data = queue.send.popFront();
-                    }
-                }
+                this.burnWaitBuffer(sessionID);
                 this.closeSessionAndCallback(sessionID, 0);
             } else {
                 this.flushWaitBuffer(sessionID);
@@ -260,10 +245,25 @@ class ClientHandlerPool {
             let endLength = packet.waitReceiveLength;
             console.log("[server]",`세션제거 요청 받음 id: ${sessionID}`);
             this.releaseSession_(handlerID,sessionID,endLength);
-
         }
     }
 
+    private burnWaitBuffer(sessionID: number) : void {
+        let queue = this._waitingDataBufferQueueMap.get(sessionID);
+        if(queue) {
+            this._waitingDataBufferQueueMap.delete(sessionID);
+            let data = queue.receive.popFront();
+            while(data != undefined) {
+                this._bufferSize -= data.length;
+                data = queue.receive.popFront();
+            }
+            data = queue.send.popFront();
+            while(data != undefined) {
+                this._bufferSize -= data.length;
+                data = queue.send.popFront();
+            }
+        }
+    }
 
 
 
@@ -281,14 +281,22 @@ class ClientHandlerPool {
             (dataHandler.dataHandlerState != DataHandlerState.ConnectingEndPoint && dataHandler.dataHandlerState != DataHandlerState.Initializing)) {
             return false;
         }
+        let pendingState = this._pendingSessionIDMap.get(sessionID);
+        if(!pendingState || pendingState.handlerID != handlerID || !pendingState.available) {
+            connected = false;
+        }
         if(connected) {
             dataHandler.sessionID = sessionID;
-            this._activatedSessionHandlerMap_.set(sessionID, dataHandler);
             dataHandler.dataHandlerState = DataHandlerState.OnlineSession;
+            this._activatedSessionHandlerMap_.set(sessionID, dataHandler);
+            return true;
         } else {
             dataHandler.dataHandlerState = DataHandlerState.Wait;
+            this._activatedSessionHandlerMap_.delete(sessionID);
+            this.closeSessionAndCallback(sessionID, 0);
+            return false;
         }
-        return true;
+
     }
 
 
@@ -305,7 +313,7 @@ class ClientHandlerPool {
         else {
             let handler = this._activatedSessionHandlerMap_.get(sessionID);
             if(handler == undefined) {
-                this.sendCloseSession(sessionID);
+                this.sendCloseSession(sessionID, 0);
                 this.closeSessionAndCallback(sessionID, 0);
                 return false;
             }
@@ -319,14 +327,20 @@ class ClientHandlerPool {
      * ExternalPortServer 로부터 세션을 닫으라는 명령을 받았을때 호출된다. (ExternalPortServer 의 핸들러가 close 될 때)
      * @param sessionID
      */
-    public sendCloseSession(sessionID: number) : void {
+    public sendCloseSession(sessionID: number, waitForLength : number) : void {
         let handler = this._activatedSessionHandlerMap_.get(sessionID);
         if(handler == undefined) {
-            return;
+            let pendingState = this._pendingSessionIDMap.get(sessionID);
+            if(pendingState) {
+                pendingState.available = false;
+            }
+            else {
+                return;
+            }
         }
         //this._activatedSessionHandlerMap_.delete(sessionID);
         console.log("[server]",`세션제거 요청을 클라이언트로 전송 id: ${sessionID}`);
-        this._controlHandler.sendData(CtrlPacket.closeSession(handler!.handlerID!, sessionID, handler!.receiveLength).toBuffer(), (socketHandler, success, err) => {
+        this._controlHandler.sendData(CtrlPacket.closeSession(handler == undefined ? 0 : handler!.handlerID ?? 0, sessionID, waitForLength).toBuffer(), (socketHandler, success, err) => {
             if(!success) {
                 console.log('[ClientHandlerPool]', `closeSession: fail: ${err}`);
                 return;
@@ -344,10 +358,17 @@ class ClientHandlerPool {
      * @param endLength
      */
     private releaseSession_(handlerID: number,sessionID: number, endLength: number =0) : void {
+        let pendingState = this._pendingSessionIDMap.get(sessionID);
+        if(pendingState) {
+            pendingState.available = false;
+            if(handlerID == 0) {
+                handlerID = pendingState.handlerID;
+            }
+        }
         let handler = this._activatedSessionHandlerMap_.get(sessionID);
-
         if(handler == undefined) {
             handler = this._dataHandlerMap.get(handlerID);
+
             if(handler != undefined) {
                 handler.dataHandlerState = DataHandlerState.Wait;
             }
@@ -385,7 +406,7 @@ class ClientHandlerPool {
         let packet = CtrlPacket.newDataHandler(dataHandlerID, sessionId).toBuffer();
         this._controlHandler.sendData(packet, (handler, success, err) => {
             if(!success) {
-                this.sendCloseSession(sessionId);
+                this.sendCloseSession(sessionId, 0);
                 console.log('[ClientHandlerPool]', `sendNewDataHandlerAndOpen: fail: ${err}`);
                 return;
             }
@@ -423,7 +444,7 @@ class ClientHandlerPool {
                 let dataHandler = this._dataHandlerMap.get(dataHandlerID);
                 if(!dataHandler) return;
                 dataHandler.dataHandlerState = DataHandlerState.Terminated;
-                this.sendCloseSession(sessionId);
+                this.sendCloseSession(sessionId, 0);
                 console.log('[ClientHandlerPool]', `sendOpen: fail: ${err}`);
                 return;
             }

@@ -84,7 +84,9 @@ class EndPointClientPool {
         if(endPointClient) {
             endPointClient.endLength = endLength;
             endPointClient.closeWait = true;
-            this.closeIfSatisfiedLength(endPointClient);
+            if(endLength == 0) {
+                this.closeIfSatisfiedLength(endPointClient);
+            }
             return true;
         }
         return false;
