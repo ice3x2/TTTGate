@@ -322,12 +322,16 @@ class SocketHandler {
 
 
     public destroy() : void {
+        if(this._fileCache) {
+            this._fileCache.delete();
+        }
         if(this._state == SocketState.Closed /*|| this._state == SocketState.Error*/) {
             return;
         }
         this.callAllDrainEvent(this._waitQueue.isEmpty());
         this._socket.removeAllListeners();
         this._socket.destroy();
+
 
         this._state = SocketState.Closed;
         this._event(this, SocketState.Closed);
