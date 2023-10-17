@@ -142,8 +142,8 @@ class HttpHandler {
     }
 
     private callEvent(state: SocketState, data?: any) : void {
-        if(state == SocketState.Receive) {
-            this._receiveLength += data.length;
+        if(data) {
+            this._receiveLength += Buffer.byteLength(data);
         }
         this._event?.(this._socketHandler, state, data);
     }

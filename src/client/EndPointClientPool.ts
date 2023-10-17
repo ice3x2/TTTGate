@@ -94,6 +94,10 @@ class EndPointClientPool {
 
 
     private closeIfSatisfiedLength(endPointClient: EndpointHandler, force: boolean = false) {
+        if(endPointClient.closeWait) {
+            let i = 100;
+            i++;
+        }
         if((endPointClient.closeWait && endPointClient.endLength! <= endPointClient.sendLength) || force) {
             this._endPointClientMap.delete(endPointClient.sessionID!);
             endPointClient.end_();

@@ -245,17 +245,18 @@ class ExternalPortServerPool {
 
 
 
-
-
-    private onHandlerEvent = (handler: SocketHandler, state: SocketState, data?: any) : void => {
+    private onHandlerEvent = (handler: EndpointHandler | EndpointHttpHandler, state: SocketState, data?: any) : void => {
         //console.log("[server:ExternalPort]",`onHandlerEvent: id: ${sessionID} state: ${SocketState[state]} , data : ${data ? data.length : 0}`);
         let sessionID = handler.getBundle(SESSION_ID_BUNDLE_KEY)!;
+        handler = this._handlerMap.get(sessionID)!;
         if(SocketState.Receive == state) {
             let portNumber : number = handler.getBundle(PORT_BUNDLE_KEY);
             let status = this._statusMap.get(portNumber);
             if(status) {
                 status.rx += data.length;
             }
+            console.log(handler.protocolType);
+
             this._onHandlerEventCallback?.(sessionID, state,{ data: data, receiveLength: handler.receiveLength});
         } else if(sessionID && (state == SocketState.End || state == SocketState.Closed)) {
             this.updateCount(handler.getBundle(OPTION_BUNDLE_KEY).forwardPort, false);
@@ -316,11 +317,11 @@ class ExternalPortServerPool {
                 logger.info(`ExternalPortServer::Bound HttpHandler - id:${sessionID}, port:${server.port}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
                 let httpHandler = HttpHandler.create(handler, option);
                 httpHandler.onSocketEvent = this.onHandlerEvent;
-                this.initEndPointInfo(httpHandler as EndpointHttpHandler, sessionID);
+                this.initEndPointInfo(httpHandler as EndpointHttpHandler, sessionID, 'http');
                 this._handlerMap.set(sessionID, httpHandler);
             } else {
                 logger.info(`ExternalPortServer::Bound SocketHandler - id:${sessionID}, port: ${server.port}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
-                this.initEndPointInfo(handler as EndpointHandler, sessionID);
+                this.initEndPointInfo(handler as EndpointHandler, sessionID, 'tcp');
                 this._handlerMap.set(sessionID, handler);
             }
             this.updateCount(server.port, true);
@@ -328,11 +329,12 @@ class ExternalPortServerPool {
         }
     }
 
-    private initEndPointInfo(endpointInfo: EndPointInfo, sessionID: number) {
+    private initEndPointInfo(endpointInfo: EndPointInfo, sessionID: number, type: 'http' | 'tcp') {
         endpointInfo.closeWait = false;
         endpointInfo.endLength = 0;
         endpointInfo.lastSendTime = Date.now();
         endpointInfo.sessionID = sessionID;
+        endpointInfo.protocolType = type;
     }
 
     private updateCount(port: number, increase: boolean) : void {

@@ -7,6 +7,7 @@ type EndPointInfo =  {
     lastSendTime? : number;
     endLength? : number;
     sessionID? : number;
+    protocolType?: 'http' | 'tcp';
 }
 
 
