@@ -9,7 +9,11 @@
   "pkg": {
     "scripts": "build/**/*.js",
     "targets": [
-      "node18-win-x64"
+      "node18-linux-arm64",
+      "node18-win-arm64",
+      "node18-win-x64",
+      "node18-linux-x64",
+      "node18-alpine-x64"
     ],
     "outputPath": "dist/bin/"
   },
@@ -53,6 +57,7 @@
     "jest": "^29.6.1",
     "nodemon": "^3.0.1",
     "pkg": "^5.8.1",
+    "vite": "^4.4.11",
     "rimraf": "^5.0.1",
     "supertest": "^6.3.3",
     "ts-jest": "^29.1.1",
