@@ -2,7 +2,7 @@ import { spawn } from 'child_process';
 import Path from "path";
 import {clearInterval} from "timers";
 import {logger} from "./commons/Logger";
-import {assignWith, forEach} from "lodash";
+import Environment from "./Environment";
 const find = require('find-process');
 
 
@@ -11,7 +11,8 @@ const find = require('find-process');
 
 class Sentinel {
 
-    private _pathList: Array<string> = [];
+    private _executePath: string = '';
+    private _argvList: Array<string> = [];
     private _argv: Array<string> = [];
 
     public static isDaemonMode(): boolean {
@@ -23,25 +24,32 @@ class Sentinel {
     }
 
 
-    public static create(executePath: string, argv: Array<string>, devMode: boolean): Sentinel {
+    public static create(devMode: boolean): Sentinel {
+
+
         let sentinel = new Sentinel();
-        sentinel._argv = argv;
         if (devMode) {
-            sentinel.makeDevPathList(executePath);
+            sentinel._argv = process.argv;
+            sentinel.makeDevPathList();
         } else {
-            sentinel.makeRuntimePathList(executePath);
+            sentinel._argv = process.argv;
+            sentinel.makeRuntimePathList();
         }
+
         return sentinel;
     }
 
 
-    private makeDevPathList(exePath: string) {
-        this._pathList = [process.argv[0], Path.join(Path.join(process.argv[1],'..'), 'node_modules', 'ts-node-dev', 'lib', 'bin.js'), '--project', Path.join(process.cwd(), 'tsconfig.json'), exePath]
-        this._pathList = [...this._pathList, ...this._argv];
+    private makeDevPathList() {
+        this._executePath = process.argv[0];
+        this._argvList = [Path.join(Path.join(process.argv[1],'..'), 'node_modules', 'ts-node-dev', 'lib', 'bin.js'), '--project', Path.join(process.cwd(), 'tsconfig.json'), process.argv[1]]
+        this._argvList = [...process.argv.slice(2)];
     }
 
-    private makeRuntimePathList(exePath: string) {
-        this._pathList = [exePath, ...this._argv];
+    private makeRuntimePathList() {
+        this._executePath = process.argv[0];
+        this._argvList = process.argv.slice(1);
+
     }
 
 
@@ -73,7 +81,8 @@ class Sentinel {
     }
 
     private static writeForegroundPID() {
-        Sentinel.writePidFile(process.pid, 'foreground');
+
+        Sentinel.writePidFile(process.pid,  'foreground');
     }
 
     private static processKill(type : 'app' | 'sentinel' | 'foreground') {
@@ -136,8 +145,9 @@ class Sentinel {
 
     private static deletePIDFile(type: 'app' | 'sentinel' | 'foreground') {
         const fs = require('fs');
-        if(fs.existsSync(`.pid_${type}`)) {
-            fs.unlinkSync(`.pid_${type}`);
+        let path = Path.join(Environment.path.binDir, `.pid_${type}`);
+        if(fs.existsSync(path)) {
+            fs.unlinkSync(path);
         }
     }
 
@@ -157,8 +167,9 @@ class Sentinel {
 
     private static readPIDFile(type: 'app' | 'sentinel' | 'foreground') : Array<number> {
         const fs = require('fs');
-        if(fs.existsSync(`.pid_${type}`)) {
-            let str = fs.readFileSync(`.pid_${type}`).toString();
+        let path = Path.join(Environment.path.binDir, `.pid_${type}`);
+        if(fs.existsSync(path)) {
+            let str = fs.readFileSync(path).toString();
             let list = str.split('\n');
             let result : Array<number> = [];
             for(let item of list) {
@@ -178,7 +189,7 @@ class Sentinel {
 
     private static writePidFile(pid: number, type: 'app' | 'sentinel' | 'foreground') {
         const fs = require('fs');
-        fs.writeFileSync(`.pid_${type}`, pid.toString() + '\n', {encoding: 'utf-8', flag: 'a'});
+        fs.writeFileSync(Path.join(Environment.path.binDir, `.pid_${type}`), pid.toString() + '\n', {encoding: 'utf-8', flag: 'a'});
     }
 
     public runSentinel() {
@@ -187,7 +198,6 @@ class Sentinel {
 
     private restartApp() {
         this.startApp((pid) => {
-            console.log('App started: ' + pid);
             Sentinel.writePidFile(pid, 'app');
             this.startScanPid(pid);
         });
@@ -219,33 +229,23 @@ class Sentinel {
 
 
     private startSentinel(firstAppPID: number, onPid: (pid: number) => void) {
-        const controller = new AbortController();
-        const {signal} = controller;
-        const child = spawn('node', this._pathList, {
-            signal,
-            detached: true,
-            env: {
-                ...process.env,
-                EXECUTE_MODE: 'sentinel',
-                APP_PID: firstAppPID.toString()
-            },
-            stdio: ['ignore', 'ignore', 'ignore']
-        });
-        child.unref();
-        child.on('spawn', () => {
-            onPid(child.pid!);
-        });
+        this.exec('execute', firstAppPID, onPid);
     }
 
     private startApp(onPid: (pid: number) => void) {
+        this.exec('execute', 0, onPid);
+    }
+
+    private exec(type: 'execute' | 'sentinel',pid: number, onPid: (pid: number) => void) {
         const controller = new AbortController();
         const {signal} = controller;
-        const child = spawn('node', this._pathList, {
+        const child = spawn(this._executePath, this._argvList, {
             signal,
             detached: true,
             env: {
                 ...process.env,
-                EXECUTE_MODE: 'execute'
+                EXECUTE_MODE: type,
+                APP_PID: pid.toString()
             },
             stdio: ['ignore', 'ignore', 'ignore']
         });
@@ -253,7 +253,6 @@ class Sentinel {
         child.on('spawn', () => {
             onPid(child.pid!);
         });
-
     }
 }
 

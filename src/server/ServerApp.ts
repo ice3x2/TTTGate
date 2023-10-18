@@ -79,7 +79,12 @@ let ServerApp : {start() : Promise<void>} = {
         });
         oldOption = ObjectUtil.cloneDeep(serverOptionStore.serverOption);
         oldAdminCertInfo = ObjectUtil.cloneDeep(certStore.getAdminCert());
-        await startService(serverOptionStore.serverOption, certStore.getAdminCert());
+        try {
+            await startService(serverOptionStore.serverOption, certStore.getAdminCert());
+        } catch (e) {
+            console.log(e);
+            process.exit(1);
+        }
     }
 
 }

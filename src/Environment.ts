@@ -16,7 +16,7 @@ const Environment = {
         adminCertDir : Path.join(ROOT_DIR,'cert', 'admin'),
         externalCertDir : Path.join(ROOT_DIR,'cert', 'external'),
         webDir : Path.join(ROOT_DIR,'web'),
-        binDir: Path.join(ROOT_DIR,'bin'),
+        binDir: !DEV_MODE ? Path.join(ROOT_DIR,'bin') :Path.join(ROOT_DIR),
     },
     devMode : DEV_MODE,
 }

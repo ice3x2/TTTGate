@@ -4,7 +4,8 @@ import Environment from "./Environment";
 import {SocketHandler} from "./util/SocketHandler";
 import Sentinel from "./Sentinel";
 
-let sentinel : Sentinel = Sentinel.create(process.argv[0],process.argv.slice(1),Environment.devMode);
+let sentinel : Sentinel = Sentinel.create(Environment.devMode);
+
 
 
 let _findTypeByArgv = () : 'server' | 'client' | 'none' | 'stop' => {
