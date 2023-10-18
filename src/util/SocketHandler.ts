@@ -4,7 +4,7 @@ import ConnectOpt from "./ConnectOpt";
 import * as tls from "tls";
 import {logger} from "../commons/Logger";
 import Path from "path";
-import {CacheRecord, FileCache} from "./FileCache";
+
 import Dequeue from "./Dequeue";
 import Errors from "./Errors";
 
@@ -134,6 +134,7 @@ class SocketHandler {
         }
 
         let socket : net.Socket;
+        // noinspection PointlessBooleanExpressionJS
         if(options.tls && options.tls === true) {
             let option = {port: options.port, host: options.host, allowHalfOpen: false , /*keepAlive: true,*/noDelay: true, rejectUnauthorized: false};
             socket = tls.connect(option, connected);
@@ -229,7 +230,9 @@ class SocketHandler {
         socket.on('drain', ()=> {
             if(this._isFullNativeBuffer && this._inRunWriteBuffer) {
                 this._isFullNativeBuffer = false;
-                this.sendPopDataRecursive2(true);
+                setImmediate(() => {
+                    this.sendPopDataRecursive2(true);
+                });
             }
         });
         socket.on('close', ()=> {
@@ -250,6 +253,8 @@ class SocketHandler {
             if(!this.isEnd()) {
                 this._state = SocketState.End;
                 this._event(this, SocketState.End);
+                //23.10.19 수정
+                this._waitQueue.clear();
             }
 
         });
@@ -437,6 +442,7 @@ class SocketHandler {
         } while (waitItem && !this._isFullNativeBuffer)
     }
 
+    // noinspection JSUnusedLocalSymbols
     private sendPopDataRecursive() : void {
         if(this._inRunWriteBuffer) {
             return;

@@ -143,12 +143,12 @@ class TunnelClient {
         } else {
             return false;
         }
+        dataHandler!.dataHandlerState = DataHandlerState.OnlineSession;
         this._ctrlHandler!.sendData(packet.toBuffer(), (handler, success) => {
             if(!success) {
                 this.deleteDataHandler(dataHandler!);
                 return;
             }
-            dataHandler!.dataHandlerState = DataHandlerState.OnlineSession;
         });
         return true;
     }

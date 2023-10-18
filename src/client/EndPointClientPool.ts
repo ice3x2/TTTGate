@@ -108,17 +108,12 @@ class EndPointClientPool {
         let endPointClient = this._endPointClientMap.get(id);
         if(endPointClient) {
             endPointClient.lastSendTime = Date.now();
-            endPointClient.sendData(data, (handler: SocketHandler, success: boolean) => {
-                this.onSendDataCallback(handler,success);
+            endPointClient.sendData(data, (handler: SocketHandler /*, success: boolean*/) => {
+                this.closeIfSatisfiedLength(handler);
             });
         }
     }
 
-    private onSendDataCallback = (handler: SocketHandler,success: boolean) : void => {
-        if(success) {
-            this.closeIfSatisfiedLength(handler);
-        }
-    }
 
 
 
