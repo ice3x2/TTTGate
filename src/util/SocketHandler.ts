@@ -35,7 +35,7 @@ class SocketHandler {
     private static MaxGlobalMemoryBufferSize: number = 1024 * 1024 * 512; // 512MB
     private static GlobalMemoryBufferSize: number = 0;
 
-    private _fileCacheDirPath : string = Path.join(process.cwd(),"cache");
+    private static FileCacheDirPath : string = Path.join(process.cwd(),"cache");
 
 
     private readonly _port: number;
@@ -72,6 +72,10 @@ class SocketHandler {
 
     public get socket() : net.Socket {
         return this._socket;
+    }
+
+    public static set fileCacheDirPath(path: string) {
+        this.FileCacheDirPath = path;
     }
 
     public set onSocketEvent(event: OnSocketEvent) {
@@ -359,7 +363,7 @@ class SocketHandler {
 
         if(this._memBufferSizeLimit > 0 && ((this.isOverMemoryBufferSize(data.length) || SocketHandler.isOverGlobalMemoryBufferSize(data.length)))) {
             if(!this._fileCache) {
-                this._fileCache = FileCache.create(this._fileCacheDirPath);
+                this._fileCache = FileCache.create(SocketHandler.FileCacheDirPath);
             }
 
             let record = this._fileCache.writeSync(data);
