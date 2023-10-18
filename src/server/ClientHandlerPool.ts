@@ -93,6 +93,7 @@ class ClientHandlerPool {
     /**
      * 데이터 핸들러가 세션을 닫으라는 명령을 받았을때 호출된다.
      * @param sessionID
+     * @param endLength
      * @private
      */
     private closeSessionAndCallback(sessionID: number, endLength: number) : void {
@@ -134,6 +135,7 @@ class ClientHandlerPool {
         if(handler == undefined || handler.dataHandlerState != DataHandlerState.OnlineSession) {
             logger.error(`ClientHandlerPool::flushWaitBuffer: invalid sessionID: ${sessionID}`);
             if(handler) {
+                handler.setBufferSizeLimit(-1);
                 handler.dataHandlerState = DataHandlerState.Wait;
             }
             return;
@@ -220,7 +222,7 @@ class ClientHandlerPool {
     /**
      * TunnelServer 에서 CtrlHandler 에 대한 데이터 이벤트를 받아서 처리한다.
      * @param handler
-     * @param data
+     * @param packet
      */
     public delegateReceivePacketOfControlHandler(handler: TunnelControlHandler, packet: CtrlPacket) : void {
         if(packet.cmd == CtrlCmd.SuccessOfOpenSession || packet.cmd == CtrlCmd.FailOfOpenSession) {
@@ -286,11 +288,15 @@ class ClientHandlerPool {
             connected = false;
         }
         if(connected) {
+            if(pendingState) {
+                dataHandler.setBufferSizeLimit(pendingState.openOpt.bufferLimit);
+            }
             dataHandler.sessionID = sessionID;
             dataHandler.dataHandlerState = DataHandlerState.OnlineSession;
             this._activatedSessionHandlerMap_.set(sessionID, dataHandler);
             return true;
         } else {
+            dataHandler.setBufferSizeLimit(-1);
             dataHandler.dataHandlerState = DataHandlerState.Wait;
             this._activatedSessionHandlerMap_.delete(sessionID);
             this.closeSessionAndCallback(sessionID, 0);
@@ -370,6 +376,7 @@ class ClientHandlerPool {
             handler = this._dataHandlerMap.get(handlerID);
 
             if(handler != undefined) {
+                handler.setBufferSizeLimit(-1);
                 handler.dataHandlerState = DataHandlerState.Wait;
             }
             this.closeSessionAndCallback(sessionID, endLength);
@@ -423,6 +430,7 @@ class ClientHandlerPool {
         this._activatedSessionHandlerMap_.delete(sessionID);
         this._pendingSessionIDMap.delete(sessionID);
         this._waitingDataBufferQueueMap.delete(sessionID);
+        handler.setBufferSizeLimit(-1);
         handler.dataHandlerState = DataHandlerState.Wait;
 
 
@@ -453,6 +461,7 @@ class ClientHandlerPool {
 
 
     public end() : void {
+        // noinspection JSUnusedLocalSymbols
         for(let [key, value] of this._dataHandlerMap) {
             value.onSocketEvent = function () {};
             value.endImmediate();

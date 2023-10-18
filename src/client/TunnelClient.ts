@@ -143,7 +143,7 @@ class TunnelClient {
         } else {
             return false;
         }
-        this._ctrlHandler!.sendData(packet.toBuffer(), (handler, success, err) => {
+        this._ctrlHandler!.sendData(packet.toBuffer(), (handler, success) => {
             if(!success) {
                 this.deleteDataHandler(dataHandler!);
                 return;
@@ -159,6 +159,7 @@ class TunnelClient {
             return;
         }
         this._activatedSessionDataHandlerMap.delete(sessionID);
+        handler.setBufferSizeLimit(-1);
         handler.dataHandlerState = DataHandlerState.Wait;
     }
 
@@ -192,7 +193,7 @@ class TunnelClient {
             handler.onSocketEvent = function (){};
             this.closeEndPointSession?.(sessionID, 0);
         });
-        this._dataHandlerMap.forEach((handler: TunnelDataHandler, handlerID: number) => {
+        this._dataHandlerMap.forEach((handler: TunnelDataHandler /*, handlerID: number*/) => {
             handler.onSocketEvent = function (){};
             handler.destroy();
         });
@@ -224,6 +225,7 @@ class TunnelClient {
                         this._onEndPointCloseCallback?.(packet.sessionID, 0);
                     } else {
                         dataHandler.addOnceDrainListener(() => {
+                            dataHandler?.setBufferSizeLimit(-1);
                             dataHandler!.dataHandlerState = DataHandlerState.Wait;
                             this._onEndPointCloseCallback?.(packet.sessionID, packet.waitReceiveLength);
                         });
@@ -246,7 +248,6 @@ class TunnelClient {
      * 패킷 전송이 성공하면 데이터 핸들러는 자신의 상태를 DataHandlerState.ConnectingEndPoint 로 변경하고, EndPoint와 연결을 시도한다.
      * @param handlerID
      * @param sessionID
-     * @param endPointConnectOpt
      * @private
      */
     private connectDataHandler(handlerID: number,  sessionID: number) : void {
@@ -256,7 +257,7 @@ class TunnelClient {
                 dataHandler.handlerType = HandlerType.Data;
                 this._dataHandlerMap.set(handlerID, dataHandler);
                 let dataStatePacket = DataStatePacket.create(this._id, handlerID, sessionID);
-                dataHandler.sendData(dataStatePacket.toBuffer(), (handler, success, err) => {
+                dataHandler.sendData(dataStatePacket.toBuffer(), (handler, success /*, err*/) => {
                     if(!success) {
                         this.deleteDataHandler(dataHandler);
                         return;
@@ -289,6 +290,7 @@ class TunnelClient {
         }
         dataHandler.sessionID = sessionID;
         dataHandler.dataHandlerState = DataHandlerState.ConnectingEndPoint;
+        dataHandler.setBufferSizeLimit(endPointConnectOpt.bufferLimit);
         this._activatedSessionDataHandlerMap.set(sessionID, dataHandler);
         console.log('[client]',`TunnelClient: connectEndPoint: sessionID:${sessionID}, remote:(${dataHandler!.socket.remoteAddress})${dataHandler!.socket.remotePort}`)
         process.nextTick(() => {
@@ -353,11 +355,12 @@ class TunnelClient {
         if(dataHandler && dataHandler.dataHandlerState == DataHandlerState.ConnectingEndPoint) {
             console.log("엔드포인트 생성 및 연결 !실패! 전송. 세션ID:" + sessionID);
             let packet = CtrlPacket.resultOfOpenSession(dataHandler.handlerID!, sessionID, false)
-            this._ctrlHandler!.sendData(packet.toBuffer(), (handler, success, err) => {
+            this._ctrlHandler!.sendData(packet.toBuffer(), (handler, success/*, err*/) => {
                 if(!success) {
                     this.deleteDataHandler(dataHandler!);
                     return;
                 }
+                dataHandler?.setBufferSizeLimit(-1);
                 dataHandler!.dataHandlerState = DataHandlerState.Wait;
             });
         } else if(dataHandler)  {
@@ -374,14 +377,14 @@ class TunnelClient {
 
     private sendCloseSession(handlerID: number, sessionID: number, waitReceiveLength: number, dataHandler?: TunnelDataHandler) : void {
         try {
-            this._ctrlHandler!.sendData(CtrlPacket.closeSession(handlerID, sessionID, waitReceiveLength).toBuffer(), (handler, success, err) => {
+            this._ctrlHandler!.sendData(CtrlPacket.closeSession(handlerID, sessionID, waitReceiveLength).toBuffer(), (handler, success/*, err*/ ) => {
                 if (!success) {
                     if (dataHandler) {
                         this.deleteDataHandler(dataHandler!);
                     }
                     return;
                 }
-            });
+            })
         } catch (e) {
             console.error(e);
         }

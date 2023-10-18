@@ -42,10 +42,8 @@ class EndPointClientPool {
             setInterval(() => {
                 let closeWaitHandlerList : Array<EndpointHandler> = Array.from(this._endPointClientMap.values())
                     .filter((handler: EndpointHandler) => {
-                        if(handler.closeWait) {
-                            return true;
-                        }
-                        return false;
+                        return !!handler.closeWait;
+
                     });
                 closeWaitHandlerList.forEach((handler: EndpointHandler) => {
                     this.closeIfSatisfiedLength(handler, now - handler.lastSendTime! > this._closeWaitTimeout);
@@ -84,9 +82,7 @@ class EndPointClientPool {
         if(endPointClient) {
             endPointClient.endLength = endLength;
             endPointClient.closeWait = true;
-            if(endLength == 0) {
-                this.closeIfSatisfiedLength(endPointClient);
-            }
+            this.closeIfSatisfiedLength(endPointClient);
             return true;
         }
         return false;
@@ -163,7 +159,7 @@ class EndPointClientPool {
 
     public closeAll() {
         this._onEndPointClientStateChangeCallback = null;
-        this._endPointClientMap.forEach((client: SocketHandler, key: number) => {
+        this._endPointClientMap.forEach((client: SocketHandler /*, key: number*/) => {
             client.destroy();
         });
         this._endPointClientMap.clear();
