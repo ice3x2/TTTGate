@@ -332,6 +332,7 @@ class ClientHandlerPool {
     /**
      * ExternalPortServer 로부터 세션을 닫으라는 명령을 받았을때 호출된다. (ExternalPortServer 의 핸들러가 close 될 때)
      * @param sessionID
+     * @param waitForLength
      */
     public sendCloseSession(sessionID: number, waitForLength : number) : void {
         let handler = this._activatedSessionHandlerMap_.get(sessionID);
@@ -406,7 +407,6 @@ class ClientHandlerPool {
      * 새로운 데이터 핸들러를 만들고, 컨트롤러 핸들러에게 세션을 열라는 명령을 보낸다.
      * @param dataHandlerID 새로운 데이터 핸들러의 ID
      * @param sessionId 세션 ID
-     * @param opt 세션 옵션
      * @private
      */
     private sendNewDataHandler(dataHandlerID: number, sessionId: number) : void {
