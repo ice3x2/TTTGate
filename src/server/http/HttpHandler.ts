@@ -8,7 +8,7 @@ import {has} from "lodash";
 
 
 interface OnSocketEvent {
-    (handler: SocketHandler, state: SocketState, data?: any) : void;
+    (handler: HttpHandler, state: SocketState, data?: any) : void;
 }
 
 
@@ -145,7 +145,10 @@ class HttpHandler {
         if(data) {
             this._receiveLength += Buffer.byteLength(data);
         }
-        this._event?.(this._socketHandler, state, data);
+
+
+        this._event?.(this, state, data);
+
     }
 
 

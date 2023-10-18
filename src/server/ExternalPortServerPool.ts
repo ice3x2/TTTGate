@@ -246,35 +246,35 @@ class ExternalPortServerPool {
 
 
     private onHandlerEvent = (handler: EndpointHandler | EndpointHttpHandler, state: SocketState, data?: any) : void => {
-        //console.log("[server:ExternalPort]",`onHandlerEvent: id: ${sessionID} state: ${SocketState[state]} , data : ${data ? data.length : 0}`);
         let sessionID = handler.getBundle(SESSION_ID_BUNDLE_KEY)!;
-        handler = this._handlerMap.get(sessionID)!;
-        if(SocketState.Receive == state) {
-            let portNumber : number = handler.getBundle(PORT_BUNDLE_KEY);
-            let status = this._statusMap.get(portNumber);
-            if(status) {
-                status.rx += data.length;
-            }
-            console.log(handler.protocolType);
 
-            this._onHandlerEventCallback?.(sessionID, state,{ data: data, receiveLength: handler.receiveLength});
-        } else if(sessionID && (state == SocketState.End || state == SocketState.Closed)) {
-            this.updateCount(handler.getBundle(OPTION_BUNDLE_KEY).forwardPort, false);
-            if(this._handlerMap.has(sessionID)) {
-                this._onHandlerEventCallback?.(sessionID, SocketState.Closed, {
-                    data: data,
-                    receiveLength: handler.receiveLength!
+            if (SocketState.Receive == state) {
+                let portNumber: number = handler.getBundle(PORT_BUNDLE_KEY);
+                let status = this._statusMap.get(portNumber);
+                if (status) {
+                    status.rx += data.length;
+                }
+
+
+                this._onHandlerEventCallback?.(sessionID, state, {data: data, receiveLength: handler.receiveLength});
+            } else if (sessionID && (state == SocketState.End || state == SocketState.Closed)) {
+                this.updateCount(handler.getBundle(OPTION_BUNDLE_KEY).forwardPort, false);
+                if (this._handlerMap.has(sessionID)) {
+                    this._onHandlerEventCallback?.(sessionID, SocketState.Closed, {
+                        data: data,
+                        receiveLength: handler.receiveLength!
+                    });
+                    this._handlerMap.delete(sessionID);
+                }
+                setImmediate(() => {
+                    this._onTerminateSessionCallback?.(sessionID);
                 });
-                this._handlerMap.delete(sessionID);
-            }
-            setImmediate(() => {
-                this._onTerminateSessionCallback?.(sessionID);
-            });
-            logger.info(`ExternalPortServer::End - id: ${sessionID}, port: ${handler.getBundle(OPTION_BUNDLE_KEY).forwardPort}`);
-            handler.destroy();
-        } else if(SocketState.Closed == state) {
+                logger.info(`ExternalPortServer::End - id: ${sessionID}, port: ${handler.getBundle(OPTION_BUNDLE_KEY).forwardPort}`);
+                handler.destroy();
+            } else if (SocketState.Closed == state) {
 
-        }
+            }
+
     }
 
     private onServerEvent = (server: TCPServer, state: SocketState, handlerOpt?: SocketHandler) : void => {
