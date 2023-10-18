@@ -55,3 +55,6 @@ dist/
 
 .run/
 /web/
+
+.pid_*
+.pid-*
