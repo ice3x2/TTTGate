@@ -7,6 +7,7 @@ import Path from "path";
 
 import Dequeue from "./Dequeue";
 import Errors from "./Errors";
+import {FileCache} from "./FileCache";
 
 
 
@@ -361,7 +362,8 @@ class SocketHandler {
 
 
     public sendData(data: Buffer,onWriteComplete? : OnWriteComplete ) : void {
-        if(this.isEnd()) {
+        //23.10.19 수정 - 종료 대기 상태면 데이터를 버린다.
+        if(this.isEnd() || this._endWaitingState) {
             onWriteComplete?.(this, false);
             return;
         }

@@ -7,6 +7,7 @@ import ConnectOpt from "../util/ConnectOpt";
 import {logger} from "../commons/Logger";
 import {TunnelControlHandler,TunnelDataHandler,DataHandlerState} from "../types/TunnelHandler";
 import DataStatePacket from "../commons/DataStatePacket";
+import Dequeue from "../util/Dequeue";
 
 
 enum CtrlState {
@@ -60,6 +61,7 @@ class TunnelClient {
     private _ctrlHandler: TunnelControlHandler | undefined = undefined;
     private _dataHandlerMap : Map<number, TunnelDataHandler> = new Map<number, TunnelDataHandler>();
     private _activatedSessionDataHandlerMap : Map<number, TunnelDataHandler> = new Map<number, TunnelDataHandler>();
+    private _waitBufferQueueMap : Map<number, Dequeue<Buffer>> = new Map<number, Dequeue<Buffer>>();
 
 
     //private _ctrlPacketStreamer : CtrlPacketStreamer = new CtrlPacketStreamer();
@@ -132,10 +134,12 @@ class TunnelClient {
             console.error(`TunnelClient: syncSession: invalid state: ${this._state}`);
             return false;
         }
+
         let dataHandler = this._activatedSessionDataHandlerMap.get(sessionID);
         if(!dataHandler) {
             return false;
         }
+        this._waitBufferQueueMap.set(sessionID, new Dequeue<Buffer>());
         let packet : CtrlPacket | undefined = undefined;
         if(dataHandler.dataHandlerState == DataHandlerState.ConnectingEndPoint) {
             console.log("엔드포인트 생성 및 연결 성공 전송. 세션ID:" + sessionID);
@@ -143,14 +147,36 @@ class TunnelClient {
         } else {
             return false;
         }
-        dataHandler!.dataHandlerState = DataHandlerState.OnlineSession;
         this._ctrlHandler!.sendData(packet.toBuffer(), (handler, success) => {
             if(!success) {
                 this.deleteDataHandler(dataHandler!);
                 return;
             }
+            dataHandler!.dataHandlerState = DataHandlerState.OnlineSession;
+            setImmediate(() => {
+                this.flushWaitBuffer(sessionID);
+            });
+
+
         });
         return true;
+    }
+
+    private flushWaitBuffer(sessionID: number) : void {
+        let queue = this._waitBufferQueueMap.get(sessionID);
+        if(!queue) {
+            return;
+        }
+        let dataHandler = this._activatedSessionDataHandlerMap.get(sessionID);
+        if(!dataHandler) {
+            this._waitBufferQueueMap.delete(sessionID);
+            return;
+        }
+        let data = queue.popFront();
+        while(data) {
+            dataHandler.sendData(data!);
+            data = queue.popFront();
+        }
     }
 
     public terminateEndPointSession(sessionID: number) : void {
@@ -161,10 +187,12 @@ class TunnelClient {
         this._activatedSessionDataHandlerMap.delete(sessionID);
         handler.setBufferSizeLimit(-1);
         handler.dataHandlerState = DataHandlerState.Wait;
+        this._waitBufferQueueMap.delete(sessionID);
     }
 
 
     private deleteDataHandler(handler: TunnelDataHandler) : void {
+        this._waitBufferQueueMap.delete(handler.sessionID ?? -1);
         handler.dataHandlerState = DataHandlerState.Terminated;
         this._activatedSessionDataHandlerMap.delete(handler.sessionID ?? 0);
         this._dataHandlerMap.delete(handler.handlerID ?? 0);
@@ -394,14 +422,22 @@ class TunnelClient {
     public sendData(sessionID: number, data: Buffer) : boolean {
         let dataHandler = this._activatedSessionDataHandlerMap.get(sessionID);
         if (!dataHandler) {
-            return false;
+            return this.writeWaitBuffer(sessionID, data);
         }
         if(dataHandler.dataHandlerState != DataHandlerState.OnlineSession) {
-            return false;
+            return this.writeWaitBuffer(sessionID, data);
         }
-
         dataHandler.sendData(data);
         return true;
+    }
+
+    private writeWaitBuffer(sessionID: number, data: Buffer) : boolean {
+        let queue = this._waitBufferQueueMap.get(sessionID);
+        if(queue) {
+            queue.pushBack(data);
+            return true;
+        }
+        return false;
     }
 
 
