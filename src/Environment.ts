@@ -19,6 +19,10 @@ const Environment = {
         binDir: !DEV_MODE ? Path.join(ROOT_DIR,'bin') :Path.join(ROOT_DIR),
     },
     devMode : DEV_MODE,
+    version : {
+        build: '20231019',
+        name: '1.0.5b'
+    }
 }
 
 export default Environment;

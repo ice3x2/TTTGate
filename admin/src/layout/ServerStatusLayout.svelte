@@ -22,7 +22,7 @@ let _onCloseAlert = () => {};
 let _sysInfo : SysInfo;
 let _usage : Usage = undefined;
 let _clientStatuses : Array<ClientStatus> = [];
-
+ServerStatusCtrl.getVersion()
 onMount(async () => {
     if(!_intervalId) {
 

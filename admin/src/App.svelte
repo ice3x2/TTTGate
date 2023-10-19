@@ -1,20 +1,27 @@
 <script lang="ts">
 
   import LoginCtrl from "./controller/LoginCtrl";
+  import ServerStatusCtrl from "./controller/ServerStatusCtrl";
   import ServerSetLayout from "./layout/ServerSetLayout.svelte";
   import TunnelOptionSetLayout from "./layout/TunnelOptionSetLayout.svelte";
   import {onMount} from "svelte";
   import Login from "./layout/Login.svelte";
-  import AlertLayout from "./component/AlertLayout.svelte";
   import ServerStatusLayout from "./layout/ServerStatusLayout.svelte";
+
 
   type SessionState = 'Checking' | 'Valid' | 'Invalid';
 
   let _validSession: SessionState = 'Checking';
 
+  let _versionInfo : {name: string, build: string} = {name: '', build: ''};
+
   onMount(async () => {
       _validSession = (await LoginCtrl.validateSession()) ? 'Valid' : 'Invalid';
+
+
   });
+
+  ServerStatusCtrl.getVersion()
 
 
   let generatePastelColor = (): string => {
@@ -39,17 +46,24 @@
     {:else if _validSession === 'Invalid'}
       <Login />
     {:else}
-      <div>Checking...</div>
+      <div>Offline server...</div>
 
     {/if}
 
-  <AlertLayout></AlertLayout>
+
+
+    <div class="version-box">
+      <div class="version-name">{_versionInfo.name}</div>
+      <div class="version-build">{_versionInfo.build}</div>
+    </div>
 
 
 
 </main>
 
 <style>
+
+
   main {
     left: 0;
     top: 0;

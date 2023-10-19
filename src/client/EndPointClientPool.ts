@@ -17,7 +17,7 @@ interface OnEndPointTerminateCallback {
     (id: number) : void;
 }
 
-const SESSION_CLEANUP_INTERVAL : number = 5000;
+const SESSION_CLEANUP_INTERVAL : number = 10000;
 
 class EndPointClientPool {
 
@@ -37,9 +37,8 @@ class EndPointClientPool {
 
     private startSessionCleanup() {
         if(this._sessionCleanupIntervalID) clearInterval(this._sessionCleanupIntervalID);
+        let now = Date.now();
         this._sessionCleanupIntervalID = setInterval(() => {
-            let now = Date.now();
-            setInterval(() => {
                 let closeWaitHandlerList : Array<EndpointHandler> = Array.from(this._endPointClientMap.values())
                     .filter((handler: EndpointHandler) => {
                         return !!handler.closeWait;
@@ -49,7 +48,7 @@ class EndPointClientPool {
                     this.closeIfSatisfiedLength(handler, now - handler.lastSendTime! > this._closeWaitTimeout);
                 });
             },SESSION_CLEANUP_INTERVAL);
-        })
+
     }
 
 

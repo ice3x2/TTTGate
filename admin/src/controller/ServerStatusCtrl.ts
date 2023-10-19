@@ -6,6 +6,7 @@ class ServerStatusCtrl {
 
     private static _instance : ServerStatusCtrl;
     private _sysInfoCache : SysInfo | null = null;
+    private static _versionInfo : {name: string, build: string} | null = null;
 
     private constructor() {
 
@@ -37,6 +38,18 @@ class ServerStatusCtrl {
 
     }
 
+
+    public static async getVersion() : Promise<{name: string, build: string}> {
+        if(this._versionInfo) {
+            return this._versionInfo;
+        }
+        let res = await fetch("/api/version", {
+            method: "GET",
+            credentials: "same-origin"
+        });
+        let json = await res.json();
+        return json;
+    }
 
     public async getSysInfo() : Promise<SysInfo> {
         if(this._sysInfoCache) {

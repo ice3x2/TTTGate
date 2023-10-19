@@ -40,7 +40,7 @@ type ExternalPortServerStatus = {
 
 
 
-const SESSION_CLEANUP_INTERVAL = 5000;
+const SESSION_CLEANUP_INTERVAL = 10000;
 
 class ExternalPortServerPool {
 
@@ -57,8 +57,6 @@ class ExternalPortServerPool {
     private static LAST_SESSION_ID = 0;
 
     private _sessionCleanupIntervalID : any = null;
-
-
 
 
 
@@ -88,9 +86,8 @@ class ExternalPortServerPool {
 
     private startSessionCleanup() {
         if(this._sessionCleanupIntervalID) clearInterval(this._sessionCleanupIntervalID);
+        let now = Date.now();
         this._sessionCleanupIntervalID = setInterval(() => {
-            let now = Date.now();
-            setInterval(() => {
                 let closeWaitHandlerList : Array<EndpointHandler | EndpointHttpHandler> = Array.from(this._handlerMap.values())
                     .filter((handler: EndpointHandler | EndpointHttpHandler) => {
                     if(handler.closeWait) {
@@ -102,7 +99,7 @@ class ExternalPortServerPool {
                     this.closeIfSatisfiedLength(handler, now - handler.lastSendTime! > this._closeWaitTimeout);
                 });
             },SESSION_CLEANUP_INTERVAL);
-        })
+
     }
 
 

@@ -23,6 +23,10 @@ class Sentinel {
         return process.env.EXECUTE_MODE != undefined;
     }
 
+    public static isSentinelMode(): boolean {
+        return process.env.EXECUTE_MODE == 'sentinel';
+    }
+
 
     public static create(devMode: boolean): Sentinel {
 
@@ -43,7 +47,8 @@ class Sentinel {
     private makeDevPathList() {
         this._executePath = 'node';
         let root = Path.join(process.argv[1],'..','..')
-        this._argvList = [Path.join(root, 'node_modules', 'ts-node-dev', 'lib', 'bin.js'), '--project', Path.join(root, 'tsconfig.json'), process.argv[1]]
+        //this._argvList = [Path.join(root, 'node_modules', 'ts-node-dev', 'lib', 'bin.js'), '--project', Path.join(root, 'tsconfig.json'), process.argv[1]]
+        this._argvList = [Path.join(root, 'node_modules', 'ts-node', 'dist', 'bin.js'), '--project', Path.join(root, 'tsconfig.json'), process.argv[1]]
         this._argvList = [...this._argvList, ...process.argv.slice(2)];
 
     }
@@ -232,7 +237,7 @@ class Sentinel {
 
 
     private startSentinel(firstAppPID: number, onPid: (pid: number) => void) {
-        this.exec('execute', firstAppPID, onPid);
+        this.exec('sentinel', firstAppPID, onPid);
     }
 
     private startApp(onPid: (pid: number) => void) {
@@ -242,6 +247,7 @@ class Sentinel {
     private exec(type: 'execute' | 'sentinel',pid: number, onPid: (pid: number) => void) {
         const controller = new AbortController();
         const {signal} = controller;
+        //console.log('start ' + type + ' pid:' + this._executePath, this._argvList);
 
         const child = spawn(this._executePath, this._argvList, {
             signal,

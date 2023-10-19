@@ -7,6 +7,8 @@ class ExMath {
     public static floor(value: number, precision: number) : number {
         let pow = Math.pow(10, precision);
         return Math.floor(value * pow) / pow;
+
+
     }
 
     public static ceil(value: number, precision: number) : number {

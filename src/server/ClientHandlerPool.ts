@@ -33,6 +33,9 @@ class ClientHandlerPool {
     private _onSessionCloseCallback? : OnSessionCloseCallback;
     private _onDataReceiveCallback? : OnDataReceiveCallback;
 
+    private _rx : number = 0;
+    private _tx : number = 0;
+
 
     public static create(id : number, controlHandler: SocketHandler) : ClientHandlerPool {
 

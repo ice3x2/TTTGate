@@ -16,6 +16,7 @@ import {SysMonitor} from "../../commons/SysMonitor";
 
 
 
+
 const EMPTY_PEM_DATA : PemData = {
     name: '',
     value: ''
@@ -157,7 +158,11 @@ class AdminServer {
         } else if (url.startsWith("/api/externalCert/")) {
             await this.onGetExternalServerCert(req, res);
             return;
-        } else {
+        } else if(url == '/api/verson') {
+            await this.onGetVersion(req, res);
+
+        }
+        else {
             await this.onGetWebResource(req, res, url);
             return;
         }
@@ -430,6 +435,12 @@ class AdminServer {
         let success = await CertificationStore.instance.updateExternalServerCert(port, certInfo);
         res.writeHead(200, {'Content-Type': 'application/json'});
         res.end(JSON.stringify({success: success, message: success ? '' : 'Invalid certificate'}));
+    }
+
+    private onGetVersion = async (req: IncomingMessage, res: ServerResponse) => {
+        let version = Environment.version;
+        res.writeHead(200, {'Content-Type': 'application/json'});
+        res.end(JSON.stringify({success: true, name: version.name, build: version.build}));
     }
 
 

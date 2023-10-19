@@ -180,6 +180,7 @@ class TunnelServer {
      */
     public async close() : Promise<void> {
         logger.info(`TunnelServer::close`);
+
         return new Promise((resolve, reject) => {
             this.stopClientCheckInterval();
             // noinspection JSUnusedLocalSymbols
