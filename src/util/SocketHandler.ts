@@ -52,6 +52,8 @@ class SocketHandler {
     private _waitQueue: Dequeue<WaitItem> = new Dequeue<WaitItem>();
     private _drainEventList : Array<OnDrainEvent> = [];
 
+    private _breakBufferFlush : boolean = false;
+
     private _sendLength: number = 0;
     private _receiveLength: number = 0;
 
@@ -81,6 +83,10 @@ class SocketHandler {
 
     public set onSocketEvent(event: OnSocketEvent) {
         this._event = event;
+    }
+
+    public get breakBufferFlush() : boolean {
+        return this._breakBufferFlush;
     }
 
     public get sendLength() : number {
@@ -239,6 +245,7 @@ class SocketHandler {
         socket.on('close', ()=> {
             this.callAllDrainEvent(this._waitQueue.isEmpty())
             if(this._state != SocketState.Closed /* && this._state != SocketState.Error*/) {
+                this._breakBufferFlush = !this._waitQueue.isEmpty();
                 this._state = SocketState.Closed;
                 this._event(this, SocketState.Closed);
             }
@@ -253,6 +260,7 @@ class SocketHandler {
         socket.on('end', ()=> {
             if(!this.isEnd()) {
                 this._state = SocketState.End;
+                this._breakBufferFlush = !this._waitQueue.isEmpty();
                 this._event(this, SocketState.End);
                 //23.10.19 수정
                 this._waitQueue.clear();
@@ -266,12 +274,12 @@ class SocketHandler {
             logger.error(`SocketHandler:: procError() - ${error.message}`);
             logger.error(Errors.toString(error));
         }
+        this._breakBufferFlush = !this._waitQueue.isEmpty();
         this.callAllDrainEvent(this._waitQueue.isEmpty())
         if(this._state != SocketState.Closed) {
             this._state = SocketState.Closed;
             this._event(this, SocketState.Closed, error);
         }
-
         this.release();
     }
 

@@ -36,6 +36,8 @@ class HttpHandler {
     private _bufLength: number = 0;
     private _sendLength: number = 0;
 
+    private _leftBufferStateInEnd : boolean = false;
+
     public set onSocketEvent(event: OnSocketEvent) {
         this._event = event;
     }
@@ -103,6 +105,7 @@ class HttpHandler {
             this._currentHttpPipe.write(data);
         } else {
             if(this._socketHandler.isEnd() || SocketState.End == state || /*SocketState.Error == state ||*/ SocketState.Closed == state) {
+                this._leftBufferStateInEnd = this._currentHttpPipe.bufferSize > 0;
                 this._sendLength = this._bufLength;
                 this.release();
             }
@@ -122,6 +125,10 @@ class HttpHandler {
 
             this.manipulateResponseHeader(<HttpResponseHeader>header);
         }
+    }
+
+    public get breakBufferFlush() : boolean {
+        return this._socketHandler.breakBufferFlush || this._leftBufferStateInEnd;
     }
 
     private manipulateRequestHeader(header: HttpRequestHeader) : void {

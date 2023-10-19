@@ -153,10 +153,6 @@ class TunnelClient {
                 return;
             }
             dataHandler!.dataHandlerState = DataHandlerState.OnlineSession;
-            setImmediate(() => {
-                this.flushWaitBuffer(sessionID);
-            });
-
 
         });
         return true;
@@ -181,13 +177,12 @@ class TunnelClient {
 
     public terminateEndPointSession(sessionID: number) : void {
         let handler = this._activatedSessionDataHandlerMap.get(sessionID);
-        if(!handler) {
-            return;
-        }
         this._activatedSessionDataHandlerMap.delete(sessionID);
-        handler.setBufferSizeLimit(-1);
-        handler.dataHandlerState = DataHandlerState.Wait;
         this._waitBufferQueueMap.delete(sessionID);
+        if(handler) {
+            handler.setBufferSizeLimit(-1);
+            handler.dataHandlerState = DataHandlerState.Wait;
+        }
     }
 
 
@@ -243,6 +238,9 @@ class TunnelClient {
             if(this._state == CtrlState.Connected) {
                 if(packet.cmd == CtrlCmd.NewDataHandler) {
                     this.connectDataHandler(packet.ID, packet.sessionID);
+                }
+                else if(packet.cmd == CtrlCmd.SuccessOfOpenSessionAck) {
+                    this.flushWaitBuffer(packet.sessionID);
                 }
                 else if(packet.cmd == CtrlCmd.OpenSession) {
                     this.connectEndPoint(packet.ID, packet.sessionID, packet.openOpt!);

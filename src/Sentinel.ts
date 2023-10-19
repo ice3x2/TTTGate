@@ -41,9 +41,11 @@ class Sentinel {
 
 
     private makeDevPathList() {
-        this._executePath = process.argv[0];
-        this._argvList = [Path.join(Path.join(process.argv[1],'..'), 'node_modules', 'ts-node-dev', 'lib', 'bin.js'), '--project', Path.join(process.cwd(), 'tsconfig.json'), process.argv[1]]
-        this._argvList = [...process.argv.slice(2)];
+        this._executePath = 'node';
+        let root = Path.join(process.argv[1],'..','..')
+        this._argvList = [Path.join(root, 'node_modules', 'ts-node-dev', 'lib', 'bin.js'), '--project', Path.join(root, 'tsconfig.json'), process.argv[1]]
+        this._argvList = [...this._argvList, ...process.argv.slice(2)];
+
     }
 
     private makeRuntimePathList() {
@@ -87,6 +89,7 @@ class Sentinel {
 
     private static processKill(type : 'app' | 'sentinel' | 'foreground') {
         let pidList = this.readPIDFile(type);
+
         let currentPID : number | undefined = undefined;
         for(let pid of pidList) {
             try {
@@ -239,6 +242,7 @@ class Sentinel {
     private exec(type: 'execute' | 'sentinel',pid: number, onPid: (pid: number) => void) {
         const controller = new AbortController();
         const {signal} = controller;
+
         const child = spawn(this._executePath, this._argvList, {
             signal,
             detached: true,
@@ -248,8 +252,15 @@ class Sentinel {
                 APP_PID: pid.toString()
             },
             stdio: ['ignore', 'ignore', 'ignore']
+            //stdio: ['ignore', 'pipe', 'pipe']
         });
         child.unref();
+        /*child.stdout!.on('data', (data) => {
+            console.log(data.toString());
+        });
+        child.stderr!.on('data', (data) => {
+            console.log(data.toString());
+        });*/
         child.on('spawn', () => {
             onPid(child.pid!);
         });

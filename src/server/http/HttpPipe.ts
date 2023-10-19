@@ -84,16 +84,11 @@ class HttpPipe {
 
     private _state : ParseState = ParseState.SEARCHING_FOR_HEADER;
     private _maxHeaderSize : number = 1024 * 1024;
-
     private _messageType : MessageType = MessageType.Request;
-
     private _chunkedSize : number = 0;
     private _chunkedSizeRead : number = 0;
-
     private _contentLengthRead : number = 0;
-
     private _deliverPureData : boolean = false;
-
     private _recursiveCallLevel : number = 0;
 
     private _onErrorCallback? : OnError;
@@ -131,6 +126,10 @@ class HttpPipe {
 
     public get messageType() : MessageType {
         return this._messageType;
+    }
+
+    public get bufferSize() : number {
+        return this._buffer.length;
     }
 
 

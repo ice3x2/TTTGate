@@ -126,7 +126,9 @@ class EndPointClientPool {
             if(state == SocketState.Connected) {
                 console.log("엔드포인트 연결 성공!: sessionID:" + sessionID + "    ");
             }
-            this._onEndPointClientStateChangeCallback?.(sessionID,state,{data: data, receiveLength: (client as EndpointHandler).receiveLength!});
+
+            let handler = (client as EndpointHandler);
+            this._onEndPointClientStateChangeCallback?.(sessionID,state,{data: data, receiveLength:handler.breakBufferFlush ? 0 :handler.receiveLength!});
             if(!this._endPointClientMap.has(sessionID)) {
                 this._endPointClientMap.set(sessionID, client as EndpointHandler);
             }
@@ -138,7 +140,8 @@ class EndPointClientPool {
             this._endPointClientMap.delete(sessionID);
             this._connectOptMap.delete(sessionID);
             if(hasSession) {
-                this._onEndPointClientStateChangeCallback?.(sessionID,state,{receiveLength: (client as EndpointHandler).receiveLength!});
+                let handler = (client as EndpointHandler);
+                this._onEndPointClientStateChangeCallback?.(sessionID,state,{receiveLength: handler.breakBufferFlush ? 0 :handler.receiveLength!});
                 setImmediate(() => {
                     this._onEndPointTerminateCallback?.(sessionID);
                 });

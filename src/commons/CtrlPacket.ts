@@ -35,6 +35,7 @@ enum CtrlCmd {
     NewDataHandler,
     FailOfOpenSession,
     SuccessOfOpenSession,
+    SuccessOfOpenSessionAck,
     NonExistent
 
 }
@@ -126,6 +127,10 @@ class CtrlPacket {
 
     public static resultOfOpenSession(handlerID: number, sessionID: number, isSuccess: boolean) : CtrlPacket {
         return CtrlPacket.createNoDataPacket(!isSuccess ? CtrlCmd.FailOfOpenSession : CtrlCmd.SuccessOfOpenSession, handlerID, sessionID);
+    }
+
+    public static resultOfOpenSessionAck(handlerID: number, sessionID: number) : CtrlPacket {
+        return CtrlPacket.createNoDataPacket(CtrlCmd.SuccessOfOpenSessionAck, handlerID, sessionID);
     }
 
 

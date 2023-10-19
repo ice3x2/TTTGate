@@ -262,7 +262,7 @@ class ExternalPortServerPool {
                 if (this._handlerMap.has(sessionID)) {
                     this._onHandlerEventCallback?.(sessionID, SocketState.Closed, {
                         data: data,
-                        receiveLength: handler.receiveLength!
+                        receiveLength: handler.breakBufferFlush ? 0 :  handler.receiveLength!
                     });
                     this._handlerMap.delete(sessionID);
                 }
