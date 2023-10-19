@@ -13,7 +13,6 @@ enum CtrlState {
 
 enum DataHandlerState {
     None, /** 초기 상태 */
-    Wait, /** 서버와 연결은 되어있지만 세션은 없음 */
     Initializing, /** 서버와 연결하여 자신이 데이터 핸들러 라는 것을 알리는중 */
     ConnectingEndPoint, /** 서버와 연결은 되어있고 세션도 있지만 엔드포인트와 연결중 */
     OnlineSession, /** 서버와 연결은 되어있고 세션도 있고 엔드포인트와 연결 완료 */

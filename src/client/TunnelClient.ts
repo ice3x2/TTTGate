@@ -59,7 +59,6 @@ class TunnelClient {
     private readonly _option : ClientOption;
     private _state : CtrlState = CtrlState.None;
     private _ctrlHandler: TunnelControlHandler | undefined = undefined;
-    private _dataHandlerMap : Map<number, TunnelDataHandler> = new Map<number, TunnelDataHandler>();
     private _activatedSessionDataHandlerMap : Map<number, TunnelDataHandler> = new Map<number, TunnelDataHandler>();
     private _waitBufferQueueMap : Map<number, Dequeue<Buffer>> = new Map<number, Dequeue<Buffer>>();
 
@@ -180,17 +179,14 @@ class TunnelClient {
         this._activatedSessionDataHandlerMap.delete(sessionID);
         this._waitBufferQueueMap.delete(sessionID);
         if(handler) {
-            handler.setBufferSizeLimit(-1);
-            handler.dataHandlerState = DataHandlerState.Wait;
+            handler.destroy();
         }
     }
-
 
     private deleteDataHandler(handler: TunnelDataHandler) : void {
         this._waitBufferQueueMap.delete(handler.sessionID ?? -1);
         handler.dataHandlerState = DataHandlerState.Terminated;
         this._activatedSessionDataHandlerMap.delete(handler.sessionID ?? 0);
-        this._dataHandlerMap.delete(handler.handlerID ?? 0);
         if(handler.sessionID) {
             this._onEndPointCloseCallback?.(handler.sessionID, 0);
         }
@@ -215,13 +211,9 @@ class TunnelClient {
         this._activatedSessionDataHandlerMap.forEach((handler: TunnelDataHandler, sessionID: number) => {
             handler.onSocketEvent = function (){};
             this.closeEndPointSession?.(sessionID, 0);
-        });
-        this._dataHandlerMap.forEach((handler: TunnelDataHandler /*, handlerID: number*/) => {
-            handler.onSocketEvent = function (){};
             handler.destroy();
         });
         this._activatedSessionDataHandlerMap.clear();
-        this._dataHandlerMap.clear();
 
     }
 
@@ -252,7 +244,7 @@ class TunnelClient {
                     } else {
                         dataHandler.addOnceDrainListener(() => {
                             dataHandler?.setBufferSizeLimit(-1);
-                            dataHandler!.dataHandlerState = DataHandlerState.Wait;
+                            dataHandler!.dataHandlerState = DataHandlerState.Terminated;
                             this._onEndPointCloseCallback?.(packet.sessionID, packet.waitReceiveLength);
                         });
                     }
@@ -281,16 +273,16 @@ class TunnelClient {
             if(state == SocketState.Connected) {
                 dataHandler.dataHandlerState = DataHandlerState.Initializing;
                 dataHandler.handlerType = HandlerType.Data;
-                this._dataHandlerMap.set(handlerID, dataHandler);
+                this._activatedSessionDataHandlerMap.set(sessionID, dataHandler);
                 let dataStatePacket = DataStatePacket.create(this._id, handlerID, sessionID);
+                dataHandler.sessionID = sessionID;
+                dataHandler.dataHandlerState = DataHandlerState.ConnectingEndPoint;
                 dataHandler.sendData(dataStatePacket.toBuffer(), (handler, success /*, err*/) => {
                     if(!success) {
                         this.deleteDataHandler(dataHandler);
                         return;
                     }
-                    dataHandler.sessionID = sessionID;
-                    this._activatedSessionDataHandlerMap.set(sessionID, dataHandler);
-                    dataHandler.dataHandlerState = DataHandlerState.ConnectingEndPoint;
+
                 });
             } else if(state == SocketState.Receive) {
                 this.onReceiveFromDataHandler(dataHandler as TunnelDataHandler, data);
@@ -310,7 +302,7 @@ class TunnelClient {
      * @private
      */
     private connectEndPoint(handlerID: number, sessionID: number,endPointConnectOpt: OpenOpt) : boolean {
-        let dataHandler = this._dataHandlerMap.get(handlerID);
+        let dataHandler = this._activatedSessionDataHandlerMap.get(sessionID);
         if(!dataHandler) {
             return false;
         }
@@ -386,8 +378,7 @@ class TunnelClient {
                     this.deleteDataHandler(dataHandler!);
                     return;
                 }
-                dataHandler?.setBufferSizeLimit(-1);
-                dataHandler!.dataHandlerState = DataHandlerState.Wait;
+                dataHandler!.dataHandlerState = DataHandlerState.Terminated;
             });
         } else if(dataHandler)  {
             let handlerID = dataHandler?.handlerID ?? 0;

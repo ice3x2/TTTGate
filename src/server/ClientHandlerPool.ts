@@ -27,10 +27,7 @@ class ClientHandlerPool {
 
     // 열린 핸들러 맵. 세션ID를 키로 사용한다.
     private _activatedSessionHandlerMap_ : Map<number, TunnelDataHandler> = new Map<number, TunnelDataHandler>();
-
-
     private _waitingDataBufferQueueMap : Map<number,{send: Dequeue<Buffer>, receive: Dequeue<Buffer>}> = new Map<number, {send: Dequeue<Buffer>, receive: Dequeue<Buffer>}>();
-    private _dataHandlerMap : Map<number,TunnelDataHandler> = new Map<number,TunnelDataHandler>();
     private _bufferSize : number = 0;
     private _pendingSessionIDMap : Map<number, {handlerID: number, sessionID: number, openOpt: OpenOpt, available: boolean }> = new Map<number, {handlerID: number, sessionID: number, openOpt: OpenOpt,available: boolean }>();
     private _onSessionCloseCallback? : OnSessionCloseCallback;
@@ -50,12 +47,9 @@ class ClientHandlerPool {
 
     public endDataHandler(handler: TunnelDataHandler) : void {
         let sessionID = this.findSessionIDByDataHandler(handler);
-        if(sessionID == undefined) {
-            sessionID = -1;
+        if(sessionID != undefined) {
+            this.terminateSession(sessionID);
         }
-        this.releaseSession_(handler.handlerID!,sessionID);
-        handler.dataHandlerState = DataHandlerState.Terminated;
-        handler.end_();
     }
 
 
@@ -83,10 +77,6 @@ class ClientHandlerPool {
         return this._pendingSessionIDMap.size;
     }
 
-    public get dataHandlerCount() : number {
-        return this._dataHandlerMap.size;
-    }
-
 
     /**
      * 데이터 핸들러가 세션을 닫으라는 명령을 받았을때 호출된다.
@@ -102,14 +92,12 @@ class ClientHandlerPool {
         let pendingDataState = Array.from(this._pendingSessionIDMap.values()).find((value) => {
           return value.handlerID == dataHandler.handlerID;
         });
-
         if(!pendingDataState) {
             logger.error(`ClientHandlerPool::putNewDataHandler: invalid handlerID: ${dataHandler.handlerID}`);
             dataHandler.endImmediate();
             return;
         }
         dataHandler.dataHandlerState = DataHandlerState.Initializing;
-        this._dataHandlerMap.set(dataHandler.handlerID!, dataHandler);
         this._activatedSessionHandlerMap_.set(pendingDataState.sessionID, dataHandler);
         dataHandler.dataHandlerState = DataHandlerState.ConnectingEndPoint;
         dataHandler.sessionID = pendingDataState.sessionID;
@@ -134,7 +122,8 @@ class ClientHandlerPool {
             logger.error(`ClientHandlerPool::flushWaitBuffer: invalid sessionID: ${sessionID}`);
             if(handler) {
                 handler.setBufferSizeLimit(-1);
-                handler.dataHandlerState = DataHandlerState.Wait;
+                handler.dataHandlerState = DataHandlerState.Terminated;
+                this.closeSessionAndCallback(sessionID, 0);
             }
             return;
         }
@@ -177,6 +166,9 @@ class ClientHandlerPool {
 
 
     private findSessionIDByDataHandler(handler: TunnelDataHandler) : number | undefined {
+        if(handler.sessionID != undefined && handler.sessionID > -1) {
+            return handler.sessionID;
+        }
         for(let [key, value] of this._activatedSessionHandlerMap_) {
             if(value == handler) {
                 return key;
@@ -203,18 +195,11 @@ class ClientHandlerPool {
             return;
         }
         this._waitingDataBufferQueueMap.set(sessionID,{send: new Dequeue<Buffer>(), receive: new Dequeue<Buffer>()});
-        let dataHandler = this.obtainHandler();
         let pendingSessionState = {handlerID: 0, sessionID: sessionID, openOpt: opt, available: true};
         this._pendingSessionIDMap.set(sessionID,pendingSessionState);
-        if(dataHandler == undefined) {
-            pendingSessionState.handlerID = ++ClientHandlerPool.LAST_DATA_HANDLER_ID;
-            this.sendNewDataHandler(pendingSessionState.handlerID, sessionID);
-        } else {
-            dataHandler.sessionID = sessionID;
-            dataHandler.dataHandlerState = DataHandlerState.ConnectingEndPoint;
-            pendingSessionState.handlerID = dataHandler.handlerID!;
-            this.sendConnectEndPointPacket(dataHandler.handlerID!, sessionID, opt);
-        }
+        pendingSessionState.handlerID = ++ClientHandlerPool.LAST_DATA_HANDLER_ID;
+        this.sendNewDataHandler(pendingSessionState.handlerID, sessionID);
+
     }
 
     /**
@@ -277,31 +262,27 @@ class ClientHandlerPool {
      * @private
      */
     private promoteDataHandler(handlerID : number,sessionID: number, connected: boolean) : boolean  {
-        let dataHandler = this._dataHandlerMap.get(handlerID);
-        if(!dataHandler ||
-            (dataHandler.dataHandlerState != DataHandlerState.ConnectingEndPoint && dataHandler.dataHandlerState != DataHandlerState.Initializing)) {
-            return false;
-        }
+        let dataHandler = this._activatedSessionHandlerMap_.get(sessionID);
         let pendingState = this._pendingSessionIDMap.get(sessionID);
-        if(!pendingState || pendingState.handlerID != handlerID || !pendingState.available) {
+        if(!dataHandler || !pendingState || pendingState.handlerID != handlerID || !pendingState.available) {
             connected = false;
         }
         if(connected) {
             if(pendingState) {
-                dataHandler.setBufferSizeLimit(pendingState.openOpt.bufferLimit);
+                dataHandler!.setBufferSizeLimit(pendingState.openOpt.bufferLimit);
             }
-            dataHandler.sessionID = sessionID;
-            dataHandler.dataHandlerState = DataHandlerState.OnlineSession;
-            this._activatedSessionHandlerMap_.set(sessionID, dataHandler);
+            dataHandler!.dataHandlerState = DataHandlerState.OnlineSession;
             return true;
         } else {
-            dataHandler.setBufferSizeLimit(-1);
-            dataHandler.dataHandlerState = DataHandlerState.Wait;
             this._activatedSessionHandlerMap_.delete(sessionID);
             this._pendingSessionIDMap.delete(sessionID);
             this.burnWaitBuffer(sessionID);
             this.sendCloseSession(sessionID, 0);
             this.closeSessionAndCallback(sessionID, 0);
+            if(dataHandler) {
+                dataHandler.destroy();
+            }
+
             return false;
         }
 
@@ -384,18 +365,9 @@ class ClientHandlerPool {
         let pendingState = this._pendingSessionIDMap.get(sessionID);
         if(pendingState) {
             pendingState.available = false;
-            if(handlerID == 0) {
-                handlerID = pendingState.handlerID;
-            }
         }
         let handler = this._activatedSessionHandlerMap_.get(sessionID);
         if(handler == undefined) {
-            handler = this._dataHandlerMap.get(handlerID);
-
-            if(handler != undefined) {
-                handler.setBufferSizeLimit(-1);
-                handler.dataHandlerState = DataHandlerState.Wait;
-            }
             this.closeSessionAndCallback(sessionID, endLength);
             return;
         }
@@ -403,20 +375,6 @@ class ClientHandlerPool {
     }
 
 
-    /**
-     * 핸들러풀에서 핸들러를 꺼내온다. 만약 핸들러풀에 핸들러가 없으면 undefined를 반환한다.
-     * @private
-     */
-    private obtainHandler() : TunnelDataHandler | undefined {
-        let handlers = Array.from(this._dataHandlerMap.values());
-        for(let handler of handlers) {
-            if(handler.dataHandlerState == DataHandlerState.Wait) {
-                handler.dataHandlerState = DataHandlerState.ConnectingEndPoint;
-                return handler;
-            }
-        }
-        return undefined;
-    }
 
 
     /**
@@ -438,13 +396,11 @@ class ClientHandlerPool {
 
     public terminateSession(sessionID: number) : void {
         let handler = this._activatedSessionHandlerMap_.get(sessionID);
-
         this._activatedSessionHandlerMap_.delete(sessionID);
         this._pendingSessionIDMap.delete(sessionID);
         this._waitingDataBufferQueueMap.delete(sessionID);
         if(handler) {
-            handler.setBufferSizeLimit(-1);
-            handler.dataHandlerState = DataHandlerState.Wait;
+            handler.end_();
         }
     }
 
@@ -461,11 +417,7 @@ class ClientHandlerPool {
         let packet = CtrlPacket.connectEndPoint(dataHandlerID, sessionId, opt).toBuffer();
         this._controlHandler.sendData(packet, (socketHandler, success, err) => {
             if(!success) {
-                let dataHandler = this._dataHandlerMap.get(dataHandlerID);
-                if(!dataHandler) return;
-                dataHandler.dataHandlerState = DataHandlerState.Terminated;
                 this.sendCloseSession(sessionId, 0);
-                console.log('[ClientHandlerPool]', `sendOpen: fail: ${err}`);
                 return;
             }
         });
@@ -474,12 +426,11 @@ class ClientHandlerPool {
 
     public end() : void {
         // noinspection JSUnusedLocalSymbols
-        for(let [key, value] of this._dataHandlerMap) {
+        for(let [key, value] of this._activatedSessionHandlerMap_) {
             value.onSocketEvent = function () {};
             value.endImmediate();
         }
         this._activatedSessionHandlerMap_.clear();
-        this._dataHandlerMap.clear();
         this._controlHandler.onSocketEvent = function () {};
         this._controlHandler.endImmediate();
         this._onSessionCloseCallback = undefined;

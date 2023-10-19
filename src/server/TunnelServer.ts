@@ -167,7 +167,7 @@ class TunnelServer {
                     uptime: Date.now() - handlerPool.createTime,
                     address: handlerPool.address,
                     activeSessionCount: handlerPool.activatedSessionCount,
-                    dataHandlerCount: handlerPool.dataHandlerCount
+                    dataHandlerCount: handlerPool.activatedSessionCount
                 });
 
         });
@@ -380,7 +380,7 @@ class TunnelServer {
             try {
                 let result = DataStatePacket.fromBuffer(data);
                 if (result.packet) {
-                    handler.dataHandlerState = DataHandlerState.Wait;
+                    handler.dataHandlerState = DataHandlerState.Initializing;
                     handler.leftOverBuffer = undefined;
                     handler.ctrlID = result.packet.ctrlID;
                     handler.handlerID = result.packet.handlerID;
@@ -556,7 +556,8 @@ class TunnelServer {
 
     private endDataHandler(dataHandler : TunnelDataHandler) : void {
         let ctrlID = dataHandler.ctrlID ?? 0;
-        let clientHandlerPool = this._clientHandlerPoolMap.get(ctrlID);
+        let clientHandlerPool = this.findCtrlHandlerPool(dataHandler.sessionID ?? -1);
+        clientHandlerPool = clientHandlerPool ? clientHandlerPool : this._clientHandlerPoolMap.get(ctrlID);
         if(!clientHandlerPool) {
             logger.error(`TunnelServer::onHandlerEvent - Not Found ClientHandlerPool. id: ${ctrlID}`);
             dataHandler.destroy();
