@@ -1,12 +1,12 @@
 
-import {InvalidSession, type ClientStatus, type SysInfo, type Usage} from "./Types";
+import {InvalidSession, type ClientStatus, type SysInfo, type Usage, type VersionInfo} from "./Types";
 
 
 class ServerStatusCtrl {
 
     private static _instance : ServerStatusCtrl;
     private _sysInfoCache : SysInfo | null = null;
-    private static _versionInfo : {name: string, build: string} | null = null;
+    private static _versionInfo : VersionInfo | null = null;
 
     private constructor() {
 
@@ -39,7 +39,7 @@ class ServerStatusCtrl {
     }
 
 
-    public static async getVersion() : Promise<{name: string, build: string}> {
+    public static async getVersion() : Promise<VersionInfo> {
         if(this._versionInfo) {
             return this._versionInfo;
         }
