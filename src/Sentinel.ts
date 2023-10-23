@@ -1,9 +1,11 @@
 import { spawn } from 'child_process';
 import Path from "path";
 import {clearInterval} from "timers";
-import {logger} from "./commons/Logger";
 import Environment from "./Environment";
 const find = require('find-process');
+
+import LoggerFactory  from "./util/logger/LoggerFactory";
+const logger = LoggerFactory.getLogger('boot', 'Sentinel');
 
 
 
@@ -215,18 +217,18 @@ class Sentinel {
         let intervalID = setInterval(() => {
             find('pid', pid).then((list: Array<any>) => {
                 if(list.length == 0) {
-                    logger.warn('[SENTINEL]','App not found. pid:' + pid);
+                    logger.warn('App not found. pid:' + pid);
                     clearInterval(intervalID);
                     setTimeout(() => {
-                        logger.info('[SENTINEL]','Restart app');
+                        logger.info('Restart app');
                         this.restartApp();
                     }, 3000);
                 }
             }).catch((err: any) => {
-                logger.error('[SENTINEL]','Error on find process: ' + pid, err);
-                logger.info('[SENTINEL]','Stop app')
+                logger.error('Error on find process: ' + pid, err);
+                logger.info('Stop app')
                 process.kill(process.pid, 'SIGTERM');
-                logger.info('[SENTINEL]','Stop sentinel')
+                logger.info('Stop sentinel')
                 clearInterval(intervalID);
                 process.kill(1);
                 return;

@@ -1,12 +1,12 @@
 import Files from "../util/Files";
 import File from "../util/File";
 import Environment from "../Environment";
-import {logger} from "../commons/Logger";
 import CACertGenerator from "../commons/CACertGenerator";
 import forge, {pki} from "node-forge";
 import CryptoJS from "crypto-js";
 import ObjectUtil from "../util/ObjectUtil";
-
+import LoggerFactory  from "../util/logger/LoggerFactory";
+const logger = LoggerFactory.getLogger('server', 'CertificationStore');
 
 interface PemData {
     name: string;

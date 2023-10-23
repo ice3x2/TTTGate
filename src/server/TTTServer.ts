@@ -4,7 +4,8 @@ import {ServerOption, TunnelingOption} from "../types/TunnelingOption";
 import SocketState from "../util/SocketState";
 import {CertificationStore, CertInfo} from "./CertificationStore";
 import ServerOptionStore from "./ServerOptionStore";
-import {logger} from "../commons/Logger";
+import LoggerFactory  from "../util/logger/LoggerFactory";
+const logger = LoggerFactory.getLogger('server', 'TTTServer');
 
 
 /**
@@ -154,8 +155,7 @@ class TTTServer {
             try {
                 await this._externalPortServerPool.startServer(tunnelOption, certStore.getExternalCert(tunnelOption.forwardPort));
             } catch (err) {
-                logger.error(`TTTServer::start - failed to start external port server. ${JSON.stringify(tunnelOption)}`);
-                logger.error(err);
+                logger.error(`TTTServer::start - failed to start external port server. ${JSON.stringify(tunnelOption)}`,err);
             }
         }
         await this._tunnelServer.start();

@@ -2,8 +2,8 @@ import net from "net";
 import { SocketHandler } from  "./SocketHandler";
 import SocketState from "./SocketState";
 import * as tls from "tls";
-import CACertGenerator from "../commons/CACertGenerator";
-import {logger} from "../commons/Logger";
+import LoggerFactory  from "../util/logger/LoggerFactory";
+const logger = LoggerFactory.getLogger('', 'TCPServer');
 
 
 interface OnServerEvent {

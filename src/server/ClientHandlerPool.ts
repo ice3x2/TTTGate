@@ -3,7 +3,9 @@ import {CtrlCmd, CtrlPacket, OpenOpt} from "../commons/CtrlPacket";
 import Dequeue from "../util/Dequeue";
 import {DataHandlerState, TunnelControlHandler, TunnelDataHandler} from "../types/TunnelHandler";
 import {Buffer} from "buffer";
-import {logger} from "../commons/Logger";
+import LoggerFactory  from "../util/logger/LoggerFactory";
+const logger = LoggerFactory.getLogger('server', 'ClientHandlerPool');
+
 
 
 interface OnSessionCloseCallback {

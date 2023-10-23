@@ -3,8 +3,9 @@ import {ClientOption} from "../types/TunnelingOption";
 import SocketState from "../util/SocketState";
 import {Buffer} from "buffer";
 import EndPointClientPool from "./EndPointClientPool";
-import {logger} from "../commons/Logger";
 import {OpenOpt} from "../commons/CtrlPacket";
+import LoggerFactory  from "../util/logger/LoggerFactory";
+const logger = LoggerFactory.getLogger('client', 'TTTClient');
 
 
 const RECONNECT_INTERVAL : number = 5000;

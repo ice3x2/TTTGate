@@ -4,14 +4,14 @@ import AdminServer from "./admin/AdminServer";
 import {CertificationStore, CertInfo} from "./CertificationStore";
 import {ServerOption} from "../types/TunnelingOption";
 import ObjectUtil from "../util/ObjectUtil";
-import {logger} from "../commons/Logger";
 import CLI from "../util/CLI";
 import Files from "../util/Files";
 import File from "../util/File";
 import Environment from "../Environment";
 import { SocketHandler } from  "../util/SocketHandler";
 import Errors from "../util/Errors";
-
+import LoggerFactory  from "../util/logger/LoggerFactory";
+const logger = LoggerFactory.getLogger('server', 'ServerApp');
 
 let adminServer : AdminServer;
 let oldOption : ServerOption;
@@ -28,8 +28,7 @@ let onServerOptionUpdate = async (newOption: ServerOption) => {
         await startService(newOption, CertificationStore.instance.getAdminCert());
         oldOption = ObjectUtil.cloneDeep(newOption);
     } catch (err) {
-        logger.error('serverApp::onServerOptionUpdate failed to start server. Reverting to old option');
-        logger.error(err);
+        logger.error('serverApp::onServerOptionUpdate failed to start server. Reverting to old option',err);
         console.error(Errors.toString(err));
         if(newOption != oldOption) {
             let serverOptionStore = ServerOptionStore.instance;

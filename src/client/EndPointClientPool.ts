@@ -5,6 +5,8 @@ import {Buffer} from "buffer";
 import {OpenOpt} from "../commons/CtrlPacket";
 import {EndpointHandler} from "../types/EndpointHandler";
 import {clearInterval} from "timers";
+import LoggerFactory  from "../util/logger/LoggerFactory";
+const logger = LoggerFactory.getLogger('client', 'EndPointClientPool');
 
 
 const ID_BUNDLE_KEY : string = "i";

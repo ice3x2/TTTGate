@@ -20,6 +20,11 @@ type ServerOption = {
     globalMemCacheLimit: number;
 }
 
+type VersionInfo = {
+    name: string;
+    build: string;
+}
+
 
 class InvalidSession extends Error {
     constructor() {
@@ -90,4 +95,4 @@ interface ClientStatus {
 
 
 
-export {type PemData,type ServerOption,type CertInfo,InvalidSession,type SysInfo, type NetworkInfo, type Usage, type NetworkInterface,type ClientStatus}
+export {type PemData,type ServerOption,type CertInfo,InvalidSession,type SysInfo, type NetworkInfo, type Usage, type NetworkInterface,type ClientStatus, type VersionInfo}

@@ -3,7 +3,6 @@ import {ServerOption, TCPServer} from "../util/TCPServer";
 import SocketState from "../util/SocketState";
 import {CtrlCmd, CtrlPacket, CtrlPacketStreamer, OpenOpt} from "../commons/CtrlPacket";
 import {Buffer} from "buffer";
-import {logger} from "../commons/Logger";
 import {CertInfo} from "./CertificationStore";
 import {ClientHandlerPool} from "./ClientHandlerPool";
 import {clearInterval} from "timers";
@@ -16,7 +15,8 @@ import {
     TunnelHandler
 } from "../types/TunnelHandler";
 import DataStatePacket from "../commons/DataStatePacket";
-
+import LoggerFactory  from "../util/logger/LoggerFactory";
+const logger = LoggerFactory.getLogger('server', 'TunnelServer');
 
 interface OnReceiveDataCallback {
     (id : number, data: Buffer) : void;

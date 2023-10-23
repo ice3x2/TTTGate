@@ -2,12 +2,14 @@ import net, {Socket} from "net";
 import SocketState from "./SocketState";
 import ConnectOpt from "./ConnectOpt";
 import * as tls from "tls";
-import {logger} from "../commons/Logger";
 import Path from "path";
 
 import Dequeue from "./Dequeue";
 import Errors from "./Errors";
 import {FileCache} from "./FileCache";
+
+import LoggerFactory  from "../util/logger/LoggerFactory";
+const logger = LoggerFactory.getLogger('', 'SocketHandler');
 
 
 
@@ -526,8 +528,7 @@ class SocketHandler {
                             onWriteComplete?.(this, false);
                             return;
                         }
-                        logger.warn(`SocketHandler:: writeBuffer() - socket.write() error(${error.message})`);
-                        logger.warn(error.stack);
+                        logger.warn(`SocketHandler:: writeBuffer() - socket.write() error(${error.message})`, error);
                         this.procError(error, false);
                         onWriteComplete?.(this, false, error);
                         return;

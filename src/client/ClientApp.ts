@@ -1,13 +1,14 @@
 import {ClientOption, DEFAULT_KEY} from "../types/TunnelingOption";
 import TunnelNames from "./TunnelNames";
 import TTTClient from "./TTTClient";
-import {logger} from "../commons/Logger";
 import File from "../util/File";
 import Environment from "../Environment";
 import YAML from "yaml";
 import Files from "../util/Files";
 import CLI from "../util/CLI";
 import {SocketHandler} from "../util/SocketHandler";
+import LoggerFactory  from "../util/logger/LoggerFactory";
+const logger = LoggerFactory.getLogger('client', 'ClientApp');
 
 const CLIENT_OPTION_FILE_NAME = "client.yaml";
 

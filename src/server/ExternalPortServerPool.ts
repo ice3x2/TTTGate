@@ -3,11 +3,13 @@ import SocketState from "../util/SocketState";
 import {SocketHandler} from "../util/SocketHandler";
 import {TunnelingOption} from "../types/TunnelingOption";
 import HttpHandler from "./http/HttpHandler";
-import {logger} from "../commons/Logger";
 import {CertInfo} from "./CertificationStore";
 import ObjectUtil from "../util/ObjectUtil";
 import {EndpointHandler, EndpointHttpHandler, EndPointInfo} from "../types/EndpointHandler";
 import {clearInterval} from "timers";
+import LoggerFactory  from "../util/logger/LoggerFactory";
+const logger = LoggerFactory.getLogger('server', 'ExternalPortServerPool');
+
 
 
 interface NewSessionCallback {

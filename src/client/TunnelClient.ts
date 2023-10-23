@@ -4,10 +4,11 @@ import {Buffer} from "buffer";
 import {CtrlCmd, CtrlPacket, CtrlPacketStreamer, OpenOpt} from "../commons/CtrlPacket";
 import {ClientOption} from "../types/TunnelingOption";
 import ConnectOpt from "../util/ConnectOpt";
-import {logger} from "../commons/Logger";
 import {TunnelControlHandler,TunnelDataHandler,DataHandlerState} from "../types/TunnelHandler";
 import DataStatePacket from "../commons/DataStatePacket";
 import Dequeue from "../util/Dequeue";
+import LoggerFactory  from "../util/logger/LoggerFactory";
+const logger = LoggerFactory.getLogger('client', 'TunnelClient');
 
 
 enum CtrlState {

@@ -3,7 +3,15 @@ import ServerApp from "./server/ServerApp";
 import Environment from "./Environment";
 import {SocketHandler} from "./util/SocketHandler";
 import Sentinel from "./Sentinel";
+import LoggerFactory from "./util/logger/LoggerFactory";
+import {WriteConfig} from "./util/logger/LoggerConfig";
 
+let config = LoggerFactory.cloneConfig();
+config.logFileDir = Environment.path.logDir;
+config.appendWriteConfig({name: 'server', console: true});
+config.appendWriteConfig({name: 'client', console: true});
+config.appendWriteConfig({name: 'boot', console: true});
+LoggerFactory.updateConfig(config);
 
 let app = () => {
     console.log('::TTTGate\n - Version: ' + Environment.version.name + '\n - build:   ' + Environment.version.build + '\n - https://github.com/ice3x2/TTTGate\n');

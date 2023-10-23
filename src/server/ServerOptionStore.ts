@@ -4,7 +4,8 @@ import {ServerOption, TunnelingOption, HttpOption, CustomHeader, DEFAULT_KEY} fr
 import YAML from "yaml";
 import Files from "../util/Files";
 import ObjectUtil from "../util/ObjectUtil";
-import {logger} from "../commons/Logger";
+import LoggerFactory  from "../util/logger/LoggerFactory";
+const logger = LoggerFactory.getLogger('server', 'ServerOptionStore');
 
 interface ServerOptionUpdateCallback {
     (serverOption: ServerOption): void;

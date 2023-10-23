@@ -2,8 +2,11 @@ import bcrypt from 'bcryptjs';
 import Environment from "../../Environment";
 import File from "../../util/File"
 import Files from "../../util/Files";
-import { logger } from "../../commons/Logger";
 import CryptoJS from "crypto-js";
+
+import LoggerFactory  from "../../util/logger/LoggerFactory";
+const logger = LoggerFactory.getLogger('server', 'SessionStore');
+
 type Session = {
     key: string;
     timeout: number;

@@ -2,6 +2,7 @@ import { InvalidSession } from "./Types";
 class ServerStatusCtrl {
     static _instance;
     _sysInfoCache = null;
+    static _versionInfo = null;
     constructor() {
     }
     static get instance() {
@@ -20,6 +21,17 @@ class ServerStatusCtrl {
             throw new InvalidSession();
         }
         this._sysInfoCache = json.system;
+        return json;
+    }
+    static async getVersion() {
+        if (this._versionInfo) {
+            return this._versionInfo;
+        }
+        let res = await fetch("/api/version", {
+            method: "GET",
+            credentials: "same-origin"
+        });
+        let json = await res.json();
         return json;
     }
     async getSysInfo() {

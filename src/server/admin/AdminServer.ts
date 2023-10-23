@@ -3,7 +3,7 @@ import https from "https";
 import ServerOptionStore from "../ServerOptionStore";
 import SessionStore from "./SessionStore";
 import CryptoJS from "crypto-js";
-import {logger } from "../../commons/Logger";
+
 import {CertificationStore, CertInfo, PemData} from "../CertificationStore";
 import ObjectUtil from "../../util/ObjectUtil";
 import UsablePortChecker from "../../util/UsablePortChecker";
@@ -13,7 +13,8 @@ import Path from "path";
 import File from "../../util/File";
 import Files from "../../util/Files";
 import {SysMonitor} from "../../commons/SysMonitor";
-
+import LoggerFactory  from "../../util/logger/LoggerFactory";
+const logger = LoggerFactory.getLogger('server', 'AdminServer');
 
 
 
