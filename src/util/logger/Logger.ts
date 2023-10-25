@@ -16,7 +16,7 @@ class Logger {
             name: this._name,
             module: this._module,
             message: message,
-            time: Date.now(),
+            day: new Date().getDate(),
             level: level,
             error:e
         };

@@ -25,6 +25,30 @@ class LoggerConfig {
         level: 'debug'
     }
 
+    private cloneWriteConfig(writeConfig: WriteConfig) : WriteConfig {
+        return {
+            path: writeConfig.path,
+            name: writeConfig.name,
+            history: writeConfig.history,
+            console: writeConfig.console,
+            file: writeConfig.file,
+            default: writeConfig.default,
+            level: writeConfig.level,
+            pattern: writeConfig.pattern
+        };
+    }
+
+    public clone() : LoggerConfig {
+        let config = LoggerConfig.create(this._defaultPath);
+        this._writerConfigMap.forEach((writeConfig) => {
+            config.appendWriteConfig(this.cloneWriteConfig(writeConfig));
+        });
+        config._defaultWriteConfig = this.cloneWriteConfig(this._defaultWriteConfig);
+        return config;
+    }
+
+
+
     public static create(path: string) : LoggerConfig {
         let config = new LoggerConfig();
         config._defaultPath = path;
@@ -53,9 +77,18 @@ class LoggerConfig {
         this._writerConfigMap.set(writeConfig.name, writeConfig);
     }
 
-    public defaultWriteConfig() : WriteConfig | undefined {
-        return this._defaultWriteConfig;
+    public get defaultWriteConfig() : WriteConfig {
+        return this.cloneWriteConfig(this._defaultWriteConfig);
     }
+
+    public get writeConfigs() : Array<WriteConfig> {
+        return Array.from(this._writerConfigMap.values()).map((writeConfig) => {
+            return this.cloneWriteConfig(writeConfig);
+        });
+    }
+
+
+
 
     public removeWriteConfig(name: string) : boolean {
         return this._writerConfigMap.delete(name);

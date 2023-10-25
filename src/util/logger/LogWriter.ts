@@ -1,13 +1,12 @@
-import {tls} from "node-forge";
 import {Level, WriteConfig} from "./LoggerConfig"
-import fs from "fs";
+import fs, {WriteStream} from "fs";
 import Path from "path";
 
 interface LogMessage {
     name: string;
     module: string;
     message: string;
-    time: number;
+    day: number;
     level: Level;
     error?: Error;
 }
@@ -23,7 +22,8 @@ class LogWriter {
     private readonly _fileWrite : boolean;
     private readonly _consoleWrite : boolean;
     private _todayDate : number = 0;
-
+    private _waitEnd : boolean = false;
+    private _isEnd : boolean = false;
 
 
     public static create(writeConfig: WriteConfig) : LogWriter {
@@ -36,17 +36,48 @@ class LogWriter {
         this._history = writeConfig.history ?? 30;
         this._fileWrite = writeConfig.file ?? true;
         this._consoleWrite = writeConfig.console ?? true;
+        this.init();
     }
 
     private init() {
         this._todayDate = new Date().getDate();
         this._filePath = this.makeLogFilePath();
+        this.sweepOldFiles();
+        this._logFileStream = fs.createWriteStream(this._filePath,  {flags:'a'});
 
     }
 
     private sweepOldFiles() {
         this._todayDate = new Date().getDate();
+        let logFiles = this.logFilesInDir();
+        for(let i =0 ; i < logFiles.length; ++i) {
+            let logFile = logFiles[i];
+            let date = this.logFileNameToDate(logFile);
+            let diff = this.daysSince(new Date()) - this.daysSince(date);
+            if(diff > this._history && this._history > 0) {
+                fs.unlinkSync(Path.join(this._dirPath, logFile));
+            }
+        }
+    }
 
+    private daysSince(startDate: Date): number {
+        const today: Date = new Date();
+        const millisecondsInDay: number = 24 * 60 * 60 * 1000; // 24 hours * 60 minutes * 60 seconds * 1000 milliseconds
+        const diff: number = today.getTime() - startDate.getTime();
+        const daysPassed: number = Math.floor(diff / millisecondsInDay);
+        return daysPassed;
+    }
+
+    private logFileNameToDate(fileName: string) : Date {
+        let regexString = `^${this._name}-(\\d{4})\\.(\\d{2})\\.(\\d{2})\\.log$`;
+        let regex = new RegExp(regexString);
+        let result = regex.exec(fileName);
+        if(result == null)
+            return new Date();
+        let year = parseInt(result[1]);
+        let month = parseInt(result[2]) - 1;
+        let dayOfMonth = parseInt(result[3]);
+        return new Date(year, month, dayOfMonth);
 
     }
 
@@ -72,28 +103,83 @@ class LogWriter {
     }
 
 
-    public static daysSinceStartOfYear(): number {
-        const today: Date = new Date();
-        const startOfYear: Date = new Date(today.getFullYear(), 0, 1);
-        const millisecondsInDay: number = 24 * 60 * 60 * 1000; // 24 hours * 60 minutes * 60 seconds * 1000 milliseconds
-        const diff: number = today.getTime() - startOfYear.getTime();
-        const daysPassed: number = Math.floor(diff / millisecondsInDay);
-        return daysPassed;
-    }
 
-    private pushMessage(message: LogMessage) {
+     public pushMessage(message: LogMessage) {
         this._logMessageQueue.push(message);
+        if(this._logMessageQueue.length == 1) {
+            this.printLogMessage();
+        }
+    }
 
+    private makeLogLine(message: LogMessage) : string {
+        let dateString = new Date(message.day).toISOString();
+        let levelString = message.level.toUpperCase();
+        let moduleString = message.module;
+        let messageString = message.message;
+        let errorString = message.error ? message.error.stack : '';
+        return `${dateString} [${levelString}] ${moduleString && moduleString != '' ? moduleString + '::' : '' } ${messageString}\n${errorString && errorString != '' ? errorString + '\n' : ''}`;
+    }
+
+    private nextLogFile()  {
+        this._todayDate = new Date().getDate();
+        this._filePath = this.makeLogFilePath();
+        this._logFileStream?.end();
+        this._logFileStream = fs.createWriteStream(this._filePath,  {flags:'a'});
+        this.sweepOldFiles();
+    }
+
+    private printLogMessage() {
+        let message = this._logMessageQueue.shift();
+        if(!message) {
+            if(this._waitEnd && !this._isEnd) {
+                this.close();
+            }
+            return;
+        }
+        if(message.day != this._todayDate) {
+            this.nextLogFile();
+        }
+        let logLine = this.makeLogLine(message);
+        if(this._fileWrite) {
+            this._logFileStream?.write(logLine, (err) => {
+                if(err) {
+                    console.log(err);
+                } else {
+                    process.nextTick(() => {
+                        this.printLogMessage();
+                    });
+                }
+            });
+        }
+        if(this._consoleWrite) {
+            console.log(logLine);
+        }
     }
 
 
+
+    public end() {
+        if(this._waitEnd || this._isEnd) {
+            return;
+        }
+        this._waitEnd = true;
+        if(this._logMessageQueue.length == 0) {
+            this.close();
+        }
+
+    }
+
+    private close() {
+        this._logMessageQueue = [];
+        this._logFileStream?.end();
+        this._isEnd = true;
+
+    }
 
 
 
 
 }
 
-
-console.log(LogWriter.daysSinceStartOfYear());
 
 export { LogWriter, LogMessage};
