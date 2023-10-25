@@ -21,7 +21,7 @@ class LoggerConfig {
         console: true,
         default: true,
         file: false,
-        name: 'default',
+        name: '',
         level: 'debug'
     }
 

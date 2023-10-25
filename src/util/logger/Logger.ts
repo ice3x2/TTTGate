@@ -41,6 +41,7 @@ class Logger {
         this.appendMessage('debug', message);
     }
 
+
     public info(message: string) : void {
         this.appendMessage('info', message);
     }
@@ -52,6 +53,8 @@ class Logger {
     public error(message: string, e?: Error) : void {
         this.appendMessage('error', message, e);
     }
+
+
 
 
 }
