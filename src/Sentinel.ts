@@ -77,6 +77,7 @@ class Sentinel {
         if (process.env.EXECUTE_MODE == undefined) {
             this.boot();
         } else if (process.env.EXECUTE_MODE == 'sentinel') {
+
             this.runSentinel();
         } else if (process.env.EXECUTE_MODE == 'execute') {
             this.runApp();
@@ -249,7 +250,8 @@ class Sentinel {
     private exec(type: 'execute' | 'sentinel',pid: number, onPid: (pid: number) => void) {
         const controller = new AbortController();
         const {signal} = controller;
-        //console.log('start ' + type + ' pid:' + this._executePath, this._argvList);
+
+        //console.log(this._executePath, this._argvList);
 
         const child = spawn(this._executePath, this._argvList, {
             signal,

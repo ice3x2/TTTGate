@@ -53,6 +53,8 @@ config/cert/
 cache/
 dist/
 
+linux_build/
+
 .run/
 /web/
 
