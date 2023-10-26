@@ -42,12 +42,10 @@ interface Client {
 }
 
 const HANDLER_TYPE_BUNDLE_KEY = 'T';
-const UNKNOWN_CLIENT_TIMEOUT = 180000;
 
 class TunnelServer {
 
     private readonly _serverOption : {port: number, tls: boolean, key: string};
-    private _unknownClients : Array<Client> = new Array<Client>();
     private _clientHandlerPoolMap : Map<number, ClientHandlerPool> = new Map<number, ClientHandlerPool>();
     private _sessionIDAndCtrlIDMap : Map<number, number> = new Map<number, number>();
 
@@ -55,7 +53,6 @@ class TunnelServer {
     private readonly _key : string;
 
     private _clientCheckIntervalId : NodeJS.Timeout | undefined;
-    private _clientTimeout : number = 30000;
     private _nextSelectIdx = 0;
     private _onSessionCloseCallback? : OnSessionCloseCallback;
     private _onReceiveDataCallback? : OnReceiveDataCallback;
@@ -92,7 +89,6 @@ class TunnelServer {
 
     public async start() : Promise<void> {
         return new Promise((resolve, reject) => {
-            this.startClientCheckInterval();
             this._tunnelServer.setOnServerEvent(this.onServerEvent);
             this._tunnelServer.setOnHandlerEvent(this.onHandlerEvent);
             this._tunnelServer.start((err) => {
@@ -105,46 +101,6 @@ class TunnelServer {
         });
     }
 
-    /**
-     * 클라이언트 체크 인터벌을 시작한다.
-     * 아직 상태 및 타입을 알 수 없는 클라이언트를 체크하여 타임아웃된 클라이언트를 종료하고 Unkown Client 목록에서 제거한다.
-     * @private
-     */
-    private startClientCheckInterval() {
-        if(this._clientCheckIntervalId) {
-            clearInterval(this._clientCheckIntervalId);
-            this._clientCheckIntervalId = undefined;
-        }
-        let currentTime = Date.now();
-        this._clientCheckIntervalId = setInterval(() => {
-            let cleanUpTargets : Array<Client> = [];
-            this._unknownClients.forEach((item) => {
-                if(currentTime - item.lastUpdated > this._clientTimeout) {
-                    cleanUpTargets.push(item);
-                }
-            });
-            for(let item of cleanUpTargets) {
-                this.removeUnknownClient(item.handler);
-                if((item.handler.handlerType == HandlerType.Control && (item.handler as TunnelControlHandler).ctrlState == CtrlState.Connected) ||
-                    item.handler.handlerType == HandlerType.Data) {
-                    continue;
-                }
-                item.handler.end_();
-            }
-        },UNKNOWN_CLIENT_TIMEOUT);
-    }
-
-    /**
-     * Unknown Client 목록에서 클라이언트를 제거한다.
-     * @param handler 제거할 클라이언트 핸들러
-     * @private
-     */
-    private removeUnknownClient(handler: TunnelHandler) : void {
-        let index = this._unknownClients.findIndex((item) => item.handler.id == handler.id);
-        if(index > -1) {
-            this._unknownClients.splice(index, 1);
-        }
-    }
 
     /**
      * 클라이언트 체크 인터벌을 종료한다.
@@ -277,7 +233,6 @@ class TunnelServer {
 
 
     private onClientHandlerBound = (handler: TunnelHandler) : void => {
-        this._unknownClients.push({handler: handler, lastUpdated: Date.now()});
         handler.handlerType = HandlerType.Unknown;
         handler.setBundle(HANDLER_TYPE_BUNDLE_KEY, HandlerType.Unknown);
         logger.info(`TunnelServer::Bound - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
@@ -287,15 +242,10 @@ class TunnelServer {
     private sendSyncCtrlAck(ctrlHandler: TunnelControlHandler) : void {
         let sendBuffer = CtrlPacket.createSyncCtrlAck(ctrlHandler!.id).toBuffer();
         ctrlHandler.sendData(sendBuffer, (handler_, success, err) => {
-            let index =  this._unknownClients.findIndex((item) => item.handler.id == ctrlHandler.id);
             if(!success) {
                 logger.error(`TunnelServer::sendSyncAndSyncSyncCmd Fail - id:${ctrlHandler.id}, remote:(${ctrlHandler.socket.remoteAddress})${ctrlHandler.socket.remotePort}, ${err}`);
-                this._unknownClients.splice(index, 1);
                 ctrlHandler.destroy();
                 return;
-            }
-            if(index > -1 && this._unknownClients[index]) {
-                this._unknownClients[index].lastUpdated = Date.now();
             }
             logger.info(`TunnelServer::sendSyncAndSyncSyncCmd Success - id:${ctrlHandler.id}, remote:(${ctrlHandler.socket.remoteAddress})${ctrlHandler.socket.remotePort}`)
             ctrlHandler.ctrlState = CtrlState.Syncing;
@@ -304,13 +254,6 @@ class TunnelServer {
     }
 
     private promoteToCtrlHandler(handler: TunnelControlHandler, clientName: string) : void {
-        let index = this._unknownClients.findIndex((item) => item.handler.id == handler.id);
-        if(index < 0 && !this._clientHandlerPoolMap.has(handler.id)) {
-            logger.error(`TunnelServer::promoteToCtrlHandler - Not Found Client. id: ${handler.id}`);
-            handler.end_();
-            return;
-        }
-        this._unknownClients.splice(index, 1);
         handler.ctrlState = CtrlState.Connected;
         let ctrlHandlerPool = ClientHandlerPool.create(handler.id, handler);
         ctrlHandlerPool.onSessionCloseCallback = (sessionID: number, endLength:  number) => {
@@ -323,15 +266,6 @@ class TunnelServer {
         this._clientHandlerPoolMap.set(handler.id, ctrlHandlerPool);
     }
 
-    private checkClientHandlerPool(handler: TunnelHandler, ctrlID: number, sessionID: number) : boolean {
-        let clientHandlerPool = this._clientHandlerPoolMap.get(ctrlID);
-        if(!clientHandlerPool) {
-            logger.error(`TunnelServer::onHandlerEvent - Not Found ClientHandlerPool. id: ${handler.id}`);
-            handler.end_();
-            return false;
-        }
-        return clientHandlerPool.isSessionOpened(sessionID);
-    }
 
     private onReceiveAllHandler(handler: TunnelHandler, data: Buffer) : void {
 
@@ -348,7 +282,6 @@ class TunnelServer {
             } else {
                 let str = data.toString('utf-8', 0, Math.min(data.length, 64)).trim().replaceAll('\n', '\\n').replaceAll('\r', '\\r');
                 logger.error(`TunnelServer::onHandlerEvent - Unknown packet. id: ${handler.id}, addr: ${handler.remoteAddress}:${handler.remotePort}, data: ${str}...`);
-                this.removeUnknownClient(handler);
                 handler.end_();
                 return;
             }
@@ -359,7 +292,6 @@ class TunnelServer {
             this.onReceiveDataHandler(handler as TunnelDataHandler, data);
         } else {
             logger.error(`TunnelServer::onHandlerEvent - Unknown HandlerType. id: ${handler.id}`);
-            this.removeUnknownClient(handler);
             handler.end_();
             return;
         }
@@ -399,8 +331,7 @@ class TunnelServer {
                 }
             } catch (e) {
                 // todo : 에러 출력기 구현
-                console.error(e);
-                logger.error(`TunnelServer::onHandlerEvent - DataStatePacket.fromBuffer Fail. sessionID: ${handler.sessionID}, ${e}`);
+                logger.error(`TunnelServer::onHandlerEvent - DataStatePacket.fromBuffer Fail. sessionID: ${handler.sessionID}`,e);
                 handler.endImmediate();
                 return;
             }
@@ -434,7 +365,7 @@ class TunnelServer {
 
     /**
      * 컨트롤 핸들러에서 데이터를 받았을때 호출된다.
-     * @param handlerf
+     * @param handler
      * @param data
      * @private
      */
@@ -446,12 +377,10 @@ class TunnelServer {
             // todo : 에러 출력기 구현
             console.error(e);
             if(handler.handlerType == HandlerType.Control) {
-                this.removeUnknownClient(handler);
                 logger.error(`TunnelServer::onHandlerEvent - CtrlPacketStreamer.readCtrlPacketList Fail. ctrlID: ${handler.id}, ${e}`);
                 this.closeHandlerPool(handler.id);
                 return;
             } else {
-                this.removeUnknownClient(handler);
                 handler.destroy();
             }
             return;
@@ -544,7 +473,6 @@ class TunnelServer {
         } else {
             let handlerType = (handler as TunnelHandler).handlerType;
             if(handlerType == HandlerType.Unknown || handlerType == undefined) {
-                this._unknownClients.splice(this._unknownClients.findIndex((item) => item.handler.id == handler.id), 1);
                 return;
             }
             if(handlerType == HandlerType.Control) {

@@ -12,7 +12,7 @@ enum ParsedState {
 
 
 type ParsingResult = {
-    packet: CtrlPacket | null ,
+    packet: CtrlPacket | null,
     remain: Buffer
     state : ParsedState
     error: any
@@ -25,6 +25,7 @@ interface OpenOpt extends ConnectOpt {
 
 
 enum CtrlCmd {
+    Heartbeat,
     // Server -> Client : SyncCtrl 클라이언트 최초 연결시 TunnelServer에서 보내는 패킷
     SyncCtrl,
     // Client -> Server : SyncCtrl 응답
@@ -76,6 +77,12 @@ class CtrlPacket {
     public static createSyncCtrl() : CtrlPacket {
         let packet = new CtrlPacket();
         packet._cmd = CtrlCmd.SyncCtrl;
+        return packet;
+    }
+
+    public static createHeartbeat() : CtrlPacket {
+        let packet = new CtrlPacket();
+        packet._cmd = CtrlCmd.Heartbeat;
         return packet;
     }
 
