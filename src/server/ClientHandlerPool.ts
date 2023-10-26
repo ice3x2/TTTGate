@@ -19,7 +19,6 @@ interface OnDataReceiveCallback {
 
 class ClientHandlerPool {
 
-
     private static LAST_DATA_HANDLER_ID : number = 10000;
     private readonly _createTime : number = Date.now();
     private readonly _remoteAddress : string = '';
@@ -32,6 +31,7 @@ class ClientHandlerPool {
     private _waitingDataBufferQueueMap : Map<number,{send: Dequeue<Buffer>, receive: Dequeue<Buffer>}> = new Map<number, {send: Dequeue<Buffer>, receive: Dequeue<Buffer>}>();
     private _bufferSize : number = 0;
     private _pendingSessionIDMap : Map<number, {handlerID: number, sessionID: number, openOpt: OpenOpt, available: boolean }> = new Map<number, {handlerID: number, sessionID: number, openOpt: OpenOpt,available: boolean }>();
+    private _lastHeartBeatTime : number = Date.now();
     private _onSessionCloseCallback? : OnSessionCloseCallback;
     private _onDataReceiveCallback? : OnDataReceiveCallback;
 
@@ -55,6 +55,11 @@ class ClientHandlerPool {
         if(sessionID != undefined) {
             this.terminateSession(sessionID);
         }
+    }
+
+    public sendHeartBeat() : void {
+        let packet = CtrlPacket.heartbeat().toBuffer();
+        this._controlHandler.sendData(packet);
     }
 
 
@@ -204,7 +209,6 @@ class ClientHandlerPool {
         this._pendingSessionIDMap.set(sessionID,pendingSessionState);
         pendingSessionState.handlerID = ++ClientHandlerPool.LAST_DATA_HANDLER_ID;
         this.sendNewDataHandler(pendingSessionState.handlerID, sessionID);
-
     }
 
     /**
@@ -236,6 +240,8 @@ class ClientHandlerPool {
             let endLength = packet.waitReceiveLength;
             console.log("[server]",`세션제거 요청 받음 id: ${sessionID}`);
             this.releaseSession_(handlerID,sessionID,endLength);
+        } else if(packet.cmd == CtrlCmd.Heartbeat) {
+            this._lastHeartBeatTime = Date.now();
         }
     }
 

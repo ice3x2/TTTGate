@@ -42,6 +42,7 @@ interface Client {
 }
 
 const HANDLER_TYPE_BUNDLE_KEY = 'T';
+const HEARTBEAT_INTERVAL = 30000;
 
 class TunnelServer {
 
@@ -52,7 +53,7 @@ class TunnelServer {
     private _tunnelServer : TCPServer;
     private readonly _key : string;
 
-    private _clientCheckIntervalId : NodeJS.Timeout | undefined;
+    private _heartbeatInterval : NodeJS.Timeout | undefined;
     private _nextSelectIdx = 0;
     private _onSessionCloseCallback? : OnSessionCloseCallback;
     private _onReceiveDataCallback? : OnReceiveDataCallback;
@@ -72,6 +73,15 @@ class TunnelServer {
         this._key = option.key;
         let tcpServerOption : ServerOption = {port: option.port, tls: option.tls, key: certInfo.key.value, cert: certInfo.cert.value, ca: (certInfo.ca.value == '') ? undefined : certInfo.ca.value};
         this._tunnelServer = TCPServer.create(tcpServerOption);
+        this.startHeartbeatInterval();
+    }
+
+    private startHeartbeatInterval() {
+        this._heartbeatInterval = setInterval(() => {
+            this._clientHandlerPoolMap.forEach((handlerPool) => {
+                handlerPool.sendHeartBeat();
+            });
+        },HEARTBEAT_INTERVAL);
     }
 
     public static create(option:{port: number, tls: boolean, key: string}, certInfo: CertInfo) : TunnelServer {
@@ -107,9 +117,9 @@ class TunnelServer {
      * @private
      */
     private stopClientCheckInterval() {
-        if(this._clientCheckIntervalId) {
-            clearInterval(this._clientCheckIntervalId);
-            this._clientCheckIntervalId = undefined;
+        if(this._heartbeatInterval) {
+            clearInterval(this._heartbeatInterval);
+            this._heartbeatInterval = undefined;
         }
     }
 
@@ -125,7 +135,6 @@ class TunnelServer {
                     activeSessionCount: handlerPool.activatedSessionCount,
                     dataHandlerCount: handlerPool.activatedSessionCount
                 });
-
         });
         return result;
     }
@@ -138,6 +147,9 @@ class TunnelServer {
         logger.info(`TunnelServer::close`);
 
         return new Promise((resolve, reject) => {
+            if(this._heartbeatInterval) {
+                clearInterval(this._heartbeatInterval!);
+            }
             this.stopClientCheckInterval();
             // noinspection JSUnusedLocalSymbols
             this._tunnelServer.stop((err) => {

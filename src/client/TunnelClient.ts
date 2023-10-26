@@ -37,10 +37,7 @@ interface OnSessionOpenCallback {
     (id: number, opt: OpenOpt) : void;
 }
 
-
-
-//type OnSessionEventCallback = (id: number, state: SessionState, data: Buffer | ConnectOpt | null) => void;
-
+const HEARTBEAT_INTERVAL = 30000;
 enum HandlerType {
     Control,
     Data
@@ -62,7 +59,8 @@ class TunnelClient {
     private _ctrlHandler: TunnelControlHandler | undefined = undefined;
     private _activatedSessionDataHandlerMap : Map<number, TunnelDataHandler> = new Map<number, TunnelDataHandler>();
     private _waitBufferQueueMap : Map<number, Dequeue<Buffer>> = new Map<number, Dequeue<Buffer>>();
-
+    private _heartbeatInterval : NodeJS.Timeout | undefined = undefined;
+    private _lastHeartBeatTime : number = Date.now();
 
     //private _ctrlPacketStreamer : CtrlPacketStreamer = new CtrlPacketStreamer();
 
@@ -113,8 +111,24 @@ class TunnelClient {
         this._ctrlHandler = SocketHandler.connect(this.makeConnectOpt(), this.onCtrlHandlerEvent) as TunnelControlHandler;
         this._ctrlHandler.handlerType = HandlerType.Control;
         this._ctrlHandler.packetStreamer = new CtrlPacketStreamer();
-
         return true;
+    }
+
+
+
+    private startHeartbeatInterval() {
+        this._heartbeatInterval = setInterval(() => {
+            if(!this._ctrlHandler) {
+                this.onCtrlStateCallback?.(this, 'closed');
+                return;
+            }
+            this._ctrlHandler?.sendData(CtrlPacket.heartbeat().toBuffer(), (handler, success) => {
+                if(!success) {
+                    this.onCtrlStateCallback?.(this, 'closed');
+                    this._ctrlHandler?.destroy();
+                }
+            });
+        },HEARTBEAT_INTERVAL);
     }
 
 
@@ -197,6 +211,7 @@ class TunnelClient {
     private onCtrlHandlerEvent = (handler: SocketHandler, state: SocketState, data?: any) : void => {
         if(state == SocketState.Connected) {
             this.sendSyncAndSyncSyncCmd(this._ctrlHandler!);
+            this.startHeartbeatInterval();
         }
         else if(state == SocketState.Receive && handler == this._ctrlHandler) {
             this.onReceiveFromCtrlHandler(this._ctrlHandler, data);
@@ -237,7 +252,11 @@ class TunnelClient {
                 }
                 else if(packet.cmd == CtrlCmd.OpenSession) {
                     this.connectEndPoint(packet.ID, packet.sessionID, packet.openOpt!);
-                } else if(packet.cmd == CtrlCmd.CloseSession) {
+                }
+                else if(packet.cmd == CtrlCmd.Heartbeat) {
+                    this._lastHeartBeatTime = Date.now();
+                }
+                else if(packet.cmd == CtrlCmd.CloseSession) {
                     let dataHandler = this._activatedSessionDataHandlerMap.get(packet.sessionID);
                     if(!dataHandler) {
                         logger.error(`TunnelClient::onReceiveFromCtrlHandler - Fail close session. invalid sessionID: ${packet.sessionID}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);

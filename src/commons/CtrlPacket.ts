@@ -80,7 +80,7 @@ class CtrlPacket {
         return packet;
     }
 
-    public static createHeartbeat() : CtrlPacket {
+    public static heartbeat() : CtrlPacket {
         let packet = new CtrlPacket();
         packet._cmd = CtrlCmd.Heartbeat;
         return packet;

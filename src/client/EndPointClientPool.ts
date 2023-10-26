@@ -27,9 +27,7 @@ class EndPointClientPool {
     private _endPointClientMap: Map<number, EndpointHandler> = new Map<number, EndpointHandler>();
     private _onEndPointClientStateChangeCallback: OnEndPointClientStateChangeCallback | null = null;
     private _onEndPointTerminateCallback: OnEndPointTerminateCallback | null = null;
-
     private _sessionCleanupIntervalID : NodeJS.Timeout | null = null;
-
     private _closeWaitTimeout : number = 60 * 1000;
 
     public constructor() {

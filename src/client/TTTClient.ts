@@ -12,8 +12,8 @@ const RECONNECT_INTERVAL : number = 5000;
 
 
 class TTTClient {
-    private readonly _endPointClientPool: EndPointClientPool = new EndPointClientPool();
     private readonly _clientOption: ClientOption;
+    private _endPointClientPool: EndPointClientPool;
     private _tunnelClient: TunnelClient;
 
     private constructor(clientOption: ClientOption) {
@@ -27,6 +27,7 @@ class TTTClient {
     }
 
     public start() {
+        this._endPointClientPool = new EndPointClientPool();
         this._tunnelClient = TunnelClient.create(this._clientOption);
         this._tunnelClient.onCtrlStateCallback = this.onCtrlStateCallback;
         this._tunnelClient.onConnectEndPointCallback = this.onSessionOpenCallback;
@@ -45,10 +46,9 @@ class TTTClient {
             this._endPointClientPool.closeAll();
             logger.info(`TTTClient:: try reconnect after ${RECONNECT_INTERVAL}ms`)
             setTimeout(() => {
+                this.start();
                 logger.info(`TTTClient:: try reconnect to ${this._clientOption.host}:${this._clientOption.port}`);
                 logger.info(`TTTClient:: option: ${JSON.stringify(this._clientOption)}`);
-                this._endPointClientPool.onEndPointClientStateChangeCallback = this.onEndPointClientStateChangeCallback;
-                client.connect();
             },RECONNECT_INTERVAL);
         } else if(state == 'connected') {
             logger.info(`TTTClient:: connection established.`);
