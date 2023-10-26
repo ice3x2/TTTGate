@@ -5,6 +5,7 @@
     import {onMount, createEventDispatcher, beforeUpdate, afterUpdate} from "svelte";
     import ObjectUtil from "../controller/ObjectUtil";
     import AlertLayout from "../component/AlertLayout.svelte";
+    import _ from "lodash";
 
 
     let _inputKeyFileEle: HTMLInputElement;
@@ -22,7 +23,7 @@
     export let width: number = 250;
 
 
-    export let certInfo: CertInfo | undefined;
+    export let certInfo: CertInfo | undefined | null;
 
     if(!certInfo) {
         certInfo = {
@@ -43,7 +44,7 @@
 
 
 
-    let _tempCertInfo = ObjectUtil.cloneDeep(certInfo);
+    let _tempCertInfo = _.cloneDeep(certInfo);
 
 
 
@@ -51,9 +52,9 @@
     let _updateCertInfo = () => {
 
         if(!ObjectUtil.equalsDeep(certInfo, _tempCertInfo)) {
-            _dispatch('update', ObjectUtil.cloneDeep(_tempCertInfo));
+            _dispatch('update', _.cloneDeep(_tempCertInfo));
         }
-        certInfo = ObjectUtil.cloneDeep(_tempCertInfo);
+        certInfo = _.cloneDeep(_tempCertInfo);
 
     }
 
@@ -66,7 +67,7 @@
     });
 
     afterUpdate(async () => {
-        _tempCertInfo = ObjectUtil.cloneDeep(certInfo);
+        _tempCertInfo = _.cloneDeep(certInfo!);
         _resetInputFile();
     });
 
@@ -81,7 +82,7 @@
 
     let _resetInputFile = () => {
 
-        _tempCertInfo = ObjectUtil.cloneDeep(certInfo);
+        _tempCertInfo = _.cloneDeep(certInfo!);
         if(_inputCertFileEle && _tempCertInfo.cert.name != '' && _tempCertInfo.cert.value != '') {
             _inputCertFileEle.files = _pemDataToDataTransfer(_tempCertInfo.cert).files;
         } else if(_inputCertFileEle) {
@@ -101,12 +102,12 @@
 
 
     let _clearKeyAndCert = () => {
-        certInfo.key.name = '';
-        certInfo.key.value = '';
-        certInfo.cert.name = '';
-        certInfo.cert.value = '';
-        certInfo.ca.name = '';
-        certInfo.ca.value = '';
+        certInfo!.key.name = '';
+        certInfo!.key.value = '';
+        certInfo!.cert.name = '';
+        certInfo!.cert.value = '';
+        certInfo!.ca.name = '';
+        certInfo!.ca.value = '';
         _tempCertInfo.key.name = '';
         _tempCertInfo.key.value = '';
         _tempCertInfo.cert.name = '';
@@ -271,8 +272,8 @@
             _updateCertInfo();
         }
         _inputCaFileEle.value = '';
-        certInfo.ca.name = '';
-        certInfo.ca.value = '';
+        certInfo!.ca.name = '';
+        certInfo!.ca.value = '';
     }
 
 

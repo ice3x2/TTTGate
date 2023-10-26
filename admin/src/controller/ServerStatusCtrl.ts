@@ -1,5 +1,6 @@
 
-import {InvalidSession, type ClientStatus, type SysInfo, type Usage, type VersionInfo} from "./Types";
+import {type ClientStatus, type SysInfo, type Usage, type VersionInfo} from "./Types";
+import InvalidSession from "./InvalidSession";
 
 
 class ServerStatusCtrl {
@@ -40,6 +41,7 @@ class ServerStatusCtrl {
 
 
     public static async getVersion() : Promise<VersionInfo> {
+
         if(this._versionInfo) {
             return this._versionInfo;
         }

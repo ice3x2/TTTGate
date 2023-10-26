@@ -216,6 +216,9 @@ class TunnelClient {
         else if(state == SocketState.Receive && handler == this._ctrlHandler) {
             this.onReceiveFromCtrlHandler(this._ctrlHandler, data);
         } else if(state == SocketState.Closed || state == SocketState.End) {
+            if(data) {
+                logger.error(`TunnelClient::onCtrlHandlerEvent - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`, data);
+            }
             this._state = CtrlState.None;
             this._ctrlHandler = undefined;
             this.destroyAllDataHandler();

@@ -1,4 +1,5 @@
-import {type CertInfo, InvalidSession} from "./Types";
+import {type CertInfo} from "./Types";
+import InvalidSession from "./InvalidSession";
 
 
 class CertificationCtrl {

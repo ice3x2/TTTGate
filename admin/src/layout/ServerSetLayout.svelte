@@ -2,12 +2,15 @@
 
     import ServerOptionCtrl from "../controller/ServerOptionCtrl";
     import CertificationCtrl from "../controller/CertificationCtrl";
-    import {type CertInfo,type ServerOption, InvalidSession} from "../controller/Types";
+
     import {onMount} from "svelte";
     import InputCertFile from "./InputCertFile.svelte";
     import Loading from "../component/Loading.svelte";
     import AlertLayout from "../component/AlertLayout.svelte";
     import ObjectUtil from "../controller/ObjectUtil";
+    import type {CertInfo, ServerOption} from "../controller/Types";
+    import InvalidSession from "../controller/InvalidSession";
+    import _ from "lodash";
 
     let _serverOption : ServerOption = ServerOptionCtrl.instance.getCachedServerOption();
     let _lastServerOption : ServerOption = ServerOptionCtrl.instance.getCachedServerOption();
@@ -32,10 +35,10 @@
             _showLoading = true;
             _serverOption = await ServerOptionCtrl.instance.getServerOption();
             await ServerOptionCtrl.instance.getServerOptionHash();
-            _lastServerOption = ObjectUtil.cloneDeep(_serverOption);
+            _lastServerOption = _.cloneDeep(_serverOption);
             _adminServerCert = await CertificationCtrl.instance.loadAdminCert();
-            _lastAdminCert = ObjectUtil.cloneDeep(_adminServerCert);
-            _originalAdminCert = ObjectUtil.cloneDeep(_adminServerCert);
+            _lastAdminCert = _.cloneDeep(_adminServerCert);
+            _originalAdminCert = _.cloneDeep(_adminServerCert);
             _isInit = true;
             _showLoading = false;
         } catch (e) {
@@ -152,17 +155,17 @@
         _showLoading = false;
         if(success) {
             _alert("Server settings have been changed.<br/>The server has been restarted.", 'OK', () => {
-                _lastServerOption = ObjectUtil.cloneDeep(_serverOption);
-                _lastAdminCert = ObjectUtil.cloneDeep(_adminServerCert);
-                _originalAdminCert = ObjectUtil.cloneDeep(_adminServerCert);
+                _lastServerOption = _.cloneDeep(_serverOption);
+                _lastAdminCert = _.cloneDeep(_adminServerCert);
+                _originalAdminCert = _.cloneDeep(_adminServerCert);
                 console.log((_serverOption.adminTls ? "https://" : "http://") + location.hostname + ':' + _serverOption.adminPort + '/');
                 location.href = (_serverOption.adminTls ? "https://" : "http://") + location.hostname + ':' + _serverOption.adminPort + '/';
             });
         } else {
             _alert("New server options cannot be applied.", 'OK', () => {
-                _serverOption  = ObjectUtil.cloneDeep(_lastServerOption);
-                _adminServerCert = ObjectUtil.cloneDeep(_originalAdminCert);
-                _lastAdminCert = ObjectUtil.cloneDeep(_adminServerCert);
+                _serverOption  = _.cloneDeep(_lastServerOption);
+                _adminServerCert = _.cloneDeep(_originalAdminCert);
+                _lastAdminCert = _.cloneDeep(_adminServerCert);
                 location.href = '/';
             });
         }
@@ -171,10 +174,10 @@
 
     let _reset = () => {
         let isChangedCert = !ObjectUtil.equalsDeep(_adminServerCert, _originalAdminCert);
-        _serverOption = ObjectUtil.cloneDeep(_lastServerOption);
-        _adminServerCert = ObjectUtil.cloneDeep(_originalAdminCert);
+        _serverOption = _.cloneDeep(_lastServerOption);
+        _adminServerCert = _.cloneDeep(_originalAdminCert);
         if (isChangedCert) {
-            _updateAdminCert(_adminServerCert);
+            _updateAdminCert(_adminServerCert!);
         }
     }
 

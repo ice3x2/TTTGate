@@ -5,15 +5,15 @@
     import type {Options, TunnelingStatus} from "../controller/Options";
     import {onMount} from "svelte";
     import ServerOptionCtrl from "../controller/ServerOptionCtrl";
-    import ObjectUtil from "../controller/ObjectUtil";
     import AlertLayout from "../component/AlertLayout.svelte";
     import Loading from "../component/Loading.svelte";
-    import {type CertInfo, InvalidSession} from "../controller/Types";
+    import {type CertInfo} from "../controller/Types";
     import InputCertFile from "./InputCertFile.svelte";
     import CertificationCtrl from "../controller/CertificationCtrl";
     import Switch from "../component/Switch.svelte";
     import Timer from "../component/Timer.svelte";
-
+    import InvalidSession from "../controller/InvalidSession";
+    import _ from "lodash";
 
     type Timers = {
         [key: number]: Timer
@@ -38,7 +38,7 @@
 
 
     let _timerElements : Timers = {};
-    let _intervalId : NodeJS.Timeout = null;
+    let _intervalId : any = null;
 
 
     onMount(async ()=> {
@@ -57,10 +57,10 @@
             _checkUpdatable();
         }
         for(let option of _tunnelOptions) {
-            option.destinationPort = _normalizePortNumber(option.destinationPort);
+            option.destinationPort = _normalizePortNumber(option.destinationPort!);
             option.forwardPort = _normalizePortNumber(option.forwardPort);
-            option.bufferLimitOnClient = _normalizeMemBufferSize(option.bufferLimitOnClient);
-            option.bufferLimitOnServer = _normalizeMemBufferSize(option.bufferLimitOnServer);
+            option.bufferLimitOnClient = _normalizeMemBufferSize(option.bufferLimitOnClient!);
+            option.bufferLimitOnServer = _normalizeMemBufferSize(option.bufferLimitOnServer!);
         }
     }
 
@@ -104,7 +104,7 @@
                 if(!tunnelOption.allowedClientNamesQuery) tunnelOption.allowedClientNamesQuery = "";
                 else tunnelOption.allowedClientNamesQuery += ";";
             }
-            _originTunnelOptions = ObjectUtil.cloneDeep(_tunnelOptions);
+            _originTunnelOptions = _.cloneDeep(_tunnelOptions);
 
             await _loadCertInfoAll();
             _checkUpdatable();
@@ -131,7 +131,10 @@
 
     let _loadCertInfo = async (port: number) => {
         try {
-            let tunnelOption : TunnelingOptionEx = _tunnelOptions.find((option) => option.forwardPort === port);
+            let tunnelOption : TunnelingOptionEx | undefined = _tunnelOptions.find((option) => option.forwardPort === port);
+            if(tunnelOption === undefined) {
+                return;
+            }
             tunnelOption.certInfo = await CertificationCtrl.instance.loadExternalServerCert(port);
             _tunnelOptions = [..._tunnelOptions];
         } catch (e) {
@@ -287,7 +290,7 @@
     let _onClickApply = async (index: number) => {
         _loading = true;
         let tunnelOption = _tunnelOptions[index];
-        tunnelOption.allowedClientNames = tunnelOption.allowedClientNamesQuery.split(";").map((name) => name.trim()).filter((name) => name !== "");
+        tunnelOption.allowedClientNames = tunnelOption.allowedClientNamesQuery!.split(";").map((name) => name.trim()).filter((name) => name !== "");
         try {
             await _removeOldServerPort();
             if(tunnelOption.tls) {
@@ -310,7 +313,7 @@
                 if(_timerElements[tunnelOption.forwardPort] && _externalServerStatuses[tunnelOption.forwardPort]?.activeTimeout) {
                     _timerElements[tunnelOption.forwardPort].reset(_externalServerStatuses[tunnelOption.forwardPort].activeTimeout);
                 }
-                _originTunnelOptions = ObjectUtil.cloneDeep(_tunnelOptions);
+                _originTunnelOptions = _.cloneDeep(_tunnelOptions);
                 _alert("Success to apply tunneling option");
             } else {
                 _alert("Fail to apply tunneling option: " + result.message);
@@ -483,7 +486,7 @@
                     {index + 1}.
                     </div>
                     <div class="tunneling-title" style="display: inline; color: #444">
-                        {option.forwardPort}  ⬌ {option.destinationAddress}:{option.destinationPort} ({option.protocol.toUpperCase()})
+                        {option.forwardPort}  ⬌ {option.destinationAddress}:{option.destinationPort} ({(option.protocol ?? '').toUpperCase()})
                     </div>
                 </div>
 

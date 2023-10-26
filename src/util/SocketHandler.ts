@@ -256,7 +256,11 @@ class SocketHandler {
         socket.on('data',(data) => {
             this._receiveLength += data.length;
             if(!this.isEnd()) {
-                this._event(this, SocketState.Receive, data);
+                try {
+                    this._event(this, SocketState.Receive, data);
+                } catch (e) {
+                    this.procError(e as Error);
+                }
             }
         });
         socket.on('end', ()=> {

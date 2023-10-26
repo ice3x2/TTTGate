@@ -1,5 +1,6 @@
-import { type ServerOption, InvalidSession } from "./Types";
+import { type ServerOption } from "./Types";
 import type {TunnelingStatus, Options} from "./Options";
+import InvalidSession from "./InvalidSession";
 
 
 class ServerOptionCtrl {

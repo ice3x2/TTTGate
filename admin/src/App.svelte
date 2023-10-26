@@ -17,6 +17,7 @@
 
   onMount(async () => {
       _validSession = (await LoginCtrl.validateSession()) ? 'Valid' : 'Invalid';
+      _versionInfo = await ServerStatusCtrl.getVersion();
 
 
   });
@@ -53,8 +54,11 @@
 
 
     <div class="version-box">
-      <div class="version-name">{_versionInfo.name}</div>
-      <div class="version-build">{_versionInfo.build}</div>
+      <div class="version-background"></div>
+      <div class="version-info-box">
+        <div class="version-info">{_versionInfo.name}</div>
+        <div class="version-info">{_versionInfo.build}</div>
+      </div>
     </div>
 
 
@@ -62,6 +66,45 @@
 </main>
 
 <style>
+
+  .version-box {
+    position: fixed;
+    bottom: 5px;
+    right: 5px;
+    width: 60px;
+    height: 35px;
+    padding: 5px;
+    font-size: 10px;
+    color: #fff;
+
+  }
+
+  .version-info-box {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    padding: 5px;
+    opacity: 0.8;
+  }
+
+  .version-background {
+    top: 0;
+    left: 0;
+    opacity: 0.4;
+    background: black;
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    border-radius: 5px;
+  }
+
+  .version-info {
+    line-height: 10pt;
+    font-size: 8pt;
+    color: #fff;
+  }
 
 
   main {

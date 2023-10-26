@@ -7,7 +7,7 @@
     export let show = false;
     export let button = 'Ok';
 
-    export let sysInfo : SysInfo = undefined;
+    export let sysInfo : SysInfo | undefined = undefined;
 
     const dispatch = createEventDispatcher();
 

@@ -49,7 +49,7 @@ type ServerOption = {
 type Options = {
     forwardPort: number,
     protocol?: Protocol,
-    httpOption?: HttpOption,
+    httpOption: HttpOption,
     destinationAddress: string,
     destinationPort?: number;
     tls?: boolean;

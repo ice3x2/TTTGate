@@ -1,4 +1,6 @@
 
+
+import _ from "lodash";
 // noinspection DuplicatedCode
 interface UpdateInfo {
     [key: string]: any | UpdateInfo;
@@ -8,15 +10,20 @@ interface UpdateInfo {
 class ObjectUtil {
 
     public static findUpdates<T>(originValue: T, newValue: T) :  UpdateInfo {
+        // @ts-ignore
         let originValueKeys = Object.keys(originValue);
+        // @ts-ignore
         let newValueKeys = Object.keys(newValue);
 
         let updates: UpdateInfo = {};
         for (const key of newValueKeys) {
             if(!originValueKeys.includes(key)) {
+                // @ts-ignore
                 updates[key] = newValue[key];
             } else {
+                // @ts-ignore
                 let originValueValue = originValue[key];
+                // @ts-ignore
                 let newValueValue = newValue[key];
                 if(typeof originValueValue == 'object') {
                     let subUpdates = ObjectUtil.findUpdates(originValueValue, newValueValue);
@@ -33,23 +40,10 @@ class ObjectUtil {
         return updates;
     }
 
-    public static cloneDeep<T extends object>(obj: T) : T {
-        if(!obj || typeof obj != 'object' || obj instanceof Date || obj instanceof Map || obj instanceof Set || obj instanceof Array) {
-            return ObjectUtil.cloneValue(obj);
-        }
-        let keys = Object.keys(obj);
-        let newObj: any = {};
-        for(let key of keys) {
-            // @ts-ignore
-            let value = obj[key];
-            newObj[key] = ObjectUtil.cloneValue(value);
-        }
-        return newObj;
-    }
 
-    private static cloneValue<T>(value: T) : T {
+    private static cloneValue<T>(value: T) : T | undefined{
         if(value === null) {
-            return null;
+            return undefined;
         } else if(value === undefined) {
             return undefined;
         } else if(value instanceof Array) {
@@ -73,13 +67,15 @@ class ObjectUtil {
         } else if (value instanceof Date) {
              return new Date(value.getDate()) as any;
         } else if(typeof value == 'object') {
-            return ObjectUtil.cloneDeep(value);
+            return _.cloneDeep(value);
         } else {
             return value;
         }
+
+
     }
 
-    public static equalsDeep<T>(obj1: T, obj2: T) : boolean {
+    public static equalsDeep<T>(obj1: T | undefined, obj2: T | undefined) : boolean {
         if(obj1 == undefined && obj2 == undefined) {
             return true;
         } else if(obj1 == undefined || obj2 == undefined) {
@@ -92,7 +88,9 @@ class ObjectUtil {
             return false;
         }
         for(let key of keys1) {
+            // @ts-ignore
             let value1 = obj1[key];
+            // @ts-ignore
             let value2 = obj2[key];
             if(typeof value1 == 'object') {
                 if(!ObjectUtil.equalsDeep(value1, value2)) {

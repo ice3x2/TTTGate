@@ -169,7 +169,7 @@ class LogWriter {
             });
         }
         if(this._consoleWrite) {
-            console.log(logLine);
+            console.log(logLine.substring(0, logLine.length - 1));
         }
     }
 

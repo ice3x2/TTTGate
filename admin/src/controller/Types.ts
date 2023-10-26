@@ -26,12 +26,6 @@ type VersionInfo = {
 }
 
 
-class InvalidSession extends Error {
-    constructor() {
-        super('Invalid session');
-        this.name = 'InvalidSession';
-    }
-}
 
 
 
@@ -95,4 +89,4 @@ interface ClientStatus {
 
 
 
-export {type PemData,type ServerOption,type CertInfo,InvalidSession,type SysInfo, type NetworkInfo, type Usage, type NetworkInterface,type ClientStatus, type VersionInfo}
+export {type PemData,type ServerOption,type CertInfo,type SysInfo, type NetworkInfo, type Usage, type NetworkInterface,type ClientStatus, type VersionInfo}

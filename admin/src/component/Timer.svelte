@@ -40,14 +40,14 @@
 
 
     export const reset = (time? : number) :void => {
-        if(_time != undefined) {
-            _time = time;
-            _startTime = time;
+
+            _time = time ?? 0;
+            _startTime = time ?? 0;
             if(_startTime <= 0) {
                 _isInfinity = true;
                 return;
             }
-        }
+
         _isInfinity = false;
         _timeMax = _startTime * TIME_WEIGHT;
         _leftTime = _startTime * TIME_WEIGHT;

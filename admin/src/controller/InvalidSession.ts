@@ -4,5 +4,5 @@ class InvalidSession extends Error {
         this.name = 'InvalidSession';
     }
 }
-export { InvalidSession };
-//# sourceMappingURL=Types.js.map
+
+export default InvalidSession;

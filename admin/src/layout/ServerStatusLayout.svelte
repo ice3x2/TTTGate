@@ -4,11 +4,12 @@ import ServerStatusCtrl from "../controller/ServerStatusCtrl";
 import CpuIcon from "../assets/cpu.png";
 import UptimeIcon from "../assets/uptime.png";
 
-import {InvalidSession, type ClientStatus, type SysInfo, type Usage, type NetworkInfo} from "../controller/Types";
+import {type ClientStatus, type SysInfo, type Usage, type NetworkInfo} from "../controller/Types";
 import AlertLayout from "../component/AlertLayout.svelte";
 import {onMount} from "svelte";
 import ExMath from "../controller/ExMath";
 import SysinfoPopup from "./SysinfoPopup.svelte";
+import InvalidSession from "../controller/InvalidSession";
 
 let _showSysInfo = false;
 let _showAlert = false;
@@ -20,7 +21,7 @@ let _intervalId : any;
 let _onCloseAlert = () => {};
 
 let _sysInfo : SysInfo;
-let _usage : Usage = undefined;
+let _usage : Usage | undefined = undefined;
 let _clientStatuses : Array<ClientStatus> = [];
 ServerStatusCtrl.getVersion()
 onMount(async () => {

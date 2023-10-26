@@ -25,9 +25,9 @@ interface OpenOpt extends ConnectOpt {
 
 
 enum CtrlCmd {
-    Heartbeat,
     // Server -> Client : SyncCtrl 클라이언트 최초 연결시 TunnelServer에서 보내는 패킷
     SyncCtrl,
+    Heartbeat,
     // Client -> Server : SyncCtrl 응답
     SyncCtrlAck,
     AckCtrl,

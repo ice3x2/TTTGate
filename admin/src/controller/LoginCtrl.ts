@@ -15,7 +15,7 @@ class LoginCtrl {
     }
 
     public static async validateSession() : Promise<boolean> {
-        console.log("validateSession");
+
         let result = await fetch("/api/validateSession", {
             method: "GET",
             credentials: "same-origin"

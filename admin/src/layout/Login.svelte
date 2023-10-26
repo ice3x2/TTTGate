@@ -15,7 +15,7 @@
         }
     });
 
-    let onClickButton = async (e : MouseEvent) => {
+    let onClickButton = async () => {
         let input = document.querySelector('input') as HTMLInputElement;
         let password = input.value;
         if (password == '') {
@@ -42,7 +42,7 @@
 
     let onInputEnter = (e : KeyboardEvent) => {
         if(e.key == 'Enter') {
-            onClickButton(null);
+            onClickButton();
         }
     }
 

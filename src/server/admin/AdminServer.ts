@@ -159,9 +159,8 @@ class AdminServer {
         } else if (url.startsWith("/api/externalCert/")) {
             await this.onGetExternalServerCert(req, res);
             return;
-        } else if(url == '/api/verson') {
+        } else if(url == '/api/version') {
             await this.onGetVersion(req, res);
-
         }
         else {
             await this.onGetWebResource(req, res, url);
