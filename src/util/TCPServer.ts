@@ -151,7 +151,18 @@ class TCPServer {
 
     public stop(callback?: (err?: Error) => void) : void {
         if(!this.isEnd()) {
-            this._server.close(callback);
+            this._idHandlerMap.forEach((handler) => {
+               handler.destroy();
+            });
+            this._server.once('close', () => {
+                callback?.(undefined);
+                this.release();
+            });
+            this._server.on('error', (err) => {
+                callback?.(err);
+                this.release();
+            });
+            this._server.close();
         } else if(callback) {
             callback(new Error("Server is already closed"));
         }

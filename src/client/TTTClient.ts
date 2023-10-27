@@ -16,6 +16,8 @@ class TTTClient {
     private _endPointClientPool: EndPointClientPool;
     private _tunnelClient: TunnelClient;
 
+    private _isOnline : boolean = false;
+
     private constructor(clientOption: ClientOption) {
         this._clientOption = clientOption;
     }
@@ -42,6 +44,10 @@ class TTTClient {
 
     private onCtrlStateCallback = (client: TunnelClient, state: ConnectionState, error? : Error ) : void => {
         if(state == 'closed') {
+            if(!this._isOnline) {
+                return;
+            }
+            this._isOnline = false;
             logger.error(`TTTClient:: connection closed.`, error);
             this._endPointClientPool.closeAll();
             logger.info(`TTTClient:: try reconnect after ${RECONNECT_INTERVAL}ms`)
@@ -52,6 +58,7 @@ class TTTClient {
             },RECONNECT_INTERVAL);
         } else if(state == 'connected') {
             logger.info(`TTTClient:: connection established.`);
+            this._isOnline = true;
         }
     }
 
