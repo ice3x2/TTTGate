@@ -457,6 +457,10 @@ class TunnelServer {
             ctrlHandler.handlerType = HandlerType.Control;
             this.sendSyncCtrlAck(ctrlHandler);
         } else if(packet.cmd == CtrlCmd.AckCtrl) {
+            if(packet.ackKey != this._key) {
+                this.notMatchedAuthKey(handler as TunnelControlHandler);
+                return;
+            }
             this.promoteToCtrlHandler(handler as TunnelControlHandler, packet.clientName!);
         } else {
             let ctrlID = handler.id;
@@ -470,6 +474,15 @@ class TunnelServer {
         }
     }
 
+    private notMatchedAuthKey(handler: TunnelControlHandler) : void {
+        logger.error(`Authkey is not matched. id: ${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
+        let packet = CtrlPacket.message(handler.id,{type: 'log', payload: 'Authkey is not matched.'});
+        handler.sendData(packet.toBuffer());
+        this._clientHandlerPoolMap.delete(handler.id);
+        setTimeout(() => {
+            handler.destroy();
+        },1000);
+    }
 
     /**
      * 클라이언트 핸들러로부터 이벤트를 받았을때 호출된다.

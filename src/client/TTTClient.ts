@@ -15,7 +15,7 @@ class TTTClient {
     private readonly _clientOption: ClientOption;
     private _endPointClientPool: EndPointClientPool;
     private _tunnelClient: TunnelClient;
-
+    private _tryConnectState : boolean = false;
     private _isOnline : boolean = false;
 
     private constructor(clientOption: ClientOption) {
@@ -39,14 +39,16 @@ class TTTClient {
         this._endPointClientPool.onEndPointTerminateCallback = this.onEndPointTerminateCallback;
         logger.info(`TTTClient:: try connect to ${this._clientOption.host}:${this._clientOption.port}`);
         logger.info(`TTTClient:: option: ${JSON.stringify(this._clientOption)}`)
+        this._tryConnectState = true;
         this._tunnelClient.connect();
     }
 
     private onCtrlStateCallback = (client: TunnelClient, state: ConnectionState, error? : Error ) : void => {
         if(state == 'closed') {
-            if(!this._isOnline) {
+            if(!this._isOnline && !this._tryConnectState) {
                 return;
             }
+            this._tryConnectState = false;
             this._isOnline = false;
             logger.error(`TTTClient:: connection closed.`, error);
             this._endPointClientPool.closeAll();
@@ -59,12 +61,15 @@ class TTTClient {
         } else if(state == 'connected') {
             logger.info(`TTTClient:: connection established.`);
             this._isOnline = true;
+            this._tryConnectState = false;
         }
     }
 
     private onSessionOpenCallback = (id: number, opt: OpenOpt) : void => {
         this._endPointClientPool.open(id , opt);
     }
+
+
 
     private onSessionCloseCallback = (id: number, waitForSendLength: number) : void => {
         console.log("[Client:TTTClient]", `세션제거 요청 받음 id: ${id}`)

@@ -29,6 +29,7 @@ class TCPServer {
     private _error : any = undefined;
 
 
+
     public isEnd() : boolean {
         return this._state == SocketState.Closed || this._state == SocketState.End;
     }

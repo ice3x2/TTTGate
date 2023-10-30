@@ -37,6 +37,7 @@ enum CtrlCmd {
     FailOfOpenSession,
     SuccessOfOpenSession,
     SuccessOfOpenSessionAck,
+    Message,
     NonExistent
 
 }
@@ -93,6 +94,21 @@ class CtrlPacket {
         return packet;
     }
 
+
+    public static message(id: number, message: { type: string, payload: object | string }) : CtrlPacket {
+        let packet = new CtrlPacket();
+        packet._cmd = CtrlCmd.Message;
+        packet._ID = id;
+        packet._data = Buffer.from(JSON.stringify(message));
+        return packet;
+    }
+
+    public static getMessageFromPacket(packet : CtrlPacket) : { type: string, payload: object | string } {
+        if(packet._cmd != CtrlCmd.Message) {
+            throw new Error("Invalid packet type");
+        }
+        return JSON.parse(packet._data.toString());
+    }
 
 
 

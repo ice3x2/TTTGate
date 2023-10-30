@@ -19,7 +19,7 @@ enum CtrlState {
 }
 
 
-type ConnectionState = 'connected' | 'closed';
+type ConnectionState = 'connected' | 'closed' ;
 interface OnCtrlStateCallback {
     (client: TunnelClient, state: ConnectionState, error?: Error) : void;
 }
@@ -258,6 +258,12 @@ class TunnelClient {
                 }
                 else if(packet.cmd == CtrlCmd.Heartbeat) {
                     this._lastHeartBeatTime = Date.now();
+                }
+                else if(packet.cmd == CtrlCmd.Message) {
+                    let message = CtrlPacket.getMessageFromPacket(packet);
+                    if(message.type == 'log') {
+                        logger.info(`Server log:  ${message.payload}`)
+                    }
                 }
                 else if(packet.cmd == CtrlCmd.CloseSession) {
                     let dataHandler = this._activatedSessionDataHandlerMap.get(packet.sessionID);
