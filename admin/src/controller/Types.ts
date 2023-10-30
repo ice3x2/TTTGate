@@ -84,7 +84,6 @@ interface ClientStatus {
     uptime: number;
     address: string;
     activeSessionCount: number;
-    dataHandlerCount: number;
 }
 
 

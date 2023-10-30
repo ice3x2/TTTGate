@@ -132,8 +132,12 @@ class SocketHandler {
 
 
 
-    public static connect(options: ConnectOpt, event : OnSocketEvent) : SocketHandler {
+    public static connect(options: ConnectOpt, event: OnSocketEvent) : SocketHandler {
         let handlerRef: Array<SocketHandler> = [];
+
+
+        options.keepalive = options.keepalive ?? false;
+        options.keepAliveInitialDelay = options.keepAliveInitialDelay ?? 30000;
 
         let connected = () => {
             if(handlerRef.length > 0 && handlerRef[0]._state == SocketState.None) {
@@ -145,10 +149,10 @@ class SocketHandler {
         let socket : net.Socket;
         // noinspection PointlessBooleanExpressionJS
         if(options.tls && options.tls === true) {
-            let option = {port: options.port, host: options.host, allowHalfOpen: false , /*keepAlive: true,*/noDelay: true, rejectUnauthorized: false};
+            let option = {port: options.port, host: options.host, allowHalfOpen: false ,keepAlive: options.keepalive, keepAliveInitialDelay: options.keepAliveInitialDelay,noDelay: true, rejectUnauthorized: false};
             socket = tls.connect(option, connected);
         } else {
-            let option = {port: options.port, host: options.host, allowHalfOpen: false , /*keepAlive: true,*/noDelay: true};
+            let option = {port: options.port, host: options.host, allowHalfOpen: false ,keepAlive: options.keepalive, keepAliveInitialDelay: options.keepAliveInitialDelay,noDelay: true, rejectUnauthorized: false};
             socket = net.connect(option, connected);
         }
 

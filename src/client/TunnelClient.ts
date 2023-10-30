@@ -8,6 +8,7 @@ import {TunnelControlHandler,TunnelDataHandler,DataHandlerState} from "../types/
 import DataStatePacket from "../commons/DataStatePacket";
 import Dequeue from "../util/Dequeue";
 import LoggerFactory  from "../util/logger/LoggerFactory";
+import {SysMonitor} from "../commons/SysMonitor";
 const logger = LoggerFactory.getLogger('client', 'TunnelClient');
 
 
@@ -59,8 +60,7 @@ class TunnelClient {
     private _ctrlHandler: TunnelControlHandler | undefined = undefined;
     private _activatedSessionDataHandlerMap : Map<number, TunnelDataHandler> = new Map<number, TunnelDataHandler>();
     private _waitBufferQueueMap : Map<number, Dequeue<Buffer>> = new Map<number, Dequeue<Buffer>>();
-    private _heartbeatInterval : NodeJS.Timeout | undefined = undefined;
-    private _lastHeartBeatTime : number = Date.now();
+
 
     //private _ctrlPacketStreamer : CtrlPacketStreamer = new CtrlPacketStreamer();
 
@@ -108,7 +108,11 @@ class TunnelClient {
             return false;
         }
         this._state = CtrlState.Connecting;
-        this._ctrlHandler = SocketHandler.connect(this.makeConnectOpt(), this.onCtrlHandlerEvent) as TunnelControlHandler;
+        let connOpt = this.makeConnectOpt();
+        connOpt.keepalive = true;
+        connOpt.keepAliveInitialDelay = 30000;
+        this._ctrlHandler = SocketHandler.connect(connOpt, this.onCtrlHandlerEvent) as TunnelControlHandler;
+        this._ctrlHandler.socket.setKeepAlive(true, )
         this._ctrlHandler.handlerType = HandlerType.Control;
         this._ctrlHandler.packetStreamer = new CtrlPacketStreamer();
         return true;
@@ -116,20 +120,6 @@ class TunnelClient {
 
 
 
-    private startHeartbeatInterval() {
-        this._heartbeatInterval = setInterval(() => {
-            if(!this._ctrlHandler) {
-                this.onCtrlStateCallback?.(this, 'closed');
-                return;
-            }
-            this._ctrlHandler?.sendData(CtrlPacket.heartbeat().toBuffer(), (handler, success) => {
-                if(!success) {
-                    this.onCtrlStateCallback?.(this, 'closed');
-                    this._ctrlHandler?.destroy();
-                }
-            });
-        },HEARTBEAT_INTERVAL);
-    }
 
 
     public get state () : CtrlState {
@@ -211,7 +201,6 @@ class TunnelClient {
     private onCtrlHandlerEvent = (handler: SocketHandler, state: SocketState, data?: any) : void => {
         if(state == SocketState.Connected) {
             this.sendSyncAndSyncSyncCmd(this._ctrlHandler!);
-            this.startHeartbeatInterval();
         }
         else if(state == SocketState.Receive && handler == this._ctrlHandler) {
             this.onReceiveFromCtrlHandler(this._ctrlHandler, data);
@@ -255,9 +244,6 @@ class TunnelClient {
                 }
                 else if(packet.cmd == CtrlCmd.OpenSession) {
                     this.connectEndPoint(packet.ID, packet.sessionID, packet.openOpt!);
-                }
-                else if(packet.cmd == CtrlCmd.Heartbeat) {
-                    this._lastHeartBeatTime = Date.now();
                 }
                 else if(packet.cmd == CtrlCmd.Message) {
                     this.processReceiveMessage(packet);
@@ -392,7 +378,19 @@ class TunnelClient {
             }
             this._state = CtrlState.Connected;
             this._onCtrlStateCallback?.(this, 'connected');
+            this.sendClientSysinfo(ctrlHandler, id);
         });
+    }
+
+    private sendClientSysinfo(ctrlHandler: TunnelControlHandler, id: number) {
+        SysMonitor.instance.sysInfo().then((value) => {
+            let ctrlPacket = CtrlPacket.message(id, {
+                type: 'sysinfo',
+                payload: value
+            });
+            ctrlHandler.sendData(ctrlPacket.toBuffer());
+        });
+
     }
 
 

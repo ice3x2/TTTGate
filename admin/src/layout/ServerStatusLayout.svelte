@@ -10,6 +10,7 @@ import {onMount} from "svelte";
 import ExMath from "../controller/ExMath";
 import SysinfoPopup from "./SysinfoPopup.svelte";
 import InvalidSession from "../controller/InvalidSession";
+import type Errors from "../../../src/util/Errors";
 
 let _showSysInfo = false;
 let _showAlert = false;
@@ -26,12 +27,9 @@ let _clientStatuses : Array<ClientStatus> = [];
 ServerStatusCtrl.getVersion()
 onMount(async () => {
     if(!_intervalId) {
-
         _startStatusUpdate();
     }
-    if(!_sysInfo) {
-        _sysInfo = await ServerStatusCtrl.instance.getSysInfo();
-    }
+
 })
 let _startStatusUpdate = () => {
     _loadServerStatus();
@@ -97,8 +95,26 @@ let _byteToUnit = (length: number,hideUnit?: boolean) : string => {
     }
 }
 
-let onClickShowInfo = (e: Event) => {
-    _showSysInfo = true;
+let  onClickShowInfo = async (e: Event) => {
+    try {
+        _sysInfo = await ServerStatusCtrl.instance.getSysInfo();
+        _showSysInfo = true;
+    } catch (e) {
+        _alert(e + '');
+    }
+}
+
+
+let onClickShowClientSysInfo = async (id: number) => {
+    try {
+        _sysInfo = await ServerStatusCtrl.instance.getClientSysInfo(id);
+        _showSysInfo = true;
+    } catch (e) {
+        if(e instanceof Error) {
+            _alert(e.message)
+        }
+        console.log(e)
+    }
 }
 
 let _timeToDMH =(time: number) => {
@@ -158,13 +174,13 @@ let _timeToDMH =(time: number) => {
             <div style="margin-top: 10px; font-size: 12pt; font-weight: bold">Client list</div>
             <ul style="padding-left:20px; margin-top: 5px">
             {#each _clientStatuses as client, index}
+
                 <li style="font-size: 11pt; font-weight: 100;">
-                ID: {client.id}, {client.name}
+                    <span style="text-decoration: underline; cursor: pointer" on:click={()=> onClickShowClientSysInfo(client.id)}>ID: {client.id}</span>, {client.name}
                 </li>
                 <ul style="padding-left: 18px; font-size: 10pt; line-height: 12pt; margin-bottom: 10px;color: #717171">
                     <li><span style="font-weight: 600">Address</span>: {client.address}</li>
                     <li><span style="font-weight: 600">Uptime</span>: {_timeToDMH(client.uptime)}</li>
-                    <li><span style="font-weight: 600">Data handlers</span>: {client.dataHandlerCount}</li>
                     <li><span style="font-weight: 600">Active session</span>: {client.activeSessionCount}</li>
                 </ul>
             {/each}
@@ -177,7 +193,7 @@ let _timeToDMH =(time: number) => {
         {@html _alertMessage}
     </AlertLayout>
 
-    <SysinfoPopup show={_showSysInfo} sysInfo={_sysInfo}></SysinfoPopup>
+    <SysinfoPopup bind:show={_showSysInfo} sysInfo={_sysInfo}></SysinfoPopup>
 
 
 </main>
