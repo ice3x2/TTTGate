@@ -159,7 +159,7 @@ class ServerOptionStore {
             return {success: false, message: "adminPort is undefined"};
         }
         if(option.globalMemCacheLimit == undefined) {
-            option.globalMemCacheLimit = 512;
+            option.globalMemCacheLimit = 128;
         }
         if(option.globalMemCacheLimit < 0) {
             option.globalMemCacheLimit = 0;

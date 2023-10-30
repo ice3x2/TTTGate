@@ -260,10 +260,7 @@ class TunnelClient {
                     this._lastHeartBeatTime = Date.now();
                 }
                 else if(packet.cmd == CtrlCmd.Message) {
-                    let message = CtrlPacket.getMessageFromPacket(packet);
-                    if(message.type == 'log') {
-                        logger.info(`Server log:  ${message.payload}`)
-                    }
+                    this.processReceiveMessage(packet);
                 }
                 else if(packet.cmd == CtrlCmd.CloseSession) {
                     let dataHandler = this._activatedSessionDataHandlerMap.get(packet.sessionID);
@@ -285,6 +282,13 @@ class TunnelClient {
                 // todo 잘못된 패킷이 수신되었을 경우 처리해야함.
                 logger.error(`TunnelClient::onReceiveFromCtrlHandler - invalid state: ${this._state}, sessionID:${packet.sessionID}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
             }
+        }
+    }
+
+    private processReceiveMessage(packet: CtrlPacket) {
+        let message = CtrlPacket.getMessageFromPacket(packet);
+        if(message.type == 'log') {
+            logger.info(`Receive Server message:  ${message.payload}`)
         }
     }
 

@@ -476,7 +476,7 @@ class TunnelServer {
 
     private notMatchedAuthKey(handler: TunnelControlHandler) : void {
         logger.error(`Authkey is not matched. id: ${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
-        let packet = CtrlPacket.message(handler.id,{type: 'log', payload: 'Authkey is not matched.'});
+        let packet = CtrlPacket.message(handler.id,{type: 'log', payload: '<Fatal> Authkey is not matched.'});
         handler.sendData(packet.toBuffer());
         this._clientHandlerPoolMap.delete(handler.id);
         setTimeout(() => {

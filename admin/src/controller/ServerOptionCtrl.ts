@@ -14,7 +14,7 @@ class ServerOptionCtrl {
         adminTls: false,
         port: 0,
         tls: false,
-        globalMemCacheLimit: 512
+        globalMemCacheLimit: 128
     }
     private _tunnelingOptions : Array<Options> = [];
 

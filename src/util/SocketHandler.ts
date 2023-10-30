@@ -35,7 +35,7 @@ class SocketHandler {
 
     private static LAST_ID: number = 0;
 
-    private static MaxGlobalMemoryBufferSize: number = 1024 * 1024 * 512; // 512MB
+    private static MaxGlobalMemoryBufferSize: number = 1024 * 1024 * 128; // 128MB
     private static GlobalMemoryBufferSize: number = 0;
 
     private static FileCacheDirPath : string = Path.join(process.cwd(),"cache");
