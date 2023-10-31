@@ -4,6 +4,7 @@ import Dequeue from "../util/Dequeue";
 import {DataHandlerState, TunnelControlHandler, TunnelDataHandler} from "../types/TunnelHandler";
 import {Buffer} from "buffer";
 import LoggerFactory  from "../util/logger/LoggerFactory";
+import {SysInfo} from "../commons/SysMonitor";
 const logger = LoggerFactory.getLogger('server', 'ClientHandlerPool');
 
 
@@ -31,12 +32,14 @@ class ClientHandlerPool {
     private _waitingDataBufferQueueMap : Map<number,{send: Dequeue<Buffer>, receive: Dequeue<Buffer>}> = new Map<number, {send: Dequeue<Buffer>, receive: Dequeue<Buffer>}>();
     private _bufferSize : number = 0;
     private _pendingSessionIDMap : Map<number, {handlerID: number, sessionID: number, openOpt: OpenOpt, available: boolean }> = new Map<number, {handlerID: number, sessionID: number, openOpt: OpenOpt,available: boolean }>();
-    private _lastHeartBeatTime : number = Date.now();
     private _onSessionCloseCallback? : OnSessionCloseCallback;
     private _onDataReceiveCallback? : OnDataReceiveCallback;
 
-    private _rx : number = 0;
-    private _tx : number = 0;
+    private _sysInfo: SysInfo =  {
+        osInfo: { platform: '',  release: '', type: '',  hostname: '', },
+        ram: -1,
+        cpuInfo : { model: '',  speed: -1,  cores: -1 },  network : {}
+    }
 
 
     public static create(id : number, controlHandler: SocketHandler) : ClientHandlerPool {
@@ -57,10 +60,10 @@ class ClientHandlerPool {
         }
     }
 
-    public sendHeartBeat() : void {
-        let packet = CtrlPacket.heartbeat().toBuffer();
-        this._controlHandler.sendData(packet);
+    public get sysInfo() {
+        return this._sysInfo;
     }
+
 
 
     public set onSessionCloseCallback(callback: OnSessionCloseCallback) {
@@ -217,7 +220,13 @@ class ClientHandlerPool {
      * @param packet
      */
     public delegateReceivePacketOfControlHandler(handler: TunnelControlHandler, packet: CtrlPacket) : void {
-        if(packet.cmd == CtrlCmd.SuccessOfOpenSession || packet.cmd == CtrlCmd.FailOfOpenSession) {
+        if(packet.cmd == CtrlCmd.Message) {
+            let message = CtrlPacket.getMessageFromPacket(packet);
+            if(message.type == 'sysinfo') {
+                this._sysInfo = message.payload as SysInfo;
+            }
+        }
+        else if(packet.cmd == CtrlCmd.SuccessOfOpenSession || packet.cmd == CtrlCmd.FailOfOpenSession) {
             let handlerID = packet.ID;
             let sessionID = packet.sessionID;
             console.log("[server]",`데이터 핸들러 연결 세션ID: ${packet.sessionID}  ${packet.cmd == CtrlCmd.SuccessOfOpenSession ? '성공' : '실패'}`);
@@ -240,8 +249,6 @@ class ClientHandlerPool {
             let endLength = packet.waitReceiveLength;
             console.log("[server]",`세션제거 요청 받음 id: ${sessionID}`);
             this.releaseSession_(handlerID,sessionID,endLength);
-        } else if(packet.cmd == CtrlCmd.Heartbeat) {
-            this._lastHeartBeatTime = Date.now();
         }
     }
 
@@ -293,7 +300,6 @@ class ClientHandlerPool {
             if(dataHandler) {
                 dataHandler.destroy();
             }
-
             return false;
         }
 

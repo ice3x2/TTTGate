@@ -5,6 +5,7 @@ import SocketState from "../util/SocketState";
 import {CertificationStore, CertInfo} from "./CertificationStore";
 import ServerOptionStore from "./ServerOptionStore";
 import LoggerFactory  from "../util/logger/LoggerFactory";
+import {SysInfo} from "../commons/SysMonitor";
 const logger = LoggerFactory.getLogger('server', 'TTTServer');
 
 
@@ -164,6 +165,10 @@ class TTTServer {
     public async close() : Promise<void> {
         await this._externalPortServerPool.stopAll();
         await this._tunnelServer.close();
+    }
+
+    public getClientSysInfo(clientID: number) : SysInfo | undefined {
+        return this._tunnelServer.getClientSysInfo(clientID);
     }
 
 }

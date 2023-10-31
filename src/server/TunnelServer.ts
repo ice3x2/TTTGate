@@ -16,6 +16,7 @@ import {
 } from "../types/TunnelHandler";
 import DataStatePacket from "../commons/DataStatePacket";
 import LoggerFactory  from "../util/logger/LoggerFactory";
+import {SysInfo} from "../commons/SysMonitor";
 const logger = LoggerFactory.getLogger('server', 'TunnelServer');
 
 interface OnReceiveDataCallback {
@@ -33,16 +34,10 @@ interface ClientStatus {
     uptime: number;
     address: string;
     activeSessionCount: number;
-    dataHandlerCount: number;
 }
 
-interface Client {
-    handler: TunnelHandler;
-    lastUpdated: number;
-}
 
 const HANDLER_TYPE_BUNDLE_KEY = 'T';
-const HEARTBEAT_INTERVAL = 30000;
 
 class TunnelServer {
 
@@ -73,16 +68,9 @@ class TunnelServer {
         this._key = option.key;
         let tcpServerOption : ServerOption = {port: option.port, tls: option.tls, key: certInfo.key.value, cert: certInfo.cert.value, ca: (certInfo.ca.value == '') ? undefined : certInfo.ca.value};
         this._tunnelServer = TCPServer.create(tcpServerOption);
-        this.startHeartbeatInterval();
     }
 
-    private startHeartbeatInterval() {
-        this._heartbeatInterval = setInterval(() => {
-            this._clientHandlerPoolMap.forEach((handlerPool) => {
-                handlerPool.sendHeartBeat();
-            });
-        },HEARTBEAT_INTERVAL);
-    }
+
 
     public static create(option:{port: number, tls: boolean, key: string}, certInfo: CertInfo) : TunnelServer {
         return new TunnelServer(option, certInfo);
@@ -133,7 +121,6 @@ class TunnelServer {
                     uptime: Date.now() - handlerPool.createTime,
                     address: handlerPool.address,
                     activeSessionCount: handlerPool.activatedSessionCount,
-                    dataHandlerCount: handlerPool.activatedSessionCount
                 });
         });
         return result;
@@ -476,7 +463,7 @@ class TunnelServer {
 
     private notMatchedAuthKey(handler: TunnelControlHandler) : void {
         logger.error(`Authkey is not matched. id: ${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
-        let packet = CtrlPacket.message(handler.id,{type: 'log', payload: 'Authkey is not matched.'});
+        let packet = CtrlPacket.message(handler.id,{type: 'log', payload: '<Fatal> Authkey is not matched.'});
         handler.sendData(packet.toBuffer());
         this._clientHandlerPoolMap.delete(handler.id);
         setTimeout(() => {
@@ -544,6 +531,11 @@ class TunnelServer {
         handlerPool.end();
     }
 
+    public getClientSysInfo(clientID: number) : SysInfo | undefined {
+        let handlerPool = this._clientHandlerPoolMap.get(clientID);
+        if(!handlerPool) return undefined;
+        return handlerPool.sysInfo;
+    }
 
 
 }

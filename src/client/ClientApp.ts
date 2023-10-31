@@ -65,7 +65,7 @@ let _loadClientOption = () : ClientOption => {
         port: 9126,
         tls: false,
         name: TunnelNames[Math.floor(Math.random() * TunnelNames.length)],
-        globalMemCacheLimit: 512
+        globalMemCacheLimit: 128
     }
     let savedOption = _loadClientOptionFromFile();
     if(savedOption) {
@@ -101,7 +101,7 @@ let _loadClientOption = () : ClientOption => {
         clientOption.globalMemCacheLimit = Math.floor(parseInt(argv["bufferLimit"]));
         if(isNaN(clientOption.globalMemCacheLimit)){
             console.warn(`bufferLimit '${argv["bufferLimit"]}' is not number.`);
-            clientOption.globalMemCacheLimit = 512;
+            clientOption.globalMemCacheLimit = 238;
         }
         else if(clientOption.globalMemCacheLimit < -1) {
             console.warn(`bufferLimit '${argv["bufferLimit"]}' is less than -1.`);
@@ -124,7 +124,7 @@ let _loadClientOption = () : ClientOption => {
 let ClientApp : { start() : void} = {
 
     start() {
-        SocketHandler.GlobalMemCacheLimit = 512 * 1024 * 1024;
+        SocketHandler.GlobalMemCacheLimit = 128 * 1024 * 1024;
         let tttClient = TTTClient.create(_loadClientOption());
 
         tttClient.start();

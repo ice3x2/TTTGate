@@ -42,7 +42,7 @@ let onServerOptionUpdate = async (newOption: ServerOption) => {
 }
 
 let startService = async (serverOption: ServerOption, adminCertInfo: CertInfo) => {
-    SocketHandler.GlobalMemCacheLimit = (serverOption.globalMemCacheLimit ?? 512) * 1024 * 1024;
+    SocketHandler.GlobalMemCacheLimit = (serverOption.globalMemCacheLimit ?? 128) * 1024 * 1024;
     tttServer = TTTServer.create(serverOption);
     adminServer = new AdminServer(tttServer, serverOption.adminTls === true, adminCertInfo);
     await adminServer.listen(serverOption.adminPort!);

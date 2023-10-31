@@ -3,11 +3,8 @@ import {CtrlPacketStreamer} from "../commons/CtrlPacket";
 
 
 enum CtrlState {
-    None, /** 초기 상태 */
-    Connecting, /** 서버와 연결중 */
     Connected,  /** 서버와 연결 완료 */
     Syncing, /** 서버와 연결 완료 후 Sync 패킷을 보내는중 */
-    halfOpened, /** 서버 전용: */
 }
 
 

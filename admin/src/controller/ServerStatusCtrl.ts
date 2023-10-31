@@ -1,12 +1,14 @@
 
 import {type ClientStatus, type SysInfo, type Usage, type VersionInfo} from "./Types";
 import InvalidSession from "./InvalidSession";
+import {join} from "lodash";
 
 
 class ServerStatusCtrl {
 
     private static _instance : ServerStatusCtrl;
     private _sysInfoCache : SysInfo | null = null;
+    private _clientSysInfoCache : Map<number, SysInfo> = new Map<number, SysInfo>();
     private static _versionInfo : VersionInfo | null = null;
 
     private constructor() {
@@ -68,6 +70,31 @@ class ServerStatusCtrl {
         this._sysInfoCache = json.system;
         return json;
     }
+
+    public async getClientSysInfo(id: number) : Promise<SysInfo> {
+        let sysInfo = this._clientSysInfoCache.get(id);
+        if(sysInfo) {
+            return sysInfo;
+        }
+        let res = await fetch(`/api/clientSysInfo/${id}`, {
+            method: "GET",
+            credentials: "same-origin"
+        });
+        let json = await res.json();
+        console.log(json)
+        if(!json || res.status == 401) {
+            throw new InvalidSession();
+        }
+        if(!json.success) {
+            throw new Error(json.message);
+        }
+
+        sysInfo = json as SysInfo;
+
+        this._clientSysInfoCache.set(id, sysInfo);
+        return json;
+    }
+
 
     public async getClientStatus() : Promise<Array<ClientStatus>> {
         let res = await fetch("/api/clientStatus", {

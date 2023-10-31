@@ -27,7 +27,6 @@ interface OpenOpt extends ConnectOpt {
 enum CtrlCmd {
     // Server -> Client : SyncCtrl 클라이언트 최초 연결시 TunnelServer에서 보내는 패킷
     SyncCtrl,
-    Heartbeat,
     // Client -> Server : SyncCtrl 응답
     SyncCtrlAck,
     AckCtrl,
@@ -78,12 +77,6 @@ class CtrlPacket {
     public static createSyncCtrl() : CtrlPacket {
         let packet = new CtrlPacket();
         packet._cmd = CtrlCmd.SyncCtrl;
-        return packet;
-    }
-
-    public static heartbeat() : CtrlPacket {
-        let packet = new CtrlPacket();
-        packet._cmd = CtrlCmd.Heartbeat;
         return packet;
     }
 

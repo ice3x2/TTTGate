@@ -133,6 +133,8 @@ class AdminServer {
             return;
         } else if(url == '/api/sysInfo') {
             await this.onGetSysInfo(req, res);
+        } else if(url == '/api/sysInfo') {
+            await this.onGetSysInfo(req, res);
         } else if(url == '/api/sysUsage') {
             await this.onGetSysUsage(req, res);
         } else if(url == '/api/clientStatus') {
@@ -158,6 +160,9 @@ class AdminServer {
             return;
         } else if (url.startsWith("/api/externalCert/")) {
             await this.onGetExternalServerCert(req, res);
+            return;
+        } else if (url.startsWith("/api/clientSysInfo/")) {
+            await this.onGetClientSysInfo(req, res);
             return;
         } else if(url == '/api/version') {
             await this.onGetVersion(req, res);
@@ -381,24 +386,24 @@ class AdminServer {
         res.end(JSON.stringify({success: true, certInfo: certInfo, message: ''}));
     }
 
-    private getPortInPath = async (req: IncomingMessage, res: ServerResponse, pathStart: string) : Promise<number | undefined> => {
+    private getNumberInPath = async (req: IncomingMessage, res: ServerResponse, pathStart: string, errorMessage: string ='Invalid port' ) : Promise<number | undefined> => {
         if(!await this.checkSession(req, res)) {
             return undefined;
         }
-        let portStr = req.url?.substring(pathStart.length);
-        let port = portStr == undefined ? undefined : parseInt(portStr);
-        if(port == undefined || isNaN(port)) {
+        let numStr = req.url?.substring(pathStart.length);
+        let num = numStr == undefined ? undefined : parseInt(numStr);
+        if(num == undefined || isNaN(num)) {
             res.writeHead(400, {'Content-Type': 'application/json'});
-            res.end(JSON.stringify({success: false, message: 'Invalid port'}));
+            res.end(JSON.stringify({success: false, message:errorMessage}));
             return undefined;
         }
-        return port;
+        return num;
     }
 
 
 
     private onActiveTunneling = async (req: IncomingMessage, res: ServerResponse) => {
-        let port = await this.getPortInPath(req, res,'/api/tunneling/active/');
+        let port = await this.getNumberInPath(req, res,'/api/tunneling/active/');
         if(port == undefined) return;
         let json = await AdminServer.readJson(req);
         let timeout = json['timeout'];
@@ -420,7 +425,7 @@ class AdminServer {
     }
 
     private onDeleteExternalServerCert = async (req: IncomingMessage, res: ServerResponse) => {
-        let port = await this.getPortInPath(req, res,'/api/externalCert/');
+        let port = await this.getNumberInPath(req, res,'/api/externalCert/');
         if(port == undefined) return;
         await CertificationStore.instance.removeForExternalServer(port);
         res.writeHead(200, {'Content-Type': 'application/json'});
@@ -428,7 +433,7 @@ class AdminServer {
     }
 
     private onUpdateExternalServerCert = async (req: IncomingMessage, res: ServerResponse) => {
-        let port = await this.getPortInPath(req, res,'/api/externalCert/');
+        let port = await this.getNumberInPath(req, res,'/api/externalCert/');
         if(port == undefined) return;
         let json = await AdminServer.readJson(req);
         let certInfo = json['certInfo'];
@@ -445,7 +450,7 @@ class AdminServer {
 
 
     private onGetExternalServerCert = async (req: IncomingMessage, res: ServerResponse) => {
-        let port = await this.getPortInPath(req, res,'/api/externalCert/');
+        let port = await this.getNumberInPath(req, res,'/api/externalCert/');
         if(port == undefined) return;
         let certStore = CertificationStore.instance;
         let certInfo = certStore.getExternalCert(port);
@@ -456,6 +461,20 @@ class AdminServer {
         }
         res.writeHead(200, {'Content-Type': 'application/json'});
         res.end(JSON.stringify({success: true, certInfo: certInfo, message: ''}));
+    }
+
+
+    private onGetClientSysInfo = async (req: IncomingMessage, res: ServerResponse) => {
+        let id = await this.getNumberInPath(req, res,'/api/clientSysInfo/', "Invalid client ID");
+        if(id == undefined) return;
+        let sysInfo = this._tttServer?.getClientSysInfo(id);
+        if(sysInfo == undefined) {
+            res.writeHead(400, {'Content-Type': 'application/json'});
+            res.end(JSON.stringify({success: false, message: 'Invalid client ID'}));
+            return;
+        }
+        res.writeHead(200, {'Content-Type': 'application/json'});
+        res.end(JSON.stringify({...sysInfo,  ...{success: true, message: ''}} ));
     }
 
     private getQueryParam(req: IncomingMessage) : Map<string, string> {
