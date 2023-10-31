@@ -35,13 +35,7 @@ class Files {
     }
 
 
-    /**
-     *
-     * @param {File} file
-     * @param {any} data
-     * @param {string | undefined} encoding
-     * @returns
-     */
+
     static async write(file: File,data: any): Promise<void> {
 
         let strData = '';
@@ -70,6 +64,11 @@ class Files {
             strData = data;
         }
         else strData = data + '';
+        let dir = file.getParentFile();
+        if(!dir.isDirectory()) {
+            dir.mkdirs();
+        }
+
         fs.writeFileSync(file.toString(), strData,{encoding: 'utf-8'});
     }
 

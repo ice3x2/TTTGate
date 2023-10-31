@@ -13,7 +13,7 @@ config.appendWriteConfig({name: 'boot', console: true});
 LoggerFactory.updateConfig(config);
 
 let app = () => {
-    console.log('::TTTGate\n - Version: ' + Environment.version.name + '\n - build:   ' + Environment.version.build + '\n - https://github.com/ice3x2/TTTGate\n');
+    console.log('TTTGate v' + Environment.version.name + ' (' + Environment.version.build + ')');
     let sentinel : Sentinel = Sentinel.create(Environment.devMode);
 
 
@@ -38,8 +38,9 @@ let app = () => {
     let startType =  _findTypeByArgv();
 
     if(startType == 'stop') {
-         Sentinel.stop();
-         return;
+        console.log('Stop TTTGate processes ...')
+        Sentinel.stop();
+        return;
     }
     else if(Sentinel.isSentinelMode() || (!Sentinel.hasExecuteMode() && Sentinel.isDaemonMode())) {
         sentinel.start();
