@@ -1,4 +1,4 @@
-import http, {IncomingMessage, RequestListener, ServerResponse} from "http";
+import http, {IncomingMessage, ServerResponse} from "http";
 import https from "https";
 import ServerOptionStore from "../ServerOptionStore";
 import SessionStore from "./SessionStore";
@@ -13,7 +13,8 @@ import Path from "path";
 import File from "../../util/File";
 import Files from "../../util/Files";
 import {SysMonitor} from "../../commons/SysMonitor";
-import LoggerFactory  from "../../util/logger/LoggerFactory";
+import LoggerFactory from "../../util/logger/LoggerFactory";
+
 const logger = LoggerFactory.getLogger('server', 'AdminServer');
 
 
@@ -38,7 +39,7 @@ class AdminServer {
     constructor(tttServer: TTTServer, tls : boolean, certInfo? : CertInfo) {
         this._tttServer = tttServer;
         if(tls) {
-            if(!certInfo) throw new Error('AdminServer::AdminServer certInfo is undefined');
+            if(!certInfo) throw new Error('AdminServer certInfo is undefined');
             let options : { key: string, cert: string, ca? : string} = {
                 key: certInfo.key.value,
                 cert: certInfo.cert.value
@@ -192,11 +193,11 @@ class AdminServer {
             res.end(`Not Found ${url}`);
             return;
         }
-        let body : Buffer | string | undefined = undefined;
+        let body : Buffer | string | undefined;
         if(contentType.startsWith('text')) {
             body = await Files.toString(file);
         } else {
-            let body = await Files.read(file);
+            body = await Files.read(file);
         }
         if(body == undefined) {
             res.writeHead(404);
@@ -252,8 +253,7 @@ class AdminServer {
         if(!await this.checkSession(req, res)) {
             return;
         }
-        let json = await AdminServer.readJson(req);
-        let serverOption = json;
+        let serverOption = await AdminServer.readJson(req);
         let serverOptionStore = ServerOptionStore.instance;
         let updates = ObjectUtil.findUpdates(serverOptionStore.serverOption, serverOption);
         let savedServerOption = serverOptionStore.serverOption;
@@ -302,8 +302,7 @@ class AdminServer {
         if(!await this.checkSession(req, res)) {
             return;
         }
-        let json = await AdminServer.readJson(req);
-        let tunnelingOption = json;
+        let tunnelingOption = await AdminServer.readJson(req);
         let serverOptionStore = ServerOptionStore.instance;
         let isSuccess = serverOptionStore.updateTunnelingOption(tunnelingOption);
         if(!isSuccess) {
@@ -411,6 +410,7 @@ class AdminServer {
         if(timeout == undefined || isNaN(timeout)) {
             timeout = 0;
         }
+        // noinspection JSUnusedAssignment
         let success = false;
         if(!this._tttServer) {
             success = false;
@@ -477,6 +477,7 @@ class AdminServer {
         res.end(JSON.stringify({...sysInfo,  ...{success: true, message: ''}} ));
     }
 
+    // noinspection JSUnusedLocalSymbols
     private getQueryParam(req: IncomingMessage) : Map<string, string> {
         let url = req.url;
         let param = new Map<string, string>();
@@ -558,8 +559,7 @@ class AdminServer {
             return;
         }
         let store = ServerOptionStore.instance;
-        let serverOption = store.serverOption;
-        let pureServerOption : any = serverOption;
+        let pureServerOption : any = store.serverOption;
         delete pureServerOption['tunnelingOptions'];
         res.writeHead(200, {'Content-Type': 'application/json'});
         res.end(JSON.stringify({success: true, serverOption:  pureServerOption, message: ''}));
@@ -632,13 +632,13 @@ class AdminServer {
     public async listen(port : number)  : Promise<number> {
         return new Promise((resolve, reject) => {
             this._server.on('listening', () => {
-                logger.info(`AdminServer::Admin server listening on port ${port}`);
+                logger.info(`Admin server listening on port ${port}`);
                 this._server.removeAllListeners('listening');
                 this._port = port;
                 resolve(port);
             });
             this._server.on('error', (err) => {
-                logger.error(`AdminServer::Admin server error on port ${port}`, err);
+                logger.error(`Admin server error on port ${port}`, err);
                 this._server.close();
                 this._server.removeAllListeners('error');
                 this._port = -1;
@@ -651,14 +651,14 @@ class AdminServer {
     public async close() : Promise<boolean> {
         logger.info(`AdminServer.close()`);
         if(this._port < -1) {
-            logger.info(`AdminServer::Admin server is already closed on port ${this._port}`);
+            logger.info(`Admin server is already closed on port ${this._port}`);
             return false;
         }
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve) => {
             this._server.removeAllListeners();
             this._server.closeAllConnections();
             this._server.close((err) => {
-                logger.info(`AdminServer::Admin server closed on port ${this._port}`);
+                logger.info(`Admin server closed on port ${this._port}`);
                 setImmediate(() => {
                     resolve(err == undefined);
                 });

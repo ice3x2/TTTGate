@@ -106,7 +106,7 @@ class ClientHandlerPool {
           return value.handlerID == dataHandler.handlerID;
         });
         if(!pendingDataState) {
-            logger.error(`ClientHandlerPool::putNewDataHandler: invalid handlerID: ${dataHandler.handlerID}`);
+            logger.error(`putNewDataHandler: invalid handlerID: ${dataHandler.handlerID}`);
             dataHandler.endImmediate();
             return;
         }
@@ -132,7 +132,7 @@ class ClientHandlerPool {
     private flushWaitBuffer(sessionID: number) : void {
         let handler = this._activatedSessionHandlerMap_.get(sessionID)!;
         if(handler == undefined || handler.dataHandlerState != DataHandlerState.OnlineSession) {
-            logger.error(`ClientHandlerPool::flushWaitBuffer: invalid sessionID: ${sessionID}`);
+            logger.error(`flushWaitBuffer: invalid sessionID: ${sessionID}`);
             if(handler) {
                 handler.setBufferSizeLimit(-1);
                 handler.dataHandlerState = DataHandlerState.Terminated;
@@ -169,7 +169,7 @@ class ClientHandlerPool {
         }
         let queue = this._waitingDataBufferQueueMap.get(sessionID);
         if(queue == undefined) {
-            logger.error(`ClientHandlerPool::pushReceiveBuffer: invalid sessionID: ${sessionID}`);
+            logger.error(`pushReceiveBuffer: invalid sessionID: ${sessionID}`);
             return false;
         }
         this._bufferSize += data.length;
@@ -220,6 +220,7 @@ class ClientHandlerPool {
      * @param packet
      */
     public delegateReceivePacketOfControlHandler(handler: TunnelControlHandler, packet: CtrlPacket) : void {
+        logger.info(`Received a packet from the control handler. cmd: ${CtrlCmd[packet.cmd]} sessionID: ${packet.sessionID}`)
         if(packet.cmd == CtrlCmd.Message) {
             let message = CtrlPacket.getMessageFromPacket(packet);
             if(message.type == 'sysinfo') {
@@ -229,10 +230,10 @@ class ClientHandlerPool {
         else if(packet.cmd == CtrlCmd.SuccessOfOpenSession || packet.cmd == CtrlCmd.FailOfOpenSession) {
             let handlerID = packet.ID;
             let sessionID = packet.sessionID;
-            console.log("[server]",`데이터 핸들러 연결 세션ID: ${packet.sessionID}  ${packet.cmd == CtrlCmd.SuccessOfOpenSession ? '성공' : '실패'}`);
+            logger.info(`Attempt to connect data handler: sessionID${packet.sessionID}  ${packet.cmd == CtrlCmd.SuccessOfOpenSession ? '<Success>' : '<Fail>'}`);
             let connected = packet.cmd == CtrlCmd.SuccessOfOpenSession;
             if(!this.promoteDataHandler(handlerID,sessionID, connected)) {
-                console.log("[server]",`데이터 핸들러 연결 실패: ${handlerID}`);
+                logger.warn(`Data handler initialization failed- sessionID:${sessionID}`);
                 return;
             }
             if(!connected) {
@@ -247,7 +248,7 @@ class ClientHandlerPool {
             let handlerID = packet.ID;
             let sessionID = packet.sessionID;
             let endLength = packet.waitReceiveLength;
-            console.log("[server]",`세션제거 요청 받음 id: ${sessionID}`);
+
             this.releaseSession_(handlerID,sessionID,endLength);
         }
     }
@@ -359,19 +360,18 @@ class ClientHandlerPool {
                 return;
             }
         }
-        //this._activatedSessionHandlerMap_.delete(sessionID);
-        console.log("[server]",`세션제거 요청을 클라이언트로 전송 id: ${sessionID}`);
+
+        logger.info(`Sends a session close request - sessionID: ${sessionID}`);
+        // noinspection JSUnusedLocalSymbols
         this._controlHandler.sendData(CtrlPacket.closeSession(handler == undefined ? 0 : handler!.handlerID ?? 0, sessionID, waitForLength).toBuffer(), (socketHandler, success, err) => {
             if(!success) {
-                console.log('[ClientHandlerPool]', `closeSession: fail: ${err}`);
                 return;
             }
-            console.log("[server]",`세션제거 요청 전송 완료 id: ${sessionID}`);
-            //handler!.dataHandlerState = DataHandlerState.Wait;
         });
 
     }
 
+    // noinspection JSUnusedLocalSymbols
     /**
      * 컨트롤 핸들러로부터 세션을 닫으라는 명령을 받았을때 호출된다.
      * @param handlerID
@@ -402,10 +402,12 @@ class ClientHandlerPool {
      */
     private sendNewDataHandler(dataHandlerID: number, sessionId: number) : void {
         let packet = CtrlPacket.newDataHandler(dataHandlerID, sessionId).toBuffer();
+        logger.info(`Requests to open a new data handler - sessionID:${sessionId}`);
+        // noinspection JSUnusedLocalSymbols
         this._controlHandler.sendData(packet, (handler, success, err) => {
             if(!success) {
                 this.sendCloseSession(sessionId, 0);
-                console.log('[ClientHandlerPool]', `sendNewDataHandlerAndOpen: fail: ${err}`);
+                logger.error(`Request to open data handler failed - sessionID:${sessionId}`);
                 return;
             }
         });
@@ -432,6 +434,7 @@ class ClientHandlerPool {
      */
     private sendConnectEndPointPacket(dataHandlerID: number, sessionId: number, opt : OpenOpt) : void {
         let packet = CtrlPacket.connectEndPoint(dataHandlerID, sessionId, opt).toBuffer();
+        // noinspection JSUnusedLocalSymbols
         this._controlHandler.sendData(packet, (socketHandler, success, err) => {
             if(!success) {
                 this.sendCloseSession(sessionId, 0);

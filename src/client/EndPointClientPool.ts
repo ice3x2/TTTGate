@@ -64,7 +64,7 @@ class EndPointClientPool {
     public open(sessionID: number, connectOpt: OpenOpt) {
 
         this._connectOptMap.set(sessionID, connectOpt);
-        console.log("엔드포인트 연결 시도: sessionID:" + sessionID + "    " + connectOpt.host + ":" + connectOpt.port);
+        logger.info("Connect to endpoint: (sessionID " + sessionID +") " + connectOpt.host + ":" + connectOpt.port);
         let endPointClient = SocketHandler.connect(connectOpt,( client: SocketHandler, state: SocketState, data?: any) => {
             client.setBufferSizeLimit(connectOpt.bufferLimit);
             this.onEndPointHandlerEvent(sessionID, client, state, data);
@@ -123,7 +123,7 @@ class EndPointClientPool {
         if(this._connectOptMap.has(sessionID)) {
             // 임시 조건문
             if(state == SocketState.Connected) {
-                console.log("엔드포인트 연결 성공!: sessionID:" + sessionID + "    ");
+                logger.info("Successfully connected to endpoint: (sessionID " + sessionID +") " + this._connectOptMap.get(sessionID)?.host + ":" + this._connectOptMap.get(sessionID)?.port);
             }
 
             let handler = (client as EndpointHandler);
@@ -132,9 +132,11 @@ class EndPointClientPool {
                 this._endPointClientMap.set(sessionID, client as EndpointHandler);
             }
         } else {
+            logger.warn(`Invalid sessionID(${sessionID}). Terminates the connection. (addr: ${client.remoteAddress}:${client.remotePort})`);
             client.end_();
         }
         if(SocketState.End == state || SocketState.Closed == state /*|| SocketState.Error == state*/) {
+            logger.info("Disconnected from endpoint: (sessionID " + sessionID +") " + this._connectOptMap.get(sessionID)?.host + ":" + this._connectOptMap.get(sessionID)?.port);
             let hasSession = this._endPointClientMap.has(sessionID);
             this._endPointClientMap.delete(sessionID);
             this._connectOptMap.delete(sessionID);
@@ -155,6 +157,7 @@ class EndPointClientPool {
 
 
     public closeAll() {
+
         this._onEndPointClientStateChangeCallback = null;
         this._endPointClientMap.forEach((client: SocketHandler /*, key: number*/) => {
             client.destroy();

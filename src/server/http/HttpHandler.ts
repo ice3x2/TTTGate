@@ -4,8 +4,9 @@ import {HttpHeader, HttpPipe, HttpRequestHeader, HttpResponseHeader, MessageType
 import HttpUtil from "./HttpUtil";
 import httpUtil from "./HttpUtil";
 import SocketState from "../../util/SocketState";
-import {has} from "lodash";
 
+import LoggerFactory  from "../../util/logger/LoggerFactory";
+let logger = LoggerFactory.getLogger('server', 'HttpHandler');
 
 interface OnSocketEvent {
     (handler: HttpHandler, state: SocketState, data?: any) : void;
@@ -162,9 +163,6 @@ class HttpHandler {
 
     private manipulateResponseHeader(header: HttpResponseHeader) : void {
         this._isUpgrade = header.upgrade;
-        if(this._isUpgrade) {
-            console.log("upgrade: " + HttpUtil.findHeaderValue(header, "Upgrade"));
-        }
 
         let host = this.findHostFromHeader(header);
         if(host != "" && this._originHost != "") {
@@ -297,7 +295,7 @@ class HttpHandler {
         this._isReplaceHostInBody = false;
         this._httpMessageType = MessageType.Request;
         this._currentHttpPipe.reset(MessageType.Request);
-        console.error(error);
+        logger.error('HTTP Message parse Error', error);
         this._socketHandler.destroy();
     }
 
@@ -392,7 +390,7 @@ class HttpHandler {
                 const [, patternStr, flags] = match;
                 return new RegExp(patternStr, flags);
             } catch (error) {
-                console.error('Error creating RegExp:', error);
+                logger.error('Error creating RegExp:' + pattern, error)
                 return pattern; // 잘못된 정규식 패턴일 경우 그대로 문자열 반환
             }
         } else {

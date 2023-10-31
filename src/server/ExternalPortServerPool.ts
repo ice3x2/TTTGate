@@ -92,10 +92,8 @@ class ExternalPortServerPool {
         this._sessionCleanupIntervalID = setInterval(() => {
                 let closeWaitHandlerList : Array<EndpointHandler | EndpointHttpHandler> = Array.from(this._handlerMap.values())
                     .filter((handler: EndpointHandler | EndpointHttpHandler) => {
-                    if(handler.closeWait) {
-                        return true;
-                    }
-                    return false;
+                    return !!handler.closeWait;
+
                 });
                 closeWaitHandlerList.forEach((handler: EndpointHandler | EndpointHttpHandler) => {
                     this.closeIfSatisfiedLength(handler, now - handler.lastSendTime! > this._closeWaitTimeout);
@@ -134,7 +132,7 @@ class ExternalPortServerPool {
                 active: !option.inactiveOnStartup, activeTimeout: 0, activeStart: option.inactiveOnStartup? Date.now() : 0});
             portServer.start((err?: Error) => {
                 if(err) {
-                    logger.error(`ExternalPortServer::startServer - port: ${option.forwardPort}`, err);
+                    logger.error(`startServer - port: ${option.forwardPort}`, err);
                     reject(err);
                     return;
                 }
@@ -145,7 +143,7 @@ class ExternalPortServerPool {
                 }
                 let simpleOption = ObjectUtil.cloneDeep(option) as any;
                 delete simpleOption['certInfo'];
-                logger.info(`ExternalPortServer::startServer - port: ${option.forwardPort}, option: ${JSON.stringify(simpleOption)}`);
+                logger.info(`startServer - port: ${option.forwardPort}, option: ${JSON.stringify(simpleOption)}`);
                 this._portServerMap.set(option.forwardPort, portServer);
 
 
@@ -233,9 +231,9 @@ class ExternalPortServerPool {
 
     private closeIfSatisfiedLength(endPointClient: EndpointHandler | EndpointHttpHandler, force: boolean = false) {
         if((endPointClient.closeWait && endPointClient.endLength! <= endPointClient.sendLength) || force) {
-            console.log('세션 제거 완료: ' + endPointClient.sessionID + ' 남아있는 세션: ' + this._handlerMap.size);
             endPointClient.onSocketEvent = function () {}
             endPointClient.end_();
+            logger.info(`End client - sessionID:${endPointClient.sessionID}, left connections: ${this._handlerMap.size}`)
             this._handlerMap.delete(endPointClient.sessionID!);
             this._onTerminateSessionCallback?.(endPointClient.sessionID!)
         }
@@ -268,7 +266,7 @@ class ExternalPortServerPool {
                 setImmediate(() => {
                     this._onTerminateSessionCallback?.(sessionID);
                 });
-                logger.info(`ExternalPortServer::End - id: ${sessionID}, port: ${handler.getBundle(OPTION_BUNDLE_KEY).forwardPort}`);
+                logger.info(`End - id: ${sessionID}, port: ${handler.getBundle(OPTION_BUNDLE_KEY).forwardPort}`);
                 handler.destroy();
             } else if (SocketState.Closed == state) {
 
@@ -278,14 +276,14 @@ class ExternalPortServerPool {
 
     private onServerEvent = (server: TCPServer, state: SocketState, handlerOpt?: SocketHandler) : void => {
         if(SocketState.Listen == state) {
-            logger.info(`ExternalPortServer::Listen - port: ${server.port}`);
+            logger.info(`Listen - port: ${server.port}`);
         }
         if(server.isEnd()) {
             let error = server.getError();
             if(error) {
-                logger.error(`ExternalPortServer::Error - port: ${server.port}`,error);
+                logger.error(`Error - port: ${server.port}`,error);
             }
-            else logger.info(`ExternalPortServer::End - port: ${server.port}`);
+            else logger.info(`End - port: ${server.port}`);
             let destPort = server.getBundle(OPTION_BUNDLE_KEY).destinationPort;
             this._portServerMap.delete(destPort);
         } else if(state == SocketState.Bound) {
@@ -294,7 +292,7 @@ class ExternalPortServerPool {
             handler.setBundle(SESSION_ID_BUNDLE_KEY, sessionID);
             let option = server.getBundle(OPTION_BUNDLE_KEY);
             if(!option) {
-                logger.error(`ExternalPortServer::Error - port: ${server.port}, Option is undefined`);
+                logger.error(`Error - port: ${server.port}, Option is undefined`);
                 handler.destroy();
                 server.stop();
                 return;
@@ -313,13 +311,13 @@ class ExternalPortServerPool {
             handler.setBundle(PORT_BUNDLE_KEY, server.port);
 
             if(option.protocol == "http" || option.protocol == "https") {
-                logger.info(`ExternalPortServer::Bound HttpHandler - id:${sessionID}, port:${server.port}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
+                logger.info(`Bound HttpHandler - id:${sessionID}, port:${server.port}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
                 let httpHandler = HttpHandler.create(handler, option);
                 httpHandler.onSocketEvent = this.onHandlerEvent;
                 this.initEndPointInfo(httpHandler as EndpointHttpHandler, sessionID, 'http');
                 this._handlerMap.set(sessionID, httpHandler);
             } else {
-                logger.info(`ExternalPortServer::Bound SocketHandler - id:${sessionID}, port: ${server.port}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
+                logger.info(`Bound SocketHandler - id:${sessionID}, port: ${server.port}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
                 this.initEndPointInfo(handler as EndpointHandler, sessionID, 'tcp');
                 this._handlerMap.set(sessionID, handler);
             }
@@ -351,7 +349,7 @@ class ExternalPortServerPool {
             return false;
         }
         await this.removeHandlerByForwardPort(port);
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve) => {
             server?.stop((err?: Error) => {
                 resolve(err != undefined);
             });
@@ -367,7 +365,7 @@ class ExternalPortServerPool {
                 handler.destroy();
             }
         }
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve) => {
             if(handlers.length == 0) {
                 resolve();
                 return;
@@ -434,16 +432,16 @@ class ExternalPortServerPool {
             clearInterval(this._sessionCleanupIntervalID);
             this._sessionCleanupIntervalID = null;
         }
-        logger.info(`ExternalPortServer::closeAll`);
+        logger.info(`closeAll`);
         let callbackCount = this._portServerMap.size;
         if(callbackCount == 0) return;
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve) => {
             this._portServerMap.forEach((server: TCPServer, port: number) => {
-                server.stop((err?: Error) => {
+                server.stop(() => {
                     callbackCount--;
-                    logger.info(`ExternalPortServer::close - port: ${port}, left count: ${callbackCount}`);
+                    logger.info(`close - port: ${port}, left count: ${callbackCount}`);
                     if(callbackCount == 0) {
-                        logger.info(`ExternalPortServer::closeAll - done`);
+                        logger.info(`closeAll - done`);
                         this._portServerMap.clear();
                         this._handlerMap.clear();
                         resolve();

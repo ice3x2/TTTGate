@@ -1,10 +1,11 @@
 import Environment from "../Environment";
 import File from "../util/File";
-import {ServerOption, TunnelingOption, HttpOption, CustomHeader, DEFAULT_KEY} from "../types/TunnelingOption";
+import {DEFAULT_KEY, HttpOption, ServerOption, TunnelingOption} from "../types/TunnelingOption";
 import YAML from "yaml";
 import Files from "../util/Files";
 import ObjectUtil from "../util/ObjectUtil";
-import LoggerFactory  from "../util/logger/LoggerFactory";
+import LoggerFactory from "../util/logger/LoggerFactory";
+
 const logger = LoggerFactory.getLogger('server', 'ServerOptionStore');
 
 interface ServerOptionUpdateCallback {
@@ -21,9 +22,8 @@ class ServerOptionStore {
     private _serverOptionUpdateCallback? : ServerOptionUpdateCallback;
 
     public get serverOption() : ServerOption {
-        let result : any = ObjectUtil.cloneDeep(this._serverOption);
         //delete result['tunnelingOptions'];
-        return result;
+        return ObjectUtil.cloneDeep(this._serverOption);
     }
 
     public set onServerOptionUpdateCallback(callback: ServerOptionUpdateCallback | undefined)  {
@@ -40,7 +40,7 @@ class ServerOptionStore {
                 this._serverOptionUpdateCallback?.(ObjectUtil.cloneDeep(result.serverOption!));
             });
             let updatedValues =  ObjectUtil.findUpdates(this._serverOption, serverOption);
-            logger.info(`ServerOptionStore::updateServerOption - ${JSON.stringify(updatedValues)}`);
+            logger.info(`updateServerOption - ${JSON.stringify(updatedValues)}`);
             this._serverOption = result.serverOption!;
             this.save();
             return true;
@@ -106,7 +106,7 @@ class ServerOptionStore {
         if(!configDirFile.isDirectory()) configDirFile.mkdirs();
         this._configFile = new File(configDir, OPTION_FILE_NAME);
         if(!this._configFile.isFile() || !this.load()) {
-            logger.info(`ServerOptionStore::make default option`);
+            logger.info(`make default option`);
             this.makeDefaultOption();
             this.save();
         }
@@ -118,7 +118,7 @@ class ServerOptionStore {
     }
 
     public reset() : void {
-        logger.info(`ServerOptionStore::reset`);
+        logger.info(`reset`);
         if(this._configFile.isFile()) {
             this._configFile.delete();
         }
@@ -134,13 +134,13 @@ class ServerOptionStore {
             }
             let result = this.verificationServerOption(this._serverOption);
             if(!result.success) {
-                logger.error(`ServerOptionStore::validation fail - ${result.message}`);
+                logger.error(`validation fail - ${result.message}`);
                 return false;
             }
             for(let tunnelingOption of this._serverOption.tunnelingOptions) {
                 let tunnelOptionResult = this.verificationTunnelingOption(tunnelingOption)
                 if(!tunnelOptionResult.success) {
-                    logger.error(`ServerOptionStore::validation fail - ${tunnelOptionResult.message}`);
+                    logger.error(`validation fail - ${tunnelOptionResult.message}`);
                     return false;
                 }
             }

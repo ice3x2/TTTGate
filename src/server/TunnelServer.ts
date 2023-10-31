@@ -131,16 +131,16 @@ class TunnelServer {
      * 서버를 종료한다.
      */
     public async close() : Promise<void> {
-        logger.info(`TunnelServer::close`);
+        logger.info(`close`);
 
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve) => {
             if(this._heartbeatInterval) {
                 clearInterval(this._heartbeatInterval!);
             }
             this.stopClientCheckInterval();
             // noinspection JSUnusedLocalSymbols
             this._tunnelServer.stop((err) => {
-                logger.info(`TunnelServer::closed`);
+                logger.info(`closed`);
                 resolve();
             });
         });
@@ -220,12 +220,10 @@ class TunnelServer {
 
 
     private onServerEvent = (server: TCPServer, state: SocketState, handler? : SocketHandler) : void => {
-        //console.log("[server]",`TunnelServer: onServerEvent: ${SocketState[state]}`);
         if(SocketState.Listen == state) {
-            logger.info(`TunnelServer::Listen: ${this._serverOption.port}`);
-            //console.log("[server]",`TunnelServer: onServerEvent:  ${SocketState[state]}: ${this._port}`);
+            logger.info(`Listen: ${this._serverOption.port}`);
         } if(state == SocketState.Bound && handler) {
-            logger.info(`TunnelServer::Bound - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
+            logger.info(`Bound - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
             this.onClientHandlerBound(handler);
         }
     }
@@ -234,7 +232,7 @@ class TunnelServer {
     private onClientHandlerBound = (handler: TunnelHandler) : void => {
         handler.handlerType = HandlerType.Unknown;
         handler.setBundle(HANDLER_TYPE_BUNDLE_KEY, HandlerType.Unknown);
-        logger.info(`TunnelServer::Bound - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
+        logger.info(`Bound - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
     }
 
 
@@ -242,11 +240,11 @@ class TunnelServer {
         let sendBuffer = CtrlPacket.createSyncCtrlAck(ctrlHandler!.id).toBuffer();
         ctrlHandler.sendData(sendBuffer, (handler_, success, err) => {
             if(!success) {
-                logger.error(`TunnelServer::sendSyncAndSyncSyncCmd Fail - id:${ctrlHandler.id}, remote:(${ctrlHandler.socket.remoteAddress})${ctrlHandler.socket.remotePort}, ${err}`);
+                logger.error(`sendSyncAndSyncSyncCmd Fail - id:${ctrlHandler.id}, remote:(${ctrlHandler.socket.remoteAddress})${ctrlHandler.socket.remotePort}, ${err}`);
                 ctrlHandler.destroy();
                 return;
             }
-            logger.info(`TunnelServer::sendSyncAndSyncSyncCmd Success - id:${ctrlHandler.id}, remote:(${ctrlHandler.socket.remoteAddress})${ctrlHandler.socket.remotePort}`)
+            logger.info(`sendSyncAndSyncSyncCmd Success - id:${ctrlHandler.id}, remote:(${ctrlHandler.socket.remoteAddress})${ctrlHandler.socket.remotePort}`)
             ctrlHandler.ctrlState = CtrlState.Syncing;
 
         });
@@ -280,7 +278,7 @@ class TunnelServer {
                 dataHandler.dataHandlerState = DataHandlerState.None;
             } else {
                 let str = data.toString('utf-8', 0, Math.min(data.length, 64)).trim().replaceAll('\n', '\\n').replaceAll('\r', '\\r');
-                logger.error(`TunnelServer::onHandlerEvent - Unknown packet. id: ${handler.id}, addr: ${handler.remoteAddress}:${handler.remotePort}, data: ${str}...`);
+                logger.error(`onHandlerEvent - Unknown packet. id: ${handler.id}, addr: ${handler.remoteAddress}:${handler.remotePort}, data: ${str}...`);
                 handler.end_();
                 return;
             }
@@ -290,7 +288,7 @@ class TunnelServer {
         } else if(handler.handlerType == HandlerType.Data) {
             this.onReceiveDataHandler(handler as TunnelDataHandler, data);
         } else {
-            logger.error(`TunnelServer::onHandlerEvent - Unknown HandlerType. id: ${handler.id}`);
+            logger.error(`onHandlerEvent - Unknown HandlerType. id: ${handler.id}`);
             handler.end_();
             return;
         }
@@ -319,7 +317,7 @@ class TunnelServer {
                     handler.sessionID = result.packet.firstSessionID;
                     let clientHandlerPool = this._clientHandlerPoolMap.get(handler.ctrlID);
                     if (!clientHandlerPool) {
-                        logger.error(`TunnelServer::onHandlerEvent - Not Found ClientHandlerPool. id: ${handler.ctrlID}`);
+                        logger.error(`onHandlerEvent - Not Found ClientHandlerPool. id: ${handler.ctrlID}`);
                         handler.end_();
                         return;
                     }
@@ -330,7 +328,7 @@ class TunnelServer {
                 }
             } catch (e) {
                 // todo : 에러 출력기 구현
-                logger.error(`TunnelServer::onHandlerEvent - DataStatePacket.fromBuffer Fail. sessionID: ${handler.sessionID}`,e);
+                logger.error(`onHandlerEvent - DataStatePacket.fromBuffer Fail. sessionID: ${handler.sessionID}`,e);
                 handler.endImmediate();
                 return;
             }
@@ -373,10 +371,9 @@ class TunnelServer {
         try {
             packetList = handler.packetStreamer!.readCtrlPacketList(data);
         } catch (e) {
-            // todo : 에러 출력기 구현
-            console.error(e);
+            logger.error(`onHandlerEvent - CtrlPacketStreamer.readCtrlPacketList Fail. ctrlID: ${handler.id}`,e);
             if(handler.handlerType == HandlerType.Control) {
-                logger.error(`TunnelServer::onHandlerEvent - CtrlPacketStreamer.readCtrlPacketList Fail. ctrlID: ${handler.id}, ${e}`);
+                logger.error(`onHandlerEvent - CtrlPacketStreamer.readCtrlPacketList Fail. ctrlID: ${handler.id}, ${e}`);
                 this.closeHandlerPool(handler.id);
                 return;
             } else {
@@ -438,8 +435,8 @@ class TunnelServer {
 
 
     private onReceiveCtrlPacket(handler: TunnelHandler, packet: CtrlPacket) : void  {
+        logger.info('receive ctrl packet - cmd:' + CtrlCmd[packet.cmd] + ', handler id: ' + handler.id + ', remote: ' + handler.remoteAddress + ':' + handler.remotePort);
         if(packet.cmd == CtrlCmd.SyncCtrl) {
-            console.log("[server]",`SyncCtrl 받음 id: ${handler.id}`);
             let ctrlHandler = handler as TunnelControlHandler;
             ctrlHandler.handlerType = HandlerType.Control;
             this.sendSyncCtrlAck(ctrlHandler);
@@ -453,7 +450,7 @@ class TunnelServer {
             let ctrlID = handler.id;
             let clientHandlerPool = this._clientHandlerPoolMap.get(ctrlID);
             if(!clientHandlerPool) {
-                logger.error(`TunnelServer::onHandlerEvent - Not Found ClientHandlerPool. id: ${ctrlID}`);
+                logger.error(`onHandlerEvent - Not Found ClientHandlerPool. id: ${ctrlID}`);
                 handler.end_();
                 return;
             }
@@ -500,7 +497,7 @@ class TunnelServer {
         let clientHandlerPool = this.findCtrlHandlerPool(dataHandler.sessionID ?? -1);
         clientHandlerPool = clientHandlerPool ? clientHandlerPool : this._clientHandlerPoolMap.get(ctrlID);
         if(!clientHandlerPool) {
-            logger.error(`TunnelServer::onHandlerEvent - Not Found ClientHandlerPool. id: ${ctrlID}`);
+            logger.error(`onHandlerEvent - Not Found ClientHandlerPool. id: ${ctrlID}`);
             dataHandler.destroy();
             return;
         }

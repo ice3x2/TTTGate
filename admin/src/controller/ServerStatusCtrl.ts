@@ -1,7 +1,5 @@
-
 import {type ClientStatus, type SysInfo, type Usage, type VersionInfo} from "./Types";
 import InvalidSession from "./InvalidSession";
-import {join} from "lodash";
 
 
 class ServerStatusCtrl {
@@ -51,8 +49,7 @@ class ServerStatusCtrl {
             method: "GET",
             credentials: "same-origin"
         });
-        let json = await res.json();
-        return json;
+        return await res.json();
     }
 
     public async getSysInfo() : Promise<SysInfo> {
@@ -81,7 +78,7 @@ class ServerStatusCtrl {
             credentials: "same-origin"
         });
         let json = await res.json();
-        console.log(json)
+
         if(!json || res.status == 401) {
             throw new InvalidSession();
         }

@@ -28,7 +28,7 @@ let onServerOptionUpdate = async (newOption: ServerOption) => {
         await startService(newOption, CertificationStore.instance.getAdminCert());
         oldOption = ObjectUtil.cloneDeep(newOption);
     } catch (err) {
-        logger.error('serverApp::onServerOptionUpdate failed to start server. Reverting to old option',err);
+        logger.error('onServerOptionUpdate failed to start server. Reverting to old option',err);
         console.error(Errors.toString(err));
         if(newOption != oldOption) {
             let serverOptionStore = ServerOptionStore.instance;

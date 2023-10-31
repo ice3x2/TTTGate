@@ -110,7 +110,7 @@ class SocketHandler {
 
     public static set GlobalMemCacheLimit(limit: number) {
         SocketHandler.MaxGlobalMemoryBufferSize = limit;
-        logger.info(`SocketHandler:: set GlobalMemCacheLimit(${limit / 1024 / 1024}MiB)`);
+        logger.info(`set GlobalMemCacheLimit(${limit / 1024 / 1024}MiB)`);
     }
 
     public setBufferSizeLimit(size: number) : void {
@@ -281,7 +281,7 @@ class SocketHandler {
 
     private procError(error: Error, logging? : boolean) : void {
         if(logging !== false) {
-            logger.error(`SocketHandler:: procError() - ${error.message}`);
+            logger.error(`procError() - ${error.message}`);
             logger.error(Errors.toString(error));
         }
         this._breakBufferFlush = !this._waitQueue.isEmpty();
@@ -396,7 +396,7 @@ class SocketHandler {
             /**if(record.id == -1) {
                 return false;
             }*/
-            //console.log("[SocketHandler]", `파일 캐시에 저장함. 파일 캐시 크기: ${record.position / 1024 / 1024}mb, 파일 캐시 ID: ${record.id}`);
+
             this._waitQueue.pushBack({buffer: EMPTY_BUFFER, cacheID: record.id, onWriteComplete: onWriteComplete});
         } else  {
             this.appendUsageMemoryBufferSize(data.length);
@@ -442,7 +442,7 @@ class SocketHandler {
             let length = waitItem.buffer.length;
             let isFileCache = waitItem.cacheID != -1;
             if(length == 0) {
-                this.procError(new Error("SocketHandler:: sendPopDataRecursive() - buffer length is zero."));
+                this.procError(new Error(" sendPopDataRecursive() - buffer length is zero."));
                 return;
             }
             let onWriteComplete = waitItem.onWriteComplete;
@@ -489,7 +489,7 @@ class SocketHandler {
         let length = waitItem.buffer.length;
         let isFileCache = waitItem.cacheID != -1;
         if(length == 0) {
-            this.procError(new Error("SocketHandler:: sendPopDataRecursive() - buffer length is zero."));
+            this.procError(new Error(" sendPopDataRecursive() - buffer length is zero."));
             return;
         }
         this.writeBuffer(waitItem.buffer, (client, success, err) => {
@@ -536,7 +536,7 @@ class SocketHandler {
                             onWriteComplete?.(this, false);
                             return;
                         }
-                        logger.warn(`SocketHandler:: writeBuffer() - socket.write() error(${error.message})`, error);
+                        logger.warn(`writeBuffer() - socket.write() error(${error.message})`, error);
                         this.procError(error, false);
                         onWriteComplete?.(this, false, error);
                         return;
@@ -544,7 +544,7 @@ class SocketHandler {
                     onWriteComplete?.(this, true);
                 });
             } catch(e) {
-                logger.warn(`SocketHandler:: writeBuffer() - socket.write() error(${e})`);
+                logger.warn(`writeBuffer() - socket.write() error(${e})`);
                 onWriteComplete?.(this, false);
                 this.procError(e as Error, false);
             }

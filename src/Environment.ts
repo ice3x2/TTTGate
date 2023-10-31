@@ -20,8 +20,8 @@ const Environment = {
     },
     devMode : DEV_MODE,
     version : {
-        build: '20231026',
-        name: '1.0.6b'
+        build: '20231031',
+        name: '1.0.7'
     }
 }
 

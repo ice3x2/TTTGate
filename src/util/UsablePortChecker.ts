@@ -2,14 +2,15 @@ import net from "net";
 
 
 class UsablePortChecker {
+    // noinspection JSUnusedLocalSymbols
     private constructor() {
     }
 
     public static async check(port: number) : Promise<boolean> {
         if(!port || port < 0 || port > 65535) throw new Error("port is invalid (0 ~ 65535)");
-        return new Promise<boolean>((resolve, reject) => {
+        return new Promise<boolean>((resolve) => {
             let server = net.createServer();
-            server.on('error', (error) => {
+            server.on('error', () => {
                 resolve(false);
             });
             server.on('listening', () => {
@@ -59,7 +60,7 @@ class UsablePortChecker {
         let ports = new Array<number>();
         for(let port = startPort; port <= endPort; port++) {
             let usable = await UsablePortChecker.check(port);
-            console.log(ports.length, port)
+
             if(!usable) {
                 ports.push(port);
             }

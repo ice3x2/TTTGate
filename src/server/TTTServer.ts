@@ -2,7 +2,7 @@ import {ExternalPortServerPool, ExternalPortServerStatus } from "./ExternalPortS
 import {TunnelServer, ClientStatus} from "./TunnelServer";
 import {ServerOption, TunnelingOption} from "../types/TunnelingOption";
 import SocketState from "../util/SocketState";
-import {CertificationStore, CertInfo} from "./CertificationStore";
+import {CertificationStore} from "./CertificationStore";
 import ServerOptionStore from "./ServerOptionStore";
 import LoggerFactory  from "../util/logger/LoggerFactory";
 import {SysInfo} from "../commons/SysMonitor";
@@ -13,10 +13,6 @@ const logger = LoggerFactory.getLogger('server', 'TTTServer');
   ExportPortServerPool은 외부에서 들어온 handler 만 관리한다.
   Ctrl 은 TunnelServer에서 관리한다.
  */
-
-interface OnRequireCertificate {
-    (callback: CertInfo): void;
-}
 
 
 class TTTServer {
@@ -156,7 +152,7 @@ class TTTServer {
             try {
                 await this._externalPortServerPool.startServer(tunnelOption, certStore.getExternalCert(tunnelOption.forwardPort));
             } catch (err) {
-                logger.error(`TTTServer::start - failed to start external port server. ${JSON.stringify(tunnelOption)}`,err);
+                logger.error(`start - failed to start external port server. ${JSON.stringify(tunnelOption)}`,err);
             }
         }
         await this._tunnelServer.start();

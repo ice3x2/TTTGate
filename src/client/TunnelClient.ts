@@ -38,7 +38,7 @@ interface OnSessionOpenCallback {
     (id: number, opt: OpenOpt) : void;
 }
 
-const HEARTBEAT_INTERVAL = 30000;
+
 enum HandlerType {
     Control,
     Data
@@ -104,7 +104,7 @@ class TunnelClient {
 
     public connect() : boolean {
         if(this._state != CtrlState.None) {
-            console.error(`TunnelClient: connect: already connected`);
+            logger.error(`TunnelClient: connect: already connected`);
             return false;
         }
         this._state = CtrlState.Connecting;
@@ -146,7 +146,6 @@ class TunnelClient {
         this._waitBufferQueueMap.set(sessionID, new Dequeue<Buffer>());
         let packet : CtrlPacket | undefined = undefined;
         if(dataHandler.dataHandlerState == DataHandlerState.ConnectingEndPoint) {
-            console.log("엔드포인트 생성 및 연결 성공 전송. 세션ID:" + sessionID);
             packet = CtrlPacket.resultOfOpenSession(dataHandler.handlerID!, sessionID, true);
         } else {
             return false;
@@ -206,7 +205,7 @@ class TunnelClient {
             this.onReceiveFromCtrlHandler(this._ctrlHandler, data);
         } else if(state == SocketState.Closed || state == SocketState.End) {
             if(data) {
-                logger.error(`TunnelClient::onCtrlHandlerEvent - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`, data);
+                logger.error(`onCtrlHandlerEvent - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`, data);
             }
             this._state = CtrlState.None;
             this._ctrlHandler = undefined;
@@ -229,7 +228,7 @@ class TunnelClient {
     private onReceiveFromCtrlHandler(handler: TunnelControlHandler, data: Buffer) : void {
         let packetList :  Array<CtrlPacket> = this._ctrlHandler!.packetStreamer!.readCtrlPacketList(data);
         for(let packet of packetList) {
-            logger.info(`TunnelClient::onReceiveFromCtrlHandler - cmd:${CtrlCmd[packet.cmd]}, sessionID:${packet.sessionID}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
+            logger.info(`onReceiveFromCtrlHandler - cmd:${CtrlCmd[packet.cmd]}, sessionID:${packet.sessionID}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
             if(this._state == CtrlState.Syncing && packet.cmd == CtrlCmd.SyncCtrlAck) {
                 this._id = packet.ID;
                 this.sendAckCtrl(handler, this._id, this._option.key);
@@ -251,7 +250,7 @@ class TunnelClient {
                 else if(packet.cmd == CtrlCmd.CloseSession) {
                     let dataHandler = this._activatedSessionDataHandlerMap.get(packet.sessionID);
                     if(!dataHandler) {
-                        logger.error(`TunnelClient::onReceiveFromCtrlHandler - Fail close session. invalid sessionID: ${packet.sessionID}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
+                        logger.error(`onReceiveFromCtrlHandler - Fail close session. invalid sessionID: ${packet.sessionID}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
                         this._onEndPointCloseCallback?.(packet.sessionID, 0);
                     } else {
                         dataHandler.addOnceDrainListener(() => {
@@ -261,12 +260,12 @@ class TunnelClient {
                         });
                     }
                 } else {
-                    //logger.warn(`TunnelClient::onReceiveFromCtrlHandler - invalid cmd: ${CtrlCmd[packet.cmd]}, sessionID:${packet.sessionID}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
+                    //logger.warn(`onReceiveFromCtrlHandler - invalid cmd: ${CtrlCmd[packet.cmd]}, sessionID:${packet.sessionID}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
                 }
             }
             else {
                 // todo 잘못된 패킷이 수신되었을 경우 처리해야함.
-                logger.error(`TunnelClient::onReceiveFromCtrlHandler - invalid state: ${this._state}, sessionID:${packet.sessionID}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
+                logger.error(`onReceiveFromCtrlHandler - invalid state: ${this._state}, sessionID:${packet.sessionID}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
             }
         }
     }
@@ -313,6 +312,7 @@ class TunnelClient {
         dataHandler.dataHandlerState = DataHandlerState.None;
     }
 
+    // noinspection JSUnusedLocalSymbols
     /**
      * 데이터 핸들러가 EndPoint와 연결을 시도한다. 연결이 완료되면 세션을 생성하고, 세션을 서버에 알린다.
      * @param handlerID
@@ -329,7 +329,8 @@ class TunnelClient {
         dataHandler.dataHandlerState = DataHandlerState.ConnectingEndPoint;
         dataHandler.setBufferSizeLimit(endPointConnectOpt.bufferLimit);
         this._activatedSessionDataHandlerMap.set(sessionID, dataHandler);
-        console.log('[client]',`TunnelClient: connectEndPoint: sessionID:${sessionID}, remote:(${dataHandler!.socket.remoteAddress})${dataHandler!.socket.remotePort}`)
+
+        logger.info(`Connect end point: sessionID:${sessionID}, remote:(${dataHandler!.socket.remoteAddress})${dataHandler!.socket.remotePort}`)
         process.nextTick(() => {
             this._onConnectEndPointCallback?.(sessionID, endPointConnectOpt);
         });
@@ -346,7 +347,7 @@ class TunnelClient {
             //});
         } else {
             // todo 잘못된 패킷이 수신되었을 경우 처리해야함.
-            logger.error(`TunnelClient::onReceiveFromDataHandler - invalid state: ${handler.dataHandlerState}, sessionID:${handler.sessionID}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
+            logger.error(`onReceiveFromDataHandler - invalid state: ${handler.dataHandlerState}, sessionID:${handler.sessionID}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
         }
     }
 
@@ -356,15 +357,15 @@ class TunnelClient {
 
     private sendSyncAndSyncSyncCmd(ctrlHandler: TunnelControlHandler) : void {
         //console.log("[server]",'TunnelServer: makeCtrlHandler - change state => ' + SessionState[SessionState.HalfOpened]);
-        logger.info(`TunnelClient::sendSyncAndSyncSyncCmd - id:${ctrlHandler.id}, remote:(${ctrlHandler.socket.remoteAddress})${ctrlHandler.socket.remotePort}`)
+        logger.info(`sendSyncAndSyncSyncCmd - id:${ctrlHandler.id}, remote:(${ctrlHandler.socket.remoteAddress})${ctrlHandler.socket.remotePort}`)
         let sendBuffer = CtrlPacket.createSyncCtrl().toBuffer();
         ctrlHandler.sendData(sendBuffer, (handler, success, err) => {
             if(!success) {
-                logger.error(`TunnelClient::sendSyncAndSyncSyncCmd Fail - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`, err);
+                logger.error(`sendSyncAndSyncSyncCmd Fail - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`, err);
                 this._ctrlHandler?.end_();
                 return;
             }
-            logger.info(`TunnelClient::sendSyncAndSyncSyncCmd Success - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`)
+            logger.info(`sendSyncAndSyncSyncCmd Success - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`)
             this._state = CtrlState.Syncing;
         });
     }
@@ -402,7 +403,7 @@ class TunnelClient {
     public closeEndPointSession(sessionID: number,waitForReceiveDataLength: number) : boolean {
         let dataHandler = this._activatedSessionDataHandlerMap.get(sessionID);
         if(dataHandler && dataHandler.dataHandlerState == DataHandlerState.ConnectingEndPoint) {
-            console.log("엔드포인트 생성 및 연결 !실패! 전송. 세션ID:" + sessionID);
+            logger.warn(`End point connection failed - sessionID: ${sessionID}`);
             let packet = CtrlPacket.resultOfOpenSession(dataHandler.handlerID!, sessionID, false)
             this._ctrlHandler!.sendData(packet.toBuffer(), (handler, success/*, err*/) => {
                 if(!success) {
@@ -413,7 +414,7 @@ class TunnelClient {
             });
         } else if(dataHandler)  {
             let handlerID = dataHandler?.handlerID ?? 0;
-            console.log("엔드포인트 세션 종료 요청. 세션ID:" + sessionID);
+
             this.sendCloseSession(handlerID, sessionID,waitForReceiveDataLength, dataHandler);
 
 
@@ -424,6 +425,7 @@ class TunnelClient {
 
 
     private sendCloseSession(handlerID: number, sessionID: number, waitReceiveLength: number, dataHandler?: TunnelDataHandler) : void {
+        console.log(`Endpoint client sends a close request - sessionID:${sessionID}`);
         try {
             this._ctrlHandler!.sendData(CtrlPacket.closeSession(handlerID, sessionID, waitReceiveLength).toBuffer(), (handler, success/*, err*/ ) => {
                 if (!success) {

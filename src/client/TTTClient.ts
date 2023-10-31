@@ -4,7 +4,8 @@ import SocketState from "../util/SocketState";
 import {Buffer} from "buffer";
 import EndPointClientPool from "./EndPointClientPool";
 import {OpenOpt} from "../commons/CtrlPacket";
-import LoggerFactory  from "../util/logger/LoggerFactory";
+import LoggerFactory from "../util/logger/LoggerFactory";
+
 const logger = LoggerFactory.getLogger('client', 'TTTClient');
 
 
@@ -24,8 +25,7 @@ class TTTClient {
 
 
     public static create(clientOption: ClientOption): TTTClient {
-        let client = new TTTClient(clientOption);
-        return client;
+        return new TTTClient(clientOption);
     }
 
     public start() {
@@ -37,8 +37,8 @@ class TTTClient {
         this._tunnelClient.onEndPointCloseCallback = this.onSessionCloseCallback;
         this._endPointClientPool.onEndPointClientStateChangeCallback = this.onEndPointClientStateChangeCallback;
         this._endPointClientPool.onEndPointTerminateCallback = this.onEndPointTerminateCallback;
-        logger.info(`TTTClient:: try connect to ${this._clientOption.host}:${this._clientOption.port}`);
-        logger.info(`TTTClient:: option: ${JSON.stringify(this._clientOption)}`)
+        logger.info(` try connect to ${this._clientOption.host}:${this._clientOption.port}`);
+        logger.info(` option: ${JSON.stringify(this._clientOption)}`)
         this._tryConnectState = true;
         this._tunnelClient.connect();
     }
@@ -50,16 +50,16 @@ class TTTClient {
             }
             this._tryConnectState = false;
             this._isOnline = false;
-            logger.error(`TTTClient:: connection closed.`, error);
+            logger.error(`Connection closed.`, error);
             this._endPointClientPool.closeAll();
-            logger.info(`TTTClient:: try reconnect after ${RECONNECT_INTERVAL}ms`)
+            logger.info(`Try reconnect after ${RECONNECT_INTERVAL}ms`)
             setTimeout(() => {
                 this.start();
-                logger.info(`TTTClient:: try reconnect to ${this._clientOption.host}:${this._clientOption.port}`);
-                logger.info(`TTTClient:: option: ${JSON.stringify(this._clientOption)}`);
+                logger.info(`Try reconnect to ${this._clientOption.host}:${this._clientOption.port}`);
+                logger.info(`Option: ${JSON.stringify(this._clientOption)}`);
             },RECONNECT_INTERVAL);
         } else if(state == 'connected') {
-            logger.info(`TTTClient:: connection established.`);
+            logger.info(` connection established.`);
             this._isOnline = true;
             this._tryConnectState = false;
         }
@@ -72,10 +72,8 @@ class TTTClient {
 
 
     private onSessionCloseCallback = (id: number, waitForSendLength: number) : void => {
-        console.log("[Client:TTTClient]", `세션제거 요청 받음 id: ${id}`)
+        logger.info("A request has been received to close the session. id: " + id + ", waitForSendLength: " + waitForSendLength);
         this._endPointClientPool.close(id,waitForSendLength);
-        logger.info(`TTTClient:: TunnelClient closed, and close EndPointClientPool id: ${id}`);
-        console.log("[Client:TTTClient]", `TunnelClient closed, and close EndPointClientPool id: ${id}`);
     }
 
     private onSessionSendCallback = (id: number, data: Buffer) : void => {

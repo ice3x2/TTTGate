@@ -44,7 +44,7 @@ class DataStatePacket {
         }
         let prefix = buffer.toString('utf-8',0,DataStatePacket.PREFIX_LENGTH);
         if(prefix != DataStatePacket.PREFIX) {
-            throw new Error(`DataStatePacket::fromBuffer: invalid prefix: ${prefix}`);
+            throw new Error(`fromBuffer: invalid prefix: ${prefix}`);
         }
         let packet = new DataStatePacket();
         packet._ctrlID = buffer.readUInt32BE(DataStatePacket.PREFIX_LENGTH);
