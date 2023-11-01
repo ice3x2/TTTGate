@@ -47,6 +47,7 @@ class TunnelServer {
 
     private _tunnelServer : TCPServer;
     private readonly _key : string;
+    private isRunning = false;
 
     private _heartbeatInterval : NodeJS.Timeout | undefined;
     private _nextSelectIdx = 0;
@@ -95,6 +96,7 @@ class TunnelServer {
                 if(err) {
                     reject(err);
                 } else {
+                    this.isRunning = true;
                     resolve();
                 }
             });
@@ -134,6 +136,7 @@ class TunnelServer {
      */
     public async close() : Promise<void> {
         logger.info(`close`);
+        this.isRunning = false;
         return new Promise((resolve) => {
             if(this._heartbeatInterval) {
                 clearInterval(this._heartbeatInterval!);
@@ -142,7 +145,6 @@ class TunnelServer {
                 handlerPool.getAllSessionIDs().forEach((id) => { this._onSessionCloseCallback?.(id, 0) });
                 handlerPool.end();
             });
-
             this.stopClientCheckInterval();
             // noinspection JSUnusedLocalSymbols
             this._tunnelServer.stop((err) => {
@@ -229,6 +231,10 @@ class TunnelServer {
         if(SocketState.Listen == state) {
             logger.info(`Listen: ${this._serverOption.port}`);
         } if(state == SocketState.Bound && handler) {
+            if(!this.isRunning) {
+                handler.end_();
+                return;
+            }
             logger.info(`Bound - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
             this.onClientHandlerBound(handler);
         }
@@ -476,6 +482,10 @@ class TunnelServer {
      * @param data
      */
     private onHandlerEvent = (handler: SocketHandler, state: SocketState, data?: any) : void => {
+        if(!this.isRunning) {
+            handler.destroy();
+            return;
+        }
         if(SocketState.Receive == state) {
             this.onReceiveAllHandler(handler, data);
         } else {
