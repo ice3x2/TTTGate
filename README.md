@@ -1,6 +1,10 @@
 # TTTGate
 TTTGate is a versatile tool designed to facilitate seamless external access to internal networks. With an easy-to-use server-client setup, it enables secure and efficient communication between external servers and internal PCs behind a NAT. 
 ![img1](https://github.com/ice3x2/TTTGate/assets/3121298/74e1fed4-59ee-4be4-857c-f622aa5cb679)
+## Installation
+ 1. Download the latest version from https://github.com/ice3x2/TTTGate/releases.
+ 2. Extract the downloaded files.
+ 3. Move the directory on both the external network accessible location and the internal network PC.
 
 ## Run Server Mode (External Server):
  1.  Open CLI Interface and Navigate to the bin Directory:
@@ -76,5 +80,18 @@ TTTGate is a versatile tool designed to facilitate seamless external access to i
        * `-daemon`: Operates in the background mode. Process monitoring is also active, enabling automatic restart in the event of the server process being forcibly terminated due to internal errors.
        * `-bufferLimit`: [limit size]: Specifies the buffer size limit in mebibytes (MiB). Default 128MiB.
        * `-save`: Saves the options.
+## Terminate background process
+   for Linux
+   ```shell
+   ./TTTGate-linux-x64 stop
+   ```
+   for Alpine
+   ```shell
+   ./TTTGate-alpine-x64 stop
+   ```
+   for Windows
+   ```shell
+   TTTGate-win-x64.exe stop
+   ```
      
     
