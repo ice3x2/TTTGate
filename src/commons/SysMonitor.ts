@@ -5,6 +5,7 @@ import ExMath from "../util/ExMath";
 import Dict = NodeJS.Dict;
 
 
+
 interface NetworkInterface {
     address: string;
     netmask: string;
@@ -159,7 +160,13 @@ class SysMonitor {
         if(this._sysInfoCache) {
             return this._sysInfoCache;
         }
-        let network : Dict<NetworkInterfaceInfo[]> =  os.networkInterfaces();
+        let network : Dict<NetworkInterfaceInfo[]> | {[name: string] : Array<NetworkInterface>} = {};
+        try {
+            network = os.networkInterfaces();
+        }
+        catch (e) {
+            network = {unknown: []}
+        }
         let keys =  Object.keys(network);
         let networkInfo : NetworkInfo = {};
         keys.forEach((key) => {
@@ -176,6 +183,7 @@ class SysMonitor {
                 });
             });
         });
+
         let status : SysInfo = {
             cpuInfo: {
                 model: os.cpus()[0].model,

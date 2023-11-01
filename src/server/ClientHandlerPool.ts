@@ -203,6 +203,10 @@ class ClientHandlerPool {
         return this._name;
     }
 
+    public getAllSessionIDs() : Array<number> {
+        return [... Array.from(this._pendingSessionIDMap.keys()), ... Array.from(this._activatedSessionHandlerMap_.keys())];
+    }
+
     public sendConnectEndPoint(sessionID: number, opt : OpenOpt) : void {
         if(this._waitingDataBufferQueueMap.has(sessionID)) {
             return;

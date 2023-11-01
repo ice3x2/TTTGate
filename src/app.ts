@@ -12,6 +12,8 @@ config.appendWriteConfig({name: 'client', console: true});
 config.appendWriteConfig({name: 'boot', console: true});
 LoggerFactory.updateConfig(config);
 
+
+
 let app = () => {
     console.log('TTTGate v' + Environment.version.name + ' (' + Environment.version.build + ')');
     let sentinel : Sentinel = Sentinel.create(Environment.devMode);

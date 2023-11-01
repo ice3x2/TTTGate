@@ -72,6 +72,8 @@ class TunnelServer {
 
 
 
+
+
     public static create(option:{port: number, tls: boolean, key: string}, certInfo: CertInfo) : TunnelServer {
         return new TunnelServer(option, certInfo);
     }
@@ -132,11 +134,15 @@ class TunnelServer {
      */
     public async close() : Promise<void> {
         logger.info(`close`);
-
         return new Promise((resolve) => {
             if(this._heartbeatInterval) {
                 clearInterval(this._heartbeatInterval!);
             }
+            this._clientHandlerPoolMap.forEach((handlerPool) => {
+                handlerPool.getAllSessionIDs().forEach((id) => { this._onSessionCloseCallback?.(id, 0) });
+                handlerPool.end();
+            });
+
             this.stopClientCheckInterval();
             // noinspection JSUnusedLocalSymbols
             this._tunnelServer.stop((err) => {
@@ -374,7 +380,7 @@ class TunnelServer {
             logger.error(`onHandlerEvent - CtrlPacketStreamer.readCtrlPacketList Fail. ctrlID: ${handler.id}`,e);
             if(handler.handlerType == HandlerType.Control) {
                 logger.error(`onHandlerEvent - CtrlPacketStreamer.readCtrlPacketList Fail. ctrlID: ${handler.id}, ${e}`);
-                this.closeHandlerPool(handler.id);
+                this.destroyClientHandlerPool(handler.id);
                 return;
             } else {
                 handler.destroy();
@@ -388,14 +394,7 @@ class TunnelServer {
     }
 
 
-    private closeHandlerPool(ctrlID: number) : void {
-        let handlerPool = this._clientHandlerPoolMap.get(ctrlID);
-        if(!handlerPool) {
-            return;
-        }
-        this._clientHandlerPoolMap.delete(ctrlID);
-        handlerPool.end();
-    }
+
 
 
 
@@ -522,9 +521,13 @@ class TunnelServer {
         });
         for(let id of removeSessionIDs) {
             this._sessionIDAndCtrlIDMap.delete(id);
+            this._onSessionCloseCallback?.(id, 0);
         }
+       handlerPool.getAllSessionIDs().forEach((id) => this._onSessionCloseCallback?.(id, 0) );
+
 
         this._clientHandlerPoolMap.delete(ctrlID);
+
         handlerPool.end();
     }
 
