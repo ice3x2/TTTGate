@@ -56,25 +56,25 @@ TTTGate is a versatile tool designed to facilitate seamless external access to i
      ```
      Please [server_address] with the server address in the format of [hostname]:[port_number]. If the port number is the default 9126 and has not been changed on the server, you can simply enter the hostname.
      for Linux
-    ```shell
-    ./TTTGate-linux-x64 client -addr hostname 
-    ```
-    for Alpine
-    procs beforehand, specifically for Alpine Linux:
-    ```shell
-    apk add procs
-    ./TTTGate-alpine-x64 client -addr hostname 
-    ```
-    for Windows
-    ```shell
-    TTTGate-win-x64.exe client -addr hostname 
-    ```
-    Available options:
-     * `-tls`: Enables communication with the server using Transport Layer Security (TLS) when TLS is enabled in the web admin console. default false.
-     * `-name`: Defines the client name. default random name.
-     * `-key`: Defines the authentication key, which must match the one set in the web admin console. The default value is the same for both the server and the client, so it does not need to be set separately.
-     * `-daemon`: Operates in the background mode. Process monitoring is also active, enabling automatic restart in the event of the server process being forcibly terminated due to internal errors.
-     * `-bufferLimit`: [limit size]: Specifies the buffer size limit in mebibytes (MiB). Default 128MiB.
-     * `-save`: Saves the options.
+     ```shell
+     ./TTTGate-linux-x64 client -addr hostname 
+     ```
+     for Alpine
+     procs beforehand, specifically for Alpine Linux:
+     ```shell
+     apk add procs
+     ./TTTGate-alpine-x64 client -addr hostname 
+     ```
+     for Windows
+     ```shell
+     TTTGate-win-x64.exe client -addr hostname 
+     ```
+     Available options:
+       * `-tls`: Enables communication with the server using Transport Layer Security (TLS) when TLS is enabled in the web admin console. default false.
+       * `-name`: Defines the client name. default random name.
+       * `-key`: Defines the authentication key, which must match the one set in the web admin console. The default value is the same for both the server and the client, so it does not need to be set separately.
+       * `-daemon`: Operates in the background mode. Process monitoring is also active, enabling automatic restart in the event of the server process being forcibly terminated due to internal errors.
+       * `-bufferLimit`: [limit size]: Specifies the buffer size limit in mebibytes (MiB). Default 128MiB.
+       * `-save`: Saves the options.
      
     
