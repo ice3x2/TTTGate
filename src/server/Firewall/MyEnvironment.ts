@@ -39,7 +39,6 @@ class MyEnvironment {
         }).catch((err) => {
             console.error(err);
             MyEnvironment.publicIP = "0.0.0.0";
-
             LOG.error("Can't get public ip", err)
         });
 
