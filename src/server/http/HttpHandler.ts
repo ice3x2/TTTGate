@@ -75,7 +75,7 @@ class HttpHandler {
         this._socketHandler.setBundle(key, value);
     }
 
-    public getBundle(key: string) : any {``
+    public getBundle(key: string) : any {
         return this._socketHandler.getBundle(key);
     }
 

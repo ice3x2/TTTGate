@@ -4,6 +4,8 @@ import Environment from "./Environment";
 import {SocketHandler} from "./util/SocketHandler";
 import Sentinel from "./Sentinel";
 import LoggerFactory from "./util/logger/LoggerFactory";
+import MyEnvironment from "./server/Firewall/MyEnvironment";
+
 
 let config = LoggerFactory.cloneConfig();
 config.logFileDir = Environment.path.logDir;
@@ -11,6 +13,10 @@ config.appendWriteConfig({name: 'server', console: true, history: 2});
 config.appendWriteConfig({name: 'client', console: true});
 config.appendWriteConfig({name: 'boot', console: true});
 LoggerFactory.updateConfig(config);
+
+
+console.log(MyEnvironment.getPublicIP());
+
 
 
 

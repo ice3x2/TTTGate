@@ -255,7 +255,10 @@ class ExternalPortServerPool {
 
                 this._onHandlerEventCallback?.(sessionID, state, {data: data, receiveLength: handler.receiveLength});
             } else if (sessionID && (state == SocketState.End || state == SocketState.Closed)) {
-                this.updateCount(handler.getBundle(OPTION_BUNDLE_KEY).forwardPort, false);
+                let bundle = handler.getBundle(OPTION_BUNDLE_KEY);
+                if(bundle) {
+                    this.updateCount(bundle.forwardPort, false);
+                }
                 if (this._handlerMap.has(sessionID)) {
                     this._onHandlerEventCallback?.(sessionID, SocketState.Closed, {
                         data: data,
