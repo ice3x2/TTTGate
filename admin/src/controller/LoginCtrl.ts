@@ -1,8 +1,17 @@
 import  CryptoJS from "crypto-js";
 class LoginCtrl {
 
+
     private constructor() {
 
+    }
+
+    public static async captchaInfo() : Promise<{expireTime: number, token: string, width: number, height: number, image: string }> {
+        let result = await fetch("/api/login/captchaaaainfo", {
+            method: "GET",
+            credentials: "same-origin"
+        });
+        return (await result.json())['data'];
     }
 
     public static async isEmptyKey() : Promise<boolean> {
@@ -24,18 +33,20 @@ class LoginCtrl {
         return json['valid'];
     }
 
-    public static async login(key: string) : Promise<boolean> {
-        let hash =await LoginCtrl.hashPassword(key);
-        let result = await fetch("/api/login", {
-            method: "POST",
-            credentials: "same-origin",
-            headers: {
-                'Content-Type': 'application/json'
-            }
-            ,body: JSON.stringify({key: hash})
-        })
-        let json = await result.json();
-        return json['success'];
+    public static async login(key: string,captchaToken: string, captcha: string) : Promise<boolean> {
+
+            let hash =await LoginCtrl.hashPassword(key);
+            let result = await fetch("/api/login", {
+                method: "POST",
+                credentials: "same-origin",
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+                ,body: JSON.stringify({key: hash, captcha: captcha, captchaToken: captchaToken})
+            })
+            let json = await result.json();
+            return json['success'];
+
     }
 
     private static async hashPassword(password: string) {

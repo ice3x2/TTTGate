@@ -66,6 +66,7 @@
     "vite": "^4.4.11"
   },
   "dependencies": {
+    "@bestdon/nodejs-captcha": "^1.0.3",
     "@types/bcryptjs": "^2.4.2",
     "@types/crypto-js": "^4.1.1",
     "@types/geoip-lite": "^1.4.4",

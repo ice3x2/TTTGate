@@ -14,6 +14,7 @@ import File from "../../util/File";
 import Files from "../../util/Files";
 import {SysMonitor} from "../../commons/SysMonitor";
 import LoggerFactory from "../../util/logger/LoggerFactory";
+import {CaptchaInfo, CaptchaStore} from "./CaptchaStore";
 
 const logger = LoggerFactory.getLogger('server', 'AdminServer');
 
@@ -132,7 +133,12 @@ class AdminServer {
         if (url == "/api/serverOption") {
             await this.onGetServerOption(req, res);
             return;
-        } else if(url == '/api/sysInfo') {
+        }
+        else if (url == "/api/login/captchaaaainfo") {
+            await this.onLoadCaptchaInfo(req, res);
+            return;
+        }
+        else if(url == '/api/sysInfo') {
             await this.onGetSysInfo(req, res);
         } else if(url == '/api/sysInfo') {
             await this.onGetSysInfo(req, res);
@@ -510,20 +516,45 @@ class AdminServer {
         res.end(JSON.stringify({emptyKey: isEmpty}));
     }
 
+    private onLoadCaptchaInfo = async (req: IncomingMessage, res: ServerResponse) => {
+        setTimeout(async () => {
+            let info = await CaptchaStore.instance.createCaptcha();
+            res.writeHead(200, {'Content-Type': 'application/json'});
+            res.end(JSON.stringify({success: true, message: '', data: {
+                    token: info.token,
+                    expire: info.expire,
+                    expireTime: info.expireTime,
+                    image: info.image,
+                    width: info.width,
+                    height: info.height
+                }}));
+            CaptchaStore.instance.releaseImage(info.token!);
+        }, 2000);
+
+
+    }
+
     private onLogin = async (req: IncomingMessage, res: ServerResponse) => {
-        let json = await AdminServer.readJson(req);
-        let key = json['key'];
-        let sessionStore =  SessionStore.instance;
-        let success = await sessionStore.login(key);
-        if(success) {
-            let sessionKey = await sessionStore.newSession();
-            res.writeHead(200, {'Content-Type': 'application/json',
-                'Set-Cookie': `sessionKey=${sessionKey};path=/api/; HttpOnly; SameSite=Strict;${ServerOptionStore.instance.serverOption.adminTls === true ? ' secure;' : '' }`});
-            res.end(JSON.stringify({success: true}));
-        } else {
-            res.writeHead(401, {'Content-Type': 'application/json'});
-            res.end(JSON.stringify({success: false}));
-        }
+        setTimeout(async () => {
+            let json = await AdminServer.readJson(req);
+            let key = json['key'];
+            let captcha = json['captcha'];
+            let captchaToken = json['captchaToken'];
+            if(!captcha) captcha = '';
+            if(!captchaToken) captchaToken = '';
+            let sessionStore =  SessionStore.instance;
+            let success = await sessionStore.login(key);
+            let validCaptcha = CaptchaStore.instance.verify(captchaToken, captcha);
+            if(success && validCaptcha) {
+                let sessionKey = await sessionStore.newSession();
+                res.writeHead(200, {'Content-Type': 'application/json',
+                    'Set-Cookie': `sessionKey=${sessionKey};path=/api/; HttpOnly; SameSite=Strict;${ServerOptionStore.instance.serverOption.adminTls === true ? ' secure;' : '' }`});
+                res.end(JSON.stringify({success: true}));
+            } else {
+                res.writeHead(401, {'Content-Type': 'application/json'});
+                res.end(JSON.stringify({success: false}));
+            }
+        }, 3000);
     }
 
 
