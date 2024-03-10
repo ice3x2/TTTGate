@@ -20,8 +20,6 @@
         _isEmptyPassword = await LoginCtrl.isEmptyKey();
         if (_isEmptyPassword && _messageElement) {
             _messageElement.innerHTML = 'No password has been set. Enter the desired password.';
-
-            return;
         }
         if(_captchaInfo.expireTime == 0) {
             await loadCaptcha();

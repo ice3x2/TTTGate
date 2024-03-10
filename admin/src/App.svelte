@@ -7,6 +7,7 @@
   import {onMount} from "svelte";
   import Login from "./layout/Login.svelte";
   import ServerStatusLayout from "./layout/ServerStatusLayout.svelte";
+  import SecurityLayout from "./layout/SecurityLayout.svelte";
 
 
   type SessionState = 'Checking' | 'Valid' | 'Invalid';
@@ -41,6 +42,7 @@
   <!--<TunnelOptionSetLayout/>-->
 
     {#if _validSession === 'Valid'}
+      <SecurityLayout/>
       <ServerSetLayout/>
       <ServerStatusLayout/>
       <TunnelOptionSetLayout/>
