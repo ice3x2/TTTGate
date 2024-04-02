@@ -35,17 +35,17 @@ class LoginCtrl {
 
     public static async login(key: string,captchaToken: string, captcha: string) : Promise<boolean> {
 
-            let hash =await LoginCtrl.hashPassword(key);
-            let result = await fetch("/api/login", {
-                method: "POST",
-                credentials: "same-origin",
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-                ,body: JSON.stringify({key: hash, captcha: captcha, captchaToken: captchaToken})
-            })
-            let json = await result.json();
-            return json['success'];
+        let hash =await LoginCtrl.hashPassword(key);
+        let result = await fetch("/api/login", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+                'Content-Type': 'application/json'
+            }
+            ,body: JSON.stringify({key: hash, captcha: captcha, captchaToken: captchaToken})
+        })
+        let json = await result.json();
+        return json['success'];
 
     }
 

@@ -62,7 +62,11 @@ class LogWriter {
             let since = this.daysSince(date);
             let diff = since;
             if(diff > this._history && this._history > 0) {
-                fs.unlinkSync(Path.join(this._dirPath, logFile));
+                try {
+                    fs.unlinkSync(Path.join(this._dirPath, logFile));
+                } catch (e) {
+                    console.log(e);
+                }
             }
         }
     }

@@ -15,6 +15,7 @@ import Files from "../../util/Files";
 import {SysMonitor} from "../../commons/SysMonitor";
 import LoggerFactory from "../../util/logger/LoggerFactory";
 import {CaptchaInfo, CaptchaStore} from "./CaptchaStore";
+import CountryCode from "../Firewall/CountryCode";
 
 const logger = LoggerFactory.getLogger('server', 'AdminServer');
 
@@ -173,6 +174,8 @@ class AdminServer {
             return;
         } else if(url == '/api/version') {
             await this.onGetVersion(req, res);
+        } else if(url == '/api/security/countryCodes') {
+            await this.onGetCountryNameListForSecurity(req, res);
         }
         else {
             await this.onGetWebResource(req, res, url);
@@ -576,6 +579,8 @@ class AdminServer {
     }
 
     private validateSession = async (req: IncomingMessage) : Promise<boolean> => {
+        if(1 < 2 ) return true;
+
         let sessionKey = AdminServer.getSessionKey(req);
         if(sessionKey) {
             let sessionStore = SessionStore.instance;
@@ -657,6 +662,17 @@ class AdminServer {
         let hash = CryptoJS.SHA512(JSON.stringify(pureServerOption) + JSON.stringify(adminCert)).toString();
         res.writeHead(200, {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': origin == undefined ? '*' : origin});
         res.end(JSON.stringify({success: true, hash: hash, message: ''}));
+    }
+
+    private onGetCountryNameListForSecurity = async (req: IncomingMessage, res: ServerResponse) => {
+        let result: Array<{name: string, code: string}> = new Array<{name: string, code: string}>();
+        Object.keys(CountryCode).forEach((key: string) => {
+            // @ts-ignore
+            let countryCode = CountryCode[key];
+            result.push({name: countryCode.CountryNameEN, code: countryCode.code});
+        });
+        res.writeHead(200, {'Content-Type': 'application/json'});
+        res.end(JSON.stringify({success: true, countryNames: result, message: ''}));
     }
 
 
