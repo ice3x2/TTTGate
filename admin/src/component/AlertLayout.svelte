@@ -1,9 +1,10 @@
 <script lang="ts">
     import {createEventDispatcher} from "svelte";
 
-    export let width = 320;
-    export let height = 150;
-
+    export let width : number | string = '320px';
+    export let height : number | string = '150px';
+    export let maxWidth : number | string = '465px';
+    export let maxHeight : number | string = '90%';
     export let show = false;
     export let button = 'Ok';
 
@@ -19,7 +20,7 @@
 </script>
 <main style="display: {!show ? 'none' : 'flex'};">
     <div class="background"></div>
-    <div class="popup-box" style="height: {height}px; width: {width}px;">
+    <div class="popup-box" style="height: {height}; width: {width}; max-width: {maxWidth}; max-height: {maxHeight}">
         <div class="content-box" >
             <div style="color: #333">
             <slot ></slot>
@@ -52,12 +53,12 @@
         height: calc(100% - 30px);
     }
     .popup-box {
-        padding: 10px;
-
+        padding: 5px;
         left: 0;
         background: white;
         border-radius: 5px;
         border: 1px solid gray;
+        overflow-y: auto;
         box-shadow: 0 1px 20px rgba(0, 0, 0, 0.5);
         z-index: 1001;
     }

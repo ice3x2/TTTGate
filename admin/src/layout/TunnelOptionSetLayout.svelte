@@ -14,6 +14,8 @@
     import Timer from "../component/Timer.svelte";
     import InvalidSession from "../controller/InvalidSession";
     import _ from "lodash";
+    import BufferWriter from "../../../src/util/BufferWriter";
+    import SecurityLayout from "./SecurityLayout.svelte";
 
     type Timers = {
         [key: number]: Timer
@@ -36,6 +38,7 @@
     let _alertButton = "Ok";
     let _onCloseAlert = () => {};
 
+    let _portForShowSecurityLayout = -1;
 
     let _timerElements : Timers = {};
     let _intervalId : any = null;
@@ -462,6 +465,11 @@
     }
 
 
+    let _onClickSecuritySettings = (port: number) => {
+        _portForShowSecurityLayout = port;
+
+    }
+
 
 
 </script>
@@ -488,6 +496,7 @@
                     <div class="tunneling-title" style="display: inline; color: #444">
                         {option.forwardPort}  ⬌ {option.destinationAddress}:{option.destinationPort} ({(option.protocol ?? '').toUpperCase()})
                     </div>
+                    <SecurityLayout show={_portForShowSecurityLayout === option.forwardPort} bind:port={option.forwardPort} bind:destinationHost={option.destinationAddress} bind:destinationPort={option.destinationPort} on:close={() => {_portForShowSecurityLayout = -1}} ></SecurityLayout>
                 </div>
 
 
@@ -511,6 +520,7 @@
                                 &nbsp;
                             </span>
 
+
                         {:else}
                             <span style="color: gray">Offline</span>
                         {/if}
@@ -533,7 +543,10 @@
                             {/if}
                         </div>
                     {/if}
+
+
                 </div>
+
             </div>
 
             <div  class="round-box">
@@ -635,7 +648,8 @@
                     </div>
 
                 {/if}
-                <div>
+                <button style="width: 160px" on:click={() => _onClickSecuritySettings(option.forwardPort)}>Security settings</button>
+                <div style="margin-top: 20px">
                     <input type="checkbox"  style="width: 14px;" on:change={()=> { }} bind:checked={option.inactiveOnStartup}  >
                     <div style="display: inline-block;position: relative; top: -7px; font-size: 10pt">Inactive on startup</div>
                 </div>
@@ -731,6 +745,31 @@
 
     .status-label {
         font-size: 15pt;
+    }
+
+    .security-button {
+        border: none;
+        color: #333;
+        background: none;
+        text-decoration: underline;
+        cursor: pointer;
+        font-size: 12pt;
+        font-weight: normal;
+        padding: 0;
+
+        height: 12pt;
+    }
+
+    .security-button:hover {
+        border: none;
+        color: dodgerblue;
+        background: none;
+    }
+
+    .security-button:active {
+        border: none;
+        color: blue;
+        background: none;
     }
 
     @media screen and (max-width: 480px) {
