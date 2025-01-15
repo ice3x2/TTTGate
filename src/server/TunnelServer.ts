@@ -478,10 +478,11 @@ class TunnelServer {
      * Receive 이벤트는 클라이언트로부터 데이터를 받았을때 호출된다.
      * 그 외에는 close 이벤트가 호출된다.
      * @param handler
+     * @param info
      * @param state
      * @param data
      */
-    private onHandlerEvent = (handler: SocketHandler, state: SocketState, data?: any) : void => {
+    private onHandlerEvent = (handler: SocketHandler,info: {address?: string, port?: number}, state: SocketState, data?: any) : void => {
         if(!this.isRunning) {
             handler.destroy();
             return;

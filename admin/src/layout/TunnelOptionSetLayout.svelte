@@ -541,8 +541,11 @@
                                        style="position: absolute; margin-left: 5px; margin-top: 3px"></Timer>
                                 </div>
                             {/if}
+
                         </div>
                     {/if}
+
+
 
 
                 </div>

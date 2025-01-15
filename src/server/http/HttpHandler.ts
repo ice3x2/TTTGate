@@ -9,7 +9,7 @@ import LoggerFactory  from "../../util/logger/LoggerFactory";
 let logger = LoggerFactory.getLogger('server', 'HttpHandler');
 
 interface OnSocketEvent {
-    (handler: HttpHandler, state: SocketState, data?: any) : void;
+    (handler: HttpHandler,info: {address?: string, port?: number}, state: SocketState, data?: any) : void;
 }
 
 
@@ -93,7 +93,7 @@ class HttpHandler {
         this._currentHttpPipe.onErrorCallback = this.onHttpMessageError;
     }
 
-    private onSocketEventFromSocketHandler = (handler: SocketHandler, state: SocketState, data?: any) : void => {
+    private onSocketEventFromSocketHandler = (handler: SocketHandler,info: {address?: string, port?: number}, state: SocketState, data?: any) : void => {
 
         if(state == SocketState.Receive && !this._socketHandler.isEnd()) {
             if(this._isUpgrade) {
@@ -155,7 +155,7 @@ class HttpHandler {
         }
 
 
-        this._event?.(this, state, data);
+        this._event?.(this,{}, state, data);
 
     }
 

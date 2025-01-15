@@ -197,7 +197,7 @@ class TunnelClient {
         handler.destroy();
     }
 
-    private onCtrlHandlerEvent = (handler: SocketHandler, state: SocketState, data?: any) : void => {
+    private onCtrlHandlerEvent = (handler: SocketHandler,info: {address?: string,port?: number}, state: SocketState, data?: any) : void => {
         if(state == SocketState.Connected) {
             this.sendSyncAndSyncSyncCmd(this._ctrlHandler!);
         }
@@ -287,7 +287,7 @@ class TunnelClient {
      * @private
      */
     private connectDataHandler(handlerID: number,  sessionID: number) : void {
-        let dataHandler : TunnelDataHandler = SocketHandler.connect(this.makeConnectOpt(), (handler, state, data) => {
+        let dataHandler : TunnelDataHandler = SocketHandler.connect(this.makeConnectOpt(), (handler,info, state, data) => {
             if(state == SocketState.Connected) {
                 dataHandler.dataHandlerState = DataHandlerState.Initializing;
                 dataHandler.handlerType = HandlerType.Data;

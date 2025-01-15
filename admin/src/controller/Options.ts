@@ -1,7 +1,7 @@
 
 
 
-// noinspection DuplicatedCode
+
 type Protocol =  "tcp" | "http" | "https";
 type CustomHeader = {
     name: string;
@@ -46,6 +46,16 @@ type ServerOption = {
     tunnelingOptions: Array<Options>
 }
 
+type SecurityOption = {
+    blockCountries: Array<string>
+    allowCountries: Array<string>
+    blockIPs: Array<string>
+    allowIPs: Array<string>
+    enabledAutoBlock: boolean
+    autoBlockThresholdMilliSeconds: number
+    autoBlockThresholdCount: number
+}
+
 type Options = {
     forwardPort: number,
     protocol?: Protocol,
@@ -57,6 +67,7 @@ type Options = {
     allowedClientNames?: Array<string>;
     bufferLimitOnServer?: number,
     bufferLimitOnClient?: number
+    security? : SecurityOption
 }
 
-export type { ServerOption, Options, HttpOption, CustomHeader, TunnelingStatus, RewriteRule};
+export type { ServerOption, Options, HttpOption, CustomHeader, TunnelingStatus, RewriteRule, SecurityOption};

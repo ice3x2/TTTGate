@@ -16,6 +16,8 @@ import {SysMonitor} from "../../commons/SysMonitor";
 import LoggerFactory from "../../util/logger/LoggerFactory";
 import {CaptchaInfo, CaptchaStore} from "./CaptchaStore";
 import CountryCode from "../Firewall/CountryCode";
+import {Zip} from "../../util/Zip";
+import fs from "fs";
 
 const logger = LoggerFactory.getLogger('server', 'AdminServer');
 
@@ -143,7 +145,11 @@ class AdminServer {
             await this.onGetSysInfo(req, res);
         } else if(url == '/api/sysInfo') {
             await this.onGetSysInfo(req, res);
-        } else if(url == '/api/sysUsage') {
+        } else if(url == '/api/logDownload') {
+            await this.onGetLogDownload(req, res);
+
+        }
+        else if(url == '/api/sysUsage') {
             await this.onGetSysUsage(req, res);
         } else if(url == '/api/clientStatus') {
             await this.onGetClientStatus(req, res);
@@ -610,6 +616,22 @@ class AdminServer {
         res.writeHead(200, {'Content-Type': 'application/json'});
         let value = {success: true, message: ''} && status;
         res.end(JSON.stringify(value));
+    }
+
+    private onGetLogDownload = async (req: IncomingMessage, res: ServerResponse) => {
+        // log Dir 에 있는 모든 파일을 압축하여 다운로드 할 수 있게 해준다.
+        let logPath = Environment.path.logDir;
+        let logFiles = new File(logPath).list();
+        let zipPath = Environment.path.tempDir + '/logs.zip';
+        let tempFile = new File(Environment.path.tempDir);
+        if(!tempFile.isDirectory()) {
+            tempFile.mkdirs();
+        }
+        new File(zipPath).delete();
+        await Zip.zipFiles(logFiles, zipPath);
+        res.writeHead(200, {'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename=logs.zip'});
+        fs.createReadStream(zipPath).pipe(res);
+
     }
 
     private onGetSysUsage = async (req: IncomingMessage, res: ServerResponse) => {

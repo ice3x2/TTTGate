@@ -14,7 +14,7 @@ const logger = LoggerFactory.getLogger('', 'SocketHandler');
 
 
 interface OnSocketEvent {
-    (handler: SocketHandler, state: SocketState, data?: any) : void;
+    (handler: SocketHandler,info: {address?: string, port?: number}, state: SocketState, data?: any) : void;
 }
 
 interface OnDrainEvent {
@@ -100,6 +100,8 @@ class SocketHandler {
     }
 
 
+
+
     public static get globalMemoryBufferSize() : number {
         return SocketHandler.GlobalMemoryBufferSize;
     }
@@ -142,7 +144,7 @@ class SocketHandler {
         let connected = () => {
             if(handlerRef.length > 0 && handlerRef[0]._state == SocketState.None) {
                 handlerRef[0]._state = SocketState.Connected;
-                event(handlerRef[0], SocketState.Connected);
+                event(handlerRef[0],{address: options.host, port: options.port}, SocketState.Connected);
             }
         }
 
@@ -229,10 +231,11 @@ class SocketHandler {
 
     private initSocket(socket: net.Socket) : void {
         this._socket = socket;
+        let info = {address: this._socket.remoteAddress, port: this._socket.remotePort};
         socket.on('connect', ()=> {
             if(this._state != SocketState.Connected) {
                 this._state = SocketState.Connected;
-                this._event(this, SocketState.Connected);
+                this._event(this,info, SocketState.Connected);
             }
 
         });
@@ -253,7 +256,7 @@ class SocketHandler {
             if(this._state != SocketState.Closed /* && this._state != SocketState.Error*/) {
                 this._breakBufferFlush = !this._waitQueue.isEmpty();
                 this._state = SocketState.Closed;
-                this._event(this, SocketState.Closed);
+                this._event(this,info, SocketState.Closed);
             }
             this.release();
         });
@@ -261,7 +264,7 @@ class SocketHandler {
             this._receiveLength += data.length;
             if(!this.isEnd()) {
                 try {
-                    this._event(this, SocketState.Receive, data);
+                    this._event(this,info, SocketState.Receive, data);
                 } catch (e) {
                     this.procError(e as Error);
                 }
@@ -271,7 +274,7 @@ class SocketHandler {
             if(!this.isEnd()) {
                 this._state = SocketState.End;
                 this._breakBufferFlush = !this._waitQueue.isEmpty();
-                this._event(this, SocketState.End);
+                this._event(this,info, SocketState.End);
                 //23.10.19 수정
                 this._waitQueue.clear();
             }
@@ -288,7 +291,7 @@ class SocketHandler {
         this.callAllDrainEvent(this._waitQueue.isEmpty())
         if(this._state != SocketState.Closed) {
             this._state = SocketState.Closed;
-            this._event(this, SocketState.Closed, error);
+            this._event(this,{address: this._socket.remoteAddress, port:this._socket.remotePort},SocketState.Closed, error);
         }
         this.release();
     }
@@ -342,9 +345,11 @@ class SocketHandler {
         if(this.isEnd()) {
             return;
         }
+        let address = this._socket.remoteAddress;
+        let port = this._socket.remotePort;
         this._socket.end();
         this._state = SocketState.End;
-        this._event?.(this, SocketState.End);
+        this._event?.(this,{address: address, port: port}, SocketState.End);
         this._waitQueue.clear();
     }
 
@@ -359,10 +364,8 @@ class SocketHandler {
         this.callAllDrainEvent(this._waitQueue.isEmpty());
         this._socket.removeAllListeners();
         this._socket.destroy();
-
-
         this._state = SocketState.Closed;
-        this._event(this, SocketState.Closed);
+        this._event(this,{address: this._socket.remoteAddress, port:this._socket.remotePort}, SocketState.Closed);
 
         this._event = ()=>{};
         this._bundle.clear();

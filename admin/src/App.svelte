@@ -41,11 +41,15 @@
   <!--<ServerSetLayout/>-->
   <!--<TunnelOptionSetLayout/>-->
 
+
     {#if _validSession === 'Valid'}
+
       <SecurityLayout/>
       <ServerSetLayout/>
       <ServerStatusLayout/>
+
       <TunnelOptionSetLayout/>
+
     {:else if _validSession === 'Invalid'}
       <Login />
     {:else}
@@ -68,6 +72,16 @@
 </main>
 
 <style>
+
+  .layout-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 10px;
+    grid-template-areas:
+      "security server"
+      "tunnel server";
+  }
 
   .version-box {
     position: fixed;

@@ -8,6 +8,7 @@ const Environment = {
 
     path : {
         logDir : Path.join(ROOT_DIR, 'logs'),
+        tempDir : Path.join(ROOT_DIR, 'temp'),
         configDir : Path.join(ROOT_DIR, 'config'),
         //cacheDir : Path.join(ROOT_DIR, 'cache'),
         serverCacheDir : Path.join(ROOT_DIR, 'cache','server'),

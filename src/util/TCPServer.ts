@@ -7,11 +7,11 @@ const logger = LoggerFactory.getLogger('', 'TCPServer');
 
 
 interface OnServerEvent {
-    (server: TCPServer, state: SocketState, handler? : SocketHandler) : void;
+    (server: TCPServer, state: SocketState, handler? : SocketHandler,info?: {address?: string, port?: number}) : void;
 }
 
 interface OnSocketEvent {
-    (handler: SocketHandler, state: SocketState, data?: any) : void;
+    (handler: SocketHandler,info: {address?: string, port?: number}, state: SocketState, data?: any) : void;
 }
 
 interface ServerOption {port: number, tls?: boolean, ca?: string, cert?: string, key?: string};
@@ -113,16 +113,22 @@ class TCPServer {
         });
     }
 
+
     private onBind = (socket: net.Socket) : void => {
         let option = {socket:socket, port: this._options.port, addr: "127.0.0.1", tls: this._options.tls ?? false };
-        let handler = SocketHandler.bound(option,(handler, state, data) => {
+        let info = {address: socket.remoteAddress, port: socket.remotePort};
+        let handler = SocketHandler.bound(option,(handler,info, state, data) => {
             if(state == SocketState.Closed || /*state == SocketState.Error ||*/ state == SocketState.End) {
                 this._idHandlerMap.delete(handler.id);
             }
-            this._onHandlerEvent?.(handler, state, data);
+            this._onHandlerEvent?.(handler,info, state, data);
         });
         this._idHandlerMap.set(handler.id, handler);
-        this._onServerEvent?.(this, SocketState.Bound, handler);
+
+        const ipv4Regex = /(\d{1,3}\.){3}\d{1,3}/;
+        const ipv4Address = socket.remoteAddress?.match(ipv4Regex)?.[0];
+
+        this._onServerEvent?.(this, SocketState.Bound, handler, {address: ipv4Address, port: socket.remotePort});
     }
 
     public static create(options: ServerOption) : TCPServer {

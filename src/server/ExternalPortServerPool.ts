@@ -49,6 +49,12 @@ class ExternalPortServerPool {
     private _portServerMap  = new Map<number, TCPServer>();
     private _statusMap  = new Map<number, ExternalPortServerStatus>();
     private _handlerMap = new Map<number, EndpointHandler | EndpointHttpHandler>();
+    /**
+     * key: 외부 포트 번호 (forwardPort)
+     * value: TunnelingOption
+     * @private
+     */
+    private _tunnelingOptionMap = new Map<number, TunnelingOption>();
 
     private _activeTimeoutMap  = new Map<number, any>();
     private _onNewSessionCallback : NewSessionCallback | null = null;
@@ -63,9 +69,6 @@ class ExternalPortServerPool {
 
 
 
-
-
-
     public static create(options: Array<TunnelingOption>) : ExternalPortServerPool {
         return new ExternalPortServerPool(options);
     }
@@ -75,14 +78,12 @@ class ExternalPortServerPool {
         for(let option of options) {
             try {
                 option = this.optionNormalization(option);
+                this._tunnelingOptionMap.set(option.forwardPort, option);
             } catch (e) {
                 console.error(e);
             }
         }
-
         this.startSessionCleanup();
-
-
     }
 
 
@@ -112,8 +113,6 @@ class ExternalPortServerPool {
             return false;
         }
 
-
-
         return new Promise((resolve, reject) => {
             let options = {
                 port: option.forwardPort,
@@ -123,7 +122,6 @@ class ExternalPortServerPool {
                 ca: certInfo?.ca.value == '' ? undefined : certInfo?.ca.value
             }
             let portServer : TCPServer = TCPServer.create(options);
-
             portServer.setOnServerEvent(this.onServerEvent);
             portServer.setOnHandlerEvent(this.onHandlerEvent);
             portServer.setBundle(OPTION_BUNDLE_KEY, option);
@@ -167,6 +165,18 @@ class ExternalPortServerPool {
 
         if(option.destinationPort == undefined) {
             throw new Error("DestinationPort is undefined");
+        }
+
+        if(option.security == undefined) {
+            option.security = {
+                blockCountries: [],
+                allowCountries: [],
+                blockIPs: [],
+                allowIPs: [],
+                enabledAutoBlock: false,
+                autoBlockThresholdMilliSeconds: 3000,
+                autoBlockThresholdCount: 5
+            }
         }
 
         return option;
@@ -240,9 +250,18 @@ class ExternalPortServerPool {
     }
 
 
+    private secureFilter(connectionInfo?: {address?:string, port?:number}): boolean {
+        if(!connectionInfo) return true;
+        if(!connectionInfo.address) return false;
+        let ipV4 = connectionInfo.address;
 
 
-    private onHandlerEvent = (handler: EndpointHandler | EndpointHttpHandler, state: SocketState, data?: any) : void => {
+        console.error(connectionInfo);
+        return false;
+    }
+
+
+    private onHandlerEvent = (handler: EndpointHandler | EndpointHttpHandler,info: {address?:string, port?:number}, state: SocketState, data?: any) : void => {
         let sessionID = handler.getBundle(SESSION_ID_BUNDLE_KEY)!;
 
             if (SocketState.Receive == state) {
@@ -251,8 +270,6 @@ class ExternalPortServerPool {
                 if (status) {
                     status.rx += data.length;
                 }
-
-
                 this._onHandlerEventCallback?.(sessionID, state, {data: data, receiveLength: handler.receiveLength});
             } else if (sessionID && (state == SocketState.End || state == SocketState.Closed)) {
                 let bundle = handler.getBundle(OPTION_BUNDLE_KEY);
@@ -277,7 +294,7 @@ class ExternalPortServerPool {
 
     }
 
-    private onServerEvent = (server: TCPServer, state: SocketState, handlerOpt?: SocketHandler) : void => {
+    private onServerEvent = (server: TCPServer,state: SocketState, handlerOpt?: SocketHandler,info?: {address?: string, port?: number}) : void => {
         if(SocketState.Listen == state) {
             logger.info(`Listen - port: ${server.port}`);
         }
@@ -291,6 +308,13 @@ class ExternalPortServerPool {
             this._portServerMap.delete(destPort);
         } else if(state == SocketState.Bound) {
             let handler = handlerOpt!;
+            //todo : 보안 필터 구현.
+            // 만약 보안 필터에 걸리면 handler.destroy() 호출
+            if(this.secureFilter(info)) {
+                handler.destroy();
+                return;
+            }
+
             let sessionID = ExternalPortServerPool.LAST_SESSION_ID++;
             handler.setBundle(SESSION_ID_BUNDLE_KEY, sessionID);
             let option = server.getBundle(OPTION_BUNDLE_KEY);
@@ -320,6 +344,7 @@ class ExternalPortServerPool {
                 this.initEndPointInfo(httpHandler as EndpointHttpHandler, sessionID, 'http');
                 this._handlerMap.set(sessionID, httpHandler);
             } else {
+
                 logger.info(`Bound SocketHandler - id:${sessionID}, port: ${server.port}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
                 this.initEndPointInfo(handler as EndpointHandler, sessionID, 'tcp');
                 this._handlerMap.set(sessionID, handler);

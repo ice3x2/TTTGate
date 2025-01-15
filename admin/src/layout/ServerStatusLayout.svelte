@@ -2,6 +2,7 @@
 import Gauge from "../component/Gauge.svelte";
 import ServerStatusCtrl from "../controller/ServerStatusCtrl";
 import CpuIcon from "../assets/cpu.png";
+import logoIcon from "../assets/log.png";
 import UptimeIcon from "../assets/uptime.png";
 
 import {type ClientStatus, type SysInfo, type Usage, type NetworkInfo} from "../controller/Types";
@@ -10,7 +11,7 @@ import {onMount} from "svelte";
 import ExMath from "../controller/ExMath";
 import SysinfoPopup from "./SysinfoPopup.svelte";
 import InvalidSession from "../controller/InvalidSession";
-import type Errors from "../../../src/util/Errors";
+
 
 let _showSysInfo = false;
 let _showAlert = false;
@@ -141,6 +142,13 @@ let _timeToDMH =(time: number) => {
                 </div>
             </div>
 
+            <div style="display: inline-block; margin-left: 5px">
+                <div style="display: flex; align-items: center; cursor: pointer; margin-bottom: 5px">
+                    <img src={logoIcon} width="16" height="16" alt="info">
+                    <span style="margin-left: 2px; font-size: 10pt; text-decoration: underline;color: #555;"><a href="/api/logDownload" style="color: #555">Log</a></span>
+                </div>
+            </div>
+
             {#if _usage !== undefined}
             <div style="display: inline-block; margin-left: 10px">
                 <div style="display: flex; align-items: center; margin-bottom: 5px">
@@ -149,6 +157,10 @@ let _timeToDMH =(time: number) => {
                 </div>
             </div>
             {/if}
+
+
+
+
         </div>
 
 
@@ -186,6 +198,7 @@ let _timeToDMH =(time: number) => {
             {/each}
             </ul>
         </div>
+
 
     </div>
 

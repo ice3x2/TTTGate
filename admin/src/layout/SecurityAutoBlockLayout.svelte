@@ -98,7 +98,7 @@
 </main>
 
 <style>
-    main {
+    main {;
         margin-top: 10px;
 
         display: block;

@@ -100,11 +100,7 @@ abstract class Block {
 class CountryBlock extends Block {
 
     private readonly blockInfoMap : Map<string, BlockInfo> = new Map<string, BlockInfo>();
-
-
     private readonly countryCodeNameMap : Map<string, string> = new Map<string, string>();
-
-
 
     constructor(port: number, mode?: 'white' | 'black') {
         super(port, mode);

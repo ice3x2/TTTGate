@@ -44,6 +44,16 @@ type ServerOption = {
 
 }
 
+type SecurityOption = {
+    blockCountries: Array<string>
+    allowCountries: Array<string>
+    blockIPs: Array<string>
+    allowIPs: Array<string>
+    enabledAutoBlock: boolean
+    autoBlockThresholdMilliSeconds: number
+    autoBlockThresholdCount: number
+}
+
 
 type TunnelingOption = {
     forwardPort: number,
@@ -56,8 +66,9 @@ type TunnelingOption = {
     tls?: boolean,
     bufferLimitOnServer?: number,
     bufferLimitOnClient?: number,
+    security? : SecurityOption
 }
 
 const DEFAULT_KEY = "hello-TTTGate";
 
-export { ServerOption, TunnelingOption, ClientOption, HttpOption, CustomHeader, DEFAULT_KEY};
+export { ServerOption, TunnelingOption, ClientOption, HttpOption, CustomHeader,SecurityOption, DEFAULT_KEY};
