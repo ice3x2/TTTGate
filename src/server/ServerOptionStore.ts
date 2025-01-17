@@ -5,6 +5,7 @@ import YAML from "yaml";
 import Files from "../util/Files";
 import ObjectUtil from "../util/ObjectUtil";
 import LoggerFactory from "../util/logger/LoggerFactory";
+import {TCPServer} from "../util/TCPServer";
 
 const logger = LoggerFactory.getLogger('server', 'ServerOptionStore');
 
@@ -196,7 +197,10 @@ class ServerOptionStore {
         if(option.bufferLimitOnClient == undefined) {
             option.bufferLimitOnClient = -1;
         }
-
+        // noinspection SuspiciousTypeOfGuard
+        if(option.keepAlive == undefined || typeof option.keepAlive !== 'number' || option.keepAlive < 0) {
+            option.keepAlive = -1;
+        }
         if(option.inactiveOnStartup == undefined) {
             option.inactiveOnStartup = false;
         }
@@ -258,7 +262,8 @@ class ServerOptionStore {
             adminPort: 9300,
             port: 9126,
             tls : false,
-            tunnelingOptions: []
+            tunnelingOptions: [],
+            keepAlive: TCPServer.DEFAULT_KEEP_ALIVE
         }
     }
 

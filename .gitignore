@@ -52,6 +52,7 @@ config/cert/
 
 cache/
 dist/
+dist.js/
 
 linux_build/
 

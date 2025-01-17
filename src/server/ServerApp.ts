@@ -43,6 +43,7 @@ let onServerOptionUpdate = async (newOption: ServerOption) => {
 
 let startService = async (serverOption: ServerOption, adminCertInfo: CertInfo) => {
     SocketHandler.GlobalMemCacheLimit = (serverOption.globalMemCacheLimit ?? 128) * 1024 * 1024;
+    logger.info("Start service with option: " + JSON.stringify(serverOption, null, 2));
     tttServer = TTTServer.create(serverOption);
     adminServer = new AdminServer(tttServer, serverOption.adminTls === true, adminCertInfo);
     await adminServer.listen(serverOption.adminPort!);
@@ -70,6 +71,16 @@ let ServerApp : {start() : Promise<void>} = {
             }
             let serverOption = serverOptionStore.serverOption;
             serverOption.adminPort = port;
+            serverOptionStore.updateServerOption(serverOption);
+        }
+        if(options['keepAlive']) {
+            let keepAlive = parseInt(options['keepAlive']);
+            if(isNaN(keepAlive) || keepAlive < 0) {
+                console.error('Invalid keep alive time');
+                process.exit(1);
+            }
+            let serverOption = serverOptionStore.serverOption;
+            serverOption.keepAlive = keepAlive;
             serverOptionStore.updateServerOption(serverOption);
         }
 

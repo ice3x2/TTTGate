@@ -1,6 +1,6 @@
 {
   "name": "TTTGate",
-  "version": "1.0.0",
+  "version": "1.0.9",
   "description": "",
   "main": "package.js",
   "bin": {
@@ -20,7 +20,7 @@
   "scripts": {
     "test": "jest --detectOpenHandles --forceExit",
     "build": "tsc -b",
-    "pkg": "pkg . ",
+    "pkg": "pkg . --no-bytecode --public-packages \"*\" --public",
     "dist": "node deploy.js",
     "start": "node bin/src/sserver.js",
     "server": "tsnd --respawn src/app.ts server -dev ",
