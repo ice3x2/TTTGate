@@ -29,6 +29,7 @@ type ClientOption = {
     tls : boolean,
     name : string
     globalMemCacheLimit: number,
+    keepAlive: number
 }
 
 
@@ -40,6 +41,7 @@ type ServerOption = {
     tls : boolean,
     tunnelingOptions: Array<TunnelingOption>,
     globalMemCacheLimit?: number
+    keepAlive: number
 
 
 }
@@ -56,6 +58,7 @@ type TunnelingOption = {
     tls?: boolean,
     bufferLimitOnServer?: number,
     bufferLimitOnClient?: number,
+    keepAlive: number
 }
 
 const DEFAULT_KEY = "hello-TTTGate";

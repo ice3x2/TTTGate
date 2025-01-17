@@ -44,6 +44,7 @@ type ServerOption = {
     port: number,
     tls : boolean,
     tunnelingOptions: Array<Options>
+    keepAlive: number
 }
 
 type Options = {
@@ -57,6 +58,7 @@ type Options = {
     allowedClientNames?: Array<string>;
     bufferLimitOnServer?: number,
     bufferLimitOnClient?: number
+    keepAlive?: number
 }
 
 export type { ServerOption, Options, HttpOption, CustomHeader, TunnelingStatus, RewriteRule};

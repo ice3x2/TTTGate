@@ -1,10 +1,13 @@
 import net from "net";
-import { SocketHandler } from  "./SocketHandler";
+import {SocketHandler} from "./SocketHandler";
 import SocketState from "./SocketState";
 import * as tls from "tls";
-import LoggerFactory  from "../util/logger/LoggerFactory";
+import LoggerFactory from "../util/logger/LoggerFactory";
+
 const logger = LoggerFactory.getLogger('', 'TCPServer');
 
+
+const DEFAULT_KEEP_ALIVE : number = 10000;
 
 interface OnServerEvent {
     (server: TCPServer, state: SocketState, handler? : SocketHandler) : void;
@@ -14,10 +17,11 @@ interface OnSocketEvent {
     (handler: SocketHandler, state: SocketState, data?: any) : void;
 }
 
-interface ServerOption {port: number, tls?: boolean, ca?: string, cert?: string, key?: string};
+interface ServerOption {port: number, tls?: boolean, ca?: string, cert?: string, key?: string, keepAlive?: number};
 
 class TCPServer {
 
+    static readonly DEFAULT_KEEP_ALIVE : number = DEFAULT_KEEP_ALIVE;
 
     private readonly _options : ServerOption;
     private _server : net.Server;
@@ -71,6 +75,7 @@ class TCPServer {
     private constructor(options: ServerOption) {
         options.tls = options.tls ?? false;
         this._options = options;
+        this._options.keepAlive = this._options.keepAlive ?? DEFAULT_KEEP_ALIVE;
 
 
         if(options.tls) {
@@ -114,7 +119,7 @@ class TCPServer {
     }
 
     private onBind = (socket: net.Socket) : void => {
-        let option = {socket:socket, port: this._options.port, addr: "127.0.0.1", tls: this._options.tls ?? false };
+        let option = {socket:socket, port: this._options.port, addr: "127.0.0.1", tls: this._options.tls ?? false , keepAlive: this._options.keepAlive ?? DEFAULT_KEEP_ALIVE};
         let handler = SocketHandler.bound(option,(handler, state, data) => {
             if(state == SocketState.Closed || /*state == SocketState.Error ||*/ state == SocketState.End) {
                 this._idHandlerMap.delete(handler.id);
@@ -126,8 +131,7 @@ class TCPServer {
     }
 
     public static create(options: ServerOption) : TCPServer {
-        let server = new TCPServer(options);
-        return server;
+        return new TCPServer(options);
     }
 
 

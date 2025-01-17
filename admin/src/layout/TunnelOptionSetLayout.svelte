@@ -568,6 +568,11 @@
                 </div>
 
                 <div class="input-box">
+                    <label for="input-active-timeout" class="form-label">Keep-Alive Timeout (ms)</label>
+                    <input type="number" id="input-active-timeout" class="form-control" bind:value={option.keepAlive}>
+                </div>
+
+                <div class="input-box">
                     <div class="form-label">Mem Buffer size limit per Sessions (MiB)</div>
 
                     <div style="width: calc(50% - 2px); display: inline-block;">

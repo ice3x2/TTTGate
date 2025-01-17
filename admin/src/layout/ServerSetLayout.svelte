@@ -230,6 +230,10 @@
             <label for="input-global-cache-limit" class="form-label" >Total buffer size limit (MiB) </label>
             <input type="number" min="1" max="99999" on:keyup={_enforceMinMax}  bind:value={_serverOption.globalMemCacheLimit}>
         </div>
+        <div class="input-box">
+            <label for="input-global-cache-limit" class="form-label" >Keep Alive (ms. If &lt;= 0, it is disabled)</label>
+            <input type="number" min="1" max="99999" on:keyup={_enforceMinMax}  bind:value={_serverOption.keepAlive}>
+        </div>
 
         <div style="width: 100%; margin-top: 40px">
             <div style="display: inline-block">
