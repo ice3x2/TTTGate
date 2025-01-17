@@ -109,10 +109,8 @@ class TunnelClient {
         }
         this._state = CtrlState.Connecting;
         let connOpt = this.makeConnectOpt();
-        connOpt.keepalive = true;
-        connOpt.keepAliveInitialDelay = 30000;
+        connOpt.keepalive = 30000;
         this._ctrlHandler = SocketHandler.connect(connOpt, this.onCtrlHandlerEvent) as TunnelControlHandler;
-        this._ctrlHandler.socket.setKeepAlive(true, )
         this._ctrlHandler.handlerType = HandlerType.Control;
         this._ctrlHandler.packetStreamer = new CtrlPacketStreamer();
         return true;

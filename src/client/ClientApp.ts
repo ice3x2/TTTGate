@@ -65,7 +65,8 @@ let _loadClientOption = () : ClientOption => {
         port: 9126,
         tls: false,
         name: TunnelNames[Math.floor(Math.random() * TunnelNames.length)],
-        globalMemCacheLimit: 128
+        globalMemCacheLimit: 128,
+        keepAlive: 0
     }
     let savedOption = _loadClientOptionFromFile();
     if(savedOption) {
@@ -89,6 +90,17 @@ let _loadClientOption = () : ClientOption => {
             }
         } else {
             clientOption.host = addr;
+        }
+    }
+    if(argv["keepAlive"]) {
+        clientOption.keepAlive = Math.floor(parseInt(argv["keepAlive"]));
+        if(isNaN(clientOption.keepAlive)){
+            console.warn(`keepAlive '${argv["keepAlive"]}' is not number.`);
+            clientOption.keepAlive = -1;
+        }
+        else if(clientOption.keepAlive < 0) {
+            console.warn(`keepAlive is disabled. (keepAlive: ${clientOption.keepAlive})`);
+            clientOption.keepAlive = -1;
         }
     }
     if(argv["tls"] != undefined && (argv["tls"] == "" || argv["tls"].toLowerCase() != "false")) {

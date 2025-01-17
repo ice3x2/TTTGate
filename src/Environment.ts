@@ -2,7 +2,8 @@ import * as Path from "path";
 
 
 const DEV_MODE = process.argv.find((arg) => arg == '-dev') != undefined;
-const ROOT_DIR = Path.join(process.argv[DEV_MODE ? 1 : 0],'..' ,'..');
+const ROOT_DIR = (process.argv[0].includes('node') || process.argv[0].includes('npm')) ? process.cwd() : Path.join(process.argv[DEV_MODE ? 1 : 0], '..', '..');
+
 
 const Environment = {
 
@@ -21,8 +22,8 @@ const Environment = {
     },
     devMode : DEV_MODE,
     version : {
-        build: '20231101',
-        name: '1.0.8'
+        build: '20250117',
+        name: '1.0.9'
     }
 }
 

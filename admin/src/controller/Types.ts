@@ -18,6 +18,7 @@ type ServerOption = {
     port: number;
     tls: boolean;
     globalMemCacheLimit: number;
+    keepAlive: number;
 }
 
 type VersionInfo = {

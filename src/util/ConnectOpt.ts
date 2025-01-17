@@ -7,8 +7,7 @@ type ConnectOpt = {
     ca? : string;
     cert? : string;
     key? : string;
-    keepalive? : boolean,
-    keepAliveInitialDelay?: number
+    keepalive? : number
 }
 
 export default ConnectOpt;

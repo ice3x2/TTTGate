@@ -31,7 +31,7 @@ class TTTServer {
         if(serverOption.tls == undefined) serverOption.tls = false;
         this._externalPortServerPool = ExternalPortServerPool.create(serverOption.tunnelingOptions);
         let tempCert = CertificationStore.instance.getTempCert();
-        this._tunnelServer = TunnelServer.create({port: serverOption.port,key: serverOption.key,tls: serverOption.tls}, tempCert);
+        this._tunnelServer = TunnelServer.create({port: serverOption.port,key: serverOption.key,tls: serverOption.tls, keepAlive: serverOption.keepAlive}, tempCert);
         this._externalPortServerPool.OnHandlerEventCallback = this.onHandlerEventOnExternalPortServer;
         this._externalPortServerPool.OnNewSessionCallback = this.onNewSession;
         this._externalPortServerPool.OnTerminateSessionCallback = this.OnTerminateSession;

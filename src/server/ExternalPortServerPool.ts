@@ -62,7 +62,7 @@ class ExternalPortServerPool {
     private _onTerminateSessionCallback : OnTerminateSessionCallback | null = null;
     private _closeWaitTimeout : number = 60 * 1000;
 
-    private static LAST_SESSION_ID = 0;
+    private static LAST_SESSION_ID = 1;
 
     private _sessionCleanupIntervalID : any = null;
 
@@ -113,13 +113,21 @@ class ExternalPortServerPool {
             return false;
         }
 
+
+        option.keepAlive = option.keepAlive ?? TCPServer.DEFAULT_KEEP_ALIVE
+        if(option.keepAlive > 0) {
+            option.keepAlive = Math.max(option.keepAlive, 500);
+        }
+
+
         return new Promise((resolve, reject) => {
             let options = {
                 port: option.forwardPort,
                 tls: option.tls!,
                 key: certInfo?.key.value,
                 cert: certInfo?.cert.value,
-                ca: certInfo?.ca.value == '' ? undefined : certInfo?.ca.value
+                ca: certInfo?.ca.value == '' ? undefined : certInfo?.ca.value,
+                keepAlive: option.keepAlive
             }
             let portServer : TCPServer = TCPServer.create(options);
             portServer.setOnServerEvent(this.onServerEvent);
@@ -323,6 +331,10 @@ class ExternalPortServerPool {
                 handler.destroy();
                 server.stop();
                 return;
+            }
+            if(handler.socket && option.keepAlive > 0) {
+                handler.socket.setNoDelay(true);
+                handler.socket.setKeepAlive(true, option.keepAlive);
             }
             let status = this._statusMap.get(server.port);
             if(status && !status.active) {

@@ -12,6 +12,7 @@ import LoggerFactory  from "../util/logger/LoggerFactory";
 const logger = LoggerFactory.getLogger('', 'SocketHandler');
 
 
+const MIN_KEEP_ALIVE : number = 500;
 
 interface OnSocketEvent {
     (handler: SocketHandler,info: {address?: string, port?: number}, state: SocketState, data?: any) : void;
@@ -138,8 +139,8 @@ class SocketHandler {
         let handlerRef: Array<SocketHandler> = [];
 
 
-        options.keepalive = options.keepalive ?? false;
-        options.keepAliveInitialDelay = options.keepAliveInitialDelay ?? 30000;
+        options.keepalive = options.keepalive ?? 60000;
+
 
         let connected = () => {
             if(handlerRef.length > 0 && handlerRef[0]._state == SocketState.None) {
@@ -151,23 +152,26 @@ class SocketHandler {
         let socket : net.Socket;
         // noinspection PointlessBooleanExpressionJS
         if(options.tls && options.tls === true) {
-            let option = {port: options.port, host: options.host, allowHalfOpen: false ,keepAlive: options.keepalive, keepAliveInitialDelay: options.keepAliveInitialDelay,noDelay: true, rejectUnauthorized: false};
+            let option = {port: options.port, host: options.host, allowHalfOpen: false ,keepAlive: options.keepalive > 0, keepAliveInitialDelay: Math.max(options.keepalive, MIN_KEEP_ALIVE) ,noDelay: true, rejectUnauthorized: false};
             socket = tls.connect(option, connected);
         } else {
-            let option = {port: options.port, host: options.host, allowHalfOpen: false ,keepAlive: options.keepalive, keepAliveInitialDelay: options.keepAliveInitialDelay,noDelay: true, rejectUnauthorized: false};
+            let option = {port: options.port, host: options.host, allowHalfOpen: false ,keepAlive: options.keepalive > 0, keepAliveInitialDelay: Math.max(options.keepalive, MIN_KEEP_ALIVE),noDelay: true, rejectUnauthorized: false};
             socket = net.connect(option, connected);
         }
-
         let handler = new SocketHandler(socket, options.port, options.host, options.tls ?? false, event);
         handlerRef.push(handler);
         return handler;
     }
 
-    public static bound(options: {socket: net.Socket, port: number, addr: string, tls: boolean }, event: OnSocketEvent) : SocketHandler {
+    public static bound(options: {socket: net.Socket, port: number, addr: string, tls: boolean, keepAlive: number }, event: OnSocketEvent) : SocketHandler {
         options.socket.setNoDelay(true);
+        if(options.keepAlive > 0) {
+            options.socket.setKeepAlive(true, options.keepAlive);
+        }
         let handler = new SocketHandler(options.socket, options.port, options.addr, options.tls, event);
         handler._state = SocketState.Connected;
         handler._isServer = true;
+
         return handler;
     }
 
@@ -180,6 +184,7 @@ class SocketHandler {
         this._addr = addr;
         this._tls = tls;
         this._socket = socket;
+
         this._event = event;
         this.initSocket(socket);
     }

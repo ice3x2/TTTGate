@@ -18,6 +18,7 @@ import {CaptchaInfo, CaptchaStore} from "./CaptchaStore";
 import CountryCode from "../Firewall/CountryCode";
 import {Zip} from "../../util/Zip";
 import fs from "fs";
+import {TCPServer} from "../../util/TCPServer";
 
 const logger = LoggerFactory.getLogger('server', 'AdminServer');
 
@@ -293,6 +294,14 @@ class AdminServer {
                 return;
             }
             updatePorts.push(serverOption.port!);
+        }
+        if(updates['keepAlive']) {
+            let keepAlive: number = updates['keepAlive'];
+            keepAlive = Math.max(0, keepAlive);
+            if(isNaN(keepAlive)) {
+                keepAlive = 0;
+            }
+            serverOption.keepAlive = keepAlive;
         }
         let usablePorts = await UsablePortChecker.checkPorts(updatePorts);
         if(usablePorts.length != updatePorts.length) {
@@ -661,6 +670,9 @@ class AdminServer {
         }
         let store = ServerOptionStore.instance;
         let tunnelingOptions = store.serverOption.tunnelingOptions;
+        for(let tunnelingOption of tunnelingOptions) {
+            tunnelingOption.keepAlive = tunnelingOption.keepAlive ?? TCPServer.DEFAULT_KEEP_ALIVE;
+        }
         res.writeHead(200, {'Content-Type': 'application/json'});
         res.end(JSON.stringify({success: true, tunnelingOptions: tunnelingOptions, message: ''}));
     }

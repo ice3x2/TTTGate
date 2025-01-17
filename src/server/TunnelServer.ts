@@ -64,7 +64,7 @@ class TunnelServer {
     }
 
 
-    private constructor(option:{port: number, tls: boolean, key: string}, certInfo: CertInfo) {
+    private constructor(option:{port: number, tls: boolean, key: string, keepAlive: number}, certInfo: CertInfo) {
         this._serverOption = option;
         this._key = option.key;
         let tcpServerOption : ServerOption = {port: option.port, tls: option.tls, key: certInfo.key.value, cert: certInfo.cert.value, ca: (certInfo.ca.value == '') ? undefined : certInfo.ca.value};
@@ -75,7 +75,7 @@ class TunnelServer {
 
 
 
-    public static create(option:{port: number, tls: boolean, key: string}, certInfo: CertInfo) : TunnelServer {
+    public static create(option:{port: number, tls: boolean, key: string, keepAlive: number}, certInfo: CertInfo) : TunnelServer {
         return new TunnelServer(option, certInfo);
     }
 
