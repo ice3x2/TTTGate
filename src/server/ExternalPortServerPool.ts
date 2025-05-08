@@ -260,8 +260,13 @@ class ExternalPortServerPool {
 
     private secureFilter(connectionInfo?: {address?:string, port?:number}): boolean {
         if(!connectionInfo) return true;
-        if(!connectionInfo.address) return false;
+        if(!connectionInfo.address || !connectionInfo.port) return false;
         let ipV4 = connectionInfo.address;
+        let tunnelingOption =  this._tunnelingOptionMap.get(connectionInfo.port);
+        if(!tunnelingOption) return false;
+        let security = tunnelingOption.security;
+        if(!security) return true;
+        let country =
 
 
         console.error(connectionInfo);

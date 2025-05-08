@@ -159,6 +159,8 @@ class TCPServer {
             }
             this._state = SocketState.Starting;
             this._server.listen(this._options.port);
+
+            
         }
     }
 

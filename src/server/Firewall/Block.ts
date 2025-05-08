@@ -1,4 +1,3 @@
-
 import CountryCode from './CountryCode';
 import geoip from 'geoip-lite';
 import Environment from "../../Environment";
@@ -125,8 +124,7 @@ class CountryBlock extends Block {
 
 
     public getConfigFilePath() : string {
-        let path = Path.join(Environment.path.configDir, 'country-block.' + this.port + '.json');
-        return path;
+        return Path.join(Environment.path.configDir, 'country-block.' + this.port + '.json');
     }
 
     public removeCountryCode(code: string) {
