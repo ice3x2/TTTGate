@@ -131,6 +131,27 @@ class SocketHandler {
         this._drainEventList.push(event);
     }
 
+    /**
+     * 소켓의 타임아웃을 설정합니다.
+     * @param timeout 타임아웃 값(밀리초)
+     */
+    public setTimeout(timeout: number): void {
+        if (this._socket && !this.isEnd()) {
+            try {
+                this._socket.setTimeout(timeout);
+
+                // 타임아웃 이벤트가 이미 등록되어 있지 않으면 등록
+                if (!this._socket.listenerCount('timeout')) {
+                    this._socket.once('timeout', () => {
+                        logger.info(`Socket ${this._id} timed out after ${timeout}ms`);
+                        this.end_();
+                    });
+                }
+            } catch (e) {
+                logger.error(`Error setting socket timeout: ${e}`);
+            }
+        }
+    }
 
 
     public static connect(options: ConnectOpt, event: OnSocketEvent) : SocketHandler {
