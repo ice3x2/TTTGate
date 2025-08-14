@@ -8,6 +8,7 @@ type ConnectOpt = {
     cert? : string;
     key? : string;
     keepalive? : number
+    timeout? : number;
 }
 
 export default ConnectOpt;

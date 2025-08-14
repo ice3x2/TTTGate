@@ -156,11 +156,7 @@ class SocketHandler {
 
     public static connect(options: ConnectOpt, event: OnSocketEvent) : SocketHandler {
         let handlerRef: Array<SocketHandler> = [];
-
-
         options.keepalive = options.keepalive ?? 60000;
-
-
         let connected = () => {
             if(handlerRef.length > 0 && handlerRef[0]._state == SocketState.None) {
                 handlerRef[0]._state = SocketState.Connected;
@@ -179,6 +175,12 @@ class SocketHandler {
         }
         let handler = new SocketHandler(socket, options.port, options.host, options.tls ?? false, event);
         handlerRef.push(handler);
+
+        if(options.timeout && options.timeout > 0) {
+            handler.setTimeout(options.timeout);
+        }
+
+
         return handler;
     }
 

@@ -238,7 +238,6 @@ class HttpHandler {
         if (data) {
             this._receiveLength += Buffer.byteLength(data);
         }
-
         this._event?.(this, state, data);
     }
 
