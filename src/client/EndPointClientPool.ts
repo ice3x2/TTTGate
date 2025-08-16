@@ -65,7 +65,7 @@ class EndPointClientPool {
 
         this._connectOptMap.set(sessionID, connectOpt);
         logger.info("Connect to endpoint: (sessionID " + sessionID +") " + connectOpt.host + ":" + connectOpt.port);
-        let endPointClient = SocketHandler.connect(connectOpt,( client: SocketHandler, state: SocketState, data?: any) => {
+        let endPointClient = SocketHandler.connect(connectOpt,(client: SocketHandler, state: SocketState, data?: any) => {
             client.setBufferSizeLimit(connectOpt.bufferLimit);
             this.onEndPointHandlerEvent(sessionID, client, state, data);
         }) as EndpointHandler;

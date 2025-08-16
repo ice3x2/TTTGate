@@ -22,6 +22,7 @@ class LogWriter {
     private readonly _fileWrite : boolean;
     private readonly _consoleWrite : boolean;
     private _todayDate : number = 0;
+    private _isUnwritable : boolean = false;
     private _waitEnd : boolean = false;
     private _isEnd : boolean = false;
 
@@ -46,6 +47,13 @@ class LogWriter {
             this._filePath = this.makeLogFilePath();
             this.sweepOldFiles();
             this._logFileStream = fs.createWriteStream(this._filePath, {flags: 'a'});
+            this._logFileStream.on('error', (err) => {
+                if (!this._isUnwritable) {
+                    this._isUnwritable = true;
+                    console.error(`Logger '${this._name}' stream error. Disabling further file logging.`, err);
+                    this._logFileStream?.end();
+                }
+            });
         }
 
     }
@@ -62,7 +70,11 @@ class LogWriter {
             let since = this.daysSince(date);
             let diff = since;
             if(diff > this._history && this._history > 0) {
-                fs.unlinkSync(Path.join(this._dirPath, logFile));
+                try {
+                    fs.unlinkSync(Path.join(this._dirPath, logFile));
+                } catch (e) {
+                    console.error(`Failed to delete old log file: ${logFile}`, e);
+                }
             }
         }
     }
@@ -76,7 +88,7 @@ class LogWriter {
     }
 
     private logFileNameToDate(fileName: string) : Date {
-        let regexString = `^${this._name}-(\\d{4})\\.(\\d{2})\\.(\\d{2})\\.log$`;
+        let regexString = `^${this._name}-(\d{4})\.(\d{2})\.(\d{2})\.log$`;
         let regex = new RegExp(regexString);
         let result = regex.exec(fileName);
         if(result == null)
@@ -96,7 +108,7 @@ class LogWriter {
                 throw new Error('Log directory is not directory.');
             let files = fs.readdirSync(this._dirPath);
             return files.filter((file) => {
-                let regexString = `^${this._name}-\\d{4}\\.\\d{2}\\.\\d{2}\\.log$`;
+                let regexString = `^${this._name}-\d{4}\.\d{2}\.\d{2}\.log$`;
                 let regex = new RegExp(regexString);
                 return regex.test(file);
             });
@@ -118,6 +130,14 @@ class LogWriter {
 
      public pushMessage(message: LogMessage) {
         message.day = Date.now();
+
+        if (this._isUnwritable && this._fileWrite) {
+            if (this._consoleWrite) {
+                console.log(this.makeLogLine(message));
+            }
+            return;
+        }
+
         if(this._fileWrite) {
             this._logMessageQueue.push(message);
             if (this._logMessageQueue.length == 1) {
@@ -138,10 +158,18 @@ class LogWriter {
     }
 
     private nextLogFile()  {
+        this._isUnwritable = false;
         this._todayDate = new Date().getDate();
         this._filePath = this.makeLogFilePath();
         this._logFileStream?.end();
         this._logFileStream = fs.createWriteStream(this._filePath,  {flags:'a'});
+        this._logFileStream.on('error', (err) => {
+            if (!this._isUnwritable) {
+                this._isUnwritable = true;
+                console.error(`Logger '${this._name}' stream error. Disabling further file logging.`, err);
+                this._logFileStream?.end();
+            }
+        });
         this.sweepOldFiles();
     }
 
@@ -153,23 +181,30 @@ class LogWriter {
             }
             return;
         }
-        if(message.day != this._todayDate) {
+
+        if(new Date(message.day).getDate() != this._todayDate) {
             this.nextLogFile();
         }
         let logLine = this.makeLogLine(message);
-        if(this._fileWrite) {
+
+        if(this._consoleWrite) {
+            console.log(logLine.substring(0, logLine.length - 1));
+        }
+
+        if(this._fileWrite && !this._isUnwritable) {
             this._logFileStream?.write(logLine, (err) => {
-                if(err) {
-                    console.log(err);
-                } else {
-                    process.nextTick(() => {
-                        this.printLogMessage();
-                    });
+                if(err && !this._isUnwritable) {
+                    this._isUnwritable = true;
+                    console.error(`Logger '${this._name}' failed to write to file. Disabling further file logging.`, err);
+                    this._logFileStream?.end();
                 }
             });
         }
-        if(this._consoleWrite) {
-            console.log(logLine.substring(0, logLine.length - 1));
+
+        if (this._logMessageQueue.length > 0) {
+            process.nextTick(() => {
+                this.printLogMessage();
+            });
         }
     }
 
@@ -192,9 +227,6 @@ class LogWriter {
         this._isEnd = true;
 
     }
-
-
-
 
 }
 

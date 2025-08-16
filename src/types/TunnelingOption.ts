@@ -19,6 +19,7 @@ type HttpOption = {
     customResponseHeaders?: Array<CustomHeader>;
     bodyRewriteRules?: Array<RewriteRule>;
     replaceAccessControlAllowOrigin?: boolean;
+    keepAliveTimeout?: number;
 }
 
 
