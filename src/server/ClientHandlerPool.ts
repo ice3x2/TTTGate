@@ -115,7 +115,13 @@ class ClientHandlerPool {
         this._activatedSessionHandlerMap_.set(pendingDataState.sessionID, dataHandler);
         dataHandler.dataHandlerState = DataHandlerState.ConnectingEndPoint;
         dataHandler.sessionID = pendingDataState.sessionID;
-        this.sendConnectEndPointPacket(dataHandler.handlerID!, dataHandler.sessionID, pendingDataState.openOpt);
+        if (!dataHandler.handlerID) {
+            logger.error(`putNewDataHandler: handlerID is undefined for sessionID: ${dataHandler.sessionID}`);
+            this._activatedSessionHandlerMap_.delete(pendingDataState.sessionID);
+            dataHandler.endImmediate();
+            return;
+        }
+        this.sendConnectEndPointPacket(dataHandler.handlerID, dataHandler.sessionID, pendingDataState.openOpt);
     }
 
     public isSessionOpened(sessionID: number) : boolean {
@@ -131,8 +137,8 @@ class ClientHandlerPool {
      * @private
      */
     private flushWaitBuffer(sessionID: number) : void {
-        let handler = this._activatedSessionHandlerMap_.get(sessionID)!;
-        if(handler == undefined || handler.dataHandlerState != DataHandlerState.OnlineSession) {
+        let handler = this._activatedSessionHandlerMap_.get(sessionID);
+        if(!handler || handler.dataHandlerState != DataHandlerState.OnlineSession) {
             logger.error(`flushWaitBuffer: invalid sessionID: ${sessionID}`);
             if(handler) {
                 handler.setBufferSizeLimit(-1);
@@ -147,16 +153,34 @@ class ClientHandlerPool {
         }
         let sendWaitPacketQueue = waitQueue.send;
         let receiveWaitPacketQueue = waitQueue.receive;
+        
+        // Send queue 처리 - 실패 시 buffer size accounting 오류 방지
         let sendData = sendWaitPacketQueue.popFront();
         while(sendData != undefined) {
-            handler.sendData(sendData);
-            this._bufferSize -= sendData.length;
+            try {
+                handler.sendData(sendData);
+                // sendData 성공 시에만 buffer size 감소
+                this._bufferSize -= sendData.length;
+            } catch (error) {
+                // 전송 실패 시 데이터는 손실되지만 buffer size는 정확하게 유지
+                logger.error(`flushWaitBuffer: sendData failed for sessionID: ${sessionID}`, error);
+                this._bufferSize -= sendData.length; // 데이터가 폐기되므로 buffer size는 감소
+            }
             sendData = sendWaitPacketQueue.popFront();
         }
+        
+        // Receive queue 처리
         let receiveData = receiveWaitPacketQueue.popFront();
         while(receiveData != undefined) {
-            this._onDataReceiveCallback?.(sessionID, receiveData);
-            this._bufferSize -= receiveData.length;
+            try {
+                this._onDataReceiveCallback?.(sessionID, receiveData);
+                // 콜백 성공 시에만 buffer size 감소
+                this._bufferSize -= receiveData.length;
+            } catch (error) {
+                // 콜백 실패 시에도 데이터는 처리된 것으로 간주하여 buffer size 감소
+                logger.error(`flushWaitBuffer: receive callback failed for sessionID: ${sessionID}`, error);
+                this._bufferSize -= receiveData.length;
+            }
             receiveData = receiveWaitPacketQueue.popFront();
         }
         this._waitingDataBufferQueueMap.delete(sessionID);
@@ -292,10 +316,12 @@ class ClientHandlerPool {
             connected = false;
         }
         if(connected) {
-            if(pendingState) {
-                dataHandler!.setBufferSizeLimit(pendingState.openOpt.bufferLimit);
+            if(pendingState && dataHandler) {
+                dataHandler.setBufferSizeLimit(pendingState.openOpt.bufferLimit);
             }
-            dataHandler!.dataHandlerState = DataHandlerState.OnlineSession;
+            if (dataHandler) {
+                dataHandler.dataHandlerState = DataHandlerState.OnlineSession;
+            }
             return true;
         } else {
             this._activatedSessionHandlerMap_.delete(sessionID);
@@ -319,7 +345,12 @@ class ClientHandlerPool {
      */
     public sendBuffer(sessionID: number, data: Buffer) : boolean  {
         if(this._waitingDataBufferQueueMap.has(sessionID)) {
-            this._waitingDataBufferQueueMap.get(sessionID)!.send.pushBack(data);
+            let waitingQueue = this._waitingDataBufferQueueMap.get(sessionID);
+            if (!waitingQueue) {
+                logger.error(`sendBuffer: no waiting queue for sessionID: ${sessionID}`);
+                return false;
+            }
+            waitingQueue.send.pushBack(data);
             this._bufferSize += data.length;
         }
         else {
@@ -343,7 +374,7 @@ class ClientHandlerPool {
                 handlerID = pendingState.handlerID;
             }
         } else {
-            handlerID = handler.handlerID!;
+            handlerID = handler.handlerID ?? 0;
         }
         this._controlHandler.sendData(CtrlPacket.resultOfOpenSessionAck(handlerID, sessionID).toBuffer());
     }
@@ -368,7 +399,7 @@ class ClientHandlerPool {
 
         logger.info(`Sends a session close request - sessionID: ${sessionID}`);
         // noinspection JSUnusedLocalSymbols
-        this._controlHandler.sendData(CtrlPacket.closeSession(handler == undefined ? 0 : handler!.handlerID ?? 0, sessionID, waitForLength).toBuffer(), (socketHandler, success, err) => {
+        this._controlHandler.sendData(CtrlPacket.closeSession(handler == undefined ? 0 : (handler.handlerID ?? 0), sessionID, waitForLength).toBuffer(), (socketHandler, success, err) => {
             if(!success) {
                 return;
             }

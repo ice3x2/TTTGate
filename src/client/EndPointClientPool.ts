@@ -37,15 +37,17 @@ class EndPointClientPool {
 
     private startSessionCleanup() {
         if(this._sessionCleanupIntervalID) clearInterval(this._sessionCleanupIntervalID);
-        let now = Date.now();
         this._sessionCleanupIntervalID = setInterval(() => {
+                // 매번 현재 시간을 재계산하여 정확한 타임아웃 체크
+                const now = Date.now();
                 let closeWaitHandlerList : Array<EndpointHandler> = Array.from(this._endPointClientMap.values())
                     .filter((handler: EndpointHandler) => {
                         return !!handler.closeWait;
 
                     });
                 closeWaitHandlerList.forEach((handler: EndpointHandler) => {
-                    this.closeIfSatisfiedLength(handler, now - handler.lastSendTime! > this._closeWaitTimeout);
+                    let isTimeout = handler.lastSendTime ? (now - handler.lastSendTime > this._closeWaitTimeout) : true;
+                    this.closeIfSatisfiedLength(handler, isTimeout);
                 });
             },SESSION_CLEANUP_INTERVAL);
 
@@ -89,14 +91,15 @@ class EndPointClientPool {
 
 
     private closeIfSatisfiedLength(endPointClient: EndpointHandler, force: boolean = false) {
-        if(endPointClient.closeWait) {
-            let i = 100;
-            i++;
-        }
-        if((endPointClient.closeWait && endPointClient.endLength! <= endPointClient.sendLength) || force) {
-            this._endPointClientMap.delete(endPointClient.sessionID!);
-            endPointClient.end_();
-            this._onEndPointTerminateCallback?.(endPointClient.sessionID!)
+        if((endPointClient.closeWait && (endPointClient.endLength ?? 0) <= endPointClient.sendLength) || force) {
+            if (endPointClient.sessionID !== undefined) {
+                this._endPointClientMap.delete(endPointClient.sessionID);
+                endPointClient.end_();
+                this._onEndPointTerminateCallback?.(endPointClient.sessionID);
+            } else {
+                logger.error(`closeIfSatisfiedLength: sessionID is undefined`);
+                endPointClient.end_();
+            }
         }
     }
 
@@ -127,7 +130,7 @@ class EndPointClientPool {
             }
 
             let handler = (client as EndpointHandler);
-            this._onEndPointClientStateChangeCallback?.(sessionID,state,{data: data, receiveLength:handler.breakBufferFlush ? 0 :handler.receiveLength!});
+            this._onEndPointClientStateChangeCallback?.(sessionID,state,{data: data, receiveLength:handler.breakBufferFlush ? 0 :(handler.receiveLength ?? 0)});
             if(!this._endPointClientMap.has(sessionID)) {
                 this._endPointClientMap.set(sessionID, client as EndpointHandler);
             }
@@ -142,7 +145,7 @@ class EndPointClientPool {
             this._connectOptMap.delete(sessionID);
             if(hasSession) {
                 let handler = (client as EndpointHandler);
-                this._onEndPointClientStateChangeCallback?.(sessionID,state,{receiveLength: handler.breakBufferFlush ? 0 :handler.receiveLength!});
+                this._onEndPointClientStateChangeCallback?.(sessionID,state,{receiveLength: handler.breakBufferFlush ? 0 :(handler.receiveLength ?? 0)});
                 setImmediate(() => {
                     this._onEndPointTerminateCallback?.(sessionID);
                 });

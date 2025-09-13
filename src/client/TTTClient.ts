@@ -89,9 +89,18 @@ class TTTClient {
         if(state == SocketState.Connected) {
             this._tunnelClient.syncEndpointSession(sessionID);
         } else if(state == SocketState.End || /*state == SocketState.Error ||*/ state == SocketState.Closed) {
-            this._tunnelClient.closeEndPointSession(sessionID, bundle!.receiveLength);
+            if (!bundle) {
+                logger.error(`onEndPointClientStateChangeCallback - bundle is undefined for sessionID: ${sessionID}, state: ${state}`);
+                this._tunnelClient.closeEndPointSession(sessionID, 0);
+            } else {
+                this._tunnelClient.closeEndPointSession(sessionID, bundle.receiveLength);
+            }
         } else if(state == SocketState.Receive) {
-            this._tunnelClient.sendData(sessionID,bundle?.data!);
+            if (!bundle || !bundle.data) {
+                logger.error(`onEndPointClientStateChangeCallback - bundle or data is undefined for sessionID: ${sessionID}, state: ${state}`);
+                return;
+            }
+            this._tunnelClient.sendData(sessionID, bundle.data);
         }
     }
 

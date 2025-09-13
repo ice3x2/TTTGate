@@ -65,9 +65,13 @@ class TTTServer {
 
     private onHandlerEventOnExternalPortServer = (id: number, state: SocketState,bundle? : {data? : Buffer, receiveLength: number}) : void => {
         if(this.isEndState(state)) {
-            this._tunnelServer.closeSession(id, bundle!.receiveLength);
+            this._tunnelServer.closeSession(id, bundle?.receiveLength ?? 0);
         } else if(state == SocketState.Receive) {
-            this._tunnelServer.sendBuffer(id, bundle!.data!);
+            if (!bundle?.data) {
+                logger.error(`onHandlerEventOnExternalPortServer - bundle or data is undefined for session: ${id}, state: ${state}`);
+                return;
+            }
+            this._tunnelServer.sendBuffer(id, bundle.data);
         }
     }
 

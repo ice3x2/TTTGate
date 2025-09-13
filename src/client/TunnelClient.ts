@@ -107,13 +107,32 @@ class TunnelClient {
             logger.error(`TunnelClient: connect: already connected`);
             return false;
         }
-        this._state = CtrlState.Connecting;
-        let connOpt = this.makeConnectOpt();
-        connOpt.keepalive = 30000;
-        this._ctrlHandler = SocketHandler.connect(connOpt, this.onCtrlHandlerEvent) as TunnelControlHandler;
-        this._ctrlHandler.handlerType = HandlerType.Control;
-        this._ctrlHandler.packetStreamer = new CtrlPacketStreamer();
-        return true;
+        
+        try {
+            let connOpt = this.makeConnectOpt();
+            connOpt.keepalive = 30000;
+            this._ctrlHandler = SocketHandler.connect(connOpt, this.onCtrlHandlerEvent) as TunnelControlHandler;
+            
+            // 연결 핸들러 생성 실패 체크
+            if (!this._ctrlHandler) {
+                logger.error(`TunnelClient: connect: failed to create control handler`);
+                return false;
+            }
+            
+            // 연결 시도가 성공적으로 시작된 후에만 state 변경
+            this._state = CtrlState.Connecting;
+            this._ctrlHandler.handlerType = HandlerType.Control;
+            this._ctrlHandler.packetStreamer = new CtrlPacketStreamer();
+            
+            logger.info(`TunnelClient: connection attempt started to ${connOpt.host}:${connOpt.port}`);
+            return true;
+            
+        } catch (error) {
+            logger.error(`TunnelClient: connect: exception during connection attempt`, error);
+            this._state = CtrlState.None;
+            this._ctrlHandler = undefined;
+            return false;
+        }
     }
 
 
@@ -138,22 +157,30 @@ class TunnelClient {
         }
 
         let dataHandler = this._activatedSessionDataHandlerMap.get(sessionID);
-        if(!dataHandler) {
+        if(!dataHandler || !this._ctrlHandler) {
             return false;
         }
         this._waitBufferQueueMap.set(sessionID, new Dequeue<Buffer>());
         let packet : CtrlPacket | undefined = undefined;
         if(dataHandler.dataHandlerState == DataHandlerState.ConnectingEndPoint) {
-            packet = CtrlPacket.resultOfOpenSession(dataHandler.handlerID!, sessionID, true);
+            if (dataHandler.handlerID === undefined) {
+                logger.error(`syncEndpointSession: handlerID is undefined for sessionID: ${sessionID}`);
+                return false;
+            }
+            packet = CtrlPacket.resultOfOpenSession(dataHandler.handlerID, sessionID, true);
         } else {
             return false;
         }
-        this._ctrlHandler!.sendData(packet.toBuffer(), (handler, success) => {
+        this._ctrlHandler.sendData(packet.toBuffer(), (handler, success) => {
             if(!success) {
-                this.deleteDataHandler(dataHandler!);
+                if (dataHandler) {
+                    this.deleteDataHandler(dataHandler);
+                }
                 return;
             }
-            dataHandler!.dataHandlerState = DataHandlerState.OnlineSession;
+            if (dataHandler) {
+                dataHandler.dataHandlerState = DataHandlerState.OnlineSession;
+            }
 
         });
         return true;
@@ -171,7 +198,7 @@ class TunnelClient {
         }
         let data = queue.popFront();
         while(data) {
-            dataHandler.sendData(data!);
+            dataHandler.sendData(data);
             data = queue.popFront();
         }
     }
@@ -196,11 +223,11 @@ class TunnelClient {
     }
 
     private onCtrlHandlerEvent = (handler: SocketHandler, state: SocketState, data?: any) : void => {
-        if(state == SocketState.Connected) {
-            this.sendSyncAndSyncSyncCmd(this._ctrlHandler!);
+        if(state == SocketState.Connected && this._ctrlHandler) {
+            this.sendSyncAndSyncSyncCmd(this._ctrlHandler);
         }
         else if(state == SocketState.Receive && handler == this._ctrlHandler) {
-            this.onReceiveFromCtrlHandler(this._ctrlHandler, data);
+            this.onReceiveFromCtrlHandler(handler as TunnelControlHandler, data);
         } else if(state == SocketState.Closed || state == SocketState.End) {
             if(data) {
                 logger.error(`onCtrlHandlerEvent - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`, data);
@@ -213,18 +240,30 @@ class TunnelClient {
     }
 
     private destroyAllDataHandler() : void {
-        this._activatedSessionDataHandlerMap.forEach((handler: TunnelDataHandler, sessionID: number) => {
-            handler.onSocketEvent = function (){};
-            this.closeEndPointSession?.(sessionID, 0);
-            handler.destroy();
+        // Race condition 방지: 먼저 세션 ID들을 배열로 복사
+        const sessionIDs = Array.from(this._activatedSessionDataHandlerMap.keys());
+        
+        // 복사된 배열을 순회하여 안전하게 세션 정리
+        sessionIDs.forEach((sessionID: number) => {
+            const handler = this._activatedSessionDataHandlerMap.get(sessionID);
+            if (handler) {
+                handler.onSocketEvent = function (){};
+                // closeEndPointSession 대신 직접 정리하여 중복 삭제 방지
+                this.deleteDataHandler(handler);
+            }
         });
+        
+        // 최종 정리 (이미 대부분 삭제되었겠지만 확실히 하기 위해)
         this._activatedSessionDataHandlerMap.clear();
-
     }
 
 
     private onReceiveFromCtrlHandler(handler: TunnelControlHandler, data: Buffer) : void {
-        let packetList :  Array<CtrlPacket> = this._ctrlHandler!.packetStreamer!.readCtrlPacketList(data);
+        if (!handler.packetStreamer) {
+            logger.error(`onReceiveFromCtrlHandler - packetStreamer is undefined for handler: ${handler.id}`);
+            return;
+        }
+        let packetList :  Array<CtrlPacket> = handler.packetStreamer.readCtrlPacketList(data);
         for(let packet of packetList) {
             logger.info(`onReceiveFromCtrlHandler - cmd:${CtrlCmd[packet.cmd]}, sessionID:${packet.sessionID}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
             if(this._state == CtrlState.Syncing && packet.cmd == CtrlCmd.SyncCtrlAck) {
@@ -240,7 +279,11 @@ class TunnelClient {
                     this.flushWaitBuffer(packet.sessionID);
                 }
                 else if(packet.cmd == CtrlCmd.OpenSession) {
-                    this.connectEndPoint(packet.ID, packet.sessionID, packet.openOpt!);
+                    if (!packet.openOpt) {
+                        logger.error(`onReceiveFromCtrlHandler - OpenSession packet missing openOpt. sessionID: ${packet.sessionID}`);
+                        return;
+                    }
+                    this.connectEndPoint(packet.ID, packet.sessionID, packet.openOpt);
                 }
                 else if(packet.cmd == CtrlCmd.Message) {
                     this.processReceiveMessage(packet);
@@ -252,8 +295,10 @@ class TunnelClient {
                         this._onEndPointCloseCallback?.(packet.sessionID, 0);
                     } else {
                         dataHandler.addOnceDrainListener(() => {
-                            dataHandler?.setBufferSizeLimit(-1);
-                            dataHandler!.dataHandlerState = DataHandlerState.Terminated;
+                            if (dataHandler) {
+                                dataHandler.setBufferSizeLimit(-1);
+                                dataHandler.dataHandlerState = DataHandlerState.Terminated;
+                            }
                             this._onEndPointCloseCallback?.(packet.sessionID, packet.waitReceiveLength);
                         });
                     }
@@ -286,28 +331,37 @@ class TunnelClient {
      */
     private connectDataHandler(handlerID: number,  sessionID: number) : void {
         let dataHandler : TunnelDataHandler = SocketHandler.connect(this.makeConnectOpt(), (handler, state, data) => {
+            // Closure capture 문제 해결: 매개변수 handler를 안전하게 캐스팅하여 사용
+            const tunnelDataHandler = handler as TunnelDataHandler;
+            
             if(state == SocketState.Connected) {
-                dataHandler.dataHandlerState = DataHandlerState.Initializing;
-                dataHandler.handlerType = HandlerType.Data;
-                this._activatedSessionDataHandlerMap.set(sessionID, dataHandler);
+                tunnelDataHandler.dataHandlerState = DataHandlerState.Initializing;
+                tunnelDataHandler.handlerType = HandlerType.Data;
+                this._activatedSessionDataHandlerMap.set(sessionID, tunnelDataHandler);
                 let dataStatePacket = DataStatePacket.create(this._id, handlerID, sessionID);
-                dataHandler.sessionID = sessionID;
-                dataHandler.dataHandlerState = DataHandlerState.ConnectingEndPoint;
-                dataHandler.sendData(dataStatePacket.toBuffer(), (handler, success /*, err*/) => {
+                tunnelDataHandler.sessionID = sessionID;
+                tunnelDataHandler.dataHandlerState = DataHandlerState.ConnectingEndPoint;
+                tunnelDataHandler.sendData(dataStatePacket.toBuffer(), (handler, success /*, err*/) => {
                     if(!success) {
-                        this.deleteDataHandler(dataHandler);
+                        this.deleteDataHandler(tunnelDataHandler);
                         return;
                     }
 
                 });
             } else if(state == SocketState.Receive) {
-                this.onReceiveFromDataHandler(dataHandler as TunnelDataHandler, data);
+                this.onReceiveFromDataHandler(tunnelDataHandler, data);
             }
         });
-        dataHandler.handlerID = handlerID;
-        dataHandler.handlerType = HandlerType.Data;
-        dataHandler.sessionID = sessionID;
-        dataHandler.dataHandlerState = DataHandlerState.None;
+        
+        // 연결 생성 후 안전하게 속성 설정
+        if (dataHandler) {
+            dataHandler.handlerID = handlerID;
+            dataHandler.handlerType = HandlerType.Data;
+            dataHandler.sessionID = sessionID;
+            dataHandler.dataHandlerState = DataHandlerState.None;
+        } else {
+            logger.error(`connectDataHandler: Failed to create data handler for sessionID: ${sessionID}`);
+        }
     }
 
     // noinspection JSUnusedLocalSymbols
@@ -328,7 +382,7 @@ class TunnelClient {
         dataHandler.setBufferSizeLimit(endPointConnectOpt.bufferLimit);
         this._activatedSessionDataHandlerMap.set(sessionID, dataHandler);
 
-        logger.info(`Connect end point: sessionID:${sessionID}, remote:(${dataHandler!.socket.remoteAddress})${dataHandler!.socket.remotePort}`)
+        logger.info(`Connect end point: sessionID:${sessionID}, remote:(${dataHandler.socket.remoteAddress})${dataHandler.socket.remotePort}`)
         process.nextTick(() => {
             this._onConnectEndPointCallback?.(sessionID, endPointConnectOpt);
         });
@@ -340,8 +394,12 @@ class TunnelClient {
 
     private onReceiveFromDataHandler(handler: TunnelDataHandler, data: Buffer) : void {
         if(handler.dataHandlerState == DataHandlerState.OnlineSession) {
+            if (handler.sessionID === undefined) {
+                logger.error(`onReceiveFromDataHandler - sessionID is undefined, state: ${handler.dataHandlerState}`);
+                return;
+            }
             //process.nextTick(() => {
-                this._onReceiveDataCallback?.(handler.sessionID!, data);
+                this._onReceiveDataCallback?.(handler.sessionID, data);
             //});
         } else {
             // todo 잘못된 패킷이 수신되었을 경우 처리해야함.
@@ -402,14 +460,28 @@ class TunnelClient {
         let dataHandler = this._activatedSessionDataHandlerMap.get(sessionID);
         if(dataHandler && dataHandler.dataHandlerState == DataHandlerState.ConnectingEndPoint) {
             logger.warn(`End point connection failed - sessionID: ${sessionID}`);
-            let packet = CtrlPacket.resultOfOpenSession(dataHandler.handlerID!, sessionID, false)
-            this._ctrlHandler!.sendData(packet.toBuffer(), (handler, success/*, err*/) => {
-                if(!success) {
-                    this.deleteDataHandler(dataHandler!);
-                    return;
+            if (this._ctrlHandler) {
+                if (dataHandler.handlerID === undefined) {
+                    logger.error(`closeEndPointSession: handlerID is undefined for sessionID: ${sessionID}`);
+                    this.deleteDataHandler(dataHandler);
+                    return true;
                 }
-                dataHandler!.dataHandlerState = DataHandlerState.Terminated;
-            });
+                let packet = CtrlPacket.resultOfOpenSession(dataHandler.handlerID, sessionID, false)
+                this._ctrlHandler.sendData(packet.toBuffer(), (handler, success/*, err*/) => {
+                    if(!success) {
+                        if (dataHandler) {
+                            this.deleteDataHandler(dataHandler);
+                        }
+                        return;
+                    }
+                    if (dataHandler) {
+                        dataHandler.dataHandlerState = DataHandlerState.Terminated;
+                    }
+                });
+            } else {
+                // Control handler is already disconnected, just clean up locally
+                this.deleteDataHandler(dataHandler);
+            }
         } else if(dataHandler)  {
             let handlerID = dataHandler?.handlerID ?? 0;
 
@@ -425,14 +497,21 @@ class TunnelClient {
     private sendCloseSession(handlerID: number, sessionID: number, waitReceiveLength: number, dataHandler?: TunnelDataHandler) : void {
         console.log(`Endpoint client sends a close request - sessionID:${sessionID}`);
         try {
-            this._ctrlHandler!.sendData(CtrlPacket.closeSession(handlerID, sessionID, waitReceiveLength).toBuffer(), (handler, success/*, err*/ ) => {
-                if (!success) {
-                    if (dataHandler) {
-                        this.deleteDataHandler(dataHandler!);
+            if (this._ctrlHandler) {
+                this._ctrlHandler.sendData(CtrlPacket.closeSession(handlerID, sessionID, waitReceiveLength).toBuffer(), (handler, success/*, err*/ ) => {
+                    if (!success) {
+                        if (dataHandler) {
+                            this.deleteDataHandler(dataHandler!);
+                        }
+                        return;
                     }
-                    return;
+                })
+            } else {
+                // Control handler is already disconnected, just clean up locally
+                if (dataHandler) {
+                    this.deleteDataHandler(dataHandler);
                 }
-            })
+            }
         } catch (e) {
             console.error(e);
         }

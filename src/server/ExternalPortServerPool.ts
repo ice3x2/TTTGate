@@ -88,15 +88,18 @@ class ExternalPortServerPool {
 
     private startSessionCleanup() {
         if(this._sessionCleanupIntervalID) clearInterval(this._sessionCleanupIntervalID);
-        let now = Date.now();
         this._sessionCleanupIntervalID = setInterval(() => {
+                // 매번 현재 시간을 재계산하여 정확한 타임아웃 체크
+                const now = Date.now();
                 let closeWaitHandlerList : Array<EndpointHandler | EndpointHttpHandler> = Array.from(this._handlerMap.values())
                     .filter((handler: EndpointHandler | EndpointHttpHandler) => {
                     return !!handler.closeWait;
 
                 });
                 closeWaitHandlerList.forEach((handler: EndpointHandler | EndpointHttpHandler) => {
-                    this.closeIfSatisfiedLength(handler, now - handler.lastSendTime! > this._closeWaitTimeout);
+                    // null assertion 제거하고 안전한 접근으로 변경
+                    let isTimeout = handler.lastSendTime ? (now - handler.lastSendTime > this._closeWaitTimeout) : true;
+                    this.closeIfSatisfiedLength(handler, isTimeout);
                 });
             },SESSION_CLEANUP_INTERVAL);
 

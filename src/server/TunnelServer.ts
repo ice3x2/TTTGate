@@ -50,6 +50,7 @@ class TunnelServer {
     private isRunning = false;
 
     private _heartbeatInterval : NodeJS.Timeout | undefined;
+    private _authTimeouts : Set<NodeJS.Timeout> = new Set<NodeJS.Timeout>();
     private _nextSelectIdx = 0;
     private _onSessionCloseCallback? : OnSessionCloseCallback;
     private _onReceiveDataCallback? : OnReceiveDataCallback;
@@ -139,8 +140,13 @@ class TunnelServer {
         this.isRunning = false;
         return new Promise((resolve) => {
             if(this._heartbeatInterval) {
-                clearInterval(this._heartbeatInterval!);
+                clearInterval(this._heartbeatInterval);
             }
+            // 모든 auth timeout 정리
+            this._authTimeouts.forEach((timeoutId) => {
+                clearTimeout(timeoutId);
+            });
+            this._authTimeouts.clear();
             this._clientHandlerPoolMap.forEach((handlerPool) => {
                 handlerPool.getAllSessionIDs().forEach((id) => { this._onSessionCloseCallback?.(id, 0) });
                 handlerPool.end();
@@ -218,10 +224,20 @@ class TunnelServer {
             });
         }
         if(ids.length == 1) {
-            return this._clientHandlerPoolMap.get(ids[0])!;
+            const pool = this._clientHandlerPoolMap.get(ids[0]);
+            if (!pool) {
+                logger.error(`getNextHandlerPool: pool not found for id: ${ids[0]}`);
+                return null;
+            }
+            return pool;
         }
         let nextId = ids[++this._nextSelectIdx % ids.length];
-        return this._clientHandlerPoolMap.get(nextId)!;
+        const pool = this._clientHandlerPoolMap.get(nextId);
+        if (!pool) {
+            logger.error(`getNextHandlerPool: pool not found for id: ${nextId}`);
+            return null;
+        }
+        return pool;
     }
 
 
@@ -249,7 +265,11 @@ class TunnelServer {
 
 
     private sendSyncCtrlAck(ctrlHandler: TunnelControlHandler) : void {
-        let sendBuffer = CtrlPacket.createSyncCtrlAck(ctrlHandler!.id).toBuffer();
+        if (!ctrlHandler) {
+            logger.error('sendSyncCtrlAck: ctrlHandler is null');
+            return;
+        }
+        let sendBuffer = CtrlPacket.createSyncCtrlAck(ctrlHandler.id).toBuffer();
         ctrlHandler.sendData(sendBuffer, (handler_, success, err) => {
             if(!success) {
                 logger.error(`sendSyncAndSyncSyncCmd Fail - id:${ctrlHandler.id}, remote:(${ctrlHandler.socket.remoteAddress})${ctrlHandler.socket.remotePort}, ${err}`);
@@ -346,13 +366,19 @@ class TunnelServer {
             }
         }
         else {
-             let ctrlPool = this.findClientHandlerPool(handler.sessionID!);
+             if (!handler.sessionID) {
+                 logger.error('onReceiveDataHandler: sessionID is undefined');
+                 handler.endImmediate();
+                 return;
+             }
+             
+             let ctrlPool = this.findClientHandlerPool(handler.sessionID);
              if(!ctrlPool) {
-                 this._onSessionCloseCallback?.(handler.sessionID!, 0);
+                 this._onSessionCloseCallback?.(handler.sessionID, 0);
                 return;
              }
-             if(!ctrlPool.pushReceiveBuffer(handler.sessionID!, data)) {
-                 this._onSessionCloseCallback?.(handler.sessionID!, 0);
+             if(!ctrlPool.pushReceiveBuffer(handler.sessionID, data)) {
+                 this._onSessionCloseCallback?.(handler.sessionID, 0);
              }
              return;
         }
@@ -381,7 +407,12 @@ class TunnelServer {
     private onReceiveCtrlHandler(handler: TunnelControlHandler, data: Buffer) : void  {
         let packetList : Array<CtrlPacket> = [];
         try {
-            packetList = handler.packetStreamer!.readCtrlPacketList(data);
+            if (!handler.packetStreamer) {
+                logger.error(`onReceiveCtrlHandler - packetStreamer is undefined. ctrlID: ${handler.id}`);
+                handler.destroy();
+                return;
+            }
+            packetList = handler.packetStreamer.readCtrlPacketList(data);
         } catch (e) {
             logger.error(`onHandlerEvent - CtrlPacketStreamer.readCtrlPacketList Fail. ctrlID: ${handler.id}`,e);
             if(handler.handlerType == HandlerType.Control) {
@@ -450,7 +481,12 @@ class TunnelServer {
                 this.notMatchedAuthKey(handler as TunnelControlHandler);
                 return;
             }
-            this.promoteToCtrlHandler(handler as TunnelControlHandler, packet.clientName!);
+            if (!packet.clientName) {
+                logger.error('AckCtrl packet missing clientName');
+                this.notMatchedAuthKey(handler as TunnelControlHandler);
+                return;
+            }
+            this.promoteToCtrlHandler(handler as TunnelControlHandler, packet.clientName);
         } else {
             let ctrlID = handler.id;
             let clientHandlerPool = this._clientHandlerPoolMap.get(ctrlID);
@@ -468,9 +504,11 @@ class TunnelServer {
         let packet = CtrlPacket.message(handler.id,{type: 'log', payload: '<Fatal> Authkey is not matched.'});
         handler.sendData(packet.toBuffer());
         this._clientHandlerPoolMap.delete(handler.id);
-        setTimeout(() => {
+        const timeoutId = setTimeout(() => {
             handler.destroy();
+            this._authTimeouts.delete(timeoutId);
         },1000);
+        this._authTimeouts.add(timeoutId);
     }
 
     /**
@@ -523,21 +561,32 @@ class TunnelServer {
         if(!handlerPool) {
             return;
         }
+        // 중복 세션 정리 방지: 처리된 세션 ID들을 Set으로 추적
+        let processedSessionIDs = new Set<number>();
+        
+        // 먼저 sessionIDAndCtrlIDMap에서 해당 ctrlID 관련 세션들 정리
         let removeSessionIDs : Array<number> = [];
         this._sessionIDAndCtrlIDMap.forEach((value, key) => {
             if(value == ctrlID) {
                 removeSessionIDs.push(key);
             }
         });
+        
         for(let id of removeSessionIDs) {
             this._sessionIDAndCtrlIDMap.delete(id);
             this._onSessionCloseCallback?.(id, 0);
+            processedSessionIDs.add(id);
         }
-       handlerPool.getAllSessionIDs().forEach((id) => this._onSessionCloseCallback?.(id, 0) );
-
+        
+        // handlerPool의 추가 세션들 정리 (중복 방지)
+        handlerPool.getAllSessionIDs().forEach((id) => {
+            if (!processedSessionIDs.has(id)) {
+                this._onSessionCloseCallback?.(id, 0);
+                processedSessionIDs.add(id);
+            }
+        });
 
         this._clientHandlerPoolMap.delete(ctrlID);
-
         handlerPool.end();
     }
 
