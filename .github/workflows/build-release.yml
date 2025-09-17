@@ -1,0 +1,101 @@
+name: Build and Create Draft Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.11b)'
+        required: true
+        type: string
+      release_title:
+        description: 'Release title'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+
+    - name: Install dependencies (root)
+      run: npm ci
+
+    - name: Install dependencies (admin)
+      run: |
+        cd admin
+        npm ci
+
+    - name: Build project
+      run: npm run dist
+
+    - name: Create release archive
+      run: |
+        cd dist
+        tar -czf ../TTTGate-${{ inputs.version }}-dist.tar.gz .
+        cd ..
+
+    - name: Generate release notes
+      id: release_notes
+      run: |
+        echo "## Release ${{ inputs.version }}" > release_notes.md
+        echo "" >> release_notes.md
+
+        # Get the latest tag
+        git fetch --tags
+        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+        if [ -n "$LATEST_TAG" ]; then
+          echo "### Changes since $LATEST_TAG" >> release_notes.md
+          echo "" >> release_notes.md
+          git log $LATEST_TAG..HEAD --pretty=format:"- %s (%h)" >> release_notes.md
+        else
+          echo "### Initial Release" >> release_notes.md
+          echo "" >> release_notes.md
+          git log --pretty=format:"- %s (%h)" -10 >> release_notes.md
+        fi
+
+        echo "" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "### Build Information" >> release_notes.md
+        echo "- **Node Version:** ${{ matrix.node-version }}" >> release_notes.md
+        echo "- **Build Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> release_notes.md
+        echo "- **Commit:** ${{ github.sha }}" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "### Installation" >> release_notes.md
+        echo '```bash' >> release_notes.md
+        echo "# Download and extract the release" >> release_notes.md
+        echo "tar -xzf TTTGate-${{ inputs.version }}-dist.tar.gz" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "# Run as server" >> release_notes.md
+        echo "node src/app.js server -adminPort 9300" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "# Run as client" >> release_notes.md
+        echo "node src/app.js client -addr <server_address>" >> release_notes.md
+        echo '```' >> release_notes.md
+
+    - name: Create Draft Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ inputs.version }}
+        name: ${{ inputs.release_title || inputs.version }}
+        body_path: release_notes.md
+        draft: true
+        prerelease: false
+        files: |
+          TTTGate-${{ inputs.version }}-dist.tar.gz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

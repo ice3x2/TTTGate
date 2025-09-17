@@ -1,0 +1,202 @@
+name: Build Binaries and Create Draft Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.11b)'
+        required: true
+        type: string
+      release_title:
+        description: 'Release title'
+        required: false
+        type: string
+        default: ''
+      build_binaries:
+        description: 'Build platform binaries'
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+
+    - name: Install dependencies (root)
+      run: npm ci
+
+    - name: Install dependencies (admin)
+      run: |
+        cd admin
+        npm ci
+
+    - name: Build project
+      run: npm run dist
+
+    - name: Create source distribution archive
+      run: |
+        cd dist
+        tar -czf ../TTTGate-${{ inputs.version }}-dist.tar.gz .
+        zip -r ../TTTGate-${{ inputs.version }}-dist.zip .
+        cd ..
+
+    - name: Build platform binaries
+      if: ${{ inputs.build_binaries }}
+      run: |
+        # Install pkg globally if needed
+        npm install -g pkg
+
+        # Build binaries using npm script
+        npm run pkg
+
+        # Create binary archives
+        cd dist
+
+        # Linux x64
+        if [ -f "tttgate-linux" ]; then
+          tar -czf ../TTTGate-${{ inputs.version }}-linux-x64.tar.gz tttgate-linux
+        fi
+
+        # Linux ARM64
+        if [ -f "tttgate-linux-arm64" ]; then
+          tar -czf ../TTTGate-${{ inputs.version }}-linux-arm64.tar.gz tttgate-linux-arm64
+        fi
+
+        # Windows x64
+        if [ -f "tttgate-win.exe" ]; then
+          zip ../TTTGate-${{ inputs.version }}-win-x64.zip tttgate-win.exe
+        fi
+
+        # Windows ARM64
+        if [ -f "tttgate-win-arm64.exe" ]; then
+          zip ../TTTGate-${{ inputs.version }}-win-arm64.zip tttgate-win-arm64.exe
+        fi
+
+        # Alpine x64
+        if [ -f "tttgate-alpine" ]; then
+          tar -czf ../TTTGate-${{ inputs.version }}-alpine-x64.tar.gz tttgate-alpine
+        fi
+
+        cd ..
+
+    - name: Generate release notes
+      id: release_notes
+      run: |
+        echo "## TTTGate ${{ inputs.version }}" > release_notes.md
+        echo "" >> release_notes.md
+
+        # Get the latest tag
+        git fetch --tags
+        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+        if [ -n "$LATEST_TAG" ]; then
+          echo "### 📋 Changes since $LATEST_TAG" >> release_notes.md
+          echo "" >> release_notes.md
+          git log $LATEST_TAG..HEAD --pretty=format:"- %s (%h)" >> release_notes.md
+        else
+          echo "### 🚀 Initial Release" >> release_notes.md
+          echo "" >> release_notes.md
+          git log --pretty=format:"- %s (%h)" -10 >> release_notes.md
+        fi
+
+        echo "" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "### 📦 Available Downloads" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "#### Source Distribution" >> release_notes.md
+        echo "- \`TTTGate-${{ inputs.version }}-dist.tar.gz\` - Node.js source distribution (tar.gz)" >> release_notes.md
+        echo "- \`TTTGate-${{ inputs.version }}-dist.zip\` - Node.js source distribution (zip)" >> release_notes.md
+
+        if [ "${{ inputs.build_binaries }}" = "true" ]; then
+          echo "" >> release_notes.md
+          echo "#### Platform Binaries" >> release_notes.md
+          echo "- \`TTTGate-${{ inputs.version }}-linux-x64.tar.gz\` - Linux x64 binary" >> release_notes.md
+          echo "- \`TTTGate-${{ inputs.version }}-linux-arm64.tar.gz\` - Linux ARM64 binary" >> release_notes.md
+          echo "- \`TTTGate-${{ inputs.version }}-win-x64.zip\` - Windows x64 binary" >> release_notes.md
+          echo "- \`TTTGate-${{ inputs.version }}-win-arm64.zip\` - Windows ARM64 binary" >> release_notes.md
+          echo "- \`TTTGate-${{ inputs.version }}-alpine-x64.tar.gz\` - Alpine Linux x64 binary" >> release_notes.md
+        fi
+
+        echo "" >> release_notes.md
+        echo "### 🛠️ Build Information" >> release_notes.md
+        echo "- **Node Version:** ${{ matrix.node-version }}" >> release_notes.md
+        echo "- **Build Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> release_notes.md
+        echo "- **Commit:** \`${{ github.sha }}\`" >> release_notes.md
+        echo "- **Branch:** \`${{ github.ref_name }}\`" >> release_notes.md
+
+        echo "" >> release_notes.md
+        echo "### 📖 Installation & Usage" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "#### From Source Distribution" >> release_notes.md
+        echo '```bash' >> release_notes.md
+        echo "# Download and extract" >> release_notes.md
+        echo "tar -xzf TTTGate-${{ inputs.version }}-dist.tar.gz" >> release_notes.md
+        echo "# OR" >> release_notes.md
+        echo "unzip TTTGate-${{ inputs.version }}-dist.zip" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "# Run as server" >> release_notes.md
+        echo "node src/app.js server -adminPort 9300" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "# Run as client" >> release_notes.md
+        echo "node src/app.js client -addr <server_address>" >> release_notes.md
+        echo '```' >> release_notes.md
+
+        if [ "${{ inputs.build_binaries }}" = "true" ]; then
+          echo "" >> release_notes.md
+          echo "#### From Binary" >> release_notes.md
+          echo '```bash' >> release_notes.md
+          echo "# Linux/Alpine" >> release_notes.md
+          echo "tar -xzf TTTGate-${{ inputs.version }}-linux-x64.tar.gz" >> release_notes.md
+          echo "./tttgate-linux server -adminPort 9300" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "# Windows" >> release_notes.md
+          echo "# Extract the zip file and run:" >> release_notes.md
+          echo "tttgate-win.exe server -adminPort 9300" >> release_notes.md
+          echo '```' >> release_notes.md
+        fi
+
+        echo "" >> release_notes.md
+        echo "### 📌 Requirements" >> release_notes.md
+        echo "- Node.js 18+ (for source distribution)" >> release_notes.md
+        echo "- Supported platforms: Linux, Windows, Alpine Linux (x64/ARM64)" >> release_notes.md
+
+    - name: List build artifacts
+      run: |
+        echo "=== Build artifacts ==="
+        ls -la TTTGate-*.* 2>/dev/null || echo "No release files found"
+        echo ""
+        echo "=== Dist directory contents ==="
+        ls -la dist/ | head -20
+
+    - name: Create Draft Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ inputs.version }}
+        name: ${{ inputs.release_title || inputs.version }}
+        body_path: release_notes.md
+        draft: true
+        prerelease: false
+        files: |
+          TTTGate-${{ inputs.version }}-dist.tar.gz
+          TTTGate-${{ inputs.version }}-dist.zip
+          TTTGate-${{ inputs.version }}-linux-x64.tar.gz
+          TTTGate-${{ inputs.version }}-linux-arm64.tar.gz
+          TTTGate-${{ inputs.version }}-win-x64.zip
+          TTTGate-${{ inputs.version }}-win-arm64.zip
+          TTTGate-${{ inputs.version }}-alpine-x64.tar.gz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
