@@ -3,6 +3,7 @@ import {CustomHeader, HttpOption, TunnelingOption} from "../../types/TunnelingOp
 import {HttpHeader, HttpPipe, HttpRequestHeader, HttpResponseHeader, MessageType, ParseState} from "./HttpPipe";
 import HttpUtil from "./HttpUtil";
 import SocketState from "../../util/SocketState";
+import {ResourcePolicyRegistry} from "../../util/ResourcePolicy";
 
 import LoggerFactory from "../../util/logger/LoggerFactory";
 let logger = LoggerFactory.getLogger('server', 'HttpHandler');
@@ -59,6 +60,10 @@ class HttpHandler {
         return this._keepAlive;
     }
 
+    public get isOutputDrained(): boolean {
+        return this._socketHandler.isOutputDrained;
+    }
+
     public static create(socketHandler: SocketHandler, tunnelOption: TunnelingOption): HttpHandler {
         let handler = new HttpHandler(socketHandler);
         handler._option = !tunnelOption.httpOption ? handler._option : tunnelOption.httpOption!;
@@ -67,7 +72,7 @@ class HttpHandler {
             handler._option.rewriteHostInTextBody = true;
         }
         if (handler._option.replaceAccessControlAllowOrigin == undefined) {
-            handler._option.replaceAccessControlAllowOrigin = true;
+            handler._option.replaceAccessControlAllowOrigin = false;
         }
 
         handler._destinationAddress = tunnelOption.destinationAddress;
@@ -455,9 +460,24 @@ class HttpHandler {
     private replaceAndSendHostInBody(): void {
         try {
             let encoding = HttpUtil.findHeaderValue(this._currentHttpHeader!, "Content-Encoding");
-            
-            // 압축 해제
-            this._bodyBuffer = HttpUtil.uncompressBody(encoding, this._bodyBuffer);
+            const originalBody = this._bodyBuffer;
+            try {
+                this._bodyBuffer = HttpUtil.uncompressBody(
+                    encoding,
+                    this._bodyBuffer,
+                    ResourcePolicyRegistry.current().httpRewriteDecompressLimitBytes
+                );
+            } catch (error) {
+                if(HttpUtil.isDecompressionLimitError(error) || (error as Error & {code?: string}).code === HttpUtil.DECOMPRESS_LIMIT_ERROR_CODE || error instanceof RangeError) {
+                    logger.warn(`Bypassing HTTP body rewrite because the inflated body exceeded the configured limit.`);
+                    this.sendChunkedData(originalBody);
+                    this._currentHttpHeader = null;
+                    this._bodyBuffer = Buffer.alloc(0);
+                    this._isReplaceHostInBody = false;
+                    return;
+                }
+                throw error;
+            }
             
             let body = this._bodyBuffer.toString();
             body = this.modifyUrlsInBody(body, this._destinationAddress, this._originHost);

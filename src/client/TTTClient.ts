@@ -5,11 +5,10 @@ import {Buffer} from "buffer";
 import EndPointClientPool from "./EndPointClientPool";
 import {OpenOpt} from "../commons/CtrlPacket";
 import LoggerFactory from "../util/logger/LoggerFactory";
+import {TTTClientRuntimeRegistry} from "./TTTClientRuntime";
+import {redactSecrets} from "../util/SecretRedactor";
 
 const logger = LoggerFactory.getLogger('client', 'TTTClient');
-
-
-const RECONNECT_INTERVAL : number = 5000;
 
 
 class TTTClient {
@@ -18,6 +17,8 @@ class TTTClient {
     private _tunnelClient: TunnelClient;
     private _tryConnectState : boolean = false;
     private _isOnline : boolean = false;
+    private _stopped : boolean = false;
+    private _reconnectTimer : NodeJS.Timeout | undefined;
 
     private constructor(clientOption: ClientOption) {
         this._clientOption = clientOption;
@@ -29,6 +30,7 @@ class TTTClient {
     }
 
     public start() {
+        this._stopped = false;
         this._endPointClientPool = new EndPointClientPool();
         this._tunnelClient = TunnelClient.create(this._clientOption);
         this._tunnelClient.onCtrlStateCallback = this.onCtrlStateCallback;
@@ -38,13 +40,16 @@ class TTTClient {
         this._endPointClientPool.onEndPointClientStateChangeCallback = this.onEndPointClientStateChangeCallback;
         this._endPointClientPool.onEndPointTerminateCallback = this.onEndPointTerminateCallback;
         logger.info(` try connect to ${this._clientOption.host}:${this._clientOption.port}`);
-        logger.info(` option: ${JSON.stringify(this._clientOption)}`)
+        logger.info(` option: ${JSON.stringify(redactSecrets(this._clientOption))}`)
         this._tryConnectState = true;
         this._tunnelClient.connect();
     }
 
     private onCtrlStateCallback = (client: TunnelClient, state: ConnectionState, error? : Error ) : void => {
         if(state == 'closed') {
+            if(this._stopped) {
+                return;
+            }
             if(!this._isOnline && !this._tryConnectState) {
                 return;
             }
@@ -52,17 +57,30 @@ class TTTClient {
             this._isOnline = false;
             logger.error(`Connection closed.`, error);
             this._endPointClientPool.closeAll();
-            logger.info(`Try reconnect after ${RECONNECT_INTERVAL}ms`)
-            setTimeout(() => {
+            const runtime = TTTClientRuntimeRegistry.current();
+            const reconnectInterval = runtime.reconnectIntervalMs;
+            logger.info(`Try reconnect after ${reconnectInterval}ms`)
+            this._reconnectTimer = runtime.scheduler.setTimeout(() => {
+                this._reconnectTimer = undefined;
                 this.start();
                 logger.info(`Try reconnect to ${this._clientOption.host}:${this._clientOption.port}`);
-                logger.info(`Option: ${JSON.stringify(this._clientOption)}`);
-            },RECONNECT_INTERVAL);
+                logger.info(`Option: ${JSON.stringify(redactSecrets(this._clientOption))}`);
+            }, reconnectInterval);
         } else if(state == 'connected') {
             logger.info(` connection established.`);
             this._isOnline = true;
             this._tryConnectState = false;
         }
+    }
+
+    public stop(): void {
+        this._stopped = true;
+        this._tryConnectState = false;
+        this._isOnline = false;
+        TTTClientRuntimeRegistry.current().scheduler.clearTimeout(this._reconnectTimer);
+        this._reconnectTimer = undefined;
+        this._endPointClientPool?.dispose();
+        this._tunnelClient?.destroy();
     }
 
     private onSessionOpenCallback = (id: number, opt: OpenOpt) : void => {

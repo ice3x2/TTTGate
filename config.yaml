@@ -1,7 +1,0 @@
-clientAddress: "127.0.0.1"
-openPortList: [8000]
-httpPort: 7333
-defaultApiKey: "1234567890"
-
-
-

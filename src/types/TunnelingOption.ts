@@ -2,6 +2,7 @@
 
 
 type Protocol = "tcp" | "http" | "https";
+type ControlProtocolMode = "legacy" | "mixed" | "mtls-strict";
 type CustomHeader = {
     name: string;
     value: string;
@@ -28,18 +29,36 @@ type ClientOption = {
     host : string,
     port : number,
     tls : boolean,
-    name : string
+    name : string,
+    clientId?: string,
+    clientSecret?: string,
+    displayName?: string,
+    ca?: string,
+    cert?: string,
+    privateKey?: string,
+    serverName?: string,
+    allowLegacyFallback?: boolean,
+    allowInsecureTls?: boolean,
     globalMemCacheLimit: number,
     keepAlive: number
 }
 
+type TrustedClient = {
+    clientId: string;
+    clientSecret: string;
+    displayName?: string;
+}
 
 type ServerOption = {
     key: string,
     adminPort?: number,
+    adminBindHost?: string,
     adminTls?: boolean,
     port: number,
     tls : boolean,
+    controlProtocolMode?: ControlProtocolMode,
+    allowLegacyControlAuth?: boolean,
+    trustedClients?: Array<TrustedClient>,
     tunnelingOptions: Array<TunnelingOption>,
     globalMemCacheLimit?: number
     keepAlive: number
@@ -55,6 +74,7 @@ type TunnelingOption = {
     destinationAddress: string,
     destinationPort?: number;
     allowedClientNames?: Array<string>;
+    allowedClientIds?: Array<string>;
     inactiveOnStartup?: boolean;
     tls?: boolean,
     bufferLimitOnServer?: number,
@@ -64,4 +84,4 @@ type TunnelingOption = {
 
 const DEFAULT_KEY = "hello-TTTGate";
 
-export { ServerOption, TunnelingOption, ClientOption, HttpOption, CustomHeader, DEFAULT_KEY};
+export { ControlProtocolMode, ServerOption, TunnelingOption, ClientOption, HttpOption, CustomHeader, TrustedClient, DEFAULT_KEY};

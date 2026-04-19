@@ -3,6 +3,7 @@ import {SocketHandler} from "./SocketHandler";
 import SocketState from "./SocketState";
 import * as tls from "tls";
 import LoggerFactory from "../util/logger/LoggerFactory";
+import {TlsOptionsFactoryRegistry} from "./TlsOptionsFactory";
 
 const logger = LoggerFactory.getLogger('', 'TCPServer');
 
@@ -76,21 +77,7 @@ class TCPServer {
         options.tls = options.tls ?? false;
         this._options = options;
         this._options.keepAlive = this._options.keepAlive ?? DEFAULT_KEEP_ALIVE;
-
-
-        if(options.tls) {
-            let tlsOption : any = {
-                key: options.key,
-                cert: options.cert,
-                secureProtocol: 'TLSv1_2_server_method'
-            }
-            if(options.ca) {
-                tlsOption.ca = options.ca;
-            }
-            this._server = tls.createServer(tlsOption,this.onBind);
-        } else {
-            this._server = net.createServer(this.onBind)
-        }
+        this._server = this.createServer();
         this._server.on('error', (error) => {
             this._error = error;
             if(!this.isEnd()) {
@@ -118,6 +105,14 @@ class TCPServer {
         });
     }
 
+    private createServer(): net.Server {
+        if(this._options.tls) {
+            let tlsOption = TlsOptionsFactoryRegistry.current().createServerTlsOptions(this._options);
+            return tls.createServer(tlsOption, this.onBind);
+        }
+        return net.createServer(this.onBind);
+    }
+
     private onBind = (socket: net.Socket) : void => {
         let option = {socket:socket, port: this._options.port, addr: "127.0.0.1", tls: this._options.tls ?? false , keepAlive: this._options.keepAlive ?? DEFAULT_KEEP_ALIVE};
         let handler = SocketHandler.bound(option,(handler, state, data) => {
@@ -137,7 +132,7 @@ class TCPServer {
 
     public start(callback? : (err?: Error) => void) : void {
         if(this.isEnd()) {
-            this._server = net.createServer(this.onBind)
+            this._server = this.createServer();
             this._state = SocketState.None;
         }
         if(this._state == SocketState.None) {

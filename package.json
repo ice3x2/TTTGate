@@ -31,19 +31,19 @@
       "<rootDir>/test/**/*.test.(js|ts)"
     ],
     "transform": {
-      "^.+\\.ts$": "ts-jest"
+      "^.+\\.ts$": [
+        "ts-jest",
+        {
+          "diagnostics": true
+        }
+      ]
     },
     "moduleFileExtensions": [
       "ts",
       "tsx",
       "js",
       "json"
-    ],
-    "globals": {
-      "ts-jest": {
-        "diagnostics": true
-      }
-    }
+    ]
   },
   "author": "",
   "license": "ISC",

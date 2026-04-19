@@ -1,5 +1,6 @@
 import {SocketHandler} from "../util/SocketHandler";
 import {CtrlPacketStreamer} from "../commons/CtrlPacket";
+import {ControlProtocolMode} from "../types/TunnelingOption";
 
 
 enum CtrlState {
@@ -32,12 +33,18 @@ type TunnelControlHandler = TunnelHandler & {
     packetStreamer?: CtrlPacketStreamer;
     handlerType?: HandlerType.Control;
     ctrlState?: CtrlState;
+    clientId?: string;
+    displayName?: string;
+    protocolVersion?: number;
+    capabilities?: string[];
+    controlProtocolMode?: ControlProtocolMode;
 }
 
 type TunnelDataHandler = TunnelHandler & {
     sessionID?: number;
     handlerID?: number;
     ctrlID?: number;
+    bindingToken?: string;
     leftOverBuffer?: Buffer;
     dataHandlerState?: DataHandlerState;
     handlerType?: HandlerType.Data;
@@ -53,5 +60,3 @@ export {
     TunnelControlHandler,
     CtrlState
 }
-
-

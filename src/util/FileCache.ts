@@ -26,6 +26,14 @@ class FileCache {
 
     private _deleted : boolean = false;
 
+    public get cacheSize(): number {
+        return this._cacheSize;
+    }
+
+    public get filePath(): string {
+        return this._filePath;
+    }
+
 
     private findEmptyBlock(length: number) : CacheRecord | null {
         for(let i = 0; i < this._emptyBlocks.length; i++) {
@@ -161,17 +169,26 @@ class FileCache {
     }
 
     public delete() : void {
-        if(this._deleted || this._fileDescriptor == -1)  {
+        this.deleteSync();
+    }
+
+    public deleteSync() : void {
+        if(this._deleted)  {
             return;
         }
         this._deleted = true;
         this._cacheMap = new Map<number, CacheRecord>();
         this._emptyBlocks = [];
         this._cacheSize = 0;
-        fs.close(this._fileDescriptor, () => {
+        if(this._fileDescriptor != -1) {
+            try {
+                fs.closeSync(this._fileDescriptor);
+            } catch {}
             this._fileDescriptor = -1;
-            fs.unlink(this._filePath, () => {});
-        });
+        }
+        try {
+            fs.unlinkSync(this._filePath);
+        } catch {}
     }
 
 

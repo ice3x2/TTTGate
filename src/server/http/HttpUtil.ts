@@ -7,6 +7,7 @@ import zlib from "zlib";
 class HttpUtil {
     // 압축 관련 상수
     private static readonly MAX_UNCOMPRESSED_SIZE = 100 * 1024 * 1024; // 100MB
+    public static readonly DECOMPRESS_LIMIT_ERROR_CODE = "HTTP_DECOMPRESS_LIMIT_EXCEEDED";
     
     /**
      * HTTP 헤더를 버퍼로 변환
@@ -127,7 +128,7 @@ class HttpUtil {
     /**
      * HTTP 바디를 압축 해제
      */
-    public static uncompressBody(contentEncoding: string | null, body: Buffer): Buffer {
+    public static uncompressBody(contentEncoding: string | null, body: Buffer, maxOutputLength: number = HttpUtil.MAX_UNCOMPRESSED_SIZE): Buffer {
         if (!contentEncoding || body.length === 0) {
             return body;
         }
@@ -135,14 +136,19 @@ class HttpUtil {
         contentEncoding = contentEncoding.toLowerCase();
         try {
             if (contentEncoding.includes("gzip")) {
-                return HttpUtil.gunzip(body);
+                return HttpUtil.gunzip(body, maxOutputLength);
             } else if (contentEncoding.includes("deflate")) {
-                return HttpUtil.inflate(body);
+                return HttpUtil.inflate(body, maxOutputLength);
             } else if (contentEncoding.includes("br")) {
-                return HttpUtil.brotliDecompress(body);
+                return HttpUtil.brotliDecompress(body, maxOutputLength);
             }
         } catch (err) {
-            console.error(`Error decompressing ${contentEncoding} content:`, err);
+            if(HttpUtil.isDecompressionLimitError(err)) {
+                const limitError = new Error("HTTP body rewrite decompress limit exceeded");
+                (limitError as Error & {code?: string}).code = HttpUtil.DECOMPRESS_LIMIT_ERROR_CODE;
+                throw limitError;
+            }
+            throw err;
         }
         
         return body;
@@ -200,15 +206,16 @@ class HttpUtil {
     /**
      * gzip 압축 해제
      */
-    public static gunzip(body: Buffer): Buffer {
+    public static gunzip(body: Buffer, maxOutputLength: number = HttpUtil.MAX_UNCOMPRESSED_SIZE): Buffer {
         try {
             return zlib.gunzipSync(body, {
-                finishFlush: zlib.constants.Z_SYNC_FLUSH
+                finishFlush: zlib.constants.Z_SYNC_FLUSH,
+                maxOutputLength
             });
         } catch (err) {
             // 만약 gunzip에 실패하면 inflate로 시도 (일부 잘못된 구현이 있을 수 있음)
             try {
-                return zlib.inflateSync(body);
+                return zlib.inflateSync(body, {maxOutputLength});
             } catch (innerErr) {
                 throw err; // 원래 에러 전달
             }
@@ -218,15 +225,16 @@ class HttpUtil {
     /**
      * deflate 압축 해제
      */
-    public static inflate(body: Buffer): Buffer {
+    public static inflate(body: Buffer, maxOutputLength: number = HttpUtil.MAX_UNCOMPRESSED_SIZE): Buffer {
         try {
             return zlib.inflateSync(body, {
-                finishFlush: zlib.constants.Z_SYNC_FLUSH
+                finishFlush: zlib.constants.Z_SYNC_FLUSH,
+                maxOutputLength
             });
         } catch (err) {
             // 일부 구현은 zlib 헤더를 포함하지 않을 수 있으므로 raw inflate 시도
             try {
-                return zlib.inflateRawSync(body);
+                return zlib.inflateRawSync(body, {maxOutputLength});
             } catch (innerErr) {
                 throw err; // 원래 에러 전달
             }
@@ -236,8 +244,19 @@ class HttpUtil {
     /**
      * Brotli 압축 해제
      */
-    public static brotliDecompress(body: Buffer): Buffer {
-        return zlib.brotliDecompressSync(body);
+    public static brotliDecompress(body: Buffer, maxOutputLength: number = HttpUtil.MAX_UNCOMPRESSED_SIZE): Buffer {
+        return zlib.brotliDecompressSync(body, {maxOutputLength});
+    }
+
+    public static isDecompressionLimitError(error: unknown): boolean {
+        if(!(error instanceof Error)) {
+            return false;
+        }
+        if((error as Error & {code?: string}).code === HttpUtil.DECOMPRESS_LIMIT_ERROR_CODE) {
+            return true;
+        }
+        const message = error.message.toLowerCase();
+        return message.includes('maxoutputlength') || message.includes('buffer too large') || message.includes('cannot create a buffer larger');
     }
 
     /**

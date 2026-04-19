@@ -2,13 +2,15 @@ import {SocketHandler} from "../util/SocketHandler";
 import SocketState from "../util/SocketState";
 import {Buffer} from "buffer";
 import {CtrlCmd, CtrlPacket, CtrlPacketStreamer, OpenOpt} from "../commons/CtrlPacket";
+import {buildHandshakeProof, CONTROL_PROTOCOL_V2, DEFAULT_PROTOCOL_V2_CAPABILITIES} from "../commons/ProtocolV2";
 import {ClientOption} from "../types/TunnelingOption";
 import ConnectOpt from "../util/ConnectOpt";
 import {TunnelControlHandler,TunnelDataHandler,DataHandlerState} from "../types/TunnelHandler";
 import DataStatePacket from "../commons/DataStatePacket";
 import Dequeue from "../util/Dequeue";
+import {ResourcePolicyRegistry} from "../util/ResourcePolicy";
 import LoggerFactory  from "../util/logger/LoggerFactory";
-import {SysMonitor} from "../commons/SysMonitor";
+import {SystemInfoProviderRegistry} from "../commons/SystemInfoProvider";
 const logger = LoggerFactory.getLogger('client', 'TunnelClient');
 
 
@@ -44,6 +46,12 @@ enum HandlerType {
     Data
 }
 
+type WaitBufferState = {
+    queue: Dequeue<Buffer>;
+    bytes: number;
+    limitBytes: number;
+}
+
 /**
  * Client 는 Ctrl(컨트롤) 클라이언트와 Session.ts(세션) 클라이언트로 구성된다.
  * Ctrl 클라이언트는 서버와 연결을 맺으면 Sync 와 SyncSync 패킷을 받는다. 이후 Ack 패킷을 보내면 연결이 완료된다. 이후 Open 패킷을 받기만한다.
@@ -59,7 +67,10 @@ class TunnelClient {
     private _state : CtrlState = CtrlState.None;
     private _ctrlHandler: TunnelControlHandler | undefined = undefined;
     private _activatedSessionDataHandlerMap : Map<number, TunnelDataHandler> = new Map<number, TunnelDataHandler>();
-    private _waitBufferQueueMap : Map<number, Dequeue<Buffer>> = new Map<number, Dequeue<Buffer>>();
+    private _waitBufferQueueMap : Map<number, WaitBufferState> = new Map<number, WaitBufferState>();
+    private _waitBufferBytesTotal: number = 0;
+    private _protocolVersion: number = 1;
+    private _legacyMode: boolean = true;
 
 
     //private _ctrlPacketStreamer : CtrlPacketStreamer = new CtrlPacketStreamer();
@@ -99,7 +110,16 @@ class TunnelClient {
     }
 
     private makeConnectOpt() : ConnectOpt {
-        return {host: this._option.host,port: this._option.port ,tls: this._option.tls};
+        return {
+            host: this._option.host,
+            port: this._option.port,
+            tls: this._option.tls,
+            ca: this._option.ca,
+            cert: this._option.cert,
+            key: this._option.privateKey,
+            serverName: this._option.serverName,
+            rejectUnauthorized: this._option.allowInsecureTls !== true
+        };
     }
 
     public connect() : boolean {
@@ -110,7 +130,7 @@ class TunnelClient {
         
         try {
             let connOpt = this.makeConnectOpt();
-            connOpt.keepalive = 30000;
+            connOpt.keepalive = this._option.keepAlive;
             this._ctrlHandler = SocketHandler.connect(connOpt, this.onCtrlHandlerEvent) as TunnelControlHandler;
             
             // 연결 핸들러 생성 실패 체크
@@ -160,14 +180,18 @@ class TunnelClient {
         if(!dataHandler || !this._ctrlHandler) {
             return false;
         }
-        this._waitBufferQueueMap.set(sessionID, new Dequeue<Buffer>());
+        this._waitBufferQueueMap.set(sessionID, {
+            queue: new Dequeue<Buffer>(),
+            bytes: 0,
+            limitBytes: dataHandler.bufferSizeLimit
+        });
         let packet : CtrlPacket | undefined = undefined;
         if(dataHandler.dataHandlerState == DataHandlerState.ConnectingEndPoint) {
             if (dataHandler.handlerID === undefined) {
                 logger.error(`syncEndpointSession: handlerID is undefined for sessionID: ${sessionID}`);
                 return false;
             }
-            packet = CtrlPacket.resultOfOpenSession(dataHandler.handlerID, sessionID, true);
+            packet = CtrlPacket.resultOfOpenSession(dataHandler.handlerID, sessionID, true, {handlerID: dataHandler.handlerID});
         } else {
             return false;
         }
@@ -187,8 +211,8 @@ class TunnelClient {
     }
 
     private flushWaitBuffer(sessionID: number) : void {
-        let queue = this._waitBufferQueueMap.get(sessionID);
-        if(!queue) {
+        let waitState = this._waitBufferQueueMap.get(sessionID);
+        if(!waitState) {
             return;
         }
         let dataHandler = this._activatedSessionDataHandlerMap.get(sessionID);
@@ -196,24 +220,26 @@ class TunnelClient {
             this._waitBufferQueueMap.delete(sessionID);
             return;
         }
-        let data = queue.popFront();
+        let data = waitState.queue.popFront();
         while(data) {
             dataHandler.sendData(data);
-            data = queue.popFront();
+            this.releaseWaitBufferBytes(waitState, data.length);
+            data = waitState.queue.popFront();
         }
+        this._waitBufferQueueMap.delete(sessionID);
     }
 
     public terminateEndPointSession(sessionID: number) : void {
         let handler = this._activatedSessionDataHandlerMap.get(sessionID);
         this._activatedSessionDataHandlerMap.delete(sessionID);
-        this._waitBufferQueueMap.delete(sessionID);
+        this.clearWaitBuffer(sessionID);
         if(handler) {
             handler.destroy();
         }
     }
 
     private deleteDataHandler(handler: TunnelDataHandler) : void {
-        this._waitBufferQueueMap.delete(handler.sessionID ?? -1);
+        this.clearWaitBuffer(handler.sessionID ?? -1);
         handler.dataHandlerState = DataHandlerState.Terminated;
         this._activatedSessionDataHandlerMap.delete(handler.sessionID ?? 0);
         if(handler.sessionID) {
@@ -267,13 +293,34 @@ class TunnelClient {
         for(let packet of packetList) {
             logger.info(`onReceiveFromCtrlHandler - cmd:${CtrlCmd[packet.cmd]}, sessionID:${packet.sessionID}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
             if(this._state == CtrlState.Syncing && packet.cmd == CtrlCmd.SyncCtrlAck) {
-                this._id = packet.ID;
+                const syncMeta = packet.syncCtrlAckMeta;
+                this._id = syncMeta?.controlID ?? packet.ID;
+                if(syncMeta && this._option.clientId && this._option.clientSecret) {
+                    this._protocolVersion = syncMeta.protocolVersion;
+                    this._legacyMode = false;
+                    this.sendAckCtrl(handler, this._id, this._option.key, {
+                        protocolVersion: CONTROL_PROTOCOL_V2,
+                        capabilities: DEFAULT_PROTOCOL_V2_CAPABILITIES,
+                        controlID: this._id,
+                        clientId: this._option.clientId,
+                        displayName: this._option.displayName || this._option.name,
+                        proof: buildHandshakeProof(this._option.clientSecret, this._option.clientId, this._id, syncMeta.challengeNonce)
+                    });
+                    continue;
+                }
+                if((this._option.clientId || this._option.clientSecret) && this._option.allowLegacyFallback !== true) {
+                    this.failHandshake(new Error("Server does not support protocol v2 and legacy fallback is disabled"));
+                    return;
+                }
+                this._protocolVersion = 1;
+                this._legacyMode = true;
                 this.sendAckCtrl(handler, this._id, this._option.key);
                 continue;
             }
             if(this._state == CtrlState.Connected) {
                 if(packet.cmd == CtrlCmd.NewDataHandler) {
-                    this.connectDataHandler(packet.ID, packet.sessionID);
+                    const handlerID = packet.newDataHandlerMeta?.handlerID ?? packet.ID;
+                    this.connectDataHandler(handlerID, packet.sessionID, packet.newDataHandlerMeta?.bindingToken);
                 }
                 else if(packet.cmd == CtrlCmd.SuccessOfOpenSessionAck) {
                     this.flushWaitBuffer(packet.sessionID);
@@ -329,7 +376,7 @@ class TunnelClient {
      * @param sessionID
      * @private
      */
-    private connectDataHandler(handlerID: number,  sessionID: number) : void {
+    private connectDataHandler(handlerID: number,  sessionID: number, bindingToken?: string) : void {
         let dataHandler : TunnelDataHandler = SocketHandler.connect(this.makeConnectOpt(), (handler, state, data) => {
             // Closure capture 문제 해결: 매개변수 handler를 안전하게 캐스팅하여 사용
             const tunnelDataHandler = handler as TunnelDataHandler;
@@ -338,7 +385,7 @@ class TunnelClient {
                 tunnelDataHandler.dataHandlerState = DataHandlerState.Initializing;
                 tunnelDataHandler.handlerType = HandlerType.Data;
                 this._activatedSessionDataHandlerMap.set(sessionID, tunnelDataHandler);
-                let dataStatePacket = DataStatePacket.create(this._id, handlerID, sessionID);
+                let dataStatePacket = DataStatePacket.create(this._id, handlerID, sessionID, bindingToken);
                 tunnelDataHandler.sessionID = sessionID;
                 tunnelDataHandler.dataHandlerState = DataHandlerState.ConnectingEndPoint;
                 tunnelDataHandler.sendData(dataStatePacket.toBuffer(), (handler, success /*, err*/) => {
@@ -359,6 +406,7 @@ class TunnelClient {
             dataHandler.handlerType = HandlerType.Data;
             dataHandler.sessionID = sessionID;
             dataHandler.dataHandlerState = DataHandlerState.None;
+            dataHandler.bindingToken = bindingToken;
         } else {
             logger.error(`connectDataHandler: Failed to create data handler for sessionID: ${sessionID}`);
         }
@@ -427,8 +475,8 @@ class TunnelClient {
     }
 
 
-    private sendAckCtrl(ctrlHandler: TunnelControlHandler, id: number, key : string) : void {
-        ctrlHandler.sendData(CtrlPacket.createAckCtrl(id, this._option.name, key).toBuffer(), (handler, success, err) => {
+    private sendAckCtrl(ctrlHandler: TunnelControlHandler, id: number, key : string, v2Meta?: any) : void {
+        ctrlHandler.sendData(CtrlPacket.createAckCtrl(id, this._option.name, key, v2Meta).toBuffer(), (handler, success, err) => {
             if (!success) {
                 this.failHandshake(err);
                 return;
@@ -440,7 +488,7 @@ class TunnelClient {
     }
 
     private sendClientSysinfo(ctrlHandler: TunnelControlHandler, id: number) {
-        SysMonitor.instance.sysInfo().then((value) => {
+        SystemInfoProviderRegistry.current().sysInfo().then((value) => {
             let ctrlPacket = CtrlPacket.message(id, {
                 type: 'sysinfo',
                 payload: value
@@ -466,7 +514,7 @@ class TunnelClient {
                     this.deleteDataHandler(dataHandler);
                     return true;
                 }
-                let packet = CtrlPacket.resultOfOpenSession(dataHandler.handlerID, sessionID, false)
+                let packet = CtrlPacket.resultOfOpenSession(dataHandler.handlerID, sessionID, false, {handlerID: dataHandler.handlerID})
                 this._ctrlHandler.sendData(packet.toBuffer(), (handler, success/*, err*/) => {
                     if(!success) {
                         if (dataHandler) {
@@ -498,7 +546,7 @@ class TunnelClient {
         console.log(`Endpoint client sends a close request - sessionID:${sessionID}`);
         try {
             if (this._ctrlHandler) {
-                this._ctrlHandler.sendData(CtrlPacket.closeSession(handlerID, sessionID, waitReceiveLength).toBuffer(), (handler, success/*, err*/ ) => {
+                this._ctrlHandler.sendData(CtrlPacket.closeSession(handlerID, sessionID, waitReceiveLength, {handlerID}).toBuffer(), (handler, success/*, err*/ ) => {
                     if (!success) {
                         if (dataHandler) {
                             this.deleteDataHandler(dataHandler!);
@@ -531,12 +579,55 @@ class TunnelClient {
     }
 
     private writeWaitBuffer(sessionID: number, data: Buffer) : boolean {
-        let queue = this._waitBufferQueueMap.get(sessionID);
-        if(queue) {
-            queue.pushBack(data);
+        let waitState = this._waitBufferQueueMap.get(sessionID);
+        if(waitState) {
+            if(!this.reserveWaitBufferBytes(sessionID, waitState, data.length)) {
+                return false;
+            }
+            waitState.queue.pushBack(data);
             return true;
         }
         return false;
+    }
+
+    public destroy(): void {
+        this._state = CtrlState.None;
+        this._ctrlHandler?.destroy();
+        this._ctrlHandler = undefined;
+        this.destroyAllDataHandler();
+        this._waitBufferQueueMap.clear();
+        this._waitBufferBytesTotal = 0;
+    }
+
+    private reserveWaitBufferBytes(sessionID: number, waitState: WaitBufferState, bytes: number): boolean {
+        const policy = ResourcePolicyRegistry.current();
+        const sessionLimit = waitState.limitBytes > 0 ? waitState.limitBytes : -1;
+        const overSession = sessionLimit > 0 && waitState.bytes + bytes > sessionLimit;
+        const overPool = policy.defaultPoolQueueLimitBytes > 0 && this._waitBufferBytesTotal + bytes > policy.defaultPoolQueueLimitBytes;
+        if(overSession || overPool) {
+            logger.warn(`Closing client-side session ${sessionID} due to buffered queue overflow. overSession=${overSession}, overPool=${overPool}`);
+            this.closeEndPointSession(sessionID, 0);
+            return false;
+        }
+        waitState.bytes += bytes;
+        this._waitBufferBytesTotal += bytes;
+        return true;
+    }
+
+    private releaseWaitBufferBytes(waitState: WaitBufferState, bytes: number): void {
+        waitState.bytes = Math.max(0, waitState.bytes - bytes);
+        this._waitBufferBytesTotal = Math.max(0, this._waitBufferBytesTotal - bytes);
+    }
+
+    private clearWaitBuffer(sessionID: number): void {
+        const waitState = this._waitBufferQueueMap.get(sessionID);
+        if(!waitState) {
+            return;
+        }
+        this._waitBufferQueueMap.delete(sessionID);
+        this._waitBufferBytesTotal = Math.max(0, this._waitBufferBytesTotal - waitState.bytes);
+        waitState.bytes = 0;
+        waitState.queue.clear();
     }
 
 

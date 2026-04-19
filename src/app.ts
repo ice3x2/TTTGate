@@ -1,43 +1,19 @@
 import ClientApp from "./client/ClientApp";
 import ServerApp from "./server/ServerApp";
 import Environment from "./Environment";
-import {SocketHandler} from "./util/SocketHandler";
 import Sentinel from "./Sentinel";
-import LoggerFactory from "./util/logger/LoggerFactory";
+import AppCompositionRoot from "./bootstrap/AppCompositionRoot";
+import CLI from "./util/CLI";
 
-let config = LoggerFactory.cloneConfig();
-config.logFileDir = Environment.path.logDir;
-config.appendWriteConfig({name: 'server', console: true, history: 2});
-config.appendWriteConfig({name: 'client', console: true});
-config.appendWriteConfig({name: 'boot', console: true});
-LoggerFactory.updateConfig(config);
+AppCompositionRoot.configureLogger();
 
 
 
 let app = () => {
     console.log('TTTGate v' + Environment.version.name + ' (' + Environment.version.build + ')');
     let sentinel : Sentinel = Sentinel.create(Environment.devMode);
-
-
-    let _findTypeByArgv = () : 'server' | 'client' | 'none' | 'stop' => {
-        let items : Array<string> = process.argv;
-        for(let item of items) {
-            if(item.startsWith("-")) {
-                return 'none';
-            }
-            else if(item == 'server')
-                return 'server';
-            else if(item == 'stop')
-                return 'stop';
-            else if(item == 'client')
-                return 'client';
-        }
-        return 'none';
-    }
-
-
-
-    let startType =  _findTypeByArgv();
+    let parsedCli = CLI.parseCommandLine();
+    let startType = parsedCli.mode;
 
     if(startType == 'stop') {
         console.log('Stop TTTGate processes ...')
@@ -49,23 +25,27 @@ let app = () => {
         return;
     }
     else if(startType == 'server' && !sentinel.start()) {
-        SocketHandler.fileCacheDirPath = Environment.path.serverCacheDir;
-        ServerApp.start().then(() => {
+        AppCompositionRoot.useServerCacheDir();
+        ServerApp.start(parsedCli.options).then(() => {
             console.log('server started');
         }).catch((err) => {
             console.error(err);
         });
     }
     else if(startType == 'client' && !sentinel.start()) {
-        SocketHandler.fileCacheDirPath = Environment.path.clientCacheDir;
-        ClientApp.start();
+        AppCompositionRoot.useClientCacheDir();
+        ClientApp.start(parsedCli.options);
     }
     else if(!Sentinel.isDaemonMode() && !Sentinel.hasExecuteMode()) {
         console.log('Usage: TTTGate [server|client] [options]');
         console.log('');
         console.log('    server: start server');
         console.log('       -adminPort [port]  : Admin server port');
-        console.log('       -reset             : Reset server options');
+        console.log('       -keepAlive [ms]    : Control listener TCP keepalive interval');
+        console.log('       -allowLegacyAdminHttp   : Allow legacy admin HTTP for one process run');
+        console.log('       -allowLegacyAdminRemote : Allow legacy non-loopback admin bind for one process run');
+        console.log('       -allowLegacyControlAuth : Allow legacy shared-key control authentication');
+        console.log('       -reset [true|false]: Reset persisted server state');
         console.log('       -daemon            : Background execution and process monitoring.');
         console.log('');
         console.log('    client: start client');
@@ -73,7 +53,15 @@ let app = () => {
         console.log('                           The port number is optional.         ');
         console.log('       -tls               : use tls');
         console.log('       -name [name]       : client name');
-        console.log('       -key  [key]        : authentication key');
+        console.log('       -clientId [id]     : authenticated client identifier for protocol v2');
+        console.log('       -clientSecret [s]  : protocol v2 shared secret');
+        console.log('       -displayName [n]   : display-only client name for protocol v2');
+        console.log('       -key  [key]        : legacy shared key (legacy control auth only)');
+        console.log('       -ca [pem]          : trusted CA/server certificate PEM');
+        console.log('       -serverName [name] : expected TLS server name');
+        console.log('       -allowLegacyFallback : allow legacy v1 fallback during rollback');
+        console.log('       -allowInsecureTls    : disable TLS certificate verification');
+        console.log('       -keepAlive [ms]    : Control connection TCP keepalive interval');
         console.log('       -bufferLimit [MiB] : Buffer limit size on memory.');
         console.log('       -save              : Save options to file');
         console.log('       -daemon            : Background execution and process monitoring.');
@@ -87,4 +75,3 @@ let app = () => {
 
 
 app();
-

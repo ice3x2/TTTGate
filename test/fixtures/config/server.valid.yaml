@@ -1,0 +1,29 @@
+key: srv-fixture-legacy-only
+adminPort: 9300
+adminBindHost: 127.0.0.1
+adminTls: true
+port: 9126
+tls: false
+controlProtocolMode: mixed
+allowLegacyControlAuth: false
+trustedClients:
+  - clientId: client-a
+    clientSecret: fixture-secret
+    displayName: Client A
+keepAlive: 10000
+globalMemCacheLimit: 128
+tunnelingOptions:
+  - forwardPort: 18080
+    protocol: http
+    destinationAddress: 127.0.0.1
+    destinationPort: 8080
+    allowedClientIds:
+      - client-a
+    tls: false
+    keepAlive: -1
+    httpOption:
+      rewriteHostInTextBody: false
+      replaceAccessControlAllowOrigin: false
+      customRequestHeaders: []
+      customResponseHeaders: []
+      bodyRewriteRules: []

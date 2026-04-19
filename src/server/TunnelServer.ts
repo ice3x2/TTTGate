@@ -3,6 +3,15 @@ import {ServerOption, TCPServer} from "../util/TCPServer";
 import SocketState from "../util/SocketState";
 import {CtrlCmd, CtrlPacket, CtrlPacketStreamer, OpenOpt} from "../commons/CtrlPacket";
 import {Buffer} from "buffer";
+import {
+    buildHandshakeProof,
+    CONTROL_PROTOCOL_V1,
+    CONTROL_PROTOCOL_V2,
+    ControlProtocolMode,
+    createOpaqueToken,
+    DEFAULT_PROTOCOL_V2_CAPABILITIES,
+    SyncCtrlAckMeta
+} from "../commons/ProtocolV2";
 import {CertInfo} from "./CertificationStore";
 import {ClientHandlerPool} from "./ClientHandlerPool";
 import {clearInterval} from "timers";
@@ -15,6 +24,8 @@ import {
     TunnelHandler
 } from "../types/TunnelHandler";
 import DataStatePacket from "../commons/DataStatePacket";
+import {IdentityRegistry} from "./IdentityRegistry";
+import {TunnelHandshakePolicyRegistry} from "./TunnelHandshakePolicy";
 import LoggerFactory  from "../util/logger/LoggerFactory";
 import {SysInfo} from "../commons/SysMonitor";
 const logger = LoggerFactory.getLogger('server', 'TunnelServer');
@@ -31,26 +42,39 @@ interface OnSessionCloseCallback {
 interface ClientStatus {
     id: number;
     name: string,
+    clientId: string,
+    protocolVersion: number,
+    controlProtocolMode: ControlProtocolMode,
+    legacy: boolean,
     uptime: number;
     address: string;
     activeSessionCount: number;
 }
+
+type PendingControlHandshake = {
+    challengeNonce: string;
+    protocolVersion: number;
+    capabilities: string[];
+};
 
 
 const HANDLER_TYPE_BUNDLE_KEY = 'T';
 
 class TunnelServer {
 
-    private readonly _serverOption : {port: number, tls: boolean, key: string};
+    private readonly _serverOption : {port: number, tls: boolean, key: string, controlProtocolMode: ControlProtocolMode, allowLegacyControlAuth: boolean};
     private _clientHandlerPoolMap : Map<number, ClientHandlerPool> = new Map<number, ClientHandlerPool>();
     private _sessionIDAndCtrlIDMap : Map<number, number> = new Map<number, number>();
+    private _pendingControlHandshakeMap: Map<number, PendingControlHandshake> = new Map<number, PendingControlHandshake>();
 
     private _tunnelServer : TCPServer;
     private readonly _key : string;
+    private readonly _identityRegistry: IdentityRegistry;
     private isRunning = false;
 
     private _heartbeatInterval : NodeJS.Timeout | undefined;
     private _authTimeouts : Set<NodeJS.Timeout> = new Set<NodeJS.Timeout>();
+    private _unauthenticatedHandlerIds: Set<number> = new Set<number>();
     private _nextSelectIdx = 0;
     private _onSessionCloseCallback? : OnSessionCloseCallback;
     private _onReceiveDataCallback? : OnReceiveDataCallback;
@@ -65,10 +89,18 @@ class TunnelServer {
     }
 
 
-    private constructor(option:{port: number, tls: boolean, key: string, keepAlive: number}, certInfo: CertInfo) {
+    private constructor(option:{port: number, tls: boolean, key: string, keepAlive: number, controlProtocolMode: ControlProtocolMode, allowLegacyControlAuth: boolean, trustedClients?: Array<{clientId: string, clientSecret: string, displayName?: string}>}, certInfo: CertInfo) {
         this._serverOption = option;
         this._key = option.key;
-        let tcpServerOption : ServerOption = {port: option.port, tls: option.tls, key: certInfo.key.value, cert: certInfo.cert.value, ca: (certInfo.ca.value == '') ? undefined : certInfo.ca.value};
+        this._identityRegistry = new IdentityRegistry(option.trustedClients ?? []);
+        let tcpServerOption : ServerOption = {
+            port: option.port,
+            tls: option.tls,
+            key: certInfo.key.value,
+            cert: certInfo.cert.value,
+            ca: (certInfo.ca.value == '') ? undefined : certInfo.ca.value,
+            keepAlive: option.keepAlive
+        };
         this._tunnelServer = TCPServer.create(tcpServerOption);
     }
 
@@ -76,7 +108,7 @@ class TunnelServer {
 
 
 
-    public static create(option:{port: number, tls: boolean, key: string, keepAlive: number}, certInfo: CertInfo) : TunnelServer {
+    public static create(option:{port: number, tls: boolean, key: string, keepAlive: number, controlProtocolMode: ControlProtocolMode, allowLegacyControlAuth: boolean, trustedClients?: Array<{clientId: string, clientSecret: string, displayName?: string}>}, certInfo: CertInfo) : TunnelServer {
         return new TunnelServer(option, certInfo);
     }
 
@@ -123,6 +155,10 @@ class TunnelServer {
                 {
                     id: ctrlID,
                     name: handlerPool.name,
+                    clientId: handlerPool.clientId,
+                    protocolVersion: handlerPool.protocolVersion,
+                    controlProtocolMode: this._serverOption.controlProtocolMode,
+                    legacy: handlerPool.legacyMode,
                     uptime: Date.now() - handlerPool.createTime,
                     address: handlerPool.address,
                     activeSessionCount: handlerPool.activatedSessionCount,
@@ -151,6 +187,9 @@ class TunnelServer {
                 handlerPool.getAllSessionIDs().forEach((id) => { this._onSessionCloseCallback?.(id, 0) });
                 handlerPool.end();
             });
+            this._unauthenticatedHandlerIds.clear();
+            this._pendingControlHandshakeMap.clear();
+            this._identityRegistry.clear();
             this.stopClientCheckInterval();
             // noinspection JSUnusedLocalSymbols
             this._tunnelServer.stop((err) => {
@@ -189,11 +228,11 @@ class TunnelServer {
      * @param opt 연결할 End Point 서버에 대한 정보.
      * @param allowClientNames 허용할 클라이언트 이름 목록. 목록에 포함된 클라이언트만 세션을 연다. 목록이 없으면 모든 클라이언트를 허용한다.
      */
-    public openSession(sessionID: number, opt : OpenOpt, allowClientNames?: Array<string>) : boolean {
+    public openSession(sessionID: number, opt : OpenOpt, allowClientNames?: Array<string>, allowClientIds?: Array<string>) : boolean {
         if(!this.available()) {
             return false;
         }
-        let handlerPool = this.getNextHandlerPool(allowClientNames);
+        let handlerPool = this.getNextHandlerPool(allowClientNames, allowClientIds);
         if(handlerPool == null) {
             return false;
         }
@@ -209,12 +248,18 @@ class TunnelServer {
 
 
 
-    private getNextHandlerPool(allowClientNames?: Array<string>) : ClientHandlerPool | null {
+    private getNextHandlerPool(allowClientNames?: Array<string>, allowClientIds?: Array<string>) : ClientHandlerPool | null {
         if(this._clientHandlerPoolMap.size == 0) {
             return null;
         }
         let ids: Array<number> = [];
-        if(!allowClientNames || allowClientNames.length == 0) {
+        if(allowClientIds && allowClientIds.length > 0) {
+            this._clientHandlerPoolMap.forEach((handlerPool, ctrlID) => {
+                if(!handlerPool.legacyMode && allowClientIds.includes(handlerPool.clientId)) {
+                    ids.push(ctrlID);
+                }
+            });
+        } else if(!allowClientNames || allowClientNames.length == 0) {
            ids =  Array.from(this._clientHandlerPoolMap.keys());
         }  else {
             this._clientHandlerPoolMap.forEach((handlerPool, ctrlID) => {
@@ -222,6 +267,9 @@ class TunnelServer {
                     ids.push(ctrlID);
                 }
             });
+        }
+        if(ids.length == 0) {
+            return null;
         }
         if(ids.length == 1) {
             const pool = this._clientHandlerPoolMap.get(ids[0]);
@@ -258,7 +306,16 @@ class TunnelServer {
 
 
     private onClientHandlerBound = (handler: TunnelHandler) : void => {
+        const handshakePolicy = TunnelHandshakePolicyRegistry.current();
+        if(this._unauthenticatedHandlerIds.size >= handshakePolicy.maxUnauthenticatedConnections) {
+            logger.warn(`Rejecting unauthenticated connection because the cap is reached. handler=${handler.id}`);
+            handler.destroy();
+            return;
+        }
+        this._unauthenticatedHandlerIds.add(handler.id);
+        handler.setTimeout(handshakePolicy.timeoutMs);
         handler.handlerType = HandlerType.Unknown;
+        (handler as TunnelControlHandler).controlProtocolMode = this._serverOption.controlProtocolMode;
         handler.setBundle(HANDLER_TYPE_BUNDLE_KEY, HandlerType.Unknown);
         logger.info(`Bound - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
     }
@@ -269,7 +326,14 @@ class TunnelServer {
             logger.error('sendSyncCtrlAck: ctrlHandler is null');
             return;
         }
-        let sendBuffer = CtrlPacket.createSyncCtrlAck(ctrlHandler.id).toBuffer();
+        const handshakeMeta: SyncCtrlAckMeta = {
+            protocolVersion: CONTROL_PROTOCOL_V2,
+            capabilities: DEFAULT_PROTOCOL_V2_CAPABILITIES,
+            challengeNonce: this.ensurePendingControlHandshake(ctrlHandler.id).challengeNonce,
+            serverMode: this._serverOption.controlProtocolMode,
+            controlID: ctrlHandler.id
+        };
+        let sendBuffer = CtrlPacket.createSyncCtrlAck(ctrlHandler.id, handshakeMeta).toBuffer();
         ctrlHandler.sendData(sendBuffer, (handler_, success, err) => {
             if(!success) {
                 logger.error(`sendSyncAndSyncSyncCmd Fail - id:${ctrlHandler.id}, remote:(${ctrlHandler.socket.remoteAddress})${ctrlHandler.socket.remotePort}, ${err}`);
@@ -282,8 +346,12 @@ class TunnelServer {
         });
     }
 
-    private promoteToCtrlHandler(handler: TunnelControlHandler, clientName: string) : void {
+    private promoteToCtrlHandler(handler: TunnelControlHandler, identity: {clientId: string, displayName: string, protocolVersion: number, capabilities: Array<string>, legacy: boolean}) : void {
         handler.ctrlState = CtrlState.Connected;
+        handler.clientId = identity.clientId;
+        handler.displayName = identity.displayName;
+        handler.protocolVersion = identity.protocolVersion;
+        handler.capabilities = [...identity.capabilities];
         let ctrlHandlerPool = ClientHandlerPool.create(handler.id, handler);
         ctrlHandlerPool.onSessionCloseCallback = (sessionID: number, endLength:  number) => {
             this._onSessionCloseCallback?.(sessionID, endLength);
@@ -291,8 +359,9 @@ class TunnelServer {
         ctrlHandlerPool.onReceiveDataCallback = (sessionID: number, data: Buffer) => {
             this._onReceiveDataCallback?.(sessionID, data);
         }
-        ctrlHandlerPool.name = clientName;
+        ctrlHandlerPool.setAuthenticatedIdentity(identity);
         this._clientHandlerPoolMap.set(handler.id, ctrlHandlerPool);
+        this._pendingControlHandshakeMap.delete(handler.id);
     }
 
 
@@ -343,10 +412,11 @@ class TunnelServer {
                 let result = DataStatePacket.fromBuffer(data);
                 if (result.packet) {
                     handler.dataHandlerState = DataHandlerState.Initializing;
-                    handler.leftOverBuffer = undefined;
+                    handler.leftOverBuffer = result.remainBuffer;
                     handler.ctrlID = result.packet.ctrlID;
                     handler.handlerID = result.packet.handlerID;
                     handler.sessionID = result.packet.firstSessionID;
+                    handler.bindingToken = result.packet.bindingToken;
                     let clientHandlerPool = this._clientHandlerPoolMap.get(handler.ctrlID);
                     if (!clientHandlerPool) {
                         logger.error(`onHandlerEvent - Not Found ClientHandlerPool. id: ${handler.ctrlID}`);
@@ -354,6 +424,7 @@ class TunnelServer {
                         return;
                     }
                     clientHandlerPool.putNewDataHandler(handler);
+                    this.markHandlerAuthenticated(handler);
 
                 } else {
                     handler.leftOverBuffer = result.remainBuffer;
@@ -477,16 +548,79 @@ class TunnelServer {
             ctrlHandler.handlerType = HandlerType.Control;
             this.sendSyncCtrlAck(ctrlHandler);
         } else if(packet.cmd == CtrlCmd.AckCtrl) {
+            const ctrlHandler = handler as TunnelControlHandler;
+            if(ctrlHandler.ctrlState !== CtrlState.Syncing) {
+                this.rejectHandshake(ctrlHandler, "Invalid control handshake state or packet ID");
+                return;
+            }
+            const ackV2Meta = packet.ackCtrlV2Meta;
+            if(ackV2Meta) {
+                if(this._serverOption.controlProtocolMode === "legacy") {
+                    this.rejectHandshake(ctrlHandler, "Protocol v2 is disabled in legacy mode");
+                    return;
+                }
+                if(this._serverOption.controlProtocolMode === "mtls-strict" && !ctrlHandler.isSecure()) {
+                    this.rejectHandshake(ctrlHandler, "Strict mode requires verified TLS");
+                    return;
+                }
+                if(!packet.clientName || !ackV2Meta.clientId || !ackV2Meta.proof) {
+                    this.rejectHandshake(ctrlHandler, "AckCtrl v2 packet is missing mandatory identity fields");
+                    return;
+                }
+                if((ackV2Meta.controlID ?? packet.ID) !== ctrlHandler.id) {
+                    this.rejectHandshake(ctrlHandler, "AckCtrl v2 control ID mismatch");
+                    return;
+                }
+                const trustedClient = this._identityRegistry.findTrustedClient(ackV2Meta.clientId);
+                const pendingHandshake = this._pendingControlHandshakeMap.get(ctrlHandler.id);
+                if(!trustedClient || !pendingHandshake) {
+                    this.rejectHandshake(ctrlHandler, "Unknown client identity or missing handshake challenge");
+                    return;
+                }
+                const expectedProof = buildHandshakeProof(trustedClient.clientSecret, ackV2Meta.clientId, ctrlHandler.id, pendingHandshake.challengeNonce);
+                if(expectedProof !== ackV2Meta.proof) {
+                    this.rejectHandshake(ctrlHandler, "Proof-of-possession validation failed");
+                    return;
+                }
+                this.markHandlerAuthenticated(ctrlHandler);
+                this.promoteToCtrlHandler(ctrlHandler, {
+                    clientId: ackV2Meta.clientId,
+                    displayName: ackV2Meta.displayName || packet.clientName || trustedClient.displayName || ackV2Meta.clientId,
+                    protocolVersion: ackV2Meta.protocolVersion || CONTROL_PROTOCOL_V2,
+                    capabilities: ackV2Meta.capabilities ?? pendingHandshake.capabilities,
+                    legacy: false
+                });
+                return;
+            }
+            if(packet.ID !== ctrlHandler.id) {
+                this.rejectHandshake(ctrlHandler, "Invalid control handshake state or packet ID");
+                return;
+            }
+            if(!this._serverOption.allowLegacyControlAuth) {
+                this.rejectHandshake(ctrlHandler, "Legacy control authentication requires explicit opt-in");
+                return;
+            }
+            if(this._serverOption.controlProtocolMode === "mtls-strict") {
+                this.rejectHandshake(ctrlHandler, "Legacy control handshake is not allowed in strict mode");
+                return;
+            }
             if(packet.ackKey != this._key) {
-                this.notMatchedAuthKey(handler as TunnelControlHandler);
+                this.notMatchedAuthKey(ctrlHandler);
                 return;
             }
             if (!packet.clientName) {
                 logger.error('AckCtrl packet missing clientName');
-                this.notMatchedAuthKey(handler as TunnelControlHandler);
+                this.notMatchedAuthKey(ctrlHandler);
                 return;
             }
-            this.promoteToCtrlHandler(handler as TunnelControlHandler, packet.clientName);
+            this.markHandlerAuthenticated(ctrlHandler);
+            this.promoteToCtrlHandler(ctrlHandler, {
+                clientId: `legacy:${packet.clientName}`,
+                displayName: packet.clientName,
+                protocolVersion: CONTROL_PROTOCOL_V1,
+                capabilities: [],
+                legacy: true
+            });
         } else {
             let ctrlID = handler.id;
             let clientHandlerPool = this._clientHandlerPoolMap.get(ctrlID);
@@ -504,6 +638,7 @@ class TunnelServer {
         let packet = CtrlPacket.message(handler.id,{type: 'log', payload: '<Fatal> Authkey is not matched.'});
         handler.sendData(packet.toBuffer());
         this._clientHandlerPoolMap.delete(handler.id);
+        this._pendingControlHandshakeMap.delete(handler.id);
         const timeoutId = setTimeout(() => {
             handler.destroy();
             this._authTimeouts.delete(timeoutId);
@@ -527,6 +662,7 @@ class TunnelServer {
         if(SocketState.Receive == state) {
             this.onReceiveAllHandler(handler, data);
         } else {
+            this.clearUnauthenticatedHandler(handler.id);
             let handlerType = (handler as TunnelHandler).handlerType;
             if(handlerType == HandlerType.Unknown || handlerType == undefined) {
                 return;
@@ -588,6 +724,41 @@ class TunnelServer {
 
         this._clientHandlerPoolMap.delete(ctrlID);
         handlerPool.end();
+    }
+
+    private markHandlerAuthenticated(handler: TunnelHandler): void {
+        this.clearUnauthenticatedHandler(handler.id);
+        handler.clearTimeout();
+    }
+
+    private clearUnauthenticatedHandler(handlerID: number): void {
+        this._unauthenticatedHandlerIds.delete(handlerID);
+    }
+
+    private ensurePendingControlHandshake(handlerID: number): PendingControlHandshake {
+        let pendingHandshake = this._pendingControlHandshakeMap.get(handlerID);
+        if(pendingHandshake) {
+            return pendingHandshake;
+        }
+        pendingHandshake = {
+            challengeNonce: createOpaqueToken(24),
+            protocolVersion: CONTROL_PROTOCOL_V2,
+            capabilities: DEFAULT_PROTOCOL_V2_CAPABILITIES
+        };
+        this._pendingControlHandshakeMap.set(handlerID, pendingHandshake);
+        return pendingHandshake;
+    }
+
+    private rejectHandshake(handler: TunnelControlHandler, reason: string): void {
+        logger.error(`${reason}. id: ${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
+        const packet = CtrlPacket.message(handler.id, {type: "log", payload: `<Fatal> ${reason}`});
+        handler.sendData(packet.toBuffer());
+        this._pendingControlHandshakeMap.delete(handler.id);
+        const timeoutId = setTimeout(() => {
+            handler.destroy();
+            this._authTimeouts.delete(timeoutId);
+        }, 250);
+        this._authTimeouts.add(timeoutId);
     }
 
     public getClientSysInfo(clientID: number) : SysInfo | undefined {

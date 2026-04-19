@@ -1,0 +1,17 @@
+# Copy to config/client.yaml before first start.
+# Secure-by-default clients should use protocol v2 identity and explicit TLS trust.
+
+key: "legacy-shared-key-only-if-server-allows-legacy-control-auth"
+host: "example.com"
+port: 9126
+tls: true
+name: "client-a"
+clientId: "client-a"
+clientSecret: "replace-with-the-same-secret-configured-on-the-server"
+displayName: "Client A"
+ca: "/absolute/path/to/server-ca.pem"
+serverName: "example.com"
+allowLegacyFallback: false
+allowInsecureTls: false
+globalMemCacheLimit: 128
+keepAlive: 0

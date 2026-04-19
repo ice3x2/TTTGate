@@ -2,6 +2,7 @@ import BufferWriter from "../util/BufferWriter";
 import BufferReader from "../util/BufferReader";
 import ConnectOpt from "../util/ConnectOpt";
 import Dequeue from "../util/Dequeue";
+import {AckCtrlV2Meta, HandlerWideIdMeta, NewDataHandlerMeta, SyncCtrlAckMeta} from "./ProtocolV2";
 
 
 enum ParsedState {
@@ -61,7 +62,7 @@ class CtrlPacket {
     private _data: Buffer = Buffer.alloc(0);
     private _ID: number = 0;
     private _sessionID: number = 0;
-    private _ackCtrlOpt: {name: string, key: string} | undefined = undefined;
+    private _ackCtrlOpt: {name: string, key: string, v2?: AckCtrlV2Meta} | undefined = undefined;
 
     private _openOpt : OpenOpt | undefined = undefined;
 
@@ -80,10 +81,13 @@ class CtrlPacket {
         return packet;
     }
 
-    public static createSyncCtrlAck(id: number) : CtrlPacket {
+    public static createSyncCtrlAck(id: number, meta?: SyncCtrlAckMeta) : CtrlPacket {
         let packet = new CtrlPacket();
         packet._cmd = CtrlCmd.SyncCtrlAck;
         packet._ID = id;
+        if(meta) {
+            packet._data = Buffer.from(JSON.stringify(meta), "utf-8");
+        }
         return packet;
     }
 
@@ -105,22 +109,28 @@ class CtrlPacket {
 
 
 
-    public static createAckCtrl(id: number,name: string, key: string) : CtrlPacket {
+    public static createAckCtrl(id: number,name: string, key: string, v2?: AckCtrlV2Meta) : CtrlPacket {
         let packet = new CtrlPacket();
         packet._cmd = CtrlCmd.AckCtrl;
         packet._ID = id;
-        packet._ackCtrlOpt = {name, key};
+        packet._ackCtrlOpt = {name, key, v2};
         let writer = new BufferWriter();
         writer.writeString(name);
         writer.writeString(key);
+        if(v2) {
+            writer.writeString(JSON.stringify(v2));
+        }
         packet._data = writer.toBuffer();
         return packet;
     }
 
-    public static closeSession(handlerID: number, sessionID: number, waitReceiveLength: number) : CtrlPacket {
-        let packet = CtrlPacket.createNoDataPacket(CtrlCmd.CloseSession, handlerID, sessionID);
+    public static closeSession(handlerID: number, sessionID: number, waitReceiveLength: number, meta?: HandlerWideIdMeta) : CtrlPacket {
+        let packet = CtrlPacket.createNoDataPacket(CtrlCmd.CloseSession, handlerID, sessionID, meta);
         packet._data = Buffer.alloc(4);
         packet._data.writeUInt32BE(waitReceiveLength);
+        if(meta) {
+            packet._data = Buffer.concat([packet._data, Buffer.from(JSON.stringify(meta), "utf-8")]);
+        }
         return packet;
     }
 
@@ -132,30 +142,33 @@ class CtrlPacket {
      * @param sessionID 세션 핸들러 ID
      * @param opt
      */
-    public static newDataHandler(ctrlID: number, sessionID: number) : CtrlPacket {
+    public static newDataHandler(ctrlID: number, sessionID: number, meta?: NewDataHandlerMeta) : CtrlPacket {
         let packet = new CtrlPacket();
         packet._cmd = CtrlCmd.NewDataHandler;
         packet._ID = ctrlID;
         packet._sessionID = sessionID;
+        if(meta) {
+            packet._data = Buffer.from(JSON.stringify(meta), "utf-8");
+        }
         return packet;
     }
 
 
-    public static resultOfOpenSession(handlerID: number, sessionID: number, isSuccess: boolean) : CtrlPacket {
-        return CtrlPacket.createNoDataPacket(!isSuccess ? CtrlCmd.FailOfOpenSession : CtrlCmd.SuccessOfOpenSession, handlerID, sessionID);
+    public static resultOfOpenSession(handlerID: number, sessionID: number, isSuccess: boolean, meta?: HandlerWideIdMeta) : CtrlPacket {
+        return CtrlPacket.createNoDataPacket(!isSuccess ? CtrlCmd.FailOfOpenSession : CtrlCmd.SuccessOfOpenSession, handlerID, sessionID, meta);
     }
 
-    public static resultOfOpenSessionAck(handlerID: number, sessionID: number) : CtrlPacket {
-        return CtrlPacket.createNoDataPacket(CtrlCmd.SuccessOfOpenSessionAck, handlerID, sessionID);
+    public static resultOfOpenSessionAck(handlerID: number, sessionID: number, meta?: HandlerWideIdMeta) : CtrlPacket {
+        return CtrlPacket.createNoDataPacket(CtrlCmd.SuccessOfOpenSessionAck, handlerID, sessionID, meta);
     }
 
 
-    private static createNoDataPacket(cmd: CtrlCmd, ctrlID: number, sessionID: number) : CtrlPacket {
+    private static createNoDataPacket(cmd: CtrlCmd, ctrlID: number, sessionID: number, meta?: HandlerWideIdMeta) : CtrlPacket {
         let packet = new CtrlPacket();
         packet._cmd = cmd;
         packet._ID = ctrlID;
         packet._sessionID = sessionID;
-        packet._data = CtrlPacket.EMPTY_BUFFER;
+        packet._data = meta ? Buffer.from(JSON.stringify(meta), "utf-8") : CtrlPacket.EMPTY_BUFFER;
         return packet;
     }
 
@@ -187,6 +200,44 @@ class CtrlPacket {
 
     public get clientName() : string | undefined {
         return this._ackCtrlOpt?.name;
+    }
+
+    public get ackCtrlV2Meta() : AckCtrlV2Meta | undefined {
+        return this._ackCtrlOpt?.v2;
+    }
+
+    public get syncCtrlAckMeta() : SyncCtrlAckMeta | undefined {
+        if(this._cmd != CtrlCmd.SyncCtrlAck || this._data.length == 0) {
+            return undefined;
+        }
+        return JSON.parse(this._data.toString("utf-8")) as SyncCtrlAckMeta;
+    }
+
+    public get newDataHandlerMeta() : NewDataHandlerMeta | undefined {
+        if(this._cmd != CtrlCmd.NewDataHandler || this._data.length == 0) {
+            return undefined;
+        }
+        return JSON.parse(this._data.toString("utf-8")) as NewDataHandlerMeta;
+    }
+
+    public get handlerWideIdMeta() : HandlerWideIdMeta | undefined {
+        if(
+            this._cmd == CtrlCmd.FailOfOpenSession
+            || this._cmd == CtrlCmd.SuccessOfOpenSession
+            || this._cmd == CtrlCmd.SuccessOfOpenSessionAck
+        ) {
+            if(this._data.length == 0) {
+                return undefined;
+            }
+            return JSON.parse(this._data.toString("utf-8")) as HandlerWideIdMeta;
+        }
+        if(this._cmd == CtrlCmd.CloseSession) {
+            if(this._data.length <= 4) {
+                return undefined;
+            }
+            return JSON.parse(this._data.subarray(4).toString("utf-8")) as HandlerWideIdMeta;
+        }
+        return undefined;
     }
 
 
@@ -258,10 +309,18 @@ class CtrlPacket {
         return {host, port,bufferLimit, tls: tls};
     }
 
-    private static parseAckCtrlData(data: Buffer) :  {name: string, key: string}  {
+    private static parseAckCtrlData(data: Buffer) :  {name: string, key: string, v2?: AckCtrlV2Meta}  {
         let reader = new BufferReader(data);
         let name = reader.readString();
         let key = reader.readString();
+        if(reader.readable() > 0) {
+            try {
+                let meta = JSON.parse(reader.readString()) as AckCtrlV2Meta;
+                return {name, key, v2: meta};
+            } catch {
+                return {name, key};
+            }
+        }
         return {name, key};
     }
 
@@ -270,7 +329,7 @@ class CtrlPacket {
         let writer = new BufferWriter();
         writer.writeBuffer(CtrlPacket.PREFIX);
         writer.writeUInt8(this._cmd);
-        writer.writeUInt16(this._ID);
+        writer.writeUInt16(this._ID & 0xffff);
         writer.writeUInt32(this._sessionID);
         writer.writeUInt32(this._data.length);
         writer.writeBuffer(this._data);

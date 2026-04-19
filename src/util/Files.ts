@@ -1,7 +1,18 @@
 import File from "./File";
 import fs from 'fs';
+import Path from "path";
 
 class Files {
+
+    private static stringify(data: any): string {
+        if(typeof(data) == 'object') {
+            return JSON.stringify(data);
+        }
+        if(typeof(data) == 'string') {
+            return data;
+        }
+        return data + '';
+    }
 
     /**
      *
@@ -37,15 +48,7 @@ class Files {
 
 
     static async write(file: File,data: any): Promise<void> {
-
-        let strData = '';
-        if(typeof(data) == 'object') {
-            strData = JSON.stringify(strData);
-        }
-        else if(typeof(data) == 'string') {
-            strData = data;
-        }
-        else strData = data + '';
+        const strData = Files.stringify(data);
         return new Promise((rev, rej) => {
             fs.writeFile(file.toString(), strData,{encoding: 'utf-8'}, (err) => {
                 if(err) rej(err);
@@ -56,20 +59,51 @@ class Files {
     }
 
     static writeSync(file: File,data: any) {
-        let strData = '';
-        if(typeof(data) == 'object') {
-            strData = JSON.stringify(strData);
-        }
-        else if(typeof(data) == 'string') {
-            strData = data;
-        }
-        else strData = data + '';
+        const strData = Files.stringify(data);
         let dir = file.getParentFile();
         if(!dir.isDirectory()) {
             dir.mkdirs();
         }
 
         fs.writeFileSync(file.toString(), strData,{encoding: 'utf-8'});
+    }
+
+    static async writeAtomic(file: File, data: any): Promise<void> {
+        const dir = file.getParentFile();
+        if(!dir.isDirectory()) {
+            dir.mkdirs();
+        }
+        const tempFile = new File(dir.toString(), `.${file.getName()}.${process.pid}.${Date.now()}.tmp`);
+        const strData = Files.stringify(data);
+        await new Promise<void>((resolve, reject) => {
+            fs.writeFile(tempFile.toString(), strData, {encoding: 'utf-8'}, (err) => {
+                if(err) {
+                    reject(err);
+                    return;
+                }
+                resolve();
+            });
+        });
+        await new Promise<void>((resolve, reject) => {
+            fs.rename(tempFile.toString(), file.toString(), (err) => {
+                if(err) {
+                    reject(err);
+                    return;
+                }
+                resolve();
+            });
+        });
+    }
+
+    static writeAtomicSync(file: File, data: any): void {
+        const dir = file.getParentFile();
+        if(!dir.isDirectory()) {
+            dir.mkdirs();
+        }
+        const tempPath = Path.join(dir.toString(), `.${file.getName()}.${process.pid}.${Date.now()}.tmp`);
+        const strData = Files.stringify(data);
+        fs.writeFileSync(tempPath, strData, {encoding: 'utf-8'});
+        fs.renameSync(tempPath, file.toString());
     }
 
 

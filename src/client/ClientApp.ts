@@ -6,8 +6,10 @@ import Environment from "../Environment";
 import YAML from "yaml";
 import Files from "../util/Files";
 import CLI from "../util/CLI";
-import {SocketHandler} from "../util/SocketHandler";
 import LoggerFactory  from "../util/logger/LoggerFactory";
+import AppCompositionRoot from "../bootstrap/AppCompositionRoot";
+import {ClockRngProvider} from "../util/ClockRng";
+import {redactSecrets} from "../util/SecretRedactor";
 const logger = LoggerFactory.getLogger('client', 'ClientApp');
 
 const CLIENT_OPTION_FILE_NAME = "client.yaml";
@@ -16,7 +18,7 @@ const CLIENT_OPTION_FILE_NAME = "client.yaml";
 
 let _printClientOptions = (clientOption: ClientOption) : void => {
     let options = '';
-    let obj = clientOption as any;
+    let obj = redactSecrets(clientOption) as any;
     for(let key in obj) {
         options += `\t\t\t  -${key}: ${obj[key]} \n`;
     }
@@ -52,19 +54,21 @@ let normalizationClientOption = (clientOption: ClientOption) : ClientOption => {
         clientOption.tls = false;
     }
     if(clientOption.name == undefined) {
-        clientOption.name = TunnelNames[Math.floor(Math.random() * TunnelNames.length)];
+        clientOption.name = TunnelNames[Math.floor(ClockRngProvider.current().random() * TunnelNames.length)];
     }
     return clientOption;
 }
 
-let _loadClientOption = () : ClientOption => {
+let _loadClientOption = (cliOptions?: {[key: string]: string}) : ClientOption => {
 
     let clientOption : ClientOption = {
         key: DEFAULT_KEY,
         host: "localhost",
         port: 9126,
         tls: false,
-        name: TunnelNames[Math.floor(Math.random() * TunnelNames.length)],
+        name: TunnelNames[Math.floor(ClockRngProvider.current().random() * TunnelNames.length)],
+        allowLegacyFallback: false,
+        allowInsecureTls: false,
         globalMemCacheLimit: 128,
         keepAlive: 0
     }
@@ -73,7 +77,7 @@ let _loadClientOption = () : ClientOption => {
         clientOption = normalizationClientOption(savedOption);
     }
 
-    let argv = CLI.readSimpleOptions();
+    let argv = cliOptions ?? CLI.parseCommandLine().options;
     if(argv["key"]) {
         clientOption.key = argv["key"];
     }
@@ -109,6 +113,33 @@ let _loadClientOption = () : ClientOption => {
     if(argv["name"]) {
         clientOption.name = argv["name"];
     }
+    if(argv["clientId"]) {
+        clientOption.clientId = argv["clientId"];
+    }
+    if(argv["clientSecret"]) {
+        clientOption.clientSecret = argv["clientSecret"];
+    }
+    if(argv["displayName"]) {
+        clientOption.displayName = argv["displayName"];
+    }
+    if(argv["serverName"]) {
+        clientOption.serverName = argv["serverName"];
+    }
+    if(argv["ca"]) {
+        clientOption.ca = argv["ca"];
+    }
+    if(argv["cert"]) {
+        clientOption.cert = argv["cert"];
+    }
+    if(argv["privateKey"]) {
+        clientOption.privateKey = argv["privateKey"];
+    }
+    if(argv["allowLegacyFallback"] != undefined && (argv["allowLegacyFallback"] == "" || argv["allowLegacyFallback"].toLowerCase() != "false")) {
+        clientOption.allowLegacyFallback = true;
+    }
+    if(argv["allowInsecureTls"] != undefined && (argv["allowInsecureTls"] == "" || argv["allowInsecureTls"].toLowerCase() != "false")) {
+        clientOption.allowInsecureTls = true;
+    }
     if(argv["bufferLimit"]) {
         clientOption.globalMemCacheLimit = Math.floor(parseInt(argv["bufferLimit"]));
         if(isNaN(clientOption.globalMemCacheLimit)){
@@ -128,16 +159,16 @@ let _loadClientOption = () : ClientOption => {
         Files.writeSync(file, yamlString);
     }
     _printClientOptions(clientOption);
-    SocketHandler.GlobalMemCacheLimit = clientOption.globalMemCacheLimit * 1024 * 1024;
+    AppCompositionRoot.applyGlobalMemLimitMiB(clientOption.globalMemCacheLimit);
     return clientOption;
 }
 
 
-let ClientApp : { start() : void} = {
+let ClientApp : { start(options?: {[key: string]: string}) : void} = {
 
-    start() {
-        SocketHandler.GlobalMemCacheLimit = 128 * 1024 * 1024;
-        let tttClient = TTTClient.create(_loadClientOption());
+    start(options?: {[key: string]: string}) {
+        AppCompositionRoot.applyGlobalMemLimitMiB(128);
+        let tttClient = TTTClient.create(_loadClientOption(options));
 
         tttClient.start();
 
@@ -147,5 +178,3 @@ let ClientApp : { start() : void} = {
 
 
 export default ClientApp;
-
-

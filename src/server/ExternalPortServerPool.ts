@@ -238,12 +238,14 @@ class ExternalPortServerPool {
     }
 
     private closeIfSatisfiedLength(endPointClient: EndpointHandler | EndpointHttpHandler, force: boolean = false) {
-        if((endPointClient.closeWait && endPointClient.endLength! <= endPointClient.sendLength) || force) {
-            endPointClient.onSocketEvent = function () {}
+        const ready = endPointClient.closeWait && (endPointClient.endLength ?? 0) <= endPointClient.sendLength && endPointClient.isOutputDrained;
+        if((ready || force) && !endPointClient.closeInitiated) {
+            endPointClient.closeInitiated = true;
+            if(force) {
+                endPointClient.destroy();
+                return;
+            }
             endPointClient.end_();
-            logger.info(`End client - sessionID:${endPointClient.sessionID}, left connections: ${this._handlerMap.size}`)
-            this._handlerMap.delete(endPointClient.sessionID!);
-            this._onTerminateSessionCallback?.(endPointClient.sessionID!)
         }
     }
 
@@ -292,8 +294,13 @@ class ExternalPortServerPool {
                 logger.error(`Error - port: ${server.port}`,error);
             }
             else logger.info(`End - port: ${server.port}`);
-            let destPort = server.getBundle(OPTION_BUNDLE_KEY).destinationPort;
-            this._portServerMap.delete(destPort);
+            let forwardPort = server.port;
+            this._portServerMap.delete(forwardPort);
+            let status = this._statusMap.get(forwardPort);
+            if(status) {
+                status.online = false;
+                status.sessions = 0;
+            }
         } else if(state == SocketState.Bound) {
             let handler = handlerOpt!;
             let sessionID = ExternalPortServerPool.LAST_SESSION_ID++;
@@ -340,6 +347,7 @@ class ExternalPortServerPool {
 
     private initEndPointInfo(endpointInfo: EndPointInfo, sessionID: number, type: 'http' | 'tcp') {
         endpointInfo.closeWait = false;
+        endpointInfo.closeInitiated = false;
         endpointInfo.endLength = 0;
         endpointInfo.lastSendTime = Date.now();
         endpointInfo.sessionID = sessionID;
@@ -360,10 +368,16 @@ class ExternalPortServerPool {
         if(!server) {
             return false;
         }
+        this.clearActiveTimeout(port);
         await this.removeHandlerByForwardPort(port);
         return new Promise((resolve) => {
             server?.stop((err?: Error) => {
-                resolve(err != undefined);
+                const status = this._statusMap.get(port);
+                if(status) {
+                    status.online = false;
+                    status.sessions = 0;
+                }
+                resolve(err == undefined);
             });
         })
     }
@@ -403,6 +417,7 @@ class ExternalPortServerPool {
         if(!status) {
             return false;
         }
+        this.clearActiveTimeout(port);
         status.active = false;
         await this.removeHandlerByForwardPort(port);
         return true;
@@ -424,8 +439,8 @@ class ExternalPortServerPool {
             return false;
         }
         if(timeout == undefined) timeout = status.activeTimeout;
+        this.clearActiveTimeout(port);
         let timeoutCtrl = this._activeTimeoutMap.get(port);
-        if(timeoutCtrl != undefined) clearTimeout(timeoutCtrl);
         status.active = true;
         status.activeTimeout = timeout;
         status.activeStart = Date.now();
@@ -444,12 +459,18 @@ class ExternalPortServerPool {
             clearInterval(this._sessionCleanupIntervalID);
             this._sessionCleanupIntervalID = null;
         }
+        this._activeTimeoutMap.forEach((_, port) => this.clearActiveTimeout(port));
         logger.info(`closeAll`);
         let callbackCount = this._portServerMap.size;
         if(callbackCount == 0) return;
         return new Promise((resolve) => {
             this._portServerMap.forEach((server: TCPServer, port: number) => {
                 server.stop(() => {
+                    let status = this._statusMap.get(port);
+                    if(status) {
+                        status.online = false;
+                        status.sessions = 0;
+                    }
                     callbackCount--;
                     logger.info(`close - port: ${port}, left count: ${callbackCount}`);
                     if(callbackCount == 0) {
@@ -461,6 +482,18 @@ class ExternalPortServerPool {
                 });
             });
         });
+    }
+
+    public async dispose(): Promise<void> {
+        await this.stopAll();
+    }
+
+    private clearActiveTimeout(port: number): void {
+        const timeoutCtrl = this._activeTimeoutMap.get(port);
+        if(timeoutCtrl != undefined) {
+            clearTimeout(timeoutCtrl);
+            this._activeTimeoutMap.delete(port);
+        }
     }
 }
 

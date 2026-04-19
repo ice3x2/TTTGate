@@ -7,6 +7,8 @@ type ConnectOpt = {
     ca? : string;
     cert? : string;
     key? : string;
+    serverName?: string;
+    rejectUnauthorized?: boolean;
     keepalive? : number
     timeout? : number;
 }

@@ -1,97 +1,103 @@
 # TTTGate
-TTTGate is a versatile tool designed to facilitate seamless external access to internal networks. With an easy-to-use server-client setup, it enables secure and efficient communication between external servers and internal PCs behind a NAT. 
-![img1](https://github.com/ice3x2/TTTGate/assets/3121298/74e1fed4-59ee-4be4-857c-f622aa5cb679)
-## Installation
- 1. Download the latest version from https://github.com/ice3x2/TTTGate/releases.
- 2. Extract the downloaded files.
- 3. Move the directory on both the external network accessible location and the internal network PC.
 
-## Run Server Mode (External Server):
- 1.  Open CLI Interface and Navigate to the bin Directory:
-     - Log in to the external server and open the command-line interface (CLI).
-     - Navigate to the bin directory of the installed TTTGate software.
-       ```shell
-       cd /path/to/TTTGate/bin
-       ```
- 4. Provide execution permissions for the TTTGate files using the following command: (Linux only)
-     ```shell
-     chmod +x TTTGate*
-     ```
- 5. Execute `TTTGate-[Your_OS_Name]-[Your_Architecture] server` from this directory.
-    ```shell
-    ./TTTGate-[Your_OS_Name]-[Your_Architecture] server
-    ```
-    for Linux
-    ```shell
-    ./TTTGate-linux-x64 server 
-    ```
-    for Alpine
-    procs beforehand, specifically for Alpine Linux:
-    ```shell
-    apk add procs
-    ./TTTGate-alpine-x64 server
-    ```
-    for Windows
-    ```shell
-    TTTGate-win-x64.exe server
-    ```
-    Available options:
-     * `-adminPort [port]`: Changes the port number of the web admin console.
-     * `-daemon`: Runs the server in the background mode with process monitoring for automatic restart in case of internal errors.
-     * `-reset`: Resets all stored configuration values.
-  6. Access Web Admin Console:
-     - After successful execution, open a web browser.
-     - Enter the external server's IP address followed by the port number 9300 (e.g., http://your_server_ip:9300). You should now be able to access the web admin console.
-    
-## Run Client Mode (Internal PC):
-   1.  Open CLI Interface and Navigate to the bin Directory:
-     - Log in to the external server and open the command-line interface (CLI).
-     - Navigate to the bin directory of the installed TTTGate software.
-       ```shell
-       cd /path/to/TTTGate/bin
-       ```
-  4. Provide execution permissions for the TTTGate files using the following command: (Linux only)
-     ```shell
-     chmod +x TTTGate* 
-     ```
-  1. Execute `TTTGate-[Your_OS_Name]-[Your_Architecture] client -addr [server address]` from this directory.
-     ```shell
-     ./TTTGate-[Your_OS_Name]-[Your_Architecture] client -addr [server_address]
-     ```
-     Please [server_address] with the server address in the format of [hostname]:[port_number]. If the port number is the default 9126 and has not been changed on the server, you can simply enter the hostname.
-     for Linux
-     ```shell
-     ./TTTGate-linux-x64 client -addr hostname 
-     ```
-     for Alpine
-     procs beforehand, specifically for Alpine Linux:
-     ```shell
-     apk add procs
-     ./TTTGate-alpine-x64 client -addr hostname 
-     ```
-     for Windows
-     ```shell
-     TTTGate-win-x64.exe client -addr hostname 
-     ```
-     Available options:
-       * `-tls`: Enables communication with the server using Transport Layer Security (TLS) when TLS is enabled in the web admin console. default false.
-       * `-name`: Defines the client name. default random name.
-       * `-key`: Defines the authentication key, which must match the one set in the web admin console. The default value is the same for both the server and the client, so it does not need to be set separately.
-       * `-daemon`: Operates in the background mode. Process monitoring is also active, enabling automatic restart in the event of the server process being forcibly terminated due to internal errors.
-       * `-bufferLimit`: [limit size]: Specifies the buffer size limit in mebibytes (MiB). Default 128MiB.
-       * `-save`: Saves the options.
-## Terminate background process
-   for Linux
-   ```shell
-   ./TTTGate-linux-x64 stop
-   ```
-   for Alpine
-   ```shell
-   ./TTTGate-alpine-x64 stop
-   ```
-   for Windows
-   ```shell
-   TTTGate-win-x64.exe stop
-   ```
-     
-    
+TTTGate exposes internal TCP/HTTP services through a server-client tunnel pair.
+
+This branch is hardened around three defaults:
+
+- the admin console binds to `127.0.0.1` and uses TLS by default
+- protocol v2 client identity is the primary trust model
+- new HTTP tunnel configs do **not** reflect `Origin` back as `Access-Control-Allow-Origin`
+
+## Runtime Config Files
+
+- server runtime config: `config/server.yaml`
+- client runtime config: `config/client.yaml`
+- tracked samples: `config/server.sample.yaml`, `config/client.sample.yaml`
+- first-login bootstrap token: `config/.bootstrap-token`
+- admin password hash: `config/.key`
+
+The old repository-root `config.yaml` is no longer used.
+
+## Server Startup
+
+1. Build or extract the release bundle.
+2. Prepare `config/server.yaml` from `config/server.sample.yaml`.
+3. Replace placeholder secrets in `trustedClients`.
+4. Start the server:
+
+```shell
+./TTTGate-linux-x64 server
+```
+
+Server options:
+
+- `-adminPort [port]`: admin console port.
+- `-keepAlive [ms]`: control listener TCP keepalive interval.
+- `-allowLegacyAdminHttp`: allow legacy non-TLS admin mode for one process run.
+- `-allowLegacyAdminRemote`: allow legacy non-loopback admin bind for one process run.
+- `-allowLegacyControlAuth`: allow legacy shared-key control authentication for one process run.
+- `-reset [true|false]`: delete persisted server state only when explicitly `true`.
+- `-daemon`: run with process monitoring.
+
+### First Admin Login
+
+On a fresh install, the server writes a one-time bootstrap token to `config/.bootstrap-token`.
+Use that token when setting the first admin password through the admin API/UI. The token is deleted after the first successful password setup.
+
+## Client Startup
+
+1. Prepare `config/client.yaml` from `config/client.sample.yaml`.
+2. Set `clientId` and `clientSecret` to a trusted client registered on the server.
+3. Configure `ca` and `serverName` when the control listener uses TLS.
+4. Start the client:
+
+```shell
+./TTTGate-linux-x64 client -addr example.com:9126
+```
+
+Client options:
+
+- `-addr [host:port]`: server address.
+- `-tls`: enable TLS on the control connection.
+- `-name [name]`: local display name.
+- `-clientId [id]`: protocol v2 client identifier.
+- `-clientSecret [secret]`: protocol v2 shared secret.
+- `-displayName [name]`: display-only name announced to the server.
+- `-ca [pem]`: CA or pinned server certificate PEM path.
+- `-serverName [name]`: expected TLS server name.
+- `-allowLegacyFallback`: allow v1 fallback only when the server explicitly enables legacy auth.
+- `-allowInsecureTls`: disable certificate verification. Keep this off outside break-glass scenarios.
+- `-key [key]`: legacy shared key. Only used with explicit legacy control auth.
+- `-keepAlive [ms]`: control connection TCP keepalive interval.
+- `-bufferLimit [MiB]`: global memory buffer limit.
+- `-save`: persist the resolved client config to `config/client.yaml`.
+- `-daemon`: run with process monitoring.
+
+## HTTP Tunnel CORS Policy
+
+`replaceAccessControlAllowOrigin` is a compatibility policy flag, not a security hotfix.
+
+- new tunnel configs default to `false`
+- existing saved configs with the field unset keep the legacy reflection behavior until you set the field explicitly
+- credential-bearing backends should move to explicit allowlists instead of origin reflection
+
+## Mixed-Version Rollout Policy
+
+- default rollout target: `controlProtocolMode: mixed`
+- secure target state: `controlProtocolMode: mtls-strict`
+- legacy shared-key control auth stays off unless `-allowLegacyControlAuth` is used deliberately
+- client-side `allowLegacyFallback` should remain `false` unless you are in an approved rollback window
+
+Recommended cutover order:
+
+1. Register protocol v2 trusted clients on the server.
+2. Upgrade clients with `clientId` and `clientSecret`.
+3. Verify mixed-version connectivity and rollback path.
+4. Disable legacy rollout exceptions.
+5. Move the control listener to TLS + `mtls-strict` when the fleet is ready.
+
+## Stop Background Processes
+
+```shell
+./TTTGate-linux-x64 stop
+```

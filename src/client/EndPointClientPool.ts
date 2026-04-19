@@ -72,6 +72,7 @@ class EndPointClientPool {
             this.onEndPointHandlerEvent(sessionID, client, state, data);
         }) as EndpointHandler;
         endPointClient.closeWait = false;
+        endPointClient.closeInitiated = false;
         endPointClient.lastSendTime = Date.now();
         endPointClient.endLength = 0;
         endPointClient.sessionID = sessionID;
@@ -91,15 +92,14 @@ class EndPointClientPool {
 
 
     private closeIfSatisfiedLength(endPointClient: EndpointHandler, force: boolean = false) {
-        if((endPointClient.closeWait && (endPointClient.endLength ?? 0) <= endPointClient.sendLength) || force) {
-            if (endPointClient.sessionID !== undefined) {
-                this._endPointClientMap.delete(endPointClient.sessionID);
-                endPointClient.end_();
-                this._onEndPointTerminateCallback?.(endPointClient.sessionID);
-            } else {
-                logger.error(`closeIfSatisfiedLength: sessionID is undefined`);
-                endPointClient.end_();
+        const ready = endPointClient.closeWait && (endPointClient.endLength ?? 0) <= endPointClient.sendLength && endPointClient.isOutputDrained;
+        if((ready || force) && !endPointClient.closeInitiated) {
+            endPointClient.closeInitiated = true;
+            if(force) {
+                endPointClient.destroy();
+                return;
             }
+            endPointClient.end_();
         }
     }
 
@@ -160,12 +160,20 @@ class EndPointClientPool {
 
 
     public closeAll() {
+        this.dispose();
+    }
 
+    public dispose() {
         this._onEndPointClientStateChangeCallback = null;
+        if(this._sessionCleanupIntervalID) {
+            clearInterval(this._sessionCleanupIntervalID);
+            this._sessionCleanupIntervalID = null;
+        }
         this._endPointClientMap.forEach((client: SocketHandler /*, key: number*/) => {
             client.destroy();
         });
         this._endPointClientMap.clear();
+        this._connectOptMap.clear();
     }
 
 
