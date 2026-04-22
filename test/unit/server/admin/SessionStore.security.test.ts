@@ -1,6 +1,6 @@
 import fs from "fs";
 import Path from "path";
-import CryptoJS from "crypto-js";
+import {createHash} from "node:crypto";
 import SessionStore, {BOOTSTRAP_TOKEN_FILE_NAME} from "../../../../src/server/admin/SessionStore";
 import {applyTestRoot, cleanupTestRoot, createTestRoot, TestRoot} from "../../../helpers/runtime";
 
@@ -10,7 +10,7 @@ const legacyHashPassword = (password: string): string => {
     for(let i = 0; i < normalizedPassword.length; i += 1) {
         salt += Math.round(normalizedPassword.charCodeAt(i) / 2).toString(16);
     }
-    return CryptoJS.SHA512(normalizedPassword + salt).toString();
+    return createHash('sha512').update(normalizedPassword + salt).digest('hex');
 };
 
 // OS 가드: POSIX 모드 비트(0o600) 검증은 Windows에서 의미가 없다(NTFS는 다른 ACL 모델).

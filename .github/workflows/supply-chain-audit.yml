@@ -1,0 +1,105 @@
+name: Supply Chain Audit
+
+on:
+  pull_request:
+    branches: [main, refactor/safecode]
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'admin/package.json'
+      - 'admin/package-lock.json'
+      - '.github/workflows/supply-chain-audit.yml'
+  push:
+    branches: [main]
+  schedule:
+    # 매주 월요일 00:00 UTC — SBOM 및 누적 advisory 감지
+    - cron: '0 0 * * 1'
+  workflow_dispatch: {}
+
+jobs:
+  audit-runtime:
+    name: Runtime audit (server production chain)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install (include dev for lockfile integrity)
+        run: npm ci --no-audit --no-fund
+        env:
+          NODE_ENV: development
+
+      - name: Audit production tree (CRITICAL gate)
+        run: npm audit --omit=dev --audit-level=critical
+        env:
+          NODE_ENV: development
+
+      - name: Audit production tree (HIGH gate — PR 차단)
+        run: npm audit --omit=dev --audit-level=high
+        env:
+          NODE_ENV: development
+
+      - name: crypto-js 서버 체인 미포함 확인
+        run: |
+          if npm ls crypto-js --omit=dev 2>&1 | grep -q "crypto-js@"; then
+            echo "::error::crypto-js 가 서버 런타임 체인에 존재함. R3-REQ-02 위반."
+            exit 1
+          fi
+        env:
+          NODE_ENV: development
+
+  audit-admin:
+    name: Admin audit (frontend chain)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: admin/package-lock.json
+
+      - name: Install admin deps
+        working-directory: admin
+        run: npm ci --no-audit --no-fund
+        env:
+          NODE_ENV: development
+
+      - name: Audit admin (CRITICAL gate)
+        working-directory: admin
+        run: npm audit --audit-level=critical
+
+      - name: Audit admin (HIGH — 보고용, 차단 안 함)
+        working-directory: admin
+        run: npm audit --audit-level=high || echo "::warning::admin HIGH advisory 잔존 (빌드 의존성)"
+
+  tests:
+    name: Supply-chain regression tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+        env:
+          NODE_ENV: development
+
+      - name: Build
+        run: npm run build
+        env:
+          NODE_ENV: development
+
+      - name: R3 supply-chain tests
+        run: npx jest test/supply-chain/ --detectOpenHandles --forceExit
+        env:
+          NODE_ENV: development

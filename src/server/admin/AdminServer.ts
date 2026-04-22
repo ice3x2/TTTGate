@@ -2,7 +2,7 @@ import http, {IncomingMessage, ServerResponse} from "http";
 import https from "https";
 import ServerOptionStore from "../ServerOptionStore";
 import SessionStore from "./SessionStore";
-import CryptoJS from "crypto-js";
+import {createHash} from "node:crypto";
 
 import {CertificationStore, CertInfo, PemData} from "../CertificationStore";
 import ObjectUtil from "../../util/ObjectUtil";
@@ -1035,7 +1035,7 @@ class AdminServer {
         const { tunnelingOptions: _omit, ...pureServerOption } = cloned;
         void _omit;
         const adminCert = CertificationStore.instance.getAdminCert();
-        const hash = CryptoJS.SHA512(JSON.stringify(pureServerOption) + JSON.stringify(adminCert)).toString();
+        const hash = createHash('sha512').update(JSON.stringify(pureServerOption) + JSON.stringify(adminCert)).digest('hex');
         res.writeHead(200, {'Content-Type': 'application/json', 'Vary': 'Origin', ...corsHeaders});
         res.end(JSON.stringify({success: true, partial: false, failedScopes: [], warnings: [], message: '', hash: hash}));
     }

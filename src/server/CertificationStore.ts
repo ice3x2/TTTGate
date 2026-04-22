@@ -3,7 +3,7 @@ import File from "../util/File";
 import Environment from "../Environment";
 import CACertGenerator from "../commons/CACertGenerator";
 import forge, {pki} from "node-forge";
-import CryptoJS from "crypto-js";
+import {createHash} from "node:crypto";
 import ObjectUtil from "../util/ObjectUtil";
 import LoggerFactory  from "../util/logger/LoggerFactory";
 import fs from "fs";
@@ -385,7 +385,7 @@ class CertificationStore {
         try {
             const certificateObject = forge.pki.certificateFromPem(certificate);
             const privateKeyObject = forge.pki.privateKeyFromPem(privateKey);
-            const plain = CryptoJS.SHA512(Date.now() + '@').toString();
+            const plain = createHash('sha512').update(Date.now() + '@').digest('hex');
             let encrypted = (certificateObject.publicKey as pki.rsa.PublicKey).encrypt(plain, 'RSA-OAEP', {
                 md: forge.md.sha256.create(),
                 mgf1: {

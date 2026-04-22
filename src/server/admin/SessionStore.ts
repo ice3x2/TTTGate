@@ -2,9 +2,8 @@ import bcrypt from 'bcryptjs';
 import Environment from "../../Environment";
 import File from "../../util/File"
 import Files from "../../util/Files";
-import CryptoJS from "crypto-js";
 import {ClockRngProvider} from "../../util/ClockRng";
-import crypto from "crypto";
+import crypto, {createHash} from "crypto";
 import fs from "fs";
 import fsp from "fs/promises";
 import {timingSafeStringEqual} from "../../util/timingSafeStringEqual";
@@ -182,7 +181,7 @@ class SessionStore {
         for(let i =0; i < password.length; i++) {
             salt += Math.round(password.charCodeAt(i) / 2).toString(16);
         }
-        return CryptoJS.SHA512(password + salt).toString();
+        return createHash('sha512').update(password + salt).digest('hex');
     }
 
     private ensureBootstrapState(): void {

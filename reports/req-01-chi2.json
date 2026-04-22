@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-04-21T10:46:35.479Z",
+  "generatedAt": "2026-04-22T14:43:46.540Z",
   "N": 20000,
   "tokenLengthBytes": 32,
   "totalBytes": 640000,
-  "chi2": 256.9183999999998,
+  "chi2": 259.6864,
   "df": 255,
   "p01Critical": 310.457,
   "pass": true
