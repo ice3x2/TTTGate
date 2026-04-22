@@ -1,7 +1,29 @@
-
+import { redactSecretString } from "./SecretRedactor";
 
 class Errors {
     public static toString(error: any) : string {
+        const raw = Errors._rawToString(error);
+        // R2-REQ-05: 최종 출력 전 민감정보 redact.
+        return redactSecretString(raw);
+    }
+
+    /**
+     * R2-REQ-05: 구조화된 에러 직렬화. 전 필드 redact 적용.
+     */
+    public static serialize(error: any) : { message: string; stack: string; cause: string } {
+        if(error == undefined) return { message: "", stack: "", cause: "" };
+        if(error instanceof Error) {
+            const cause = Errors.getCause(error);
+            return {
+                message: redactSecretString(error.message ?? ""),
+                stack: redactSecretString(error.stack ?? ""),
+                cause: cause ? Errors.toString(cause) : ""
+            };
+        }
+        return { message: redactSecretString(String(error)), stack: "", cause: "" };
+    }
+
+    private static _rawToString(error: any) : string {
         if(error == undefined) {
             return "";
         }
@@ -41,11 +63,12 @@ class Errors {
     }
 
     private static printError(error: Error) : string {
+        // R2-REQ-05: message/stack 개별 redact.
         let message = error.message;
         if(message == undefined) {
             return "";
         }
-        return message + "\n\t" + Errors.printStackTrace(error);
+        return redactSecretString(message) + "\n\t" + Errors.printStackTrace(error);
     }
 
     private static printStackTrace(error: Error) : string {
@@ -58,7 +81,7 @@ class Errors {
         for(let i = 0; i < stackSplit.length; i++) {
             let line = stackSplit[i];
             if(line.indexOf("at ") == 0) {
-                result += line + "\n\t";
+                result += redactSecretString(line) + "\n\t";
             }
         }
         return result;

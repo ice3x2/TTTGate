@@ -7,6 +7,7 @@ import {DataHandlerState, TunnelControlHandler, TunnelDataHandler} from "../type
 import {Buffer} from "buffer";
 import LoggerFactory  from "../util/logger/LoggerFactory";
 import {SysInfo} from "../commons/SysMonitor";
+import {timingSafeStringEqual} from "../util/timingSafeStringEqual";
 const logger = LoggerFactory.getLogger('server', 'ClientHandlerPool');
 
 
@@ -125,7 +126,12 @@ class ClientHandlerPool {
             dataHandler.endImmediate();
             return;
         }
-        if(pendingDataState.bindingToken && pendingDataState.bindingToken !== dataHandler.bindingToken) {
+        // P7-T2 / REQ-21: bindingToken 은 인증 자격 증명(세션 바인딩 토큰)이므로 상수시간 비교.
+        if(pendingDataState.bindingToken && !timingSafeStringEqual(
+            pendingDataState.bindingToken,
+            dataHandler.bindingToken ?? "",
+            "utf8"
+        )) {
             logger.error(`putNewDataHandler: binding token mismatch for sessionID: ${pendingDataState.sessionID}`);
             const fullHandlerID = dataHandler.handlerID ?? pendingDataState.handlerID;
             this._controlHandler.sendData(CtrlPacket.resultOfOpenSession(fullHandlerID, pendingDataState.sessionID, false, {handlerID: fullHandlerID}).toBuffer());

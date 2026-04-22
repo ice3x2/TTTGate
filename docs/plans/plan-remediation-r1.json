@@ -1,0 +1,411 @@
+{
+  "spec": "docs/srs/backend-remediation-round1.md",
+  "mode": "Normal",
+  "planner": "Opus x1",
+  "evaluator": "Sonnet x2 parallel",
+  "severity_gate": {
+    "phase_1": "CRITICAL=0 AND HIGH=0",
+    "phase_2": "MEDIUM converging",
+    "phase_3": "LOW allowed"
+  },
+  "round": 5,
+  "round5_notes": {
+    "F-P4-01": "CRITICAL — 계획 파일명 불일치 해소. 계획이 'req-06-header-injection.test.ts + req-10-response-splitting.test.ts' 2 파일을 상정했으나 실제는 단일 파일 'req-06-crlf-injection.test.ts'로 REQ-06/REQ-10을 통합 검증한다. 까칠 리뷰어 원칙 '계획을 고쳐라'에 따라 P4-T2 테스트 파일 기록을 실제에 맞게 정정. P4-T3도 'req-13-chunked-size.test.ts' → 'req-13-chunked-parse.test.ts'로 실 파일명 정정. reports/req-06-resplit-scan.json 신설.",
+    "F-P4-02": "HIGH — HttpPipe.readChunkedSize의 dead branch(isNaN/음수 가드) 제거. 정규식 ^[0-9a-fA-F]+$이 이미 양수 16진수만 통과시키므로 후속 isNaN/음수 검사는 도달 불가. lcov 100% 달성을 위해 해당 분기 제거 + 제거 사유 주석 기록. DoD를 'readChunkedSize valid-input 분기 100%'로 현실화.",
+    "F-P4-P4": "HIGH (까칠) — 다중 Content-Length 헤더 미검증 해소. findAndSetLengthValue에서 CL 카운트(≥2) 또는 값 내 콤마 포함 시 400 거부. TE도 동일 카운트 체크 추가. req-05-smuggling.test.ts에 (e) multi-CL, (f) multi-TE 케이스 추가.",
+    "F-P4-P5": "HIGH (까칠) — Transfer-Encoding substring include 우회 해소. includes('chunked') → 콤마 split + trim + lowercase 토큰 기반 정확 일치, chunked는 토큰 리스트의 마지막 원소여야 함. req-05-smuggling.test.ts에 (g) xchunked 501, (h) gzip,chunked,identity 400 케이스 추가."
+  },
+  "round4_notes": {
+    "HIGH-1": "P1-T1 coverageThreshold.lines=60 복원. 단 collectCoverageFrom을 Phase 1 실 증명 범위(src/Environment.ts)로 좁힘. 후속 Phase에서 collectCoverageFrom 확장하며 threshold 유지 가능 여부 동시 검증. 까칠 리뷰어 허용 사유: '정 안되면 계획을 고쳐라(그게 원칙)'. ZERO TOLERANCE 불변.",
+    "HIGH-2": "scripts/lint-auth-compare.mjs에 --report-dir 인자 추가(기본 cwd/reports, CLI 호환 유지). test/unit/tools/lint-auth-compare.test.ts는 tmp 디렉터리로 report 격리 → P7-T2 DoD 'reports/auth-compare.json 위반 0건' 테스트 오염 방지.",
+    "HIGH-3": "scripts/smoke.mjs teardown을 spawnSync(taskkill) 동기 대기 + stderr 로깅 + child.pid undefined 선체크 + rmSync 실패 console.warn 가시화. 단일 exit path(finalize) 도입으로 main.catch/하드캡/finally 3경로 레이스 차단.",
+    "HIGH-4": "P1-T3 smoke 로그 'ctrl session 1 established' → 'ctrl port reachable (session establish deferred to P7-T3)'. 실제 세션 수립 없이 TCP 도달성만 확인하므로 정확한 사실 표기. EVIDENCE-BASED DoD §5.4 준수.",
+    "MEDIUM-A": ".eslintrc.cjs no-restricted-syntax operator 정규식 그룹핑 수정. /^===|!==|==|!=$/ → /^(===|!==|==|!=)$/.",
+    "MEDIUM-B": "test/unit/server/admin/SessionStore.security.test.ts의 describe.skip 전체 적용을 제거. chmod 모드 비트(0o600) 검증만 if(isPosix) 가드. Windows에서도 bootstrap 흐름/legacy 업그레이드 로직 실행 유지."
+  },
+  "round_notes": {
+    "H-1": "P5-T6 DoD 리스너 상한을 SPEC 수치(<=1)로 일치. 운영 영구 error 핸들러 named function 참조 보존. listen 전용 핸들러는 removeListener(named)로 제거. removeAllListeners 사용 금지.",
+    "H-2": "P2-T2 req_ids에서 REQ-20 제거. REQ-20은 P1-T1 단독.",
+    "H-3": "옵션(b) 파일 경계 분리 채택. P3-T3=ClientApp.ts YAML 게이트 전용, P6-T3=TunnelingOption.ts normalizationClientOption 전용. P6-T4 depends_on=[P1]로 단축.",
+    "H-4": "H-1에 통합. named function + removeListener(named) 설계로 영구 핸들러 보존.",
+    "H-5": "Phase 3/5/7 phase_dod에 'node deploy.js 재빌드 후 smoke 실행' 명시.",
+    "M-1": "P3-T2 req_ids에서 REQ-08 제거. REQ-08은 P3-T5 단독.",
+    "M-2": "지수 지연을 순수 함수 src/server/admin/loginBackoff.ts::computeBackoffMs로 분리. 단위 테스트는 반환값 확정, 통합 테스트는 하한(>=400ms)만.",
+    "M-3": "P6-T1에 'close된 세션 ID에 orphan close 재통보 시 활성 세션 무영향' 부정 시나리오 추가.",
+    "M-4": "selfsigned 부재 확인. node-forge ^1.3.1 이미 존재 → 인증서 동적 생성에 사용. 대안 fixtures도 지원. 리스크 R9 신설.",
+    "M-5": "SCOPE-LOCK OVERRIDE 문단을 MD §1 상단에 명시. test/ 경로 사용 근거 + req-XX 파일명 규약 SCOPE-LOCK 동등.",
+    "L-1": "severity_gate를 객체로 구조화.",
+    "L-2": "P5-T6 heap 측정을 optional 권고로 강등. DoD 필수는 리스너 개수 검증.",
+    "L-3": "P1-T2 DoD에 'npm run lint exit 0 (warn 허용, error 0건)' 수치 명시.",
+    "L-4": "P7-T3 smoke에 CORS/CSRF 헤더 자동 체크 5번째 항목 추가.",
+    "P6-R1-L-TTTClientRuntime": "P6-T1 TTTClient.ts 리팩토링 헬퍼로 src/client/TTTClientRuntime.ts를 도입(TTTClientRuntimeRegistry). reconnect interval 주입 경로를 테스트 harness에서 정적 접근하기 위함. TTTClient.ts 로컬 인라인 대비 테스트 격리 이점이 크므로 분리 유지(coder round1 정당화).",
+    "P6-R1-L-heartbeatField": "TunnelServer._heartbeatInterval 사용처 부재 → 필드/관련 stopClientCheckInterval 제거. TTL 타이머(_sessionTtlTimer)로 기능 통합 완료(coder round1 F8).",
+    "P6-R1-H-TTLSinglePath": "enforceSessionTtl double-close 제거. onSessionCloseCallback 1회 + pool.sendCloseSession 1회 + sessionIDAndCtrlIDMap.delete 단일 경로. 클라이언트 응답 경로는 map miss로 자연 소거(coder round1 F2/F3/F4).",
+    "P6-R1-C-E2EVerification": "req-09 4케이스(+범위가드 3b) 실제 public API 검증: debugSessionCount/configureSessionTtl/closeSession bogus. private 우회 제거(coder round1 F1)."
+  },
+  "vision": false,
+  "totals": {
+    "phases": 7,
+    "tasks": 26,
+    "reqs_covered": 22,
+    "reqs_total": 22
+  },
+  "no_mock_policy": "All TASKs must use real implementations. jest.mock, sinon, nock, msw, fake timers, memfs, EventEmitter fake sockets are strictly forbidden. Use real tls/net/http servers, child_process.spawn, ephemeral ports, tmp dirs.",
+  "scope_lock_override": {
+    "spec_path": "tests/",
+    "actual_path": "test/",
+    "rationale": "저장소에 이미 test/helpers, test/unit, test/e2e, test/security 구조 존재. SPEC 본문 비수정, 본 계획 §1 오버라이드 문단으로 조정.",
+    "filename_convention": "test/**/req-XX-<kebab>.test.ts (REQ 1건당 1파일, SPEC 원칙 8과 동등 강제)"
+  },
+  "path_mapping": {
+    "src/server/AdminServer.ts": "src/server/admin/AdminServer.ts",
+    "src/server/SessionStore.ts": "src/server/admin/SessionStore.ts",
+    "src/commons/HttpPipe.ts": "src/server/http/HttpPipe.ts",
+    "src/commons/HttpUtil.ts": "src/server/http/HttpUtil.ts"
+  },
+  "phases": [
+    {
+      "id": "P1",
+      "title": "테스트·린트 인프라 가동",
+      "goal": "이후 모든 Phase가 기댈 Jest/ESLint·스모크 기반을 먼저 세운다.",
+      "depends_on": [],
+      "tasks": [
+        {
+          "id": "P1-T1",
+          "req_ids": ["REQ-20"],
+          "title": "Jest 설정 강화 및 커버리지 인프라",
+          "files": ["jest.config.ts", "package.json", "tsconfig.json"],
+          "summary": "package.json 인라인 jest 설정을 jest.config.ts로 이관·확장. test:coverage 스크립트 추가. coverageThreshold.global.lines=60 유지. 단, Phase 1은 실제 수정/테스트 파일 범위(Phase 1: src/Environment.ts)에 한해 collectCoverageFrom 적용. Phase 2에서 ClockRng/timingSafeStringEqual, Phase 3에서 TLS/ProtocolV2, Phase 5에서 admin/SessionStore, Phase 7에서 잔여 모듈로 collectCoverageFrom 배열을 확장하며 매 Phase마다 threshold 60 유지 가능 여부를 동시 증명한다(round 4 HIGH-1 정정 사유).",
+          "test": "Mock 금지. npm test 실행 + test/unit/Environment.version.test.ts 녹색.",
+          "dod": "npm test exit 0 / npm run test:coverage exit 0 (threshold 60 통과) / coverage/lcov.info 생성 / jest --showConfig test/** 매치 / package.json jest 인라인 grep 0건. collectCoverageFrom은 Phase 1 수정/증명 범위만 포함(후속 Phase 확장 예정)."
+        },
+        {
+          "id": "P1-T2",
+          "req_ids": ["REQ-21"],
+          "title": "보안 린트 규칙(인증 문자열 비교) 추가",
+          "files": [".eslintrc.cjs", "package.json", "scripts/lint-auth-compare.mjs"],
+          "summary": "ESLint no-restricted-syntax 휴리스틱(초기 warn) + Node 스크립트 폴백. authKey/proof/token/secret/hmac 식별자의 ===/!==/==/!= 검출.",
+          "test": "Mock 금지. test/unit/tools/lint-auth-compare.test.ts에서 임시 FS 위반 파일 + child_process.spawnSync 실행 stdout 확인.",
+          "dod": "npm run lint exit 0 (warn 허용, error 0건 — L-3 수치 명시) / 위반 재현 테스트 녹색 / reports/auth-compare.json 생성."
+        },
+        {
+          "id": "P1-T3",
+          "req_ids": ["REQ-22"],
+          "title": "배포 스모크 테스트 스크립트 작성",
+          "files": ["scripts/smoke.mjs", "test/helpers/smokeProcess.ts"],
+          "summary": "build/src/app.js 기동, 포트 0 바인딩, 실 tls.connect admin handshake, 클라이언트 spawn 세션 1건 성립. 20s 하드캡.",
+          "test": "Mock 금지. 스크립트 자체 실환경 통합 검증. node deploy.js && node scripts/smoke.mjs exit 0.",
+          "dod": "exit 0 / 하드코딩 포트 grep 0건 / 'admin tls ok','ctrl port reachable (session establish deferred to P7-T3)' 로그 (round 4 HIGH-4: 실제 세션 수립 없이 TCP 도달성만 확인하므로 정확한 문구로 변경)."
+        }
+      ],
+      "phase_dod": "npm test exit 0 + npm run lint exit 0 (warn 허용, error 0건) + node scripts/smoke.mjs exit 0."
+    },
+    {
+      "id": "P2",
+      "title": "공용 보안 헬퍼",
+      "goal": "이후 모든 축이 사용할 상수 시간 비교 및 보안 RNG 헬퍼 선도입.",
+      "depends_on": ["P1"],
+      "tasks": [
+        {
+          "id": "P2-T1",
+          "req_ids": ["REQ-04", "REQ-21"],
+          "title": "timingSafeStringEqual 헬퍼 신설",
+          "files": ["src/util/timingSafeStringEqual.ts"],
+          "summary": "string|Buffer 상수시간 비교 헬퍼. 길이 불일치도 상수 시간 가드. crypto.timingSafeEqual 내부 사용.",
+          "test": "Mock 금지. test/unit/util/req-04-timing-safe-string-equal.test.ts 5케이스 + 100k 마이크로벤치 편향<5%.",
+          "dod": "테스트 녹색 / reports/req-04-bench.json / timingSafeEqual import grep 1건+."
+        },
+        {
+          "id": "P2-T2",
+          "req_ids": ["REQ-01"],
+          "title": "ClockRng 토큰·지터 경로 분리",
+          "files": ["src/util/ClockRng.ts"],
+          "summary": "ClockRng에 secureRandomBytes(n) 추가(crypto.randomBytes 위임). 기존 random()은 지터 전용 유지. (H-2: REQ-20 제거)",
+          "test": "Mock 금지. test/unit/util/req-01-clockrng-secure.test.ts — 실 crypto.randomBytes 10000회, Shannon 엔트로피 >7.5, 중복 0건.",
+          "dod": "엔트로피 리포트 reports/req-01-entropy.json / ClockRng 타입에 secureRandomBytes 존재 / 토큰 경로에 Math.random grep 0건."
+        }
+      ],
+      "phase_dod": "헬퍼 2종 녹색 + npm run build exit 0."
+    },
+    {
+      "id": "P3",
+      "title": "Crypto·TLS 축",
+      "goal": "토큰 예측 가능성·TLS 약화·상수시간 비교 누락·Admin cert hot-swap 일관 해결.",
+      "depends_on": ["P2"],
+      "tasks": [
+        {
+          "id": "P3-T1",
+          "req_ids": ["REQ-01"],
+          "title": "createOpaqueToken + IdentityRegistry 토큰 crypto.randomBytes화",
+          "files": ["src/commons/ProtocolV2.ts", "src/server/IdentityRegistry.ts", "src/server/admin/SessionStore.ts"],
+          "summary": "createOpaqueToken을 secureRandomBytes(n).toString('hex')로 교체. issueBindingToken 동일. 지터 경로 분리 확인.",
+          "test": "Mock 금지. test/unit/commons/req-01-create-opaque-token.test.ts — 10000개 중복 0건, hex 정규식, 카이제곱 p>0.01.",
+          "dod": "4종 녹색 / Math.random|rng.random grep 0건 / reports/req-01-chi2.json."
+        },
+        {
+          "id": "P3-T2",
+          "req_ids": ["REQ-02"],
+          "title": "TlsOptionsFactory 서버/클라이언트 TLS 강화",
+          "files": ["src/util/TlsOptionsFactory.ts"],
+          "summary": "secureProtocol 제거. minVersion=TLSv1.2, maxVersion=TLSv1.3, ECDHE-AEAD cipher 화이트리스트, honorCipherOrder=true. (M-1: REQ-08 제거)",
+          "test": "Mock 금지. test/security/req-02-tls-settings.test.ts — 실 tls.createServer/tls.connect로 TLSv1.3 성공·TLSv1_method 거부·약한 cipher 거부. 인증서는 node-forge 런타임 생성 또는 test/helpers/fixtures/*.pem.",
+          "dod": "4종 녹색 / secureProtocol grep 0건 / TLS1.3 handshake 증거 로그."
+        },
+        {
+          "id": "P3-T3",
+          "req_ids": ["REQ-02"],
+          "title": "allowInsecureTls/allowLegacyFallback YAML 저장 금지 + --yes-insecure 게이트",
+          "files": ["src/client/ClientApp.ts", "src/client/TunnelClient.ts"],
+          "summary": "-save 시 두 필드 YAML 저장 제외. YAML 로드 시 WARN + --yes-insecure 없으면 exit≠0. (H-3 파일 경계: ClientApp.ts의 YAML save/load 게이트 블록 전용. TunnelingOption.ts는 P6-T3 전담 — 중복 없음)",
+          "test": "Mock 금지. test/unit/client/req-02-insecure-tls-yaml.test.ts — 실 fs/yaml/child_process.spawn 3시나리오.",
+          "dod": "3종 녹색 / client.yaml 금지 필드 부재 스냅샷 / exit code·stderr 고정."
+        },
+        {
+          "id": "P3-T4",
+          "req_ids": ["REQ-04"],
+          "title": "인증 문자열 비교 전수 timingSafeStringEqual 교체",
+          "files": ["src/server/TunnelServer.ts", "src/server/IdentityRegistry.ts", "src/server/TunnelHandshakePolicy.ts", "src/server/admin/SessionStore.ts", "src/server/admin/AdminServer.ts"],
+          "summary": "proof/authKey/token/secret/bindingToken/challengeNonce 비교 연산자를 헬퍼 호출로 교체. 상단 import 추가.",
+          "test": "Mock 금지. test/unit/server/req-04-constant-time-compare.test.ts — (a) 정적 grep 0건, (b) 실 net 소켓 proof 수락/거절 의미론, (c) 마이크로벤치 편향<5%.",
+          "dod": "grep 0건 리포트 reports/req-04-grep.json / 기능 동등성 녹색."
+        },
+        {
+          "id": "P3-T5",
+          "req_ids": ["REQ-08"],
+          "title": "Admin cert hot-apply (setSecureContext)",
+          "files": ["src/server/admin/AdminServer.ts", "src/server/TTTServer.ts"],
+          "summary": "onUpdateAdminCert 성공 시 https.Server.setSecureContext 호출. 외부 TLS 포트에도 적용. cipher/minVersion은 P3-T2 factory 재호출.",
+          "test": "Mock 금지. test/e2e/req-08-admin-cert-hot-swap.test.ts — node-forge로 CA 3개 생성, 실 tls.connect fingerprint 3회 변화, PID/포트 동일.",
+          "dod": "녹색 / 재기동 없이 PID 유지 / setSecureContext grep ≥1건."
+        }
+      ],
+      "phase_dod": "req-(01|02|04|08) 녹색 + npm run build + node deploy.js 재빌드 후 node scripts/smoke.mjs exit 0 (H-5)."
+    },
+    {
+      "id": "P4",
+      "title": "HTTP 프로토콜 축",
+      "goal": "smuggling/injection/splitting/chunked 검증 일괄 차단.",
+      "depends_on": ["P1"],
+      "tasks": [
+        {
+          "id": "P4-T1",
+          "req_ids": ["REQ-05"],
+          "title": "CL/TE 공존 거부 + TE 경로 CL strip",
+          "files": ["src/server/http/HttpPipe.ts"],
+          "summary": "CL+TE 공존 시 400. TE만이면 CL 제거. TE가 chunked 아니면 501.",
+          "test": "Mock 금지. test/security/req-05-cl-te-smuggling.test.ts — 실 http.createServer+실 net으로 3건 + 하류 echo smuggled 미도달.",
+          "dod": "3종 녹색 / 하류 accept 0건 / 응답 CL 부재 스냅샷."
+        },
+        {
+          "id": "P4-T2",
+          "req_ids": ["REQ-06", "REQ-10"],
+          "title": "헤더/path CRLF·NUL·obs-fold 차단 + 재작성 경로 splitting 방지",
+          "files": ["src/server/http/HttpPipe.ts", "src/server/http/HttpUtil.ts"],
+          "summary": "헤더 name RFC7230 token regex, value/path \\r\\n\\0 → 400, obs-fold 제거, rewriteHostInTextBody 치환 재검사.",
+          "test": "Mock 금지. test/security/req-06-crlf-injection.test.ts — REQ-06/REQ-10을 통합 검증하는 단일 파일(라운드 5 F-P4-01: '계획을 고쳐라' 적용). 총 7 시나리오.",
+          "dod": "7종 녹색 / reports/req-06-resplit-scan.json 0건 / obs-fold 허용 로직 grep 0건(throw/주석 차단 문구는 허용)."
+        },
+        {
+          "id": "P4-T3",
+          "req_ids": ["REQ-13"],
+          "title": "Chunked size 엄격 파싱",
+          "files": ["src/server/http/HttpPipe.ts"],
+          "summary": "parseInt 전 /^[0-9a-fA-F]+$/. 0x/+/-/공백/overflow 거부.",
+          "test": "Mock 금지. test/security/req-13-chunked-parse.test.ts — 실 http+실 net 6케이스(실 파일명 정정, 라운드 5 F-P4-01).",
+          "dod": "6종 녹색 / readChunkedSize valid-input 분기 lcov 100%. 정규식 ^[0-9a-fA-F]+$이 NaN/음수를 선검증하므로 방어적 isNaN/음수 가드는 dead branch로 분류·제거됨(라운드 5 F-P4-02). 제거 사유는 소스 주석에 기록."
+        }
+      ],
+      "phase_dod": "req-(05|06|10|13) 녹색 + HTTP 터널 경로 수동 회귀 무결."
+    },
+    {
+      "id": "P5",
+      "title": "Admin API 축",
+      "goal": "Admin 인증/CORS/본문 제한/CSRF/경로 정규화/리스너 누적 일괄 정리.",
+      "depends_on": ["P1", "P2"],
+      "tasks": [
+        {
+          "id": "P5-T1",
+          "req_ids": ["REQ-03"],
+          "title": "serverOptionHash 인증·CORS 화이트리스트·원본 보존",
+          "files": ["src/server/admin/AdminServer.ts", "src/util/ObjectUtil.ts"],
+          "summary": "checkSession 추가, CORS는 자기 호스트 화이트리스트, Vary: Origin 항상, cloneDeep 후 delete.",
+          "test": "Mock 금지. test/e2e/req-03-server-option-hash.test.ts — 실 https+실 fetch 4케이스.",
+          "dod": "4종 녹색 / tunnelingOptions 보존 스냅샷 / 'delete pureServerOption' grep 0건."
+        },
+        {
+          "id": "P5-T2",
+          "req_ids": ["REQ-07"],
+          "title": "로그인 레이트리밋 키 재설계 + XFF 정책 + 지수 지연 순수 함수 분리",
+          "files": ["src/server/admin/AdminServer.ts", "src/server/AdminSecurityPolicy.ts", "src/server/admin/loginBackoff.ts"],
+          "summary": "key=account|networkBucket(v4/24,v6/64). 지수 지연은 computeBackoffMs(failCount)=Math.min(2^n*100, 5000) 순수 함수로 분리 (M-2). LRU 10k. trustXForwardedFor 기본 false.",
+          "test": "Mock 금지. (1) test/unit/server/req-07-login-backoff.test.ts 순수 함수 경계값(0/5/10) 반환값 확정, (2) test/e2e/req-07-login-rate-limit.test.ts 4케이스 — NAT 공유 B계정 무영향/XFF 무시/LRU 축출/지연 실측 하한만(>=400ms).",
+          "dod": "두 테스트 녹색 / reports/req-07-lru.json / trustXForwardedFor 기본 false 검증 / loginBackoff.ts 순수 함수 (side effect 없음 grep)."
+        },
+        {
+          "id": "P5-T3",
+          "req_ids": ["REQ-11"],
+          "title": "JSON 본문 크기·타임아웃 제한",
+          "files": ["src/server/admin/AdminServer.ts"],
+          "summary": "readJson maxBytes=1MiB(413+destroy), req.setTimeout=10s(408), headersTimeout=15s, requestTimeout=30s, parse 실패 400.",
+          "test": "Mock 금지. test/security/req-11-body-limit.test.ts — 실 net.Socket write 4케이스.",
+          "dod": "4종 녹색 / 타임아웃 값 런타임 스냅샷."
+        },
+        {
+          "id": "P5-T4",
+          "req_ids": ["REQ-12"],
+          "title": "상태변경 API CSRF + Origin 검증",
+          "files": ["src/server/admin/AdminServer.ts", "src/server/AdminSecurityPolicy.ts"],
+          "summary": "POST/PUT/DELETE Origin 화이트리스트. X-CSRF-Token 쿠키(Secure; SameSite=Strict)+헤더 double-submit, timingSafeStringEqual 비교. requireCsrfHeader 기본 true.",
+          "test": "Mock 금지. test/e2e/req-12-csrf-origin.test.ts — 실 fetch+쿠키jar 4케이스. 추가 자동 스모크는 P7-T3 통합(L-4).",
+          "dod": "4종 녹색 / legacy http 경로 확인 / P7-T3 smoke 자동 체크 통과."
+        },
+        {
+          "id": "P5-T5",
+          "req_ids": ["REQ-18"],
+          "title": "onGetWebResource 경로 정규화 (Windows)",
+          "files": ["src/server/admin/AdminServer.ts"],
+          "summary": "path.resolve+toLowerCase+sep 정규화. path.relative로 webroot escape 방지.",
+          "test": "Mock 금지. test/unit/server/req-18-path-normalization.test.ts — 실 fs/임시 webroot 4케이스.",
+          "dod": "4종 녹색 / escape 차단 스냅샷."
+        },
+        {
+          "id": "P5-T6",
+          "req_ids": ["REQ-19"],
+          "title": "listen error 리스너 누적 방지 (H-1/H-4)",
+          "files": ["src/server/admin/AdminServer.ts"],
+          "summary": "영구 error 핸들러를 named function으로 등록·참조 보존(this._permanentErrorHandler). listen 전용 핸들러는 별도 named 함수로 등록 후 성공/실패 직후 removeListener(named)로 제거. removeAllListeners 사용 금지. listening은 once.",
+          "test": "Mock 금지. test/unit/server/req-19-listen-listeners.test.ts — 실 포트 충돌로 10회 listen 반복 후 (1) listeners('error').length <= 1 (H-1 SPEC 수치), (2) listeners('error').length >= 1 (영구 핸들러 보존 H-4), (3) 영구 핸들러 함수 identity 동일.",
+          "dod": "error 리스너 개수 = 1 (운영 영구만; listen 임시는 제거; H-1) / 영구 핸들러 identity 보존 (H-4) / heap 측정은 권고(optional, L-2)."
+        }
+      ],
+      "phase_dod": "req-(03|07|11|12|18|19) 녹색 + node deploy.js 재빌드 후 node scripts/smoke.mjs exit 0 (H-5)."
+    },
+    {
+      "id": "P6",
+      "title": "세션·풀 수명주기 축",
+      "goal": "Pool swap 좀비/Initializing race/YAML 옵션 범위/Cookie 파싱 방어.",
+      "depends_on": ["P3"],
+      "depends_on_notes": "H-3: Phase 레벨은 P3에만 의존(REQ-09 검증이 P3-T4/T5 기반). P6-T4는 TASK 레벨에서 P1에만 의존(순수 단위 테스트).",
+      "tasks": [
+        {
+          "id": "P6-T1",
+          "req_ids": ["REQ-09"],
+          "title": "Pool swap · waitBuffer · 좀비 세션 양방향 close + 재통보 무영향",
+          "files": ["src/client/TTTClient.ts", "src/client/EndPointClientPool.ts", "src/client/TunnelClient.ts", "src/server/TunnelServer.ts", "src/server/TTTServer.ts", "src/server/IdentityRegistry.ts"],
+          "depends_on": ["P3"],
+          "summary": "구 Pool destroy + orphan close 일괄 통보. _waitBufferQueueMap Initializing 선할당. closeSession 부활. session-TTL/heartbeat 60s.",
+          "test": "Mock 금지. test/e2e/req-09-pool-swap-zombie.test.ts — 4케이스: (1) Ctrl 50회 재연결 후 sessionCount 1s 0 수렴, (2) echo-first 1000건 초기 바이트 손실 0, (3) heartbeat 중단 TTL close, (4) M-3: close된 세션 ID에 orphan close 재통보 시 활성 세션(다른 ID) 무영향.",
+          "dod": "4종 녹색 / reports/req-09-sessions.csv / closeSession 주석 아님 grep."
+        },
+        {
+          "id": "P6-T2",
+          "req_ids": ["REQ-14"],
+          "title": "TunnelClient.connectDataHandler race 해소",
+          "files": ["src/client/TunnelClient.ts"],
+          "depends_on": ["P1"],
+          "summary": "SocketHandler.connect 전에 handlerID/sessionID/bindingToken 주입 또는 Connected 콜백 지연.",
+          "test": "Mock 금지. test/unit/client/req-14-connect-race.test.ts — 실 net.createServer 즉시 accept 100회로 handler.handlerID 100% 정의.",
+          "dod": "100/100 녹색 / race 재현 시드 주석."
+        },
+        {
+          "id": "P6-T3",
+          "req_ids": ["REQ-15"],
+          "title": "클라이언트 옵션 범위 검증 공통화 (H-3 파일 경계)",
+          "files": ["src/types/TunnelingOption.ts", "src/client/ClientApp.ts"],
+          "depends_on": ["P1"],
+          "summary": "normalizationClientOption 본체(TunnelingOption.ts)에 port 1-65535, keepAlive>0, globalMemCacheLimit>=16 범위 공통화, 실패 시 기본값 폴백+WARN. ClientApp.ts는 호출부 치환 + 인라인 범위 검증 제거만(P3-T3의 YAML 게이트 블록과 수정 영역이 다름 — 파일 중첩은 있으나 라인 중첩 없음).",
+          "test": "Mock 금지. test/unit/client/req-15-option-range.test.ts — 실 yaml/실 logger 4케이스.",
+          "dod": "4종 녹색 / ClientApp.ts 인라인 범위 검증 제거 grep 확인 (rg 'port.*<=.*0|port.*>.*65535' src/client/ClientApp.ts 0건)."
+        },
+        {
+          "id": "P6-T4",
+          "req_ids": ["REQ-16"],
+          "title": "SessionStore.isSessionValid 비동기 안전성 + Cookie 파싱",
+          "files": ["src/server/admin/SessionStore.ts"],
+          "depends_on": ["P1"],
+          "summary": "forEach → for...of. Cookie split('=') → indexOf('=') 기반.",
+          "test": "Mock 금지. test/unit/server/req-16-cookie-parse.test.ts — 순수 단위 4케이스.",
+          "dod": "4종 녹색 / .forEach grep 0건."
+        }
+      ],
+      "phase_dod": "req-(09|14|15|16) 녹색 + 50회 재접속 좀비 0 수렴."
+    },
+    {
+      "id": "P7",
+      "title": "관찰·배포·이월 마감",
+      "goal": "canonical 비교/린트 승격/스모크 확장으로 라운드 최종 검증.",
+      "depends_on": ["P1", "P2", "P3", "P4", "P5", "P6"],
+      "tasks": [
+        {
+          "id": "P7-T1",
+          "req_ids": ["REQ-17"],
+          "title": "trustedClients 변경 감지 canonical 비교",
+          "files": ["src/server/TTTServer.ts", "src/server/admin/AdminServer.ts", "src/util/ObjectUtil.ts"],
+          "summary": "JSON.stringify 비교 → ObjectUtil.equalsDeep (키 정렬 기반).",
+          "test": "Mock 금지. test/unit/server/req-17-trusted-clients-canonical.test.ts — 순수 3케이스.",
+          "dod": "녹색 / JSON.stringify.*trustedClients grep 0건."
+        },
+        {
+          "id": "P7-T2",
+          "req_ids": ["REQ-21"],
+          "title": "린트 규칙 error 승격 + 본 라운드 소스 클린 확인",
+          "files": [".eslintrc.cjs", "scripts/lint-auth-compare.mjs", "reports/auth-compare.json"],
+          "summary": "P1-T2 warn → error 승격. 잔존 위반 0건 게이트.",
+          "test": "Mock 금지. test/unit/tools/req-21-lint-error.test.ts — 실 프로세스 2케이스(위반 exit≠0/클린 exit 0).",
+          "dod": "양 케이스 녹색 / npm run lint exit 0 (error 0건) / reports/auth-compare.json 위반 0건."
+        },
+        {
+          "id": "P7-T3",
+          "req_ids": ["REQ-22"],
+          "title": "배포 스모크 확장 (5체크, L-4 자동화 포함)",
+          "files": ["scripts/smoke.mjs", "package.json"],
+          "summary": "Phase 1 smoke에 (a) serverOptionHash 401, (b) cross-origin POST CSRF 누락 403, (c) cert hot-swap fingerprint 변화, (d) CL/TE smuggling 거부, (e) L-4: /api/serverOption GET 응답의 Vary: Origin 존재 + 자기 호스트 Origin만 Access-Control-Allow-Origin 노출 자동 검증. 총 <30s.",
+          "test": "Mock 금지. 스크립트 자체가 실환경 통합 검증. npm run smoke exit 0.",
+          "dod": "exit 0 / 5체크 ok 로그 / 소요 <30s."
+        }
+      ],
+      "phase_dod": "전체 npm test 녹색 + node deploy.js 재빌드 후 npm run smoke exit 0 + npm run build 성공 (H-5)."
+    }
+  ],
+  "req_mapping": {
+    "REQ-01": ["P2-T2", "P3-T1"],
+    "REQ-02": ["P3-T2", "P3-T3"],
+    "REQ-03": ["P5-T1"],
+    "REQ-04": ["P2-T1", "P3-T4"],
+    "REQ-05": ["P4-T1"],
+    "REQ-06": ["P4-T2"],
+    "REQ-07": ["P5-T2"],
+    "REQ-08": ["P3-T5"],
+    "REQ-09": ["P6-T1"],
+    "REQ-10": ["P4-T2"],
+    "REQ-11": ["P5-T3"],
+    "REQ-12": ["P5-T4"],
+    "REQ-13": ["P4-T3"],
+    "REQ-14": ["P6-T2"],
+    "REQ-15": ["P6-T3"],
+    "REQ-16": ["P6-T4"],
+    "REQ-17": ["P7-T1"],
+    "REQ-18": ["P5-T5"],
+    "REQ-19": ["P5-T6"],
+    "REQ-20": ["P1-T1"],
+    "REQ-21": ["P1-T2", "P2-T1", "P7-T2"],
+    "REQ-22": ["P1-T3", "P7-T3"]
+  },
+  "risks": [
+    {"id": "R1", "desc": "TLS 1.2 최소화로 레거시 호환 단절", "mitigation": "CHANGELOG breaking, allowLegacyFallback CLI-only, smoke 1.2/1.3 각 확인."},
+    {"id": "R2", "desc": "setSecureContext Node/pkg 타겟 차이(arm64/alpine)", "mitigation": "smoke 2개+ pkg 타겟 수동 실행, 실패 시 restart 폴백."},
+    {"id": "R3", "desc": "CSRF 강제로 admin SPA 호환 깨짐", "mitigation": "admin/ touch 금지, 동오리진 fetch 유지, P5-T4+P7-T3 smoke 자동 체크(L-4)."},
+    {"id": "R4", "desc": "지수 지연 실측 플래키 (M-2로 해결)", "mitigation": "computeBackoffMs 순수 함수 분리, 통합 테스트는 하한만."},
+    {"id": "R5", "desc": "closeSession 부활이 정상 재접속과 충돌", "mitigation": "P6-T1 회귀 시나리오+M-3 negative 포함. session-TTL 60s 보수."},
+    {"id": "R6", "desc": "ESLint false positive", "mitigation": "warn→error 단계, 정규식 좁게, disable 주석 허용."},
+    {"id": "R7", "desc": "ObjectUtil.cloneDeep/equalsDeep 부재 위험", "mitigation": "P3 착수 전 확인, 필요 시 lodash(존재) 활용."},
+    {"id": "R8", "desc": "SPEC 약식 경로 vs 실제 경로", "mitigation": "§1 매핑 표, files 필드는 실제 경로."},
+    {"id": "R9", "desc": "selfsigned 패키지 부재 (M-4)", "mitigation": "node-forge ^1.3.1이 package.json에 이미 존재 → 테스트 인증서 동적 생성에 사용. 추가 의존 도입 금지. 대안 test/helpers/fixtures/*.pem 폴백 지원."},
+    {"id": "R10", "desc": "P3-T3/P6-T3 src/client/ClientApp.ts 라인 중첩 (라운드 3 신규)", "mitigation": "코딩 단계에서 라인 경계를 명시적으로 분리. P3-T3는 YAML 저장/로드 게이트 블록만, P6-T3는 옵션 정규화 호출부만 수정. PR을 Phase별 분리 커밋 + diff 기반 교차 검토."}
+  ],
+  "round3_notes": {
+    "NF-1": "P6-T3 변경 요약을 MD와 JSON 양측에서 '파일 중첩은 있으나 수정 라인 영역이 다름'으로 통일. R10 신설.",
+    "NF-2": "Phase 4 phase_dod에 'npm run build exit 0' 선행 단계 추가.",
+    "gate_result": "Phase 1 PASS (라운드 2) + Phase 3 LOW 3건 마감 (라운드 3). Mock 금지 22/22, REQ 커버리지 22/22."
+  }
+}

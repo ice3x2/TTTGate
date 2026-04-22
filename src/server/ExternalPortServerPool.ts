@@ -195,6 +195,21 @@ class ExternalPortServerPool {
     }
 
 
+    /**
+     * P3-T5 / REQ-08: 외부 TLS 포트 인증서 hot-apply.
+     * 해당 포트가 TLS 서버가 아니거나 종료 상태면 false.
+     */
+    public applyTlsCertificateHotSwap(port: number, certInfo?: CertInfo): boolean {
+        if(!certInfo) return false;
+        const server = this._portServerMap.get(port);
+        if(!server) return false;
+        return server.applyTlsCertificateHotSwap({
+            key: certInfo.key.value,
+            cert: certInfo.cert.value,
+            ca: certInfo.ca.value && certInfo.ca.value.length > 0 ? certInfo.ca.value : undefined
+        });
+    }
+
     public getServerStatus(port: number) : ExternalPortServerStatus  {
         let status = this._statusMap.get(port);
         if(!status) {

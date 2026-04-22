@@ -377,16 +377,35 @@ class TunnelClient {
      * @private
      */
     private connectDataHandler(handlerID: number,  sessionID: number, bindingToken?: string) : void {
+        // P6-T2 / REQ-14: race 해소 — SocketHandler.connect는 (tls/net 레이어의 즉시 accept 시나리오에서)
+        // Connected 이벤트를 동기 실행할 수 있다. 따라서 handlerID/sessionID/bindingToken은
+        // "connect 반환 후 속성 할당"으로는 100% 주입 보장이 불가능하다.
+        // 해결: 핸들러 속성을 이벤트 콜백 안에서, Connected 로직 실행 전에 즉시 주입한다.
+        // 또한 _waitBufferQueueMap 선할당(P6-T1 REQ-09): Initializing 상태 진입 시점에 반드시 큐를 확보해
+        // "상태 Online 전 도착한 send"가 유실되지 않도록 한다.
+        //
+        // race 재현 시드: test/unit/client/req-14-connect-race.test.ts — 실 net.createServer immediate accept 100회.
         let dataHandler : TunnelDataHandler = SocketHandler.connect(this.makeConnectOpt(), (handler, state, data) => {
             // Closure capture 문제 해결: 매개변수 handler를 안전하게 캐스팅하여 사용
             const tunnelDataHandler = handler as TunnelDataHandler;
-            
+
             if(state == SocketState.Connected) {
-                tunnelDataHandler.dataHandlerState = DataHandlerState.Initializing;
-                tunnelDataHandler.handlerType = HandlerType.Data;
-                this._activatedSessionDataHandlerMap.set(sessionID, tunnelDataHandler);
-                let dataStatePacket = DataStatePacket.create(this._id, handlerID, sessionID, bindingToken);
+                // P6-T2: 반드시 Connected 직후(동기 순서) 식별자 세트. 외부 post-connect 할당에 의존하지 않음.
+                tunnelDataHandler.handlerID = handlerID;
                 tunnelDataHandler.sessionID = sessionID;
+                tunnelDataHandler.bindingToken = bindingToken;
+                tunnelDataHandler.handlerType = HandlerType.Data;
+                tunnelDataHandler.dataHandlerState = DataHandlerState.Initializing;
+                this._activatedSessionDataHandlerMap.set(sessionID, tunnelDataHandler);
+                // P6-T1: waitBuffer queue 선할당.
+                if(!this._waitBufferQueueMap.has(sessionID)) {
+                    this._waitBufferQueueMap.set(sessionID, {
+                        queue: new Dequeue<Buffer>(),
+                        bytes: 0,
+                        limitBytes: tunnelDataHandler.bufferSizeLimit
+                    });
+                }
+                let dataStatePacket = DataStatePacket.create(this._id, handlerID, sessionID, bindingToken);
                 tunnelDataHandler.dataHandlerState = DataHandlerState.ConnectingEndPoint;
                 tunnelDataHandler.sendData(dataStatePacket.toBuffer(), (handler, success /*, err*/) => {
                     if(!success) {
@@ -399,14 +418,15 @@ class TunnelClient {
                 this.onReceiveFromDataHandler(tunnelDataHandler, data);
             }
         });
-        
-        // 연결 생성 후 안전하게 속성 설정
+
+        // 연결 생성 후 속성 세트 — Connected 콜백에서 이미 주입했더라도, 후속 대기 중 상태(None)
+        // 노출을 막기 위해 post-connect fallback으로 한 번 더 주입한다. (idempotent)
         if (dataHandler) {
-            dataHandler.handlerID = handlerID;
+            dataHandler.handlerID = dataHandler.handlerID ?? handlerID;
             dataHandler.handlerType = HandlerType.Data;
-            dataHandler.sessionID = sessionID;
-            dataHandler.dataHandlerState = DataHandlerState.None;
-            dataHandler.bindingToken = bindingToken;
+            dataHandler.sessionID = dataHandler.sessionID ?? sessionID;
+            dataHandler.dataHandlerState = dataHandler.dataHandlerState ?? DataHandlerState.None;
+            dataHandler.bindingToken = dataHandler.bindingToken ?? bindingToken;
         } else {
             logger.error(`connectDataHandler: Failed to create data handler for sessionID: ${sessionID}`);
         }

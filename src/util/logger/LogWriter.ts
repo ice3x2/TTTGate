@@ -1,6 +1,7 @@
 import {Level, WriteConfig} from "./LoggerConfig"
 import fs, {WriteStream} from "fs";
 import Path from "path";
+import {redactSecretString} from "../SecretRedactor";
 
 interface LogMessage {
     name: string;
@@ -152,8 +153,9 @@ class LogWriter {
         let dateString = new Date(message.day).toISOString();
         let levelString = message.level.toUpperCase();
         let moduleString = message.module;
-        let messageString = message.message;
-        let errorString = message.error ? message.error.stack : '';
+        // R2-REQ-05: 로거 최종 write 직전 문자열 redact (post-processor 훅).
+        let messageString = redactSecretString(message.message ?? '');
+        let errorString = message.error ? redactSecretString(message.error.stack ?? '') : '';
         return `${dateString} [${levelString}] ${moduleString && moduleString != '' ? moduleString + '::' : '' } ${messageString}\n${errorString && errorString != '' ? errorString + '\n' : ''}`;
     }
 

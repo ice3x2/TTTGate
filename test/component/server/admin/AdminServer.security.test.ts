@@ -139,7 +139,10 @@ describe("AdminServer security hardening", () => {
             },
             body: JSON.stringify({key: "supersecret1", bootstrapToken})
         });
-        const cookie = (loginResponse.headers["set-cookie"] as string[])[0].split(";")[0];
+        const setCookies = loginResponse.headers["set-cookie"] as string[];
+        const cookie = setCookies.map((c) => c.split(";")[0]).join("; ");
+        const csrfCookie = setCookies.find((c) => c.startsWith("csrfToken="))!;
+        const csrfToken = csrfCookie.split(";")[0].split("=")[1];
         const insecureOption = ServerOptionStore.instance.serverOption;
         insecureOption.adminTls = false;
         insecureOption.adminBindHost = "0.0.0.0";
@@ -150,7 +153,8 @@ describe("AdminServer security hardening", () => {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                cookie
+                cookie,
+                "x-csrf-token": csrfToken
             },
             body: JSON.stringify(insecureOption)
         });
@@ -181,7 +185,10 @@ describe("AdminServer security hardening", () => {
             },
             body: JSON.stringify({key: "supersecret1", bootstrapToken})
         });
-        const cookie = (loginResponse.headers["set-cookie"] as string[])[0].split(";")[0];
+        const setCookies = loginResponse.headers["set-cookie"] as string[];
+        const cookie = setCookies.map((c) => c.split(";")[0]).join("; ");
+        const csrfCookie = setCookies.find((c) => c.startsWith("csrfToken="))!;
+        const csrfToken = csrfCookie.split(";")[0].split("=")[1];
         const legacyOption = ServerOptionStore.instance.serverOption;
         legacyOption.adminTls = false;
         legacyOption.adminBindHost = "0.0.0.0";
@@ -192,7 +199,8 @@ describe("AdminServer security hardening", () => {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                cookie
+                cookie,
+                "x-csrf-token": csrfToken
             },
             body: JSON.stringify(legacyOption)
         });

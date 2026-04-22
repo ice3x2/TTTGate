@@ -28,6 +28,8 @@ type TunnelHarness = {
     collectResourceStats(): ResourceStats;
     shutdown(): Promise<void>;
     dispose(): Promise<void>;
+    // P6-T1 개선 1회차 / REQ-09 E2E 테스트용 진단 접근자.
+    getServer(): TTTServer | undefined;
 }
 
 const createTunnelHarness = async (options: TunnelHarnessOptions = {}): Promise<TunnelHarness> => {
@@ -184,6 +186,9 @@ const createTunnelHarness = async (options: TunnelHarnessOptions = {}): Promise<
         async dispose(): Promise<void> {
             await shutdownHarness();
             await cleanupTestRoot(testRoot);
+        },
+        getServer(): TTTServer | undefined {
+            return server;
         }
     };
 };

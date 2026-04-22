@@ -1,0 +1,11 @@
+{
+  "summary": {
+    "tool": "lint-auth-compare",
+    "version": "1.0.0",
+    "scannedFiles": 65,
+    "violationCount": 0,
+    "strict": true,
+    "generatedAt": "2026-04-21T10:47:09.936Z"
+  },
+  "violations": []
+}

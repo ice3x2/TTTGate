@@ -16,7 +16,10 @@ import {SysMonitor} from "../../commons/SysMonitor";
 import LoggerFactory from "../../util/logger/LoggerFactory";
 import {TCPServer} from "../../util/TCPServer";
 import {ClockRngProvider} from "../../util/ClockRng";
-import {evaluateAdminSecurityPolicy, formatAdminSecurityPolicyErrors} from "../AdminSecurityPolicy";
+import {AdminSecurityPolicyRegistry, evaluateAdminSecurityPolicy, formatAdminSecurityPolicyErrors} from "../AdminSecurityPolicy";
+import {timingSafeStringEqual} from "../../util/timingSafeStringEqual";
+import {computeBackoffMs} from "./loginBackoff";
+import crypto from "crypto";
 
 const logger = LoggerFactory.getLogger('server', 'AdminServer');
 
@@ -24,12 +27,24 @@ type LoginAttemptState = {
     failedCount: number;
     windowStartedAt: number;
     blockedUntil: number;
+    lastSeenAt: number;
 }
 
-const LOGIN_FAILURE_DELAY_MS = 100;
 const LOGIN_WINDOW_MS = 60_000;
 const LOGIN_BLOCK_MS = 60_000;
 const LOGIN_MAX_FAILURES = 5;
+// P5-T2 / REQ-07: 실패 카운터 LRU 상한 (메모리 무제한 방지).
+const LOGIN_ATTEMPT_MAP_LIMIT = 10_000;
+
+// P5-T3 / REQ-11: JSON 본문 크기 / 타임아웃 상한.
+const ADMIN_JSON_BODY_LIMIT_BYTES = 1 * 1024 * 1024; // 1MiB
+const ADMIN_REQUEST_IDLE_TIMEOUT_MS = 10_000;
+const ADMIN_HEADERS_TIMEOUT_MS = 15_000;
+const ADMIN_REQUEST_TIMEOUT_MS = 30_000;
+
+// P5-T4 / REQ-12: CSRF 토큰 쿠키명 / 헤더명.
+const CSRF_COOKIE_NAME = 'csrfToken';
+const CSRF_HEADER_NAME = 'x-csrf-token';
 
 const EMPTY_PEM_DATA : PemData = {
     name: '',
@@ -47,8 +62,13 @@ class AdminServer {
     private readonly _server : http.Server | https.Server;
     private readonly _tls: boolean;
     private _port : number = -1;
+    private _bindHost: string = '';
     private _tttServer : TTTServer | undefined;
     private _loginAttempts: Map<string, LoginAttemptState> = new Map<string, LoginAttemptState>();
+    // P3-T5 / REQ-08: hot-apply를 위해 현재 TLS 옵션을 보존.
+    private _currentTlsOptions: { key: string, cert: string, ca?: string } | undefined;
+    // P5-T6 / REQ-19: 영구 error 핸들러 참조 보존 (removeAllListeners 절대 사용 금지).
+    private readonly _permanentErrorHandler: (err: Error) => void;
 
     constructor(tttServer: TTTServer, tls : boolean, certInfo? : CertInfo) {
         this._tttServer = tttServer;
@@ -62,6 +82,7 @@ class AdminServer {
             if(certInfo.ca.value.length > 0) {
                 options.ca = certInfo.ca.value;
             }
+            this._currentTlsOptions = { ...options };
             this._server = https.createServer(options, async (req, res) => {
                 await this.route(req, res);
             });
@@ -71,9 +92,49 @@ class AdminServer {
             });
         }
 
-        this._server.on('error', (err) => {
+        // P5-T6 / REQ-19: named function 참조로 영구 error 핸들러를 등록.
+        // removeAllListeners 를 호출하면 이 영구 핸들러까지 사라지므로 절대 사용 금지.
+        this._permanentErrorHandler = (err: Error) => {
             logger.error('HTTP Admin server error', err);
-        });
+        };
+        this._server.on('error', this._permanentErrorHandler);
+
+        // P5-T3 / REQ-11: HTTP 서버 수준 타임아웃.
+        try {
+            (this._server as any).headersTimeout = ADMIN_HEADERS_TIMEOUT_MS;
+            (this._server as any).requestTimeout = ADMIN_REQUEST_TIMEOUT_MS;
+        } catch { /* no-op: runtime 차이 보호 */ }
+    }
+
+    /**
+     * P3-T5 / REQ-08: Admin 인증서 hot-apply.
+     *
+     * https.Server.setSecureContext를 호출해 재기동 없이 신규 cert/key를 활성화한다.
+     * HTTP→HTTPS 전환(=tls 토글)은 listener 구조가 바뀌므로 이 경로로 처리하지 않으며,
+     * 상위 TTTServer가 pendingRestartScopes로 별도 재기동을 예약한다.
+     *
+     * 빈 CA는 setSecureContext에 넘기지 않는다 (undefined는 무해하나 '' 빈 문자열은
+     * OpenSSL이 실패로 간주할 수 있음).
+     */
+    public applyTlsCertificateHotSwap(certInfo: CertInfo): boolean {
+        if(!this._tls) return false;
+        if(!certInfo || !certInfo.cert?.value || !certInfo.key?.value) return false;
+        const next: { key: string, cert: string, ca?: string } = {
+            key: certInfo.key.value,
+            cert: certInfo.cert.value
+        };
+        if(certInfo.ca && certInfo.ca.value && certInfo.ca.value.length > 0) {
+            next.ca = certInfo.ca.value;
+        }
+        try {
+            (this._server as https.Server).setSecureContext(next as any);
+            this._currentTlsOptions = { ...next };
+            logger.info('AdminServer: TLS secure context hot-swapped (setSecureContext)');
+            return true;
+        } catch (e) {
+            logger.error('AdminServer: setSecureContext failed', e);
+            return false;
+        }
     }
 
     private async route(req: IncomingMessage, res: ServerResponse)  {
@@ -81,8 +142,23 @@ class AdminServer {
         url = url == undefined ? "" : url;
         let method = req.method;
         try {
+           // P5-T3 / REQ-11: 요청 단위 idle timeout.
+           try { req.setTimeout(ADMIN_REQUEST_IDLE_TIMEOUT_MS); } catch {}
+
            if(this._tls) {
                res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains");
+           }
+           // P5-T1 / REQ-03 (P7-T3 강화): Vary: Origin 은 인증 성공/실패와 무관하게 항상 설정한다.
+           // 캐시 레이어가 Origin 기반 응답 분화를 올바르게 처리하도록 보장.
+           res.setHeader('Vary', 'Origin');
+           // P5-T4 / REQ-12: 상태 변경 메서드는 Origin+CSRF 검증.
+           if(method === 'POST' || method === 'PUT' || method === 'DELETE') {
+               // /api/login 은 CSRF 토큰 발급 전 호출 가능해야 하므로 헤더 검증은 스킵하되,
+               // Origin(존재 시)은 여전히 화이트리스트 강제.
+               const skipCsrfHeader = (url == '/api/login');
+               if(!this.verifyCsrfGuard(req, res, skipCsrfHeader)) {
+                   return;
+               }
            }
            if (method == 'GET') {
                 await this.routeGet(req, res, url);
@@ -92,15 +168,34 @@ class AdminServer {
                 await this.routePost(req, res, url);
                 return;
            }
+           else if(method == 'PUT') {
+                await this.routePost(req, res, url);
+                return;
+           }
            else if(method == 'DELETE') {
                await this.routeDelete(req, res, url);
                return;
            }
 
-        } catch (e) {
+        } catch (e: any) {
             try {
+                const code = e && typeof e === 'object' ? e.code : undefined;
+                let status = 500;
+                let message = `Internal Server Error: ${e}`;
+                if(code === 'E_BODY_TOO_LARGE') {
+                    status = 413;
+                    message = 'Payload Too Large';
+                } else if(code === 'E_REQ_TIMEOUT') {
+                    status = 408;
+                    message = 'Request Timeout';
+                } else if(e instanceof SyntaxError) {
+                    status = 400;
+                    message = 'Invalid JSON body';
+                }
                 logger.warn('HTTP Admin server processing error', e);
-                this.sendApiFailure(res, 500, {message: `Internal Server Error: ${e}`, url: url});
+                if(!res.headersSent) {
+                    this.sendApiFailure(res, status, {message, url: url});
+                }
                 return;
             } catch (e) {
                 logger.error('HTTP Admin server processing error', e);
@@ -170,6 +265,9 @@ class AdminServer {
         } else if (url == "/api/validateSession") {
             await this.onGetValidateSession(req, res);
             return;
+        } else if (url == "/api/csrfToken") {
+            await this.onGetCsrfToken(req, res);
+            return;
         } else if (url == "/api/adminCert") {
             await this.onGetAdminCert(req, res);
             return;
@@ -210,7 +308,10 @@ class AdminServer {
         }
         let ext = Path.extname(realPath);
         let contentType = this.contentTypeFromExt(ext);
-        if(contentType == 'application/octet-stream' && !realPath.endsWith("index.html")) {
+        // P5-T7 / REQ-18: Windows FS 는 기본 대소문자 무시 → basename 을 소문자화해서 비교.
+        // realPath 가 `...\INDEX.HTML` 로 들어와도 실제 디스크의 `index.html` 에 매칭되어야 한다.
+        const basenameLower = Path.basename(realPath).toLowerCase();
+        if(contentType == 'application/octet-stream' && basenameLower !== "index.html") {
             res.writeHead(404);
             res.end(`Not Found ${url}`);
             return;
@@ -249,38 +350,54 @@ class AdminServer {
             this.sendApiFailure(res, 400, {message: 'Invalid certificate'});
             return;
         }
+        // P3-T5 / REQ-08: 우선 hot-swap을 시도하고, 성공하면 restart 예약을 비운다.
+        const hotSwapped = this.applyTlsCertificateHotSwap(certInfo);
+        const pendingRestartScopes = hotSwapped ? [] : ["admin-cert"];
         let success = await certStore.commitAdminServerCert(certInfo, {
-            markLastKnownGood: false,
-            pendingRestartScopes: ["admin-cert"]
+            markLastKnownGood: hotSwapped,
+            pendingRestartScopes
         });
         if(!success) {
             this.sendApiFailure(res, 400, {message: 'Invalid certificate'});
             return;
         }
         this.sendApiSuccess(res, {
-            partial: true,
-            warnings: ["admin certificate stored; restart required to apply"],
-            restartRequiredScopes: ["admin-cert"],
+            partial: !hotSwapped,
+            warnings: hotSwapped
+                ? ["admin certificate hot-applied"]
+                : ["admin certificate stored; restart required to apply"],
+            restartRequiredScopes: pendingRestartScopes,
             revisionState: certStore.revisionState
         });
     }
 
     private static getSessionKey = (req: IncomingMessage) : Array<string> => {
-        let result = new Array<string>();
-        let cookie = req.headers['cookie'];
-        if(cookie == undefined) {
-            return result;
-        }
-        let cookieParts = cookie.split(';');
-        for (let i = 0; i < cookieParts.length; i++) {
-            let cookiePart = cookieParts[i];
-            let cookiePartParts = cookiePart.split('=');
-            if(cookiePartParts.length == 2) {
-                let key = cookiePartParts[0].trim();
-                let value = cookiePartParts[1].trim();
-                if(key == 'sessionKey') {
-                    result.push(value);
-                }
+        const cookies = AdminServer.parseCookies(req);
+        const v = cookies.get('sessionKey');
+        return v ? [v] : [];
+    }
+
+    /**
+     * P5-T5 / REQ-16: Cookie 파싱 방어.
+     * split('=') 기반 파싱은 값에 '='가 포함되면(base64url 패딩 등) 조각이 3개 이상이 되어
+     * 쿠키 자체를 무시해버린다. indexOf('=') 로 첫 '=' 만 분리해 안전하게 추출한다.
+     */
+    private static parseCookies(req: IncomingMessage): Map<string, string> {
+        const result = new Map<string, string>();
+        const cookie = req.headers['cookie'];
+        if(cookie == undefined) return result;
+        const parts = cookie.split(';');
+        for(const raw of parts) {
+            const seg = raw.trim();
+            if(seg.length == 0) continue;
+            const eq = seg.indexOf('=');
+            if(eq <= 0) continue;
+            const key = seg.substring(0, eq).trim();
+            const value = seg.substring(eq + 1).trim();
+            if(key.length == 0) continue;
+            // 동일 이름 쿠키는 최초 값을 우선(RFC6265 §5.4 권장).
+            if(!result.has(key)) {
+                result.set(key, value);
             }
         }
         return result;
@@ -358,7 +475,7 @@ class AdminServer {
             || currentServerOption.controlProtocolMode !== serverOption.controlProtocolMode
             || (currentServerOption.allowLegacyControlAuth === true) !== (serverOption.allowLegacyControlAuth === true)
             || (currentServerOption.globalMemCacheLimit ?? 128) !== (serverOption.globalMemCacheLimit ?? 128)
-            || JSON.stringify(currentServerOption.trustedClients ?? []) !== JSON.stringify(serverOption.trustedClients ?? []);
+            || !ObjectUtil.canonicalEquals(currentServerOption.trustedClients ?? [], serverOption.trustedClients ?? []);
         let runtimeResult;
         if(typeof (this._tttServer as any)?.applyServerOption == "function") {
             runtimeResult = await (this._tttServer as any).applyServerOption(serverOption, currentServerOption);
@@ -531,6 +648,26 @@ class AdminServer {
             return;
         }
         this.sendApiSuccess(res, {valid: valid});
+    }
+
+    /**
+     * MEDIUM / REQ-12 개선: CSRF 토큰 재발급 엔드포인트.
+     * 세션이 유효할 때만 새 토큰을 발급하고 csrfToken 쿠키를 갱신한다.
+     * (GET 은 CSRF 게이트 바깥이므로, 탈취 쿠키로 악용되지 않도록 반드시 세션 검증을 선행한다.)
+     */
+    private onGetCsrfToken = async (req: IncomingMessage, res: ServerResponse) => {
+        if(!await this.checkSession(req, res)) {
+            return;
+        }
+        const csrfToken = crypto.randomBytes(32).toString('hex');
+        const secure = this._tls ? ' Secure;' : '';
+        res.writeHead(200, {
+            'Content-Type': 'application/json',
+            'Set-Cookie': [
+                `${CSRF_COOKIE_NAME}=${csrfToken}; Path=/; Max-Age=${12 * 60 * 60}; SameSite=Strict;${secure}`
+            ]
+        });
+        res.end(JSON.stringify({success: true, partial: false, failedScopes: [], warnings: [], message: '', csrfToken}));
     }
 
     private checkSession = async (req: IncomingMessage, res: ServerResponse) : Promise<boolean> => {
@@ -706,24 +843,44 @@ class AdminServer {
     }
 
     private onLogin = async (req: IncomingMessage, res: ServerResponse) => {
-        if(this.isLoginBlocked(req)) {
+        let json: any;
+        try {
+            json = await AdminServer.readJson(req);
+        } catch (e: any) {
+            // body 크기 초과/타임아웃은 상위 route()에서 처리하지만,
+            // 방어적으로 여기서도 fail-fast.
+            if(!res.headersSent) this.sendApiFailure(res, 400, {message: 'Invalid login body'});
+            return;
+        }
+        const key = typeof json?.['key'] == 'string' ? json['key'] : '';
+        const bootstrapToken = typeof json?.['bootstrapToken'] == 'string' ? json['bootstrapToken'] : undefined;
+        const account = this.extractAccountKey(key);
+        // P5-T2 / REQ-07: 레이트리밋 키 = account + network-bucket.
+        if(this.isLoginBlocked(req, account)) {
             this.sendApiFailure(res, 429, {message: 'Too many login attempts'});
             return;
         }
-        let json = await AdminServer.readJson(req);
-        let key = typeof json['key'] == 'string' ? json['key'] : '';
-        let bootstrapToken = typeof json['bootstrapToken'] == 'string' ? json['bootstrapToken'] : undefined;
-        let sessionStore =  SessionStore.instance;
-        let result = await sessionStore.loginWithDetails(key, bootstrapToken);
+        const sessionStore = SessionStore.instance;
+        const result = await sessionStore.loginWithDetails(key, bootstrapToken);
         if(result.success) {
-            this.resetLoginAttempts(req);
-            let sessionKey = await sessionStore.newSession();
-            res.writeHead(200, {'Content-Type': 'application/json',
-                'Set-Cookie': `sessionKey=${sessionKey}; Path=/api/; Max-Age=${12 * 60 * 60}; HttpOnly; SameSite=Strict;${this._tls ? ' Secure;' : ''}`});
-            res.end(JSON.stringify({success: true, partial: false, failedScopes: [], warnings: [], message: ''}));
+            this.resetLoginAttempts(req, account);
+            const sessionKey = await sessionStore.newSession();
+            // P5-T4 / REQ-12: 로그인 성공 시 CSRF 쿠키도 함께 발급 (double-submit).
+            const csrfToken = crypto.randomBytes(32).toString('hex');
+            const secure = this._tls ? ' Secure;' : '';
+            res.writeHead(200, {
+                'Content-Type': 'application/json',
+                'Set-Cookie': [
+                    `sessionKey=${sessionKey}; Path=/; Max-Age=${12 * 60 * 60}; HttpOnly; SameSite=Strict;${secure}`,
+                    // CSRF 토큰은 JS에서 읽어 헤더에 실어야 하므로 HttpOnly 금지.
+                    `${CSRF_COOKIE_NAME}=${csrfToken}; Path=/; Max-Age=${12 * 60 * 60}; SameSite=Strict;${secure}`
+                ]
+            });
+            res.end(JSON.stringify({success: true, partial: false, failedScopes: [], warnings: [], message: '', csrfToken}));
         } else {
-            this.recordLoginFailure(req);
-            await this.delayFailedLogin();
+            this.recordLoginFailure(req, account);
+            // P5-T2 / REQ-07: 실패 응답 지연은 computeBackoffMs(실패횟수) 기반.
+            await this.delayFailedLogin(req, account);
             if(result.bootstrapRequired) {
                 this.sendApiFailure(res, result.weakPassword ? 400 : 403, {
                     bootstrapRequired: true,
@@ -737,19 +894,58 @@ class AdminServer {
     }
 
 
-    private static async readJson(req: IncomingMessage) : Promise<any> {
+    /**
+     * P5-T3 / REQ-11: JSON 본문 상한 1MiB. 초과 시 413 응답 후 소켓 파괴.
+     * 이 정적 헬퍼는 상한 초과를 예외로 전파하므로, 호출부는 상위 try/catch에서 처리하거나
+     * 본 클래스의 readJsonOrFail 편의 메서드를 사용해야 한다.
+     */
+    private static async readJson(req: IncomingMessage, maxBytes: number = ADMIN_JSON_BODY_LIMIT_BYTES) : Promise<any> {
         return new Promise<any>((resolve, reject) => {
-            let data = '';
-            req.on('data', (chunk) => {
-                data += chunk;
+            let received = 0;
+            let chunks: Buffer[] = [];
+            let aborted = false;
+            const finish = (fn: () => void) => {
+                if(aborted) return;
+                aborted = true;
+                fn();
+            };
+            req.on('data', (chunk: Buffer | string) => {
+                if(aborted) return;
+                const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+                // MEDIUM / REQ-11 개선: push 전에 상한 초과를 선판정해 메모리 피크를 억제한다.
+                if(received + buf.length > maxBytes) {
+                    finish(() => {
+                        const err: any = new Error(`request body exceeds ${maxBytes} bytes`);
+                        err.code = 'E_BODY_TOO_LARGE';
+                        try { req.destroy(err); } catch {}
+                        reject(err);
+                    });
+                    return;
+                }
+                received += buf.length;
+                chunks.push(buf);
             });
             req.on('end', () => {
-                try {
-                    let json = JSON.parse(data);
-                    resolve(json);
-                } catch (e) {
-                    reject(e);
-                }
+                finish(() => {
+                    try {
+                        const data = Buffer.concat(chunks).toString('utf8');
+                        const json = data.length == 0 ? {} : JSON.parse(data);
+                        resolve(json);
+                    } catch (e) {
+                        reject(e);
+                    }
+                });
+            });
+            req.on('error', (err) => {
+                finish(() => reject(err));
+            });
+            req.on('timeout', () => {
+                finish(() => {
+                    const err: any = new Error('request idle timeout');
+                    err.code = 'E_REQ_TIMEOUT';
+                    try { req.destroy(err); } catch {}
+                    reject(err);
+                });
             });
         });
     }
@@ -768,10 +964,15 @@ class AdminServer {
         if(!await this.checkSession(req, res)) {
             return;
         }
+        // P5-T1 / REQ-03: Vary + CORS whitelist. 자기 호스트 아닐 시 CORS 헤더 생략.
+        this.applySelfOriginCorsHeaders(req, res);
         let store = ServerOptionStore.instance;
-        let pureServerOption : any = store.serverOption;
-        delete pureServerOption['tunnelingOptions'];
-        this.sendApiSuccess(res, {serverOption:  pureServerOption, revisionState: store.revisionState});
+        // P5-T1 / REQ-03: store.serverOption 은 cloneDeep 복사본을 반환하지만,
+        // delete 연산 의존성을 제거하기 위해 구조 분해로 tunnelingOptions 를 제외한 신규 객체 구성.
+        const cloned = ObjectUtil.cloneDeep(store.serverOption) as any;
+        const { tunnelingOptions: _omit, ...pureServerOption } = cloned;
+        void _omit;
+        this.sendApiSuccess(res, {serverOption: pureServerOption, revisionState: store.revisionState});
     }
 
 
@@ -822,35 +1023,49 @@ class AdminServer {
 
 
     private onGetServerOptionHash = async (req: IncomingMessage, res: ServerResponse) => {
-        let origin = req.headers['origin'];
-        let serverOption = ServerOptionStore.instance.serverOption;
-        let adminCert = CertificationStore.instance.getAdminCert();
-        let pureServerOption : any = serverOption;
-        delete pureServerOption['tunnelingOptions'];
-        let hash = CryptoJS.SHA512(JSON.stringify(pureServerOption) + JSON.stringify(adminCert)).toString();
-        res.writeHead(200, {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': origin == undefined ? '*' : origin});
+        // P5-T1 / REQ-03: 세션 인증 필수.
+        if(!await this.checkSession(req, res)) {
+            return;
+        }
+        // P5-T1 / REQ-03: 자기 호스트 CORS 화이트리스트 + Vary: Origin 항상.
+        const corsHeaders = this.buildSelfOriginCorsHeaders(req);
+        // P5-T1 / REQ-03: cloneDeep 후 구조 분해로 tunnelingOptions 제외 — 런타임 상태 파괴 방지.
+        const storeOption = ServerOptionStore.instance.serverOption;
+        const cloned = ObjectUtil.cloneDeep(storeOption) as any;
+        const { tunnelingOptions: _omit, ...pureServerOption } = cloned;
+        void _omit;
+        const adminCert = CertificationStore.instance.getAdminCert();
+        const hash = CryptoJS.SHA512(JSON.stringify(pureServerOption) + JSON.stringify(adminCert)).toString();
+        res.writeHead(200, {'Content-Type': 'application/json', 'Vary': 'Origin', ...corsHeaders});
         res.end(JSON.stringify({success: true, partial: false, failedScopes: [], warnings: [], message: '', hash: hash}));
     }
 
 
     public async listen(port : number, host?: string)  : Promise<number> {
+        // P5-T6 / REQ-19: listen 전용 핸들러를 named function 으로 등록해 listen 종료 후 removeListener(named).
+        // removeAllListeners 를 호출하면 생성자에서 등록한 영구 핸들러(_permanentErrorHandler)까지 제거되므로 절대 사용 금지.
         return new Promise((resolve, reject) => {
-            this._server.on('listening', () => {
-                let address = this._server.address();
-                let actualPort = typeof address == 'object' && address ? address.port : port;
-                let actualHost = typeof address == 'object' && address ? address.address : (host ?? "");
+            const onListening = () => {
+                const address = this._server.address();
+                const actualPort = typeof address == 'object' && address ? address.port : port;
+                const actualHost = typeof address == 'object' && address ? address.address : (host ?? "");
                 logger.info(`Admin server listening on ${actualHost}:${actualPort}`);
-                this._server.removeAllListeners('listening');
+                this._server.removeListener('listening', onListening);
+                this._server.removeListener('error', onListenError);
                 this._port = actualPort;
+                this._bindHost = (host && host.length > 0) ? host : (typeof actualHost == 'string' ? actualHost : '');
                 resolve(actualPort);
-            });
-            this._server.on('error', (err) => {
+            };
+            const onListenError = (err: Error) => {
                 logger.error(`Admin server error on port ${port}`, err);
-                this._server.close();
-                this._server.removeAllListeners('error');
+                this._server.removeListener('listening', onListening);
+                this._server.removeListener('error', onListenError);
+                try { this._server.close(); } catch {}
                 this._port = -1;
                 reject(err);
-            });
+            };
+            this._server.on('listening', onListening);
+            this._server.on('error', onListenError);
             if(host && host.length > 0) {
                 this._server.listen(port, host);
             } else {
@@ -865,9 +1080,11 @@ class AdminServer {
             logger.info(`Admin server is already closed on port ${this._port}`);
             return false;
         }
+        // P5-T6 / REQ-19: 영구 error 핸들러는 유지 (재시작 시에도 동일 인스턴스 재사용 가능해야 함).
+        // removeAllListeners 사용 금지. listening/request 리스너만 선택적으로 제거.
         return new Promise((resolve) => {
-            this._server.removeAllListeners();
-            this._server.closeAllConnections();
+            this._server.removeAllListeners('listening');
+            try { (this._server as any).closeAllConnections?.(); } catch {}
             this._server.close((err) => {
                 logger.info(`Admin server closed on port ${this._port}`);
                 this._port = -1;
@@ -940,35 +1157,221 @@ class AdminServer {
         return ClockRngProvider.current().now();
     }
 
+    /**
+     * P5-T2 / REQ-07: 신뢰할 수 있는 클라이언트 원격 IP를 반환.
+     * trustXForwardedFor 가 true 일 때만 XFF 헤더 최좌측 IP 신뢰. 기본값(false)에서는 항상 socket.remoteAddress 사용.
+     */
     private getClientAddress(req: IncomingMessage): string {
+        const allowances = AdminSecurityPolicyRegistry.current();
+        if(allowances.trustXForwardedFor) {
+            const xff = req.headers['x-forwarded-for'];
+            const xffRaw = Array.isArray(xff) ? xff[0] : xff;
+            if(typeof xffRaw == 'string' && xffRaw.length > 0) {
+                const first = xffRaw.split(',')[0]?.trim();
+                if(first && first.length > 0) return first;
+            }
+        }
         return req.socket.remoteAddress ?? "unknown";
     }
 
-    private isLoginBlocked(req: IncomingMessage): boolean {
-        const state = this._loginAttempts.get(this.getClientAddress(req));
+    /**
+     * P5-T2 / REQ-07: 네트워크 버킷 (IPv4 /24, IPv6 /64) 계산.
+     * 동일 NAT 뒤의 서로 다른 계정이 공격자 1인에 의해 잠기지 않도록,
+     * 레이트리밋 키는 (account, bucket) 튜플로 구성한다.
+     */
+    private getNetworkBucket(address: string): string {
+        if(!address || address == 'unknown') return 'unknown';
+        // IPv6 mapped (::ffff:1.2.3.4) 정규화
+        const v6MapMatch = address.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
+        const normalized = v6MapMatch ? v6MapMatch[1] : address;
+        if(/^\d+\.\d+\.\d+\.\d+$/.test(normalized)) {
+            const parts = normalized.split('.');
+            return `v4:${parts[0]}.${parts[1]}.${parts[2]}.0/24`;
+        }
+        // IPv6: 앞 4그룹(64bit) 만 남김.
+        if(normalized.indexOf(':') >= 0) {
+            // zone suffix 제거
+            const noZone = normalized.split('%')[0];
+            // 축약 형태 확장
+            const segs = noZone.split(':');
+            const head = segs.slice(0, 4).join(':');
+            return `v6:${head}::/64`;
+        }
+        return `raw:${normalized}`;
+    }
+
+    private extractAccountKey(key: string): string {
+        // 비밀번호 기반 인증이므로 계정명이 별도로 없지만, 식별을 위해 비밀번호 앞 8자 해시 사용.
+        // 원문 비밀번호를 평문으로 저장/비교하지 않도록 SHA-256 단방향 해시.
+        const h = crypto.createHash('sha256').update(key ?? '').digest('hex');
+        return `acct:${h.substring(0, 16)}`;
+    }
+
+    private buildLoginAttemptKey(req: IncomingMessage, account: string): string {
+        return `${account}|${this.getNetworkBucket(this.getClientAddress(req))}`;
+    }
+
+    private isLoginBlocked(req: IncomingMessage, account: string): boolean {
+        const state = this._loginAttempts.get(this.buildLoginAttemptKey(req, account));
         return state != undefined && state.blockedUntil > this.now();
     }
 
-    private recordLoginFailure(req: IncomingMessage): void {
+    private recordLoginFailure(req: IncomingMessage, account: string): void {
         const now = this.now();
-        const clientAddress = this.getClientAddress(req);
-        let state = this._loginAttempts.get(clientAddress);
+        const mapKey = this.buildLoginAttemptKey(req, account);
+        let state = this._loginAttempts.get(mapKey);
         if(!state || state.windowStartedAt + LOGIN_WINDOW_MS <= now) {
-            state = {failedCount: 0, windowStartedAt: now, blockedUntil: 0};
+            state = {failedCount: 0, windowStartedAt: now, blockedUntil: 0, lastSeenAt: now};
         }
         state.failedCount += 1;
+        state.lastSeenAt = now;
         if(state.failedCount >= LOGIN_MAX_FAILURES) {
             state.blockedUntil = now + LOGIN_BLOCK_MS;
         }
-        this._loginAttempts.set(clientAddress, state);
+        // P5-T2 / REQ-07: LRU 상한 10k — Map insertion-order 기반으로 가장 오래된 엔트리 축출.
+        if(!this._loginAttempts.has(mapKey) && this._loginAttempts.size >= LOGIN_ATTEMPT_MAP_LIMIT) {
+            const oldestKey = this._loginAttempts.keys().next().value as string | undefined;
+            if(oldestKey !== undefined) {
+                this._loginAttempts.delete(oldestKey);
+            }
+        }
+        // Map 의 LRU 흉내: 기존 키 삭제 후 재삽입하면 insertion-order 재조정.
+        this._loginAttempts.delete(mapKey);
+        this._loginAttempts.set(mapKey, state);
     }
 
-    private resetLoginAttempts(req: IncomingMessage): void {
-        this._loginAttempts.delete(this.getClientAddress(req));
+    private resetLoginAttempts(req: IncomingMessage, account: string): void {
+        this._loginAttempts.delete(this.buildLoginAttemptKey(req, account));
     }
 
-    private async delayFailedLogin(): Promise<void> {
-        await new Promise((resolve) => setTimeout(resolve, LOGIN_FAILURE_DELAY_MS));
+    private async delayFailedLogin(req: IncomingMessage, account: string): Promise<void> {
+        // P5-T2 / REQ-07: 실패 카운트 기반 지수 지연.
+        const state = this._loginAttempts.get(this.buildLoginAttemptKey(req, account));
+        const count = state ? state.failedCount : 1;
+        const delay = computeBackoffMs(count);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+
+    /**
+     * P5-T1/P5-T4: 자기 호스트(listen URL)와 Origin 이 일치할 때만 CORS/상태변경 요청 허용.
+     * 화이트리스트: listen host + 127.0.0.1 / ::1 / localhost (개발 편의).
+     */
+    private isOriginAllowed(origin: string | undefined): boolean {
+        if(!origin) return false; // Origin 없는 상태변경 요청은 거부 (다만 CSRF 헤더 존재 여부로 별도 판정).
+        try {
+            const u = new URL(origin);
+            const host = u.hostname.toLowerCase();
+            // MEDIUM / REQ-12 개선: 포트까지 포함해 비교한다.
+            // u.port 는 동일 scheme 기본 포트(80/443)일 때 '' 가 되므로, scheme 기반 기본 포트로 보정.
+            const defaultPort = u.protocol === 'https:' ? 443 : (u.protocol === 'http:' ? 80 : 0);
+            const originPort = u.port.length > 0 ? parseInt(u.port, 10) : defaultPort;
+            const allowedHosts = new Set<string>(['127.0.0.1', '::1', 'localhost']);
+            if(this._bindHost && this._bindHost.length > 0 && this._bindHost !== '0.0.0.0' && this._bindHost !== '::') {
+                allowedHosts.add(this._bindHost.toLowerCase());
+            }
+            if(!allowedHosts.has(host)) return false;
+            // listen 포트를 알고 있을 때만 포트 일치 강제. listen 전이면(_port < 0) hostname 일치로 폴백.
+            if(this._port > 0) {
+                return originPort === this._port;
+            }
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    private buildSelfOriginCorsHeaders(req: IncomingMessage): Record<string, string> {
+        const origin = req.headers['origin'];
+        const originStr = Array.isArray(origin) ? origin[0] : origin;
+        const headers: Record<string, string> = { 'Vary': 'Origin' };
+        if(originStr && this.isOriginAllowed(originStr)) {
+            headers['Access-Control-Allow-Origin'] = originStr;
+            headers['Access-Control-Allow-Credentials'] = 'true';
+        }
+        return headers;
+    }
+
+    private applySelfOriginCorsHeaders(req: IncomingMessage, res: ServerResponse): void {
+        const headers = this.buildSelfOriginCorsHeaders(req);
+        for(const [k, v] of Object.entries(headers)) {
+            res.setHeader(k, v);
+        }
+    }
+
+    /**
+     * P5-T4 / REQ-12: 상태 변경 요청 가드.
+     *  - Origin 헤더가 존재하면 화이트리스트 검증. 화이트리스트 밖이면 403.
+     *  - requireCsrfHeader (기본 true): X-CSRF-Token 헤더와 csrfToken 쿠키 double-submit 비교.
+     *    둘 다 없으면 동일 오리진으로 간주되더라도 403.
+     *  - /api/login 만 CSRF 토큰 헤더 예외 허용 (토큰 발급 전이므로).
+     */
+    private verifyCsrfGuard(req: IncomingMessage, res: ServerResponse, skipCsrfHeader: boolean): boolean {
+        const origin = req.headers['origin'];
+        const originStr = Array.isArray(origin) ? origin[0] : origin;
+        if(originStr !== undefined && !this.isOriginAllowed(originStr)) {
+            this.sendApiFailure(res, 403, {message: 'Forbidden origin'});
+            return false;
+        }
+        const allowances = AdminSecurityPolicyRegistry.current();
+        const headerRaw = req.headers[CSRF_HEADER_NAME];
+        const headerToken = Array.isArray(headerRaw) ? headerRaw[0] : headerRaw;
+        const cookies = AdminServer.parseCookies(req);
+        const cookieToken = cookies.get(CSRF_COOKIE_NAME);
+        const sessionCookie = cookies.get('sessionKey');
+        const hasSession = sessionCookie !== undefined && sessionCookie.length > 0;
+
+        if(skipCsrfHeader) {
+            // /api/login 경로: 토큰 발급 전이므로 CSRF 헤더 검사 스킵.
+            return true;
+        }
+
+        // HIGH-2 / REQ-12: 세션이 있는 상태변경 요청은 반드시 CSRF double-submit 성립 필요.
+        // 쿠키 탈취만으로 CSRF 헤더 없이 상태변경을 호출할 수 없도록 강제.
+        if(hasSession) {
+            if(!cookieToken || !headerToken) {
+                this.sendApiFailure(res, 403, {message: 'Missing CSRF token'});
+                return false;
+            }
+            if(!timingSafeStringEqual(headerToken, cookieToken, 'utf8')) {
+                this.sendApiFailure(res, 403, {message: 'CSRF token mismatch'});
+                return false;
+            }
+            return true;
+        }
+
+        // 세션 없음 = 로그인 전 또는 non-browser 경로.
+        // requireCsrfHeader 가 꺼져 있으면 통과 (기본값은 true).
+        if(!allowances.requireCsrfHeader) {
+            return true;
+        }
+
+        // allowLegacyAdminHttp + requireCsrfHeader 조합 시 non-browser 경로에서도 토큰 헤더를 요구한다.
+        if(allowances.allowLegacyAdminHttp) {
+            if(!headerToken) {
+                this.sendApiFailure(res, 403, {message: 'Missing CSRF token'});
+                return false;
+            }
+            // cookieToken 이 있으면 일치 검증, 없으면 레거시 클라이언트의 헤더-only 경로 허용.
+            if(cookieToken && !timingSafeStringEqual(headerToken, cookieToken, 'utf8')) {
+                this.sendApiFailure(res, 403, {message: 'CSRF token mismatch'});
+                return false;
+            }
+            return true;
+        }
+
+        // 브라우저가 아닌 CLI/서버 간 호출: Origin 없음 + 쿠키에 CSRF 토큰 없음이면 통과.
+        if(!cookieToken && !headerToken && originStr === undefined) {
+            return true;
+        }
+        if(!headerToken || !cookieToken) {
+            this.sendApiFailure(res, 403, {message: 'Missing CSRF token'});
+            return false;
+        }
+        if(!timingSafeStringEqual(headerToken, cookieToken, 'utf8')) {
+            this.sendApiFailure(res, 403, {message: 'CSRF token mismatch'});
+            return false;
+        }
+        return true;
     }
 
 

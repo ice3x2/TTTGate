@@ -19,31 +19,15 @@
   },
   "scripts": {
     "test": "jest --detectOpenHandles --forceExit",
+    "test:coverage": "jest --detectOpenHandles --forceExit --coverage",
+    "lint": "node scripts/lint-auth-compare.mjs src --strict",
+    "smoke": "node scripts/smoke.mjs",
     "build": "tsc -b",
     "pkg": "pkg . --no-bytecode --public-packages \"*\" --public",
     "dist": "node deploy.js",
     "start": "node bin/src/sserver.js",
     "server": "tsnd --respawn src/app.ts server -dev ",
     "client": "tsnd --respawn src/app.ts client -dev "
-  },
-  "jest": {
-    "testMatch": [
-      "<rootDir>/test/**/*.test.(js|ts)"
-    ],
-    "transform": {
-      "^.+\\.ts$": [
-        "ts-jest",
-        {
-          "diagnostics": true
-        }
-      ]
-    },
-    "moduleFileExtensions": [
-      "ts",
-      "tsx",
-      "js",
-      "json"
-    ]
   },
   "author": "",
   "license": "ISC",

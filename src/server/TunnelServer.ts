@@ -26,6 +26,7 @@ import {
 import DataStatePacket from "../commons/DataStatePacket";
 import {IdentityRegistry} from "./IdentityRegistry";
 import {TunnelHandshakePolicyRegistry} from "./TunnelHandshakePolicy";
+import {timingSafeStringEqual} from "../util/timingSafeStringEqual";
 import LoggerFactory  from "../util/logger/LoggerFactory";
 import {SysInfo} from "../commons/SysMonitor";
 const logger = LoggerFactory.getLogger('server', 'TunnelServer');
@@ -60,6 +61,17 @@ type PendingControlHandshake = {
 
 const HANDLER_TYPE_BUNDLE_KEY = 'T';
 
+// P6-T1 / REQ-09: 세션-TTL/heartbeat. 기본 60초 무응답 시 강제 종료.
+// 테스트에서는 정적 setter로 짧게 조정할 수 있다(스테이트리스 싱글턴 회피 → per-instance 설정).
+const DEFAULT_SESSION_TTL_MS = 60_000;
+const DEFAULT_SESSION_HEARTBEAT_CHECK_INTERVAL_MS = 5_000;
+
+// P6-T1 개선 1회차 / F4: configureSessionTtl 범위 방어. REQ-15와 대칭.
+const MIN_SESSION_TTL_MS = 1_000;
+const MAX_SESSION_TTL_MS = 3_600_000;
+const MIN_SESSION_TTL_CHECK_INTERVAL_MS = 100;
+const MAX_SESSION_TTL_CHECK_INTERVAL_MS = 60_000;
+
 class TunnelServer {
 
     private readonly _serverOption : {port: number, tls: boolean, key: string, controlProtocolMode: ControlProtocolMode, allowLegacyControlAuth: boolean};
@@ -72,7 +84,13 @@ class TunnelServer {
     private readonly _identityRegistry: IdentityRegistry;
     private isRunning = false;
 
-    private _heartbeatInterval : NodeJS.Timeout | undefined;
+    // P6-T1 / REQ-09: 세션별 마지막 활동 시각 기록. TTL 경과 시 강제 종료.
+    private _sessionLastActivityMs : Map<number, number> = new Map<number, number>();
+    private _sessionTtlMs : number = DEFAULT_SESSION_TTL_MS;
+    private _sessionTtlCheckIntervalMs : number = DEFAULT_SESSION_HEARTBEAT_CHECK_INTERVAL_MS;
+    private _sessionTtlTimer : NodeJS.Timeout | undefined;
+    // P6-T1 개선 1회차 / F3: close() 진입 후 dispatch 된 TTL 콜백 race 가드.
+    private _closed : boolean = false;
     private _authTimeouts : Set<NodeJS.Timeout> = new Set<NodeJS.Timeout>();
     private _unauthenticatedHandlerIds: Set<number> = new Set<number>();
     private _nextSelectIdx = 0;
@@ -130,23 +148,95 @@ class TunnelServer {
                     reject(err);
                 } else {
                     this.isRunning = true;
+                    this.startSessionTtlTimer();
                     resolve();
                 }
             });
         });
     }
 
-
-    /**
-     * 클라이언트 체크 인터벌을 종료한다.
-     * @private
-     */
-    private stopClientCheckInterval() {
-        if(this._heartbeatInterval) {
-            clearInterval(this._heartbeatInterval);
-            this._heartbeatInterval = undefined;
+    // P6-T1 / REQ-09: 세션 TTL 설정 API. 테스트/운영에서 동적 조정 가능.
+    // P6-T1 개선 1회차 / F4: 범위 밖 값은 예외로 차단(REQ-15 handshake policy 검증과 대칭).
+    public configureSessionTtl(ttlMs: number, checkIntervalMs?: number) : void {
+        if(!Number.isFinite(ttlMs) || ttlMs < MIN_SESSION_TTL_MS || ttlMs > MAX_SESSION_TTL_MS) {
+            throw new RangeError(`configureSessionTtl: ttlMs must be within [${MIN_SESSION_TTL_MS}, ${MAX_SESSION_TTL_MS}] ms (got ${ttlMs})`);
+        }
+        if(checkIntervalMs !== undefined) {
+            if(!Number.isFinite(checkIntervalMs) || checkIntervalMs < MIN_SESSION_TTL_CHECK_INTERVAL_MS || checkIntervalMs > MAX_SESSION_TTL_CHECK_INTERVAL_MS) {
+                throw new RangeError(`configureSessionTtl: checkIntervalMs must be within [${MIN_SESSION_TTL_CHECK_INTERVAL_MS}, ${MAX_SESSION_TTL_CHECK_INTERVAL_MS}] ms (got ${checkIntervalMs})`);
+            }
+            if(checkIntervalMs >= ttlMs) {
+                throw new RangeError(`configureSessionTtl: checkIntervalMs (${checkIntervalMs}) must be less than ttlMs (${ttlMs})`);
+            }
+            this._sessionTtlCheckIntervalMs = checkIntervalMs;
+        }
+        this._sessionTtlMs = ttlMs;
+        if(this._sessionTtlTimer) {
+            clearInterval(this._sessionTtlTimer);
+            this._sessionTtlTimer = undefined;
+            this.startSessionTtlTimer();
         }
     }
+
+    private startSessionTtlTimer() : void {
+        if(this._sessionTtlTimer) return;
+        this._sessionTtlTimer = setInterval(() => {
+            this.enforceSessionTtl();
+        }, this._sessionTtlCheckIntervalMs);
+        // node unref → test 프로세스 종료 방해 방지.
+        if(this._sessionTtlTimer && typeof (this._sessionTtlTimer as any).unref === "function") {
+            (this._sessionTtlTimer as any).unref();
+        }
+    }
+
+    private stopSessionTtlTimer() : void {
+        if(this._sessionTtlTimer) {
+            clearInterval(this._sessionTtlTimer);
+            this._sessionTtlTimer = undefined;
+        }
+    }
+
+    private enforceSessionTtl() : void {
+        // P6-T1 개선 1회차 / F3: close() 중 dispatched 된 잔여 콜백은 즉시 종료.
+        if(this._closed || !this.isRunning) return;
+        if(this._sessionLastActivityMs.size === 0) return;
+        const now = Date.now();
+        const expired: number[] = [];
+        for(const [sessionId, lastActive] of this._sessionLastActivityMs.entries()) {
+            if(now - lastActive > this._sessionTtlMs) {
+                expired.push(sessionId);
+            }
+        }
+        for(const sessionId of expired) {
+            logger.warn(`Session TTL exceeded, forcing close. sessionID=${sessionId}`);
+            // P6-T1 개선 1회차 / F2: single-path close.
+            // closeSession()가 activity 제거 + client 통보를 모두 수행하므로 여기선 activity 제거만 선행.
+            // External pool close 는 closeSession() 경로 내 sendCloseSession 응답 파이프에서 이미 정리되며,
+            // 즉시성이 필요하므로 onSessionCloseCallback 을 여기서 1회만 호출(이중 호출 방지).
+            this._sessionLastActivityMs.delete(sessionId);
+            try { this._onSessionCloseCallback?.(sessionId, 0); } catch(e) { logger.error("TTL close callback error", e); }
+            try {
+                // 풀 레벨 close (클라이언트 쪽 통보). closeSession 내부에서 activity delete 는 no-op.
+                const pool = this.findClientHandlerPool(sessionId);
+                if(pool) {
+                    pool.sendCloseSession(sessionId, 0);
+                }
+                // 매핑 제거(단일 경로).
+                this._sessionIDAndCtrlIDMap.delete(sessionId);
+            } catch(e) {
+                logger.error("TTL close error", e);
+            }
+        }
+    }
+
+    private markSessionActivity(sessionId: number) : void {
+        this._sessionLastActivityMs.set(sessionId, Date.now());
+    }
+
+    public debugSessionCount() : number {
+        return this._sessionIDAndCtrlIDMap.size;
+    }
+
 
     public clientStatuses() : Array<ClientStatus> {
         let result : Array<ClientStatus> = [];
@@ -174,10 +264,11 @@ class TunnelServer {
     public async close() : Promise<void> {
         logger.info(`close`);
         this.isRunning = false;
+        // P6-T1 개선 1회차 / F3: 후속 TTL 콜백 race 방지 플래그.
+        this._closed = true;
+        this.stopSessionTtlTimer();
+        this._sessionLastActivityMs.clear();
         return new Promise((resolve) => {
-            if(this._heartbeatInterval) {
-                clearInterval(this._heartbeatInterval);
-            }
             // 모든 auth timeout 정리
             this._authTimeouts.forEach((timeoutId) => {
                 clearTimeout(timeoutId);
@@ -190,7 +281,6 @@ class TunnelServer {
             this._unauthenticatedHandlerIds.clear();
             this._pendingControlHandshakeMap.clear();
             this._identityRegistry.clear();
-            this.stopClientCheckInterval();
             // noinspection JSUnusedLocalSymbols
             this._tunnelServer.stop((err) => {
                 logger.info(`closed`);
@@ -218,6 +308,8 @@ class TunnelServer {
         if(!handlerPool) {
             return false;
         }
+        // P6-T1 / REQ-09: 활동 기록 업데이트(TTL 리셋).
+        this.markSessionActivity(sessionId);
         return handlerPool.sendBuffer(sessionId, buffer);
     }
 
@@ -237,6 +329,8 @@ class TunnelServer {
             return false;
         }
         this._sessionIDAndCtrlIDMap.set(sessionID, handlerPool.id);
+        // P6-T1 / REQ-09: 세션 오픈 즉시 활동 타임스탬프 기록.
+        this.markSessionActivity(sessionID);
         handlerPool.sendConnectEndPoint(sessionID, opt);
         return true;
     }
@@ -448,6 +542,8 @@ class TunnelServer {
                  this._onSessionCloseCallback?.(handler.sessionID, 0);
                 return;
              }
+             // P6-T1 / REQ-09: 데이터 수신도 활동으로 간주 → TTL 리셋.
+             this.markSessionActivity(handler.sessionID);
              if(!ctrlPool.pushReceiveBuffer(handler.sessionID, data)) {
                  this._onSessionCloseCallback?.(handler.sessionID, 0);
              }
@@ -509,6 +605,8 @@ class TunnelServer {
     public terminateSession(sessionId: number) : void {
         let pool = this.findCtrlHandlerPool(sessionId);
         this._sessionIDAndCtrlIDMap.delete(sessionId);
+        // P6-T1 / REQ-09: 세션 종료 시 활동 기록 제거.
+        this._sessionLastActivityMs.delete(sessionId);
         if(pool == undefined) {
             return;
         }
@@ -533,6 +631,8 @@ class TunnelServer {
 
     public closeSession(sessionId: number, waitForLength: number) : void {
         let pool = this.findClientHandlerPool(sessionId);
+        // P6-T1 / REQ-09: 활동 기록 제거(중복 TTL 트리거 방지).
+        this._sessionLastActivityMs.delete(sessionId);
         if(pool == undefined) {
             return;
         }
@@ -578,7 +678,8 @@ class TunnelServer {
                     return;
                 }
                 const expectedProof = buildHandshakeProof(trustedClient.clientSecret, ackV2Meta.clientId, ctrlHandler.id, pendingHandshake.challengeNonce);
-                if(expectedProof !== ackV2Meta.proof) {
+                // P3-T4 / REQ-04: proof 비교는 상수시간. hex 인코딩 고정.
+                if(!timingSafeStringEqual(expectedProof, ackV2Meta.proof, "hex")) {
                     this.rejectHandshake(ctrlHandler, "Proof-of-possession validation failed");
                     return;
                 }
@@ -604,7 +705,9 @@ class TunnelServer {
                 this.rejectHandshake(ctrlHandler, "Legacy control handshake is not allowed in strict mode");
                 return;
             }
-            if(packet.ackKey != this._key) {
+            // P3-T4 / REQ-04: legacy auth-key 비교도 상수시간 헬퍼로 교체.
+            // 입력은 임의 utf8이며 길이가 고정되지 않으므로 'utf8' 인코딩 사용.
+            if(!timingSafeStringEqual(packet.ackKey ?? "", this._key ?? "", "utf8")) {
                 this.notMatchedAuthKey(ctrlHandler);
                 return;
             }
@@ -710,6 +813,8 @@ class TunnelServer {
         
         for(let id of removeSessionIDs) {
             this._sessionIDAndCtrlIDMap.delete(id);
+            // P6-T1 / REQ-09: Pool swap/destroy 시 orphan close 일괄 통보 + 활동 기록 제거.
+            this._sessionLastActivityMs.delete(id);
             this._onSessionCloseCallback?.(id, 0);
             processedSessionIDs.add(id);
         }

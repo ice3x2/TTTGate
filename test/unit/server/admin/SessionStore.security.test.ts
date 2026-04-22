@@ -13,6 +13,12 @@ const legacyHashPassword = (password: string): string => {
     return CryptoJS.SHA512(normalizedPassword + salt).toString();
 };
 
+// OS 가드: POSIX 모드 비트(0o600) 검증은 Windows에서 의미가 없다(NTFS는 다른 ACL 모델).
+// Windows에서 stat.mode는 0o666으로 보고되므로 기대값과 충돌한다.
+// MEDIUM-B 라운드 4 수정: describe 전체 skip은 과도했음. chmod 모드 비트 검증(0o600)을
+// 포함하는 개별 expect만 플랫폼 가드하고, 나머지 로직(bootstrap token 흐름, legacy → bcrypt 업그레이드)은
+// Windows에서도 실행하여 회귀 방지. Jest mock 금지 원칙은 유지.
+
 describe("SessionStore security behavior", () => {
     let testRoot: TestRoot;
 
@@ -25,7 +31,9 @@ describe("SessionStore security behavior", () => {
         await cleanupTestRoot(testRoot);
     });
 
-    it("creates a bootstrap token file with owner-only permissions and requires it for first login", async () => {
+    const isPosix = process.platform !== "win32";
+
+    it("creates a bootstrap token file and requires it for first login", async () => {
         const store = SessionStore.instance;
         const bootstrapTokenFile = Path.join(testRoot.rootDir, "config", BOOTSTRAP_TOKEN_FILE_NAME);
         const bootstrapToken = fs.readFileSync(bootstrapTokenFile, {encoding: "utf-8"}).trim();
@@ -34,7 +42,10 @@ describe("SessionStore security behavior", () => {
         const deniedLogin = await store.loginWithDetails("supersecret1");
         const bootstrapLogin = await store.loginWithDetails("supersecret1", bootstrapToken);
 
-        expect(stat.mode & 0o777).toBe(0o600);
+        // MEDIUM-B: chmod 모드 비트 검증은 POSIX 한정 (NTFS는 모드 비트 의미 없음).
+        if (isPosix) {
+            expect(stat.mode & 0o777).toBe(0o600);
+        }
         expect(deniedLogin).toMatchObject({
             success: false,
             bootstrapRequired: true,
@@ -58,6 +69,9 @@ describe("SessionStore security behavior", () => {
             migratedLegacyHash: true
         });
         expect(savedHash.startsWith("$2")).toBe(true);
-        expect((fs.statSync(keyFile).mode & 0o777)).toBe(0o600);
+        // MEDIUM-B: chmod 모드 비트 검증은 POSIX 한정.
+        if (isPosix) {
+            expect((fs.statSync(keyFile).mode & 0o777)).toBe(0o600);
+        }
     });
 });

@@ -12,7 +12,6 @@ class BufferWriter {
 
 
     public writeByte(value : number) : void {
-        this._buffer.readUInt8()
         this.ensureCapacity(1);
         this._buffer[this._pos++] = value;
     }

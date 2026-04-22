@@ -3,6 +3,14 @@ import BufferReader from "../util/BufferReader";
 import ConnectOpt from "../util/ConnectOpt";
 import Dequeue from "../util/Dequeue";
 import {AckCtrlV2Meta, HandlerWideIdMeta, NewDataHandlerMeta, SyncCtrlAckMeta} from "./ProtocolV2";
+import {
+    assertAckCtrlV2Meta,
+    assertHandlerWideIdMeta,
+    assertMessageMeta,
+    assertNewDataHandlerMeta,
+    assertSyncCtrlAckMeta,
+    safeJsonParse
+} from "./CtrlMetaGuards";
 
 
 enum ParsedState {
@@ -42,6 +50,8 @@ enum CtrlCmd {
 
 }
 
+// R2-REQ-01: MAX_PAYLOAD_SIZE는 **순수 페이로드 바이트 한도** (헤더 제외).
+// 송·수신 양쪽에서 data 길이 자체에 적용되며, 헤더 길이(HEADER_LEN)는 별도 검사.
 const MAX_PAYLOAD_SIZE = 64000;
 
 class CtrlPacket {
@@ -104,7 +114,8 @@ class CtrlPacket {
         if(packet._cmd != CtrlCmd.Message) {
             throw new Error("Invalid packet type");
         }
-        return JSON.parse(packet._data.toString());
+        // R2-REQ-04: 가드 + prototype pollution 차단.
+        return safeJsonParse(packet._data, assertMessageMeta);
     }
 
 
@@ -210,14 +221,16 @@ class CtrlPacket {
         if(this._cmd != CtrlCmd.SyncCtrlAck || this._data.length == 0) {
             return undefined;
         }
-        return JSON.parse(this._data.toString("utf-8")) as SyncCtrlAckMeta;
+        // R2-REQ-04: 가드 적용.
+        return safeJsonParse(this._data, assertSyncCtrlAckMeta);
     }
 
     public get newDataHandlerMeta() : NewDataHandlerMeta | undefined {
         if(this._cmd != CtrlCmd.NewDataHandler || this._data.length == 0) {
             return undefined;
         }
-        return JSON.parse(this._data.toString("utf-8")) as NewDataHandlerMeta;
+        // R2-REQ-04: 가드 적용.
+        return safeJsonParse(this._data, assertNewDataHandlerMeta);
     }
 
     public get handlerWideIdMeta() : HandlerWideIdMeta | undefined {
@@ -229,13 +242,15 @@ class CtrlPacket {
             if(this._data.length == 0) {
                 return undefined;
             }
-            return JSON.parse(this._data.toString("utf-8")) as HandlerWideIdMeta;
+            // R2-REQ-04: 가드 적용 (3개 CtrlCmd 공용).
+            return safeJsonParse(this._data, assertHandlerWideIdMeta);
         }
         if(this._cmd == CtrlCmd.CloseSession) {
             if(this._data.length <= 4) {
                 return undefined;
             }
-            return JSON.parse(this._data.subarray(4).toString("utf-8")) as HandlerWideIdMeta;
+            // R2-REQ-04: 가드 적용 (CloseSession은 앞 4B가 waitReceiveLength).
+            return safeJsonParse(this._data.subarray(4), assertHandlerWideIdMeta);
         }
         return undefined;
     }
@@ -260,8 +275,8 @@ class CtrlPacket {
         result._ID = reader.readUInt16();
         result._sessionID = reader.readUInt32();
         let dataLength = reader.readUInt32();
-        // unt32 max value
-        if(dataLength > MAX_PAYLOAD_SIZE + this.HEADER_LEN) {
+        // R2-REQ-01: 순수 페이로드 한도 (헤더 제외). NF-03-eval1: this.HEADER_LEN dead 참조 제거.
+        if(dataLength > MAX_PAYLOAD_SIZE) {
             return {packet: null, remain: emptyBuffer, state: ParsedState.Error, error: new Error("Data length too large")};
         }
         if(result._cmd == CtrlCmd.SyncCtrl && dataLength != 0) {
@@ -315,7 +330,8 @@ class CtrlPacket {
         let key = reader.readString();
         if(reader.readable() > 0) {
             try {
-                let meta = JSON.parse(reader.readString()) as AckCtrlV2Meta;
+                // R2-REQ-04: 가드 + prototype pollution 차단. 실패 시 기존 fallback 유지 (v2 없는 경우로 취급).
+                let meta = safeJsonParse(reader.readString(), assertAckCtrlV2Meta);
                 return {name, key, v2: meta};
             } catch {
                 return {name, key};
@@ -326,6 +342,10 @@ class CtrlPacket {
 
 
     public toBuffer() : Buffer {
+        // R2-REQ-01: 송신 측 순수 페이로드 한도 가드.
+        if(this._data.length > MAX_PAYLOAD_SIZE) {
+            throw new RangeError(`CtrlPacket payload exceeds MAX_PAYLOAD_SIZE (${this._data.length} > ${MAX_PAYLOAD_SIZE})`);
+        }
         let writer = new BufferWriter();
         writer.writeBuffer(CtrlPacket.PREFIX);
         writer.writeUInt8(this._cmd);
@@ -339,23 +359,72 @@ class CtrlPacket {
 
 }
 
+type CtrlStreamerOptions = {
+    onOverflow?: (err: Error) => void;
+    maxPendingBytes?: number;
+};
+
 class CtrlPacketStreamer {
 
+    // R2-REQ-03: 불완전 패킷 누적 DoS 방지. 기본 상한 = 헤더 + 페이로드*2.
+    public static readonly DEFAULT_MAX_PENDING_BYTES = CtrlPacket.HEADER_LEN + MAX_PAYLOAD_SIZE * 2;
+
     private _dequeue : Dequeue<Buffer> = new Dequeue<Buffer>();
+    private _pendingBytes : number = 0;
+    private readonly _maxPendingBytes : number;
+    private readonly _onOverflow : ((err: Error) => void) | undefined;
+
+    public constructor(options?: CtrlStreamerOptions) {
+        this._maxPendingBytes = options?.maxPendingBytes ?? CtrlPacketStreamer.DEFAULT_MAX_PENDING_BYTES;
+        this._onOverflow = options?.onOverflow;
+    }
+
+    private _overflow(incoming: number) : Error {
+        return new RangeError(`CtrlPacketStreamer pending bytes overflow (pending=${this._pendingBytes}, incoming=${incoming}, max=${this._maxPendingBytes})`);
+    }
+
+    private _handleOverflow(incoming: number) : void {
+        const err = this._overflow(incoming);
+        this._dequeue.clear();
+        this._pendingBytes = 0;
+        if(this._onOverflow) {
+            this._onOverflow(err);
+            return;
+        }
+        // NF-02: 기본 동작은 RangeError throw (하위 호환).
+        throw err;
+    }
 
     public feed(buffer: Buffer) : void {
+        if(this._pendingBytes + buffer.length > this._maxPendingBytes) {
+            this._handleOverflow(buffer.length);
+            return;
+        }
         this._dequeue.pushBack(buffer);
+        this._pendingBytes += buffer.length;
     }
 
     private toPacketAtComplete(result: ParsingResult) : CtrlPacket {
         if(result.remain && result.remain.length > 0) {
             this._dequeue.pushFront(result.remain!);
+            this._pendingBytes += result.remain.length;
         }
         return result.packet!;
     }
 
+    private _popFront() : Buffer | undefined {
+        const b = this._dequeue.popFront();
+        if(b !== undefined) this._pendingBytes -= b.length;
+        return b;
+    }
+
+    private _pushFront(b: Buffer) : void {
+        this._dequeue.pushFront(b);
+        this._pendingBytes += b.length;
+    }
+
     public readPacket() : CtrlPacket | null {
-        let buffer = this._dequeue.popFront();
+        let buffer = this._popFront();
         if(buffer === undefined) {
             return null;
         }
@@ -364,15 +433,20 @@ class CtrlPacketStreamer {
             return this.toPacketAtComplete(result);
         }
         else if(result.state == ParsedState.Incomplete && this._dequeue.isEmpty()) {
-            this._dequeue.pushFront(buffer);
+            this._pushFront(buffer);
             return null;
         }
         while(result.state == ParsedState.Incomplete && !this._dequeue.isEmpty()) {
-            let newBuffer = this._dequeue.popFront()!;
-            newBuffer = Buffer.concat([buffer, newBuffer!]);
+            let nextBuffer = this._popFront()!;
+            // R2-REQ-03: Buffer.concat 전 상한 재확인 (누적 공격 방어).
+            if(buffer.length + nextBuffer.length > this._maxPendingBytes) {
+                this._handleOverflow(nextBuffer.length);
+                return null;
+            }
+            let newBuffer = Buffer.concat([buffer, nextBuffer]);
             result = CtrlPacket.fromBuffer(newBuffer);
             if(result.state == ParsedState.Incomplete && this._dequeue.isEmpty()) {
-                this._dequeue.pushFront(newBuffer);
+                this._pushFront(newBuffer);
                 return null;
             } else if(result.state == ParsedState.Complete) {
                 return this.toPacketAtComplete(result);

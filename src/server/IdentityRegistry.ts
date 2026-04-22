@@ -1,6 +1,7 @@
 import {TrustedClient} from "../types/TunnelingOption";
 import {createOpaqueToken} from "../commons/ProtocolV2";
 import {ClockRngProvider} from "../util/ClockRng";
+import {timingSafeStringEqual} from "../util/timingSafeStringEqual";
 
 type AuthenticatedClientIdentity = {
     clientId: string;
@@ -60,10 +61,15 @@ class IdentityRegistry {
         if(!record) {
             return false;
         }
-        const matches = record.clientId === expected.clientId
-            && record.ctrlID === expected.ctrlID
-            && record.handlerID === expected.handlerID
-            && record.sessionID === expected.sessionID;
+        // P3-T4 / REQ-04: clientId(=비밀 식별자)는 상수시간 비교.
+        // ctrlID/handlerID/sessionID는 32/64-bit 정수이며 비밀이 아니므로
+        // 일반 === 비교를 유지한다. lint-auth-compare가 sessionID 식별자를
+        // 휴리스틱으로 잡지만 의미상 비밀이 아님을 allow 주석으로 명시.
+        const idMatches = Number(record.ctrlID) === Number(expected.ctrlID)
+            && Number(record.handlerID) === Number(expected.handlerID)
+            && Number(record.sessionID) === Number(expected.sessionID); // lint-auth-compare-allow
+        const clientIdMatches = timingSafeStringEqual(record.clientId, expected.clientId, "utf8");
+        const matches = idMatches && clientIdMatches;
         this._bindingTokenMap.delete(token);
         return matches;
     }

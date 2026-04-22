@@ -7,6 +7,7 @@ import {ClockRngProvider} from "../../util/ClockRng";
 import crypto from "crypto";
 import fs from "fs";
 import fsp from "fs/promises";
+import {timingSafeStringEqual} from "../../util/timingSafeStringEqual";
 
 import LoggerFactory  from "../../util/logger/LoggerFactory";
 const logger = LoggerFactory.getLogger('server', 'SessionStore');
@@ -85,30 +86,56 @@ class SessionStore {
     }
 
     public sweepSession() : void {
-        let now = this.now();
-        this._sessions.forEach((session, key) => {
+        // P5-T5 / REQ-16: forEach → for...of 로 반복 변경.
+        // forEach 는 async/await 를 무시하므로 비동기 안전성이 낮다.
+        const now = this.now();
+        for(const [key, session] of this._sessions) {
             if(session.timeout < now) {
                 this._sessions.delete(key);
             }
-        })
+        }
     }
 
 
     public async isSessionValid(sessionKeyList: Array<string>) : Promise<boolean> {
+        // P5-T5 / REQ-16: forEach → for...of 전환으로 비동기 컨트롤 흐름 안전 확보.
         let valid = false;
-        sessionKeyList.forEach((sessionKey) => {
-            let session = this._sessions.get(sessionKey);
-            if (session) {
-                let now = this.now();
-                if (session.timeout > now) {
-                    session.timeout = now + DEFAULT_TIMEOUT;
-                    valid = true;
-                } else {
-                    this._sessions.delete(sessionKey);
-                }
+        for(const sessionKey of sessionKeyList) {
+            const session = this._sessions.get(sessionKey);
+            if(!session) continue;
+            const now = this.now();
+            if(session.timeout > now) {
+                session.timeout = now + DEFAULT_TIMEOUT;
+                valid = true;
+            } else {
+                this._sessions.delete(sessionKey);
             }
-        });
+        }
         return valid;
+    }
+
+    /**
+     * P5-T5 / REQ-16: Cookie 파싱 방어용 헬퍼.
+     * split('=') 대신 indexOf('=')로 첫 분리자만 사용한다. 값에 '='가 포함된 쿠키
+     * (예: base64url 패딩이 남은 토큰 `sid=abc=xy`)도 `abc=xy` 그대로 추출 가능.
+     */
+    public static parseCookieHeader(header: string | undefined): Map<string, string> {
+        const result = new Map<string, string>();
+        if(header == undefined) return result;
+        const parts = header.split(';');
+        for(const raw of parts) {
+            const seg = raw.trim();
+            if(seg.length == 0) continue;
+            const eq = seg.indexOf('=');
+            if(eq <= 0) continue;
+            const key = seg.substring(0, eq).trim();
+            const value = seg.substring(eq + 1).trim();
+            if(key.length == 0) continue;
+            if(!result.has(key)) {
+                result.set(key, value);
+            }
+        }
+        return result;
     }
 
 
@@ -191,12 +218,8 @@ class SessionStore {
         if(typeof token != "string") {
             return false;
         }
-        const actual = Buffer.from(this._bootstrapToken, "utf-8");
-        const received = Buffer.from(token.trim(), "utf-8");
-        if(actual.length != received.length) {
-            return false;
-        }
-        return crypto.timingSafeEqual(actual, received);
+        // P3-T4 / REQ-04: 부트스트랩 토큰 비교를 timingSafeStringEqual로 일원화.
+        return timingSafeStringEqual(this._bootstrapToken, token.trim(), "utf8");
     }
 
     private async verifyPassword(password: string): Promise<{success: boolean, migrateToBcrypt: boolean}> {
@@ -206,7 +229,10 @@ class SessionStore {
         if(this.isBcryptHash(this._key)) {
             return {success: await bcrypt.compare(password, this._key), migrateToBcrypt: false};
         }
-        return {success: this._key == this.hashPassword(password), migrateToBcrypt: true};
+        // P3-T4 / REQ-04: 레거시 SHA512 해시 비교를 상수시간으로 수행.
+        // 이 경로는 bcrypt 마이그레이션 전용이지만, 해시 일치 여부 검증은
+        // 길이-고정 hex 문자열 비교이므로 상수시간이 필요하다.
+        return {success: timingSafeStringEqual(this._key, this.hashPassword(password), "utf8"), migrateToBcrypt: true};
     }
 
     private isBcryptHash(hash: string): boolean {

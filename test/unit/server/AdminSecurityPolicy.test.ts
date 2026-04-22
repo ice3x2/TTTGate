@@ -71,9 +71,12 @@ describe("AdminSecurityPolicy", () => {
         });
         const decision = evaluateAdminSecurityPolicy(option, allowances);
 
+        // P5-T2/P5-T4: allowances 객체에 trustXForwardedFor(기본 false) 및 requireCsrfHeader(기본 true) 필드가 포함된다.
         expect(allowances).toEqual({
             allowLegacyAdminHttp: false,
-            allowLegacyAdminRemote: true
+            allowLegacyAdminRemote: true,
+            trustXForwardedFor: false,
+            requireCsrfHeader: true
         });
         expect(decision.allowed).toBe(true);
         expect(decision.insecureBind).toBe(true);

@@ -1,0 +1,15 @@
+{
+  "requirement": "REQ-01",
+  "iterations": 10000,
+  "bytesPerCall": 16,
+  "totalBytes": 160000,
+  "uniqueHexCount": 10000,
+  "duplicateCount": 0,
+  "shannonEntropyBitsPerByte": 7.998922929232448,
+  "threshold": 7.5,
+  "pass": true,
+  "node": "v22.14.0",
+  "platform": "win32",
+  "arch": "x64",
+  "generatedAt": "2026-04-21T10:46:35.917Z"
+}

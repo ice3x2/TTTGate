@@ -7,6 +7,7 @@ import ServerOptionStore from "./ServerOptionStore";
 import LoggerFactory  from "../util/logger/LoggerFactory";
 import {SysInfo} from "../commons/SysMonitor";
 import AppCompositionRoot from "../bootstrap/AppCompositionRoot";
+import ObjectUtil from "../util/ObjectUtil";
 const logger = LoggerFactory.getLogger('server', 'TTTServer');
 
 type RuntimeApplyResult = {
@@ -143,7 +144,9 @@ class TTTServer {
 
     private onSessionDataReceived = (id: number, data: Buffer) : void => {
         if(!this._externalPortServerPool.send(id, data)) {
-            //this._tunnelServer.closeSession(id, 0);
+            // P6-T1 / REQ-09: 외부 송신 실패 시 "좀비 세션" 방지 위해 터널 세션을 닫는다.
+            // (기존에는 주석 처리되어 있었으나, Pool swap/재통보 시 active하지 않은 세션이 남는 원인이었음.)
+            this._tunnelServer.closeSession(id, 0);
         }
     }
 
@@ -190,7 +193,7 @@ class TTTServer {
             || previousOption.keepAlive !== nextOption.keepAlive
             || previousOption.controlProtocolMode !== nextOption.controlProtocolMode
             || previousOption.allowLegacyControlAuth !== nextOption.allowLegacyControlAuth
-            || JSON.stringify(previousOption.trustedClients ?? []) !== JSON.stringify(nextOption.trustedClients ?? []);
+            || !ObjectUtil.canonicalEquals(previousOption.trustedClients ?? [], nextOption.trustedClients ?? []);
 
         if(!requiresTunnelRestart) {
             this.syncAllowedClientMaps(nextOption);
@@ -305,6 +308,20 @@ class TTTServer {
             };
         }
         try {
+            // P3-T5 / REQ-08: 하향 호환성 있는 경우 setSecureContext 기반 hot-swap 우선 시도.
+            //   - TLS 서버이고 end 상태가 아니면 true 반환 → 재기동(stop→start) 스킵.
+            //   - TLS off / 종료 / 미지원 시 false → 기존 stop/start 폴백.
+            const hotSwapped = this._externalPortServerPool.applyTlsCertificateHotSwap(port, nextCert);
+            if(hotSwapped) {
+                logger.info(`applyExternalServerCert: hot-swapped TLS cert on port ${port} (no restart)`);
+                return {
+                    success: true,
+                    partial: false,
+                    warnings: [],
+                    failedScopes: [],
+                    restartRequiredScopes: []
+                };
+            }
             const stopped = await this._externalPortServerPool.stop(port);
             if(!stopped) {
                 throw new Error(`failed to stop listener ${port}`);
@@ -401,6 +418,12 @@ class TTTServer {
 
     public getClientSysInfo(clientID: number) : SysInfo | undefined {
         return this._tunnelServer.getClientSysInfo(clientID);
+    }
+
+    // P6-T1 개선 1회차 / REQ-09: 테스트/운영 진단용 TunnelServer 직접 접근.
+    // 내부 맵 상태 검증(debugSessionCount)과 TTL 주입(configureSessionTtl) 경로에 사용.
+    public get tunnelServer() : TunnelServer {
+        return this._tunnelServer;
     }
 
 }

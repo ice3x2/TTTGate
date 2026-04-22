@@ -11,26 +11,43 @@ class HttpUtil {
     
     /**
      * HTTP 헤더를 버퍼로 변환
+     *
+     * REQ-06/REQ-10: 재직렬화 직전 모든 name/value/path/statusText에 CR/LF/NUL이
+     * 포함되지 않는지 재검증한다. (rewriteHostInTextBody 등 치환 경로가
+     * 악의적 입력으로 CRLF 를 새로 생성했을 때 response splitting 을 차단.)
      */
     public static convertHttpHeaderToBuffer(header: HttpRequestHeader | HttpResponseHeader): Buffer {
+        const INJECT_RE = /[\r\n\0]/;
         let lines: Array<string> = [];
-        
+
         // 첫 번째 줄 생성
         if (header.type == MessageType.Request) {
+            if (INJECT_RE.test(header.path)) {
+                throw new Error('HTTP header re-serialization aborted: CR/LF/NUL in request path (REQ-10)');
+            }
+            if (INJECT_RE.test(header.version)) {
+                throw new Error('HTTP header re-serialization aborted: CR/LF/NUL in request version (REQ-10)');
+            }
             lines.push(`${HttpMethod[header.method]} ${header.path} ${header.version}`);
         } else {
+            if (INJECT_RE.test(header.version) || INJECT_RE.test(header.statusText)) {
+                throw new Error('HTTP header re-serialization aborted: CR/LF/NUL in response status line (REQ-10)');
+            }
             lines.push(`${header.version} ${header.status} ${header.statusText}`);
         }
-        
+
         // 헤더 필드 추가
         for (let i = 0; i < header.headers.length; i++) {
             let nameValue = header.headers[i];
+            if (INJECT_RE.test(nameValue.name) || INJECT_RE.test(nameValue.value)) {
+                throw new Error(`HTTP header re-serialization aborted: CR/LF/NUL in header '${nameValue.name}' (REQ-10)`);
+            }
             lines.push(`${nameValue.name}: ${nameValue.value}`);
         }
-        
+
         // 헤더 종료 표시 추가
         lines.push("\r\n");
-        
+
         return Buffer.from(lines.join("\r\n"));
     }
 

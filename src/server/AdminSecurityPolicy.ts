@@ -7,6 +7,11 @@ const LEGACY_ADMIN_REMOTE_FLAG = "allowLegacyAdminRemote";
 type AdminSecurityAllowances = {
     allowLegacyAdminHttp: boolean;
     allowLegacyAdminRemote: boolean;
+    // P5-T2 / REQ-07: X-Forwarded-For 신뢰 정책. 기본 false.
+    // true 로 설정된 환경(역방향 프록시 뒤)에서만 XFF 최좌측 IP를 클라이언트 주소로 사용.
+    trustXForwardedFor: boolean;
+    // P5-T4 / REQ-12: CSRF 헤더(X-CSRF-Token) 강제 여부. 기본 true.
+    requireCsrfHeader: boolean;
 }
 
 type AdminSecurityPolicyDecision = {
@@ -21,7 +26,9 @@ type AdminSecurityPolicyDecision = {
 
 const DEFAULT_ALLOWANCES: AdminSecurityAllowances = {
     allowLegacyAdminHttp: false,
-    allowLegacyAdminRemote: false
+    allowLegacyAdminRemote: false,
+    trustXForwardedFor: false,
+    requireCsrfHeader: true
 };
 
 let activeAllowances: AdminSecurityAllowances = {...DEFAULT_ALLOWANCES};
@@ -53,7 +60,11 @@ const isLoopbackAdminHost = (host?: string): boolean => {
 const buildAdminSecurityAllowancesFromCliOptions = (options: SimpleCliOptions): AdminSecurityAllowances => {
     return {
         allowLegacyAdminHttp: normalizeBooleanOption(options[LEGACY_ADMIN_HTTP_FLAG]) === true,
-        allowLegacyAdminRemote: normalizeBooleanOption(options[LEGACY_ADMIN_REMOTE_FLAG]) === true
+        allowLegacyAdminRemote: normalizeBooleanOption(options[LEGACY_ADMIN_REMOTE_FLAG]) === true,
+        // P5-T2 / REQ-07: 기본 false — 역방향 프록시 환경에서만 명시적으로 true 로 설정해야 한다.
+        trustXForwardedFor: normalizeBooleanOption(options["trustXForwardedFor"]) === true,
+        // P5-T4 / REQ-12: 기본 true — 상태 변경 API 에 CSRF 토큰 헤더 강제.
+        requireCsrfHeader: normalizeBooleanOption(options["requireCsrfHeader"]) !== false
     };
 };
 

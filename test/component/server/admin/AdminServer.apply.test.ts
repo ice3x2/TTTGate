@@ -7,6 +7,11 @@ import {httpRequest} from "../../../helpers/http";
 import {applyTestRoot, cleanupTestRoot, createTestRoot, TestRoot} from "../../../helpers/runtime";
 
 const loginAndGetCookie = async (port: number, testRoot: TestRoot): Promise<string> => {
+    const {cookie} = await loginAndGetAuth(port, testRoot);
+    return cookie;
+};
+
+const loginAndGetAuth = async (port: number, testRoot: TestRoot): Promise<{cookie: string, csrfToken: string}> => {
     SessionStore.instance;
     const bootstrapToken = (await fs.readFile(
         Path.join(testRoot.rootDir, "config", BOOTSTRAP_TOKEN_FILE_NAME),
@@ -21,7 +26,11 @@ const loginAndGetCookie = async (port: number, testRoot: TestRoot): Promise<stri
         },
         body: JSON.stringify({key: "supersecret1", bootstrapToken})
     });
-    return (loginResponse.headers["set-cookie"] as string[])[0].split(";")[0];
+    const setCookies = loginResponse.headers["set-cookie"] as string[];
+    const cookie = setCookies.map((c) => c.split(";")[0]).join("; ");
+    const csrfCookie = setCookies.find((c) => c.startsWith("csrfToken="))!;
+    const csrfToken = csrfCookie.split(";")[0].split("=")[1];
+    return {cookie, csrfToken};
 };
 
 describe("AdminServer staged apply behavior", () => {
@@ -71,7 +80,7 @@ describe("AdminServer staged apply behavior", () => {
             failedScopes: ["external-listener:18081"],
             restartRequiredScopes: []
         });
-        const cookie = await loginAndGetCookie(port, testRoot);
+        const {cookie, csrfToken} = await loginAndGetAuth(port, testRoot);
 
         const response = await httpRequest({
             port,
@@ -79,7 +88,8 @@ describe("AdminServer staged apply behavior", () => {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                cookie
+                cookie,
+                "x-csrf-token": csrfToken
             },
             body: JSON.stringify({
                 forwardPort: 18081,
@@ -112,7 +122,7 @@ describe("AdminServer staged apply behavior", () => {
             restartRequiredScopes: ["admin-server"]
         });
         const store = ServerOptionStore.instance;
-        const cookie = await loginAndGetCookie(port, testRoot);
+        const {cookie, csrfToken} = await loginAndGetAuth(port, testRoot);
         const nextServerOption = {
             ...store.serverOption,
             adminPort: store.serverOption.adminPort! + 1
@@ -124,7 +134,8 @@ describe("AdminServer staged apply behavior", () => {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                cookie
+                cookie,
+                "x-csrf-token": csrfToken
             },
             body: JSON.stringify(nextServerOption)
         });

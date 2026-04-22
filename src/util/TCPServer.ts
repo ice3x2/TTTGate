@@ -129,6 +129,33 @@ class TCPServer {
         return new TCPServer(options);
     }
 
+    /**
+     * P3-T5 / REQ-08: 외부 TLS 포트의 인증서 hot-apply.
+     *
+     * 현 서버가 tls.Server인 경우에 한해 `setSecureContext`를 호출한다.
+     * net.Server 또는 이미 종료된 서버에는 무동작(false 반환).
+     * 성공 시 내부 옵션(cert/key/ca)도 최신 값으로 갱신한다.
+     */
+    public applyTlsCertificateHotSwap(next: {key: string, cert: string, ca?: string}): boolean {
+        if(this.isEnd()) return false;
+        if(!this._options.tls) return false;
+        if(!(this._server instanceof tls.Server)) return false;
+        if(!next || !next.cert || !next.key) return false;
+        const ctx: { key: string, cert: string, ca?: string } = { key: next.key, cert: next.cert };
+        if(next.ca && next.ca.length > 0) ctx.ca = next.ca;
+        try {
+            (this._server as tls.Server).setSecureContext(ctx as any);
+            this._options.cert = next.cert;
+            this._options.key = next.key;
+            this._options.ca = next.ca && next.ca.length > 0 ? next.ca : undefined;
+            logger.info(`TCPServer: TLS secure context hot-swapped on port ${this._options.port}`);
+            return true;
+        } catch (e) {
+            logger.error(`TCPServer: setSecureContext failed on port ${this._options.port}`, e);
+            return false;
+        }
+    }
+
 
     public start(callback? : (err?: Error) => void) : void {
         if(this.isEnd()) {

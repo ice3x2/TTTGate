@@ -112,6 +112,42 @@ class ObjectUtil {
         return newObj;
     }
 
+    /**
+     * P7-T1 / REQ-17: canonical(키 정렬 + 배열 정규화) 기반 deep 비교.
+     *
+     * 기존 `equalsDeep`는 Object.keys 순서 의존이 없고 인덱스 기반 배열 비교를 수행하지만,
+     * trustedClients 같은 "논리적 집합" 성격 배열은 요소 순서가 의미 없으므로 canonical
+     * 비교가 필요하다. 본 헬퍼는 다음을 수행한다:
+     *  - 객체: 키를 정렬 후 재귀 비교
+     *  - 배열: 각 요소를 canonical 문자열로 직렬화 후 정렬한 결과를 비교
+     *  - 원시값: `==` 비교(기존 equalsDeep와 일관)
+     *
+     * 주의: 본 헬퍼의 목적은 "변경 감지"이므로, 수치적으로 동일하지만 형식이 다른 값
+     * (예: "1" vs 1) 은 원시 `==` 비교 특성상 같다고 판정될 수 있다. trustedClients 같은
+     * 문자열 필드 구성에서는 무해하다.
+     */
+    public static canonicalEquals(a: any, b: any) : boolean {
+        return ObjectUtil.canonicalSerialize(a) === ObjectUtil.canonicalSerialize(b);
+    }
+
+    private static canonicalSerialize(v: any): string {
+        if(v === null || v === undefined) return JSON.stringify(null);
+        if(Array.isArray(v)) {
+            const items = v.map((item) => ObjectUtil.canonicalSerialize(item));
+            items.sort();
+            return '[' + items.join(',') + ']';
+        }
+        if(typeof v === 'object') {
+            const keys = Object.keys(v).sort();
+            const parts: string[] = [];
+            for(const k of keys) {
+                parts.push(JSON.stringify(k) + ':' + ObjectUtil.canonicalSerialize(v[k]));
+            }
+            return '{' + parts.join(',') + '}';
+        }
+        return JSON.stringify(v);
+    }
+
     public static equalsDeep<T extends object>(obj1: T, obj2: T) : boolean {
         if(obj1 == undefined && obj2 == undefined) {
             return true;

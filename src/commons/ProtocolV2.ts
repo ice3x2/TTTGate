@@ -46,13 +46,19 @@ const buildHandshakeProof = (secret: string, clientId: string, handlerId: number
         .digest("hex");
 };
 
+/**
+ * P3-T1 / REQ-01: 불투명 토큰을 CSPRNG 기반으로 생성.
+ *
+ * 이전 구현은 `Math.random()`을 byte 단위로 반복 호출해 예측 가능한 시퀀스를
+ * 만들었다. 현재 구현은 `ClockRngProvider.secureRandomBytes(n)`에 위임하며
+ * 이는 `crypto.randomBytes(n)`를 호출한다(비편향 CSPRNG).
+ *
+ * `Math.random` / `rng.random()` 지터 경로와 분리된 단일 경로로 고정하여,
+ * 향후 토큰 경로에 예측 가능 RNG가 다시 섞이는 것을 방지한다.
+ */
 const createOpaqueToken = (length: number = 32): string => {
     const rng = ClockRngProvider.current();
-    const bytes: number[] = [];
-    for(let i = 0; i < length; i++) {
-        bytes.push(Math.floor(rng.random() * 256));
-    }
-    return Buffer.from(bytes).toString("hex");
+    return rng.secureRandomBytes(length).toString("hex");
 };
 
 export {
