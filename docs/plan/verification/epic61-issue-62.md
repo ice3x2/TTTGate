@@ -1,8 +1,8 @@
 # Issue #62: locked Node declaration compatibility
 
-Status: implementation complete; independent review and integration pending.
+Status: complete; independently reviewed, integrated, pushed, closed and notified.
 
-Assigned agent: fix_ci14. Branch: `fix/epic61-ci`. Worktree: `C:/Work/git/_Snoworca/TTTGate-epic61-ci`. Writable paths: `package.json`, `package-lock.json`, and this evidence file. Next action: orchestrator independent dependency review and integration.
+Assigned agent: fix_ci14. Branch: `fix/epic61-ci`. Worktree: `C:/Work/git/_Snoworca/TTTGate-epic61-ci`. Writable paths: `package.json`, `package-lock.json`, and this evidence file. Next action: none for this issue; combined Wave 0 regression follows #15 integration.
 
 ## Scope and cause
 
@@ -16,7 +16,13 @@ While implementing #14, a locked install followed by the existing TypeScript bui
   Status: complete. Primary package metadata command `npm view @types/node@18 version --json` reported 18.19.130 as the latest listed 18.x version. `npm install --package-lock-only --save-dev '@types/node@^18.19.130' --no-audit --no-fund` exited 0. The only resolved package changes are `@types/node` 18.16.19 -> 18.19.130 and its `undici-types@5.26.5` dependency. npm also synchronized the lockfile root's existing node-forge range from ^1.3.1 to ^1.4.0 to match package.json; the resolved node-forge version did not change. Node major version and `skipLibCheck: false` remain unchanged.
 - [x] Reinstall from the resulting lockfile and rerun the failing command.
   Status: GREEN. `npm ci --no-audit --no-fund` exited 0 (534 packages); `npm run build` exited 0 with no compiler diagnostics. Local runtime Node v24.16.0. The full suite before installed declaration replacement passed 66 suites / 282 tests; final combined integration regression is owned by the orchestrator.
-- [ ] Independent diff and dependency review.
-  Status: pending orchestrator-assigned reviewer.
-- [ ] Commit, integrate, push, close issue and send Telegram.
-  Status: pending orchestrator; no commit or remote mutation made in this lane.
+- [x] Independent diff and dependency review.
+  Status: PASS by `review_wave0`; no material findings. See `epic61-wave0-review.md`.
+- [x] Commit, integrate, push, close issue and send Telegram.
+  Status: complete; operational evidence below.
+
+## Operational completion
+
+Original issue title: 클린 설치 후 minipass와 Node 타입 불일치로 TypeScript 빌드 실패. Integration commit: `a35f53c`. Independently observed pushed remote HEAD: `a35f53c9c1be7c79b7ac26e916ce3abebbc9430c` on `origin/fix/epic-61`. GitHub independently confirmed CLOSED at `2026-09-07T15:04:31Z`.
+
+Telegram title: `TDD Gate 62 클린 설치 후 minipass와 Node 타입 불일치로 TypeScript 빌드 실패 (57/2)`. Delivery succeeded with message ID `3894` according to the orchestrator's Telegram tool receipt; the reviewer did not independently fetch the Telegram message. Do not send a duplicate completion notification.

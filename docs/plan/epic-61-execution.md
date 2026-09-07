@@ -1,12 +1,14 @@
 # Epic #61 execution plan
 
-Status: active; 2026-09-07; baseline `376b65c`; 57 tracked issues. Original child range: 5 through 60, plus discovered build issue 62; unrelated issue 2 is excluded.
+Status: active; 2026-09-08; baseline `376b65c`; 58 tracked issues, three completed. Original child range: 5 through 60, plus discovered build issue 62 and user-directed Node 24 migration 63; unrelated issue 2 is excluded.
 
 ## Scope and decisions
 
 Resolve every child of #61, plus defects discovered during this work. Preserve existing CLI, configuration, authentication, TLS and tunnel compatibility unless a documented decision requires change. Reference `docs/research/2026-09-05-tttgate-full-inspection.md`, `docs/plan/00-2.tech-decisions.md`, and existing phase plans. Previous session decision-file location has been requested; no new product policy is inferred from the unrelated RBAC roadmap.
 
 Original workspace `../TTTGate` on `refactor/admin` contains pre-existing uncommitted admin upgrades and reports. Preserve those changes. Integration workspace: `../TTTGate-epic61`, branch `fix/epic-61`. Issue lanes are sibling worktrees forked from the latest reviewed integration commit. Changes are integrated serially; never share a writable lane.
+
+Accepted current user decision: minimum Node.js version becomes `>=24.0.0` (24 LTS), replacing the earlier Node 18 baseline. ADR-011 and `verification/epic61-node24-decision.md` define #63. No further Node-major policy decision is pending. Preserve historical #14/#62/#15 evidence and notification denominators as sent; all subsequent notifications use total 58.
 
 ## Execution order and ownership
 
@@ -16,20 +18,20 @@ File ownership is exclusive during a wave, including test files. Serial cherry-p
 
 ### Wave 0 — mandatory regression barrier
 
-Status: assigned/in progress; CI and supply agents have started. Worktrees: `../TTTGate-epic61-ci` and `../TTTGate-epic61-supply`. CI owns the new code-test workflow, contract tests and root package manifests; supply owns supply-chain tests/helpers. Existing shared workflow changes have one owner and are integrated before the dependent lane resumes. No later-wave implementation starts until all three items pass independent review and integration checks.
+Status: complete; #14, #62 and #15 passed review, integration, push, closure and notification gates. Worktrees: `../TTTGate-epic61-ci` and `../TTTGate-epic61-supply`. CI owns the new code-test workflow, contract tests and root package manifests; supply owns supply-chain tests/helpers. Existing shared workflow changes have one owner and are integrated before the dependent lane resumes. No later-wave implementation starts until all three items pass independent review and integration checks.
 
-- [ ] #14 CI execution. Status: assigned to CI lane.
-- [ ] #62 clean-install TypeScript build compatibility. Status: assigned to CI lane after its preceding item; owns root package manifests. Evidence: `verification/epic61-build-issue.md`.
-- [ ] #15 fail-closed supply-chain checks. Status: assigned to supply lane.
+- [x] #14 CI execution. Status: complete; commit `1df351f` pushed, issue closed, Telegram receipt 3893 (57/1).
+- [x] #62 clean-install TypeScript build compatibility. Status: complete; commit `a35f53c` pushed, issue closed, Telegram receipt 3894 (57/2). Evidence: `verification/epic61-issue-62.md`.
+- [x] #15 fail-closed supply-chain checks. Status: complete; commit `654a065` pushed, issue closed, Telegram receipt 3896 (57/3).
 
 ### Wave 1 — administrator deployment blockers
 
-Status: pending Wave 0. Lane A owns `admin/` and bootstrap routing in `AdminServer.ts`. Inspect original dirty admin changes as input, but reproduce failures before adopting implementation. Lane B owns `deploy.js` and the release-manifest supply test; it does not change admin package files concurrently.
+Status: assigned after Wave 0 completion. Lane A agent `fix_ci14`, worktree `../TTTGate-epic61-admin`, branch `fix/epic61-admin`, base `654a065`, owns `admin/`, root package manifests, code regression CI, `test/admin/` and bootstrap routing in `AdminServer.ts`. Inspect original dirty admin changes as input, but reproduce failures before adopting implementation. Lane B agent `fix_supply15`, worktree `../TTTGate-epic61-release`, branch `fix/epic61-release`, base `654a065`, owns `package-build.json`, release manifest generation and the release-manifest supply test; it does not change admin package files concurrently.
 
 Lane A, serial:
 
-- [ ] #50 admin test runner. Status: pending Wave 0.
-- [ ] #5 SPA mount. Status: pending previous lane item.
+- [ ] #50 admin test runner. Status: assigned to `fix_ci14` in the admin lane.
+- [ ] #5 SPA mount. Status: pending #50, #17 and serial #63 integration.
 - [ ] #6 certificate lifecycle. Status: pending previous lane item.
 - [ ] #7 CSRF integration. Status: pending previous lane item.
 - [ ] #8 bootstrap UI and request. Status: pending previous lane item.
@@ -37,7 +39,11 @@ Lane A, serial:
 
 Lane B, parallel with A:
 
-- [ ] #17 release manifest. Status: pending Wave 0.
+- [ ] #17 release manifest. Status: assigned to `fix_supply15` in the release lane.
+
+Serial interlude after #50 and #17 integration, before Lane A continues with #5:
+
+- [ ] #63 Node 24 minimum/runtime migration. Status: pending #50/#17 integration; exclusive ownership of root/admin/distribution manifests, lockfiles, Node declarations, workflows and binary packaging. #50 may select Node 24 for its new CI harness; all remaining migration belongs here. Packaging research may run concurrently without edits. Rebase the admin lane onto reviewed #63 before continuing; #44 must verify actual Node 24 artifacts and supported platforms.
 
 Wave completion gate, after A and B integration:
 
@@ -148,14 +154,14 @@ Status: pending Wave 5; one serial integration lane owns package scripts, final 
 3. Implement minimum fix in assigned worktree; record green and appropriate regression evidence.
 4. Independent reviewer checks original requirements and diff. A different fixer handles findings, followed by independent re-review until no material findings remain. Record findings by critical/high/medium/low.
 5. Review commit content/message independently, commit without signature or progress markers, integrate serially, run integration checks, push without force, verify remote hash, then close issue with evidence.
-6. Send Telegram after each closed issue: `TDD Gate {issue number} {issue title} ({total issue count}/{completed issue count})`. Current total 57 (original 56 plus the discovered build issue); add newly discovered in-scope issues explicitly. Persist delivery result to prevent duplicate reporting.
+6. Send Telegram after each closed issue: `TDD Gate {issue number} {issue title} ({total issue count}/{completed issue count})`. Current total 58 (original 56 plus build issue #62 and user-directed Node 24 migration #63); add newly discovered in-scope issues explicitly. Persist delivery result to prevent duplicate reporting.
 
 ## Issue completion ledger
 
-No issues completed yet. Each checklist item is completed only after all per-issue gates. Store its ledger in `docs/plan/verification/epic61-issue-N.md`, where N is the issue number. Required fields: original title/requirements, assigned agent/worktree/branch/writable paths, current status and next command, reuse findings, red command/result before implementation, green/regression commands/results, review findings and independent reviewer/fixer identity, integration commit, pushed remote hash, GitHub closure evidence, Telegram title/delivery receipt. Allowed states: pending, assigned, red, implementing, reviewing, integrating, pushed, closed, notified, complete, blocked. Update the checklist status when any state changes. Newly discovered defects receive their own issue, schedule item and ledger; update total count before subsequent notifications.
+Three of 58 issues completed: #14, #62 and #15. Independent Wave 0 review evidence: `docs/plan/verification/epic61-wave0-review.md`. Each checklist item is completed only after all per-issue gates. Store its ledger in `docs/plan/verification/epic61-issue-N.md`, where N is the issue number. Required fields: original title/requirements, assigned agent/worktree/branch/writable paths, current status and next command, reuse findings, red command/result before implementation, green/regression commands/results, review findings and independent reviewer/fixer identity, integration commit, pushed remote hash, GitHub closure evidence, Telegram title/delivery receipt. Allowed states: pending, assigned, red, implementing, reviewing, integrating, pushed, closed, notified, complete, blocked. Update the checklist status when any state changes. Newly discovered defects receive their own issue, schedule item and ledger; update total count before subsequent notifications.
 
 Plan review evidence: `docs/plan/verification/epic61-plan-review.md`. A different reviewer must rereview this amended plan before treating its findings as resolved.
 
 ## Resume
 
-Inspect live Git/worktree/GitHub state and live agent handles before relying on this document; do not restart work based only on an expired observation or stale status. Current next action: independently rereview the amended schedule and poll the existing CI and supply agents. All original dirty files remain in the original workspace. After Wave 0, create each new lane from the latest reviewed integration commit and record its path in the ledger before assignment. Recheck current user-decision evidence before any policy-sensitive implementation.
+Inspect live Git/worktree/GitHub state and live agent handles before relying on this document; do not restart work based only on an expired observation or stale status. Current next action: progress assigned Wave 1 admin #50 and release #17 lanes from base `654a065`. Wave 0 combined build passed; full regression completed with 68 suites/306 tests passed and four online tests skipped (157.635 seconds). Remote HEAD is `654a0659f8e592a19817f2aae64f3c74e29502e2`. All original dirty files remain in the original workspace. After Wave 0, create each new lane from the latest reviewed integration commit and record its path in the ledger before assignment. Recheck current user-decision evidence before any policy-sensitive implementation.

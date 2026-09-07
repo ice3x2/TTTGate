@@ -1,6 +1,6 @@
 # Issue #15 — Fail-closed supply-chain checks
 
-Status: implementation and focused test execution complete; independent review pending.
+Status: complete; independently reviewed, integrated, pushed, closed and notified. Assigned agent: `fix_supply15`. Next action: none for this issue.
 Worktree: `C:/Work/git/_Snoworca/TTTGate-epic61-supply`; branch: `fix/epic61-supply`.
 Writable paths: `test/supply-chain/**`, `test/helpers/SupplyChainGate.ts`, `scripts/supply-chain-gate.cjs`, `.github/workflows/supply-chain-audit.yml`, and this evidence file.
 
@@ -8,10 +8,10 @@ Writable paths: `test/supply-chain/**`, `test/helpers/SupplyChainGate.ts`, `scri
 - [x] Search existing command runners and audit parsers before implementation. Status: complete; existing supply-chain suites duplicated catch/stdout handling, while no reusable report validator existed. Extracted shared validation into `scripts/supply-chain-gate.cjs`, used by `test/helpers/SupplyChainGate.ts` and the admin reporting CLI.
 - [x] Reproduce failure before changing gates. Status: complete; command below exited 1 because the old gate incorrectly exited 0.
 - [x] Add process-result regression cases before implementing the shared validator and workflow conditions. Status: complete; missing helper and missing scheduled-only job conditions failed before implementation.
-- [x] Implement shared fail-closed JSON/process validation and scheduled online audits. Status: complete, subject to review.
+- [x] Implement shared fail-closed JSON/process validation and scheduled online audits. Status: complete; independent review passed.
 - [x] Run focused regression. Status: complete; 47 passed, four explicitly online tests skipped in normal local execution.
-- [ ] Independent review and fixes. Status: pending orchestrator assignment.
-- [ ] Integrate, verify remote commit, close issue, send Telegram. Status: pending orchestrator.
+- [x] Independent review and fixes. Status: PASS by `review_wave0`; workflow-label finding resolved and admin HIGH report-only policy preserved. See `epic61-wave0-review.md`.
+- [x] Integrate, verify remote commit, close issue, send Telegram. Status: complete; evidence below.
 
 ## TDD evidence
 
@@ -80,3 +80,11 @@ registry case asserts failure with an audit-result diagnostic.
 Live registry and hosted workflow runs are not claimed by this local evidence.
 Windows Node emits a shell/argument deprecation warning for the fixed internal
 npm arguments; focused tests still exit cleanly without `--forceExit`.
+
+## Operational completion
+
+Original issue title: 공급망 테스트가 네트워크 실패 시 무조건 통과함. Integration commit and independently observed pushed remote HEAD: `654a0659f8e592a19817f2aae64f3c74e29502e2` on `origin/fix/epic-61`. GitHub independently confirmed CLOSED at `2026-09-07T15:09:25Z`.
+
+The orchestrator's combined build passed; full regression handle `96111` exited 0 with 68 suites/306 tests passed and four online tests skipped in 157.635 seconds. Reviewer independently reran the supply subset: 47 tests passed/four online tests skipped.
+
+Telegram title: `TDD Gate 15 공급망 테스트가 네트워크 실패 시 무조건 통과함 (57/3)`. Delivery succeeded with message ID `3896` according to the orchestrator's Telegram tool receipt; the reviewer did not independently fetch the message. Do not send a duplicate completion notification.
