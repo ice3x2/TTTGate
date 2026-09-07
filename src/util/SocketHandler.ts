@@ -64,6 +64,7 @@ class SocketHandler {
     private _endWaitingState = false;
 
     private _event: OnSocketEvent;
+    private _onOwnerTerminal?: (handler: SocketHandler) => void;
 
 
     private _memoryBufferSize: number = 0;
@@ -259,12 +260,12 @@ class SocketHandler {
         return handler;
     }
 
-    public static bound(options: {socket: net.Socket, port: number, addr: string, tls: boolean, keepAlive: number }, event: OnSocketEvent) : SocketHandler {
+    public static bound(options: {socket: net.Socket, port: number, addr: string, tls: boolean, keepAlive: number }, event: OnSocketEvent, onOwnerTerminal?: (handler: SocketHandler) => void) : SocketHandler {
         options.socket.setNoDelay(true);
         if(options.keepAlive > 0) {
             options.socket.setKeepAlive(true, options.keepAlive);
         }
-        let handler = new SocketHandler(options.socket, options.port, options.addr, options.tls, event);
+        let handler = new SocketHandler(options.socket, options.port, options.addr, options.tls, event, onOwnerTerminal);
         handler._state = SocketState.Connected;
         handler._isServer = true;
 
@@ -275,13 +276,14 @@ class SocketHandler {
         return this._socket.localAddress ?? '';
     }
 
-    private constructor(socket: Socket, port: number, addr: string,  tls: boolean,event: OnSocketEvent) {
+    private constructor(socket: Socket, port: number, addr: string,  tls: boolean,event: OnSocketEvent, onOwnerTerminal?: (handler: SocketHandler) => void) {
         this._port = port;
         this._addr = addr;
         this._tls = tls;
         this._socket = socket;
 
         this._event = event;
+        this._onOwnerTerminal = onOwnerTerminal;
         this.initSocket(socket);
     }
 
@@ -315,6 +317,12 @@ class SocketHandler {
 
     public isEnd() : boolean {
         return this._state == SocketState.Closed || this._state == SocketState.End; /* || this._state == SocketState.Error; */
+    }
+
+    private notifyOwnerTerminal(): void {
+        const callback = this._onOwnerTerminal;
+        this._onOwnerTerminal = undefined;
+        callback?.(this);
     }
 
     public isSecure() : boolean {
@@ -356,6 +364,7 @@ class SocketHandler {
             if(this._state != SocketState.Closed /* && this._state != SocketState.Error*/) {
                 this._breakBufferFlush = !this._waitQueue.isEmpty();
                 this._state = SocketState.Closed;
+                this.notifyOwnerTerminal();
                 this._event(this, SocketState.Closed);
             }
             this.release();
@@ -374,6 +383,7 @@ class SocketHandler {
             if(!this.isEnd()) {
                 this._state = SocketState.End;
                 this._breakBufferFlush = !this._waitQueue.isEmpty();
+                this.notifyOwnerTerminal();
                 this._event(this, SocketState.End);
                 //23.10.19 수정
                 this.clearWaitQueue();
@@ -391,6 +401,7 @@ class SocketHandler {
         this.callAllDrainEvent(this.isOutputDrained);
         if(this._state != SocketState.Closed) {
             this._state = SocketState.Closed;
+            this.notifyOwnerTerminal();
             this._event(this, SocketState.Closed, error);
         }
         this.release();
@@ -459,6 +470,7 @@ class SocketHandler {
         }
         this._socket.end();
         this._state = SocketState.End;
+        this.notifyOwnerTerminal();
         this._event?.(this, SocketState.End);
         this.clearWaitQueue();
     }
@@ -475,6 +487,7 @@ class SocketHandler {
 
 
         this._state = SocketState.Closed;
+        this.notifyOwnerTerminal();
         this._event(this, SocketState.Closed);
 
         this._event = ()=>{};

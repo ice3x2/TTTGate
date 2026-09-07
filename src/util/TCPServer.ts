@@ -114,10 +114,9 @@ class TCPServer {
     private onBind = (socket: net.Socket) : void => {
         let option = {socket:socket, port: this._options.port, addr: "127.0.0.1", tls: this._options.tls ?? false , keepAlive: this._options.keepAlive ?? DEFAULT_KEEP_ALIVE};
         let handler = SocketHandler.bound(option,(handler, state, data) => {
-            if(state == SocketState.Closed || /*state == SocketState.Error ||*/ state == SocketState.End) {
-                this._idHandlerMap.delete(handler.id);
-            }
             this._onHandlerEvent?.(handler, state, data);
+        }, (ownedHandler) => {
+            this._idHandlerMap.delete(ownedHandler.id);
         });
         this._idHandlerMap.set(handler.id, handler);
         this._onServerEvent?.(this, SocketState.Bound, handler);
