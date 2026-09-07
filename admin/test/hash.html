@@ -1,11 +1,10 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="UTF-8"><title>Browser hash contract</title></head>
+<head><meta charset="UTF-8"><title>Browser random challenge contract</title></head>
 <body>
 <script type="module">
-    import {sha512Hex, randomHex} from '/src/util/hash.ts';
-    import LoginCtrl from '/src/controller/LoginCtrl.ts';
-    window.hashContract = {sha512Hex, randomHex, legacyHash: (password) => LoginCtrl.hashPassword(password)};
+    import {randomHex} from '/src/util/hash.ts';
+    window.randomChallenge = randomHex;
 </script>
 </body>
 </html>

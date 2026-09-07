@@ -3,39 +3,51 @@
     import LoginCtrl from "../controller/LoginCtrl";
     import {onMount} from "svelte";
 
-    let _messageElement : HTMLDivElement;
+    let _message = '';
+    let _password = '';
+    let _bootstrapToken = '';
+    let _bootstrapRequired = false;
+    let _pending = false;
     let _isEmptyPassword : boolean = false;
 
 
     onMount( async () => {
         _isEmptyPassword = await LoginCtrl.isEmptyKey();
-        if (_isEmptyPassword && _messageElement) {
-            _messageElement.innerHTML = 'No password has been set. Enter the desired password.';
+        if (_isEmptyPassword) {
+            _message = 'No password has been set. Enter the desired password.';
             return;
         }
     });
 
     let onClickButton = async () => {
-        let input = document.querySelector('input') as HTMLInputElement;
-        let password = input.value;
-        if (password == '') {
-            _messageElement.innerHTML = 'Please enter your password.';
+        if (_pending) return;
+        if (_password == '') {
+            _message = 'Please enter your password.';
             return;
         }
-        if(_isEmptyPassword) {
-             if (password.length < 12) {
-                _messageElement.innerHTML = 'The password must be at least 12 characters long.';
-                return;
-            } else if (!password.match(/[0-9]/g) || !password.match(/[~!@#$%^&*()_+|<>?:{}]/g)) {
-                _messageElement.innerHTML = 'The password must contain at least one number or special character.';
+        _pending = true;
+        try {
+            const result = await LoginCtrl.login(_password, _bootstrapToken || undefined);
+            if(result.success) {
+                window.location.href = '/';
                 return;
             }
-        }
-        let isSuccess = await LoginCtrl.login(password);
-        if(!isSuccess) {
-            _messageElement.innerHTML = 'The password is incorrect.';
-        } else {
-            window.location.href = '/';
+            if(result.bootstrapRequired) _bootstrapRequired = true;
+            if(result.status === 429) {
+                _message = 'Too many login attempts. Please try again later.';
+            } else if(result.weakPassword) {
+                _message = "The password does not meet the server's minimum length.";
+            } else if(result.invalidBootstrapToken && _bootstrapToken) {
+                _message = 'The bootstrap token is invalid. Check config/.bootstrap-token on the server.';
+            } else if(result.bootstrapRequired) {
+                _message = _bootstrapToken ? 'Unable to set the first password.' : 'Enter the bootstrap token to set the first password.';
+            } else {
+                _message = result.message || 'The password is incorrect.';
+            }
+        } catch {
+            _message = 'Unable to connect to the server.';
+        } finally {
+            _pending = false;
         }
 
     }
@@ -53,12 +65,17 @@
         Sign in
     </h2>
     <div class="input-box" >
-        <input type="password" class="form-control" placeholder="Password" aria-label="Password"   on:keyup={onInputEnter} />
-        <div id="login-message" bind:this={_messageElement}></div>
+        <input type="password" class="form-control" placeholder="Password" aria-label="Password" bind:value={_password} on:keyup={onInputEnter} />
+        {#if _bootstrapRequired || _isEmptyPassword}
+            <label for="bootstrap-token">Bootstrap token</label>
+            <input id="bootstrap-token" type="password" class="form-control" aria-label="Bootstrap token" autocomplete="off" bind:value={_bootstrapToken} on:keyup={onInputEnter} />
+            <small>Read the token from config/.bootstrap-token on the server.</small>
+        {/if}
+        <div id="login-message" role="alert">{_message}</div>
     </div>
 
     <div class="button-box">
-    <button type="button" on:click={onClickButton}>OK</button>
+    <button type="button" on:click={onClickButton} disabled={_pending}>OK</button>
     </div>
 
 </main>
@@ -76,12 +93,13 @@
     .input-box {
         width: 100%;
         display: flex;
+        flex-direction: column;
+        gap: 8px;
         justify-content: flex-start;
         margin: 10px 0 25px 0;
     }
     #login-message {
-        position: absolute;
-        margin-top: 28px;
+        margin-top: 4px;
         font-size: 10pt;
         color: deeppink;
     }
@@ -107,7 +125,7 @@
         flex-direction: column;
         text-align: left;
         padding: 15px;
-        height: 180px;
+        min-height: 180px;
 
         max-width: 100%;
         background: #f7f7f7;

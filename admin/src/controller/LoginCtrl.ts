@@ -1,4 +1,12 @@
-import {sha512Hex} from "../util/hash";
+type LoginResult = {
+    success: boolean;
+    status: number;
+    bootstrapRequired?: boolean;
+    invalidBootstrapToken?: boolean;
+    weakPassword?: boolean;
+    message?: string;
+};
+
 class LoginCtrl {
 
     private constructor() {
@@ -24,27 +32,17 @@ class LoginCtrl {
         return json['valid'];
     }
 
-    public static async login(key: string) : Promise<boolean> {
-        let hash =await LoginCtrl.hashPassword(key);
+    public static async login(key: string, bootstrapToken?: string) : Promise<LoginResult> {
         let result = await fetch("/api/login", {
             method: "POST",
             credentials: "same-origin",
             headers: {
                 'Content-Type': 'application/json'
             }
-            ,body: JSON.stringify({key: hash})
+            ,body: JSON.stringify({key, bootstrapToken})
         })
         let json = await result.json();
-        return json['success'];
-    }
-
-    private static async hashPassword(password: string) {
-        password = password.trim() + '@';
-        let salt : string = '';
-        for(let i =0; i < password.length; i++) {
-            salt += Math.round(password.charCodeAt(i) / 2).toString(16);
-        }
-        return await sha512Hex(password + salt);
+        return {...json, status: result.status, success: result.ok && json.success === true};
     }
 
 
