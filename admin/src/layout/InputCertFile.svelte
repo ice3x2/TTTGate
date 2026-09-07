@@ -2,7 +2,7 @@
     import forge, {pki} from 'node-forge';
     import {randomHex} from "../util/hash";
     import {type CertInfo, type PemData} from "../controller/Types";
-    import {onMount, createEventDispatcher, beforeUpdate, afterUpdate} from "svelte";
+    import {onMount, createEventDispatcher} from "svelte";
     import ObjectUtil from "../controller/ObjectUtil";
     import AlertLayout from "../component/AlertLayout.svelte";
     import _ from "lodash";
@@ -25,26 +25,41 @@
 
     export let certInfo: CertInfo | undefined | null;
 
+    const _emptyCertInfo: CertInfo = {
+        key: {
+            name: '',
+            value: ''
+        },
+        cert: {
+            name: '',
+            value:''
+        },
+        ca: {
+            name: '',
+            value: ''
+        }
+    };
     if(!certInfo) {
-        certInfo = {
-            key: {
-                name: '',
-                value: ''
-            },
-            cert: {
-                name: '',
-                value:''
-            },
-            ca: {
-                name: '',
-                value: ''
-            }
-        };
+        certInfo = _.cloneDeep(_emptyCertInfo);
     }
 
 
 
     let _tempCertInfo = _.cloneDeep(certInfo);
+    let _lastCertInfo = _.cloneDeep(certInfo);
+
+    let _syncCertInfo = (value: CertInfo | undefined | null) => {
+        if(!value) {
+            certInfo = _.cloneDeep(_emptyCertInfo);
+            value = certInfo;
+        }
+        if(!ObjectUtil.equalsDeep(value, _lastCertInfo)) {
+            _lastCertInfo = _.cloneDeep(value);
+            _resetInputFile();
+        }
+    };
+
+    $: _syncCertInfo(certInfo);
 
 
 
@@ -65,12 +80,6 @@
 
         }
     });
-
-    afterUpdate(async () => {
-        _tempCertInfo = _.cloneDeep(certInfo!);
-        _resetInputFile();
-    });
-
 
 
     let _alert = (message: string) => {

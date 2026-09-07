@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Certificate lifecycle contract</title></head>
+<body>
+<div id="fixture"></div>
+<script type="module">
+    import {mount, unmount} from 'svelte';
+    import CertificateFixture from './CertificateFixture.svelte';
+    const component = mount(CertificateFixture, {target: document.getElementById('fixture'),
+        props: {auxiliary: new URLSearchParams(location.search).has('auxiliary')}});
+    window.unmountFixture = () => unmount(component);
+</script>
+</body>
+</html>
