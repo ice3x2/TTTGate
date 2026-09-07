@@ -16,6 +16,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
 
     strategy:
       matrix:
@@ -31,6 +33,9 @@ jobs:
         node-version: ${{ matrix.node-version }}
         cache: 'npm'
 
+    - name: Validate release version
+      run: node scripts/validate-release-version.cjs "$RELEASE_VERSION"
+
     - name: Install dependencies (root)
       run: npm ci
 
@@ -45,13 +50,13 @@ jobs:
     - name: Create release archive
       run: |
         cd dist
-        tar -czf ../TTTGate-${{ inputs.version }}-dist.tar.gz .
+        tar -czf "../TTTGate-$RELEASE_VERSION-dist.tar.gz" .
         cd ..
 
     - name: Generate release notes
       id: release_notes
       run: |
-        echo "## Release ${{ inputs.version }}" > release_notes.md
+        echo "## Release $RELEASE_VERSION" > release_notes.md
         echo "" >> release_notes.md
 
         # Get the latest tag
@@ -78,7 +83,7 @@ jobs:
         echo "### Installation" >> release_notes.md
         echo '```bash' >> release_notes.md
         echo "# Download and extract the release" >> release_notes.md
-        echo "tar -xzf TTTGate-${{ inputs.version }}-dist.tar.gz" >> release_notes.md
+        echo "tar -xzf TTTGate-$RELEASE_VERSION-dist.tar.gz" >> release_notes.md
         echo "" >> release_notes.md
         echo "# Run as server" >> release_notes.md
         echo "node src/app.js server -adminPort 9300" >> release_notes.md

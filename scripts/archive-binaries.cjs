@@ -1,13 +1,14 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {spawnSync} = require('node:child_process');
+const {isValidReleaseVersion} = require('./validate-release-version.cjs');
 
 const version = process.argv[2];
 const root = path.resolve(process.argv[3] || path.join(__dirname, '..'));
 const binaryDirectory = path.join(root, 'dist/bin');
 const platforms = ['linux-x64', 'linux-arm64', 'win-x64', 'win-arm64', 'alpine-x64'];
 const fail = (message) => { console.error(message); process.exit(1); };
-if(!version || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(version)) fail('Invalid release version');
+if(!isValidReleaseVersion(version)) fail('Invalid release version');
 
 const entries = platforms.map(platform => ({
     binary: `TTTGate-${platform}${platform.startsWith('win-') ? '.exe' : ''}`,
