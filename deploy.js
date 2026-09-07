@@ -35,9 +35,9 @@ execSync(`npm --prefix ${Path.join(process.cwd())} run pkg`);
 
 
 /*
-"node18-linux-arm64",
-      "node18-win-arm64",
-      "node18-win-x64",
-      "node18-linux-x64",
-      "node18-alpine-x64"
+"node24-linux-arm64",
+      "node24-win-arm64",
+      "node24-win-x64",
+      "node24-linux-x64",
+      "node24-alpine-x64"
  */

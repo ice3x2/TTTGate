@@ -8,6 +8,16 @@ This branch is hardened around three defaults:
 - protocol v2 client identity is the primary trust model
 - new HTTP tunnel configs do **not** reflect `Origin` back as `Access-Control-Allow-Origin`
 
+## Runtime Requirements
+
+Use Node.js 24 LTS or newer (minimum `24.0.0`) for source installations and
+building the server or admin UI. Run `nvm use` when using nvm, then install the
+locked dependencies with `npm ci` and `npm ci --prefix admin`.
+
+Standalone binaries embed Node.js 24 and do not require a separate Node install.
+Build them with the locked `@yao-pkg/pkg` tool through `npm run pkg`; the supported
+targets are Linux x64/ARM64, Windows x64/ARM64 and Alpine x64.
+
 ## Runtime Config Files
 
 - server runtime config: `config/server.yaml`

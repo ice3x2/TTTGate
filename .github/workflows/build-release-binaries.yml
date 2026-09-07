@@ -24,7 +24,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [18.x]
+        node-version: [24.x]
 
     steps:
     - name: Checkout repository
@@ -57,9 +57,6 @@ jobs:
     - name: Build platform binaries
       if: ${{ inputs.build_binaries }}
       run: |
-        # Install pkg globally if needed
-        npm install -g pkg
-
         # Build binaries using npm script
         npm run pkg
 
@@ -171,7 +168,7 @@ jobs:
 
         echo "" >> release_notes.md
         echo "### 📌 Requirements" >> release_notes.md
-        echo "- Node.js 18+ (for source distribution)" >> release_notes.md
+        echo "- Node.js 24+ (for source distribution)" >> release_notes.md
         echo "- Supported platforms: Linux, Windows, Alpine Linux (x64/ARM64)" >> release_notes.md
 
     - name: List build artifacts

@@ -20,7 +20,7 @@ import * as crypto from "crypto";
  *    호출자 책임 영역이다.
  *
  * 인코딩 계약:
- *  - 기본 `encoding`은 'hex'. 'hex' 인코딩일 때만 형식 검증(/^[0-9a-fA-F]*$/)을
+ *  - 기본 `encoding`은 'hex'. 'hex' 인코딩일 때만 짝수 길이 확인과 형식 검증(/^[0-9a-fA-F]*$/)을
  *    수행하여 silent truncation(Buffer.from이 비-hex 문자를 만나 입력을 잘라내는 동작)을
  *    차단한다. 'utf8' 등 다른 인코딩에서는 문자열을 그대로 Buffer로 변환하며
  *    별도 형식 검증은 하지 않는다.
@@ -55,9 +55,9 @@ export function timingSafeStringEqual(
     }
 
     // MEDIUM-1: hex 인코딩일 때 silent truncation 방지.
-    // Buffer.from(s,'hex')는 비-hex 문자를 만나면 거기서 잘라내므로,
+    // Buffer.from(s,'hex')는 비-hex 문자와 홀수 길이의 마지막 nibble을 잘라내므로,
     // 사전에 형식 검증 후 실패 시 dummy 비교 경로로 false를 반환한다.
-    const hexValid = (s: string): boolean => /^[0-9a-fA-F]*$/.test(s);
+    const hexValid = (s: string): boolean => s.length % 2 === 0 && /^[0-9a-fA-F]*$/.test(s);
     let formatValid = true;
     if (typeof a === "string" && encoding === "hex" && !hexValid(a)) formatValid = false;
     if (typeof b === "string" && encoding === "hex" && !hexValid(b)) formatValid = false;
