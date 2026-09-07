@@ -1,6 +1,6 @@
 # Issue #51 — Remove obsolete empty-key discovery
 
-Status: ready to commit; both independent reviews and all scoped checks passed.
+Status: complete; independently reviewed, committed, integrated, pushed, closed and notified. Next action: none for this issue; release #44 is separately assigned.
 Original title: `/api/emptyKey` 엔드포인트가 라우팅되지 않아 최초 설정 안내와 비밀번호 강도 검사가 죽어 있음.
 Assigned agent: `fix_ci14`; worktree `C:/Work/git/_Snoworca/TTTGate-epic61-ui`;
 branch `fix/epic61-empty-key`; baseline `0e9ce88`.
@@ -22,5 +22,11 @@ still succeeds and the old endpoint continues returning 404.
   Status: LoginCtrl's discovery method, Login's onMount/import/discovery state and the unused backend handler are removed. Bootstrap UI now depends solely on bootstrapRequired. SessionStore.isEmptyKey and endpoint 404 behavior are retained. Same focused command GREEN: one passed/seven unselected, 3.678 seconds.
 - [x] Run focused, login/administrator and backend compatibility regressions plus builds.
   Status: static check exited 0 (zero errors/ten existing accessibility/CSS warnings), backend build exited 0. Related handle 4629 exited 0 naturally: four suites/18 tests passed in 61.133 seconds using `node node_modules/jest/bin/jest.js --runInBand --silent --runTestsByPath test/admin/login-bootstrap.test.ts test/admin/entrypoint.test.ts test/component/server/admin/AdminServer.security.test.ts test/unit/server/admin/SessionStore.security.test.ts`.
-- [ ] Obtain both independent reviews, commit and hand off remote completion.
-  Status: primary `review_wave0` and secondary `fix_supply15` code/content/title reviews PASS. Primary independently ran the actual no-discovery browser case: one test passed in 3.391 seconds with natural exit 0. Root authorized the scoped commit with exact title `fix: 최초 설정에서 폐기된 키 조회 제거`; root owns integration/push/close/Telegram.
+- [x] Obtain both independent reviews, commit and hand off remote completion.
+  Status: primary `review_wave0` and secondary `fix_supply15` code/content/title reviews PASS. Primary independently ran the actual no-discovery browser case: one test passed in 3.391 seconds with natural exit 0. Root authorized the scoped commit with exact title `fix: 최초 설정에서 폐기된 키 조회 제거`; integration/push/closure/Telegram are complete as recorded below.
+
+## Operational completion
+
+Source commit: `1ee99c1`. Integration commit and independently observed pushed `origin/fix/epic-61` HEAD: `30599cf59fa1507051469c9edd1c099ea139182f`. GitHub independently confirmed CLOSED at `2026-09-07T22:01:53Z`. Root reports two suites/13 integrated tests passed naturally in 43.778 seconds. Scoped static/build and broader checks are recorded above; hosted execution is not claimed.
+
+Telegram title: TDD Gate 51 `/api/emptyKey` 엔드포인트가 라우팅되지 않아 최초 설정 안내와 비밀번호 강도 검사가 죽어 있음 (63/22). Successful message `3925` is from the orchestrator's tool receipt, not an independent Telegram fetch. Existing notification denominators are unchanged. Do not duplicate the notification.
