@@ -404,11 +404,11 @@ class SocketHandler {
             this.notifyOwnerTerminal();
             this._event(this, SocketState.Closed, error);
         }
-        this.release();
+        this.release(error);
     }
 
-    private release() : void {
-        this.clearWaitQueue();
+    private release(error?: Error) : void {
+        this.clearWaitQueue(error);
         this.clearTimeout();
         this._socket.removeAllListeners();
         this._state = SocketState.Closed;
@@ -593,7 +593,13 @@ class SocketHandler {
         this._inRunWriteBuffer = true;
         let waitItem = undefined;
         do {
-            waitItem = this.popBufferSync();
+            try {
+                waitItem = this.popBufferSync();
+            } catch (error) {
+                this._inRunWriteBuffer = false;
+                this.procError(error as Error);
+                return;
+            }
             if(!waitItem) {
                 this._inRunWriteBuffer = false;
                 // 종료 대기 상태고, 버퍼 큐가 비어있으면 소켓을 종료한다.
@@ -632,11 +638,11 @@ class SocketHandler {
     }
 
 
-    private clearWaitQueue() : void {
+    private clearWaitQueue(error?: Error) : void {
         let waitItem = this._waitQueue.popFront()
         while(waitItem) {
             this.completeWaitItem(waitItem, waitItem.cacheID == -1);
-            waitItem.onWriteComplete?.(this, false);
+            waitItem.onWriteComplete?.(this, false, error);
             waitItem = this._waitQueue.popFront();
         }
         this._waitQueue.clear();
@@ -708,17 +714,21 @@ class SocketHandler {
 
 
     private popBufferSync() : WaitItem | undefined {
-        let waitItem = this._waitQueue.popFront();
+        // Failed cached reads stay queued for failure callbacks and drain accounting.
+        let waitItem = this._waitQueue.front();
         if(!waitItem) {
             return undefined;
         }
-        if(waitItem.cacheID != -1 && this._fileCache) {
+        if(waitItem.cacheID != -1) {
             let buffer = this._fileCache?.readSync(waitItem.cacheID);
-            this._fileCache?.remove(waitItem.cacheID);
+            if(!buffer || buffer.length !== waitItem.length) {
+                throw new Error(`File cache read failed for record ${waitItem.cacheID}`);
+            }
+            this._fileCache!.remove(waitItem.cacheID);
             this.appendFileCacheUsage(-waitItem.length);
-            waitItem.buffer = buffer ?? EMPTY_BUFFER;
-            return waitItem;
+            waitItem.buffer = buffer;
         }
+        this._waitQueue.popFront();
         return waitItem;
     }
 

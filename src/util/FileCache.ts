@@ -147,7 +147,14 @@ class FileCache {
             return undefined;
         }
         let buffer = Buffer.allocUnsafe(block.length);
-        fs.readSync(this._fileDescriptor, buffer, 0, block.length, block.position);
+        let offset = 0;
+        while(offset < block.length) {
+            const bytesRead = fs.readSync(this._fileDescriptor, buffer, offset, block.length - offset, block.position + offset);
+            if(bytesRead === 0) {
+                throw new Error(`Incomplete file cache record ${id}: read ${offset} of ${block.length} bytes`);
+            }
+            offset += bytesRead;
+        }
         return buffer;
     }
 
