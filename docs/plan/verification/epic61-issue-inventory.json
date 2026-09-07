@@ -170,7 +170,7 @@
   {
     "body": "## 요약\r\n\r\n배포 스크립트가 Vite 빌드와 TypeScript 컴파일만 수행합니다. Vite 빌드는 타입을 확인하지 않고, Svelte 타입 검사와 테스트는 호출되지 않습니다.\r\n\r\n## 근거\r\n\r\n- `deploy.js:12` — admin 빌드를 실행합니다.\r\n- `deploy.js:19` — TypeScript 컴파일을 실행합니다.\r\n- `deploy.js:34` — 바이너리 패키징을 실행합니다.\r\n- `admin/package.json:10` — `check` 스크립트가 정의되어 있으나 파이프라인에서 호출되지 않습니다.\r\n- 의존성 설치 단계가 없어 잠금 파일이 실제 설치에 반영되지 않습니다.\r\n\r\n## 재현과 영향\r\n\r\n`node deploy.js` 를 실행하면 재현됩니다. #5 (C-01) 부터 #8 (C-04) 까지의 프론트엔드 결함이 모두 빌드를 통과해 배포물에 포함됩니다.\r\n\r\n## 권고\r\n\r\nadmin 빌드 앞에 의존성 설치와 Svelte 타입 검사를, TypeScript 컴파일 뒤에 테스트를 게이트로 배치합니다.\r\n\r\n## 검증 상태\r\n\r\n- 기존 테스트 커버: 해당 없음.\r\n- 도입 시점: 기존.\r\n- 확인 방법: 배포 스크립트 코드 확인.\r\n\r\n---\r\n근거 문서: `docs/research/2026-09-05-tttgate-full-inspection.md` §5.27",
     "number": 44,
-    "state": "OPEN",
+    "state": "CLOSED",
     "title": "배포 파이프라인에 타입 검사와 테스트 게이트가 없어 결함이 그대로 패키징됨",
     "url": "https://github.com/ice3x2/TTTGate/issues/44"
   },

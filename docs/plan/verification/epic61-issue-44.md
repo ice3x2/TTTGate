@@ -1,6 +1,6 @@
 # Issue #44 — Release validation gates
 
-Status: both independent code/title reviews, actual pipeline and independent final evidence review passed; scoped commit pending.
+Status: complete; independently reviewed, committed, integrated, pushed, closed and notified. Next action: none for #44; #65 is assigned separately.
 Original title: 배포 파이프라인에 타입 검사와 테스트 게이트가 없어 결함이 그대로 패키징됨.
 Assigned agent: `fix_ci14`; worktree `C:/Work/git/_Snoworca/TTTGate-epic61-release`;
 branch `fix/epic61-release-gates`; baseline `30599cf`.
@@ -43,8 +43,8 @@ must be run separately and identified as such; no release is published.
   Status: built-in filesystem operations, fixed npm arguments/explicit cwd, the seven required gates and final production admin rebuild are implemented. Root test:browser:install calls Playwright; hosted Linux adds --with-deps. No #65/#68 change. Fixture handle 37604 exited 0 naturally: nine tests passed in 42.446 seconds using the same command.
 - [x] Run fixture tests, independent reviews and the actual project pipeline with distinct evidence.
   Status: fixture tests, primary review_wave0 and secondary fix_supply15 code/content/title reviews passed. Actual pipeline handle 11246 terminated with exit 0; detailed observed results below.
-- [ ] Commit reviewed scope and hand off integration/push/closure to root.
-  Status: pending; #65/#68 work is not authorized by this checkpoint.
+- [x] Commit reviewed scope and hand off integration/push/closure to root.
+  Status: complete; #65 is now separately assigned after integration and #68 remains its later checkpoint.
 
 ## Fixture evidence and exact source scope
 
@@ -97,3 +97,11 @@ SHA256 `3CD60681B807D1B02526C7FDD7CB5927948403F67410248FEF00F4BA026F7B52`.
 The three copies follow the final production rebuild, not the preview fixture.
 Ordinary test-generated reports and lint temporary files are not release source
 changes and are excluded from the scoped commit. No timing experiment was run.
+
+## Operational completion
+
+Source commit: `67b8303`. Integration commit and independently observed pushed `origin/fix/epic-61` HEAD: `c064c5397de260fc16b791f9e4b3ac23fca88ba5`. GitHub independently confirmed CLOSED at `2026-09-07T22:44:02Z`. Root reports nine integrated gate-fixture tests passed naturally in 42.89 seconds. The earlier actual project run, 91 passing suites/445 passing tests with four online skips and five generated binaries remains distinct evidence; #49 and archive issues #65/#68 are not claimed complete.
+
+Telegram title: `TDD Gate 44 배포 파이프라인에 타입 검사와 테스트 게이트가 없어 결함이 그대로 패키징됨 (63/25)`. Successful message `3930` is from the orchestrator's tool receipt, not an independent Telegram fetch. Existing notification denominators remain unchanged. Do not duplicate the notification.
+
+Root reported that automatic policy review denied a recursive lint-temporary-output deletion; that action was not executed. Existing lint output and the actual pipeline log remain preserved and excluded from the scoped source commit. No additional deletion attempt was made for this completion update. #65 now runs separately in `fix/epic61-binary-archives` from `c064c53`.
