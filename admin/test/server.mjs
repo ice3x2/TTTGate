@@ -8,9 +8,13 @@ if(process.env.ADMIN_TEST_HTTP_ALIAS === '1') options.allowedHosts = ['admin.tes
 if(process.env.ADMIN_TEST_API_ORIGIN) {
     options.proxy = {'/api': {target: process.env.ADMIN_TEST_API_ORIGIN, rewrite: (url) => url}};
 }
+// Override only the target for the actual-config proxy regression. Preview
+// inherits server.proxy, retaining its original path rewrite and other options.
+const proxyOverride = process.env.ADMIN_TEST_PROXY_TARGET
+    ? {proxy: {'/api': {target: process.env.ADMIN_TEST_PROXY_TARGET}}} : {};
 const server = isPreview
-    ? await preview({root, preview: options, logLevel: 'error'})
-    : await createServer({root, server: options, logLevel: 'error'});
+    ? await preview({root, server: proxyOverride, preview: options, logLevel: 'error'})
+    : await createServer({root, server: {...options, ...proxyOverride}, logLevel: 'error'});
 if(!isPreview) await server.listen();
 process.send({url: server.resolvedUrls.local[0].replace(/\/$/, '')});
 process.on('message', async (message) => {

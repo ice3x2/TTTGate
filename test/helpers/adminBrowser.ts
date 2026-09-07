@@ -2,10 +2,11 @@ import {fork} from "child_process";
 import * as path from "path";
 import {Browser, chromium} from "playwright";
 
-export const startAdminBrowser = async (options: {apiOrigin?: string, preview?: boolean, httpAlias?: boolean} = {}) => {
+export const startAdminBrowser = async (options: {apiOrigin?: string, proxyTarget?: string, preview?: boolean, httpAlias?: boolean} = {}) => {
     const server = fork(path.resolve(__dirname, "../../admin/test/server.mjs"), [], {
         stdio: ["ignore", "pipe", "pipe", "ipc"],
         env: {...process.env, ADMIN_TEST_API_ORIGIN: options.apiOrigin,
+            ADMIN_TEST_PROXY_TARGET: options.proxyTarget,
             NODE_ENV: options.preview ? "production" : "development",
             ADMIN_TEST_HTTP_ALIAS: options.httpAlias ? "1" : "0",
             ADMIN_TEST_PREVIEW: options.preview ? "1" : "0"},
