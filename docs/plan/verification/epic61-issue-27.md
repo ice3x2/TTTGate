@@ -1,20 +1,20 @@
 # Issue #27 — HTTP handler ownership cleanup
 
-Status: reviewing; shared owner-hook repair and all focused/broader regressions pass.
+Status: complete; independently reviewed, integrated, pushed, closed and notified.
 Original title: HTTP 외부 포트가 접속 하나마다 핸들러를 영구 누적함.
 Assigned agent: `fix_supply15`; branch `fix/epic61-handler-lifecycle`.
 Worktree: `C:/Work/git/_Snoworca/TTTGate-epic61-listeners`; base `2b0a426`.
 Writable test paths shared with #26: `test/component/handler-map-lifecycle.test.ts`
 and `test/component/handler-map-lifecycle-driver.ts`, plus the new owner-contract
 test. Root/primary review approved the bounded TCPServer/SocketHandler ownership
-change. HttpHandler/EPS remain read-only. Next action: independent final review.
+change. HttpHandler/EPS remain read-only. Next action: none for this issue; operational completion is recorded below.
 
 - [x] Read #27/#26 and inspect actual HttpHandler callback replacement. Status: complete.
 - [x] Reproduce HTTP terminal retention before shared implementation. Status: RED for natural EOF, actual HttpHandler.destroy and explicit socket-error paths; control-case RED was captured in the same run.
 - [x] Approve and implement shared owner-termination cleanup. Status: root/primary-approved optional owner hook implemented only after both issue REDs and seven additional owner-contract REDs.
 - [x] Run focused/integration regressions. Status: paired/owner 12 tests pass; broader six suites/23 tests exit 0 naturally and forced build passes, as recorded in #26 ledger.
-- [ ] Independent final review. Status: pending orchestrator.
-- [ ] Integrate, push, close and notify. Status: pending orchestrator.
+- [x] Independent final review. Status: two independent reviews PASS as recorded in the GitHub closure comment.
+- [x] Integrate, push, close and notify. Status: complete; operational evidence below.
 
 ## RED evidence
 
@@ -52,3 +52,9 @@ Full commands and natural exit/build results are in `epic61-issue-26.md`.
 The notification tracks existing logical End/Closed semantics, not a claim of
 physical close at End. No HTTP parsing, TLS policy, control protocol, session
 callback or configuration behavior is changed by this ownership fix.
+
+## Operational completion
+
+Integration commit: `bf6b790`. Independently observed pushed `origin/fix/epic-61` HEAD: `bf6b790832b838ee8e8bb528dc974dd0810795f9`. GitHub independently confirmed CLOSED at `2026-09-07T19:19:05Z`. The existing GitHub closure comment records two independent reviews, six suites/23 integration tests and forced compilation PASS. Hosted workflow execution is not claimed.
+
+Telegram title: TDD Gate 27 HTTP 외부 포트가 접속 하나마다 핸들러를 영구 누적함 (62/19). Successful message `3920` is from the orchestrator's tool receipt, not an independent Telegram fetch. Do not duplicate the notification.

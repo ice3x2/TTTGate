@@ -1,20 +1,20 @@
 # Issue #26 — Control-pool handler ownership cleanup
 
-Status: reviewing; shared #26/#27 implementation, focused and broader natural-exit regression, and forced build pass.
+Status: complete; independently reviewed, integrated, pushed, closed and notified.
 Original title: 클라이언트 재연결 때마다 서버의 `TCPServer` 핸들러 맵에 항목이 누적됨.
 Assigned agent: `fix_supply15`; branch `fix/epic61-handler-lifecycle`.
 Worktree: `C:/Work/git/_Snoworca/TTTGate-epic61-listeners`; base `2b0a426`.
 Approved writable paths: `src/util/TCPServer.ts`, `src/util/SocketHandler.ts`,
 `test/component/handler-map-lifecycle.test.ts`, its dedicated driver,
 `test/component/socket-owner-terminal.test.ts`, and the separate #26/#27 ledgers.
-Next action: independent final review; no commit or other transport issue work.
+Next action: none for this issue; subsequent transport work remains separately scheduled.
 
 - [x] Read #26/#27 and search existing terminal cleanup facilities. Status: complete; replaceable onSocketEvent is the only current map cleanup path, and SocketHandler removes native socket listeners during release/destroy.
 - [x] Write and reproduce both issue-specific failures before shared implementation. Status: complete; first run failed control plus three HTTP terminal cases.
 - [x] Approve minimum SocketHandler ownership hook. Status: root and primary reviewer approved only an optional bound-factory owner callback, private one-shot consumption and five existing terminal transition notifications.
 - [x] Add owner contract RED before shared production changes. Status: seven tests failed with zero owner notifications; exact-once, reentrant destroy, live ownership and pending write/FIN checks precede implementation.
 - [x] Implement shared fix after approval and run focused/integration regressions. Status: focused 12 tests pass; broader six suites/23 tests pass naturally, forced build exits 0.
-- [ ] Independent final review, integration, push, closure and notification. Status: pending.
+- [x] Independent final review, integration, push, closure and notification. Status: complete; two independent reviews and integration checks recorded in the GitHub closure comment, operational evidence below.
 
 ## RED evidence
 
@@ -87,3 +87,9 @@ End is a logical terminal state for the TCPServer registry, matching its old
 cleanup semantics; the hook does not claim that the physical socket has closed
 at the first End notification. The black-box leak cases additionally wait until
 the closed handlers reach Closed, and retain an unrelated live entry throughout.
+
+## Operational completion
+
+Integration commit: `bf6b790`. Independently observed pushed `origin/fix/epic-61` HEAD: `bf6b790832b838ee8e8bb528dc974dd0810795f9`. GitHub independently confirmed CLOSED at `2026-09-07T19:18:50Z`. The existing GitHub closure comment records two independent reviews, six suites/23 integration tests and forced compilation PASS. Hosted workflow execution is not claimed.
+
+Telegram title: TDD Gate 26 클라이언트 재연결 때마다 서버의 `TCPServer` 핸들러 맵에 항목이 누적됨 (62/18). Successful message `3919` is from the orchestrator's tool receipt, not an independent Telegram fetch. Do not duplicate the notification.
