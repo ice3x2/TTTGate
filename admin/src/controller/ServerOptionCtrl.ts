@@ -1,6 +1,7 @@
 import { type ServerOption } from "./Types";
 import type {TunnelingStatus, Options} from "./Options";
 import InvalidSession from "./InvalidSession";
+import {adminRequest} from "./AdminRequest";
 
 
 class ServerOptionCtrl {
@@ -129,7 +130,7 @@ class ServerOptionCtrl {
 
 
     public async updateServerOption(serverOption: ServerOption) : Promise<{success: boolean, message: string, updated: boolean, updates: object}> {
-        let res = await fetch("/api/serverOption", {
+        return adminRequest("/api/serverOption", {
             method: "POST",
             credentials: "same-origin",
             headers: {
@@ -137,15 +138,10 @@ class ServerOptionCtrl {
             },
             body: JSON.stringify(serverOption)
         });
-        let json = await res.json();
-        if(!json || res.status == 401) {
-            throw new InvalidSession();
-        }
-        return json;
     }
 
     public async updateTunnelingOption(tunnelingOption : Options) : Promise<{success: boolean, message: string}> {
-        let res = await fetch("/api/tunnelingOption", {
+        return adminRequest("/api/tunnelingOption", {
             method: "POST",
             credentials: "same-origin",
             headers: {
@@ -153,15 +149,10 @@ class ServerOptionCtrl {
             },
             body: JSON.stringify(tunnelingOption)
         });
-        let json = await res.json();
-        if(!json || res.status == 401) {
-            throw new InvalidSession();
-        }
-        return json;
     }
 
     public async removeTunnelingOption(tunnelingOption : Options | {forwardPort: number}) : Promise<{success: boolean, message: string, forwardPort: number}> {
-        let res = await fetch("/api/tunnelingOption", {
+        return adminRequest("/api/tunnelingOption", {
             method: "DELETE",
             credentials: "same-origin",
             headers: {
@@ -169,11 +160,6 @@ class ServerOptionCtrl {
             },
             body: JSON.stringify(tunnelingOption)
         });
-        let json = await res.json();
-        if(!json || res.status == 401) {
-            throw new InvalidSession();
-        }
-        return json;
     }
 
 
@@ -192,7 +178,7 @@ class ServerOptionCtrl {
     public async activeExternalPortServer(active: boolean, port: number, timeout?: number) : Promise<{success: boolean, message: string}> {
 
         timeout = timeout ?? 0;
-        let res = await fetch(`/api/tunneling/active/${port}`, {
+        return adminRequest(`/api/tunneling/active/${port}`, {
             method: "POST",
             credentials: "same-origin",
             headers: {
@@ -200,11 +186,6 @@ class ServerOptionCtrl {
             },
             body: JSON.stringify({active: active,timeout: timeout})
         });
-        let json = await res.json();
-        if(!json || res.status == 401) {
-            throw new InvalidSession();
-        }
-        return json;
     }
 
 
