@@ -227,12 +227,9 @@ class Sentinel {
                 }
             }).catch((err: any) => {
                 logger.error('Error on find process: ' + pid, err);
-                logger.info('Stop app')
-                process.kill(process.pid, 'SIGTERM');
                 logger.info('Stop sentinel')
                 clearInterval(intervalID);
-                process.kill(1);
-                return;
+                process.exit(1);
             });
         }, 3000);
 
