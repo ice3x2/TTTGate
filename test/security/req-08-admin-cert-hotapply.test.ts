@@ -106,27 +106,27 @@ describe("REQ-08 Admin cert hot-apply (setSecureContext)", () => {
         };
 
         const pool = ExternalPortServerPool.create([]);
-        // Replace forwardPort with a random free port by binding port 0 first through startServer.
-        // startServer uses forwardPort as the actual listen port; to keep logic simple pick a high random port and retry.
-        const pickPort = () => 40000 + Math.floor(Math.random() * 20000);
-        let port = 0;
-        for(let tries = 0; tries < 8; tries++) {
-            port = pickPort();
-            tunnelingOption.forwardPort = port;
-            const certInfo: any = {
-                cert: { name: "cert.pem", value: cert0.certPem },
-                key:  { name: "key.pem",  value: cert0.keyPem },
-                ca:   { name: "ca.pem",   value: "" }
-            };
-            try {
-                const ok = await pool.startServer(tunnelingOption, certInfo);
-                if(ok) break;
-            } catch {
-                // port collision → retry
-                continue;
-            }
-        }
         try {
+            // Replace forwardPort with a random free port by binding port 0 first through startServer.
+            // startServer uses forwardPort as the actual listen port; to keep logic simple pick a high random port and retry.
+            const pickPort = () => 40000 + Math.floor(Math.random() * 20000);
+            let port = 0;
+            for(let tries = 0; tries < 8; tries++) {
+                port = pickPort();
+                tunnelingOption.forwardPort = port;
+                const certInfo: any = {
+                    cert: { name: "cert.pem", value: cert0.certPem },
+                    key:  { name: "key.pem",  value: cert0.keyPem },
+                    ca:   { name: "ca.pem",   value: "" }
+                };
+                try {
+                    const ok = await pool.startServer(tunnelingOption, certInfo);
+                    if(ok) break;
+                } catch {
+                    // port collision → retry
+                    continue;
+                }
+            }
             // initial fingerprint
             const fp0 = await fetchPeerFingerprint(port);
             expect(fp0).toBe(cert0.fingerprintSha256);
@@ -147,22 +147,26 @@ describe("REQ-08 Admin cert hot-apply (setSecureContext)", () => {
             // 동일 port 여전히 online
             expect(pool.getServerStatus(port).online).toBe(true);
         } finally {
-            try { await pool.stop(port); } catch { /* noop */ }
+            await pool.dispose();
         }
     });
 
     it("(6) ExternalPortServerPool.applyTlsCertificateHotSwap — 미등록 포트는 false", async () => {
         const { ExternalPortServerPool } = await import("../../src/server/ExternalPortServerPool");
         const pool = ExternalPortServerPool.create([]);
-        const cert0 = generateSelfSignedCert("localhost");
-        const nextCert: any = {
-            cert: { name: "cert.pem", value: cert0.certPem },
-            key:  { name: "key.pem",  value: cert0.keyPem },
-            ca:   { name: "ca.pem",   value: "" }
-        };
-        expect(pool.applyTlsCertificateHotSwap(65000, nextCert)).toBe(false);
-        // certInfo 없음
-        expect(pool.applyTlsCertificateHotSwap(65000, undefined)).toBe(false);
+        try {
+            const cert0 = generateSelfSignedCert("localhost");
+            const nextCert: any = {
+                cert: { name: "cert.pem", value: cert0.certPem },
+                key:  { name: "key.pem",  value: cert0.keyPem },
+                ca:   { name: "ca.pem",   value: "" }
+            };
+            expect(pool.applyTlsCertificateHotSwap(65000, nextCert)).toBe(false);
+            // certInfo 없음
+            expect(pool.applyTlsCertificateHotSwap(65000, undefined)).toBe(false);
+        } finally {
+            await pool.dispose();
+        }
     });
 
     it("(4) src/util/TCPServer.applyTlsCertificateHotSwap — tls.Server 경로", async () => {
