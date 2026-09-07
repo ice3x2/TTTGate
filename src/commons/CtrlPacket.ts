@@ -2,6 +2,7 @@ import BufferWriter from "../util/BufferWriter";
 import BufferReader from "../util/BufferReader";
 import ConnectOpt from "../util/ConnectOpt";
 import Dequeue from "../util/Dequeue";
+import LoggerFactory from "../util/logger/LoggerFactory";
 import {AckCtrlV2Meta, HandlerWideIdMeta, NewDataHandlerMeta, SyncCtrlAckMeta} from "./ProtocolV2";
 import {
     assertAckCtrlV2Meta,
@@ -16,7 +17,8 @@ import {
 enum ParsedState {
     Complete,
     Incomplete,
-    Error
+    Error,
+    Discarded
 }
 
 
@@ -78,7 +80,7 @@ class CtrlPacket {
 
 
     public get waitReceiveLength() : number {
-        if(this._cmd != CtrlCmd.CloseSession) {
+        if(this._cmd != CtrlCmd.CloseSession || this._data.length < 4) {
             return 0;
         }
         return this._data.readUInt32BE(0);
@@ -286,6 +288,10 @@ class CtrlPacket {
             return {packet: null, remain: emptyBuffer, state: ParsedState.Incomplete,  error: null};
         }
         result._data = reader.readBuffer(dataLength);
+        if(!CtrlPacket.hasRequiredPayload(result._cmd, result._data)) {
+            return {packet: null, remain: reader.readBufferToEnd(), state: ParsedState.Discarded,
+                error: new Error(`Incomplete ${CtrlCmd[result._cmd]} payload`)};
+        }
         if(result._cmd == CtrlCmd.AckCtrl) {
             result._ackCtrlOpt = CtrlPacket.parseAckCtrlData(result._data);
 
@@ -297,6 +303,21 @@ class CtrlPacket {
 
     public get cmd() : CtrlCmd {
         return this._cmd;
+    }
+
+    private static hasRequiredPayload(cmd: CtrlCmd, data: Buffer): boolean {
+        if(cmd == CtrlCmd.CloseSession) return data.length >= 4;
+        if(cmd == CtrlCmd.OpenSession) {
+            // host length + host bytes + port + TLS flag + buffer limit.
+            return data.length >= 9 && data.readUInt16BE(0) + 9 <= data.length;
+        }
+        if(cmd == CtrlCmd.AckCtrl) {
+            if(data.length < 4) return false;
+            const keyOffset = 2 + data.readUInt16BE(0);
+            return keyOffset + 2 <= data.length &&
+                keyOffset + 2 + data.readUInt16BE(keyOffset) <= data.length;
+        }
+        return true;
     }
 
     public get sessionID() : number {
@@ -425,36 +446,37 @@ class CtrlPacketStreamer {
 
     public readPacket() : CtrlPacket | null {
         let buffer = this._popFront();
-        if(buffer === undefined) {
-            return null;
-        }
-        let result = CtrlPacket.fromBuffer(buffer);
-        if(result.state == ParsedState.Complete) {
-            return this.toPacketAtComplete(result);
-        }
-        else if(result.state == ParsedState.Incomplete && this._dequeue.isEmpty()) {
-            this._pushFront(buffer);
-            return null;
-        }
-        while(result.state == ParsedState.Incomplete && !this._dequeue.isEmpty()) {
-            let nextBuffer = this._popFront()!;
-            // R2-REQ-03: Buffer.concat 전 상한 재확인 (누적 공격 방어).
-            if(buffer.length + nextBuffer.length > this._maxPendingBytes) {
-                this._handleOverflow(nextBuffer.length);
-                return null;
+        let discarded = 0;
+        try {
+            while(buffer !== undefined) {
+                const result = CtrlPacket.fromBuffer(buffer);
+                if(result.state == ParsedState.Complete) return this.toPacketAtComplete(result);
+                if(result.state == ParsedState.Discarded) {
+                    discarded++;
+                    if(result.remain.length > 0) this._pushFront(result.remain);
+                    buffer = this._popFront();
+                    continue;
+                }
+                if(result.state == ParsedState.Error) throw result.error;
+                const nextBuffer = this._popFront();
+                if(nextBuffer === undefined) {
+                    this._pushFront(buffer);
+                    return null;
+                }
+                // Preserve the pending-byte limit before concatenating fragments.
+                if(buffer.length + nextBuffer.length > this._maxPendingBytes) {
+                    this._handleOverflow(nextBuffer.length);
+                    return null;
+                }
+                buffer = Buffer.concat([buffer, nextBuffer]);
             }
-            let newBuffer = Buffer.concat([buffer, nextBuffer]);
-            result = CtrlPacket.fromBuffer(newBuffer);
-            if(result.state == ParsedState.Incomplete && this._dequeue.isEmpty()) {
-                this._pushFront(newBuffer);
-                return null;
-            } else if(result.state == ParsedState.Complete) {
-                return this.toPacketAtComplete(result);
+            return null;
+        } finally {
+            if(discarded > 0) {
+                LoggerFactory.getLogger("default", "CtrlPacketStreamer")
+                    .warn(`Discarded ${discarded} control frame(s) with incomplete command payloads`);
             }
-            buffer = newBuffer;
         }
-
-        throw result.error;
     }
 
 
