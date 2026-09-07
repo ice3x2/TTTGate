@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Admin component test</title></head>
+<body>
+<div id="fixture"></div>
+<script type="module">
+    import AlertLayout from '/src/component/AlertLayout.svelte';
+    import LoginCtrl from '/src/controller/LoginCtrl.ts';
+
+    // This fixture supports the existing baseline and the intended Svelte 5
+    // upgrade; the production entrypoint is tested separately for issue #5.
+    const svelte = await import('svelte');
+    const options = {target: document.getElementById('fixture'), props: {show: true, button: 'Dismiss test alert'}};
+    const component = svelte.mount ? svelte.mount(AlertLayout, options) : new AlertLayout(options);
+    window.hashPassword = (password) => LoginCtrl.hashPassword(password);
+</script>
+</body>
+</html>

@@ -20,9 +20,12 @@ describe("code regression CI (#14)", () => {
         expect(job.defaults?.run?.["working-directory"]).toBeUndefined();
         expect(job.steps[0].uses).toMatch(/^actions\/checkout@/);
         expect(job.steps[1].uses).toMatch(/^actions\/setup-node@/);
+        expect(job.steps[1].with["node-version"]).toBe("24");
         const commands = job.steps.filter((step: {run?: string}) => step.run);
         expect(commands.map((step: {run: string}) => step.run)).toEqual([
             "npm ci --no-audit --no-fund",
+            "npm ci --prefix admin --no-audit --no-fund",
+            "npx playwright install --with-deps chromium",
             "npm run build",
             "npm test -- --runInBand",
         ]);
