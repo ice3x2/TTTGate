@@ -1,23 +1,12 @@
 <script lang="ts">
 
     import LoginCtrl from "../controller/LoginCtrl";
-    import {onMount} from "svelte";
 
     let _message = '';
     let _password = '';
     let _bootstrapToken = '';
     let _bootstrapRequired = false;
     let _pending = false;
-    let _isEmptyPassword : boolean = false;
-
-
-    onMount( async () => {
-        _isEmptyPassword = await LoginCtrl.isEmptyKey();
-        if (_isEmptyPassword) {
-            _message = 'No password has been set. Enter the desired password.';
-            return;
-        }
-    });
 
     let onClickButton = async () => {
         if (_pending) return;
@@ -66,7 +55,7 @@
     </h2>
     <div class="input-box" >
         <input type="password" class="form-control" placeholder="Password" aria-label="Password" bind:value={_password} on:keyup={onInputEnter} />
-        {#if _bootstrapRequired || _isEmptyPassword}
+        {#if _bootstrapRequired}
             <label for="bootstrap-token">Bootstrap token</label>
             <input id="bootstrap-token" type="password" class="form-control" aria-label="Bootstrap token" autocomplete="off" bind:value={_bootstrapToken} on:keyup={onInputEnter} />
             <small>Read the token from config/.bootstrap-token on the server.</small>

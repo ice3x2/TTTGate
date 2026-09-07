@@ -13,15 +13,6 @@ class LoginCtrl {
 
     }
 
-    public static async isEmptyKey() : Promise<boolean> {
-        let result = await fetch("/api/emptyKey", {
-            method: "GET",
-            credentials: "same-origin"
-        });
-        let json = await result.json();
-        return json['emptyKey'];
-    }
-
     public static async validateSession() : Promise<boolean> {
 
         let result = await fetch("/api/validateSession", {

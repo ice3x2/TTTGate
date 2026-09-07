@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import SessionStore from "../../src/server/admin/SessionStore";
 import {createTestRoot, cleanupTestRoot, writeWebFixture} from "../helpers/runtime";
 import {startAdminBrowser} from "../helpers/adminBrowser";
+import {httpRequest} from "../helpers/http";
 
 const withLogin = async (check: (fixture: any) => Promise<void>, storedKey?: string) => {
     const root = await createTestRoot("browser-login-8");
@@ -72,6 +73,29 @@ const withLogin = async (check: (fixture: any) => Promise<void>, storedKey?: str
         }
     }
 };
+
+test("bootstrap response completes first setup without obsolete discovery requests", async () => {
+    await withLogin(async ({app, submit, token, origin}) => {
+        const discoveryRequests: string[] = [];
+        app.page.on("request", (request: any) => {
+            if(new URL(request.url()).pathname === "/api/emptyKey") discoveryRequests.push(request.url());
+        });
+        await app.page.reload();
+        await app.page.getByLabel("Password", {exact: true}).fill("plainword");
+        const required = await submit();
+        expect(required.status()).toBe(403);
+        expect(await required.json()).toMatchObject({bootstrapRequired: true});
+        const field = app.page.getByLabel("Bootstrap token", {exact: true});
+        await field.waitFor({state: "visible", timeout: 3000});
+        await field.fill(await token());
+        expect((await submit()).status()).toBe(200);
+        await app.page.waitForURL(`${origin()}/`);
+        const removed = await httpRequest({port: Number(new URL(origin()).port), path: "/api/emptyKey"});
+        expect(removed.statusCode).toBe(404);
+        expect(JSON.parse(removed.body).emptyKey).toBeUndefined();
+        expect(discoveryRequests).toEqual([]);
+    });
+}, 45_000);
 
 test("controller sends the actual raw key and bootstrap token accepted by the server", async () => {
     await withLogin(async ({app, token, root}) => {

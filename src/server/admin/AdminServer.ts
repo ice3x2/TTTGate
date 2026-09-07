@@ -838,10 +838,6 @@ class AdminServer {
 
 
 
-    private onGetEmptyKey = async (req: IncomingMessage, res: ServerResponse) => {
-        this.sendApiFailure(res, 404, {message: 'Not Found'});
-    }
-
     private onLogin = async (req: IncomingMessage, res: ServerResponse) => {
         let json: any;
         try {
