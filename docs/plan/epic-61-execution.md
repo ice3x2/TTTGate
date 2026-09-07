@@ -1,6 +1,6 @@
 # Epic #61 execution plan
 
-Status: active; 2026-09-08; baseline `376b65c`; 58 tracked issues, three completed. Original child range: 5 through 60, plus discovered build issue 62 and user-directed Node 24 migration 63; unrelated issue 2 is excluded.
+Status: active; 2026-09-08; baseline `376b65c`; 58 tracked issues, five completed. Original child range: 5 through 60, plus discovered build issue 62 and user-directed Node 24 migration 63; unrelated issue 2 is excluded.
 
 ## Scope and decisions
 
@@ -12,7 +12,7 @@ Accepted current user decision: minimum Node.js version becomes `>=24.0.0` (24 L
 
 ## Execution order and ownership
 
-Each issue below appears once and is its own resumable checklist item. Items inside a lane run serially. Lanes in the same wave may run in parallel, up to three workers including reviewers; the orchestrator occupies the fourth slot. A completed wave means reviewed changes have been integrated and checked before the next wave starts. Release gates run after both Wave 1 lanes.
+Each issue below appears once and is its own resumable checklist item. Items inside a lane run serially. Lanes in the same wave may run in parallel, up to three workers including reviewers; the orchestrator occupies the fourth slot. A completed wave means reviewed changes have been integrated and checked before the next wave starts, except the explicitly bounded early #9 lane below. Wave 0 remains the mandatory global barrier. Release gates run after both Wave 1 lanes and #63.
 
 File ownership is exclusive during a wave, including test files. Serial cherry-picking alone does not make overlapping implementations safe. Before assignment, record the actual branch, worktree and writable paths in the issue evidence file. If a fix needs another active lane's file, defer that change until the owner is integrated, update this plan and rebase the waiting lane. Do not independently edit shared files and defer resolving their semantics until merge.
 
@@ -30,7 +30,7 @@ Status: assigned after Wave 0 completion. Lane A agent `fix_ci14`, worktree `../
 
 Lane A, serial:
 
-- [ ] #50 admin test runner. Status: assigned to `fix_ci14` in the admin lane.
+- [x] #50 admin test runner. Status: complete; commit `d8cb6a7` pushed, issue closed, Telegram receipt 3898 (58/5).
 - [ ] #5 SPA mount. Status: pending #50, #17 and serial #63 integration.
 - [ ] #6 certificate lifecycle. Status: pending previous lane item.
 - [ ] #7 CSRF integration. Status: pending previous lane item.
@@ -39,11 +39,11 @@ Lane A, serial:
 
 Lane B, parallel with A:
 
-- [ ] #17 release manifest. Status: assigned to `fix_supply15` in the release lane.
+- [x] #17 release manifest. Status: complete; commit `5cd4df0` pushed, issue closed, Telegram receipt 3897 (58/4).
 
 Serial interlude after #50 and #17 integration, before Lane A continues with #5:
 
-- [ ] #63 Node 24 minimum/runtime migration. Status: pending #50/#17 integration; exclusive ownership of root/admin/distribution manifests, lockfiles, Node declarations, workflows and binary packaging. #50 may select Node 24 for its new CI harness; all remaining migration belongs here. Packaging research may run concurrently without edits. Rebase the admin lane onto reviewed #63 before continuing; #44 must verify actual Node 24 artifacts and supported platforms.
+- [ ] #63 Node 24 minimum/runtime migration. Status: assigned to `fix_supply15` in `../TTTGate-epic61-node24`, branch `fix/epic61-node24`, base `d8cb6a7`; exclusive ownership of root/admin/distribution manifests, lockfiles, Node declarations, workflows and binary packaging. #50 may select Node 24 for its new CI harness; all remaining migration belongs here. Packaging research may run concurrently without edits. Rebase the admin lane onto reviewed #63 before continuing; #44 must verify actual Node 24 artifacts and supported platforms.
 
 Wave completion gate, after A and B integration:
 
@@ -51,11 +51,13 @@ Wave completion gate, after A and B integration:
 
 ### Wave 2 — termination and listener foundations
 
-Status: pending Wave 1. Lane A exclusively owns `SocketHandler.ts`, `TCPServer.ts`, `CtrlPacket.ts`, `TunnelServer.ts`, `TunnelClient.ts`, `ClientHandlerPool.ts`, `ExternalPortServerPool.ts`, and HTTP cleanup changes. These cannot be divided into simultaneous protocol/listener writers. Lane B owns `Sentinel.ts`, `LogWriter.ts` and logging composition only. Lane C owns admin/config/certificate files and their tests; changes to external listeners or common transport are deferred to Wave 4.
+Status: pending Wave 1 except the bounded #9 early lane. Lane A exclusively owns `SocketHandler.ts`, `TCPServer.ts`, `CtrlPacket.ts`, `TunnelServer.ts`, `TunnelClient.ts`, `ClientHandlerPool.ts`, `ExternalPortServerPool.ts`, and HTTP cleanup changes. These cannot be divided into simultaneous protocol/listener writers. Lane B owns `Sentinel.ts`, `LogWriter.ts` and logging composition only. Lane C owns admin/config/certificate files and their tests; changes to external listeners or common transport are deferred to Wave 4.
+
+Early #9 lane: after completed Wave 0, #9 may execute concurrently with #63. Actual issue scope is command payload validation in `src/commons/CtrlPacket.ts`, getter bounds and dedicated packet/consumer regression tests. These do not depend on administrator fixes or Node packaging. Exclusive writable paths are `src/commons/CtrlPacket.ts`, `test/unit/commons/CtrlPacket.test.ts`, dedicated #9 files under `test/commons/` and `test/component/`, and its issue ledger. Existing consumer/runtime files may be read; any required edits outside this set must be surfaced and ownership/schedule amended before writing. The #9 worker must not edit root/admin manifests, lockfiles, workflows, README, packaging scripts or shared test helpers owned by #63/admin. No other Wave 2 issue starts early. Integrate serially and rerun packet/consumer regression on the integrated Node 24 baseline. The orchestrator records the assigned worktree/branch before dispatch. This is a dependency-based parallel exception, not a relaxation of TDD or review gates.
 
 Lane A, serial:
 
-- [ ] #9 control payload boundary. Status: pending Wave 1.
+- [ ] #9 control payload boundary. Status: eligible for bounded early assignment in parallel with #63; Wave 0 complete, exclusive paths above.
 - [ ] #28 large byte counts. Status: pending previous lane item.
 - [ ] #10 inactive listener. Status: pending previous lane item.
 - [ ] #39 TCPServer restart. Status: pending previous lane item.
@@ -158,10 +160,10 @@ Status: pending Wave 5; one serial integration lane owns package scripts, final 
 
 ## Issue completion ledger
 
-Three of 58 issues completed: #14, #62 and #15. Independent Wave 0 review evidence: `docs/plan/verification/epic61-wave0-review.md`. Each checklist item is completed only after all per-issue gates. Store its ledger in `docs/plan/verification/epic61-issue-N.md`, where N is the issue number. Required fields: original title/requirements, assigned agent/worktree/branch/writable paths, current status and next command, reuse findings, red command/result before implementation, green/regression commands/results, review findings and independent reviewer/fixer identity, integration commit, pushed remote hash, GitHub closure evidence, Telegram title/delivery receipt. Allowed states: pending, assigned, red, implementing, reviewing, integrating, pushed, closed, notified, complete, blocked. Update the checklist status when any state changes. Newly discovered defects receive their own issue, schedule item and ledger; update total count before subsequent notifications.
+Five of 58 issues completed: #14, #62, #15, #17 and #50. Independent Wave 0 review evidence: `docs/plan/verification/epic61-wave0-review.md`. Each checklist item is completed only after all per-issue gates. Store its ledger in `docs/plan/verification/epic61-issue-N.md`, where N is the issue number. Required fields: original title/requirements, assigned agent/worktree/branch/writable paths, current status and next command, reuse findings, red command/result before implementation, green/regression commands/results, review findings and independent reviewer/fixer identity, integration commit, pushed remote hash, GitHub closure evidence, Telegram title/delivery receipt. Allowed states: pending, assigned, red, implementing, reviewing, integrating, pushed, closed, notified, complete, blocked. Update the checklist status when any state changes. Newly discovered defects receive their own issue, schedule item and ledger; update total count before subsequent notifications.
 
 Plan review evidence: `docs/plan/verification/epic61-plan-review.md`. A different reviewer must rereview this amended plan before treating its findings as resolved.
 
 ## Resume
 
-Inspect live Git/worktree/GitHub state and live agent handles before relying on this document; do not restart work based only on an expired observation or stale status. Current next action: progress assigned Wave 1 admin #50 and release #17 lanes from base `654a065`. Wave 0 combined build passed; full regression completed with 68 suites/306 tests passed and four online tests skipped (157.635 seconds). Remote HEAD is `654a0659f8e592a19817f2aae64f3c74e29502e2`. All original dirty files remain in the original workspace. After Wave 0, create each new lane from the latest reviewed integration commit and record its path in the ledger before assignment. Recheck current user-decision evidence before any policy-sensitive implementation.
+Inspect live Git/worktree/GitHub state and live agent handles before relying on this document; do not restart work based only on an expired observation or stale status. Current next action: execute assigned serial #63 in the Node 24 worktree; #50 and #17 are complete, #5 waits for #63 integration. Wave 0 combined build passed; full regression completed with 68 suites/306 tests passed and four online tests skipped (157.635 seconds). Remote HEAD observed after #50 completion is `d8cb6a73cdf8a359946465f816e2cfc48c9be5cd`. All original dirty files remain in the original workspace. After Wave 0, create each new lane from the latest reviewed integration commit and record its path in the ledger before assignment. Recheck current user-decision evidence before any policy-sensitive implementation.
