@@ -269,6 +269,7 @@ class ExternalPortServerPool {
 
     private onHandlerEvent = (handler: EndpointHandler | EndpointHttpHandler, state: SocketState, data?: any) : void => {
         let sessionID = handler.getBundle(SESSION_ID_BUNDLE_KEY)!;
+        if(!this._handlerMap.has(sessionID)) return;
 
             if (SocketState.Receive == state) {
                 let portNumber: number = handler.getBundle(PORT_BUNDLE_KEY);
@@ -318,8 +319,6 @@ class ExternalPortServerPool {
             }
         } else if(state == SocketState.Bound) {
             let handler = handlerOpt!;
-            let sessionID = ExternalPortServerPool.LAST_SESSION_ID++;
-            handler.setBundle(SESSION_ID_BUNDLE_KEY, sessionID);
             let option = server.getBundle(OPTION_BUNDLE_KEY);
             if(!option) {
                 logger.error(`Error - port: ${server.port}, Option is undefined`);
@@ -337,7 +336,8 @@ class ExternalPortServerPool {
                 return;
             }
             option = option as TunnelingOption;
-
+            let sessionID = ExternalPortServerPool.LAST_SESSION_ID++;
+            handler.setBundle(SESSION_ID_BUNDLE_KEY, sessionID);
 
             let bufferSizeLimit = option.bufferLimitOnServer == undefined || option.bufferLimitOnServer < 1 ? - 1 :  option.bufferLimitOnServer * 1024 * 1024;
             handler.setBufferSizeLimit(bufferSizeLimit);
