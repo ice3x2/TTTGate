@@ -50,7 +50,7 @@ const main = () => {
     fs.cpSync(Path.join(root, 'build', 'src'), sourceOutput, {recursive: true});
     fs.cpSync(Path.join(admin, 'dist'), Path.join(sourceOutput, 'web'), {recursive: true});
     fs.copyFileSync(Path.join(root, 'package-build.json'), Path.join(sourceOutput, 'package.json'));
-    runNpm(['run', 'pkg'], root, 'production');
+    if(!process.argv.includes('--skip-binaries')) runNpm(['run', 'pkg'], root, 'production');
 };
 
 main();

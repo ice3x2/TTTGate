@@ -1,0 +1,52 @@
+[
+  {
+    "platform": "linux-x64",
+    "binary": "TTTGate-linux-x64",
+    "bytes": 77692244,
+    "archiveBytes": 27757998,
+    "archiveSha256": "8e057a58229805308e1dc5bb5a7fc06ef1470489368ec768fbb4593a1f2809b0",
+    "sourceHash": "2aa864f7d3cfebfccf59e13d3ddb2f4eaf70045d9a19f87f9e57c7422f9010c8",
+    "extractedHash": "2aa864f7d3cfebfccf59e13d3ddb2f4eaf70045d9a19f87f9e57c7422f9010c8",
+    "header": "7f454c4602010103000000000000000002003e00"
+  },
+  {
+    "platform": "linux-arm64",
+    "binary": "TTTGate-linux-arm64",
+    "bytes": 71724044,
+    "archiveBytes": 27293787,
+    "archiveSha256": "b43b4ea6b719f8e1e4b062b9f69a8763a5ec26f350a5964c1c0c69c8509d45a0",
+    "sourceHash": "d4d56666c0eed2686c17202992f2215a21ba0998b998e5ddd5c0d5f536c1e528",
+    "extractedHash": "d4d56666c0eed2686c17202992f2215a21ba0998b998e5ddd5c0d5f536c1e528",
+    "header": "7f454c460201010300000000000000000200b700"
+  },
+  {
+    "platform": "win-x64",
+    "binary": "TTTGate-win-x64.exe",
+    "bytes": 96005776,
+    "archiveBytes": 35215021,
+    "archiveSha256": "793447c8b75da0348050f4aed5de071d9cddfd3835e63c85adda4b45f1405ce2",
+    "sourceHash": "395c321ed277363185107f7bc1e0115165e285665344393cd227ae4df6861028",
+    "extractedHash": "395c321ed277363185107f7bc1e0115165e285665344393cd227ae4df6861028",
+    "header": "4d5a780001000000040000000000000000000000"
+  },
+  {
+    "platform": "win-arm64",
+    "binary": "TTTGate-win-arm64.exe",
+    "bytes": 90294416,
+    "archiveBytes": 33467282,
+    "archiveSha256": "a960b55dc2cbf3b63169d5a437ff6ab1077fa5605f46215f033dcf47e00a58d2",
+    "sourceHash": "d302ce4edd6f1e4b19e96f40869bf9838931cb5b5dcfeaddec5c0957659d3332",
+    "extractedHash": "d302ce4edd6f1e4b19e96f40869bf9838931cb5b5dcfeaddec5c0957659d3332",
+    "header": "4d5a780001000000040000000000000000000000"
+  },
+  {
+    "platform": "alpine-x64",
+    "binary": "TTTGate-alpine-x64",
+    "bytes": 83790484,
+    "archiveBytes": 29898143,
+    "archiveSha256": "d6eb7eefb02a149527b369bd29d5027e2c75be388b5e85df0dfc00155e0d4480",
+    "sourceHash": "1963ed0d4e0cc2599d4ecdff7608dd599827400f9a238d729cca7368df7d88e1",
+    "extractedHash": "1963ed0d4e0cc2599d4ecdff7608dd599827400f9a238d729cca7368df7d88e1",
+    "header": "7f454c4602010100000000000000000003003e00"
+  }
+]

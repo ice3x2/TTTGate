@@ -28,7 +28,7 @@ if(stage === 'pkg') {
 }
 `;
 
-const withFixture = (check: (fixture: {directory: string, result: ReturnType<typeof spawnSync>, journal: any[]}) => void, fail?: string) => {
+const withFixture = (check: (fixture: {directory: string, result: ReturnType<typeof spawnSync>, journal: any[]}) => void, fail?: string, args: string[] = []) => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "release gates & "));
     const manifest = (location: string, scripts: Record<string, string>) => {
         const data = {name: "release-gate-fixture", version: "1.0.0", private: true, scripts};
@@ -49,7 +49,7 @@ const withFixture = (check: (fixture: {directory: string, result: ReturnType<typ
             fs.mkdirSync(path.join(directory, output), {recursive: true});
             fs.writeFileSync(path.join(directory, output, "preserve.txt"), "previous artifact");
         }
-        const result = spawnSync(process.execPath, [path.join(directory, "deploy.js")], {
+        const result = spawnSync(process.execPath, [path.join(directory, "deploy.js"), ...args], {
             cwd: path.join(directory, "caller"), encoding: "utf8", timeout: 45_000, maxBuffer: 4 * 1024 * 1024,
             env: {...process.env, DEPLOY_FIXTURE_FAIL: fail, npm_config_update_notifier: "false"},
         });
@@ -97,3 +97,12 @@ test("the actual browser gate invokes the installed Playwright CLI", () => {
     const manifest = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
     expect(manifest.scripts["test:browser:install"]).toBe("playwright install chromium");
 });
+
+test("explicit source-only deployment runs all gates but never invokes pkg", () => {
+    withFixture(({directory, result, journal}) => {
+        expect(result.status).toBe(0);
+        expect(journal.map(entry => entry.stage)).toEqual(stages);
+        expect(fs.existsSync(path.join(directory, "dist/bin/fixture.txt"))).toBe(false);
+        expect(fs.readFileSync(path.join(directory, "dist.js/app.js"), "utf8")).toBe("compiled release");
+    }, undefined, ["--skip-binaries"]);
+}, 50_000);

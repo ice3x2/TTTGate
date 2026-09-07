@@ -45,7 +45,14 @@ jobs:
         npm ci
 
     - name: Build project
-      run: npm run dist
+      env:
+        BUILD_BINARIES: ${{ inputs.build_binaries }}
+      run: |
+        if [ "$BUILD_BINARIES" = "true" ]; then
+          npm run dist
+        else
+          npm run dist -- --skip-binaries
+        fi
 
     - name: Create source distribution archive
       run: |
@@ -54,41 +61,11 @@ jobs:
         zip -r ../TTTGate-${{ inputs.version }}-dist.zip .
         cd ..
 
-    - name: Build platform binaries
+    - name: Archive platform binaries
       if: ${{ inputs.build_binaries }}
-      run: |
-        # Build binaries using npm script
-        npm run pkg
-
-        # Create binary archives
-        cd dist
-
-        # Linux x64
-        if [ -f "tttgate-linux" ]; then
-          tar -czf ../TTTGate-${{ inputs.version }}-linux-x64.tar.gz tttgate-linux
-        fi
-
-        # Linux ARM64
-        if [ -f "tttgate-linux-arm64" ]; then
-          tar -czf ../TTTGate-${{ inputs.version }}-linux-arm64.tar.gz tttgate-linux-arm64
-        fi
-
-        # Windows x64
-        if [ -f "tttgate-win.exe" ]; then
-          zip ../TTTGate-${{ inputs.version }}-win-x64.zip tttgate-win.exe
-        fi
-
-        # Windows ARM64
-        if [ -f "tttgate-win-arm64.exe" ]; then
-          zip ../TTTGate-${{ inputs.version }}-win-arm64.zip tttgate-win-arm64.exe
-        fi
-
-        # Alpine x64
-        if [ -f "tttgate-alpine" ]; then
-          tar -czf ../TTTGate-${{ inputs.version }}-alpine-x64.tar.gz tttgate-alpine
-        fi
-
-        cd ..
+      env:
+        RELEASE_VERSION: ${{ inputs.version }}
+      run: node scripts/archive-binaries.cjs "$RELEASE_VERSION"
 
     - name: Generate release notes
       id: release_notes
@@ -158,11 +135,11 @@ jobs:
           echo '```bash' >> release_notes.md
           echo "# Linux/Alpine" >> release_notes.md
           echo "tar -xzf TTTGate-${{ inputs.version }}-linux-x64.tar.gz" >> release_notes.md
-          echo "./tttgate-linux server -adminPort 9300" >> release_notes.md
+          echo "./TTTGate-linux-x64 server -adminPort 9300" >> release_notes.md
           echo "" >> release_notes.md
           echo "# Windows" >> release_notes.md
           echo "# Extract the zip file and run:" >> release_notes.md
-          echo "tttgate-win.exe server -adminPort 9300" >> release_notes.md
+          echo "TTTGate-win-x64.exe server -adminPort 9300" >> release_notes.md
           echo '```' >> release_notes.md
         fi
 
@@ -179,6 +156,25 @@ jobs:
         echo "=== Dist directory contents ==="
         ls -la dist/ | head -20
 
+    - name: Select and validate release files
+      id: release_files
+      env:
+        RELEASE_VERSION: ${{ inputs.version }}
+        BUILD_BINARIES: ${{ inputs.build_binaries }}
+      run: |
+        files=("TTTGate-$RELEASE_VERSION-dist.tar.gz" "TTTGate-$RELEASE_VERSION-dist.zip")
+        if [ "$BUILD_BINARIES" = "true" ]; then
+          files+=("TTTGate-$RELEASE_VERSION-linux-x64.tar.gz" "TTTGate-$RELEASE_VERSION-linux-arm64.tar.gz" "TTTGate-$RELEASE_VERSION-win-x64.zip" "TTTGate-$RELEASE_VERSION-win-arm64.zip" "TTTGate-$RELEASE_VERSION-alpine-x64.tar.gz")
+        fi
+        for file in "${files[@]}"; do
+          test -f "$file" && test -s "$file" || exit 1
+        done
+        {
+          echo 'files<<EOF'
+          printf '%s\n' "${files[@]}"
+          echo 'EOF'
+        } >> "$GITHUB_OUTPUT"
+
     - name: Create Draft Release
       uses: softprops/action-gh-release@v1
       with:
@@ -187,13 +183,7 @@ jobs:
         body_path: release_notes.md
         draft: true
         prerelease: false
-        files: |
-          TTTGate-${{ inputs.version }}-dist.tar.gz
-          TTTGate-${{ inputs.version }}-dist.zip
-          TTTGate-${{ inputs.version }}-linux-x64.tar.gz
-          TTTGate-${{ inputs.version }}-linux-arm64.tar.gz
-          TTTGate-${{ inputs.version }}-win-x64.zip
-          TTTGate-${{ inputs.version }}-win-arm64.zip
-          TTTGate-${{ inputs.version }}-alpine-x64.tar.gz
+        fail_on_unmatched_files: true
+        files: ${{ steps.release_files.outputs.files }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
