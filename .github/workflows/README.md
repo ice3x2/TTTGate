@@ -67,6 +67,21 @@ gh workflow run build-release-binaries.yml \
 - `TTTGate-{version}-win-arm64.zip` - Windows ARM64
 - `TTTGate-{version}-alpine-x64.tar.gz` - Alpine Linux x64
 
+### 소스 배포판 실행
+
+Node.js 24 이상에서 소스 아카이브를 새 디렉터리에 풀고 그 디렉터리에서 실행합니다.
+배포판에는 `app.js`, `package.json`, 관리자 `web/` 자산과 런타임 `bin/` 디렉터리가 들어 있습니다.
+
+```bash
+npm install --omit=dev
+node app.js server -adminPort 9300
+# 클라이언트:
+node app.js client -addr <server_address>
+```
+
+배포 전용 lockfile을 포함하지 않으므로 `npm ci`가 아닌 위 설치 명령을 사용합니다.
+의존성은 배포 manifest의 버전 범위로 설치되며, 동일 해석 결과를 보장하는 잠금 배포는 아닙니다.
+
 ## Draft Release 게시
 
 1. 워크플로우 실행 완료 후 **Releases** 페이지로 이동

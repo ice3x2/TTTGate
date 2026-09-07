@@ -2,7 +2,7 @@
   "name": "TTTGate",
   "version": "1.0.11b",
   "description": "",
-  "main": "package.js",
+  "main": "app.js",
   "bin": {
     "app": "app.js"
   },

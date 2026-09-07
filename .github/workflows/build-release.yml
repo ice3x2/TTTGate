@@ -45,13 +45,10 @@ jobs:
         npm ci
 
     - name: Build project
-      run: npm run dist
+      run: npm run dist -- --skip-binaries
 
     - name: Create release archive
-      run: |
-        cd dist
-        tar -czf "../TTTGate-$RELEASE_VERSION-dist.tar.gz" .
-        cd ..
+      run: node scripts/archive-source.cjs "$RELEASE_VERSION"
 
     - name: Generate release notes
       id: release_notes
@@ -86,10 +83,11 @@ jobs:
         echo "tar -xzf TTTGate-$RELEASE_VERSION-dist.tar.gz" >> release_notes.md
         echo "" >> release_notes.md
         echo "# Run as server" >> release_notes.md
-        echo "node src/app.js server -adminPort 9300" >> release_notes.md
+        echo "npm install --omit=dev" >> release_notes.md
+        echo "node app.js server -adminPort 9300" >> release_notes.md
         echo "" >> release_notes.md
         echo "# Run as client" >> release_notes.md
-        echo "node src/app.js client -addr <server_address>" >> release_notes.md
+        echo "node app.js client -addr <server_address>" >> release_notes.md
         echo '```' >> release_notes.md
 
     - name: Create Draft Release
@@ -100,6 +98,7 @@ jobs:
         body_path: release_notes.md
         draft: true
         prerelease: false
+        fail_on_unmatched_files: true
         files: |
           TTTGate-${{ inputs.version }}-dist.tar.gz
       env:

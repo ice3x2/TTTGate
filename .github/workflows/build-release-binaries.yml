@@ -60,11 +60,7 @@ jobs:
         fi
 
     - name: Create source distribution archive
-      run: |
-        cd dist
-        tar -czf "../TTTGate-$RELEASE_VERSION-dist.tar.gz" .
-        zip -r "../TTTGate-$RELEASE_VERSION-dist.zip" .
-        cd ..
+      run: node scripts/archive-source.cjs "$RELEASE_VERSION"
 
     - name: Archive platform binaries
       if: ${{ inputs.build_binaries }}
@@ -126,10 +122,11 @@ jobs:
         echo "unzip TTTGate-$RELEASE_VERSION-dist.zip" >> release_notes.md
         echo "" >> release_notes.md
         echo "# Run as server" >> release_notes.md
-        echo "node src/app.js server -adminPort 9300" >> release_notes.md
+        echo "npm install --omit=dev" >> release_notes.md
+        echo "node app.js server -adminPort 9300" >> release_notes.md
         echo "" >> release_notes.md
         echo "# Run as client" >> release_notes.md
-        echo "node src/app.js client -addr <server_address>" >> release_notes.md
+        echo "node app.js client -addr <server_address>" >> release_notes.md
         echo '```' >> release_notes.md
 
         if [ "${{ inputs.build_binaries }}" = "true" ]; then
