@@ -2,9 +2,13 @@ import {fork} from "child_process";
 import * as path from "path";
 import {Browser, chromium} from "playwright";
 
-export const startAdminBrowser = async () => {
+export const startAdminBrowser = async (options: {apiOrigin?: string, preview?: boolean, httpAlias?: boolean} = {}) => {
     const server = fork(path.resolve(__dirname, "../../admin/test/server.mjs"), [], {
         stdio: ["ignore", "pipe", "pipe", "ipc"],
+        env: {...process.env, ADMIN_TEST_API_ORIGIN: options.apiOrigin,
+            NODE_ENV: options.preview ? "production" : "development",
+            ADMIN_TEST_HTTP_ALIAS: options.httpAlias ? "1" : "0",
+            ADMIN_TEST_PREVIEW: options.preview ? "1" : "0"},
     });
     let output = "";
     server.stdout!.on("data", (chunk) => { output += chunk; });
@@ -38,7 +42,9 @@ export const startAdminBrowser = async () => {
                 reject(new Error(`Admin test server exited ${code}: ${output}`));
             });
         });
-        browser = await chromium.launch();
+        browser = await chromium.launch(options.httpAlias ? {
+            args: ["--host-resolver-rules=MAP admin.test 127.0.0.1", "--no-proxy-server"],
+        } : {});
         const page = await browser.newPage();
         const errors: string[] = [];
         page.on("pageerror", (error) => errors.push(error.message));

@@ -1,6 +1,6 @@
 <script lang="ts">
     import forge, {pki} from 'node-forge';
-    import CryptoJS from "crypto-js";
+    import {randomHex} from "../util/hash";
     import {type CertInfo, type PemData} from "../controller/Types";
     import {onMount, createEventDispatcher, beforeUpdate, afterUpdate} from "svelte";
     import ObjectUtil from "../controller/ObjectUtil";
@@ -144,7 +144,7 @@
         try {
             const certificateObject = forge.pki.certificateFromPem(certificate);
             const privateKeyObject = forge.pki.privateKeyFromPem(privateKey);
-            const plain = CryptoJS.SHA512(Date.now() + '@').toString();
+            const plain = randomHex(64);
             let encrypted = (certificateObject.publicKey as pki.rsa.PublicKey).encrypt(plain, 'RSA-OAEP', {
                 md: forge.md.sha256.create(),
                 mgf1: {

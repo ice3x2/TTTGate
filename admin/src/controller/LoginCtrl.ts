@@ -1,4 +1,4 @@
-import  CryptoJS from "crypto-js";
+import {sha512Hex} from "../util/hash";
 class LoginCtrl {
 
     private constructor() {
@@ -44,7 +44,7 @@ class LoginCtrl {
         for(let i =0; i < password.length; i++) {
             salt += Math.round(password.charCodeAt(i) / 2).toString(16);
         }
-        return CryptoJS.SHA512(password + salt).toString();
+        return await sha512Hex(password + salt);
     }
 
 
