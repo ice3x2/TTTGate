@@ -78,39 +78,37 @@ class TCPServer {
         this._options = options;
         this._options.keepAlive = this._options.keepAlive ?? DEFAULT_KEEP_ALIVE;
         this._server = this.createServer();
-        this._server.on('error', (error) => {
+    }
+
+    private createServer(): net.Server {
+        const server = this._options.tls
+            ? tls.createServer(TlsOptionsFactoryRegistry.current().createServerTlsOptions(this._options), this.onBind)
+            : net.createServer(this.onBind);
+        server.on('error', (error) => {
+            if(server !== this._server) return;
             this._error = error;
             if(!this.isEnd()) {
                 logger.error(`TCPServer: error: ${error}`);
                 this._state = SocketState.Closed;
+                this.release(server);
                 this._onServerEvent?.(this, SocketState.Closed);
-                this.release();
             }
-            this._state = SocketState.Closed;
-
         });
-        this._server.on('close', () => {
+        server.on('close', () => {
+            if(server !== this._server) return;
             if(!this.isEnd()) {
                 this._state = SocketState.Closed;
+                this.release(server);
                 this._onServerEvent?.(this, SocketState.Closed);
-                this.release();
             }
-            this._state = SocketState.Closed;
         });
-        this._server.on('listening', () => {
-            if(this._state == SocketState.Starting) {
+        server.on('listening', () => {
+            if(server === this._server && this._state == SocketState.Starting) {
                 this._state = SocketState.Listen;
                 this._onServerEvent?.(this, SocketState.Listen);
             }
         });
-    }
-
-    private createServer(): net.Server {
-        if(this._options.tls) {
-            let tlsOption = TlsOptionsFactoryRegistry.current().createServerTlsOptions(this._options);
-            return tls.createServer(tlsOption, this.onBind);
-        }
-        return net.createServer(this.onBind);
+        return server;
     }
 
     private onBind = (socket: net.Socket) : void => {
@@ -161,16 +159,10 @@ class TCPServer {
         if(this.isEnd()) {
             this._server = this.createServer();
             this._state = SocketState.None;
+            this._error = undefined;
         }
         if(this._state == SocketState.None) {
-            if(callback) {
-                this._server.once('listening', () => {
-                    callback(undefined);
-                });
-                this._server.once('error', (err) => {
-                    callback(err);
-                });
-            }
+            if(callback) this.onceCompletion(this._server, 'listening', callback);
             this._state = SocketState.Starting;
             this._server.listen(this._options.port);
         }
@@ -181,24 +173,28 @@ class TCPServer {
             this._idHandlerMap.forEach((handler) => {
                handler.destroy();
             });
-            this._server.once('close', () => {
-                callback?.(undefined);
-                this.release();
-            });
-            this._server.on('error', (err) => {
-                callback?.(err);
-                this.release();
-            });
+            if(callback) this.onceCompletion(this._server, 'close', callback);
             this._server.close();
         } else if(callback) {
             callback(new Error("Server is already closed"));
         }
     }
 
-    private release() : void {
-        this._server.removeAllListeners();
-        this._onServerEvent = undefined;
-        this._onHandlerEvent = undefined;
+    private onceCompletion(server: net.Server, event: 'listening' | 'close', callback: (err?: Error) => void): void {
+        const onSuccess = () => {
+            server.removeListener('error', onError);
+            callback(undefined);
+        };
+        const onError = (error: Error) => {
+            server.removeListener(event, onSuccess);
+            callback(error);
+        };
+        server.once(event, onSuccess);
+        server.once('error', onError);
+    }
+
+    private release(server: net.Server) : void {
+        server.removeAllListeners();
     }
 
 
