@@ -854,16 +854,15 @@ class AdminServer {
         }
         const key = typeof json?.['key'] == 'string' ? json['key'] : '';
         const bootstrapToken = typeof json?.['bootstrapToken'] == 'string' ? json['bootstrapToken'] : undefined;
-        const account = this.extractAccountKey(key);
-        // P5-T2 / REQ-07: 레이트리밋 키 = account + network-bucket.
-        if(this.isLoginBlocked(req, account)) {
+        // 단일 관리자 암호이므로 제출 값과 무관하게 네트워크 버킷으로 집계한다.
+        if(this.isLoginBlocked(req)) {
             this.sendApiFailure(res, 429, {message: 'Too many login attempts'});
             return;
         }
         const sessionStore = SessionStore.instance;
         const result = await sessionStore.loginWithDetails(key, bootstrapToken);
         if(result.success) {
-            this.resetLoginAttempts(req, account);
+            this.resetLoginAttempts(req);
             const sessionKey = await sessionStore.newSession();
             // P5-T4 / REQ-12: 로그인 성공 시 CSRF 쿠키도 함께 발급 (double-submit).
             const csrfToken = crypto.randomBytes(32).toString('hex');
@@ -878,9 +877,9 @@ class AdminServer {
             });
             res.end(JSON.stringify({success: true, partial: false, failedScopes: [], warnings: [], message: '', csrfToken}));
         } else {
-            this.recordLoginFailure(req, account);
+            this.recordLoginFailure(req);
             // P5-T2 / REQ-07: 실패 응답 지연은 computeBackoffMs(실패횟수) 기반.
-            await this.delayFailedLogin(req, account);
+            await this.delayFailedLogin(req);
             if(result.bootstrapRequired) {
                 this.sendApiFailure(res, result.weakPassword ? 400 : 403, {
                     bootstrapRequired: true,
@@ -1176,8 +1175,7 @@ class AdminServer {
 
     /**
      * P5-T2 / REQ-07: 네트워크 버킷 (IPv4 /24, IPv6 /64) 계산.
-     * 동일 NAT 뒤의 서로 다른 계정이 공격자 1인에 의해 잠기지 않도록,
-     * 레이트리밋 키는 (account, bucket) 튜플로 구성한다.
+     * 단일 관리자 암호 인증의 실패 횟수를 네트워크별로 집계한다.
      */
     private getNetworkBucket(address: string): string {
         if(!address || address == 'unknown') return 'unknown';
@@ -1200,25 +1198,18 @@ class AdminServer {
         return `raw:${normalized}`;
     }
 
-    private extractAccountKey(key: string): string {
-        // 비밀번호 기반 인증이므로 계정명이 별도로 없지만, 식별을 위해 비밀번호 앞 8자 해시 사용.
-        // 원문 비밀번호를 평문으로 저장/비교하지 않도록 SHA-256 단방향 해시.
-        const h = crypto.createHash('sha256').update(key ?? '').digest('hex');
-        return `acct:${h.substring(0, 16)}`;
+    private buildLoginAttemptKey(req: IncomingMessage): string {
+        return this.getNetworkBucket(this.getClientAddress(req));
     }
 
-    private buildLoginAttemptKey(req: IncomingMessage, account: string): string {
-        return `${account}|${this.getNetworkBucket(this.getClientAddress(req))}`;
-    }
-
-    private isLoginBlocked(req: IncomingMessage, account: string): boolean {
-        const state = this._loginAttempts.get(this.buildLoginAttemptKey(req, account));
+    private isLoginBlocked(req: IncomingMessage): boolean {
+        const state = this._loginAttempts.get(this.buildLoginAttemptKey(req));
         return state != undefined && state.blockedUntil > this.now();
     }
 
-    private recordLoginFailure(req: IncomingMessage, account: string): void {
+    private recordLoginFailure(req: IncomingMessage): void {
         const now = this.now();
-        const mapKey = this.buildLoginAttemptKey(req, account);
+        const mapKey = this.buildLoginAttemptKey(req);
         let state = this._loginAttempts.get(mapKey);
         if(!state || state.windowStartedAt + LOGIN_WINDOW_MS <= now) {
             state = {failedCount: 0, windowStartedAt: now, blockedUntil: 0, lastSeenAt: now};
@@ -1240,13 +1231,13 @@ class AdminServer {
         this._loginAttempts.set(mapKey, state);
     }
 
-    private resetLoginAttempts(req: IncomingMessage, account: string): void {
-        this._loginAttempts.delete(this.buildLoginAttemptKey(req, account));
+    private resetLoginAttempts(req: IncomingMessage): void {
+        this._loginAttempts.delete(this.buildLoginAttemptKey(req));
     }
 
-    private async delayFailedLogin(req: IncomingMessage, account: string): Promise<void> {
+    private async delayFailedLogin(req: IncomingMessage): Promise<void> {
         // P5-T2 / REQ-07: 실패 카운트 기반 지수 지연.
-        const state = this._loginAttempts.get(this.buildLoginAttemptKey(req, account));
+        const state = this._loginAttempts.get(this.buildLoginAttemptKey(req));
         const count = state ? state.failedCount : 1;
         const delay = computeBackoffMs(count);
         await new Promise((resolve) => setTimeout(resolve, delay));

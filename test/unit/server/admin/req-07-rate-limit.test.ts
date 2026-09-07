@@ -1,9 +1,10 @@
 /**
  * P5-T2 / REQ-07 — 로그인 레이트리밋 키 재설계 통합 검증.
- * Mock 금지: 실 http.request / 실 AdminServer.
+ * 실 http.request / 실 AdminServer. 만료 경계는 기존 주입 가능 clock을 사용하고,
+ * LRU 상한은 명시적인 요청 데이터 fixture로 실제 기록 메서드를 호출한다.
  *
- * 4 케이스:
- *  (a) 동일 NAT 주소에서 계정 A 가 5회 실패해도 계정 B 는 잠기지 않음.
+ * 주요 검증:
+ *  (a) 동일 네트워크의 실패는 제출 비밀번호와 무관하게 누적되며 차단 만료 후 재시도 가능.
  *  (b) trustXForwardedFor=false(기본) 에서 X-Forwarded-For 헤더는 무시됨 (실제 socket.remoteAddress 만 사용).
  *  (c) LRU 상한 초과 시 가장 오래된 엔트리 축출 (private map size 를 접근자 없이 10,001 호출로 검증).
  *  (d) 실패 응답 지연 하한: 실패 횟수 >= 3 일 때 최소 400ms.
@@ -14,12 +15,14 @@ import AdminServer from "../../../../src/server/admin/AdminServer";
 import SessionStore, {BOOTSTRAP_TOKEN_FILE_NAME} from "../../../../src/server/admin/SessionStore";
 import {AdminSecurityPolicyRegistry} from "../../../../src/server/AdminSecurityPolicy";
 import ServerOptionStore from "../../../../src/server/ServerOptionStore";
+import {ClockRngProvider} from "../../../../src/util/ClockRng";
+import {createFakeClockRng} from "../../../helpers/clockRng";
 import {httpRequest} from "../../../helpers/http";
 import {applyTestRoot, cleanupTestRoot, createTestRoot, TestRoot} from "../../../helpers/runtime";
 
 jest.setTimeout(60_000);
 
-describe("REQ-07 login rate limit (account+network-bucket)", () => {
+describe("REQ-07 login rate limit (network bucket)", () => {
     let testRoot: TestRoot;
     let adminServer: AdminServer;
     let port: number;
@@ -43,30 +46,60 @@ describe("REQ-07 login rate limit (account+network-bucket)", () => {
         await cleanupTestRoot(testRoot);
     });
 
-    async function login(body: object) {
+    async function login(body: object, headers: Record<string, string> = {}) {
         return await httpRequest({
             port, path: "/api/login", method: "POST",
-            headers: {"Content-Type": "application/json"},
+            headers: {"Content-Type": "application/json", ...headers},
             body: JSON.stringify(body)
         });
     }
 
-    it("(a) 동일 NAT 에서 계정 A 5회 실패 시 계정 B 는 정상 로그인 가능", async () => {
-        // 먼저 부트스트랩으로 A 계정(=supersecret1) 등록.
+    it("(a) five failures block every submitted password until the existing window expires", async () => {
         const bootstrapRes = await login({key: "supersecret1", bootstrapToken});
         expect(bootstrapRes.statusCode).toBe(200);
+        const clock = createFakeClockRng(Date.now());
+        ClockRngProvider.configure(clock);
 
-        // 이제 A 비밀번호 5회 오입력 → A 계정 키는 잠긴다.
         for(let i = 0; i < 5; i++) {
             const r = await login({key: "wrong-password-A"});
-            expect([401, 429]).toContain(r.statusCode);
+            expect(r.statusCode).toBe(401);
         }
         const blockedA = await login({key: "wrong-password-A"});
         expect(blockedA.statusCode).toBe(429);
 
-        // 계정 B 에 해당하는 다른 잘못된 비밀번호 — account key 가 다르므로 정상 401.
         const otherAcct = await login({key: "different-wrong-password-B"});
-        expect(otherAcct.statusCode).toBe(401);
+        expect(otherAcct.statusCode).toBe(429);
+        expect(JSON.parse(otherAcct.body)).toMatchObject({success: false, message: "Too many login attempts"});
+        expect((await login({key: "supersecret1"})).statusCode).toBe(429);
+        expect((adminServer as any)._loginAttempts.size).toBe(1);
+        clock.advance(59_999);
+        expect((await login({key: "third-wrong-password"})).statusCode).toBe(429);
+        clock.advance(1);
+        expect((await login({key: "different-wrong-password-B"})).statusCode).toBe(401);
+        expect([...(adminServer as any)._loginAttempts.values()][0]).toMatchObject({failedCount: 1});
+        expect((await login({key: "supersecret1"})).statusCode).toBe(200);
+        expect((adminServer as any)._loginAttempts.size).toBe(0);
+    });
+
+    it("rotating passwords and untrusted XFF headers cannot create fresh buckets", async () => {
+        expect((await login({key: "supersecret1", bootstrapToken})).statusCode).toBe(200);
+        for(let index = 0; index < 5; index++) {
+            const result = await login({key: `different-password-${index}`}, {"X-Forwarded-For": `10.${index}.1.1`});
+            expect(result.statusCode).toBe(401);
+        }
+        expect((await login({key: "sixth-new-password"}, {"X-Forwarded-For": "192.0.2.1"})).statusCode).toBe(429);
+        expect((adminServer as any)._loginAttempts.size).toBe(1);
+        expect([...(adminServer as any)._loginAttempts.values()][0]).toMatchObject({failedCount: 5});
+    });
+
+    it("explicit trusted XFF retains separate network buckets and groups the same IPv4 /24", async () => {
+        expect((await login({key: "supersecret1", bootstrapToken})).statusCode).toBe(200);
+        AdminSecurityPolicyRegistry.configure({trustXForwardedFor: true});
+        for(let index = 0; index < 5; index++) {
+            expect((await login({key: "trusted-wrong-password"}, {"X-Forwarded-For": "10.1.1.5, 192.0.2.1"})).statusCode).toBe(401);
+        }
+        expect((await login({key: "another-wrong-password"}, {"X-Forwarded-For": "10.1.1.99"})).statusCode).toBe(429);
+        expect((await login({key: "another-wrong-password"}, {"X-Forwarded-For": "10.1.2.5"})).statusCode).toBe(401);
     });
 
     it("(b) trustXForwardedFor=false 기본값 — XFF 헤더 무시", () => {
@@ -76,23 +109,17 @@ describe("REQ-07 login rate limit (account+network-bucket)", () => {
     });
 
     it("(c) LRU 축출 — 10,001 개의 서로 다른 키 실패 후에도 map 이 10,000 상한 유지", async () => {
-        // 빠른 수행을 위해 AdminServer 내부 delay 를 피하려면 loginBackoff 가 실행되더라도 100~200ms 수준이므로
-        // 10,001회 호출은 오래 걸린다. 대신 recordLoginFailure 를 간접 호출하는 private 경로 대신,
-        // LRU 핵심 로직(map size 상한)을 AdminServer 외부에서 직접 검증한다: 같은 함수는 loginBackoff 가 아니라
-        // AdminServer private 이므로 여기서는 "reflected access" 로 Map 을 얻어 상한만 확인한다.
+        // 네트워크/백오프 대기 10,050회를 만들지 않고 실제 기록 메서드의 상한을 검사한다.
         const mapRef: Map<string, any> = (adminServer as any)._loginAttempts;
-        // 10,001 개의 엔트리 투입 시에도 <=10,000 유지.
-        // 직접 Map 에 set 하는 방식은 내부 recordLoginFailure 경로와 다르므로, 실제 구현의 LRU 보장을 확인하기 위해
-        // recordLoginFailure 를 호출한다 — 그러나 이는 IncomingMessage 와 account 를 필요로 하므로 간이 stub 사용.
+        // Map 직접 조작 없이 IncomingMessage 형태의 명시적 데이터 fixture를 전달한다.
         const stubReq: any = {
             socket: {remoteAddress: "127.0.0.1"},
             headers: {}
         };
         for(let i = 0; i < 10_050; i++) {
-            // 각 요청마다 서로 다른 account key 유도: getNetworkBucket 이 socket.remoteAddress 기반이므로
-            // socket.remoteAddress 에 서로 다른 IPv4 를 주입해 bucket 을 분산시킨다.
+            // 서로 다른 IPv4 /24 네트워크로 bucket 을 분산시킨다.
             stubReq.socket.remoteAddress = `10.${Math.floor(i / 256) % 256}.${i % 256}.1`;
-            (adminServer as any).recordLoginFailure(stubReq, `acct:${i.toString(16).padStart(16, "0")}`);
+            (adminServer as any).recordLoginFailure(stubReq);
         }
         expect(mapRef.size).toBeLessThanOrEqual(10_000);
         expect(mapRef.size).toBeGreaterThan(9_000); // 의미 있는 데이터 유지.
