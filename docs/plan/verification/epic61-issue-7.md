@@ -1,13 +1,13 @@
 # Issue #7 — Administrator request CSRF integration
 
-Status: reviewing; focused and complete administrator/backend CSRF regressions passed.
+Status: complete; independently reviewed, integrated, pushed, closed and notified.
 Original title: 관리자 UI 가 CSRF 헤더를 보내지 않아 모든 설정 변경이 403 으로 거부됨.
 Assigned agent: `fix_ci14`; branch `fix/epic61-ui-csrf`; base `67d8123`.
 Worktree: `C:/Work/git/_Snoworca/TTTGate-epic61-ui`.
 Writable paths: `admin/src/controller/AdminRequest.ts`, the seven mutation methods
 in ServerOptionCtrl.ts/CertificationCtrl.ts, `admin/test/requests.ts`,
 `test/admin/csrf-requests.test.ts`, and this ledger.
-Next action: orchestrator-assigned independent review checkpoint.
+Next action: none for this issue; #67 now assigned separately.
 
 ## Scope and reuse
 
@@ -52,10 +52,10 @@ checks and leaves production proxy/backend policy untouched.
   Status: GREEN. Full dedicated test command passed five tests in 50.567 seconds. `npm --prefix admin run check` exited 0 with zero errors/ten existing accessibility/CSS warnings. `npm run build` exited 0.
 - [x] Execute full administrator suite and existing backend CSRF guards.
   Status: GREEN. Handle 61955 exited 0; command `node node_modules/jest/bin/jest.js --runInBand --silent test/admin test/security/req-12-csrf.test.ts` passed seven suites/26 tests in 129.45 seconds, without forced exit.
-- [ ] Independent review and any corrections.
-  Status: pending orchestrator. Proposed title: `fix: 관리자 변경 요청에 CSRF 검증과 토큰 복구 연결`.
-- [ ] Commit, integration verification, remote verification, closure and Telegram report.
-  Status: pending orchestrator; no commit or remote mutation made in this lane.
+- [x] Independent review and any corrections.
+  Status: final PASS by `review_wave0`, including separate fixture cleanup rereview. Proposed title: `fix: 관리자 변경 요청에 CSRF 검증과 토큰 복구 연결`.
+- [x] Commit, integration verification, remote verification, closure and Telegram report.
+  Status: complete; operational evidence below.
 
 ## What the real tests prove
 
@@ -117,3 +117,9 @@ These are deployment-origin controller/API checks, not proof of every rendered
 dialog or the unfinished development proxy (#67). Login/bootstrap (#8), obsolete
 empty-key discovery (#51) and unrelated server lifecycle issues remain scheduled.
 Local checks use Node v24.16.0/Svelte 5.57.0/Chromium; hosted CI is not claimed.
+
+## Operational completion
+
+Integration commit and independently observed pushed remote HEAD: `2b0a42690f6aa52046cc648cc7b1ec479b3f4c8f`. GitHub independently confirmed CLOSED at `2026-09-07T18:30:13Z`. Root's final shared integration selection passed six suites/25 tests naturally in 109.895 seconds. The earlier native Vite launch failure and successful unchanged-case follow-up remain separately recorded in `epic61-integration-native-failure.md` without asserting an unproven cause.
+
+Telegram title: `TDD Gate 7 관리자 UI 가 CSRF 헤더를 보내지 않아 모든 설정 변경이 403 으로 거부됨 (62/16)`. Successful message `3917` is from the orchestrator's tool receipt, not an independent Telegram fetch. #67 development-proxy work follows separately. Do not duplicate the notification.

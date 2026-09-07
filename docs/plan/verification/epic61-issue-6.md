@@ -1,13 +1,13 @@
 # Issue #6 — Certificate input lifecycle
 
-Status: reviewing; targeted and complete administrator browser regression passed.
+Status: complete; independently reviewed, integrated, pushed, closed and notified.
 Original title: `InputCertFile` 의 `afterUpdate` 가 Svelte 5 에서 무한 갱신 루프를 일으킴.
 Assigned agent: `fix_ci14`; branch `fix/epic61-ui-cert`; base `9281bb2`.
 Worktree: `C:/Work/git/_Snoworca/TTTGate-epic61-ui`.
 Writable paths: `admin/src/layout/InputCertFile.svelte`, dedicated
 `admin/test/CertificateFixture.svelte`, `admin/test/certificate.html`,
 `test/admin/certificate-lifecycle.test.ts`, and this ledger.
-Next action: independent review checkpoint; no #7 or #8 implementation begun.
+Next action: none for this issue; #7 now assigned separately, #8 remains later.
 
 ## Findings and minimum repair
 
@@ -45,10 +45,10 @@ compatibility implementation are preserved.
   Status: GREEN. Full dedicated command passed five tests in 13.802 seconds. It covers initial mount/unmount, retained draft across redraw/error alert/equivalent props, completing a valid key pair and emitting one update, changed/reused-identity parent props, empty/null clearing, and unchanged Gauge/Timer lifecycle paths. `npm --prefix admin run check` exited 0 with zero errors/ten pre-existing accessibility/CSS warnings.
 - [x] Run the complete administrator browser suite, including production entrypoint build.
   Status: GREEN. `npm --prefix admin test` exited 0 naturally: five suites/14 tests passed in 43.956 seconds. Existing development/production entrypoints and both browser hash contexts remain green. The entrypoint suite builds the real production administrator bundle.
-- [ ] Independent review and any corrections.
-  Status: pending orchestrator. Proposed title: `fix: 인증서 입력을 실제 prop 변경에만 동기화`.
-- [ ] Commit, integration regression, remote verification, closure and Telegram report.
-  Status: pending orchestrator; no commit or remote mutation made in this lane.
+- [x] Independent review and any corrections.
+  Status: PASS by `review_wave0`; five focused browser tests passed, no material findings. Proposed title: `fix: 인증서 입력을 실제 prop 변경에만 동기화`.
+- [x] Commit, integration regression, remote verification, closure and Telegram report.
+  Status: complete; operational evidence below.
 
 ## Evidence limits
 
@@ -57,3 +57,9 @@ does not demonstrate the historical-version update-depth crash. It demonstrates
 the current draft-reset failure and correct prop-driven behavior under real
 Chromium/Svelte 5.57.0 on Node v24.16.0. CSRF requests, bootstrap login, API error
 handling and later end-to-end requirements remain separately scheduled.
+
+## Operational completion
+
+Integration commit and independently observed pushed remote HEAD: `67d81239936d98b05ffeff0765e9f6c3e6979c64`. GitHub independently confirmed CLOSED at `2026-09-07T17:18:59Z`. Root reports all five focused integration browser tests passed in 16.356 seconds; broader administrator/static checks were recorded above.
+
+Telegram title: TDD Gate 6 `InputCertFile` 의 `afterUpdate` 가 Svelte 5 에서 무한 갱신 루프를 일으킴 (61/14). Successful message `3915` is from the orchestrator's tool receipt, not an independent Telegram fetch. Historical crash reproduction limitations remain unchanged. Do not duplicate the notification.

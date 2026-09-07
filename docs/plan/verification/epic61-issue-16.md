@@ -1,13 +1,12 @@
 # Issue #16 — Sentinel failure exits its own process
 
-Status: reviewing; strict RED, focused GREEN and forced build complete.
+Status: complete; independently reviewed, integrated, pushed, closed and notified.
 Original title: `Sentinel` 이 자기 프로세스 대신 PID 1 에 SIGTERM 을 보냄.
 Assigned agent: `fix_supply15`; branch `fix/epic61-process`.
 Worktree: `C:/Work/git/_Snoworca/TTTGate-epic61-process`; base `b093dce`.
 Writable paths: `src/Sentinel.ts`, `test/component/sentinel-exit.test.ts`,
 `test/component/sentinel-exit-driver.cjs`, and this ledger.
-Next action: independent review; no commit or #21 implementation before review
-and orchestrator integration.
+Next action: none for this issue; #21 now starts separately from the reviewed integration.
 
 - [x] Read #16, technical decisions and current integration plan. Status: complete; use the explicitly authorized early process lane parallel to administrator work.
 - [x] Search existing subprocess helpers and Sentinel tests. Status: complete; reuse the established real child Node + ts-node pattern from #9; no existing Sentinel suite or production injection facility to reuse.
@@ -15,8 +14,8 @@ and orchestrator integration.
 - [x] Apply minimum self-termination fix. Status: complete; preserve lookup error logging and timer cancellation, replace both signal requests with native `process.exit(1)`.
 - [x] Execute failure and healthy monitoring regression. Status: GREEN; one suite/two tests pass.
 - [x] Force TypeScript build. Status: `npm run build -- --force`, handle 32884, exit 0.
-- [ ] Independent review and any corrections. Status: pending orchestrator assignment.
-- [ ] Integrate, push, close and notify. Status: pending orchestrator; no commit or remote mutation in this lane.
+- [x] Independent review and any corrections. Status: PASS by `review_wave0`; independent two-test child-process run passed in 11.075 seconds, no material findings.
+- [x] Integrate, push, close and notify. Status: complete; operational evidence below.
 
 ## Test-first evidence
 
@@ -64,3 +63,9 @@ The test exercises a deterministic lookup rejection rather than waiting for a
 real platform process-discovery outage. It does not claim full daemon E2E or
 container shutdown testing. Both normal polling and failure behavior are
 verified in real isolated child processes with the stated boundary fixtures.
+
+## Operational completion
+
+Integration commit and independently observed pushed remote HEAD: `66d0323eb2e65e21f4b5937005c95c61af19a38e`. GitHub independently confirmed CLOSED at `2026-09-07T16:41:22Z`. Root reports forced compilation and both focused integration tests passed in 10.646 seconds after cherry-picking.
+
+Telegram title: TDD Gate 16 `Sentinel` 이 자기 프로세스 대신 PID 1 에 SIGTERM 을 보냄 (61/10). Successful delivery message `3908` is from the orchestrator's tool receipt, not an independent Telegram fetch. Do not duplicate the notification.

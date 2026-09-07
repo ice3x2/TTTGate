@@ -1,6 +1,6 @@
 # Issue #21 — Restore dated-log retention matching
 
-Status: reviewing; strict RED, focused GREEN and forced build complete.
+Status: complete; independently reviewed, integrated, pushed, closed and notified.
 Original title: 로그 회전 정규식이 템플릿 리터럴 이스케이프 때문에 깨져 오래된 로그가 삭제되지 않음.
 Assigned agent: `fix_supply15`; branch `fix/epic61-logs`.
 Worktree: `C:/Work/git/_Snoworca/TTTGate-epic61-process`.
@@ -8,7 +8,7 @@ Base: integrated #16 commit `66d0323eb2e65e21f4b5937005c95c61af19a38e`;
 the preceding process branch was preserved when creating this log branch.
 Writable paths: `src/util/logger/LogWriter.ts`,
 `test/unit/util/log-retention.test.ts`, and this ledger.
-Next action: independent review; no commit or #22 changes before integration.
+Next action: none for this issue; #22 remains separately scheduled.
 
 - [x] Read #21 and current integration plan; check the clean process worktree. Status: complete; #16 integrated before this lane began.
 - [x] Search existing regex escaping and logger tests. Status: complete; no reusable regex-escape helper found. Existing dated-log parsing/filtering duplicated patterns, so they now share one per-writer pattern; existing redaction regression is reused.
@@ -16,8 +16,8 @@ Next action: independent review; no commit or #22 changes before integration.
 - [x] Correct literal matching and reuse one date-capture pattern. Status: complete; preserve backslashes with String.raw, escape logger-name metacharacters, and use the same pattern for filtering and date parsing.
 - [x] Run focused retention and existing redaction regression. Status: GREEN; two suites/12 tests pass, 0.569 seconds.
 - [x] Force TypeScript build. Status: `npm run build -- --force` exits 0.
-- [ ] Independent review and any fixes. Status: pending orchestrator.
-- [ ] Integrate, push, close and notify. Status: pending orchestrator; no commit or remote mutation in this lane.
+- [x] Independent review and any fixes. Status: PASS by `review_wave0`; independent retention/redaction run passed 12 tests, no findings.
+- [x] Integrate, push, close and notify. Status: complete; operational evidence below.
 
 ## TDD evidence
 
@@ -66,3 +66,9 @@ TypeScript with TS2339; the final implementation needs no compiler/config change
 This evidence covers constructor-triggered retention through the same sweep
 method used by rotation. It does not claim multi-day production operation or
 changes to unrelated daily-rotation lifecycle behavior.
+
+## Operational completion
+
+Integration commit and independently observed pushed remote HEAD: `9281bb23067bf7f34487a079ae98ecbac6d15f4b`. GitHub independently confirmed CLOSED at `2026-09-07T16:58:19Z`. Root reports forced compilation and five focused integration tests passed; independent retention/redaction review ran 12 tests successfully.
+
+Telegram title: `TDD Gate 21 로그 회전 정규식이 템플릿 리터럴 이스케이프 때문에 깨져 오래된 로그가 삭제되지 않음 (61/12)`. Successful message `3912` is from the orchestrator's tool receipt, not an independent Telegram fetch. Do not duplicate the notification.

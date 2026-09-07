@@ -1,6 +1,6 @@
 # Issue #5 — Svelte 5 administrator entrypoint
 
-Status: implementation and browser GREEN complete; independent review pending.
+Status: complete; independently reviewed, integrated, pushed, closed and notified.
 Original title: 관리자 SPA 가 Svelte 4 클래스 API 를 호출해 부팅되지 않음.
 Assigned agent: `fix_ci14`; branch `fix/epic61-ui`; base `b093dce`.
 Worktree: `C:/Work/git/_Snoworca/TTTGate-epic61-ui`.
@@ -10,7 +10,7 @@ Writable paths: admin package manifest/lock, `admin/src/main.ts`,
 only LoginCtrl's hash implementation, InputCertFile's challenge generation,
 `admin/src/util/hash.ts`, and dedicated hash fixtures/tests to complete the
 original crypto-js removal without introducing a declaration shim.
-Next action: independent review; no #6 lifecycle or #8 login-wire fix has begun.
+Next action: none for this issue; #6 starts separately after integration; #8 remains later.
 
 ## Scope and reuse
 
@@ -44,10 +44,10 @@ not replaced with mocks or changed by this entrypoint fix.
   Status: GREEN. `npm --prefix admin test` exited 0: three suites/six tests passed in 24.453 seconds. Each production entrypoint test builds the real admin app with NODE_ENV=production before previewing it. Both real entrypoints render the Sign in heading and password field without browser page errors. Existing AlertLayout interaction and legacy browser/server hash contracts pass. `npm run build` exited 0.
 - [x] Verify regenerated lockfile installation and record additional static diagnostics.
   Status: `npm ci --prefix admin --no-audit --no-fund` exited 0 (102 packages before crypto-js removal). Initial `npm --prefix admin run check` exited 1 with two missing crypto-js declaration errors in LoginCtrl.ts/InputCertFile.svelte and ten existing-style accessibility/CSS warnings. Root approved bounded removal/hash adoption after that report; final static check passes with zero errors/ten warnings. No declaration shim or weakened checking was introduced.
-- [ ] Independent review and any corrections.
-  Status: pending. Proposed title: `fix: Svelte 5 관리자 앱 구동과 해시 호환성 복구`.
-- [ ] Commit, integration regression, remote verification, issue closure and Telegram report.
-  Status: pending orchestrator; no commit or remote mutation made by this lane.
+- [x] Independent review and any corrections.
+  Status: PASS by `review_wave0`; nine browser tests passed and static check found zero errors/ten existing warnings. Proposed title: `fix: Svelte 5 관리자 앱 구동과 해시 호환성 복구`.
+- [x] Commit, integration regression, remote verification, issue closure and Telegram report.
+  Status: complete; operational evidence below.
 
 ## Approved crypto-js removal and explicit HTTP compatibility
 
@@ -83,3 +83,9 @@ bootstrap/raw-password login (#8), or removal of obsolete empty-key discovery
 (#51). The retained legacy-hash test is not a claim that the current login wire
 contract is correct; that separately identified mismatch remains #8's scope.
 Local execution used Node v24.16.0/Chromium; a hosted workflow run is not claimed.
+
+## Operational completion
+
+Integration commit: `6a3b94c`. Independently observed subsequent remote HEAD: `9281bb23067bf7f34487a079ae98ecbac6d15f4b`. GitHub independently confirmed CLOSED at `2026-09-07T16:58:00Z`. Root reports administrator static check with zero errors/ten existing warnings and 20 integration tests passed.
+
+Telegram title: `TDD Gate 5 관리자 SPA 가 Svelte 4 클래스 API 를 호출해 부팅되지 않음 (61/11)`. Successful message `3911` is from the orchestrator's tool receipt, not an independent Telegram fetch. Do not duplicate the notification.

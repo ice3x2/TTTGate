@@ -1,15 +1,12 @@
 # Issue #39 — Preserve TCP server lifecycle across restart
 
-Status: final review; dedicated regressions, forced build and broader four-suite
-regression pass. The broader Jest process exits naturally after the independently
-reviewed #49 partial fixture repair was integrated.
+Status: complete; independently reviewed, integrated, pushed, closed and notified. Final broader regression exits naturally; prior assertions-only diagnostic remains unclassified.
 Original title: `TCPServer` 재시작 시 서버 이벤트 핸들러가 재부착되지 않아 포트 충돌로 프로세스가 죽음.
 Assigned agent: `fix_supply15`; branch `fix/epic61-tcp-restart`.
 Worktree: `C:/Work/git/_Snoworca/TTTGate-epic61-listeners`; base `67d8123`.
 Writable paths: `src/util/TCPServer.ts`, `test/component/tcp-restart.test.ts`,
 `test/component/tcp-restart-driver.ts`, and this ledger.
-Next action: final independent review/message gate and orchestrator commit/push;
-no next-issue implementation.
+Next action: none for this issue; paired #26/#27 is now assigned separately.
 
 - [x] Read #39, current integration plan and existing TCP/listener tests. Status: complete; #10 reviewed integration precedes this branch.
 - [x] Check reuse. Status: complete; use the existing server factory, event callbacks, free-port/roundtrip helpers and child-test pattern. Server handler setup is moved into the factory instead of duplicated after each restart.
@@ -18,8 +15,8 @@ no next-issue implementation.
 - [x] Run dedicated real-child/socket regression. Status: GREEN; four tests pass and the Jest process exits 0.
 - [x] Force TypeScript build. Status: handle 98127 exited 0.
 - [x] Complete broader regression disposition. Status: reviewed #49 partial repair 9c9c8f7 was cherry-picked as 3a2e570; new handle 94401 exited naturally with code 0, four suites/11 tests passed in 21.275 seconds. Earlier handle 7475 remains an unobserved termination, not PASS.
-- [ ] Independent review and corrections. Status: pending orchestrator.
-- [ ] Integrate, push, close and notify. Status: pending orchestrator; no commit or remote mutation in this lane.
+- [x] Independent review and corrections. Status: final PASS by `review_wave0`; dedicated tests and broader natural-exit regression verified.
+- [x] Integrate, push, close and notify. Status: complete; operational evidence below.
 
 ## RED evidence
 
@@ -125,3 +122,9 @@ watchdog termination was used for this result.
 
 The prior 7475 assertions-only run and unknown eventual termination remain
 recorded separately; the new successful process does not change their status.
+
+## Operational completion
+
+Integration commit: `cf38c9d`. Independently observed subsequent remote HEAD: `2b0a42690f6aa52046cc648cc7b1ec479b3f4c8f`. GitHub independently confirmed CLOSED at `2026-09-07T18:29:25Z`. Root's final shared integration selection passed six suites/25 tests naturally in 109.895 seconds. The first run's native Vite-child failure and focused follow-up remain recorded in `epic61-integration-native-failure.md`; they are not retroactively marked PASS. The separate #49 fixture cleanup `8266c10` is integrated, but #49 remains open.
+
+Telegram title: TDD Gate 39 `TCPServer` 재시작 시 서버 이벤트 핸들러가 재부착되지 않아 포트 충돌로 프로세스가 죽음 (62/15). Successful message `3916` is from the orchestrator's tool receipt, not an independent Telegram fetch. Do not duplicate the notification.

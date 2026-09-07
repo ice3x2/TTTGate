@@ -1,13 +1,13 @@
 # Issue #10 — Reject inactive connections without registering sessions
 
-Status: reviewing; strict RED, focused GREEN, baseline tunnel regression and forced build complete.
+Status: complete; independently reviewed, integrated, pushed, closed and notified.
 Original title: 비활성 외부 포트에 접속 한 번이면 서버 프로세스가 종료됨.
 Assigned agent: `fix_supply15`; branch `fix/epic61-listeners`.
 Worktree: `C:/Work/git/_Snoworca/TTTGate-epic61-listeners`; base `9281bb2`.
 Writable paths: `src/server/ExternalPortServerPool.ts`,
 `test/component/inactive-listener.test.ts`,
 `test/component/inactive-listener-driver.ts`, and this ledger.
-Next action: independent review; no commit or #39 implementation before reviewed integration.
+Next action: none for this issue; #39 is now assigned after integration.
 
 - [x] Read #10, current integration plan and existing lifecycle/helper code. Status: complete; use the bounded listener lane parallel to administrator work.
 - [x] Check reuse opportunities. Status: complete; reuse existing free-port and TCP roundtrip helpers and the established isolated Node/ts-node child pattern; no shared helper or TCPServer edit.
@@ -15,8 +15,8 @@ Next action: independent review; no commit or #39 implementation before reviewed
 - [x] Apply admission/registration fix. Status: complete; allocate a session ID only after admission and ignore handler events that have no registered session.
 - [x] Run new and existing listener regression. Status: GREEN; two suites/three tests pass.
 - [x] Run baseline server/client tunnel regression and forced build. Status: GREEN; one baseline test passes and forced TypeScript build exits 0.
-- [ ] Independent review and corrections. Status: pending orchestrator.
-- [ ] Integrate, push, close and notify. Status: pending orchestrator; no commit or remote mutation in this lane.
+- [x] Independent review and corrections. Status: PASS by `review_wave0`; three focused listener tests passed, no material findings.
+- [x] Integrate, push, close and notify. Status: complete; operational evidence below.
 
 ## Test-first evidence
 
@@ -68,3 +68,9 @@ not substitute process, TCPServer or SocketHandler behavior. Internal handler-ma
 size is read only to verify rejected-session bookkeeping. No production files
 outside ExternalPortServerPool were changed. This evidence does not claim full
 HTTP/TLS or reconnection coverage beyond the separate existing baseline test.
+
+## Operational completion
+
+Integration commit: `22d6a08`. Independently observed subsequent remote HEAD: `67d81239936d98b05ffeff0765e9f6c3e6979c64`. GitHub independently confirmed CLOSED at `2026-09-07T17:18:41Z`. Root reports forced compilation and four integrated tests passed in 8.874 seconds.
+
+Telegram title: `TDD Gate 10 비활성 외부 포트에 접속 한 번이면 서버 프로세스가 종료됨 (61/13)`. Successful message `3914` is from the orchestrator's tool receipt, not an independent Telegram fetch. Do not duplicate the notification.
