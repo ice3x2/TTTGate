@@ -1,6 +1,6 @@
 /**
  * R3-REQ-02 — crypto-js 서버 체인 제거 검증 (NO-MOCK).
- * - package.json 의 서버 런타임 의존성에서 crypto-js/@types/crypto-js 제거됨.
+ * - package.json/package-build.json 의 서버 런타임 의존성에서 crypto-js/@types/crypto-js 제거됨.
  * - src/ 하위 서버 코드에서 crypto-js 임포트/사용이 0건임.
  * - admin/ 프런트엔드 체인은 별도 라운드 — 본 테스트 범위 외.
  */
@@ -11,8 +11,8 @@ import {readDependencyTree, runNpm} from "../helpers/SupplyChainGate";
 const repoRoot = path.resolve(__dirname, "..", "..");
 
 describe("R3-REQ-02 crypto-js removed from server runtime chain", () => {
-    test("package.json dependencies 에서 crypto-js 제거", () => {
-        const pkg = JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"));
+    test.each(["package.json", "package-build.json"])("%s dependencies 에서 crypto-js 제거", (manifest) => {
+        const pkg = JSON.parse(fs.readFileSync(path.join(repoRoot, manifest), "utf8"));
         const deps = {...(pkg.dependencies || {}), ...(pkg.devDependencies || {})};
         expect(deps["crypto-js"]).toBeUndefined();
         expect(deps["@types/crypto-js"]).toBeUndefined();
