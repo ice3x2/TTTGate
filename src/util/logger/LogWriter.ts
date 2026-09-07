@@ -15,6 +15,7 @@ interface LogMessage {
 class LogWriter {
 
     private readonly _name : string;
+    private readonly _logFilePattern : RegExp;
     private  _filePath : string;
     private readonly _dirPath : string;
     private _logMessageQueue : Array<LogMessage> = [];
@@ -34,6 +35,8 @@ class LogWriter {
 
     private constructor(writeConfig: WriteConfig) {
         this._name = writeConfig.name;
+        const escapedName = this._name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        this._logFilePattern = new RegExp(String.raw`^${escapedName}-(\d{4})\.(\d{2})\.(\d{2})\.log$`);
         this._dirPath = writeConfig.path!;
         this._history = writeConfig.history ?? 30;
         this._fileWrite = writeConfig.file ?? true;
@@ -89,9 +92,7 @@ class LogWriter {
     }
 
     private logFileNameToDate(fileName: string) : Date {
-        let regexString = `^${this._name}-(\d{4})\.(\d{2})\.(\d{2})\.log$`;
-        let regex = new RegExp(regexString);
-        let result = regex.exec(fileName);
+        let result = this._logFilePattern.exec(fileName);
         if(result == null)
             return new Date();
         let year = parseInt(result[1]);
@@ -108,11 +109,7 @@ class LogWriter {
             if (!stat.isDirectory())
                 throw new Error('Log directory is not directory.');
             let files = fs.readdirSync(this._dirPath);
-            return files.filter((file) => {
-                let regexString = `^${this._name}-\d{4}\.\d{2}\.\d{2}\.log$`;
-                let regex = new RegExp(regexString);
-                return regex.test(file);
-            });
+            return files.filter((file) => this._logFilePattern.test(file));
         } catch (e) {
             return [];
         }
