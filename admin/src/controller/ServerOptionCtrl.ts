@@ -4,6 +4,9 @@ import InvalidSession from "./InvalidSession";
 import {adminRequest} from "./AdminRequest";
 
 
+export type ConfigurationSnapshot<T> = {value: T, readonly revision: number};
+export type ConfigurationResult = {success: boolean, message: string, revisionState?: {currentRevision: number}};
+
 class ServerOptionCtrl {
 
 
@@ -37,7 +40,7 @@ class ServerOptionCtrl {
         return this._serverOption;
     }
 
-    public async getServerOption() : Promise<ServerOption> {
+    public async getServerOption() : Promise<ConfigurationSnapshot<ServerOption>> {
         let res = await fetch("/api/serverOption", {
             method: "GET",
             credentials: "same-origin"
@@ -48,11 +51,11 @@ class ServerOptionCtrl {
             throw new InvalidSession();
         }
         this._serverOption = json['serverOption'];
-        return this._serverOption;
+        return {value: this._serverOption, revision: json.revisionState.currentRevision};
     }
 
 
-    public async getTunnelingOption() : Promise<Array<Options>> {
+    public async getTunnelingOption() : Promise<ConfigurationSnapshot<Array<Options>>> {
         let res = await fetch("/api/tunnelingOption", {
             method: "GET",
             credentials: "same-origin"
@@ -62,7 +65,7 @@ class ServerOptionCtrl {
             throw new InvalidSession();
         }
         this._tunnelingOptions = json['tunnelingOptions'];
-        return this._tunnelingOptions;
+        return {value: this._tunnelingOptions, revision: json.revisionState.currentRevision};
     }
 
     public async checkChangeServerOption(oldServerOptions: ServerOption, newServerOption: ServerOption) : Promise<boolean> {
@@ -129,36 +132,36 @@ class ServerOptionCtrl {
     }
 
 
-    public async updateServerOption(serverOption: ServerOption) : Promise<{success: boolean, message: string, updated: boolean, updates: object}> {
+    public async updateServerOption(serverOption: ServerOption, expectedRevision: number) : Promise<ConfigurationResult & {updated: boolean, updates: object}> {
         return adminRequest("/api/serverOption", {
             method: "POST",
             credentials: "same-origin",
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(serverOption)
+            body: JSON.stringify({...serverOption, expectedRevision})
         });
     }
 
-    public async updateTunnelingOption(tunnelingOption : Options) : Promise<{success: boolean, message: string}> {
+    public async updateTunnelingOption(tunnelingOption : Options, expectedRevision: number) : Promise<ConfigurationResult> {
         return adminRequest("/api/tunnelingOption", {
             method: "POST",
             credentials: "same-origin",
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(tunnelingOption)
+            body: JSON.stringify({...tunnelingOption, expectedRevision})
         });
     }
 
-    public async removeTunnelingOption(tunnelingOption : Options | {forwardPort: number}) : Promise<{success: boolean, message: string, forwardPort: number}> {
+    public async removeTunnelingOption(tunnelingOption : Options | {forwardPort: number}, expectedRevision: number) : Promise<ConfigurationResult & {forwardPort: number}> {
         return adminRequest("/api/tunnelingOption", {
             method: "DELETE",
             credentials: "same-origin",
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(tunnelingOption)
+            body: JSON.stringify({...tunnelingOption, expectedRevision})
         });
     }
 

@@ -403,134 +403,152 @@ class AdminServer {
         return result;
     }
 
+    private async mutateConfiguration(res: ServerResponse, payload: any, operation: (store: ServerOptionStore) => Promise<void>): Promise<void> {
+        if(!payload || Array.isArray(payload) || !Number.isSafeInteger(payload.expectedRevision) || payload.expectedRevision <= 0) {
+            this.sendApiFailure(res, 400, {message: 'A positive safe-integer expectedRevision is required.'});
+            return;
+        }
+        const expectedRevision = payload.expectedRevision;
+        delete payload.expectedRevision;
+        const store = ServerOptionStore.instance;
+        await store.runConfigurationMutation(async () => {
+            if(expectedRevision !== store.revisionState.currentRevision) {
+                this.sendApiFailure(res, 409, {message: 'Configuration changed. Reload before saving.', revisionState: store.revisionState});
+                return;
+            }
+            await operation(store);
+        });
+    }
+
     private onUpdateServerOption = async (req: IncomingMessage, res: ServerResponse) => {
         if(!await this.checkSession(req, res)) {
             return;
         }
-        let serverOptionStore = ServerOptionStore.instance;
-        let currentServerOption = serverOptionStore.serverOption;
-        let requestedServerOption = await AdminServer.readJson(req);
-        let prepareResult = serverOptionStore.prepareServerOption(ObjectUtil.cloneDeep(requestedServerOption));
-        if(!prepareResult.success || !prepareResult.serverOption) {
-            this.sendApiFailure(res, 400, {message: 'Invalid server option', updated: false});
-            return;
-        }
-        let serverOption = prepareResult.serverOption;
-        let updates = ObjectUtil.findUpdates(currentServerOption, serverOption);
-        if(ObjectUtil.equalsDeep(currentServerOption, serverOption)) {
+        const requestedServerOption = await AdminServer.readJson(req);
+        await this.mutateConfiguration(res, requestedServerOption, async (serverOptionStore) => {
+            let currentServerOption = serverOptionStore.serverOption;
+            let prepareResult = serverOptionStore.prepareServerOption(ObjectUtil.cloneDeep(requestedServerOption));
+            if(!prepareResult.success || !prepareResult.serverOption) {
+                this.sendApiFailure(res, 400, {message: 'Invalid server option', updated: false});
+                return;
+            }
+            let serverOption = prepareResult.serverOption;
+            let updates = ObjectUtil.findUpdates(currentServerOption, serverOption);
+            if(ObjectUtil.equalsDeep(currentServerOption, serverOption)) {
+                this.sendApiSuccess(res, {
+                    message: 'equals',
+                    updated: false,
+                    updates,
+                    revisionState: serverOptionStore.revisionState
+                });
+                return;
+            }
+            let updatePorts = new Array<number>();
+            if(updates['adminPort'] != undefined) {
+                if(updates['adminPort'] == serverOption.port) {
+                    this.sendApiFailure(res, 400, {
+                        message: 'Input error: Admin server port and Tunnel server port number cannot be the same.',
+                        updated: false,
+                        updates
+                    });
+                    return;
+                }
+                updatePorts.push(serverOption.adminPort!);
+            }
+            if(updates['port'] != undefined) {
+                if(updates['port'] == serverOption.adminPort || (updates['adminPort'] != undefined && updates['adminPort'] == updates['port'])) {
+                    this.sendApiFailure(res, 400, {
+                        message: 'Input error: Admin server port and Tunnel server port number cannot be the same.',
+                        updated: false,
+                        updates
+                    });
+                    return;
+                }
+                updatePorts.push(serverOption.port!);
+            }
+            let policyDecision = evaluateAdminSecurityPolicy(serverOption);
+            if(!policyDecision.allowed) {
+                this.sendApiFailure(res, 400, {
+                    message: formatAdminSecurityPolicyErrors(policyDecision),
+                    updated: false,
+                    legacyFlagsRequired: policyDecision.missingFlags
+                });
+                return;
+            }
+            let usablePorts = await UsablePortChecker.checkPorts(updatePorts);
+            if(usablePorts.length != updatePorts.length) {
+                let notUsablePorts = updatePorts.filter((port) => !usablePorts.includes(port));
+                this.sendApiFailure(res, 400, {
+                    message: `Port number ${notUsablePorts} is already in use`,
+                    updated: false,
+                    updates
+                });
+                return;
+            }
+            const hotApplyRequired = currentServerOption.port !== serverOption.port
+                || (currentServerOption.tls === true) !== (serverOption.tls === true)
+                || currentServerOption.key !== serverOption.key
+                || (currentServerOption.keepAlive ?? TCPServer.DEFAULT_KEEP_ALIVE) !== (serverOption.keepAlive ?? TCPServer.DEFAULT_KEEP_ALIVE)
+                || currentServerOption.controlProtocolMode !== serverOption.controlProtocolMode
+                || (currentServerOption.allowLegacyControlAuth === true) !== (serverOption.allowLegacyControlAuth === true)
+                || (currentServerOption.globalMemCacheLimit ?? 128) !== (serverOption.globalMemCacheLimit ?? 128)
+                || !ObjectUtil.canonicalEquals(currentServerOption.trustedClients ?? [], serverOption.trustedClients ?? []);
+            let runtimeResult;
+            if(typeof (this._tttServer as any)?.applyServerOption == "function") {
+                runtimeResult = await (this._tttServer as any).applyServerOption(serverOption, currentServerOption);
+            } else if(!hotApplyRequired) {
+                runtimeResult = {
+                    success: true,
+                    partial: true,
+                    warnings: ["admin listener changes require process restart"],
+                    failedScopes: [],
+                    restartRequiredScopes: ["admin-server"]
+                };
+            } else {
+                runtimeResult = {
+                    success: false,
+                    partial: false,
+                    warnings: [],
+                    failedScopes: ["server-runtime"],
+                    restartRequiredScopes: []
+                };
+            }
+            if(!runtimeResult.success) {
+                serverOptionStore.recordRollback('server option runtime apply failed', runtimeResult.failedScopes);
+                this.sendApiFailure(res, 400, {
+                    message: 'Unable to apply server option.',
+                    updated: false,
+                    updates,
+                    warnings: runtimeResult.warnings,
+                    failedScopes: runtimeResult.failedScopes,
+                    restartRequiredScopes: runtimeResult.restartRequiredScopes,
+                    revisionState: serverOptionStore.revisionState
+                });
+                return;
+            }
+            let commitResult = serverOptionStore.commitPreparedServerOption(serverOption, {
+                markLastKnownGood: runtimeResult.restartRequiredScopes.length == 0,
+                pendingRestartScopes: runtimeResult.restartRequiredScopes
+            });
+            if(!commitResult.success) {
+                serverOptionStore.recordRollback('server option commit failed', ["server-option"]);
+                this.sendApiFailure(res, 500, {
+                    message: 'Unable to commit server option.',
+                    updated: false,
+                    failedScopes: ["server-option"],
+                    revisionState: serverOptionStore.revisionState
+                });
+                return;
+            }
             this.sendApiSuccess(res, {
-                message: 'equals',
-                updated: false,
-                updates,
-                revisionState: serverOptionStore.revisionState
-            });
-            return;
-        }
-        let updatePorts = new Array<number>();
-        if(updates['adminPort'] != undefined) {
-            if(updates['adminPort'] == serverOption.port) {
-                this.sendApiFailure(res, 400, {
-                    message: 'Input error: Admin server port and Tunnel server port number cannot be the same.',
-                    updated: false,
-                    updates
-                });
-                return;
-            }
-            updatePorts.push(serverOption.adminPort!);
-        }
-        if(updates['port'] != undefined) {
-            if(updates['port'] == serverOption.adminPort || (updates['adminPort'] != undefined && updates['adminPort'] == updates['port'])) {
-                this.sendApiFailure(res, 400, {
-                    message: 'Input error: Admin server port and Tunnel server port number cannot be the same.',
-                    updated: false,
-                    updates
-                });
-                return;
-            }
-            updatePorts.push(serverOption.port!);
-        }
-        let policyDecision = evaluateAdminSecurityPolicy(serverOption);
-        if(!policyDecision.allowed) {
-            this.sendApiFailure(res, 400, {
-                message: formatAdminSecurityPolicyErrors(policyDecision),
-                updated: false,
-                legacyFlagsRequired: policyDecision.missingFlags
-            });
-            return;
-        }
-        let usablePorts = await UsablePortChecker.checkPorts(updatePorts);
-        if(usablePorts.length != updatePorts.length) {
-            let notUsablePorts = updatePorts.filter((port) => !usablePorts.includes(port));
-            this.sendApiFailure(res, 400, {
-                message: `Port number ${notUsablePorts} is already in use`,
-                updated: false,
-                updates
-            });
-            return;
-        }
-        const hotApplyRequired = currentServerOption.port !== serverOption.port
-            || (currentServerOption.tls === true) !== (serverOption.tls === true)
-            || currentServerOption.key !== serverOption.key
-            || (currentServerOption.keepAlive ?? TCPServer.DEFAULT_KEEP_ALIVE) !== (serverOption.keepAlive ?? TCPServer.DEFAULT_KEEP_ALIVE)
-            || currentServerOption.controlProtocolMode !== serverOption.controlProtocolMode
-            || (currentServerOption.allowLegacyControlAuth === true) !== (serverOption.allowLegacyControlAuth === true)
-            || (currentServerOption.globalMemCacheLimit ?? 128) !== (serverOption.globalMemCacheLimit ?? 128)
-            || !ObjectUtil.canonicalEquals(currentServerOption.trustedClients ?? [], serverOption.trustedClients ?? []);
-        let runtimeResult;
-        if(typeof (this._tttServer as any)?.applyServerOption == "function") {
-            runtimeResult = await (this._tttServer as any).applyServerOption(serverOption, currentServerOption);
-        } else if(!hotApplyRequired) {
-            runtimeResult = {
-                success: true,
-                partial: true,
-                warnings: ["admin listener changes require process restart"],
-                failedScopes: [],
-                restartRequiredScopes: ["admin-server"]
-            };
-        } else {
-            runtimeResult = {
-                success: false,
-                partial: false,
-                warnings: [],
-                failedScopes: ["server-runtime"],
-                restartRequiredScopes: []
-            };
-        }
-        if(!runtimeResult.success) {
-            serverOptionStore.recordRollback('server option runtime apply failed', runtimeResult.failedScopes);
-            this.sendApiFailure(res, 400, {
-                message: 'Unable to apply server option.',
-                updated: false,
+                partial: runtimeResult.partial,
+                updated: true,
                 updates,
                 warnings: runtimeResult.warnings,
                 failedScopes: runtimeResult.failedScopes,
                 restartRequiredScopes: runtimeResult.restartRequiredScopes,
-                revisionState: serverOptionStore.revisionState
+                revisionState: commitResult.revisionState
             });
-            return;
-        }
-        let commitResult = serverOptionStore.commitPreparedServerOption(serverOption, {
-            markLastKnownGood: runtimeResult.restartRequiredScopes.length == 0,
-            pendingRestartScopes: runtimeResult.restartRequiredScopes
-        });
-        if(!commitResult.success) {
-            serverOptionStore.recordRollback('server option commit failed', ["server-option"]);
-            this.sendApiFailure(res, 500, {
-                message: 'Unable to commit server option.',
-                updated: false,
-                failedScopes: ["server-option"],
-                revisionState: serverOptionStore.revisionState
-            });
-            return;
-        }
-        this.sendApiSuccess(res, {
-            partial: runtimeResult.partial,
-            updated: true,
-            updates,
-            warnings: runtimeResult.warnings,
-            failedScopes: runtimeResult.failedScopes,
-            restartRequiredScopes: runtimeResult.restartRequiredScopes,
-            revisionState: commitResult.revisionState
         });
     }
 
@@ -539,56 +557,57 @@ class AdminServer {
         if(!await this.checkSession(req, res)) {
             return;
         }
-        let tunnelingOption = await AdminServer.readJson(req);
-        let serverOptionStore = ServerOptionStore.instance;
-        let previousOption = serverOptionStore.getTunnelingOption(tunnelingOption.forwardPort);
-        let composeResult = serverOptionStore.composeServerOptionWithTunnelingOption(ObjectUtil.cloneDeep(tunnelingOption));
-        if(!composeResult.success || !composeResult.serverOption) {
-            this.sendApiFailure(res, 400, {
-                message: 'Tunneling options update failed.',
-                forwardPort: tunnelingOption.forwardPort
-            });
-            return;
-        }
-        if(!previousOption && !await UsablePortChecker.check(tunnelingOption.forwardPort)) {
-            this.sendApiFailure(res, 400, {
-                message: `${tunnelingOption.forwardPort} is an unusable port number.`,
-                forwardPort: tunnelingOption.forwardPort
-            });
-            return;
-        }
-        let runtimeResult = await this._tttServer?.applyTunnelingOption(tunnelingOption, previousOption) ?? {
-            success: false,
-            partial: false,
-            warnings: [],
-            failedScopes: [`external-listener:${tunnelingOption.forwardPort}`],
-            restartRequiredScopes: []
-        };
-        if(!runtimeResult.success) {
-            serverOptionStore.recordRollback('tunneling option runtime apply failed', runtimeResult.failedScopes);
-            this.sendApiFailure(res, 400, {
-                message: 'Unable to restart tunneling server.',
+        const tunnelingOption = await AdminServer.readJson(req);
+        await this.mutateConfiguration(res, tunnelingOption, async (serverOptionStore) => {
+            let previousOption = serverOptionStore.getTunnelingOption(tunnelingOption.forwardPort);
+            let composeResult = serverOptionStore.composeServerOptionWithTunnelingOption(ObjectUtil.cloneDeep(tunnelingOption));
+            if(!composeResult.success || !composeResult.serverOption) {
+                this.sendApiFailure(res, 400, {
+                    message: 'Tunneling options update failed.',
+                    forwardPort: tunnelingOption.forwardPort
+                });
+                return;
+            }
+            if(!previousOption && !await UsablePortChecker.check(tunnelingOption.forwardPort)) {
+                this.sendApiFailure(res, 400, {
+                    message: `${tunnelingOption.forwardPort} is an unusable port number.`,
+                    forwardPort: tunnelingOption.forwardPort
+                });
+                return;
+            }
+            let runtimeResult = await this._tttServer?.applyTunnelingOption(tunnelingOption, previousOption) ?? {
+                success: false,
+                partial: false,
+                warnings: [],
+                failedScopes: [`external-listener:${tunnelingOption.forwardPort}`],
+                restartRequiredScopes: []
+            };
+            if(!runtimeResult.success) {
+                serverOptionStore.recordRollback('tunneling option runtime apply failed', runtimeResult.failedScopes);
+                this.sendApiFailure(res, 400, {
+                    message: 'Unable to restart tunneling server.',
+                    forwardPort: tunnelingOption.forwardPort,
+                    failedScopes: runtimeResult.failedScopes,
+                    warnings: runtimeResult.warnings,
+                    revisionState: serverOptionStore.revisionState
+                });
+                return;
+            }
+            const commitResult = serverOptionStore.commitPreparedServerOption(composeResult.serverOption);
+            if(!commitResult.success) {
+                serverOptionStore.recordRollback('tunneling option commit failed', ["tunneling-option"]);
+                this.sendApiFailure(res, 500, {
+                    message: 'Unable to commit tunneling option.',
+                    forwardPort: tunnelingOption.forwardPort,
+                    failedScopes: ["tunneling-option"],
+                    revisionState: serverOptionStore.revisionState
+                });
+                return;
+            }
+            this.sendApiSuccess(res, {
                 forwardPort: tunnelingOption.forwardPort,
-                failedScopes: runtimeResult.failedScopes,
-                warnings: runtimeResult.warnings,
-                revisionState: serverOptionStore.revisionState
+                revisionState: commitResult.revisionState
             });
-            return;
-        }
-        const commitResult = serverOptionStore.commitPreparedServerOption(composeResult.serverOption);
-        if(!commitResult.success) {
-            serverOptionStore.recordRollback('tunneling option commit failed', ["tunneling-option"]);
-            this.sendApiFailure(res, 500, {
-                message: 'Unable to commit tunneling option.',
-                forwardPort: tunnelingOption.forwardPort,
-                failedScopes: ["tunneling-option"],
-                revisionState: serverOptionStore.revisionState
-            });
-            return;
-        }
-        this.sendApiSuccess(res, {
-            forwardPort: tunnelingOption.forwardPort,
-            revisionState: commitResult.revisionState
         });
     }
 
@@ -596,48 +615,49 @@ class AdminServer {
         if(!await this.checkSession(req, res)) {
             return;
         }
-        let json = await AdminServer.readJson(req);
-        let forwardPort = json['forwardPort'];
-        let serverOptionStore = ServerOptionStore.instance;
-        let previousOption = serverOptionStore.getTunnelingOption(forwardPort);
-        if(!previousOption) {
-            this.sendApiFailure(res, 404, {message: `External port(${forwardPort}) server already removed.`, forwardPort});
-            return;
-        }
-        let warnings: string[] = [];
-        let status = this._tttServer?.externalServerStatus(forwardPort);
-        if(status?.online) {
-            let stopped = await this._tttServer?.stopExternalPortServer(forwardPort);
-            if(!stopped) {
-                serverOptionStore.recordRollback('tunneling option remove failed', [`external-listener:${forwardPort}`]);
-                this.sendApiFailure(res, 400, {
-                    message: `Unable to stop external port(${forwardPort}) listener.`,
+        const json = await AdminServer.readJson(req);
+        await this.mutateConfiguration(res, json, async (serverOptionStore) => {
+            let forwardPort = json['forwardPort'];
+            let previousOption = serverOptionStore.getTunnelingOption(forwardPort);
+            if(!previousOption) {
+                this.sendApiFailure(res, 404, {message: `External port(${forwardPort}) server already removed.`, forwardPort});
+                return;
+            }
+            let warnings: string[] = [];
+            let status = this._tttServer?.externalServerStatus(forwardPort);
+            if(status?.online) {
+                let stopped = await this._tttServer?.stopExternalPortServer(forwardPort);
+                if(!stopped) {
+                    serverOptionStore.recordRollback('tunneling option remove failed', [`external-listener:${forwardPort}`]);
+                    this.sendApiFailure(res, 400, {
+                        message: `Unable to stop external port(${forwardPort}) listener.`,
+                        forwardPort,
+                        failedScopes: [`external-listener:${forwardPort}`],
+                        revisionState: serverOptionStore.revisionState
+                    });
+                    return;
+                }
+            } else {
+                warnings.push(`listener ${forwardPort} was already offline`);
+            }
+            let composeResult = serverOptionStore.composeServerOptionWithoutTunnelingOption(forwardPort);
+            if(!composeResult.success || !composeResult.serverOption) {
+                this.sendApiFailure(res, 400, {message: `External port(${forwardPort}) server already removed.`, forwardPort});
+                return;
+            }
+            let commitResult = serverOptionStore.commitPreparedServerOption(composeResult.serverOption);
+            if(!commitResult.success) {
+                serverOptionStore.recordRollback('tunneling option remove commit failed', ["tunneling-option"]);
+                this.sendApiFailure(res, 500, {
+                    message: `Unable to remove external port(${forwardPort}) configuration.`,
                     forwardPort,
-                    failedScopes: [`external-listener:${forwardPort}`],
+                    failedScopes: ["tunneling-option"],
                     revisionState: serverOptionStore.revisionState
                 });
                 return;
             }
-        } else {
-            warnings.push(`listener ${forwardPort} was already offline`);
-        }
-        let composeResult = serverOptionStore.composeServerOptionWithoutTunnelingOption(forwardPort);
-        if(!composeResult.success || !composeResult.serverOption) {
-            this.sendApiFailure(res, 400, {message: `External port(${forwardPort}) server already removed.`, forwardPort});
-            return;
-        }
-        let commitResult = serverOptionStore.commitPreparedServerOption(composeResult.serverOption);
-        if(!commitResult.success) {
-            serverOptionStore.recordRollback('tunneling option remove commit failed', ["tunneling-option"]);
-            this.sendApiFailure(res, 500, {
-                message: `Unable to remove external port(${forwardPort}) configuration.`,
-                forwardPort,
-                failedScopes: ["tunneling-option"],
-                revisionState: serverOptionStore.revisionState
-            });
-            return;
-        }
-        this.sendApiSuccess(res, {forwardPort, warnings, revisionState: commitResult.revisionState});
+            this.sendApiSuccess(res, {forwardPort, warnings, revisionState: commitResult.revisionState});
+        });
     }
 
 

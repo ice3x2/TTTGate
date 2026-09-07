@@ -30,6 +30,19 @@ class ServerOptionStore {
     private _serverOption : ServerOption;
     private _revisionState: RevisionState;
     private _serverOptionUpdateCallback? : ServerOptionUpdateCallback;
+    private _configurationMutation: Promise<void> = Promise.resolve();
+
+    public async runConfigurationMutation(operation: () => Promise<void>): Promise<void> {
+        const previous = this._configurationMutation;
+        let release!: () => void;
+        this._configurationMutation = new Promise<void>((resolve) => { release = resolve; });
+        await previous;
+        try {
+            await operation();
+        } finally {
+            release();
+        }
+    }
 
     public get serverOption() : ServerOption {
         //delete result['tunnelingOptions'];

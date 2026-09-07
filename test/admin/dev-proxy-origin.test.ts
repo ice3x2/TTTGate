@@ -35,8 +35,10 @@ test.each([false, true])("actual configured proxy adapts only trusted present or
         const cookies = login.headers["set-cookie"]!.map((cookie) => cookie.split(";")[0]);
         const csrf = JSON.parse(login.body).csrfToken;
         const headers = {Cookie: cookies.join("; "), "Content-Type": "application/json", "X-CSRF-Token": csrf};
+        const read = JSON.parse((await httpRequest({port: backendPort, path: "/api/serverOption", headers})).body);
+        const expectedRevision = read.revisionState.currentRevision;
         const direct = await httpRequest({port: backendPort, path: "/api/serverOption", method: "POST",
-            headers: {...headers, Origin: backendOrigin}, body: JSON.stringify(option)});
+            headers: {...headers, Origin: backendOrigin}, body: JSON.stringify({...option, expectedRevision})});
         expect(direct.statusCode).toBe(200);
         app = await startAdminBrowser({preview, proxyTarget: `${backendOrigin}/api`});
         const proxyPort = Number(new URL(app.url).port);
@@ -47,10 +49,17 @@ test.each([false, true])("actual configured proxy adapts only trusted present or
         }));
         await app.page.goto(`${app.url}/test/proxy.html`);
         await app.page.waitForFunction(() => typeof (window as any).adminControllers !== "undefined", undefined, {timeout: 5000});
-        const browserResult = await app.page.evaluate((value) => (window as any).adminControllers.server.updateServerOption(value), option);
-        const probe = (extra: Record<string, string>, includeToken = true) => httpRequest({port: proxyPort,
-            path: "/api/serverOption", method: "POST", headers: {...headers,
-                ...(includeToken ? {} : {"X-CSRF-Token": ""}), ...extra}, body: JSON.stringify(option)});
+        const browserResult = await app.page.evaluate(async () => {
+            const controller = (window as any).adminControllers.server;
+            const snapshot = await controller.getServerOption();
+            return controller.updateServerOption(snapshot.value, snapshot.revision);
+        });
+        const probe = async (extra: Record<string, string>, includeToken = true) => {
+            const snapshot = JSON.parse((await httpRequest({port: backendPort, path: "/api/serverOption", headers})).body);
+            return httpRequest({port: proxyPort, path: "/api/serverOption", method: "POST", headers: {...headers,
+                ...(includeToken ? {} : {"X-CSRF-Token": ""}), ...extra},
+                body: JSON.stringify({...snapshot.serverOption, expectedRevision: snapshot.revisionState.currentRevision})});
+        };
         const cases: Array<[string, Record<string, string>, boolean, number]> = [
             ["localhost alias", {Origin: `http://localhost:${proxyPort}`, Host: `localhost:${proxyPort}`}, true, 200],
             ["IPv6 loopback alias", {Origin: `http://[::1]:${proxyPort}`, Host: `[::1]:${proxyPort}`}, true, 200],

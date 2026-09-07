@@ -27,6 +27,7 @@
     let _tunnelOptions : Array<TunnelingOptionEx> = [];
     let _originTunnelOptions : Array<TunnelingOptionEx> = [];
     let _isInit = false;
+    let _snapshotRevision: number;
     let _loading = false;
     let _transitionLoading = false;
 
@@ -96,7 +97,9 @@
     let _loadTunnelingOption = async () => {
         try {
             _loading = true;
-            _tunnelOptions = await ServerOptionCtrl.instance.getTunnelingOption();
+            const snapshot = await ServerOptionCtrl.instance.getTunnelingOption();
+            _tunnelOptions = snapshot.value;
+            _snapshotRevision = snapshot.revision;
             for(let tunnelOption of _tunnelOptions) {
                 tunnelOption.isSync = true;
                 tunnelOption.updatable = true;
@@ -246,7 +249,7 @@
         try {
             let result: {success: boolean, message: string, forwardPort: number} = {success: true, message: "", forwardPort: tunnelOption.forwardPort};
             if (tunnelOption.isSync) {
-                result = await ServerOptionCtrl.instance.removeTunnelingOption(tunnelOption);
+                result = await ServerOptionCtrl.instance.removeTunnelingOption(tunnelOption, _snapshotRevision);
             }
             _loading = false;
             if (result.success) {
@@ -269,22 +272,22 @@
         }
     }
 
-    let _removeOldServerPort = async () => {
+    let _removeOldServerPort = async (workingRevision: number) => {
         let oldPorts = _originTunnelOptions.map((option) => option.forwardPort);
         let newPorts = _tunnelOptions.map((option) => option.forwardPort);
         for(let oldPort of oldPorts) {
             if(newPorts.indexOf(oldPort) === -1) {
-                try {
-                    let option = _originTunnelOptions.find((option) => option.forwardPort === oldPort);
-                    if(option && option.certInfo) {
-                        await CertificationCtrl.instance.deleteExternalServerCert(oldPort);
-                    }
-                    await ServerOptionCtrl.instance.removeTunnelingOption({forwardPort: oldPort});
-                } catch (e) {
-                    console.error(e);
+                const result = await ServerOptionCtrl.instance.removeTunnelingOption({forwardPort: oldPort}, workingRevision);
+                if(!result.success) return {success: false, message: result.message, revision: workingRevision};
+                workingRevision = result.revisionState!.currentRevision;
+                let option = _originTunnelOptions.find((option) => option.forwardPort === oldPort);
+                if(option && option.certInfo) {
+                    const certificate = await CertificationCtrl.instance.deleteExternalServerCert(oldPort);
+                    if(!certificate.success) return {success: false, message: certificate.message, revision: workingRevision};
                 }
             }
         }
+        return {success: true, message: '', revision: workingRevision};
     }
 
     let _onClickApply = async (index: number) => {
@@ -292,9 +295,11 @@
         let tunnelOption = _tunnelOptions[index];
         tunnelOption.allowedClientNames = tunnelOption.allowedClientNamesQuery!.split(";").map((name) => name.trim()).filter((name) => name !== "");
         try {
-            await _removeOldServerPort();
-            if(tunnelOption.tls) {
-                CertificationCtrl
+            const removal = await _removeOldServerPort(_snapshotRevision);
+            if(!removal.success) {
+                _loading = false;
+                _alert("Fail to apply tunneling option: " + removal.message);
+                return;
             }
 
             if(tunnelOption.tls && tunnelOption.certInfo) {
@@ -305,7 +310,7 @@
                     return;
                 }
             }
-            let result = await ServerOptionCtrl.instance.updateTunnelingOption(tunnelOption);
+            let result = await ServerOptionCtrl.instance.updateTunnelingOption(tunnelOption, removal.revision);
 
             _loading = false;
             if (result.success) {
@@ -317,6 +322,7 @@
                 _alert("Success to apply tunneling option");
             } else {
                 _alert("Fail to apply tunneling option: " + result.message);
+                return;
             }
             await _loadTunnelingOption();
             await _loadExternalServerStatus();

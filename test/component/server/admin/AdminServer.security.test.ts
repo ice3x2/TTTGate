@@ -143,7 +143,8 @@ describe("AdminServer security hardening", () => {
         const cookie = setCookies.map((c) => c.split(";")[0]).join("; ");
         const csrfCookie = setCookies.find((c) => c.startsWith("csrfToken="))!;
         const csrfToken = csrfCookie.split(";")[0].split("=")[1];
-        const insecureOption = ServerOptionStore.instance.serverOption;
+        const read = JSON.parse((await httpRequest({port, path: "/api/serverOption", headers: {cookie}})).body);
+        const insecureOption = read.serverOption;
         insecureOption.adminTls = false;
         insecureOption.adminBindHost = "0.0.0.0";
 
@@ -156,7 +157,7 @@ describe("AdminServer security hardening", () => {
                 cookie,
                 "x-csrf-token": csrfToken
             },
-            body: JSON.stringify(insecureOption)
+            body: JSON.stringify({...insecureOption, expectedRevision: read.revisionState.currentRevision})
         });
 
         expect(response.statusCode).toBe(400);
@@ -189,7 +190,8 @@ describe("AdminServer security hardening", () => {
         const cookie = setCookies.map((c) => c.split(";")[0]).join("; ");
         const csrfCookie = setCookies.find((c) => c.startsWith("csrfToken="))!;
         const csrfToken = csrfCookie.split(";")[0].split("=")[1];
-        const legacyOption = ServerOptionStore.instance.serverOption;
+        const read = JSON.parse((await httpRequest({port, path: "/api/serverOption", headers: {cookie}})).body);
+        const legacyOption = read.serverOption;
         legacyOption.adminTls = false;
         legacyOption.adminBindHost = "0.0.0.0";
 
@@ -202,7 +204,7 @@ describe("AdminServer security hardening", () => {
                 cookie,
                 "x-csrf-token": csrfToken
             },
-            body: JSON.stringify(legacyOption)
+            body: JSON.stringify({...legacyOption, expectedRevision: read.revisionState.currentRevision})
         });
 
         expect(response.statusCode).toBe(200);

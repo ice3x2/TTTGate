@@ -76,7 +76,8 @@ describe("REQ-12 CSRF + Origin guard for state-changing APIs", () => {
 
     it("(b) 동일 오리진 + 정상 CSRF double-submit → 200/400 (허용)", async () => {
         const {sessionCookie, csrfCookie, csrfToken} = await bootstrapLogin();
-        const option = ServerOptionStore.instance.serverOption;
+        const read = JSON.parse((await httpRequest({port, path: "/api/serverOption", headers: {cookie: sessionCookie}})).body);
+        const option = {...read.serverOption, expectedRevision: read.revisionState.currentRevision};
         const r = await httpRequest({
             port, path: "/api/serverOption", method: "POST",
             headers: {

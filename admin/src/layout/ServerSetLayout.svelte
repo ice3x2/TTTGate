@@ -18,6 +18,7 @@
     let _originalAdminCert : CertInfo | null = null;
     let _lastAdminCert : CertInfo | null = null;
     let _isInit: boolean = false;
+    let _snapshotRevision: number;
 
     let _showLoading: boolean = false;
 
@@ -33,7 +34,9 @@
         }
         try {
             _showLoading = true;
-            _serverOption = await ServerOptionCtrl.instance.getServerOption();
+            const snapshot = await ServerOptionCtrl.instance.getServerOption();
+            _serverOption = snapshot.value;
+            _snapshotRevision = snapshot.revision;
             await ServerOptionCtrl.instance.getServerOptionHash();
             _lastServerOption = _.cloneDeep(_serverOption);
             _adminServerCert = await CertificationCtrl.instance.loadAdminCert();
@@ -120,7 +123,7 @@
     let _apply = async () => {
         try {
             _showLoading = true;
-            let result = await ServerOptionCtrl.instance.updateServerOption(_serverOption);
+            let result = await ServerOptionCtrl.instance.updateServerOption(_serverOption, _snapshotRevision);
             _showLoading = false;
             if (result.success) {
                 await _checkServerRestart();

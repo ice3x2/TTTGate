@@ -81,6 +81,7 @@ describe("AdminServer staged apply behavior", () => {
             restartRequiredScopes: []
         });
         const {cookie, csrfToken} = await loginAndGetAuth(port, testRoot);
+        const read = JSON.parse((await httpRequest({port, path: "/api/serverOption", headers: {cookie}})).body);
 
         const response = await httpRequest({
             port,
@@ -92,6 +93,7 @@ describe("AdminServer staged apply behavior", () => {
                 "x-csrf-token": csrfToken
             },
             body: JSON.stringify({
+                expectedRevision: read.revisionState.currentRevision,
                 forwardPort: 18081,
                 protocol: "tcp",
                 destinationAddress: "127.0.0.2",
@@ -123,6 +125,7 @@ describe("AdminServer staged apply behavior", () => {
         });
         const store = ServerOptionStore.instance;
         const {cookie, csrfToken} = await loginAndGetAuth(port, testRoot);
+        const read = JSON.parse((await httpRequest({port, path: "/api/serverOption", headers: {cookie}})).body);
         const nextServerOption = {
             ...store.serverOption,
             adminPort: store.serverOption.adminPort! + 1
@@ -137,7 +140,7 @@ describe("AdminServer staged apply behavior", () => {
                 cookie,
                 "x-csrf-token": csrfToken
             },
-            body: JSON.stringify(nextServerOption)
+            body: JSON.stringify({...nextServerOption, expectedRevision: read.revisionState.currentRevision})
         });
 
         const body = JSON.parse(response.body);

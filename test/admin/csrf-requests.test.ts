@@ -145,9 +145,9 @@ test("all seven authenticated browser controller mutations succeed against the r
         const results = await fixture.app.page.evaluate(async (data) => {
             const {server, certificates} = (window as any).adminControllers;
             const calls = [
-                () => server.updateServerOption(data.current),
-                () => server.updateTunnelingOption({...data.option, forwardPort: data.addedPort}),
-                () => server.removeTunnelingOption({forwardPort: data.addedPort}),
+                async () => { const read = await server.getServerOption(); return server.updateServerOption(read.value, read.revision); },
+                async () => { const read = await server.getTunnelingOption(); return server.updateTunnelingOption({...data.option, forwardPort: data.addedPort}, read.revision); },
+                async () => { const read = await server.getTunnelingOption(); return server.removeTunnelingOption({forwardPort: data.addedPort}, read.revision); },
                 () => server.activeExternalPortServer(true, data.forwardPort),
                 () => certificates.updateAdminCert(data.certInfo),
                 () => certificates.updateExternalServerCert(data.forwardPort, data.certInfo),
@@ -180,12 +180,13 @@ test("lost CSRF cookie is restored once before concurrent mutations, without rep
         const results = await fixture.app.page.evaluate(async (option) => {
             document.cookie = "csrfToken=; Path=/; Max-Age=0";
             const controller = (window as any).adminControllers.server;
-            return Promise.all([controller.updateServerOption(option), controller.updateServerOption(option)]);
+            const read = await controller.getServerOption();
+            return Promise.all([controller.updateServerOption(read.value, read.revision), controller.updateServerOption(read.value, read.revision)]);
         }, current);
         expect(results.map((result: any) => result.success)).toEqual([true, true]);
         expect(fixture.requests.filter((request) => request.path === "/api/csrfToken")).toHaveLength(1);
         expect(fixture.requests.filter((request) => request.method === "POST")).toHaveLength(2);
-        expect(fixture.requests[0].path).toBe("/api/csrfToken");
+        expect(fixture.requests.filter((request) => request.path !== "/api/serverOption")[0].path).toBe("/api/csrfToken");
     } finally {
         await fixture.close();
     }
