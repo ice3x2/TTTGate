@@ -345,7 +345,7 @@
   {
     "body": "## 요약\r\n\r\n캐시 읽기가 실패하면 빈 버퍼로 대체하는데, 뒤이은 전송 루프는 원래 길이 기준으로 판정하고 송신 누적량에도 원래 길이를 더합니다. 0바이트를 보내고 성공으로 보고합니다.\r\n\r\n## 근거\r\n\r\n- `src/util/SocketHandler.ts:706` — 읽기 결과가 없으면 `EMPTY_BUFFER` 로 대체합니다.\r\n- `src/util/SocketHandler.ts:597-601` — 0바이트 검사가 `waitItem.length` 라는 원래 길이를 봅니다.\r\n- `src/util/SocketHandler.ts:614` — 쓰기 성공 후 `this._sendLength += length` 를 실행합니다.\r\n- `src/util/FileCache.ts:141-152` — 캐시가 삭제되었거나 파일 서술자가 닫혔거나 해당 식별자가 없으면 값 없음을 반환합니다.\r\n- `src/util/SocketHandler.ts:717-720` — 같은 캐시 항목을 두 번째로 해제하며 전역 캐시 사용량을 이중으로 감산합니다. 그 결과 전역 파일 캐시 상한이 실제보다 느슨해집니다.\r\n\r\n## 재현과 영향\r\n\r\n캐시가 삭제된 상태에서 큐에 항목이 남아 있으면 발생합니다. 소켓 종료와 쓰기 완료가 겹치는 시점이 여기 해당하며, #20 (H-03) 의 식별자 재사용이 이 조건을 만듭니다. 임의의 TCP 트래픽을 중계하는 제품에서 데이터가 오류 기록 없이 사라지고 수신 측 스트림이 잘린 채 이어집니다. 파일 전송이 손상되며 원인 추적이 불가능합니다.\r\n\r\n## 권고\r\n\r\n읽기 실패는 예외 상황이므로 실패로 처리합니다. 쓰기 완료 콜백에 실패를 통지하고 핸들러를 파기하며, 조용한 대체를 제거합니다.\r\n\r\n## 검증 상태\r\n\r\n- 기존 테스트 커버: 없음. `test/unit/util/SocketHandler.resource.test.ts` 는 쿼터 초과 시 fail-closed 동작만 검증합니다.\r\n- 도입 시점: 기존.\r\n- 확인 방법: 코드 확인.\r\n\r\n---\r\n근거 문서: `docs/research/2026-09-05-tttgate-full-inspection.md` §5.2",
     "number": 19,
-    "state": "OPEN",
+    "state": "CLOSED",
     "title": "파일 캐시 읽기 실패 시 빈 버퍼를 대신 보내고 성공으로 보고해 데이터가 조용히 사라짐",
     "url": "https://github.com/ice3x2/TTTGate/issues/19"
   },

@@ -1,6 +1,6 @@
 # Issue #19 — Cache read failures must not become successful sends
 
-Status: independently reviewed and approved; scoped commit authorized, root integration/push/closure pending. No #20 implementation authorized yet.
+Status: complete; independently reviewed, committed, integrated, pushed, closed and notified.
 Original title: 파일 캐시 읽기 실패 시 빈 버퍼를 대신 보내고 성공으로 보고해 데이터가 조용히 사라짐.
 Assigned agent: `fix_supply15`; branch `fix/epic61-cache-read`.
 Worktree: `C:/Work/git/_Snoworca/TTTGate-epic61-listeners`; base `bacae6f`.
@@ -17,10 +17,9 @@ cache-release timing remain outside this repair.
 - [x] Verify current/follower callbacks once, no failed send bytes, survivor accounting, owner cleanup and successful spill bytes. Status: six focused tests pass naturally, 5.143 seconds.
 - [x] Run relevant regression and forced build. Status: six suites/20 tests pass naturally; forced TypeScript build exits 0.
 - [x] Two independent reviews. Status: primary `review_wave0` and secondary `fix_ci14` passed code/content/exact-title review. Primary independently ran two suites/six tests with natural exit 0 in 5.128 seconds, as confirmed by root review receipts.
-- [ ] Commit/integrate/push/close/notify via root. Status: pending.
+- [x] Commit/integrate/push/close/notify via root. Status: complete; operational evidence below.
 
-Next action: commit only the six owned files with the approved exact title and
-hand the hash to the root. #20 waits for reviewed integration and assignment.
+Next action: none for this issue; #20 is separately assigned after reviewed integration.
 
 ## RED before implementation
 
@@ -90,6 +89,12 @@ Actual changed paths are `src/util/SocketHandler.ts`, `src/util/FileCache.ts`,
 `test/component/cache-read-failure.test.ts`, `test/unit/util/file-cache-read.test.ts`
 and this ledger. The first two contain the only production changes. No queue
 release-to-write-callback migration, cache-ID reuse fix or UI change is included.
+
+## Operational completion
+
+Source commit: `34d74ce`. Integration commit and independently observed pushed `origin/fix/epic-61` HEAD: `bbf1ef4f9f491fab43fbb274baf178cf62989a9f`. GitHub independently confirmed CLOSED at `2026-09-07T22:13:38Z`. Root reports forced compilation and six suites/20 integration tests passed naturally in 15.95 seconds.
+
+Telegram title: `TDD Gate 19 파일 캐시 읽기 실패 시 빈 버퍼를 대신 보내고 성공으로 보고해 데이터가 조용히 사라짐 (63/23)`. Successful message `3926` is from the orchestrator's tool receipt, not an independent Telegram fetch. Existing notification denominators remain unchanged. Do not duplicate the notification.
 
 ## Independent approval
 
