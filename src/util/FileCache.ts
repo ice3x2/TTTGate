@@ -114,6 +114,7 @@ class FileCache {
         let length = buffer.length;
 
         if(block != null) {
+            block.id = this._lastId++;
             block.length = length;
             if(length < block.capacity) {
                 buffer = Buffer.concat([buffer, Buffer.allocUnsafe(block.capacity - buffer.length)]);
