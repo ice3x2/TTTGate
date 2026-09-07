@@ -20,6 +20,13 @@ const repoRoot = path.resolve(__dirname, "..", "..");
 const workflowPath = path.join(repoRoot, ".github", "workflows", "supply-chain-audit.yml");
 
 describe("R3-REQ-06 CI supply-chain gate (static)", () => {
+    test("online audit jobs run only on schedule or explicit dispatch", () => {
+        const workflow = parseYaml(fs.readFileSync(workflowPath, "utf8"));
+        for(const job of [workflow.jobs["audit-runtime"], workflow.jobs["audit-admin"]]) {
+            expect(job.if).toBe("github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'");
+            expect(JSON.stringify(job)).not.toMatch(/\|\| echo|grep -q/);
+        }
+    });
     test("워크플로우 파일 존재", () => {
         expect(fs.existsSync(workflowPath)).toBe(true);
     });
@@ -45,7 +52,7 @@ describe("R3-REQ-06 CI supply-chain gate (static)", () => {
 
     test("crypto-js 서버 체인 부재 검증 Step 존재", () => {
         const content = fs.readFileSync(workflowPath, "utf8");
-        expect(content).toMatch(/npm ls crypto-js/);
+        expect(content).toMatch(/r3-req-02-crypto-js-removed/);
         expect(content).toMatch(/R3-REQ-02/);
     });
 

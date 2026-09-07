@@ -10,31 +10,14 @@
  * @babel/traverse 는 빌드 타임(dev) 도구 체인에 있으므로 별도 P4 범위이나,
  * 여기서는 production audit 로 form-data 만 강제 검증한다.
  */
-import {execSync} from "child_process";
+import {audit, onlineTest} from "../helpers/SupplyChainGate";
 import * as path from "path";
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 
 describe("R3-REQ-03 CRITICAL cleared on production chain", () => {
-    test("npm audit --omit=dev --audit-level=critical → 0건", () => {
-        let out = "";
-        let exitCode = 0;
-        try {
-            out = execSync("npm audit --omit=dev --audit-level=critical --json", {
-                cwd: repoRoot,
-                encoding: "utf8",
-                stdio: ["ignore", "pipe", "pipe"],
-                env: {...process.env, NODE_ENV: "development"},
-            });
-        } catch(e: any) {
-            exitCode = e.status || 1;
-            out = e.stdout ? e.stdout.toString() : "";
-        }
-
-        // npm audit JSON 구조: vulnerabilities[pkgName].severity
-        expect(out.length).toBeGreaterThan(0);
-        const parsed = JSON.parse(out);
-        const vulnerabilities = parsed.vulnerabilities || {};
+    onlineTest("npm audit --omit=dev --audit-level=critical → 0건", () => {
+        const vulnerabilities = audit("critical").vulnerabilities;
         const criticalHits: string[] = [];
         for(const [name, data] of Object.entries<any>(vulnerabilities)) {
             if(data?.severity === "critical") criticalHits.push(name);
@@ -42,20 +25,8 @@ describe("R3-REQ-03 CRITICAL cleared on production chain", () => {
         expect(criticalHits).toEqual([]);
     }, 60_000);
 
-    test("npm audit --omit=dev --audit-level=high → form-data/node-forge advisory 0건", () => {
-        let out = "";
-        try {
-            out = execSync("npm audit --omit=dev --audit-level=high --json", {
-                cwd: repoRoot,
-                encoding: "utf8",
-                stdio: ["ignore", "pipe", "pipe"],
-                env: {...process.env, NODE_ENV: "development"},
-            });
-        } catch(e: any) {
-            out = e.stdout ? e.stdout.toString() : "";
-        }
-        const parsed = JSON.parse(out);
-        const vulnerabilities = parsed.vulnerabilities || {};
+    onlineTest("npm audit --omit=dev --audit-level=high → form-data/node-forge advisory 0건", () => {
+        const vulnerabilities = audit("high").vulnerabilities;
         expect(vulnerabilities["form-data"]).toBeUndefined();
         expect(vulnerabilities["node-forge"]).toBeUndefined();
     }, 60_000);

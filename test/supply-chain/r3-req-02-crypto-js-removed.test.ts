@@ -6,7 +6,7 @@
  */
 import * as fs from "fs";
 import * as path from "path";
-import {execSync} from "child_process";
+import {readDependencyTree, runNpm} from "../helpers/SupplyChainGate";
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 
@@ -39,19 +39,7 @@ describe("R3-REQ-02 crypto-js removed from server runtime chain", () => {
 
     test("npm ls crypto-js (서버 루트) — (empty) 또는 admin 체인에 국한", () => {
         // 서버 루트 npm ls 는 서버 의존성 트리만 탐색. admin/ 은 별도 프로젝트.
-        let out = "";
-        try {
-            out = execSync("npm ls crypto-js --all --json", {cwd: repoRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"]});
-        } catch(e: any) {
-            // npm ls 는 미발견 시 exit code !=0 을 반환할 수 있음 — stdout 을 사용.
-            out = e.stdout ? e.stdout.toString() : "";
-        }
-        // 빈 출력이거나 crypto-js 키가 없는 JSON이면 PASS.
-        if(out.trim().length === 0) {
-            expect(true).toBe(true);
-            return;
-        }
-        const parsed = JSON.parse(out);
+        const parsed = readDependencyTree(runNpm(["ls", "--all", "--omit=dev", "--json"]));
         const flatten = (node: any, acc: string[]) => {
             if(!node || !node.dependencies) return;
             for(const [name, child] of Object.entries<any>(node.dependencies)) {

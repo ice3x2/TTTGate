@@ -18,6 +18,7 @@ on:
 
 jobs:
   audit-runtime:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     name: Runtime audit (server production chain)
     runs-on: ubuntu-latest
     steps:
@@ -33,26 +34,28 @@ jobs:
         env:
           NODE_ENV: development
 
+      - name: Online production audit regression
+        run: npx jest --runInBand --runTestsByPath test/supply-chain/r3-req-03-critical-fixed.test.ts test/supply-chain/r3-req-04-medium-cleared.test.ts
+        env:
+          SUPPLY_CHAIN_ONLINE: "1"
+
       - name: Audit production tree (CRITICAL gate)
         run: npm audit --omit=dev --audit-level=critical
         env:
           NODE_ENV: development
 
-      - name: Audit production tree (HIGH gate — PR 차단)
+      - name: Audit production tree (HIGH gate)
         run: npm audit --omit=dev --audit-level=high
         env:
           NODE_ENV: development
 
       - name: crypto-js 서버 체인 미포함 확인
-        run: |
-          if npm ls crypto-js --omit=dev 2>&1 | grep -q "crypto-js@"; then
-            echo "::error::crypto-js 가 서버 런타임 체인에 존재함. R3-REQ-02 위반."
-            exit 1
-          fi
+        run: npx jest --runInBand --runTestsByPath test/supply-chain/r3-req-02-crypto-js-removed.test.ts # R3-REQ-02
         env:
           NODE_ENV: development
 
   audit-admin:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     name: Admin audit (frontend chain)
     runs-on: ubuntu-latest
     steps:
@@ -74,9 +77,9 @@ jobs:
         working-directory: admin
         run: npm audit --audit-level=critical
 
-      - name: Audit admin (HIGH — 보고용, 차단 안 함)
+      - name: Audit admin (HIGH report; command errors fail)
         working-directory: admin
-        run: npm audit --audit-level=high || echo "::warning::admin HIGH advisory 잔존 (빌드 의존성)"
+        run: node ../scripts/supply-chain-gate.cjs --admin-high-report
 
   tests:
     name: Supply-chain regression tests
