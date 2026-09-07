@@ -1,6 +1,6 @@
 # Epic #61 execution plan
 
-Status: active; 2026-09-08; baseline `376b65c`; 58 tracked issues, five completed. Original child range: 5 through 60, plus discovered build issue 62 and user-directed Node 24 migration 63; unrelated issue 2 is excluded.
+Status: active; 2026-09-08; baseline `376b65c`; 61 tracked issues, nine completed. Original child range: 5 through 60, plus discovered build issue 62, user-directed Node 24 migration 63, timing verification issue 64 and release archive issue 65 and odd-length hex validation issue 66; unrelated issue 2 is excluded.
 
 ## Scope and decisions
 
@@ -8,11 +8,11 @@ Resolve every child of #61, plus defects discovered during this work. Preserve e
 
 Original workspace `../TTTGate` on `refactor/admin` contains pre-existing uncommitted admin upgrades and reports. Preserve those changes. Integration workspace: `../TTTGate-epic61`, branch `fix/epic-61`. Issue lanes are sibling worktrees forked from the latest reviewed integration commit. Changes are integrated serially; never share a writable lane.
 
-Accepted current user decision: minimum Node.js version becomes `>=24.0.0` (24 LTS), replacing the earlier Node 18 baseline. ADR-011 and `verification/epic61-node24-decision.md` define #63. No further Node-major policy decision is pending. Preserve historical #14/#62/#15 evidence and notification denominators as sent; all subsequent notifications use total 58.
+Accepted current user decision: minimum Node.js version becomes `>=24.0.0` (24 LTS), replacing the earlier Node 18 baseline. ADR-011 and `verification/epic61-node24-decision.md` define #63. No further Node-major policy decision is pending. Preserve historical #14/#62/#15 evidence and notification denominators as sent; all subsequent notifications use total 61 after discovery of #64/#65/#66.
 
 ## Execution order and ownership
 
-Each issue below appears once and is its own resumable checklist item. Items inside a lane run serially. Lanes in the same wave may run in parallel, up to three workers including reviewers; the orchestrator occupies the fourth slot. A completed wave means reviewed changes have been integrated and checked before the next wave starts, except the explicitly bounded early #9 lane below. Wave 0 remains the mandatory global barrier. Release gates run after both Wave 1 lanes and #63.
+Each issue below appears once and is its own resumable checklist item. Items inside a lane run serially. Lanes in the same wave may run in parallel, up to three workers including reviewers; the orchestrator occupies the fourth slot. A completed wave means reviewed changes have been integrated and checked before the next wave starts, except the explicitly bounded early #9 and #16/#21 lanes below. Wave 0 remains the mandatory global barrier. Release gates run after both Wave 1 lanes and #63.
 
 File ownership is exclusive during a wave, including test files. Serial cherry-picking alone does not make overlapping implementations safe. Before assignment, record the actual branch, worktree and writable paths in the issue evidence file. If a fix needs another active lane's file, defer that change until the owner is integrated, update this plan and rebase the waiting lane. Do not independently edit shared files and defer resolving their semantics until merge.
 
@@ -26,12 +26,12 @@ Status: complete; #14, #62 and #15 passed review, integration, push, closure and
 
 ### Wave 1 — administrator deployment blockers
 
-Status: assigned after Wave 0 completion. Lane A agent `fix_ci14`, worktree `../TTTGate-epic61-admin`, branch `fix/epic61-admin`, base `654a065`, owns `admin/`, root package manifests, code regression CI, `test/admin/` and bootstrap routing in `AdminServer.ts`. Inspect original dirty admin changes as input, but reproduce failures before adopting implementation. Lane B agent `fix_supply15`, worktree `../TTTGate-epic61-release`, branch `fix/epic61-release`, base `654a065`, owns `package-build.json`, release manifest generation and the release-manifest supply test; it does not change admin package files concurrently.
+Status: assigned after Wave 0 completion. Lane A agent `fix_ci14`, worktree `../TTTGate-epic61-ui`, branch `fix/epic61-ui`, base `b093dce`, owns `admin/`, root package manifests, code regression CI, `test/admin/` and bootstrap routing in `AdminServer.ts`. Inspect original dirty admin changes as input, but reproduce failures before adopting implementation. Lane B agent `fix_supply15`, worktree `../TTTGate-epic61-release`, branch `fix/epic61-release`, base `654a065`, owns `package-build.json`, release manifest generation and the release-manifest supply test; it does not change admin package files concurrently.
 
 Lane A, serial:
 
 - [x] #50 admin test runner. Status: complete; commit `d8cb6a7` pushed, issue closed, Telegram receipt 3898 (58/5).
-- [ ] #5 SPA mount. Status: pending #50, #17 and serial #63 integration.
+- [ ] #5 SPA mount. Status: assigned to `fix_ci14` in `../TTTGate-epic61-ui`, branch `fix/epic61-ui`, base `b093dce`; selective Svelte 5 adoption preserves Node 24 and TypeScript 5.9.
 - [ ] #6 certificate lifecycle. Status: pending previous lane item.
 - [ ] #7 CSRF integration. Status: pending previous lane item.
 - [ ] #8 bootstrap UI and request. Status: pending previous lane item.
@@ -43,21 +43,30 @@ Lane B, parallel with A:
 
 Serial interlude after #50 and #17 integration, before Lane A continues with #5:
 
-- [ ] #63 Node 24 minimum/runtime migration. Status: assigned to `fix_supply15` in `../TTTGate-epic61-node24`, branch `fix/epic61-node24`, base `d8cb6a7`; exclusive ownership of root/admin/distribution manifests, lockfiles, Node declarations, workflows and binary packaging. #50 may select Node 24 for its new CI harness; all remaining migration belongs here. Packaging research may run concurrently without edits. Rebase the admin lane onto reviewed #63 before continuing; #44 must verify actual Node 24 artifacts and supported platforms.
+- [x] #63 Node 24 minimum/runtime migration. Status: complete; commit `b093dce` pushed, issue closed, Telegram receipt 3902 (61/7). All five targets preserved; future admin changes must retain Node 24 and TypeScript 5.9.
+
+Runtime verification interlude: #63 configuration/artifact implementation precedes #64 investigation and repair; #64 completion then enables #63 final full-regression/closure gate. This is the ordered chain `#63 implementation -> #64 -> #63 final verification`, not a cyclic issue dependency. The runtime lane owns this sequence; the explicitly bounded independent-fixer delegation below separates script and runtime write sets. Do not weaken the 7% threshold, retry until green, or treat an isolated pass as resolution. Review the methodology proposal before implementation.
+
+- [x] #64 timing benchmark verification reliability. Status: complete as verification-method repair; commit `b093dce` pushed, issue closed, Telegram receipt 3903 (61/8). First experiment FAIL and both diagnostics INCONCLUSIVE remain preserved; no empirical timing PASS or physical proof claimed.
+
+- [x] #66 odd-length hex comparison validation. Status: complete; commit `b093dce` pushed, issue closed, Telegram receipt 3904 (61/9). Native padded comparison path preserved.
+
+Bounded independent-fixer delegation in the existing Node 24 worktree is intentional: `fix_ci14` fixes only the #64 benchmark script and dedicated experiment tests, while `fix_supply15` owns #66's helper and dedicated regression test. These are disjoint write sets, not independent integration lanes. Neither edits the other's files. Freeze both before rebuilding and executing the preregistered timing diagnostic or integration checks. #64's first explicit experiment remains FAIL; no retries until green or retrospective threshold relaxation. The fixed diagnostic and the single preapproved affinity-condition comparison were both INCONCLUSIVE. Stop timing measurements and condition search. Root accepted #64 closure against its actual verification-method repair criteria after fresh ordinary full regression and honest evidence review; no conclusive empirical timing or physical constant-time claim is required or made. Preserve every FAIL/INCONCLUSIVE report. #63 closes only after #64/#66 acceptance and integrated full regression plus refreshed binary checks.
 
 Wave completion gate, after A and B integration:
 
 - [ ] #44 release type-check/test/install gates. Status: pending both Wave 1 lanes; exclusive release and package ownership.
+- [ ] #65 release archive collection. Status: pending #63 and administrator lane completion; same exclusive release lane alongside #44, serialized around shared workflow edits. Test actual `dist/bin/TTTGate-*` output names, all five archive contents, and fail on absent/empty artifacts. Evidence: `verification/epic61-discovery-65.md`.
 
 ### Wave 2 — termination and listener foundations
 
-Status: pending Wave 1 except the bounded #9 early lane. Lane A exclusively owns `SocketHandler.ts`, `TCPServer.ts`, `CtrlPacket.ts`, `TunnelServer.ts`, `TunnelClient.ts`, `ClientHandlerPool.ts`, `ExternalPortServerPool.ts`, and HTTP cleanup changes. These cannot be divided into simultaneous protocol/listener writers. Lane B owns `Sentinel.ts`, `LogWriter.ts` and logging composition only. Lane C owns admin/config/certificate files and their tests; changes to external listeners or common transport are deferred to Wave 4.
+Status: pending Wave 1 except completed early #9 and the bounded #16/#21 early lane. Lane A exclusively owns `SocketHandler.ts`, `TCPServer.ts`, `CtrlPacket.ts`, `TunnelServer.ts`, `TunnelClient.ts`, `ClientHandlerPool.ts`, `ExternalPortServerPool.ts`, and HTTP cleanup changes. These cannot be divided into simultaneous protocol/listener writers. Lane B owns `Sentinel.ts`, `LogWriter.ts` and logging composition only. Lane C owns admin/config/certificate files and their tests; changes to external listeners or common transport are deferred to Wave 4.
 
-Early #9 lane: after completed Wave 0, #9 may execute concurrently with #63. Actual issue scope is command payload validation in `src/commons/CtrlPacket.ts`, getter bounds and dedicated packet/consumer regression tests. These do not depend on administrator fixes or Node packaging. Exclusive writable paths are `src/commons/CtrlPacket.ts`, `test/unit/commons/CtrlPacket.test.ts`, dedicated #9 files under `test/commons/` and `test/component/`, and its issue ledger. Existing consumer/runtime files may be read; any required edits outside this set must be surfaced and ownership/schedule amended before writing. The #9 worker must not edit root/admin manifests, lockfiles, workflows, README, packaging scripts or shared test helpers owned by #63/admin. No other Wave 2 issue starts early. Integrate serially and rerun packet/consumer regression on the integrated Node 24 baseline. The orchestrator records the assigned worktree/branch before dispatch. This is a dependency-based parallel exception, not a relaxation of TDD or review gates.
+Early #9 lane: after completed Wave 0, #9 may execute concurrently with #63. Actual issue scope is command payload validation in `src/commons/CtrlPacket.ts`, getter bounds and dedicated packet/consumer regression tests. These do not depend on administrator fixes or Node packaging. Exclusive writable paths are `src/commons/CtrlPacket.ts`, `test/unit/commons/CtrlPacket.test.ts`, dedicated #9 files under `test/commons/` and `test/component/`, and its issue ledger. Existing consumer/runtime files may be read; any required edits outside this set must be surfaced and ownership/schedule amended before writing. The #9 worker must not edit root/admin manifests, lockfiles, workflows, README, packaging scripts or shared test helpers owned by #63/admin. No other Wave 2 issue starts early except the separately bounded #16/#21 lane below. Integrate serially and rerun packet/consumer regression on the integrated Node 24 baseline. The orchestrator records the assigned worktree/branch before dispatch. This is a dependency-based parallel exception, not a relaxation of TDD or review gates.
 
 Lane A, serial:
 
-- [ ] #9 control payload boundary. Status: eligible for bounded early assignment in parallel with #63; Wave 0 complete, exclusive paths above.
+- [x] #9 control payload boundary. Status: complete; commit `a8ea15b` pushed, issue closed, Telegram receipt 3900 (61/6). Control lane changes are included in the runtime lane.
 - [ ] #28 large byte counts. Status: pending previous lane item.
 - [ ] #10 inactive listener. Status: pending previous lane item.
 - [ ] #39 TCPServer restart. Status: pending previous lane item.
@@ -66,8 +75,12 @@ Lane A, serial:
 
 Lane B, parallel with A/C:
 
-- [ ] #16 Sentinel self-termination. Status: pending Wave 1.
-- [ ] #21 log retention. Status: pending previous lane item.
+Bounded early #16/#21 lane: after the reviewed Node 24/comparison changes are integrated, this lane may execute alongside administrator #5/#6/#7/#8/#51. Source inspection finds no dependency on SPA mounting, certificate UI or CSRF/bootstrap contracts. #16 exclusively owns `src/Sentinel.ts`, dedicated Sentinel test/driver files under `test/component/` or `test/unit/`, and its ledger. Use an isolated child and explicit failure fixture for RED; intercept/record dangerous signal destinations before they can leave the child, so the baseline never actually signals PID 1 or another process. The GREEN test must observe the intended child termination and preserve unrelated daemon behavior; a fixture must not be described as mock-free if it replaces a process lookup/signal boundary.
+
+After #16 integration, #21 exclusively owns `src/util/logger/LogWriter.ts`, dedicated retention tests and its ledger. Test real temporary log files, retained recent/unrelated files and logger-name metacharacters. Existing logging composition may be read; any composition/configuration or shared-helper edit needs an ownership amendment before writing. Neither issue owns root/admin manifests, lockfiles, workflows, README, admin sources, transport primitives or packaging scripts. Record worktree/branch before dispatch and integrate changes serially with scoped and integrated regressions. This does not authorize early #11/HTTP or other Wave 2 work; existing overlap/dependency rules remain.
+
+- [ ] #16 Sentinel self-termination. Status: assigned to `fix_supply15` in `../TTTGate-epic61-process`, branch `fix/epic61-process`, base `b093dce`, parallel with #5 under bounded paths above.
+- [ ] #21 log retention. Status: eligible after #16 reviewed integration, in the same bounded early lane; serialize its edits with #16.
 
 Lane C, parallel with A/B:
 
@@ -156,14 +169,14 @@ Status: pending Wave 5; one serial integration lane owns package scripts, final 
 3. Implement minimum fix in assigned worktree; record green and appropriate regression evidence.
 4. Independent reviewer checks original requirements and diff. A different fixer handles findings, followed by independent re-review until no material findings remain. Record findings by critical/high/medium/low.
 5. Review commit content/message independently, commit without signature or progress markers, integrate serially, run integration checks, push without force, verify remote hash, then close issue with evidence.
-6. Send Telegram after each closed issue: `TDD Gate {issue number} {issue title} ({total issue count}/{completed issue count})`. Current total 58 (original 56 plus build issue #62 and user-directed Node 24 migration #63); add newly discovered in-scope issues explicitly. Persist delivery result to prevent duplicate reporting.
+6. Send Telegram after each closed issue: `TDD Gate {issue number} {issue title} ({total issue count}/{completed issue count})`. Current total 61 (original 56 plus #62, #63, #64, #65 and #66); add newly discovered in-scope issues explicitly. Persist delivery result to prevent duplicate reporting.
 
 ## Issue completion ledger
 
-Five of 58 issues completed: #14, #62, #15, #17 and #50. Independent Wave 0 review evidence: `docs/plan/verification/epic61-wave0-review.md`. Each checklist item is completed only after all per-issue gates. Store its ledger in `docs/plan/verification/epic61-issue-N.md`, where N is the issue number. Required fields: original title/requirements, assigned agent/worktree/branch/writable paths, current status and next command, reuse findings, red command/result before implementation, green/regression commands/results, review findings and independent reviewer/fixer identity, integration commit, pushed remote hash, GitHub closure evidence, Telegram title/delivery receipt. Allowed states: pending, assigned, red, implementing, reviewing, integrating, pushed, closed, notified, complete, blocked. Update the checklist status when any state changes. Newly discovered defects receive their own issue, schedule item and ledger; update total count before subsequent notifications.
+Nine of 61 issues completed: #14, #62, #15, #17, #50, #9, #63, #64 and #66. Independent Wave 0 review evidence: `docs/plan/verification/epic61-wave0-review.md`. Each checklist item is completed only after all per-issue gates. Store its ledger in `docs/plan/verification/epic61-issue-N.md`, where N is the issue number. Required fields: original title/requirements, assigned agent/worktree/branch/writable paths, current status and next command, reuse findings, red command/result before implementation, green/regression commands/results, review findings and independent reviewer/fixer identity, integration commit, pushed remote hash, GitHub closure evidence, Telegram title/delivery receipt. Allowed states: pending, assigned, red, implementing, reviewing, integrating, pushed, closed, notified, complete, blocked. Update the checklist status when any state changes. Newly discovered defects receive their own issue, schedule item and ledger; update total count before subsequent notifications.
 
 Plan review evidence: `docs/plan/verification/epic61-plan-review.md`. A different reviewer must rereview this amended plan before treating its findings as resolved.
 
 ## Resume
 
-Inspect live Git/worktree/GitHub state and live agent handles before relying on this document; do not restart work based only on an expired observation or stale status. Current next action: execute assigned serial #63 in the Node 24 worktree; #50 and #17 are complete, #5 waits for #63 integration. Wave 0 combined build passed; full regression completed with 68 suites/306 tests passed and four online tests skipped (157.635 seconds). Remote HEAD observed after #50 completion is `d8cb6a73cdf8a359946465f816e2cfc48c9be5cd`. All original dirty files remain in the original workspace. After Wave 0, create each new lane from the latest reviewed integration commit and record its path in the ledger before assignment. Recheck current user-decision evidence before any policy-sensitive implementation.
+Inspect live Git/worktree/GitHub state and live agent handles before relying on this document; do not restart work based only on an expired observation or stale status. Current next action: progress assigned administrator #5 and process #16 lanes from integrated `b093dce`; #21 waits for #16 integration. Runtime #63/#64/#66 is complete, with timing INCONCLUSIVE explicitly preserved. No further timing measurements. #9 is complete and integrated into the runtime lane. #50 and #17 are complete; #5 is assigned after completed #63 integration. Wave 0 combined build passed; full regression completed with 68 suites/306 tests passed and four online tests skipped (157.635 seconds). Remote HEAD observed after runtime completion is `b093dce3dcd945833dc46ac490b099970dd6507a`. All original dirty files remain in the original workspace. After Wave 0, create each new lane from the latest reviewed integration commit and record its path in the ledger before assignment. Recheck current user-decision evidence before any policy-sensitive implementation.

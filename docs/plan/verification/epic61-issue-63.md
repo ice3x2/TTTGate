@@ -1,6 +1,6 @@
 # Issue #63 — Node 24 minimum and binary runtime
 
-Status: final independent review; forced build, 75-suite ordinary regression and all five refreshed binaries pass. Timing experiment remains INCONCLUSIVE, not a timing-safety proof.
+Status: complete; independently reviewed, integrated, pushed, closed and notified. Timing outcomes remain FAIL/INCONCLUSIVE, with no physical constant-time proof claimed.
 Assigned agent: `fix_supply15`; branch `fix/epic61-node24`.
 Worktree: `C:/Work/git/_Snoworca/TTTGate-epic61-node24`; base `d8cb6a7`.
 Writable paths: root/admin/distribution package manifests and lockfiles, runtime
@@ -14,8 +14,8 @@ and this ledger. Runtime/tunnel behavior and #44 archive fixes are outside this 
 - [x] Upgrade minimum versions, declarations, locked packaging tool and CI. Status: complete; minimum >=24.0.0, @types/node 24.13.3, TypeScript 5.9.3, @yao-pkg/pkg 6.22.0; nine contracts pass.
 - [x] Clean install, build, root/admin regression. Status: final forced build and ordinary regression pass (75 suites/372 tests, four online skips); earlier timing failures preserved below and separately resolved as experiment-methodology issue #64, not relabeled as passing.
 - [x] Generate all five real app binaries, inspect architectures and run Windows x64 product plus runtime probe. Status: final regeneration after #9/#66 and TypeScript 5.9.3 emit passes; final checksums below.
-- [ ] Independent review and corrections. Status: pending; author does not self-approve results.
-- [ ] Integrate, push, close and notify. Status: pending orchestrator.
+- [x] Independent review and corrections. Status: PASS by `review_wave0`; final source, forced-build and artifact review complete.
+- [x] Integrate, push, close and notify. Status: complete; operational evidence below.
 
 ## Primary-source research
 
@@ -218,3 +218,9 @@ earlier failed observations and independent methodology disposition are in the
 as physical timing-safety proof. No further timing measurements were run here.
 Test-generated tracked reports were restored; unique diagnostic reports and
 the committed raw evidence copies remain intact.
+
+## Operational completion
+
+Integration commit and independently observed pushed remote HEAD: `b093dce3dcd945833dc46ac490b099970dd6507a`. GitHub independently confirmed CLOSED at `2026-09-07T16:26:23Z`. Root reports clean root/admin installs, forced compilation and eight suites/66 focused integration tests passed in 27.951 seconds after cherry-picking.
+
+Telegram title: `TDD Gate 63 최소 Node.js 사양을 24 LTS로 올리고 CI·배포 런타임 통일 (61/7)`. Successful delivery message `3902` is from the orchestrator's tool receipt, not an independent Telegram fetch. Do not duplicate the notification.

@@ -49,8 +49,8 @@ accepted by the orchestrator before implementation.
   Status: GREEN. Handle `10829` exited 0; command `npm test -- --runInBand test/unit/commons/CtrlPacket.test.ts test/commons test/component/server/ProtocolV2.test.ts` passed six suites/53 tests in 28.766 seconds.
 - [x] Independent review and corrections.
   Status: PASS by `review_wave0`, six suites/49 tests passed in 6.578 seconds; no material findings. Independent content/title review also PASS by `research_schedule`. Approved title: `fix: 짧은 제어 패킷으로 인한 연결 종료와 예외 차단`.
-- [ ] Commit, integrate with Node 24 baseline, verify remote, close issue and send Telegram.
-  Status: pending orchestrator; no commit or remote mutation made in this lane.
+- [x] Commit, integrate with Node 24 baseline, verify remote, close issue and send Telegram.
+  Status: complete; operational evidence below. Node 24 version/configuration transition final checks remain separately tracked by #63.
 
 ## Consumer test fidelity and limits
 
@@ -69,3 +69,9 @@ proof. A watchdog fails stalled children rather than accepting missing execution
 Local runtime is Node v24.16.0. These tests target the identified payload defect;
 they do not claim complete protocol fuzzing, malformed JSON recovery, or a hosted
 CI run. Authentication/TLS production defaults remain unchanged.
+
+## Operational completion
+
+Integration commit and independently observed pushed remote HEAD: `a8ea15b9c85a6396f217ed952224496a5bf6ce9b` on `origin/fix/epic-61`. GitHub independently confirmed CLOSED at `2026-09-07T15:46:04Z`. The orchestrator ran the integrated 20-test regression; the runtime lane also incorporated this change before its remaining work.
+
+Telegram title: TDD Gate 9 페이로드가 빈 `CloseSession` 제어 패킷 하나로 서버와 클라이언트 프로세스가 종료됨 (61/6). Delivery succeeded with message ID `3900` according to the orchestrator's Telegram tool receipt; the reviewer did not independently fetch the message. Do not send a duplicate completion notification.

@@ -1,14 +1,13 @@
 # Issue #64 — Timing experiment variability
 
-Status: reviewing final evidence; methodology repairs and deterministic focused checks pass. The first empirical experiment remains FAIL and both subsequent approved diagnostics are INCONCLUSIVE. No empirical timing PASS is claimed. #64 does not change production comparison code; the separately reviewed #66 parity repair is included in the later diagnostics' built helper.
+Status: complete; independently reviewed, integrated, pushed, closed and notified. Timing outcomes remain FAIL/INCONCLUSIVE, with no physical constant-time proof claimed.
 Assigned agent: `fix_supply15`; branch `fix/epic61-node24`.
 Worktree: `C:/Work/git/_Snoworca/TTTGate-epic61-node24`; runtime worker owns concurrent #63 build/packaging work.
 Original title: 상수 시간 비교 벤치마크의 결과 변동으로 전체 테스트가 간헐적으로 실패함.
 Writable paths: `scripts/timing-safe-string-equal-bench.cjs`, root `package.json`
 test command, `test/unit/tools/timing-experiment.test.ts`, only the 7% experiment
 and semantic additions in `test/unit/util/req-04-timing-safe-string-equal.test.ts`,
-and this issue's evidence files. Next action: final artifact review and orchestrator
-commit/remote closure. Runtime worker completed the forced build, ordinary full
+and this issue's evidence files. Next action: none for this issue; final review and remote completion passed. Runtime worker completed the forced build, ordinary full
 tests and five binary regenerations sequentially. No further timing run
 is authorized. This methodology repair is a prerequisite
 to #63 closure.
@@ -275,5 +274,11 @@ documentation of this empirical limitation.
   Status: runtime worker reported forced build handle 45821 exited 0; full ordinary regression handle 16537 then passed 75 suites/372 tests with four online tests skipped (376 total) in 228.365 seconds. Sequential packaging handle 33884 regenerated all five artifacts after that test run; Windows native CLI/probe and target header/hash checks passed. Full commands and platform evidence are in [the #63 ledger](epic61-issue-63.md). Final independent artifact review remains required before closure. These checks do not alter either empirical INCONCLUSIVE result.
 - [x] Independent review of final evidence copies and result documentation.
   Status: PASS by `review_wave0`: all four raw/launcher SHA-256 values, nonpass outcomes, interval bounds and native-exit limitation were independently checked. The subsequently added final ordinary/artifact status above awaits the final reviewers; this fixer does not self-approve it.
-- [ ] Commit, remote verification, issue closure and Telegram report.
-  Status: pending orchestrator. No additional timing runs are authorized by this ledger.
+- [x] Commit, remote verification, issue closure and Telegram report.
+  Status: complete; operational evidence below. No additional timing runs are authorized by this ledger.
+
+## Operational completion
+
+Integration commit and independently observed pushed remote HEAD: `b093dce3dcd945833dc46ac490b099970dd6507a`. GitHub independently confirmed CLOSED at `2026-09-07T16:26:44Z`. Root reports clean root/admin installs, forced compilation and eight suites/66 focused integration tests passed in 27.951 seconds. Closure is verification-method repair; the preserved FAIL/INCONCLUSIVE timing results are not relabeled as passing.
+
+Telegram title: `TDD Gate 64 상수 시간 비교 벤치마크의 결과 변동으로 전체 테스트가 간헐적으로 실패함 (61/8)`. Successful delivery message `3903` is from the orchestrator's tool receipt, not an independent Telegram fetch. The notification explicitly retained the inconclusive measurement limitation. Do not duplicate the notification.
