@@ -19,18 +19,15 @@ import * as fs from "fs";
 import * as path from "path";
 import {createTunnelHarness, TunnelHarness} from "../helpers/tunnelHarness";
 import {sleep, waitFor} from "../helpers/network";
+import {createArtifactRoot} from "../helpers/artifactRoot";
 
 jest.setTimeout(180_000);
 
-const REPORT_DIR = path.resolve(process.cwd(), "reports");
-const REPORT_FILE = path.join(REPORT_DIR, "req-09-sessions.csv");
-
-const ensureReportDir = () => {
-    try { fs.mkdirSync(REPORT_DIR, { recursive: true }); } catch { /* noop */ }
-};
+let reportArtifacts: ReturnType<typeof createArtifactRoot> | undefined;
 
 const appendCsvLine = (line: string) => {
-    ensureReportDir();
+    reportArtifacts ??= createArtifactRoot('req09-artifacts-');
+    const REPORT_FILE = path.join(reportArtifacts.root, "req-09-sessions.csv");
     if(!fs.existsSync(REPORT_FILE)) {
         fs.writeFileSync(REPORT_FILE, "case,metric,value,timestamp\n", { encoding: "utf-8" });
     }
@@ -43,6 +40,9 @@ describe("REQ-09 Pool swap / zombie sessions", () => {
     afterEach(async () => {
         try { await harness?.dispose(); } catch { /* noop */ }
         harness = undefined;
+        const artifacts = reportArtifacts;
+        reportArtifacts = undefined;
+        artifacts?.cleanup();
     });
 
     it("(1) Ctrl 50회 재연결 후 debugSessionCount 1s 내 0 수렴", async () => {

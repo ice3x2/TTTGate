@@ -13,8 +13,8 @@ import { resolve, relative, sep } from "path";
 import { mkdirSync, writeFileSync } from "fs";
 import { IdentityRegistry } from "../../../src/server/IdentityRegistry";
 import { timingSafeStringEqual } from "../../../src/util/timingSafeStringEqual";
+import {createArtifactRoot} from "../../helpers/artifactRoot";
 
-const REPORT_DIR = resolve(process.cwd(), "reports");
 const P3_T4_TARGETS = [
     "src/server/TunnelServer.ts",
     "src/server/IdentityRegistry.ts",
@@ -23,8 +23,7 @@ const P3_T4_TARGETS = [
     "src/server/admin/AdminServer.ts"
 ].map((p) => p.split("/").join(sep));
 
-function runLintScript(): any {
-    const tmpReportDir = resolve(process.cwd(), "test", ".tmp-req04-lint");
+function runLintScript(tmpReportDir: string): any {
     mkdirSync(tmpReportDir, { recursive: true });
     const res = spawnSync(
         process.execPath,
@@ -37,21 +36,23 @@ function runLintScript(): any {
 
 describe("REQ-04 상수시간 비교 전환", () => {
     it("(a) lint-auth-compare: P3-T4 대상 파일 violation 0건", () => {
-        const events = runLintScript();
+        const artifacts = createArtifactRoot('req04-artifacts-');
+        try {
+        const events = runLintScript(artifacts.root);
         const violations = events.filter((e) => e.type === "violation");
         const p3t4Violations = violations.filter((v) => {
             const normalized = String(v.file).split("/").join(sep);
             return P3_T4_TARGETS.some((t) => normalized === t || normalized.endsWith(t));
         });
         // 리포트 저장
-        mkdirSync(REPORT_DIR, { recursive: true });
-        writeFileSync(resolve(REPORT_DIR, "req-04-grep.json"), JSON.stringify({
+        writeFileSync(resolve(artifacts.root, "req-04-grep.json"), JSON.stringify({
             generatedAt: new Date().toISOString(),
             totalViolations: violations.length,
             p3t4Targets: P3_T4_TARGETS.map((p) => p.split(sep).join("/")),
             p3t4Violations
         }, null, 2), "utf-8");
         expect(p3t4Violations).toEqual([]);
+        } finally { artifacts.cleanup(); }
     });
 
     it("(b) IdentityRegistry.consumeBindingToken — clientId 상수시간, 의미론 보존", () => {
