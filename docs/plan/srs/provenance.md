@@ -1,11 +1,11 @@
 # Original SRS reference provenance
 
-Status: root-authorized immutable reference import prepared; independent byte/provenance review and commit pending. Semantic traceability mapping has not started in this scope.
+Status: immutable import byte/provenance reviewed PASS by two independent reviewers and committed/pushed as bb500d05800639bedaa2d813ffc9d16abad239e7 (root89b90c). Checkout-byte preservation correction now awaits independent review; semantic traceability mapping remains unexecuted.
 
 - [x] Locate and independently review original reference inventory. Status: original366 records/366 unique IDs reviewed; all occur in final Markdown.
 - [x] Copy approved source bytes into durable integration paths. Status: new byte copies created without altering original workspace; hashes below were checked before copying. Existing differing targets would be preserved rather than overwritten.
-- [ ] Independently verify imported bytes and provenance. Status: pending separate reviewer.
-- [ ] Commit immutable references after review. Status: root-owned, not performed by importer.
+- [x] Independently verify imported bytes and provenance. Status: root confirmed two independent byte/provenance reviews PASS; both source hashes preserved.
+- [x] Commit immutable references after review. Status: root committed/pushed bb500d05800639bedaa2d813ffc9d16abad239e7, verified89b90c.
 - [ ] Build/review all366 semantic trace rows. Status: not assigned or executed by this import.
 
 | Imported path | Original absolute path | SHA256 |
@@ -31,3 +31,5 @@ Do not normalize or edit them to fit current code. Any future source revision ne
 an explicitly versioned reference and reviewed provenance. This import establishes
 a portable reference only, not verified implementation, test coverage or completed
 trace links. Original workspace files remain unchanged.
+
+- [ ] Independently review checkout-byte preservation. Status: actual fresh Git core.autocrlf=true checkout initially changed both hashes; exact-path -text attributes restored both original hashes in new owned output. Details and RED/GREEN receipts in research58; no original/imported source bytes changed. Attribute correction commit remains root-owned/pending.
