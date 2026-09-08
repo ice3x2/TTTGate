@@ -1,6 +1,6 @@
 # Issue #35 — Preserve committed and applied state after failed changes
 
-Status: independent fixer addressed four reviewed defects after fresh RED; five recovery suites/29 tests, forced build and two independent rereviews passed. Root authorized the eleven-file scoped commit.
+Status: complete; source `2cdc902`, integration `0f83a90fbc178225dd4fdf015e2166a73639bd2b` pushed and remote verified; GitHub CLOSED 2026-09-08T01:15:29Z; Telegram receipt 3953 (66/32). Integrated six suites/43 tests passed in 167.364 seconds, natural exit 0.
 Original title: 설정 커밋 실패 시 런타임 롤백이 없어 메모리·디스크·런타임 상태가 어긋남.
 Owner: `fix_supply15`; branch `fix/epic61-configuration-rollback`;
 worktree: `C:/Work/git/_Snoworca/TTTGate-epic61-listeners`; base `f65184a`.
@@ -13,9 +13,9 @@ release/manifests or original dirty workspace changes.
 - [x] Read approved design and source/reuse boundaries. Status: shared SOS queue, certificate preparation, runtime apply and atomic file helpers inspected; actual restoration is absent.
 - [x] Write/reproduce stage, partial publication, revision metadata, runtime and recovery failure RED. Status: recorded below; real-file/runtime tests use explicitly labeled fault boundaries for deterministic failure positions.
 - [x] Reproduce currentRevision != actual scope LKG failure recovery and unrelated-pending success preservation. Status: RED recorded and GREEN; acknowledged committed config/certificate candidates and pendingRestartScopes preserved.
-- [x] Implement minimum staging/publication and complete baseline restoration. Status: code frozen after targeted GREEN; batched stage/publication, committed/runtime snapshots, pending preservation and explicit failed restoration implemented. Independent review and broader regression remain required.
-- [ ] Run focused regression, build and two independent reviews. Status: pending implementation.
-- [ ] Reviewed commit/root integration/push/closure. Status: pending.
+- [x] Implement minimum staging/publication and complete baseline restoration. Status: code frozen after targeted GREEN; batched stage/publication, committed/runtime snapshots, pending preservation and explicit failed restoration implemented. Independent reviews and broader regression subsequently passed; completion receipt below.
+- [x] Run focused regression, build and two independent reviews. Status: completed; independent rereviews PASS and integrated six suites/43 tests PASS; latest main forced build PASS.
+- [x] Commit/integration/push/closure/notification. Status: complete; source `2cdc902`, integration `0f83a90fbc178225dd4fdf015e2166a73639bd2b` pushed and remote verified; GitHub CLOSED 2026-09-08T01:15:29Z; Telegram receipt 3953 (66/32). Integrated six suites/43 tests passed in 167.364 seconds, natural exit 0.
 
 Snapshot contract: one queue-protected baseline includes committed option/cert
 values, file bytes/existence, current revision and pending metadata, plus actual
@@ -130,3 +130,7 @@ ID/name ACLs, delegated real-filesystem fault positions, and actual listener
 stop followed by a declared false-result fault. Fault injection is disclosed;
 no mock-free claim. Cleanup restores injected methods in finally and closes
 owned clients/listeners. No pool/HTTP/#71 frontend source changes are allowed.
+
+## Current completion checkpoint
+
+Status: complete; source `2cdc902`, integration `0f83a90fbc178225dd4fdf015e2166a73639bd2b` pushed and remote verified; GitHub CLOSED 2026-09-08T01:15:29Z; Telegram receipt 3953 (66/32). Integrated six suites/43 tests passed in 167.364 seconds, natural exit 0. Main forced build passed at that recorded checkpoint. Earlier author/fixer assignments, pending handoffs and run receipts above are historical evidence. The recorded epic count at that operational checkpoint was 33/66; this issue has no remaining completion gate. The epic, #28 policy decision and other open issues remain unfinished.

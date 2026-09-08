@@ -1,12 +1,12 @@
 # Issue #71 discovery: stale TLS edit certificate conflict
 
-Status: OPEN; design approved after two independent rereviews and root checkpoint. Current order is #35 -> #71. `fix_supply15` is assigned #35 implementation on `fix/epic61-configuration-rollback`, base `f65184a`, in the listeners worktree; #71 implementation waits for reviewed #35 integration. Historical discovery/design branches below are evidence only.
+Status: COMPLETE; complete; source `5ec1e801dea6084352f524c61e6160b0082ca114`, integration `6aa3abd21aa7d1361f8b615137e88e847958bbb8` pushed and remote verified; GitHub CLOSED 2026-09-08T02:28:27Z; Telegram receipt 3961 (66/34). Integrated seven suites/44 tests passed in 283.824 seconds with natural exit 0; forced build passed. Historical discovery/design branches below remain evidence only.
 
 - [x] Preserve the actual discovery and independent classification. Status: complete; author-observed RED handle 45527, exit 1 in 13.722 seconds; earlier fixture failures are not functional RED.
 - [x] Register issue #71 in the administrator sequence and inventory. Status: recorded; initial order was amended after approved design review to #34 -> #35 -> #71 -> #36 -> #38, same owner serially.
-- [x] Approve compound-save design and exact write ownership. Status: both independent rereviews and root checkpoint passed; #35 foundation is assigned first at `f65184a`, and #71 compound implementation follows its reviewed integration. See `epic61-issue-71.md` and the main execution plan for the approved baseline-tuple contract.
-- [ ] Reconfirm preserved regression RED, implement and verify. Status: pending reviewed #35 integration; retain the assertion, then restore ordinary test collection when implementation begins.
-- [ ] Independent review, integration, push, closure and notification. Status: pending.
+- [x] Approve compound-save design and exact write ownership. Status: both independent rereviews and root checkpoint passed; #35 foundation was assigned first at `f65184a` and subsequently integrated. Initial #71 implementation was assigned to `fix_ci14`; current progress is tracked in `epic61-issue-71.md` and the main execution plan.
+- [x] Reconfirm preserved regression RED, implement and verify. Status: ordinary test restored, real browser RED and implementation/API/runtime/fixer regressions completed; see issue-71 ledger for exact receipts.
+- [x] Independent review, integration, push, closure and notification. Status: complete; source `5ec1e801dea6084352f524c61e6160b0082ca114`, integration `6aa3abd21aa7d1361f8b615137e88e847958bbb8` pushed and remote verified; GitHub CLOSED 2026-09-08T02:28:27Z; Telegram receipt 3961 (66/34). Integrated seven suites/44 tests passed in 283.824 seconds with natural exit 0; forced build passed.
 
 ## Evidence and limits
 
@@ -56,4 +56,8 @@ Subsequent #70 closure: GitHub CLOSED at 2026-09-07T23:16:53Z; root remote integ
 
 Subsequent #34 closure: source 04dec2c, integration 6a9472906134275314eb7838066ef0c2e04f2e61, GitHub CLOSED 2026-09-07T23:27:24Z, Telegram receipt 3936 (66/28). At that receipt, 66 issues were tracked and 28 completed. Historical registration and #70 counts above remain preserved.
 
-Current checkpoint after #69 closure: 66 tracked issues, 30 completed. #71 remains OPEN and implementation follows approved #35 foundation integration. Earlier receipt counts and quoted original issue text are historical evidence, not active assignment instructions.
+Historical checkpoint at #69 closure: 66 tracked issues, 30 completed. At that checkpoint #35 remained a prerequisite for #71. Earlier receipt counts and quoted original issue text are historical evidence, not active assignment instructions.
+
+Historical checkpoint after #11/#35/#12 closures: 33/66 complete. #71 implementation was then assigned; current execution and completion are recorded in the main plan and issue ledger.
+
+Current checkpoint: #71 completed; 34/66 issues complete. #36 follows on listeners fix/epic61-certificate-paths@6aa3abd. Earlier OPEN/assignment/receipt counts in quoted issue text and dated checkpoints are historical. #29 remains held after platform safety rejection, without pool edits or bypass attempts.

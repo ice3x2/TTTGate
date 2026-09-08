@@ -1,6 +1,6 @@
 # Issue #11 — Independent HTTP directions
 
-Status: both independent final rereviews PASS after separate-fixer repairs; root authorized the scoped HTTP commit. Integration/push/closure remain root-owned.
+Status: complete; source `9a15f5a`, integration `31f61313c3271916f7c3a4a3392419999a4fe01f` pushed and remote verified; GitHub CLOSED 2026-09-08T00:58:39Z; Telegram receipt 3950 (66/31). Integrated six suites/56 tests passed in 1.852 seconds, natural exit 0.
 Original title: 요청과 응답이 하나의 HttpPipe 를 공유해 응답 본문에 다음 요청의 바이트가 섞임.
 Owner fix_ci14; worktree C:/Work/git/_Snoworca/TTTGate-epic61-ui;
 branch fix/epic61-http-directions; baseline 9007917.
@@ -12,7 +12,7 @@ administrator #35/#71 files remain read-only; #12 onward is not assigned yet.
 - [x] Observe real duplex/body/early-response/context-tail/128-limit RED. Status: `node node_modules/jest/bin/jest.js --runInBand --silent --runTestsByPath test/component/http-directions.test.ts` handle 72729 exited 1 naturally: all nine tests failed in 18.826 seconds before production edits. Actual upstream barriers show next requests/uploads/tails do not arrive or responses fail to complete; the baseline's shared parser prevents the later queue-limit checkpoints too. These are test failures, not timeout-as-success claims.
 - [x] Minimal independent parser/context implementation and focused GREEN. Status: independent request/response pipes, immutable header-time FIFO (128), interim context retention, final-response slot release and tail-preserving same-direction reset implemented. Overflow logs and destroys without forwarding the 129th request or writing an out-of-order HTTP response. All 11 real-socket cases plus existing HTTP/security regressions passed: six suites/53 tests, 1.276s, natural exit 0. `npm run build -- --force` also exited 0.
 - [x] Independent code/behavior/title reviews and regression checkpoint. Status: final review_cert_conflict and review_wave0 PASS; exact title approved and objective results below.
-- [ ] Commit/integration/remote closure. Status: scoped commit authorized; root owns integration/push/closure.
+- [x] Commit/integration/push/closure/notification. Status: complete; source `9a15f5a`, integration `31f61313c3271916f7c3a4a3392419999a4fe01f` pushed and remote verified; GitHub CLOSED 2026-09-08T00:58:39Z; Telegram receipt 3950 (66/31). Integrated six suites/56 tests passed in 1.852 seconds, natural exit 0.
 
 Approved policy: immutable request metadata captured at valid headers before
 upstream forwarding, 1xx retains FIFO context, final responses consume contexts;
@@ -91,3 +91,7 @@ review_wave0 ran all 14 in 1.119 seconds, each with natural exit 0. Both MEDIUM
 findings are resolved. Root authorized committing the original author changes and
 the separate fixer's repairs together under `fix: HTTP 요청과 응답 파서 및 대기 문맥 분리`.
 No #35 files belong to this commit; that lane is now being revised by fix_ci14.
+
+## Current completion checkpoint
+
+Status: complete; source `9a15f5a`, integration `31f61313c3271916f7c3a4a3392419999a4fe01f` pushed and remote verified; GitHub CLOSED 2026-09-08T00:58:39Z; Telegram receipt 3950 (66/31). Integrated six suites/56 tests passed in 1.852 seconds, natural exit 0. Main forced build passed at that recorded checkpoint. Earlier author/fixer assignments, pending handoffs and run receipts above are historical evidence. The recorded epic count at that operational checkpoint was 33/66; this issue has no remaining completion gate. The epic, #28 policy decision and other open issues remain unfinished.

@@ -1,6 +1,6 @@
 # Discovery #69
 
-Status: independently reproduced and draft reviewed; root created [issue #69](https://github.com/ice3x2/TTTGate/issues/69), currently OPEN. Implementation follows the serialized release plan.
+Status: independently reproduced and draft reviewed; root created [issue #69](https://github.com/ice3x2/TTTGate/issues/69), subsequently completed and closed. Its completion evidence is in `epic61-issue-69.md`; the reproduction below records the original defect.
 
 ## Observation and reproduction
 

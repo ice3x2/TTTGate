@@ -1,6 +1,6 @@
 # Issue #71 — Compound TLS edit consistency
 
-Status: both independent final rereviews PASS after separate-fixer repairs; root authorized the scoped #71 commit. Integration/push/closure remain root-owned.
+Status: complete; source `5ec1e801dea6084352f524c61e6160b0082ca114`, integration `6aa3abd21aa7d1361f8b615137e88e847958bbb8` pushed and remote verified; GitHub CLOSED 2026-09-08T02:28:27Z; Telegram receipt 3961 (66/34). Integrated seven suites/44 tests passed in 283.824 seconds with natural exit 0; forced build passed.
 Original title: 오래된 TLS 편집본이 설정 충돌 전에 인증서를 변경함.
 Implementation owner: `fix_ci14`; original design/repro author: `fix_supply15`.
 Branch `fix/epic61-compound-tls-save`; worktree
@@ -19,7 +19,7 @@ the original sequencing, not current implementation authorization limits.
 - [x] Latest backend regression/build. Status: handle 50502 exited 0 naturally, seven suites/60 tests passed in 351.759s, then forced build passed. Includes all 26 compound cases, #35 configuration/certificate/fixer rollback, publication, #34 revision and legacy apply tests.
 - [x] Final affected controls. Status: handle 65471 exited 0 naturally, proxy/admission/real TLS hot-swap three suites/eight tests passed in 21.073s. Same-row stale no-op, config-only certificate-revision preservation and queue release after invalid preparation are explicit passing controls.
 - [x] Two independent reviews. Status: review_cert_conflict and review_wave0 final rereviews PASS; receipts below.
-- [ ] Scoped commit/root integration/push/closure. Status: root authorized the complete reviewed #71 commit; remote operations pending.
+- [x] Scoped commit/root integration/push/closure/notification. Status: complete; source `5ec1e801dea6084352f524c61e6160b0082ca114`, integration `6aa3abd21aa7d1361f8b615137e88e847958bbb8` pushed and remote verified; GitHub CLOSED 2026-09-08T02:28:27Z; Telegram receipt 3961 (66/34). Integrated seven suites/44 tests passed in 283.824 seconds with natural exit 0; forced build passed.
 
 Known evidence: the preserved browser repro records certificate POST 200 followed
 by configuration POST 409 and directly asserts the in-memory certificate value.
@@ -260,12 +260,9 @@ The original dirty workspace remains untouched.
 - [x] Malformed/mismatched PEM/CA and busy-port controls. Status: invalid certificate paths reject without state change; wildcard busy-port control passes without unrelated availability changes.
 - [x] #35 stage/publication/metadata/runtime/recovery foundation and compound failure tests. Status: #35 is integrated; compound tests reuse its real-file fault boundary and separately cover runtime return failure, thrown apply and failed restoration.
 - [x] Latest browser/security controls. Status: backend 60 tests/forced build, restored browser/editor/CSRF 12 tests, and proxy/admission/TLS eight tests passed; no ordinary suite was weakened or left opt-in.
-- [ ] Two independent implementation reviews. Status: pending root assignment/results.
+- [x] Two independent implementation reviews. Status: both final rereviews PASS; completion receipt and original reviewer/fixer evidence retained.
 
-Current next action: obtain two independent reviews of the frozen implementation
-and evidence. The
-original design-only phase performed no production edits/heavy tests; the current
-implementation receipts are recorded separately below.
+Current next action: #71 has no remaining completion gate. Root assigned #36 to `fix_supply15` in listeners on `fix/epic61-certificate-paths` at `6aa3abd`. The original design-only phase performed no production edits/heavy tests; subsequent implementation receipts remain separate below.
 
 ### #35 failure-test inputs and expected state
 
@@ -404,3 +401,11 @@ Approved title: `fix: TLS 설정과 인증서를 한 번의 저장으로 일관�
 The scoped status contains 18 paths: ten modified paths, six new files and the old
 and new paths of the restored repro. Git rename detection represents these as
 17 logical changed files. No HTTP #29 file is included.
+
+## Root completion and historical handoff preservation
+
+Status: complete; source `5ec1e801dea6084352f524c61e6160b0082ca114`, integration `6aa3abd21aa7d1361f8b615137e88e847958bbb8`, CLOSED 2026-09-08T02:28:27Z, Telegram receipt 3961 (66/34). Root integration seven suites/44 tests passed in 283.824 seconds with natural exit 0; forced build passed. Current epic count is 34/66; #28 policy and the whole epic remain unfinished.
+
+The pre-integration operations backup retained the original design branch `fix/epic61-certificate-transaction`, base `6a94729`, design author `fix_supply15`, in the same listeners worktree. Preserve these as historical design identity. The approved #35 -> #71 sequence, #35 integration `0f83a90`, subsequent #71 implementation assignment to `fix_ci14`, restored ordinary reproduction and required fresh RED are retained in this ledger's design and implementation receipts. Backup pending statuses are superseded by the recorded implementation/review/closure evidence; they are not outstanding gates. Independent fixer `fix_supply15` and original implementation author `fix_ci14` remain distinct.
+
+#36 is now assigned to `fix_supply15` on listeners `fix/epic61-certificate-paths@6aa3abd`. The separate #29 consumer-integration action is held after its platform terminal safety rejection (possible cybersecurity risk), with no pool edit; preserve partial HTTP/tests and await platform resolution without alternate-agent/tool bypass.

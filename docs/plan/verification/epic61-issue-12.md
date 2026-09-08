@@ -1,6 +1,6 @@
 # Issue #12 — Complete chunked message boundaries
 
-Status: both independent final reviews PASS, including independent test strengthening; root authorized the three-file commit. Remote integration/closure remain root-owned.
+Status: complete; source `bf67b9e`, integration `494d72fcb19fcf5df6d2c1621d7d3dc09257e6d7` pushed and remote verified; GitHub CLOSED 2026-09-08T01:28:18Z; Telegram receipt 3955 (66/33). Integrated seven suites/66 tests passed in 1.705 seconds, natural exit 0.
 Original title: chunked 응답의 종료 CRLF 가 하류로 전달되지 않아 클라이언트가 무한 대기함.
 Owner: `fix_supply15`; branch `fix/epic61-http-chunk-boundary`;
 worktree: `C:/Work/git/_Snoworca/TTTGate-epic61-ui`; base `31f6131`.
@@ -11,7 +11,7 @@ HTTP tests and this ledger. #29 EOF consumer/pool/types/wire and #35 are exclude
 - [x] Add and observe byte-exact RED for zero-size end, trailers, payload/CRLF and terminator splits. Status: six tests failed naturally before implementation; exact results below.
 - [x] Implement minimum boundary handling without weakening framing rejection. Status: only HttpPipe changed; hold payload until its full CRLF, forward raw terminal CRLF/trailers after existing validation.
 - [x] Run #11 duplex/upgrade/128 and smuggling/CRLF/chunk regressions, forced build and two independent reviews. Status: regression/build and both final reviews passed; independent test addition and receipts below.
-- [ ] Authorized commit/root integration/push/closure. Status: root authorized the scoped commit; integration/push/closure pending.
+- [x] Commit/integration/push/closure/notification. Status: complete; source `bf67b9e`, integration `494d72fcb19fcf5df6d2c1621d7d3dc09257e6d7` pushed and remote verified; GitHub CLOSED 2026-09-08T01:28:18Z; Telegram receipt 3955 (66/33). Integrated seven suites/66 tests passed in 1.705 seconds, natural exit 0.
 
 Reuse findings: HttpPipe.readChunkedTrailer consumes the final CRLF/trailer block
 without its raw onData callback. readChunkedData removes payload before confirming
@@ -75,3 +75,7 @@ the selected completion case: one test passed in 0.344 seconds, natural exit 0.
 Both final code/content/title reviews PASS; root authorized this three-file commit
 including the independent test fixer fix_ci14's addition. No #29 implementation or
 push is authorized by this checkpoint.
+
+## Current completion checkpoint
+
+Status: complete; source `bf67b9e`, integration `494d72fcb19fcf5df6d2c1621d7d3dc09257e6d7` pushed and remote verified; GitHub CLOSED 2026-09-08T01:28:18Z; Telegram receipt 3955 (66/33). Integrated seven suites/66 tests passed in 1.705 seconds, natural exit 0. Main forced build passed at that recorded checkpoint. Earlier author/fixer assignments, pending handoffs and run receipts above are historical evidence. The recorded epic count at that operational checkpoint was 33/66; this issue has no remaining completion gate. The epic, #28 policy decision and other open issues remain unfinished.
