@@ -62,14 +62,14 @@ class DataStatePacket {
     public static fromBuffer(buffer: Buffer, format: "legacy" | "token") : {
         packet: DataStatePacket | undefined, remainBuffer: Buffer | undefined, error?: string
     } {
-        if(format !== "legacy" && format !== "token")
+        if(format !== "legacy" && format !== "token") // lint-auth-compare-allow: public wire-format discriminator, not a credential comparison.
             return {packet: undefined, remainBuffer: undefined, error: "An explicit data-state format is required"};
         const header = this.readFixedHeader(buffer);
         if(header.kind === "incomplete") return {packet: undefined, remainBuffer: buffer};
         if(header.kind === "invalid") return {packet: undefined, remainBuffer: undefined, error: header.reason};
         let frameLength = DataStatePacket.LENGTH;
         let token: string | undefined;
-        if(format === "token") {
+        if(format === "token") { // lint-auth-compare-allow: public wire-format discriminator, not a credential comparison.
             if(buffer.length < frameLength + 2) return {packet: undefined, remainBuffer: buffer};
             const tokenLength = buffer.readUInt16BE(frameLength);
             frameLength += 2 + tokenLength;
