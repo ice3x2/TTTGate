@@ -1,6 +1,6 @@
 # Issue #38 — Completed administrator route responses
 
-Status: implementation/regression/build and both independent reviews passed; source frozen, root commit authorization pending.
+Status: complete; source 587084f, integration 7c765a79f53d515964cc50e1e2d37c24b1d0b1d2 pushed and remote verified; GitHub CLOSED 2026-09-08T03:28:27Z, comment 5578661954; root Telegram receipt 3965 (66/37). Integrated seven suites/36 tests PASS in 81.458 seconds, natural exit 0; forced build PASS.
 Original title: 매칭되지 않는 POST 와 DELETE 요청에 아무 응답도 반환하지 않음.
 Owner: `fix_supply15`; branch `fix/epic61-admin-routes`; worktree
 `C:/Work/git/_Snoworca/TTTGate-epic61-listeners`; base `7a79df4`.
@@ -10,7 +10,7 @@ Writable: AdminServer.ts, dedicated route tests and this ledger only.
 - [x] Observe real HTTP RED for unmatched mutation routes and query login/routing. Status: five tests failed before source edits; receipt below.
 - [x] Use one pathname extraction for guard/routing/numeric paths; finish unmatched routes with 404. Status: shared query stripping used without changing req.url, decoding or parseInt policy; unmatched POST/PUT/DELETE use existing failure envelopes.
 - [x] Verify security rejection and #71 compound/#36 filename regressions; forced build/two reviews. Status: seven suites/36 tests and forced build passed; review_wave0 and review_cert_conflict final code/content/title reviews PASS with zero findings.
-- [ ] Root-authorized commit/integration/push/closure. Status: pending.
+- [x] Root-authorized commit/integration/push/closure/notification. Status: complete; source 587084f, integration 7c765a79f53d515964cc50e1e2d37c24b1d0b1d2 pushed and remote verified; GitHub CLOSED 2026-09-08T03:28:27Z, comment 5578661954; root Telegram receipt 3965 (66/37). Integrated seven suites/36 tests PASS in 81.458 seconds, natural exit 0; forced build PASS.
 
 Reuse: normalizeAssetUrl already strips query using string operations. Extract
 that bounded operation for routing, the exact login guard exception and numeric
@@ -68,3 +68,8 @@ Root relayed review_cert_conflict's final independent result: zero Critical/High
 Medium/Low findings and code/content/exact-title PASS. That reviewer performed
 read-only review without a separate test rerun; no extra execution is claimed.
 Both independent reviews are complete; root owns commit/integration and closure.
+
+## Operational completion
+
+Status: complete; source 587084f, integration 7c765a79f53d515964cc50e1e2d37c24b1d0b1d2 pushed and remote verified; GitHub CLOSED 2026-09-08T03:28:27Z, comment 5578661954; root Telegram receipt 3965 (66/37). Integrated seven suites/36 tests PASS in 81.458 seconds, natural exit 0; forced build PASS.
+Current epic count is 37/66. These operational receipts were supplied by root. Earlier pending authorization/handoff and execution statements are historical; this issue has no outstanding completion gate. #37 follows under separate assignment; #28/#29 and the whole epic remain unresolved.

@@ -212,7 +212,7 @@
   {
     "body": "## 요약\r\n\r\n핸들러 식별자 카운터가 순환 없이 단조 증가하는데 전송 시 16비트로 절단됩니다. 메타를 해석하지 않는 v1 클라이언트에서는 절단된 값이 되돌아와 대조가 실패합니다.\r\n\r\n## 근거\r\n\r\n- `src/server/ClientHandlerPool.ts:34` — 카운터가 10000 에서 시작합니다.\r\n- `src/server/ClientHandlerPool.ts:296` — 순환 없이 단조 증가합니다.\r\n- `src/commons/CtrlPacket.ts:352` — 전송 시 16비트로 기록합니다.\r\n- `src/server/ClientHandlerPool.ts:368`, `:121-127` — 대조 지점.\r\n\r\n## 재현과 영향\r\n\r\nlegacy 인증을 허용한 서버에 v1 클라이언트가 붙고 누적 세션 수가 55535 를 넘으면 재현됩니다. 절단된 식별자 때문에 대기 세션 탐색과 승격 대조가 모두 실패하여, 해당 클라이언트의 모든 신규 세션이 열리지 않습니다. 서버 재시작 전까지 복구되지 않습니다.\r\n\r\n## 권고\r\n\r\n카운터를 16비트 범위 안에서 순환시키고 사용 중인 값을 회피하거나, 프로토콜 협상 결과에 따라 wide 식별자 사용을 강제합니다.\r\n\r\n## 검증 상태\r\n\r\n- 기존 테스트 커버: 없음. `test/component/server/ProtocolV2.test.ts:320` 은 v2 양단 조합만 검증하며 v1 과 v2 혼재는 다루지 않습니다.\r\n- 도입 시점: 신규. wide 식별자 메타가 개선 작업에서 도입되었습니다.\r\n- 확인 방법: 코드 확인.\r\n\r\n---\r\n근거 문서: `docs/research/2026-09-05-tttgate-full-inspection.md` §5.24",
     "number": 41,
-    "state": "OPEN",
+    "state": "CLOSED",
     "title": "v1 클라이언트가 붙은 서버는 누적 세션 55535개 이후 모든 신규 세션이 실패함",
     "url": "https://github.com/ice3x2/TTTGate/issues/41"
   },
@@ -233,7 +233,7 @@
   {
     "body": "## 요약\r\n\r\n메서드별 라우팅에서 404 폴백이 GET 경로에만 있습니다. 존재하지 않는 POST 나 DELETE 경로를 호출하면 응답이 오지 않습니다.\r\n\r\n## 근거\r\n\r\n- `src/server/admin/AdminServer.ts:167-178` — 각 메서드 핸들러 호출 후 즉시 반환합니다.\r\n- `src/server/admin/AdminServer.ts:221-238` — POST 라우팅에 폴백이 없습니다.\r\n- `src/server/admin/AdminServer.ts:209-217` — DELETE 라우팅에 폴백이 없습니다.\r\n- `src/server/admin/AdminServer.ts:284-286` — 404 폴백이 GET 경로에만 존재합니다.\r\n- `src/server/admin/AdminServer.ts:158` — 정확 일치 비교 때문에 질의 문자열이 붙은 로그인 경로도 분기에 걸리지 않습니다.\r\n\r\n## 재현과 영향\r\n\r\n존재하지 않는 POST 경로를 호출하면 재현됩니다. 감사 과정에서 동일 구조의 재현 서버로 확인한 결과, 응답이 전혀 오지 않고 10초 뒤 연결이 초기화되었습니다. 클라이언트는 오류 종류를 구분할 수 없고 그동안 소켓이 점유됩니다.\r\n\r\n## 권고\r\n\r\nPOST 와 DELETE 라우팅 말미에 404 폴백을 추가합니다.\r\n\r\n## 검증 상태\r\n\r\n- 기존 테스트 커버: 없음. `test/component/server/admin/AdminServer.security.test.ts:38` 은 GET 경로만 검증합니다.\r\n- 도입 시점: 기존. 배포본 `1.0.11b` 의 `routePost` 와 `routeDelete` 에도 폴백이 없고 구조가 동일합니다.\r\n- 확인 방법: 실행 재현 및 배포본 커밋 대조.\r\n\r\n---\r\n근거 문서: `docs/research/2026-09-05-tttgate-full-inspection.md` §5.21",
     "number": 38,
-    "state": "OPEN",
+    "state": "CLOSED",
     "title": "매칭되지 않는 POST 와 DELETE 요청에 아무 응답도 반환하지 않음",
     "url": "https://github.com/ice3x2/TTTGate/issues/38"
   },

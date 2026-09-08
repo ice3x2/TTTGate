@@ -1,13 +1,13 @@
 # Issue #41 — Legacy handler identifier research
 
-Status: research independently rereviewed PASS by review_cert_conflict and approved by root. Assigned to review_cert_conflict in C:/Work/git/_Snoworca/TTTGate-epic61-control, branch fix/epic61-legacy-handler-ids, base 7a79df4. This document records no implementation or executed test evidence.
+Status: implementation and all per-issue gates complete; source 94875b3, integration b6dbf014745a97b6a85805d1691abab5e9de4e50 pushed and remote verified; GitHub CLOSED 2026-09-08T03:34:05Z, comment 5578706583; root Telegram receipt 3966 (66/38). Integrated three suites/13 tests PASS in 42.105 seconds, natural exit 0; forced build PASS. The research below preserves its original design and proposed RED contract.
 Researcher: review_wave0; integration workspace only. Original: https://github.com/ice3x2/TTTGate/issues/41.
 
 - [x] Read original issue and current allocation/consumer/protocol paths. Status: complete; anchors below.
 - [x] Examine reuse, ownership and separate policy boundaries. Status: recommendation below; no implementation authorization implied.
 - [x] Independently review allocation/lifetime design and approve exact scope. Status: review_cert_conflict rereview PASS after mandatory dual-identity correction; root approved the bounded #41 lane.
-- [ ] Create dedicated branch/ledger and execute consumer RED before implementation. Status: root created and assigned the branch/worktree above; owner must freeze exhaustion's existing caller-failure contract in ledger41 and observe required RED before production changes.
-- [ ] Implement, run compatibility/lifecycle regressions, independently review and integrate. Status: pending RED and assignment.
+- [x] Create dedicated branch/ledger and execute consumer RED before implementation. Status: completed; actual RED evidence in epic61-issue-41.md.
+- [x] Implement, run compatibility/lifecycle regressions, independently review and integrate. Status: completed; two independent reviews and closure evidence in epic61-issue-41.md.
 
 ## Observed contract
 
@@ -111,3 +111,5 @@ new legacy deprecation decision. Requiring v2, narrowing v2 IDs, introducing a n
 wire field or changing authentication would require explicit policy approval and
 is not recommended here. Exhaustion behavior must be frozen in the implementation
 ledger as bounded resource failure before RED, not silently inferred after coding.
+
+Current completion checkpoint: 38/66. Earlier assignment/RED-pending wording describes the approved research phase, not unfinished #41 work. Successors remain subject to independent design approval.

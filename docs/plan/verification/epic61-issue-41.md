@@ -1,6 +1,6 @@
 # Issue #41 — Legacy IDs and data-socket identity
 
-Status: implementation, locked-dependency compatibility/resource regressions, forced build and both independent reviews passed; source frozen. Root commit authorization pending.
+Status: complete; source 94875b3, integration b6dbf014745a97b6a85805d1691abab5e9de4e50 pushed and remote verified; GitHub CLOSED 2026-09-08T03:34:05Z, comment 5578706583; root Telegram receipt 3966 (66/38). Integrated three suites/13 tests PASS in 42.105 seconds, natural exit 0; forced build PASS.
 Owner review_cert_conflict; worktree `C:/Work/git/_Snoworca/TTTGate-epic61-control`,
 branch `fix/epic61-legacy-handler-ids`, base `7a79df4`.
 Root approved main `epic61-issue-41-research.md` and recorded exclusive ownership.
@@ -104,3 +104,8 @@ cancelled-session and mixed legacy/v2 cases: handle 17413 exited 0 naturally,
 two tests passed and three were filtered out, 8.581 seconds. This is selected
 verification, not a second full thirteen-test run. Root owns subsequent commit,
 integration, push, closure and notification.
+
+## Operational completion
+
+- [x] Commit/integration/push/closure/notification. Status: complete; source 94875b3, integration b6dbf014745a97b6a85805d1691abab5e9de4e50 pushed and remote verified; GitHub CLOSED 2026-09-08T03:34:05Z, comment 5578706583; root Telegram receipt 3966 (66/38). Integrated three suites/13 tests PASS in 42.105 seconds, natural exit 0; forced build PASS.
+Current epic count is 38/66. Root supplied these operational receipts. Earlier authorization-pending statements and reviewer/author execution records remain historical. No remaining completion gate exists for #41; #37 continues under separate assignment, #28/#29 remain unresolved and the epic is incomplete.
