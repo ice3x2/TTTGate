@@ -141,6 +141,7 @@ class AdminServer {
     private async route(req: IncomingMessage, res: ServerResponse)  {
         let url = req.url;
         url = url == undefined ? "" : url;
+        const pathname = this.pathname(url);
         let method = req.method;
         try {
            // P5-T3 / REQ-11: 요청 단위 idle timeout.
@@ -156,25 +157,25 @@ class AdminServer {
            if(method === 'POST' || method === 'PUT' || method === 'DELETE') {
                // /api/login 은 CSRF 토큰 발급 전 호출 가능해야 하므로 헤더 검증은 스킵하되,
                // Origin(존재 시)은 여전히 화이트리스트 강제.
-               const skipCsrfHeader = (url == '/api/login');
+               const skipCsrfHeader = (pathname == '/api/login');
                if(!this.verifyCsrfGuard(req, res, skipCsrfHeader)) {
                    return;
                }
            }
            if (method == 'GET') {
-                await this.routeGet(req, res, url);
+                await this.routeGet(req, res, pathname);
                 return;
            }
            else if(method == 'POST') {
-                await this.routePost(req, res, url);
+                await this.routePost(req, res, pathname);
                 return;
            }
            else if(method == 'PUT') {
-                await this.routePost(req, res, url);
+                await this.routePost(req, res, pathname);
                 return;
            }
            else if(method == 'DELETE') {
-               await this.routeDelete(req, res, url);
+               await this.routeDelete(req, res, pathname);
                return;
            }
 
@@ -217,6 +218,7 @@ class AdminServer {
             await this.onDeleteExternalServerCert(req, res);
             return;
         }
+        this.sendApiFailure(res, 404, {message: `Not Found ${url}`});
     }
 
 
@@ -237,6 +239,8 @@ class AdminServer {
         } else if (url.startsWith("/api/tunneling/active/")) {
             await this.onActiveTunneling(req, res);
             return;
+        } else {
+            this.sendApiFailure(res, 404, {message: `Not Found ${url}`});
         }
     }
 
@@ -859,7 +863,7 @@ class AdminServer {
         if(!await this.checkSession(req, res)) {
             return undefined;
         }
-        let numStr = req.url?.substring(pathStart.length);
+        let numStr = this.pathname(req.url).substring(pathStart.length);
         let num = numStr == undefined ? undefined : parseInt(numStr);
         if(num == undefined || isNaN(num)) {
             this.sendApiFailure(res, 400, {message:errorMessage});
@@ -1330,8 +1334,12 @@ class AdminServer {
         this.sendApiEnvelope(res, statusCode, {success: false, ...payload});
     }
 
+    private pathname(url: string = ''): string {
+        return url.split('?')[0];
+    }
+
     private normalizeAssetUrl(url: string): string | undefined {
-        const pathOnly = url.split("?")[0];
+        const pathOnly = this.pathname(url);
         const defaultPath = pathOnly.length == 0 || pathOnly == "/" ? "/index.html" : pathOnly;
         try {
             return decodeURIComponent(defaultPath);
