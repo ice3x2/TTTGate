@@ -1,6 +1,6 @@
 # Issue #43 — Decode the negotiated data-handshake format
 
-Status: implementation and test-only M1 coverage follow-up complete; both final independent rereviews PASS. Source/tests frozen; root commit authorization and integration pending.
+Status: complete; source a1edfa5, integration f2400463f7c2cb0fd31e4030418101c7fd813cfd pushed and remote verified; GitHub CLOSED 2026-09-08T04:16:24Z, comment 5579102771; root Telegram receipt 3971 (66/40). Integrated eight suites/50 tests PASS in 69.895 seconds, natural exit 0; forced build PASS.
 Owner review_cert_conflict; control worktree `fix/epic61-data-handshake-framing`,
 base `0ca13992dadc8bc124f65230e866c5470eefbd23`.
 Root-approved API/research: main `epic61-data-handshake-research.md`.
@@ -163,3 +163,8 @@ pre-follow-up record. No production change or additional production RED is claim
 Both final rereviews found no additional material findings. Exact title remains
 `fix: 데이터 연결 프레임을 협상된 형식으로 해석`. Source and tests stay frozen;
 root commit authorization, integration, push, closure and notification are pending.
+
+## Operational completion
+
+- [x] Root integration/push/closure/notification. Status: complete; source a1edfa5, integration f2400463f7c2cb0fd31e4030418101c7fd813cfd pushed and remote verified; GitHub CLOSED 2026-09-08T04:16:24Z, comment 5579102771; root Telegram receipt 3971 (66/40). Integrated eight suites/50 tests PASS in 69.895 seconds, natural exit 0; forced build PASS.
+Current epic count is 40/66. Root supplied these operational receipts. Earlier review/authorization-pending and assignment statements are historical; original RED reclassification and separate test-only addition remain unchanged. #42 now follows under separate root approval; #40/#28/#29 and the epic remain unresolved.

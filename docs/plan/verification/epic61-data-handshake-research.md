@@ -1,14 +1,14 @@
 # Data-channel handshake framing and retained payload research (#43 -> #42)
 
-Status: technical research and final API-record review PASS by review_wave0; root approved only bounded #43 implementation. Assigned owner review_cert_conflict, control worktree branch fix/epic61-data-handshake-framing, base 0ca1399. #42 requires its own later gate.
+Status: #43 complete; source a1edfa5, integration f2400463f7c2cb0fd31e4030418101c7fd813cfd pushed and remote verified; GitHub CLOSED 2026-09-08T04:16:24Z, comment 5579102771; root Telegram receipt 3971 (66/40). Integrated eight suites/50 tests PASS in 69.895 seconds, natural exit 0; forced build PASS. #42 independently reviewed and approved by root; owner review_cert_conflict, control branch fix/epic61-data-handshake-payload at f240046. Earlier unapproved statements below describe the research checkpoints.
 Researcher: review_cert_conflict. Original GitHub #43 and #42 and current main
 sources were read; no source edit, server or test execution occurred during this research. At the original research checkpoint, #41 was frozen for review. It is now complete and integrated as `b6dbf014745a97b6a85805d1691abab5e9de4e50`, CLOSED 2026-09-08T03:34:05Z, Telegram receipt 3966 (66/38). Its identity-admission behavior must be preserved.
 
 - [x] Read original issues and actual producer/parser/consumer. Status: source findings below.
 - [x] Examine existing format, negotiation and buffer reuse. Status: format-preserving proposal below.
 - [x] Independent review and explicit scope/sequence approval. Status: review_wave0 technical/API-record PASS; root approved the exact #43 scope and created the assigned branch. #42 stays separately gated.
-- [ ] #43 dedicated branch/ledger, actual parser/consumer RED, fix and independent integration. Status: assigned to review_cert_conflict in C:/Work/git/_Snoworca/TTTGate-epic61-control on fix/epic61-data-handshake-framing at 0ca1399. Ledger/API freeze and actual RED precede implementation; production is limited to DataStatePacket and TunnelServer handshake, plus the two named unit migrations and dedicated tests/fixture/ledger. ClientHandlerPool writes and #42 delivery are not authorized.
-- [ ] #42 separate RED, minimum tail delivery fix, independent review and integration. Status: pending #43.
+- [x] #43 dedicated branch/ledger, actual parser/consumer RED, fix and independent integration. Status: complete; source a1edfa5, main f240046, CLOSED 2026-09-08T04:16:24Z, comment 5579102771, receipt 3971 (66/40). Exact implementation/review evidence remains in epic61-issue-43.md.
+- [ ] #42 separate RED, minimum tail delivery fix and independent integration. Status: root assigned the branch above after completed #43; actual RED remains required.
 
 ## Actual format and source evidence
 
@@ -139,13 +139,31 @@ before RED and obtain root approval; this research does not itself approve a pat
 
 ## #42: deliver suffix once, only after successful admission
 
-Initial production scope: data-handler portion of `TunnelServer.ts` plus dedicated
-tests/ledger42. If no trustworthy existing success signal is sufficient,
-`ClientHandlerPool.putNewDataHandler` may need a separately approved narrow boolean
-admission result, after #41 integration. It currently returns void even when it
-rejects and closes the incoming socket. Do not blindly queue the suffix or mark
-the handler authenticated after rejection; test the actual accepted/rejected path.
-No new type/transport framework or change to ExternalPortServerPool is proposed.
+Current prerequisite: #43 is complete, source a1edfa5 integrated at main f240046, CLOSED 2026-09-08T04:16:24Z, comment 5579102771, Telegram receipt 3971 (66/40). #42 source/branch implementation is still awaiting explicit root approval.
+
+Proposed #42 production scope is only the data-handler portion of TunnelServer.ts,
+plus dedicated tests/ledger42 and a narrow migration of the #43 consumer assertion
+that currently expects the suffix to remain stored. #43 now checks !handler.isEnd()
+after putNewDataHandler; all current rejected admission paths synchronously end the
+incoming handler. Therefore no ClientHandlerPool return-type change is currently
+needed. Keep ClientHandlerPool, DataStatePacket, shared types and the producer read-only.
+
+Exact sequence: retain parsed suffix in a local variable, clear the handler's
+completed-handshake accumulator, publish the parsed identity and call existing
+admission. If ended, stop without authentication or payload dispatch. If accepted,
+mark authenticated, then dispatch a nonempty suffix immediately through the same
+post-handshake receive path used by later chunks. That path already checks session
+association, marks activity and calls pushReceiveBuffer. Freeze the concrete reuse as a small private `receiveSessionPayload(handler: TunnelDataHandler, data: Buffer): void` extraction of the existing post-handshake branch. Both subsequent receive events and admitted suffix delivery call this one path; no recursive handshake re-entry or second queue implementation is needed. There is no await between admission and suffix dispatch, so later
+chunks cannot overtake it. An empty suffix must not create a queue item/callback.
+
+Static overflow caveat to settle with RED: terminateWaitingSession calls the
+session-close callback itself, and the current TunnelServer receive branch also
+calls it when pushReceiveBuffer returns false. Do not claim callback-once solely
+from reuse. Count real callbacks in the overflow RED. If duplicate notification
+is confirmed, a narrowly reviewed TunnelServer fallback guard must distinguish
+already-terminated/handled overflow from the missing-queue failure requiring a
+fallback close. No ClientHandlerPool, generic socket or EOF consumer rewrite is
+proposed. Root must approve this exact scope before implementation.
 
 Consume and clear remainBuffer when the handshake completes, then pass nonempty
 bytes through the same receive path used by later chunks, after identity/token
@@ -173,3 +191,26 @@ tests and integration. Root has assigned the #43 worktree recorded above; #42 re
 changed by either proposal. #29's platform-held HTTP EOF consumer work remains
 untouched; this is not an alternate implementation of or workaround for that hold.
 No external endpoint, daemon, server or test was run during this research. The original #41 freeze reference was historical; #41 is now complete at `b6dbf01` with receipt 3966 (66/38). The later root assignment authorizes #43 under its stated RED/API/scope gates only; #42 remains unapproved.
+
+### #42 immediate implementation-gate checklist (latest source read)
+
+- [ ] Root explicitly assigns #42. Status: #43 integration/closure complete (3971, 66/40); #42 source/branch work remains unapproved.
+- [ ] Coalesced-tail RED with actual receiving evidence. Status: planned; verify the parse-completing receive contains handshake suffix bytes, queue them before endpoint-open completion, then prove first/second binary markers arrive in order exactly once after normal ACK. A segmentation/setup failure is not functional RED.
+- [ ] Replace #43's retained-field assertion with stronger delivery evidence. Status: requires assignment; preserve existing parser remainBuffer byte assertions and identity assertions, require cleared completed accumulator and actual queued/delivered suffix. Do not merely delete the old assertion.
+- [ ] Zero-tail and failure cleanup controls. Status: planned; zero bytes cause no payload callback or queue entry, rejected token/session/control identity plus suffix produces no delivery/authentication, and original pending/sibling echo survives where admission contract requires it.
+- [ ] Overflow RED. Status: planned; use existing resource limits and actual admitted data path, count session-close callbacks and queue byte accounting, ensure only the failing session is released and sibling remains functional. Investigate the static duplicate-fallback caveat above before changing notification semantics.
+- [ ] Existing protocol/frame/wide-ID/queue controls and natural exit. Status: pending assignment; #28 wire-count policy and #29 held EOF work remain excluded.
+### Frozen #42 local contract for root approval
+
+- [x] Confirm #43 prerequisite and minimal design. Status: #43 CLOSED; proposed production write set is TunnelServer.ts only, in the existing data-handler method and its small shared payload helper. No ClientHandlerPool return change, parser/producer/type change or pool/EOF changes.
+- [ ] Implement only after actual RED and root branch assignment. Status: pending. On complete parse, hold remainBuffer locally and clear leftOverBuffer; incomplete accumulation stays unchanged. Perform existing admission, return immediately if handler.isEnd(), otherwise mark authenticated and invoke receiveSessionPayload only for a nonempty tail. Dispatch is synchronous before any later chunk and uses existing session association/activity/queue limits.
+- [ ] Observe both-mode ordered delivery RED. Status: planned. Actual legacy and v2 peers send handshake plus binary marker A in a receive proven to complete the handshake with suffix; marker B follows. Before endpoint-open ACK, A is present in the existing receive queue but not delivered. After normal OpenSession/result/ACK, external client receives A+B exactly once and a later real echo succeeds. Keep parser byte-layout assertions; strengthen the old #43 retained-tail consumer assertion to cleared accumulator plus queued/delivered bytes.
+- [ ] Observe cleanup and zero-tail controls. Status: planned. Empty tail produces no payload callback/queue item; malformed prefix, unknown/replaced pool, stale session/handler and wrong token with a suffix produce no tail delivery or authentication. Preserve valid pending buffers and sibling echo according to existing admission rules; rejected completed tails are not retained on the handler.
+- [ ] Observe overflow and fallback RED. Status: planned. Use the existing small queue limit and real accepted data path; count close callbacks, failing-session queue bytes/resources and sibling survival. For overflow already terminated by pushReceiveBuffer, suppress the outer duplicate close; for missing-queue failure with a still-live handler, preserve one outer fallback close. The proposed minimal condition is failed push plus !handler.isEnd(), justified only after the real overflow/control assertions establish its behavior. No generic lifecycle refactor or ClientHandlerPool mutation.
+- [ ] Root scope/API approval, dedicated ledger42 and test-first execution. Status: pending. This supplement is a design record only; #28's wire-count choice and #29's platform hold remain untouched.
+
+## Current approved assignment checkpoint
+
+- [x] Root approves #42 exact scope after independent review. Status: branch fix/epic61-data-handshake-payload at f240046 created in control, owner review_cert_conflict.
+- [ ] Execute #42 ledger/actual RED before implementation. Status: assigned; TunnelServer/helper plus dedicated tests/ledger and strengthened existing suffix assertion only. Conditional overflow guard requires actual overflow RED and missing-queue control. No ClientHandlerPool or producer/wire change.
+Current epic count is 40/66. Earlier #42 unapproved wording is historical and is superseded only by this bounded assignment; all behavioral and test constraints remain mandatory.

@@ -1,13 +1,13 @@
 # Issue #37 — Apply the normalized committed tunnel option
 
-Status: independently rereviewed PASS by review_cert_conflict after M1 ownership clarification; root approved assignment after completed #38. Owner fix_supply15, listeners worktree, branch fix/epic61-normalized-apply, base 7c765a7. The operational count at this assignment checkpoint was 37/66; current progress is tracked in the execution plan. This research records no executed implementation/tests.
+Status: complete; source `f7109db`, integration `f34f2cd7c5102aff8804a7c490dd374c4036a8f4` pushed and remote verified; GitHub CLOSED 2026-09-08T04:06:05Z, comment 5579014668; Telegram receipt 3969 (66/39). Integrated three suites/15 tests PASS in 65.450 seconds, natural exit 0; forced build PASS. The original research below records pre-implementation findings and the approved RED/ownership boundary; current epic count is 39/66.
 Researcher: review_wave0. Original issue: https://github.com/ice3x2/TTTGate/issues/37.
 
 - [x] Read original issue and latest normalization/apply paths. Status: both ordinary and compound handlers still pass the unnormalized request to runtime.
 - [x] Identify minimal reuse and recovery boundary. Status: recommendation below; no new normalization policy proposed.
 - [x] Independently review and approve ownership/schedule. Status: review_cert_conflict rereview PASS; root approved the bounded AdminServer/test/ledger-only assignment after #38 integration.
-- [ ] Create assigned ledger and observe both-path actual RED before implementation. Status: branch prepared and assigned above; actual RED remains mandatory.
-- [ ] Implement minimum change, regress, independently review and integrate. Status: pending RED.
+- [x] Create assigned ledger and observe both-path actual RED before implementation. Status: completed; six actual failures/four controls and implementation receipts are retained in epic61-issue-37.md.
+- [x] Implement minimum change, regress, independently review and integrate. Status: all per-issue gates complete; original wider-run failure and the independent #35 test correction remain separately recorded.
 
 ## Current source evidence
 

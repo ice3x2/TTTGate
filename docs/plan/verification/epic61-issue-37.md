@@ -1,6 +1,6 @@
 # Issue #37 — Apply the committed normalized tunnel row
 
-Status: both independent final reviews PASS; implementation frozen for root commit/integration. Own ten-case GREEN and forced build complete; broader71708 retained as 65 passing/one failing. The independently reviewed #35 test-only correction is now integrated here and its corrected unit passed separately. No commit authorized.
+Status: complete; source `f7109db`, integration `f34f2cd7c5102aff8804a7c490dd374c4036a8f4` pushed and remote verified; GitHub CLOSED 2026-09-08T04:06:05Z, comment 5579014668; Telegram receipt 3969 (66/39). Integrated three suites/15 tests PASS in 65.450 seconds, natural exit 0; forced build PASS. Original broader71708 remains 65 passing/one failing; separate #35 test-only correction and its unit PASS remain distinct evidence.
 Original title: 터널링 옵션 hot apply 에 정규화되지 않은 원본이 전달되어 저장 설정과 런타임이 어긋남.
 Owner: `fix_supply15`; branch `fix/epic61-normalized-apply`; worktree
 `C:/Work/git/_Snoworca/TTTGate-epic61-listeners`; base `7c765a7`.
@@ -12,8 +12,8 @@ Writable: AdminServer.ts, dedicated tests and this ledger only.
 - [x] Observe both ordinary and compound actual TLS/default propagation RED. Status: six failures/four controls passed before production edits; receipt below.
 - [x] Pass the committed normalized clone to both runtime calls. Status: exactly two call arguments now use existing getTunnelingOption clone after publication; previous option/staged certificate/order preserved.
 - [x] Run explicit-value, normalization, rollback, compound/path/routing regressions and forced build. Status: own ten GREEN; broader 65 PASS/one stale #35 expectation FAIL; corrected dependency unit separately PASS, as detailed below. No single all-green broader run is claimed.
-- [ ] Obtain two independent final reviews. Status: ready; source and tests frozen.
-- [ ] Authorized commit/root integration/push/closure. Status: pending.
+- [x] Obtain two independent final reviews. Status: review_wave0 and review_cert_conflict final code/content/exact-title reviews PASS.
+- [x] Authorized commit/root integration/push/closure/notification. Status: complete; source `f7109db`, integration `f34f2cd7c5102aff8804a7c490dd374c4036a8f4` pushed and remote verified; GitHub CLOSED 2026-09-08T04:06:05Z, comment 5579014668; Telegram receipt 3969 (66/39). Integrated three suites/15 tests PASS in 65.450 seconds, natural exit 0; forced build PASS.
 
 Safety: omitted destination ports 80/443 are observed only in committed/applied
 metadata, with no endpoint connection. TLS/I/O cases use owned loopback listeners
@@ -84,3 +84,9 @@ Root relayed review_cert_conflict's final code/content/exact-title PASS with zer
 Critical/High/Medium/Low findings. That second reviewer performed no additional
 test execution; no further test counts are claimed. Both independent reviews
 are complete and root controls subsequent commit and integration.
+
+## Operational completion
+
+Status: complete; source `f7109db`, integration `f34f2cd7c5102aff8804a7c490dd374c4036a8f4` pushed and remote verified; GitHub CLOSED 2026-09-08T04:06:05Z, comment 5579014668; Telegram receipt 3969 (66/39). Integrated three suites/15 tests PASS in 65.450 seconds, natural exit 0; forced build PASS. The operational epic count is 39/66. Original 65 PASS/1 FAIL run71708, independent #35 supplement, local cherry-pick and corrected-unit receipt remain historical facts; this completion does not retroactively convert that run into all-green. The #35 supplement is complete and is not counted as another issue. Earlier review/authorization-pending statements describe completed handoff stages.
+
+Current next decision is #40's asynchronous user policy choice (minimum 1 MiB/no unlimited with original invalid configuration preserved on startup rejection, versus unlimited only behind an explicit risk option). No #40 source write is authorized yet. #28 remains awaiting user policy; #29 remains on platform hold without bypass; the epic is unfinished.

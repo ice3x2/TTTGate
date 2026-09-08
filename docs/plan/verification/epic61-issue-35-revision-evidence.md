@@ -1,6 +1,6 @@
 # #35 revision diagnostic test alignment
 
-Status: test-only alignment, relevant GREEN, forced build and both independent reviews complete; source frozen, root commit authorization pending.
+Status: test-only follow-up complete; source 6263373 integrated as 78f4500489db71b8b79d33360d9c9785307b2231, pushed and remote verified; existing #35 updated with comment 5578916827.
 Independent fixer: review_cert_conflict; process worktree
 `fix/epic61-rollback-evidence`, base `0ca1399`.
 Only ServerOptionStore.revision.test.ts and this supplement are writable.
@@ -50,3 +50,8 @@ file was changed by this reviewer.
 Root relayed fix_supply15's second independent code/content/exact-title PASS with
 zero Critical/High/Medium/Low findings. That reviewer did not rerun tests; no
 additional execution evidence is claimed. Root owns subsequent integration.
+
+## Operational completion
+
+- [x] Root integration, push and existing-issue evidence update. Status: source 6263373 -> main 78f4500489db71b8b79d33360d9c9785307b2231 pushed/remote verified; root unit one PASS, 1.775 seconds, natural exit 0. GitHub #35 comment 5578916827 posted.
+Root supplied these operational receipts. Earlier authorization-pending statements are historical. Original #35 closure/receipt is unchanged; no new issue, completion increment or Telegram notification results from this supplement. #37 prerequisite uptake remains in its own ledger.
