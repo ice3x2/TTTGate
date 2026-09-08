@@ -160,11 +160,28 @@ class CertificationStore {
 
 
     public prepareAdminServerCert(certInfo: CertInfo): boolean {
-        return this.checkKeyPair(certInfo);
+        return this.hasValidFileNames(certInfo) && this.checkKeyPair(certInfo);
     }
 
     public prepareExternalServerCert(certInfo: CertInfo): boolean {
-        return this.checkKeyPair(certInfo);
+        return this.hasValidFileNames(certInfo) && this.checkKeyPair(certInfo);
+    }
+
+    private static validCertificateNames(info: CertInfo): boolean {
+        if(!info) return false;
+        return [info.key, info.cert, info.ca].every(part => {
+            if(!part || typeof part.name !== 'string' || typeof part.value !== 'string') return false;
+            if(part.name === '') return part.value === '';
+            if(/[<>:"/\\|?*\u0000-\u001f\u007f]/.test(part.name) || /[. ]$/.test(part.name)) return false;
+            const base = part.name.split('.')[0].trim();
+            return !/^(?:CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³]|CONIN\$|CONOUT\$)$/i.test(base);
+        });
+    }
+
+    public hasValidFileNames(candidate?: CertInfo): boolean {
+        if(!this._externalCert || !CertificationStore.validCertificateNames(this._adminCert)) return false;
+        return Object.values(this._externalCert).every(info => CertificationStore.validCertificateNames(info)) &&
+            (candidate === undefined || CertificationStore.validCertificateNames(candidate));
     }
 
     private certificateFiles(info: CertInfo, type: 'admin' | 'external'): AtomicFileValue[] {
@@ -174,6 +191,7 @@ class CertificationStore {
     }
 
     public captureCommittedState(candidate?: {info: CertInfo, type: 'admin' | 'external'}) {
+        if(!this.hasValidFileNames(candidate?.info)) return undefined;
         const files = [this._adminCertFile, this._externalCertFile, this._stateFile,
             ...this.certificateFiles(this._adminCert, 'admin').map(entry => entry.file),
             ...Object.values(this._externalCert).flatMap(info => this.certificateFiles(info, 'external').map(entry => entry.file)),
@@ -182,11 +200,14 @@ class CertificationStore {
             files: Files.captureFiles([...new Map(files.map(file => [file.toString(), file])).values()])};
     }
 
-    public restoreCommittedState(state: ReturnType<CertificationStore['captureCommittedState']>): void {
+    public restoreCommittedState(state: NonNullable<ReturnType<CertificationStore['captureCommittedState']>>): boolean {
+        if(!state || !CertificationStore.validCertificateNames(state.adminCert) || !state.externalCert ||
+            !Object.values(state.externalCert).every(info => CertificationStore.validCertificateNames(info))) return false;
         Files.writeAtomicBatchSync(state.files);
         this._adminCert = ObjectUtil.cloneDeep(state.adminCert);
         this._externalCert = ObjectUtil.cloneDeep(state.externalCert);
         this._revisionState = ObjectUtil.cloneDeep(state.revisionState);
+        return true;
     }
 
     private prepareCertificateChange(type: 'admin' | 'external', adminCert: CertInfo, externalCert: ExternalCertFileInfo,
@@ -227,6 +248,7 @@ class CertificationStore {
     }
 
     public prepareExternalCertificateChange(port: number, certInfo?: CertInfo, previousPort?: number) {
+        if(!this.hasValidFileNames(certInfo)) return undefined;
         const external = this.getAllExternalCert();
         const previous = external[previousPort ?? port];
         if(previousPort !== undefined && previousPort !== port) delete external[previousPort];
@@ -289,13 +311,17 @@ class CertificationStore {
     }
 
     public async removeForExternalServer(port: number) {
+        if(!this.hasValidFileNames()) return false;
         const external = this.getAllExternalCert();
         delete external[port];
         this.persistCertificateChange('external', this._adminCert, external, this._externalCert[port], undefined, {});
+        return true;
     }
 
     public async removeForAdminServer() {
+        if(!this.hasValidFileNames()) return false;
         this.persistCertificateChange('admin', CertificationStore.makeEmptyCertFileInfo(), this._externalCert, this._adminCert, undefined, {});
+        return true;
     }
 
     public async saveForExternalServer(port: number, certInfo: CertInfo) : Promise<boolean> {

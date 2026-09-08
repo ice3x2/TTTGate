@@ -355,6 +355,7 @@ class AdminServer {
                 return;
             }
             const committedBefore = certStore.captureCommittedState({info: certInfo, type: 'admin'});
+            if(!committedBefore) { this.sendApiFailure(res, 400, {message: 'Invalid certificate filename.'}); return; }
             const tlsBefore = this._currentTlsOptions ? {...this._currentTlsOptions} : undefined;
             const pendingRestartScopes = this._tls ? [] : ['admin-cert'];
             const success = await certStore.commitAdminServerCert(certInfo, {markLastKnownGood: this._tls, pendingRestartScopes});
@@ -413,10 +414,10 @@ class AdminServer {
         return result;
     }
 
-    private async restoreCertificateBaseline(committed: ReturnType<CertificationStore['captureCommittedState']>,
+    private async restoreCertificateBaseline(committed: NonNullable<ReturnType<CertificationStore['captureCommittedState']>>,
         runtime?: ReturnType<TTTServer['captureRuntimeState']>): Promise<string[]> {
         const failures: string[] = [];
-        try { CertificationStore.instance.restoreCommittedState(committed); }
+        try { if(!CertificationStore.instance.restoreCommittedState(committed)) failures.push('certificate-restore'); }
         catch(error) { logger.error('certificate baseline restore failed', error); failures.push('certificate-restore'); }
         if(runtime) failures.push(...await this._tttServer!.restoreRuntimeState(runtime));
         return failures;
@@ -690,6 +691,7 @@ class AdminServer {
         }
         const certificateChange = certInfo !== undefined || (rename && certificates.getAllExternalCert()[previousForwardPort!] !== undefined);
         if(certificateChange && !this.admitCertificateRevision(res, expectedCertificateRevision)) return;
+        if(!certificates.hasValidFileNames(certInfo)) { this.sendApiFailure(res, 400, {message: 'Invalid certificate filename.'}); return; }
         if(certInfo !== undefined && (!certInfo || !certInfo.key || !certInfo.cert || !certInfo.ca ||
             !ObjectUtil.equalsType(EMPTY_CERT_INFO, certInfo) || !certificates.prepareExternalServerCert(certInfo))) {
             this.sendApiFailure(res, 400, {message: 'Invalid certificate.'}); return;
@@ -702,14 +704,16 @@ class AdminServer {
         if(!previousOption && !await UsablePortChecker.check(option.forwardPort)) {
             this.sendApiFailure(res, 400, {message: `${option.forwardPort} is an unusable port number.`}); return;
         }
-        const committedBefore = store.captureCommittedState();
         const certificateBefore = certificates.captureCommittedState(certInfo ? {info: certInfo, type: 'external'} : undefined);
+        if(!certificateBefore) { this.sendApiFailure(res, 400, {message: 'Invalid certificate filename.'}); return; }
+        const committedBefore = store.captureCommittedState();
         const runtimeBefore = this._tttServer?.captureRuntimeState();
         const prepared = store.prepareServerOptionCommit(composed.serverOption);
         if(!prepared.prepared) {
             this.sendApiFailure(res, 400, {message: prepared.message}); return;
         }
         const preparedCertificate = certificateChange ? certificates.prepareExternalCertificateChange(option.forwardPort, certInfo, rename ? previousForwardPort : undefined) : undefined;
+        if(certificateChange && !preparedCertificate) { this.sendApiFailure(res, 400, {message: 'Invalid certificate filename.'}); return; }
         try {
             Files.writeAtomicBatchSync([...prepared.prepared.files, ...(preparedCertificate?.files ?? [])]);
         } catch(error) {
@@ -892,7 +896,9 @@ class AdminServer {
         const payload = await AdminServer.readJson(req);
         await ServerOptionStore.instance.runConfigurationMutation(async () => {
             if(!this.admitCertificateRevision(res, payload?.expectedCertificateRevision)) return;
-            await CertificationStore.instance.removeForExternalServer(port);
+            if(!await CertificationStore.instance.removeForExternalServer(port)) {
+                this.sendApiFailure(res, 400, {message: 'Invalid certificate filename.'}); return;
+            }
             this.sendApiSuccess(res, {revisionState: CertificationStore.instance.revisionState});
         });
     }
@@ -910,6 +916,7 @@ class AdminServer {
                 return;
             }
             const committedBefore = certStore.captureCommittedState({info: certInfo, type: 'external'});
+            if(!committedBefore) { this.sendApiFailure(res, 400, {message: 'Invalid certificate filename.'}); return; }
             const runtimeBefore = this._tttServer?.captureRuntimeState?.();
             let success = await certStore.commitExternalServerCert(port, certInfo, {
                 markLastKnownGood: true,
