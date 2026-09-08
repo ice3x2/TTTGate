@@ -1,6 +1,6 @@
 # Issue #22 — Persist socket logs when child stdio is ignored
 
-Status: three-line production fix, real-file GREEN, selected regressions, forced build and both independent reviews passed; source frozen. Root commit authorization remains pending.
+Status: complete; source 1099b55e970b57408aeca663f3690b32a100a06c, integration c40ef3ca29fb26dc0c812cab8f2936820319c561 pushed and remote verified; GitHub CLOSED 2026-09-08T03:15:04Z, comment 5578555935; root Telegram receipt 3964 (66/36). Integrated three suites/nine tests PASS in 3.323 seconds, natural exit 0; forced build exit 0.
 Owner: review_cert_conflict; branch `fix/epic61-socket-logs`, base `7a79df4`;
 worktree `C:/Work/git/_Snoworca/TTTGate-epic61-process`.
 Approved root plan: main `docs/plan/verification/epic61-issue-22-plan.md`.
@@ -10,7 +10,7 @@ Approved root plan: main `docs/plan/verification/epic61-issue-22-plan.md`.
 - [x] Apply only two logger names and one existing writer registration. Status: socket name added to the two modules and production configureLogger; no logger/transport behavior edits.
 - [x] Focused and relevant regression/build. Status: three suites/nine tests passed naturally in 3.663 seconds; forced TypeScript build exited 0. Exact command and evidence below.
 - [x] Two independent original-issue/diff/evidence/title reviews. Status: review_wave0 and fix_supply15 independently PASS with zero Critical/High/Medium/Low findings; source frozen. Root relayed fix_supply15's confirmation of the reviewer-authored execution record as well.
-- [ ] Root-authorized commit/integration/push/closure/notification. Status: not authorized.
+- [x] Root-authorized commit/integration/push/closure/notification. Status: complete; source 1099b55e970b57408aeca663f3690b32a100a06c, integration c40ef3ca29fb26dc0c812cab8f2936820319c561 pushed and remote verified; GitHub CLOSED 2026-09-08T03:15:04Z, comment 5578555935; root Telegram receipt 3964 (66/36). Integrated three suites/nine tests PASS in 3.323 seconds, natural exit 0; forced build exit 0.
 
 The test uses actual AppCompositionRoot configuration, real bound SocketHandler
 timeout and TCPServer EADDRINUSE from a second owned wildcard listener. It does
@@ -68,3 +68,8 @@ Root subsequently relayed fix_supply15's independent code/content/exact-title
 PASS with zero Critical/High/Medium/Low findings and confirmation of this selected
 execution record. Both reviews are complete; root commit authorization and
 integration/push/closure/notification remain pending.
+
+## Operational completion
+
+Status: complete; source 1099b55e970b57408aeca663f3690b32a100a06c, integration c40ef3ca29fb26dc0c812cab8f2936820319c561 pushed and remote verified; GitHub CLOSED 2026-09-08T03:15:04Z, comment 5578555935; root Telegram receipt 3964 (66/36). Integrated three suites/nine tests PASS in 3.323 seconds, natural exit 0; forced build exit 0.
+Current epic count is 36/66. Root supplied these operational receipts. Earlier author handoffs, authorization-pending statements and execution receipts above are historical; this issue has no remaining completion gate. #38/#41 continue independently, #28 awaits user policy, #29 remains held without bypass, and the epic is incomplete.

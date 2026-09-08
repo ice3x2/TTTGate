@@ -1,6 +1,6 @@
 # Issue #36 — Certificate basename validation
 
-Status: implementation, targeted regression/build and both independent reviews passed; source frozen, root commit authorization/integration/closure pending.
+Status: complete; integration 7a79df4bafd2789b105e288368391dad314568c5 pushed and remote verified; GitHub CLOSED 2026-09-08T03:03:56Z, comment 5578464411; root Telegram receipt 3963 (66/35). Integrated five suites/29 tests passed naturally in 174.724 seconds; forced build passed.
 Original title: 인증서 파일명이 검증 없이 파일 경로로 사용되어 임의 경로 쓰기와 삭제가 가능함.
 Owner: `fix_supply15`; branch `fix/epic61-certificate-paths`; worktree
 `C:/Work/git/_Snoworca/TTTGate-epic61-listeners`; base `6aa3abd`.
@@ -12,7 +12,7 @@ wire, #29 and unrelated files remain excluded.
 - [x] Freeze basename/namespace rules and reproduce preparation/write/deletion RED. Status: eight original RED cases observed; lexical policy and safety evidence below.
 - [x] Implement conditional rejection before path construction/file access. Status: candidate/stored/snapshot/delete/prepared-change names share one predicate; invalid results map to 400 without exception-based input control flow.
 - [x] Preserve valid filenames/optional CA and API authentication/CSRF/revision contracts; run regression/build/two reviews. Status: regression/build passed; review_wave0 and review_cert_conflict independently reported zero Critical/High/Medium/Low findings and exact-title PASS.
-- [ ] Authorized commit/root integration/push/closure. Status: pending.
+- [x] Authorized commit/root integration/push/closure/notification. Status: complete; integration 7a79df4bafd2789b105e288368391dad314568c5 pushed and remote verified; GitHub CLOSED 2026-09-08T03:03:56Z, comment 5578464411; root Telegram receipt 3963 (66/35). Integrated five suites/29 tests passed naturally in 174.724 seconds; forced build passed.
 
 Safety boundary: real file effects are limited to a newly owned outer temp directory
 containing a cert root and sibling sentinel. No malicious OS device/absolute path
@@ -68,8 +68,8 @@ This is lexical filename validation, not a new filesystem/cryptography framework
 
 Proposed exact title: `fix: 인증서 파일 접근 전에 안전한 파일명 검증`.
 Five-file scope: two production files, one dedicated test, this ledger and guidance.
-Independent code/content/title reviews passed; root commit authorization, integration,
-push, closure and notification remain pending.
+Independent code/content/title reviews passed; root subsequently completed commit, integration,
+push, closure and notification as recorded below.
 
 ## Independent review receipts
 
@@ -86,4 +86,9 @@ The proposed exact title passed signature/progress-marker and scope checks.
 Root relayed the separate review_cert_conflict result: zero Critical/High/Medium/Low
 findings and exact-title PASS. No additional execution counts are inferred from
 that review result. This review record was written by review_wave0; independent
-verification of the documentation update remains root-coordinated.
+verification of this historical documentation update was root-coordinated.
+
+## Operational completion
+
+Status: complete; integration 7a79df4bafd2789b105e288368391dad314568c5 pushed and remote verified; GitHub CLOSED 2026-09-08T03:03:56Z, comment 5578464411; root Telegram receipt 3963 (66/35). Integrated five suites/29 tests passed naturally in 174.724 seconds; forced build passed.
+Current epic count is 35/66. Closure, remote and Telegram receipts above are root-provided operational evidence; earlier pending handoffs and author/reviewer runs remain historical. This issue has no remaining completion gate. The epic remains active; #28 awaits user policy and #29 remains held without bypass.

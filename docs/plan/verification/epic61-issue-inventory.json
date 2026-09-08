@@ -247,7 +247,7 @@
   {
     "body": "## 요약\r\n\r\n인증서 등록 시 사용자가 지정한 이름을 그대로 디렉터리와 결합해 경로를 만듭니다. 검증은 PEM 값만 확인하고 이름은 보지 않습니다.\r\n\r\n## 근거\r\n\r\n- `src/server/CertificationStore.ts:180`, `:183`, `:186` — 사용자 입력 이름을 경로에 결합합니다.\r\n- `src/server/CertificationStore.ts:192-200` — 삭제 경로도 동일합니다.\r\n- `src/server/CertificationStore.ts:375-381` — 검증이 PEM 값만 확인합니다.\r\n- `src/server/admin/AdminServer.ts:349` — 타입 검사와 PEM 키쌍 검증을 수행하지만 이름은 검사하지 않습니다.\r\n\r\n## 재현과 영향\r\n\r\n인증된 관리자가 인증서 이름에 상위 경로 참조를 넣으면 재현됩니다. 프로세스 권한으로 임의 경로에 PEM 내용을 기록할 수 있고, 다음 갱신 시 그 경로가 삭제됩니다. 관리자 비밀번호 해시 파일을 덮어쓰면 영구 로그인 불가 상태가 됩니다.\r\n\r\n## 권고\r\n\r\n이름을 기본 파일명으로 축약하고, 경로 구분자나 상위 참조를 포함한 이름은 400 으로 거부합니다.\r\n\r\n## 검증 상태\r\n\r\n- 기존 테스트 커버: 없음.\r\n- 도입 시점: 기존.\r\n- 확인 방법: 코드 확인 및 경로 결합 동작 실측.\r\n\r\n---\r\n근거 문서: `docs/research/2026-09-05-tttgate-full-inspection.md` §5.19",
     "number": 36,
-    "state": "OPEN",
+    "state": "CLOSED",
     "title": "인증서 파일명이 검증 없이 파일 경로로 사용되어 임의 경로 쓰기와 삭제가 가능함",
     "url": "https://github.com/ice3x2/TTTGate/issues/36"
   },
@@ -345,7 +345,7 @@
   {
     "body": "## 요약\r\n\r\n`SocketHandler` 와 `TCPServer` 만 빈 이름으로 로거를 요청합니다. 빈 이름은 파일 출력이 꺼진 기본 writer 로 연결되며, 데몬 모드는 콘솔 출력마저 버립니다.\r\n\r\n## 근거\r\n\r\n- `src/util/SocketHandler.ts:15` — `getLogger('', ...)`.\r\n- `src/util/TCPServer.ts:8` — 동일합니다.\r\n- `src/util/logger/LoggerConfig.ts:21-28` — 빈 이름은 `file: false` 인 기본 writer 로 연결됩니다.\r\n- `src/Sentinel.ts:264` — 데몬 모드가 자식 프로세스를 `stdio: ['ignore','ignore','ignore']` 로 띄웁니다.\r\n\r\n## 재현과 영향\r\n\r\n데몬 모드로 운영하면 항상 해당합니다. 파일 캐시 쿼터 초과 경고, 소켓 쓰기 오류, 타임아웃 기록이 하나도 남지 않습니다. #19 (H-02) 의 데이터 유실이 발생해도 흔적이 없습니다.\r\n\r\n## 권고\r\n\r\n두 모듈의 로거에 이름을 부여해 파일 출력을 켭니다.\r\n\r\n## 검증 상태\r\n\r\n- 기존 테스트 커버: 없음.\r\n- 도입 시점: 기존.\r\n- 확인 방법: 코드 확인.\r\n\r\n---\r\n근거 문서: `docs/research/2026-09-05-tttgate-full-inspection.md` §5.5",
     "number": 22,
-    "state": "OPEN",
+    "state": "CLOSED",
     "title": "소켓 계층 로그가 파일에 기록되지 않고 데몬 모드에서 전부 소실됨",
     "url": "https://github.com/ice3x2/TTTGate/issues/22"
   },
