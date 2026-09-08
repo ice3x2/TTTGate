@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const createArchive = require('./create-archive.cjs');
 const {isValidReleaseVersion} = require('./validate-release-version.cjs');
+const getWebValidationError = require('./validate-web.cjs');
 
 const version = process.argv[2];
 const root = path.resolve(process.argv[3] || path.join(__dirname, '..'));
@@ -18,6 +19,7 @@ for(const entry of entries) {
     const file = path.join(binaryDirectory, entry.binary);
     if(!fs.existsSync(file) || !fs.statSync(file).isFile() || fs.statSync(file).size === 0) fail(`Missing or empty binary: ${entry.binary}`);
 }
-for(const entry of entries) {
-    createArchive(entry.archive, binaryDirectory, [entry.binary]);
-}
+const distribution = path.join(root, 'dist');
+const webError = getWebValidationError(distribution);
+if(webError) fail(webError);
+for(const entry of entries) createArchive(entry.archive, distribution, [`bin/${entry.binary}`, 'web']);

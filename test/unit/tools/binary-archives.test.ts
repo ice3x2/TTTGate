@@ -9,12 +9,18 @@ const binaries = ["TTTGate-linux-x64", "TTTGate-linux-arm64", "TTTGate-win-x64.e
 const archives = ["linux-x64.tar.gz", "linux-arm64.tar.gz", "win-x64.zip", "win-arm64.zip", "alpine-x64.tar.gz"];
 const run = (directory: string) => spawnSync(process.execPath,
     [path.join(root, "scripts/archive-binaries.cjs"), "v-fixture", directory], {encoding: "utf8", timeout: 15000});
+const web = (directory: string) => {
+    fs.mkdirSync(path.join(directory, "dist/web/assets"), {recursive: true});
+    fs.writeFileSync(path.join(directory, "dist/web/index.html"), '<script src="/assets/main.js"></script>');
+    fs.writeFileSync(path.join(directory, "dist/web/assets/main.js"), "production web fixture");
+};
 
 test("archives exactly the five configured output binaries with original bytes", () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archive bytes & "));
     try {
         fs.mkdirSync(path.join(directory, "dist/bin"), {recursive: true});
         binaries.forEach((name, i) => fs.writeFileSync(path.join(directory, "dist/bin", name), Buffer.from([0, i, 255, 13, 10])));
+        web(directory);
         const result = run(directory);
         expect({status: result.status, error: result.stderr}).toEqual({status: 0, error: ""});
         expect(fs.readdirSync(directory).filter(name => name.startsWith("TTTGate-"))).toEqual(archives.map(name => `TTTGate-v-fixture-${name}`).sort());
@@ -24,11 +30,30 @@ test("archives exactly the five configured output binaries with original bytes",
             const zip = suffix.endsWith(".zip") && process.platform !== "win32";
             const list = spawnSync(zip ? "unzip" : "tar", zip ? ["-Z1", archive] : ["-tf", archive], {encoding: "utf8"});
             expect(list.status).toBe(0);
-            expect(list.stdout.trim()).toBe(binaries[i]);
-            const content = spawnSync(zip ? "unzip" : "tar", zip ? ["-p", archive, binaries[i]] : ["-xOf", archive, binaries[i]]);
+            const members = list.stdout.trim().split(/\r?\n/).filter(name => !name.endsWith("/"));
+            expect(members.sort()).toEqual([`bin/${binaries[i]}`, "web/assets/main.js", "web/index.html"].sort());
+            const content = spawnSync(zip ? "unzip" : "tar", zip ? ["-p", archive, `bin/${binaries[i]}`] : ["-xOf", archive, `bin/${binaries[i]}`]);
             expect(content.status).toBe(0);
             expect(content.stdout).toEqual(fs.readFileSync(path.join(directory, "dist/bin", binaries[i])));
+            const webContent = spawnSync(zip ? "unzip" : "tar", zip ? ["-p", archive, "web/assets/main.js"] : ["-xOf", archive, "web/assets/main.js"]);
+            expect(webContent.stdout).toEqual(fs.readFileSync(path.join(directory, "dist/web/assets/main.js")));
         });
+    } finally { fs.rmSync(directory, {recursive: true, force: true}); }
+});
+
+test.each(["missing index", "empty index", "missing asset", "empty asset"])("%s rejects all five archives before output", kind => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archive web "));
+    try {
+        fs.mkdirSync(path.join(directory, "dist/bin"), {recursive: true});
+        binaries.forEach(name => fs.writeFileSync(path.join(directory, "dist/bin", name), "binary"));
+        web(directory);
+        const relative = kind.endsWith("index") ? "web/index.html" : "web/assets/main.js";
+        const file = path.join(directory, "dist", relative);
+        if(kind.startsWith("empty")) fs.writeFileSync(file, ""); else fs.unlinkSync(file);
+        const result = run(directory);
+        expect(result.status).not.toBe(0);
+        expect(result.stderr).toContain(relative);
+        expect(fs.readdirSync(directory)).toEqual(["dist"]);
     } finally { fs.rmSync(directory, {recursive: true, force: true}); }
 });
 
@@ -52,6 +77,8 @@ test("workflow builds once, honors false and requires every selected upload", ()
     expect(commands).not.toContain("npm run pkg");
     expect(commands).toContain("--skip-binaries");
     expect(commands).toContain("scripts/archive-binaries.cjs");
+    expect(commands).toContain("./bin/TTTGate-linux-x64 server");
+    expect(commands).toContain("bin/TTTGate-win-x64.exe server");
     const release = steps.find((step: any) => step.uses?.startsWith("softprops/action-gh-release"));
     expect(release.with.fail_on_unmatched_files).toBe(true);
     expect(release.with.files).toContain("steps.release_files.outputs.files");

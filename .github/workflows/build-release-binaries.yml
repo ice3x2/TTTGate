@@ -135,11 +135,11 @@ jobs:
           echo '```bash' >> release_notes.md
           echo "# Linux/Alpine" >> release_notes.md
           echo "tar -xzf TTTGate-$RELEASE_VERSION-linux-x64.tar.gz" >> release_notes.md
-          echo "./TTTGate-linux-x64 server -adminPort 9300" >> release_notes.md
+          echo "./bin/TTTGate-linux-x64 server -adminPort 9300" >> release_notes.md
           echo "" >> release_notes.md
           echo "# Windows" >> release_notes.md
           echo "# Extract the zip file and run:" >> release_notes.md
-          echo "TTTGate-win-x64.exe server -adminPort 9300" >> release_notes.md
+          echo "bin/TTTGate-win-x64.exe server -adminPort 9300" >> release_notes.md
           echo '```' >> release_notes.md
         fi
 

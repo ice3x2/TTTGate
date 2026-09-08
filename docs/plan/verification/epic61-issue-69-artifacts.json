@@ -1,0 +1,229 @@
+{
+  "baseline": "2106e48",
+  "includesAdminRevisionCommit": "6a94729",
+  "pipeline": {
+    "exit": 0,
+    "suitesPassed": 97,
+    "suitesSkipped": 1,
+    "testsPassed": 492,
+    "testsSkipped": 4,
+    "totalTests": 496,
+    "seconds": 437.912,
+    "finalAdminBuildSeconds": 2.89,
+    "pkg": "6.22.0"
+  },
+  "archives": [
+    {
+      "platform": "linux-x64",
+      "archive": "TTTGate-v-issue69-verification-linux-x64.tar.gz",
+      "archiveBytes": 27905713,
+      "archiveSha256": "f8c175804fb0a03b6607c97d0f554beb1bfbfdaea9c6ebe83627cae0f38550f5",
+      "members": [
+        {
+          "path": "bin/TTTGate-linux-x64",
+          "bytes": 77694467,
+          "sha256": "6fa2bc1f8076f7bb0e39da6f602fd1a3accd44b9cd065179802c40ce6c609323"
+        },
+        {
+          "path": "web/assets/index-CGtnnd6K.js",
+          "bytes": 473354,
+          "sha256": "da38e9eb676a7dfcf2b375a99423208b95175d4e45d84f6fafa473372a2b69bd"
+        },
+        {
+          "path": "web/assets/index-CTOWaF2j.css",
+          "bytes": 11903,
+          "sha256": "b988c6fa2ad4e674e80e030b3366461e68097d057758c446ec1a839a939c1235"
+        },
+        {
+          "path": "web/icon.png",
+          "bytes": 994,
+          "sha256": "943a0b702c2d93910451ee2e4c0eab0b4b178d1abe8503711c3a146cfdedb4ea"
+        },
+        {
+          "path": "web/index.html",
+          "bytes": 475,
+          "sha256": "fde93d5361e817f654d80b9338ba9ad0d9c857d3eaac1759d8c8d0ed3c374b9b"
+        }
+      ]
+    },
+    {
+      "platform": "linux-arm64",
+      "archive": "TTTGate-v-issue69-verification-linux-arm64.tar.gz",
+      "archiveBytes": 27441887,
+      "archiveSha256": "808a6acd08db5645f9821737b5f2cb559858f1a3ceb8bb7d21d0186b44371c93",
+      "members": [
+        {
+          "path": "bin/TTTGate-linux-arm64",
+          "bytes": 71726267,
+          "sha256": "70d797b412403896830e346215f89945b3d0cfc930f7e5c91b996f253efa6911"
+        },
+        {
+          "path": "web/assets/index-CGtnnd6K.js",
+          "bytes": 473354,
+          "sha256": "da38e9eb676a7dfcf2b375a99423208b95175d4e45d84f6fafa473372a2b69bd"
+        },
+        {
+          "path": "web/assets/index-CTOWaF2j.css",
+          "bytes": 11903,
+          "sha256": "b988c6fa2ad4e674e80e030b3366461e68097d057758c446ec1a839a939c1235"
+        },
+        {
+          "path": "web/icon.png",
+          "bytes": 994,
+          "sha256": "943a0b702c2d93910451ee2e4c0eab0b4b178d1abe8503711c3a146cfdedb4ea"
+        },
+        {
+          "path": "web/index.html",
+          "bytes": 475,
+          "sha256": "fde93d5361e817f654d80b9338ba9ad0d9c857d3eaac1759d8c8d0ed3c374b9b"
+        }
+      ]
+    },
+    {
+      "platform": "win-x64",
+      "archive": "TTTGate-v-issue69-verification-win-x64.zip",
+      "archiveBytes": 35363115,
+      "archiveSha256": "d2887756671ac5fe9ad85d986a15969491a3275358743e215f01b08bcbc7d61a",
+      "members": [
+        {
+          "path": "bin/TTTGate-win-x64.exe",
+          "bytes": 96007999,
+          "sha256": "c24a7bca68ac3119144d04c42b75e350938862ee0d19e17aaff2079b5f496279"
+        },
+        {
+          "path": "web/assets/index-CGtnnd6K.js",
+          "bytes": 473354,
+          "sha256": "da38e9eb676a7dfcf2b375a99423208b95175d4e45d84f6fafa473372a2b69bd"
+        },
+        {
+          "path": "web/assets/index-CTOWaF2j.css",
+          "bytes": 11903,
+          "sha256": "b988c6fa2ad4e674e80e030b3366461e68097d057758c446ec1a839a939c1235"
+        },
+        {
+          "path": "web/icon.png",
+          "bytes": 994,
+          "sha256": "943a0b702c2d93910451ee2e4c0eab0b4b178d1abe8503711c3a146cfdedb4ea"
+        },
+        {
+          "path": "web/index.html",
+          "bytes": 475,
+          "sha256": "fde93d5361e817f654d80b9338ba9ad0d9c857d3eaac1759d8c8d0ed3c374b9b"
+        }
+      ]
+    },
+    {
+      "platform": "win-arm64",
+      "archive": "TTTGate-v-issue69-verification-win-arm64.zip",
+      "archiveBytes": 33615361,
+      "archiveSha256": "d9590b72d261dae45367059d7d7aee4bbb8223685d47f925a3f6b9ef48e74ee6",
+      "members": [
+        {
+          "path": "bin/TTTGate-win-arm64.exe",
+          "bytes": 90296639,
+          "sha256": "dec39231a9a90901f1a2107702e0422564890f81693b71b439481bb1454fcb0e"
+        },
+        {
+          "path": "web/assets/index-CGtnnd6K.js",
+          "bytes": 473354,
+          "sha256": "da38e9eb676a7dfcf2b375a99423208b95175d4e45d84f6fafa473372a2b69bd"
+        },
+        {
+          "path": "web/assets/index-CTOWaF2j.css",
+          "bytes": 11903,
+          "sha256": "b988c6fa2ad4e674e80e030b3366461e68097d057758c446ec1a839a939c1235"
+        },
+        {
+          "path": "web/icon.png",
+          "bytes": 994,
+          "sha256": "943a0b702c2d93910451ee2e4c0eab0b4b178d1abe8503711c3a146cfdedb4ea"
+        },
+        {
+          "path": "web/index.html",
+          "bytes": 475,
+          "sha256": "fde93d5361e817f654d80b9338ba9ad0d9c857d3eaac1759d8c8d0ed3c374b9b"
+        }
+      ]
+    },
+    {
+      "platform": "alpine-x64",
+      "archive": "TTTGate-v-issue69-verification-alpine-x64.tar.gz",
+      "archiveBytes": 30046128,
+      "archiveSha256": "6bdfae73aba6392f68b2de85b62c668dc89ad1c6a7a4dff2e1a34c5fc36661cd",
+      "members": [
+        {
+          "path": "bin/TTTGate-alpine-x64",
+          "bytes": 83792707,
+          "sha256": "c252916b4e7a1f020007904188a7938adf93747f1cd7692a7bffbed0b947e5be"
+        },
+        {
+          "path": "web/assets/index-CGtnnd6K.js",
+          "bytes": 473354,
+          "sha256": "da38e9eb676a7dfcf2b375a99423208b95175d4e45d84f6fafa473372a2b69bd"
+        },
+        {
+          "path": "web/assets/index-CTOWaF2j.css",
+          "bytes": 11903,
+          "sha256": "b988c6fa2ad4e674e80e030b3366461e68097d057758c446ec1a839a939c1235"
+        },
+        {
+          "path": "web/icon.png",
+          "bytes": 994,
+          "sha256": "943a0b702c2d93910451ee2e4c0eab0b4b178d1abe8503711c3a146cfdedb4ea"
+        },
+        {
+          "path": "web/index.html",
+          "bytes": 475,
+          "sha256": "fde93d5361e817f654d80b9338ba9ad0d9c857d3eaac1759d8c8d0ed3c374b9b"
+        }
+      ]
+    }
+  ],
+  "nativeRed": {
+    "archive": "C:\\Work\\git\\_Snoworca\\TTTGate-epic61-release\\TTTGate-v-issue65-verification-win-x64.zip",
+    "outer": "C:\\Users\\beom\\AppData\\Local\\Temp\\tttgate-binary69-NHLdVz",
+    "extracted": "C:\\Users\\beom\\AppData\\Local\\Temp\\tttgate-binary69-NHLdVz\\extract",
+    "executable": "C:\\Users\\beom\\AppData\\Local\\Temp\\tttgate-binary69-NHLdVz\\extract\\TTTGate-win-x64.exe",
+    "runtimeRoot": "C:\\Users\\beom\\AppData\\Local\\Temp\\tttgate-binary69-NHLdVz",
+    "adminPort": 56904,
+    "controlPort": 56905,
+    "pid": 29752,
+    "pass": false,
+    "failure": "Native admin HTTP failed: no response",
+    "childExit": {
+      "code": 1,
+      "signal": null
+    }
+  },
+  "nativeGreen": {
+    "archive": "C:\\Work\\git\\_Snoworca\\TTTGate-epic61-release\\TTTGate-v-issue69-verification-win-x64.zip",
+    "outer": "C:\\Users\\beom\\AppData\\Local\\Temp\\tttgate-binary69-NNY1bH",
+    "extracted": "C:\\Users\\beom\\AppData\\Local\\Temp\\tttgate-binary69-NNY1bH\\extract",
+    "executable": "C:\\Users\\beom\\AppData\\Local\\Temp\\tttgate-binary69-NNY1bH\\extract\\bin\\TTTGate-win-x64.exe",
+    "runtimeRoot": "C:\\Users\\beom\\AppData\\Local\\Temp\\tttgate-binary69-NNY1bH\\extract",
+    "adminPort": 62041,
+    "controlPort": 62042,
+    "pid": 10800,
+    "pass": true,
+    "assets": [
+      {
+        "path": "/assets/index-CGtnnd6K.js",
+        "status": 200,
+        "bytes": 473354,
+        "sha256": "da38e9eb676a7dfcf2b375a99423208b95175d4e45d84f6fafa473372a2b69bd"
+      },
+      {
+        "path": "/assets/index-CTOWaF2j.css",
+        "status": 200,
+        "bytes": 11903,
+        "sha256": "b988c6fa2ad4e674e80e030b3366461e68097d057758c446ec1a839a939c1235"
+      }
+    ],
+    "pidFileExists": true,
+    "htmlStatus": 200,
+    "childExit": {
+      "code": null,
+      "signal": "SIGTERM"
+    }
+  }
+}

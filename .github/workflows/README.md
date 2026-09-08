@@ -67,6 +67,15 @@ gh workflow run build-release-binaries.yml \
 - `TTTGate-{version}-win-arm64.zip` - Windows ARM64
 - `TTTGate-{version}-alpine-x64.tar.gz` - Alpine Linux x64
 
+바이너리 아카이브는 해당 플랫폼의 `bin/TTTGate-*` 실행 파일과 관리자 `web/` 자산을 포함합니다.
+압축을 푼 구조를 유지하고 루트에서 실행합니다.
+
+```bash
+./bin/TTTGate-linux-x64 server -adminPort 9300
+# Windows:
+bin/TTTGate-win-x64.exe server -adminPort 9300
+```
+
 ### 소스 배포판 실행
 
 Node.js 24 이상에서 소스 아카이브를 새 디렉터리에 풀고 그 디렉터리에서 실행합니다.
