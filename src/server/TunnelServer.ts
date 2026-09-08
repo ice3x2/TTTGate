@@ -534,13 +534,17 @@ class TunnelServer {
                 if (result.packet) {
                     handler.deleteBundle(DATA_HANDSHAKE_POOL_BUNDLE_KEY);
                     handler.dataHandlerState = DataHandlerState.Initializing;
-                    handler.leftOverBuffer = result.remainBuffer;
+                    const payload = result.remainBuffer;
+                    handler.leftOverBuffer = undefined;
                     handler.ctrlID = result.packet.ctrlID;
                     handler.handlerID = result.packet.handlerID;
                     handler.sessionID = result.packet.firstSessionID;
                     handler.bindingToken = result.packet.bindingToken;
                     clientHandlerPool.putNewDataHandler(handler);
-                    if(!handler.isEnd()) this.markHandlerAuthenticated(handler);
+                    if(!handler.isEnd()) {
+                        this.markHandlerAuthenticated(handler);
+                        if(payload && payload.length > 0) this.receiveSessionPayload(handler, payload);
+                    }
 
                 } else {
                     handler.leftOverBuffer = result.remainBuffer;
@@ -553,23 +557,25 @@ class TunnelServer {
             }
         }
         else {
-             if (!handler.sessionID) {
-                 logger.error('onReceiveDataHandler: sessionID is undefined');
-                 handler.endImmediate();
-                 return;
-             }
-             
-             let ctrlPool = this.findClientHandlerPool(handler.sessionID);
-             if(!ctrlPool) {
-                 this._onSessionCloseCallback?.(handler.sessionID, 0);
-                return;
-             }
-             // P6-T1 / REQ-09: 데이터 수신도 활동으로 간주 → TTL 리셋.
-             this.markSessionActivity(handler.sessionID);
-             if(!ctrlPool.pushReceiveBuffer(handler.sessionID, data)) {
-                 this._onSessionCloseCallback?.(handler.sessionID, 0);
-             }
-             return;
+            this.receiveSessionPayload(handler, data);
+        }
+    }
+
+    private receiveSessionPayload(handler: TunnelDataHandler, data: Buffer): void {
+        if (!handler.sessionID) {
+            logger.error('onReceiveDataHandler: sessionID is undefined');
+            handler.endImmediate();
+            return;
+        }
+        const ctrlPool = this.findClientHandlerPool(handler.sessionID);
+        if(!ctrlPool) {
+            this._onSessionCloseCallback?.(handler.sessionID, 0);
+            return;
+        }
+        // P6-T1 / REQ-09: 데이터 수신도 활동으로 간주 → TTL 리셋.
+        this.markSessionActivity(handler.sessionID);
+        if(!ctrlPool.pushReceiveBuffer(handler.sessionID, data) && !handler.isEnd()) {
+            this._onSessionCloseCallback?.(handler.sessionID, 0);
         }
     }
 

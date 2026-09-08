@@ -54,12 +54,16 @@ test("actual v2 receiver waits at fixed-header and one-length-byte barriers", as
 test("actual legacy receiver admits fixed frame with a coalesced binary suffix", async () => withHandshake(false, async h => {
     const suffix = Buffer.from([0x47, 0x45, 0x54, 0x20, 0, 255, 128]);
     h.socket.write(Buffer.concat([h.frame, suffix]));
-    await h.peer.read(CtrlCmd.OpenSession, h.session.packet.sessionID);
+    await h.until(() => h.received() === h.frame.length + suffix.length, 'Frame and suffix not observed');
     const handler = h.observations[0].handler;
     expect(handler.handlerID).toBe(h.session.packet.ID);
     expect(handler.sessionID).toBe(h.session.packet.sessionID);
-    // #42 still owns subsequent delivery; this test checks the exact parsed suffix.
-    expect(handler.leftOverBuffer).toEqual(suffix);
+    // #42 strengthens the old retained-tail control to actual queue and delivery.
+    expect(handler.leftOverBuffer).toBeUndefined();
+    expect((h.peer.pool as any)._waitingDataBufferQueueMap.get(h.session.packet.sessionID).receiveBytes).toBe(suffix.length);
+    await h.finish();
+    await h.until(() => Buffer.concat(h.session.received).length >= suffix.length, 'Parsed suffix not delivered');
+    expect(Buffer.concat(h.session.received)).toEqual(suffix);
 }));
 
 test("a fragmented handshake cannot switch to a different authenticated pool object", async () => withHandshake(true, async h => {
