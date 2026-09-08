@@ -2,31 +2,25 @@
  * P7-T2 / REQ-21 — lint-auth-compare 가 strict(error) 승격 모드에서 exit 1 을 내고,
  * 클린 소스에서는 exit 0 을 내는지 검증한다.
  */
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "fs";
+import { mkdtempSync, mkdirSync, writeFileSync, realpathSync } from "fs";
 import { tmpdir } from "os";
 import { join, resolve } from "path";
-import { spawnSync } from "child_process";
+import {cleanupOwnedLintRoot, runLintProcess} from "../../helpers/lintProcess";
 
 describe("REQ-21: lint-auth-compare strict(error) mode", () => {
     const scriptPath = resolve(process.cwd(), "scripts", "lint-auth-compare.mjs");
     let tmpRoot: string;
 
     beforeEach(() => {
-        tmpRoot = mkdtempSync(join(tmpdir(), "lint-err-"));
+        tmpRoot = realpathSync(mkdtempSync(join(tmpdir(), "lint-err-")));
     });
     afterEach(() => {
-        try { rmSync(tmpRoot, { recursive: true, force: true }); } catch { /* noop */ }
+        cleanupOwnedLintRoot(tmpRoot);
     });
 
-    function run(target: string, strict: boolean) {
+    function run(target: string, strict: boolean, expectedExit: 0 | 1 = 0) {
         const reportDir = join(tmpRoot, "reports");
-        const args = [scriptPath, target, "--report-dir", reportDir];
-        if (strict) args.push("--strict");
-        return spawnSync(process.execPath, args, {
-            encoding: "utf-8",
-            env: { ...process.env },
-            timeout: 30_000
-        });
+        return runLintProcess({script: scriptPath, target, reportDir, cwd: tmpRoot, strict, expectedExit});
     }
 
     it("(a) 위반 파일 → strict 모드에서 exit≠0", () => {
@@ -38,8 +32,8 @@ describe("REQ-21: lint-auth-compare strict(error) mode", () => {
             `}\n`,
             { encoding: "utf-8" }
         );
-        const res = run(srcDir, true);
-        expect(res.status).not.toBe(0);
+        const res = run(srcDir, true, 1);
+        expect(res.status).toBe(1);
     });
 
     it("(b) 클린 소스 → strict 모드에서 exit 0", () => {

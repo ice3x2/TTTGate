@@ -1,7 +1,7 @@
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, rmSync } from "fs";
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, realpathSync } from "fs";
 import { tmpdir } from "os";
 import { join, resolve } from "path";
-import { spawnSync } from "child_process";
+import {cleanupOwnedLintRoot, runLintProcess} from "../../helpers/lintProcess";
 
 /**
  * P1-T2 / REQ-21 — lint-auth-compare 스크립트의 실환경 검증.
@@ -12,25 +12,17 @@ describe("scripts/lint-auth-compare.mjs", () => {
     let tmpRoot: string;
 
     beforeEach(() => {
-        tmpRoot = mkdtempSync(join(tmpdir(), "lint-auth-"));
+        tmpRoot = realpathSync(mkdtempSync(join(tmpdir(), "lint-auth-")));
     });
 
     afterEach(() => {
-        try { rmSync(tmpRoot, { recursive: true, force: true }); } catch { /* noop */ }
+        cleanupOwnedLintRoot(tmpRoot);
     });
 
-    function runScript(targetPath: string, env: Record<string, string> = {}, reportDir?: string) {
+    function runScript(targetPath: string, env: Record<string, string> = {}, reportDir?: string, expectedExit: 0 | 1 = 0) {
         // HIGH-2 격리: 리포트 디렉터리를 tmpRoot 하위로 돌려 cwd/reports/auth-compare.json 오염 금지.
         const rDir = reportDir ?? join(tmpRoot, "reports");
-        const res = spawnSync(
-            process.execPath,
-            [scriptPath, targetPath, "--report-dir", rDir],
-            {
-                encoding: "utf-8",
-                env: { ...process.env, ...env },
-                timeout: 30_000
-            }
-        );
+        const res = runLintProcess({script: scriptPath, target: targetPath, reportDir: rDir, cwd: tmpRoot, strict: env.LINT_AUTH_COMPARE_STRICT === "1", expectedExit});
         return { res, reportDir: rDir };
     }
 
@@ -76,7 +68,7 @@ describe("scripts/lint-auth-compare.mjs", () => {
             { encoding: "utf-8" }
         );
 
-        const { res } = runScript(srcDir, { LINT_AUTH_COMPARE_STRICT: "1" });
+        const { res } = runScript(srcDir, { LINT_AUTH_COMPARE_STRICT: "1" }, undefined, 1);
         expect(res.status).toBe(1);
     });
 
@@ -88,7 +80,7 @@ describe("scripts/lint-auth-compare.mjs", () => {
             { encoding: "utf-8" }
         );
 
-        const { res } = runScript(srcDir, { LINT_AUTH_COMPARE_STRICT: "1" });
+        const { res } = runScript(srcDir, { LINT_AUTH_COMPARE_STRICT: "1" }, undefined, 0);
         expect(res.status).toBe(0);
     });
 });
