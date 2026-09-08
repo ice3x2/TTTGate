@@ -107,7 +107,7 @@
   {
     "body": "## 요약\r\n\r\n본문 호스트 치환 테스트가 우회 조건만 확인하고, 정상 조건에서 실제로 치환이 일어나는지 단언하지 않습니다.\r\n\r\n## 근거\r\n\r\n- `test/unit/server/http/HttpHandler.rewrite.test.ts:135` — 한도 초과 시 우회 동작만 검증합니다.\r\n\r\n## 영향\r\n\r\n치환 기능 자체가 망가져도 테스트가 통과합니다. #30 (H-13) 과 #31 (H-14) 가 지적한 재작성 결함이 이 공백 안에 있습니다.\r\n\r\n## 권고\r\n\r\n한도 이내 본문에서 치환이 실제로 일어남을 단언하는 정상 경로 테스트를 추가합니다.\r\n\r\n## 검증 상태\r\n\r\n- 확인 방법: 테스트 코드 확인.\r\n\r\n---\r\n근거 문서: `docs/research/2026-09-05-tttgate-full-inspection.md` §7.5",
     "number": 56,
-    "state": "OPEN",
+    "state": "CLOSED",
     "title": "HTTP 본문 재작성 테스트가 정상 경로를 단언하지 않아 기능이 망가져도 통과함",
     "url": "https://github.com/ice3x2/TTTGate/issues/56"
   },
@@ -268,14 +268,14 @@
   {
     "body": "## 요약\r\n\r\nHost 헤더가 여러 개 있어도 거부하지 않고, 첫 번째만 치환한 뒤 나머지는 원문 그대로 내부망에 전달합니다.\r\n\r\n## 근거\r\n\r\n- `src/server/http/HttpPipe.ts:291-368` — 헤더 파싱이 중복 Host 를 거부하지 않습니다.\r\n- `src/server/http/HttpHandler.ts:350-356` — 치환 함수는 모든 헤더를 순회하지만, 값이 원본 Host 와 다른 두 번째 헤더는 일치하지 않아 그대로 남습니다.\r\n\r\n## 재현과 영향\r\n\r\n서로 다른 값을 가진 Host 헤더 두 개를 함께 보내면 두 번째가 원문 그대로 도달합니다. 내부 서버가 어느 값을 채택하느냐에 따라 가상 호스트 라우팅과 캐시 키가 갈립니다.\r\n\r\n## 권고\r\n\r\nHost 헤더가 둘 이상이면 400 으로 거부합니다.\r\n\r\n## 검증 상태\r\n\r\n- 기존 테스트 커버: 없음. `test/security/req-05-smuggling.test.ts` 는 Content-Length 와 Transfer-Encoding 중복만 검증합니다.\r\n- 도입 시점: 기존.\r\n- 확인 방법: 실행 재현.\r\n\r\n---\r\n근거 문서: `docs/research/2026-09-05-tttgate-full-inspection.md` §5.16",
     "number": 33,
-    "state": "OPEN",
+    "state": "CLOSED",
     "title": "중복 Host 헤더가 검증 없이 내부망으로 전달됨",
     "url": "https://github.com/ice3x2/TTTGate/issues/33"
   },
   {
     "body": "## 요약\r\n\r\n본문 재작성 상한을 넘으면 실패를 반환하지만, 소켓 파괴는 다음 수신이 있어야 일어납니다. 그 사이 클라이언트는 아무 응답도 받지 못합니다.\r\n\r\n## 근거\r\n\r\n- `src/server/http/HttpHandler.ts:366-389` — 상한 초과 시 실패를 반환합니다.\r\n- `src/server/http/HttpHandler.ts:116-120` — 소켓 파괴가 다음 수신 시점에 일어납니다.\r\n\r\n## 재현과 영향\r\n\r\n감사 과정에서 17MiB `text/plain` 응답을 보냈더니 클라이언트가 받은 바이트는 헤더 73바이트뿐이었고 소켓 파괴도 일어나지 않았습니다. 상한을 넘는 텍스트 응답에서 클라이언트가 무한 대기합니다.\r\n\r\n## 권고\r\n\r\n상한 초과 시 즉시 502 응답을 보내고 소켓을 종료하십시오. 클라이언트가 무한 대기하는 것보다 명시적 오류가 낫습니다.\r\n\r\n재작성을 포기하고 원본을 그대로 흘리는 방식은 더 나은 사용자 경험을 주지만, 본문에 내부망 호스트명이 남는다는 부작용이 있으므로 이 이슈의 범위 밖으로 둡니다.\r\n\r\n## 검증 상태\r\n\r\n- 기존 테스트 커버: 없음.\r\n- 도입 시점: 기존.\r\n- 확인 방법: 실행 재현.\r\n\r\n---\r\n근거 문서: `docs/research/2026-09-05-tttgate-full-inspection.md` §5.15",
     "number": 32,
-    "state": "OPEN",
+    "state": "CLOSED",
     "title": "재작성 상한을 넘는 텍스트 응답이 통지 없이 사라져 클라이언트가 무한 대기함",
     "url": "https://github.com/ice3x2/TTTGate/issues/32"
   },
@@ -289,7 +289,7 @@
   {
     "body": "## 요약\r\n\r\n본문을 문자열로 바꾼 뒤 다시 버퍼로 되돌리는 과정에서 UTF-8 로 해석되지 않는 바이트가 대체 문자로 치환됩니다.\r\n\r\n## 근거\r\n\r\n- `src/server/http/HttpHandler.ts:482-489` — `toString()` 후 `Buffer.from()` 을 수행합니다.\r\n- `src/server/http/HttpUtil.ts:148-172` — 미지원 인코딩은 압축 상태 그대로 반환합니다.\r\n- `src/server/http/HttpUtil.ts:155-161` — 다중 인코딩의 순서를 무시합니다.\r\n\r\n## 재현과 영향\r\n\r\n감사 과정에서 확인한 손상 사례는 다음과 같습니다.\r\n\r\n| 입력 | 결과 |\r\n|---|---|\r\n| `Content-Encoding: zstd` 본문 | 복구 불가능하게 훼손 |\r\n| `charset=euc-kr` 본문 | 모든 바이트가 대체 문자로 치환 |\r\n| `Content-Encoding: br, gzip` | gzip 만 풀고 brotli 계층 훼손 |\r\n\r\n한국어 EUC-KR 페이지를 서비스하는 내부망 웹서버가 정확히 이 경로에 해당합니다. 헤더는 원래 인코딩을 유지하므로 클라이언트 디코딩도 실패합니다.\r\n\r\n## 권고\r\n\r\n문자셋이 UTF-8 이 아니거나 인코딩 토큰이 지원 대상 단일값이 아니면 재작성을 건너뛰고 원본 바이트를 그대로 흘리십시오.\r\n\r\n이때 헤더도 원본 그대로 두어야 합니다. 지금은 재작성 여부와 무관하게 `Content-Length` 를 제거하고 `Transfer-Encoding: chunked` 를 붙이므로, 재작성을 건너뛰면 원래 길이 정보를 되살려야 합니다.\r\n\r\n## 검증 상태\r\n\r\n- 기존 테스트 커버: 없음. `test/unit/server/http/HttpHandler.rewrite.test.ts:92` 는 gzip 한계 초과 우회만 검증합니다.\r\n- 도입 시점: 기존.\r\n- 확인 방법: 실행 재현.\r\n\r\n---\r\n근거 문서: `docs/research/2026-09-05-tttgate-full-inspection.md` §5.13",
     "number": 30,
-    "state": "OPEN",
+    "state": "CLOSED",
     "title": "본문 재작성 경로가 바이너리와 비 UTF-8 응답을 파괴함",
     "url": "https://github.com/ice3x2/TTTGate/issues/30"
   },
@@ -324,21 +324,21 @@
   {
     "body": "## 요약\r\n\r\n상태 변경 콜백이 어느 클라이언트에서 온 것인지 확인하지 않습니다. 폐기된 이전 클라이언트의 지연된 종료 이벤트가 이미 살아 있는 새 연결을 무너뜨립니다.\r\n\r\n## 근거\r\n\r\n- `src/client/TTTClient.ts:48` — 콜백 시그니처의 `client` 인자를 사용하지 않습니다.\r\n- `src/client/TTTClient.ts:53-68` — 종료 상태에서 온라인 플래그를 내리고 엔드포인트 풀을 폐기합니다.\r\n- `src/client/TTTClient.ts:32-46` — 재시작 시 이전 `_tunnelClient` 를 파기하지 않습니다.\r\n- `src/client/TunnelClient.ts:167-171` — 핸드셰이크 실패 시 소켓이 닫히기 전에 종료 콜백을 먼저 호출합니다.\r\n\r\n## 재현과 영향\r\n\r\n핸드셰이크 실패 후 5초 뒤 재연결이 이루어졌는데, 이전 소켓이 그보다 늦게 종료 이벤트를 발화하면 재현됩니다. 살아 있는 엔드포인트 풀이 폐기되어 클라이언트는 서버에 온라인으로 보이지만 어떤 세션도 열 수 없는 상태가 됩니다. 이어서 중복 재연결 타이머가 등록되어 서버가 동일 이름의 클라이언트를 둘 보게 됩니다.\r\n\r\n## 권고\r\n\r\n콜백 진입부에서 현재 클라이언트가 아니면 즉시 반환합니다. 재시작 시 이전 클라이언트와 풀을 먼저 정리하고, 연결 성공 분기에서 대기 중인 재연결 타이머를 취소합니다.\r\n\r\n## 검증 상태\r\n\r\n- 기존 테스트 커버: 없음. `test/e2e/req-09-pool-swap-zombie.test.ts` 와 `test/stress/reconnect-churn.test.ts` 는 서버 전체 재시작만 반복하며 핸드셰이크 실패 후 지연 종료 시나리오는 다루지 않습니다.\r\n- 도입 시점: 기존.\r\n- 확인 방법: 코드 확인.\r\n\r\n---\r\n근거 문서: `docs/research/2026-09-05-tttgate-full-inspection.md` §5.8",
     "number": 25,
-    "state": "OPEN",
+    "state": "CLOSED",
     "title": "폐기된 `TunnelClient` 의 지연 콜백이 새 연결의 상태를 오염시킴",
     "url": "https://github.com/ice3x2/TTTGate/issues/25"
   },
   {
     "body": "## 요약\r\n\r\n데이터 핸들러 소켓의 이벤트 콜백에 연결과 수신 분기만 있고 종료 분기가 없습니다. 데이터 연결만 끊기면 세션이 활성 맵에 영구히 남습니다.\r\n\r\n## 근거\r\n\r\n- `src/client/TunnelClient.ts:388-420` — `SocketState.Connected` 와 `SocketState.Receive` 분기만 존재합니다.\r\n- `src/client/TunnelClient.ts:257-265` — 대비되는 제어 핸들러는 종료 분기를 가집니다.\r\n- `src/util/SocketHandler.ts:505-508` — 죽은 핸들러에 대한 쓰기가 조용히 버려집니다.\r\n- `src/client/TunnelClient.ts:444-447` — 최초 연결 실패 시 맵에 등록되지 않아 뒤이은 세션 개시 요청이 조용히 실패합니다.\r\n\r\n## 재현과 영향\r\n\r\n제어 연결은 유지된 채 데이터 연결 하나만 끊어지는 경우입니다. 중간 방화벽이나 로드밸런서가 유휴 데이터 연결을 개별적으로 끊거나 서버가 데이터 소켓만 리셋하는 상황이 해당합니다. 내부망 엔드포인트 소켓이 닫히지 않고 서버에도 종료가 통보되지 않아, 제어 연결이 죽을 때까지 세션과 내부망 커넥션이 누적됩니다.\r\n\r\n## 권고\r\n\r\n데이터 핸들러 이벤트 콜백에 종료 분기를 추가해 핸들러를 정리하고 엔드포인트 종료를 상위로 통보합니다.\r\n\r\n## 검증 상태\r\n\r\n- 기존 테스트 커버: 없음. `test/unit/client/req-14-connect-race.test.ts` 는 식별자 주입 경합만 검증합니다.\r\n- 도입 시점: 기존.\r\n- 확인 방법: 코드 확인.\r\n\r\n---\r\n근거 문서: `docs/research/2026-09-05-tttgate-full-inspection.md` §5.7",
     "number": 24,
-    "state": "OPEN",
+    "state": "CLOSED",
     "title": "클라이언트 데이터 핸들러의 종료 이벤트가 처리되지 않아 세션과 내부망 연결이 누수됨",
     "url": "https://github.com/ice3x2/TTTGate/issues/24"
   },
   {
     "body": "## 요약\r\n\r\n클라이언트 keepAlive 기본값이 0 이고 그 경우 소켓 keepalive 가 꺼집니다. 제어 연결에는 주기적 트래픽도 없고 하트비트 패킷도 프로토콜에 정의되어 있지 않습니다.\r\n\r\n## 근거\r\n\r\n- `src/client/ClientApp.ts:122` — 기본값이 0 입니다.\r\n- `src/util/TlsOptionsFactory.ts:27` — 값이 0 이면 소켓 keepalive 를 끕니다.\r\n- `src/commons/CtrlPacket.ts:36-51` — Ping 계열 명령이 정의되어 있지 않습니다.\r\n- `src/client/TunnelClient.ts:112-123` — 연결 옵션 생성부가 keepalive 를 설정하지 않아 데이터 핸들러만 기본값 60초를 받습니다.\r\n- `src/util/TCPServer.ts:11` — 서버는 자체 기본값 10초로 단절을 감지합니다.\r\n\r\n## 재현과 영향\r\n\r\nNAT 유휴 타임아웃, 케이블 분리, 서버 호스트 전원 차단처럼 종료 신호가 오지 않는 단절에서 재현됩니다. 클라이언트는 끊긴 터널을 무한정 정상으로 인식하고 재연결하지 않으므로, 터널은 프로세스를 수동 재시작할 때까지 죽어 있습니다. 생존 감지가 가장 중요한 제어 연결이 유일하게 keepalive 없이 동작하는 역전 구조입니다.\r\n\r\n## 권고\r\n\r\n클라이언트 keepAlive 기본값을 서버와 대칭인 양수로 바꾸고, 연결 옵션 생성부에서 제어와 데이터 양쪽에 동일한 값을 적용합니다.\r\n\r\n## 검증 상태\r\n\r\n- 기존 테스트 커버: 부분적. `test/unit/client/TunnelClient.keepalive.test.ts` 는 명시적으로 지정한 값의 전달만 확인하며, 기본값이 keepalive 를 비활성화한다는 사실은 검증하지 않습니다.\r\n- 도입 시점: 기존.\r\n- 확인 방법: 코드 확인.\r\n\r\n---\r\n근거 문서: `docs/research/2026-09-05-tttgate-full-inspection.md` §5.6",
     "number": 23,
-    "state": "OPEN",
+    "state": "CLOSED",
     "title": "클라이언트 제어 연결의 keepalive 가 기본값에서 꺼져 있어 끊어진 터널을 감지하지 못함",
     "url": "https://github.com/ice3x2/TTTGate/issues/23"
   },
@@ -467,5 +467,12 @@
     "state": "CLOSED",
     "title": "관리자 SPA 가 Svelte 4 클래스 API 를 호출해 부팅되지 않음",
     "url": "https://github.com/ice3x2/TTTGate/issues/5"
+  },
+  {
+    "body": "Existing server configuration load failures are treated as first startup: the store\ncreates defaults and attempts to save them, resetting persisted revision metadata.\nA parsing/validation failure can also publish a partial candidate internally before\nload reports failure. An operator correcting a bad file can lose the original\nconfiguration instead of receiving a startup error.\n\nSeparate truly missing configuration from an existing invalid/unreadable/non-file\npath. Create and persist defaults only for confirmed absence. Validate parsed data\nlocally and publish only a complete successful candidate. Return a bounded explicit\nload status for predictable invalid input. Refuse normal startup before certificate\nload, CLI option persistence and any listener start when existing configuration\ncannot load, preserving configuration and revision-state bytes. Keep intentional\nexplicit reset behavior, with its existing authorization/CLI semantics, intact.\n\nEvidence status: static source diagnosis only; actual reproductions and RED must be\ncollected after approved assignment. This is a separate prerequisite for #18 because\nadding a rejected TTL value to current validation would otherwise trigger the same\nexisting overwrite path. No #40 memory-limit decision is made by this issue.\n\n\nParent: #61.\n\nAcceptance: preserve existing config and revision bytes for invalid/read-error/non-file inputs; refuse normal startup before cert load, CLI persistence and listeners; validate a local candidate before publication; preserve missing-file initialization and explicit reset. Obtain actual RED, independent reviews, commit/push/closure and per-issue notification.\n",
+    "number": 72,
+    "state": "OPEN",
+    "title": "잘못된 기존 서버 설정이 로드 실패 시 기본값으로 덮어써짐",
+    "url": "https://github.com/ice3x2/TTTGate/issues/72"
   }
 ]

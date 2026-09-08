@@ -1,6 +1,6 @@
 # Independent HTTP header and framed-body work research
 
-Status: bounded #31 implementation completed through closure/notification3978; source b76a10c -> main4b5015f2b08b7784924754e3c09f5a8299131854 pushed/remote verified; GitHub CLOSED2026-09-08T09:14:59Z, comment5582451863; root Telegram3978(66/46). Integrated six suites/58tests PASS3.443seconds, natural exit0; forced build PASS. Original research below is historical. #33 policy/API approved and assigned to review_cert_conflict in process fix/epic61-duplicate-host at4b5015f; other proposals are not assigned. Current progress SSOT is execution plan.
+Status: #31/#33/#30/#32 complete; latest #32 receipt3983. No new HTTP implementation assigned by these completions; EOF/#29 remains held. Earlier proposed/assigned/pending text is historical; current progress SSOT is execution plan.
 
 - [x] Compare original issues and integrated source. Status: findings below.
 - [x] Inspect unintegrated #29 write overlap without modifying it. Status: UI worktree still has HttpHandler.ts and HttpPipe.ts changes; no pool change in its tracked diff.
@@ -111,9 +111,9 @@ latched, terminate before switching to raw forwarding; emit no HTTP400 into the
 upgraded stream. Subsequent response tail must stop after400 emission as well.
 
 - [x] Freeze ordered rejection/API. Status: root approved onRequestRejected duplicate-host callback once, separate inputReject/400sent latches, existing FIFO ordered400/end and explicit101/dead/incomplete-upstream exceptions.
-- [ ] Actual first-request RED. Status: plan identical/different/mixed-case duplicate Host, split/coalesced headers and invalid body/later request suffix; zero invalid bytes upstream, exact400/EOF once, healthy independent sibling. Single mixed-case Host remains valid and missing Host behavior is unchanged.
-- [ ] Actual pipelined RED. Status: plan one and multiple outstanding requests with partial CL and chunked responses, including existing synchronous text rewrite; invalid request arrives while response body is incomplete. Assert only valid requests upstream, no400 before all preceding final response bytes, exact ordered complete responses followed by400 and terminal close. Keep upstream open until these finite-message assertions complete; no FIN-triggered success.
-- [ ] Counter/terminal controls. Status: informational100/103 must not reduce pending count or release400 early; final responses do, invalid and later input never consume slots. Repeat bad input emits400 only once; owner cleanup once, pending/latch zero on terminal, sibling continues. Preserve128-cap behavior and existing CL/TE rejection. Include peer/write failure and accepted-upgrade exception without new error/EOF semantics.
+- [x] Actual first-request RED. Status: executed; original plan identical/different/mixed-case duplicate Host, split/coalesced headers and invalid body/later request suffix; zero invalid bytes upstream, exact400/EOF once, healthy independent sibling. Single mixed-case Host remains valid and missing Host behavior is unchanged.
+- [x] Actual pipelined RED. Status: executed; original plan one and multiple outstanding requests with partial CL and chunked responses, including existing synchronous text rewrite; invalid request arrives while response body is incomplete. Assert only valid requests upstream, no400 before all preceding final response bytes, exact ordered complete responses followed by400 and terminal close. Keep upstream open until these finite-message assertions complete; no FIN-triggered success.
+- [x] Counter/terminal controls. Status: informational100/103 must not reduce pending count or release400 early; final responses do, invalid and later input never consume slots. Repeat bad input emits400 only once; owner cleanup once, pending/latch zero on terminal, sibling continues. Preserve128-cap behavior and existing CL/TE rejection. Include peer/write failure and accepted-upgrade exception without new error/EOF semantics.
 
 Root dispatch freeze: only HttpPipe request header/rejection boundary and
 HttpHandler rejection/ordered-output boundary are writable production areas, plus
@@ -181,3 +181,8 @@ denied artifact cleanup or #29 EOF implementation is proposed or executed.
 
 - [x] Independent design review and root assignment. Status: approved; review_cert_conflict on fix/epic61-host-header at35a5d5f; HttpHandler.replaceHostInHeader Host-selection hunk plus dedicated test/ledger31 only; held UI/EOF/pool remains untouched.
 - [x] Observe #31 actual RED and complete independent per-issue gates. Status: complete3978; no successor approval follows automatically.
+
+## #33 completed gates
+
+- [x] Root integration/push/closure/notification. Status: source634183f -> main31311b2142d1d2a28d638005f51b034a0bed6e2c pushed/remote verified; GitHub CLOSED2026-09-08T09:33:46Z, comment5582767217; root Telegram3979(66/47). Seven suites/68tests PASS2.822seconds, natural exit0; forced build PASS.
+No #30/#32/#56 implementation is authorized by this closure. See execution plan for current state.

@@ -1,6 +1,6 @@
 # Issue23 consistent native client keepalive
 
-Status: validRED then minimum implementation/focusedGREEN complete; related6suites43PASS/buildPASS, frozen for two independent reviews. Root assigned control fix/epic61-client-keepalive at286feff; production3files only. Main current assignment must be recorded before source.
+Status: complete; source602a24e -> mainfc6e286bcd91a33203bf3d52f7dde780b010318b pushed/remote verified; CLOSED2026-09-08T11:13:55Z comment5584258275 Telegram3985(66/53). Seven suites/46tests PASS70.867seconds natural exit0/buildPASS. Earlier pending gates describe historical stages; current progress SSOT is execution plan.
 
 - [x] Original23/approved resolver design and existing reuse read. Status: extract existing shared keepalive checks only, reuse factory/real peer fixture, no whole-option normalization in TunnelClient.
 - [x] Actual RED. Status:96992/3ee84b naturalexit1,15failed22.303seconds before all source writes.
@@ -19,7 +19,7 @@ Test-only logger delegates then strengthened once-warning assertions for CLI/dir
 ## Final frozen verification
 
 - [x] Related regressions and forced build. Status:35026/4d34f4 six suites43testsPASS67.478seconds; sequential `npm run build -- --force` completed f664a1 naturalexit0. Existing npm always-auth warnings only. No live handle remains. Focused15PASS22.257 and related43PASS are distinct executions, not a synthetic58-test result.
-- [ ] Two independent reviews/root integration. Status: frozen five files; ClientApp.ts, TunnelClient.ts, types/TunnelingOption.ts, dedicated keepalive-options.test.ts and this ledger. No commit.
+- [x] Two independent reviews/root integration. Status: all per-issue gates complete; operational receipts below.
 
 Related exact command: `node node_modules/jest/bin/jest.js --runInBand --silent --runTestsByPath test/component/client/keepalive-options.test.ts test/unit/client/req-15-option-range.test.ts test/unit/client/TunnelClient.keepalive.test.ts test/unit/client/req-02-insecure-tls-yaml.test.ts test/security/req-02-tls-settings.test.ts test/component/client/client-owner.test.ts`.
 
@@ -29,6 +29,11 @@ Exact proposed title: `fix: 클라이언트 제어·데이터 연결에 동일�
 ## Root-confirmed final independent reviews
 
 - [x] Two independent reviews. Status: root confirmed review_wave0 and fix_lint_diagnostics both returned full PASS with zero Critical/High/Medium/Low findings and exact-title PASS. Neither reviewer performed additional test execution. These are results from two other reviewers, not author self-verification.
-- [ ] Root commit/integration. Status: pending; source/tests remain frozen. This update changes only the ledger and author performs no commit or process termination.
+- [x] Root commit/integration. Status: all per-issue gates complete; operational receipts below.
 
 Exact reviewed title: `fix: 클라이언트 제어·데이터 연결에 동일한 keepalive 적용`.
+
+## Operational completion
+
+- [x] Integration/push/closure/notification. Status: source602a24e -> mainfc6e286bcd91a33203bf3d52f7dde780b010318b pushed/remote verified; CLOSED2026-09-08T11:13:55Z comment5584258275 Telegram3985(66/53). Seven suites/46tests PASS70.867seconds natural exit0/buildPASS.
+Root supplied operational receipts. At latest joint checkpoint53CLOSED/53notified of66; original selected tests, failures and independent reviews remain historical and are not merged into invented runs. #18 load-refusal scope remains unassigned under review, #28/#40 replies pending and #29 held.

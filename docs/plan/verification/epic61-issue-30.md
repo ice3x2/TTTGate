@@ -1,6 +1,6 @@
 # Issue #30 — Finite text rewrite eligibility
 
-Status: implementation and independent test-only live-sibling correction passed both final rereviews; source/test frozen for root commit/integration. Original first-review and M1 history remain preserved.
+Status: complete; source8f90534 -> main1b329daab74c9981479a4875ccbd455c88d57d54 pushed/remote verified; GitHub CLOSED2026-09-08T09:48:56Z, comment5583034448; root Telegram3981(66/49). Eight suites/96tests PASS3.354seconds, natural exit0; forced build PASS. Earlier pending and review/fixer records are historical.
 Approved API: HttpUtil.canRewriteTextEncoding(HttpHeader):boolean; HttpHandler eligibility AND before framing/header commit. Scope: these two production hunks, dedicated tests/fixture and ledger only. #32/EOF29/pool/new codecs remain excluded.
 
 - [x] Read approved body research and reuse. Status: existing findHeaders/raw path/codecs and withHttpDuplex reused; Node HTTP parser observes completion rather than FIN assumptions.
@@ -54,3 +54,8 @@ Before/after SHA256 (f1ff43/ffbb9e) identical: HttpHandler68C26EFA071B398E6EB90A
 
 Root confirmed review_wave0 and fix_lint_diagnostics final independent M1 rereviews PASS with zero Critical/High/Medium/Low findings and existing exact-title PASS. Neither reviewer executed additional tests for this final rereview. Original initial26PASS/first review and the subsequently requested M1 coverage remain separate history.
 review_wave0 verified actual partial opaque input and incomplete response bracket the independent sibling rewrite/end/complete and next exchange; subsequent suffix release preserves exact opaque bytes/framing and completes normally. Error/abort conditions surface; production blobs match the prior reviewed source. Selected2PASS and related43PASS remain the separate fixer executions above, not a new production RED. Source/test files were not changed by this ledger update; root commit/integration remain pending.
+
+## Operational completion
+
+- [x] Root integration/push/closure/notification. Status: source8f90534 -> main1b329daab74c9981479a4875ccbd455c88d57d54 pushed/remote verified; GitHub CLOSED2026-09-08T09:48:56Z, comment5583034448; root Telegram3981(66/49). Eight suites/96tests PASS3.354seconds, natural exit0; forced build PASS.
+Root supplied these facts; at closure49CLOSED/49notified of66. Original20RED/positive controls, first26PASS and sibling test-only follow-up remain distinct. #32 now separately assigned under the approved body policy; current progress SSOT is execution plan. No remaining #30 completion gate.

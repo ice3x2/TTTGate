@@ -1,6 +1,6 @@
 # Issue #32 — Finite rewrite body limit
 
-Status: minimum implementation/nine focused GREEN/105regression GREEN/forced build complete; frozen for two independent reviews. Owner fix_supply15, process branch `fix/epic61-http-body-limit`, base `1b329da`.
+Status: complete; source6ba4ff1 -> main286feff843a617afd5dba1603a235ac80a2046cd pushed/remote verified; CLOSED2026-09-08T11:01:15Z, comment5584110658, Telegram3983(66/51); nine suites/106tests PASS4.973seconds natural exit0/buildPASS. Earlier review/assignment/pending statements record historical stages.
 Root-approved body research: only HttpHandler eligible precommit/body-terminal hunks and dedicated tests/ledger. Existing16MiB counts encoded accumulator bytes. Known eligible CL>limit gets one502/CL0/Connectionclose before original header; after committed chunked cumulative>limit abort immediately, no second status/raw fallback/success terminator. This postcommit abort is the explicit root-approved exception to original always502. It cancels #33 pending400. #30 codec eligibility/decompressionlimit/EOF29/pool untouched.
 
 - [x] Read policy and reuse. Status: existing request FIFO, header-reset guard, SocketHandler end/destroy and owned duplex fixture reused.
@@ -41,3 +41,8 @@ The added test delegates native502 writing, records its actual bytes at the clie
 
 Exact title: `fix: 본문 재작성 한도 초과 시 즉시 응답 종료`.
 User process safety rule remains binding: never terminate node.exe by process name; any task-owned termination requires current PID, command line and ownership verification. This ledger update performed no process termination.
+
+## Operational completion
+
+- [x] Root integration/push/closure/notification. Status: source6ba4ff1 -> main286feff843a617afd5dba1603a235ac80a2046cd pushed/remote verified; CLOSED2026-09-08T11:01:15Z, comment5584110658, Telegram3983(66/51); nine suites/106tests PASS4.973seconds natural exit0/buildPASS.
+Root supplied these facts. Current counts/active work are maintained in execution plan; original RED/failure/explicit exceptions and distinct execution receipts remain preserved. No remaining per-issue gate. #23 now separately assigned; #18/#28/#40/#29 boundaries unchanged.

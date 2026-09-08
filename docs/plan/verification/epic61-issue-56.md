@@ -1,13 +1,13 @@
 # Issue #56 — Existing positive HTTP body rewrite evidence
 
-Status: two independent audits PASS; evidence-only resolution prepared. Documentation review/commit/integration/GitHub closure/notification pending. Current epic remains51CLOSED/51notified of66; #56 is not yet counted complete.
+Status: complete; Evidence commit4fbb7aa61be9c5b374ad12087fa75a1002877ca9 pushed/remote verified; CLOSED2026-09-08T11:11:43Z comment5584233000 Telegram3984(66/52). Existing independent6PASS/22filtered0.528natural0 and two audits/document reviews; no new source/test. Earlier pending gates describe historical stages; current progress SSOT is execution plan.
 Recorder: fix_supply15 in main worktree `C:/Work/git/_Snoworca/TTTGate-epic61`. This records root-confirmed independent results; it is not the research author's self-approval. No source/test change, new test, new RED or test execution by this recorder.
 
 - [x] Map original56 recommendation to existing explicit positive assertions. Status: exact anchors below.
 - [x] Independent audits and selected existing-test verification. Status: review_wave0 and fix_lint_diagnostics each C0/H0/M0/L0; separate receipts below.
 - [x] Root choose evidence-only resolution. Status: existing integrated tests satisfy original recommendation; optional matrix expansion is not required for this closure.
 - [ ] Independently review evidence documents/title and integrate. Status: prepared, no stage/commit authorized.
-- [ ] Root GitHub closure and per-issue notification. Status: pending; no external write made.
+- [x] Root GitHub closure and per-issue notification. Status: all per-issue gates complete; operational receipts below.
 
 ## Requirement and direct assertion mapping
 
@@ -38,3 +38,8 @@ The root approved evidence-only resolution after these audits. Recorder fix_supp
 Compressed chunked-input positives, Korean UTF-8/multiple URL occurrences and a second rewritten Host context remain optional matrix extensions identified in `epic61-issue-56-research.md`. They are broader than the original request for a positive within-limit assertion and are not silently claimed covered. Existing cases use a single ASCII HTTP URL/text/plain. No production fix is proposed from this audit.
 
 Close-delimited/unknown-length body completion remains outside finite evidence and held by #29. No held UI/pool/EOF work, benchmark, denied temporary-path operation, dependency or process operation occurred. #28/#40 decisions remain separate. Proposed exact documentation title: `docs: HTTP 본문 치환 정상 경로 검증 근거 기록`. Root must complete documentation gates and then individually close/notify #56 before changing the completed count.
+
+## Operational completion
+
+- [x] Integration/push/closure/notification. Status: Evidence commit4fbb7aa61be9c5b374ad12087fa75a1002877ca9 pushed/remote verified; CLOSED2026-09-08T11:11:43Z comment5584233000 Telegram3984(66/52). Existing independent6PASS/22filtered0.528natural0 and two audits/document reviews; no new source/test.
+Root supplied operational receipts. At latest joint checkpoint53CLOSED/53notified of66; original selected tests, failures and independent reviews remain historical and are not merged into invented runs. #18 load-refusal scope remains unassigned under review, #28/#40 replies pending and #29 held.

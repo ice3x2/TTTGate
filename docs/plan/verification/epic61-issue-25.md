@@ -1,6 +1,6 @@
 # Issue25 upper client owner
 
-Status: original implementation and test-only endpoint-state M1 correction complete; review_cert_conflict and fix_lint_diagnostics final correction rereviews PASS, source/test frozen for root commit/integration.
+Status: complete; sourceef11102 -> maind1ad8ffa8fc1857ab894594e175741050bac3e4a pushed/remote verified; CLOSED2026-09-08T10:58:29Z, comment5584078471, Telegram3982(66/50); six suites/46tests PASS145.728seconds natural exit0/buildPASS. Earlier review/assignment/pending statements record historical stages.
 
 - [x] Read original lifecycle source/research and reuse. Status: reuse withClient real fixture, existing scheduler and disposal; no new fixture or transport.
 - [x] Observe actual RED before production. Status: eight corrected baseline failures and separate queued-sibling failure below.
@@ -45,3 +45,8 @@ Full owner regression: node node_modules/jest/bin/jest.js --runInBand --silent -
 
 Root confirmed review_cert_conflict and fix_lint_diagnostics independent final test-only correction rereviews PASS, zero Critical/High/Medium/Low findings and existing exact-title PASS. Neither reviewer performed additional test execution. M1 is resolved: old EndPointClientPool Connected/End/Closed probes cover the matching fresh SID while actual queued siblings, sync/close side-effect counts and later delivery/echo remain correct. Original production review and the subsequent test-only addition remain distinct; no new production RED is claimed.
 This ledger-only update changes no source/test. Root commit/integration remain pending. Existing selected3PASS10.576 and full owner12PASS40.977 are the recorded correction executions, separate from historical author compatibility evidence.
+
+## Operational completion
+
+- [x] Root integration/push/closure/notification. Status: sourceef11102 -> maind1ad8ffa8fc1857ab894594e175741050bac3e4a pushed/remote verified; CLOSED2026-09-08T10:58:29Z, comment5584078471, Telegram3982(66/50); six suites/46tests PASS145.728seconds natural exit0/buildPASS.
+Root supplied these facts. Current counts/active work are maintained in execution plan; original RED/failure/explicit exceptions and distinct execution receipts remain preserved. No remaining per-issue gate. #23 now separately assigned; #18/#28/#40/#29 boundaries unchanged.

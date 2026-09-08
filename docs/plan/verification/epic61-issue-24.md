@@ -1,6 +1,6 @@
 # Issue #24 — Data terminal ownership
 
-Status: final full independent review by review_wave0 and separate fixer-delta review by fix_supply15 PASS; source/test frozen for root commit/integration. Original author fix_supply15 did not independently approve its own full implementation. Execution failures and separate passing receipts remain preserved.
+Status: complete; source643afe2 -> mainc497ecd5feb6403315894b7c7d928b6a8aca3776 pushed/remote verified; GitHub CLOSED2026-09-08T09:36:26Z, comment5582813455; root Telegram3980(66/48). Eight suites/55tests PASS164.834seconds, natural exit0; forced build PASS. Earlier stage/review-pending statements are historical; original failed receipts remain unchanged.
 Approved main lifecycle research and root assignment: TunnelClient only plus dedicated tests/fixtures/ledger. #25/#23/#18 remain later gates; no endpoint/server/socket/wire changes.
 
 - [x] Read original issue and latest pending-attempt/terminal API. Status: reuse existing clearWaitBuffer/deleteDataHandler/packet producers and #45 real greeting barrier.
@@ -56,3 +56,8 @@ Final47528 natural exit0: five suites/43tests147.841seconds. Existing client dat
 
 review_wave0 independently reviewed the full original #24/approved contract/final code/tests/evidence: PASS, zero Critical/High/Medium/Low findings and exact-title PASS. Root separately confirmed fix_supply15 reviewed the independent fixer fix_lint_diagnostics delta with PASS and exact-title PASS; this is not original-author approval of its own whole change. Neither reviewer performed additional execution in these final reviews.
 The six focused tests, six actual suites/50 passing tests inside the ENOENT-failed command, separately executed intended three-test suite and build remain distinct receipts. No failed command is relabeled all-green. Source/test remain unchanged; root controls subsequent commit/integration/closure. This reviewer-authored entry changes only the ledger.
+
+## Operational completion
+
+- [x] Root integration/push/closure/notification. Status: source643afe2 -> mainc497ecd5feb6403315894b7c7d928b6a8aca3776 pushed/remote verified; GitHub CLOSED2026-09-08T09:36:26Z, comment5582813455; root Telegram3980(66/48). Eight suites/55tests PASS164.834seconds, natural exit0; forced build PASS.
+Root supplied these operational facts. At closure the epic reached48CLOSED/48notified of66. Original setup/ENOENT failed command, actual50PASS and separately3PASS remain separate historical evidence; the new final8suites55PASS is a distinct execution. No remaining #24 gate; #25 awaits independent design reconfirmation/assignment. #28/#40/#29 boundaries unchanged.
