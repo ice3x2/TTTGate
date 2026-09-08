@@ -72,6 +72,13 @@ let ServerApp : {start(options?: {[key: string]: string}) : Promise<void>} = {
             serverOptionStore.reset();
             await certStore.reset();
         }
+        const loaded = serverOptionStore.readServerOption();
+        if(!loaded.success) {
+            logger.error(loaded.message);
+            console.error(loaded.message);
+            process.exitCode = 1;
+            return;
+        }
         await certStore.load();
         applyStartupOptions(cliOptions, serverOptionStore);
         const policyDecision = evaluateAdminSecurityPolicy(serverOptionStore.serverOption);

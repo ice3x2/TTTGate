@@ -22,12 +22,24 @@ type TunnelingOptionNormalizationMode = "new-config" | "legacy-load";
 const OPTION_FILE_NAME: string = 'server.yaml';
 const OPTION_STATE_FILE_NAME: string = '.server.state.json';
 
+type ConfigLoadStatus = {ready: true; source: 'loaded' | 'created' | 'reset'} |
+    {ready: false; reason: 'non-file' | 'read-error' | 'empty' | 'parse' | 'validation'};
+
 class ServerOptionStore {
 
     private static _instance : ServerOptionStore;
     private readonly _configFile : File;
     private readonly _stateFile : File;
     private _serverOption : ServerOption;
+    private _loadStatus: ConfigLoadStatus = {ready: false, reason: 'empty'};
+
+    public get loadStatus(): ConfigLoadStatus { return {...this._loadStatus}; }
+    public readServerOption(): {success: true; serverOption: ServerOption} | {success: false; message: string} {
+        return this._loadStatus.ready ? {success: true, serverOption: this.serverOption} : {success: false, message: 'server configuration is not ready'};
+    }
+    private assertReady(): void {
+        if(!this._loadStatus.ready) throw new Error('server configuration is not ready');
+    }
     private _revisionState: RevisionState;
     private _serverOptionUpdateCallback? : ServerOptionUpdateCallback;
     private _configurationMutation: Promise<void> = Promise.resolve();
@@ -45,6 +57,7 @@ class ServerOptionStore {
     }
 
     public get serverOption() : ServerOption {
+        this.assertReady();
         //delete result['tunnelingOptions'];
         return ObjectUtil.cloneDeep(this._serverOption);
     }
@@ -54,10 +67,12 @@ class ServerOptionStore {
     }
 
     public get revisionState(): RevisionState {
+        this.assertReady();
         return ObjectUtil.cloneDeep(this._revisionState);
     }
 
     public prepareServerOption(serverOption: ServerOption): {success: boolean, message: string, serverOption?: ServerOption} {
+        if(!this._loadStatus.ready) return {success: false, message: 'server configuration is not ready'};
         if(!serverOption.tunnelingOptions) {
             serverOption.tunnelingOptions = this._serverOption.tunnelingOptions;
         }
@@ -65,6 +80,7 @@ class ServerOptionStore {
     }
 
     public composeServerOptionWithTunnelingOption(tunnelingOption: TunnelingOption): {success: boolean, message: string, serverOption?: ServerOption} {
+        if(!this._loadStatus.ready) return {success: false, message: 'server configuration is not ready'};
         const normalizedOption = ObjectUtil.cloneDeep(tunnelingOption);
         const result = this.verificationTunnelingOption(normalizedOption);
         if(!result.success) {
@@ -81,6 +97,7 @@ class ServerOptionStore {
     }
 
     public composeServerOptionWithoutTunnelingOption(forwardPort: number): {success: boolean, message: string, serverOption?: ServerOption} {
+        if(!this._loadStatus.ready) return {success: false, message: 'server configuration is not ready'};
         const serverOption = this.serverOption;
         const index = serverOption.tunnelingOptions.findIndex((option) => option.forwardPort == forwardPort);
         if(index < 0) {
@@ -94,6 +111,7 @@ class ServerOptionStore {
         serverOption: ServerOption,
         options: {markLastKnownGood?: boolean, pendingRestartScopes?: string[]} = {}
     ): {success: boolean, message: string, revisionState?: RevisionState} {
+        if(!this._loadStatus.ready) return {success: false, message: 'server configuration is not ready'};
         const result = this.prepareServerOptionCommit(serverOption, options);
         if(!result.prepared) return {success: false, message: result.message};
         Files.writeAtomicBatchSync(result.prepared.files);
@@ -103,6 +121,7 @@ class ServerOptionStore {
 
     public prepareServerOptionCommit(serverOption: ServerOption,
         options: {markLastKnownGood?: boolean, pendingRestartScopes?: string[]} = {}) {
+        if(!this._loadStatus.ready) return {success: false, message: 'server configuration is not ready'};
         const result = this.prepareServerOption(ObjectUtil.cloneDeep(serverOption));
         if(!result.success) {
             return {success: false, message: result.message};
@@ -125,23 +144,30 @@ class ServerOptionStore {
         return {success: true, message: "", prepared: {serverOption: result.serverOption!, revisionState, files}};
     }
 
-    public publishPreparedServerOption(prepared: NonNullable<ReturnType<ServerOptionStore['prepareServerOptionCommit']>['prepared']>): void {
+    public publishPreparedServerOption(prepared: NonNullable<ReturnType<ServerOptionStore['prepareServerOptionCommit']>['prepared']>): boolean {
+        if(!this._loadStatus.ready) return false;
         this._serverOption = ObjectUtil.cloneDeep(prepared.serverOption);
         this._revisionState = ObjectUtil.cloneDeep(prepared.revisionState);
+        return true;
     }
 
     public captureCommittedState() {
+        this.assertReady();
         return {serverOption: this.serverOption, revisionState: this.revisionState,
             files: Files.captureFiles([this._configFile, this._stateFile])};
     }
 
-    public restoreCommittedState(state: ReturnType<ServerOptionStore['captureCommittedState']>): void {
+    public restoreCommittedState(state: ReturnType<ServerOptionStore['captureCommittedState']>): boolean {
+        if(!this._loadStatus.ready) return false;
         Files.writeAtomicBatchSync(state.files);
         this._serverOption = ObjectUtil.cloneDeep(state.serverOption);
         this._revisionState = ObjectUtil.cloneDeep(state.revisionState);
+        return true;
     }
 
-    public markLastKnownGood(revision: number = this._revisionState.currentRevision, pendingRestartScopes: string[] = []): void {
+    public markLastKnownGood(revision?: number, pendingRestartScopes: string[] = []): boolean {
+        if(!this._loadStatus.ready) return false;
+        revision ??= this._revisionState.currentRevision;
         this._revisionState.lastKnownGoodRevision = revision;
         this._revisionState.lastKnownGoodAt = Date.now();
         this._revisionState.pendingRestartScopes = [...pendingRestartScopes];
@@ -149,14 +175,18 @@ class ServerOptionStore {
             this._revisionState.lastRollback = undefined;
         }
         this.saveRevisionState();
+        return true;
     }
 
-    public recordRollback(reason: string, failedScopes: string[], attemptedRevision?: number, restoredRevision = this._revisionState.currentRevision): void {
+    public recordRollback(reason: string, failedScopes: string[], attemptedRevision?: number, restoredRevision?: number): boolean {
+        if(!this._loadStatus.ready) return false;
+        restoredRevision ??= this._revisionState.currentRevision;
         const revisionState = this.revisionState;
         revisionState.lastRollback = {at: Date.now(), reason, failedScopes: [...failedScopes],
             attemptedRevision: attemptedRevision ?? (revisionState.currentRevision + 1), restoredRevision};
         Files.writeAtomicBatchSync([{file: this._stateFile, data: JSON.stringify(revisionState, null, 2), mode: 0o600}]);
         this._revisionState = revisionState;
+        return true;
     }
 
     public updateServerOption(serverOption: ServerOption): boolean {
@@ -187,6 +217,7 @@ class ServerOptionStore {
     }
 
     public getTunnelingOptions() : Array<TunnelingOption> {
+        this.assertReady();
         let result : Array<TunnelingOption> = [];
         for(let option of this._serverOption.tunnelingOptions) {
             result.push(ObjectUtil.cloneDeep(option));
@@ -196,6 +227,7 @@ class ServerOptionStore {
 
 
     public getTunnelingOption(forwardPort: number) : TunnelingOption | undefined {
+        this.assertReady();
         for(let option of this._serverOption.tunnelingOptions) {
             if(option.forwardPort == forwardPort) {
                 return ObjectUtil.cloneDeep(option);
@@ -224,21 +256,30 @@ class ServerOptionStore {
         this._configFile = new File(configDir, OPTION_FILE_NAME);
         this._stateFile = new File(configDir, OPTION_STATE_FILE_NAME);
         this._revisionState = this.loadRevisionState();
-        if(!this._configFile.isFile() || !this.load()) {
-            logger.info(`make default option`);
-            this.makeDefaultOption();
-            this._revisionState = createInitialRevisionState();
-            this.save();
+        let stat: fs.Stats;
+        try { stat = fs.statSync(this._configFile.toString()); }
+        catch(error) {
+            if((error as NodeJS.ErrnoException).code === 'ENOENT') {
+                try { fs.lstatSync(this._configFile.toString()); }
+                catch(entryError) {
+                    if((entryError as NodeJS.ErrnoException).code === 'ENOENT') { this.initializeDefaults('created'); return; }
+                }
+            }
+            this._loadStatus = {ready: false, reason: 'read-error'}; return;
         }
+        if(!stat.isFile()) { this._loadStatus = {ready: false, reason: 'non-file'}; return; }
+        this.load();
     }
 
-    public save() : void {
+    public save() : boolean {
+        if(!this._loadStatus.ready) return false;
         let yamlString : string = YAML.stringify(this._serverOption);
         Files.writeAtomicSync(this._configFile, yamlString);
         try {
             fs.chmodSync(this._configFile.toString(), 0o600);
         } catch {}
         this.saveRevisionState();
+        return true;
     }
 
     public reset() : void {
@@ -249,37 +290,50 @@ class ServerOptionStore {
         if(this._stateFile.isFile()) {
             this._stateFile.delete();
         }
-        this.makeDefaultOption();
-        this._revisionState = createInitialRevisionState();
-        this.save();
+        this._loadStatus = {ready: false, reason: 'empty'};
+        this.initializeDefaults('reset');
     }
 
-    private load() : boolean {
-        try {
-            let yamlString = Files.toStringSync(this._configFile);
-            if(yamlString) {
-                this._serverOption = YAML.parse(yamlString);
-            }
-            let result = this.verificationServerOption(this._serverOption);
-            if(!result.success) {
-                logger.error(`validation fail - ${result.message}`);
-                return false;
-            }
-            for(let tunnelingOption of this._serverOption.tunnelingOptions) {
-                let tunnelOptionResult = this.verificationTunnelingOption(tunnelingOption, "legacy-load")
-                if(!tunnelOptionResult.success) {
-                    logger.error(`validation fail - ${tunnelOptionResult.message}`);
-                    return false;
-                }
-            }
-            if(!this._revisionState) {
-                this._revisionState = createInitialRevisionState();
-            }
-            return result.success;
-        } catch (e) {
-            console.error(e);
+    private initializeDefaults(source: 'created' | 'reset'): void {
+        const option = this.makeDefaultOption(), revision = createInitialRevisionState();
+        Files.writeAtomicBatchSync([{file: this._configFile, data: YAML.stringify(option), mode: 0o600},
+            {file: this._stateFile, data: JSON.stringify(revision, null, 2), mode: 0o600}]);
+        this._serverOption = option; this._revisionState = revision; this._loadStatus = {ready: true, source};
+    }
+
+    private load(): void {
+        let text: string;
+        try { text = fs.readFileSync(this._configFile.toString(), 'utf8'); }
+        catch { this._loadStatus = {ready: false, reason: 'read-error'}; return; }
+        if(text.trim().length === 0) { this._loadStatus = {ready: false, reason: 'empty'}; return; }
+        let candidate: ServerOption;
+        try { candidate = YAML.parse(text); }
+        catch(error) {
+            if(error instanceof YAML.YAMLParseError) { this._loadStatus = {ready: false, reason: 'parse'}; return; }
+            throw error;
         }
-        return false;
+        const record = (value: unknown): value is Record<string, any> => typeof value === 'object' && value !== null && !Array.isArray(value);
+        if(!record(candidate) || (candidate.adminBindHost != undefined && typeof candidate.adminBindHost !== 'string') ||
+            (candidate.tunnelingOptions && (!Array.isArray(candidate.tunnelingOptions) ||
+            !candidate.tunnelingOptions.every(option => record(option) && (!option.httpOption ||
+                (record(option.httpOption) && [option.httpOption.bodyRewriteRules, option.httpOption.customRequestHeaders, option.httpOption.customResponseHeaders].every(value =>
+                    value === undefined || (Array.isArray(value) && value.every(record)))))))) ||
+            (candidate.trustedClients && (!Array.isArray(candidate.trustedClients) ||
+                !candidate.trustedClients.every(client => {
+                    if(!record(client)) return false;
+                    if(!client.clientId) return true;
+                    if(typeof client.clientId !== 'string') return false;
+                    if(!client.clientId.trim() || !client.clientSecret) return true;
+                    if(typeof client.clientSecret !== 'string') return false;
+                    return !client.clientSecret.trim() || client.displayName == undefined || typeof client.displayName === 'string';
+                })))) {
+            this._loadStatus = {ready: false, reason: 'validation'}; return;
+        }
+        if(!this.verificationServerOption(candidate).success ||
+            candidate.tunnelingOptions.some(option => !this.verificationTunnelingOption(option, 'legacy-load').success)) {
+            this._loadStatus = {ready: false, reason: 'validation'}; return;
+        }
+        this._serverOption = candidate; this._loadStatus = {ready: true, source: 'loaded'};
     }
 
     public verificationServerOption(option: ServerOption) : {success: boolean, message: string, serverOption?: ServerOption} {
@@ -445,8 +499,8 @@ class ServerOptionStore {
     }
 
 
-    private makeDefaultOption() : void {
-        this._serverOption = {
+    private makeDefaultOption() : ServerOption {
+        return {
             key: `srv-${createOpaqueToken(16)}`,
             adminPort: 9300,
             adminBindHost: "127.0.0.1",
