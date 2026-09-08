@@ -1,6 +1,6 @@
 # Session lifecycle research (#24 -> #25 -> #23 -> #18)
 
-Status: #24/#25/#23 complete; latest #23 receipt3985. #18 exact five-file design independently PASS/root approved and assigned review_cert_conflict/process fix/epic61-session-idle-policy ata64a901; actual RED precedes source. Earlier approval/implementation-pending prose is historical; current counts/active state SSOT is execution plan.
+Status: lifecycle24/25/23/18 complete; latest18 CLOSED2026-09-08T12:36:35Z/comment5585232482/Telegram3992(67/58), source9fe3728 -> remote-verified563795955855687f01f6644a8310278c764e42b8. Earlier design/assignment/RED-pending prose is historical; execution Status/Resume is current-progress SSOT.
 At the initial research checkpoint, implementation assignment followed the joint #45/#46 milestone; that research performed no source, server, test or timing execution.
 Researcher review_cert_conflict; initial inspection main `07c083d`; ownership paths
 rechecked on current main `35a5d5f` including the #46 metadata changes.

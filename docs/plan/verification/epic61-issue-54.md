@@ -1,12 +1,12 @@
 # Issue #54 — Explicit multiple-client harness
 
-Status: minimum helper implemented, related18GREEN and additional focused controls passed; frozen for two independent reviews. Owner fix_supply15/listeners branch `fix/epic61-multi-client-harness`, base `eb546cd`.
+Status: complete; source14ecab407e630949d506b1a8aefa7139d1600aef -> main514d882d73ecf8164ba88e8f68eec0d65fc9c322 pushed/remote verified (4aab1c); CLOSED2026-09-08T12:43:17Z comment5585315275 Telegram3994(67/59). Root30877/2ba6e6 three suites/19tests PASS22.831seconds natural exit0; build3078af exit0. Historical original/fixer executions below remain distinct.
 Root-approved exact API in main epic61-e2e-research.md. Only test/helpers/tunnelHarness.ts, dedicated multi-client test/fixture and this ledger writable; network48/production read-only.
 
 - [x] Read original54/current48 helper/reuse/API. Status: single-default fields preserved; explicit client specs and detached mappings, per-ID stop/readiness/send.
 - [x] Actual identity/one-shot/isolation/partial-failure RED. Status:9failed/1control before helper changes, receipts below.
 - [x] Minimum harness implementation and focused legacy regression. Status:18relatedPASS,10focusedPASS and strengthened routing1PASS as separate commands.
-- [ ] Two independent reviews/integration. Status: pending; no commit.
+- [x] Independent reviews/integration. Status: correction rereviews and root integration complete; operational receipt below.
 
 Explicit multi requires send ID even after one remains; unknown/stopped/missing reject before connect. Legacy or explicit singleton omits ID safely. Multi fixture rejects conflicting old client options/trusted-list/tunnel-list/ACL overrides before allocation. Actual authenticated ID set readiness, distinct endpoint/ACL mappings and local stop cannot reset sibling. Setup/start registers resources immediately and cleans failed partial work; natural exit and original error preserved. Existing one-shot full-FIN helpers unchanged. Same-member overlapping finite exchanges are not supported. No #47/#53/#18/#28/#29/#40 policy change.
 
@@ -42,3 +42,8 @@ Full dedicated command: node node_modules/jest/bin/jest.js --runInBand --silent 
 ## Final independent reviews
 
 - [x] Final code, evidence and exact-title reviews. Status: review_cert_conflict and fix_lint_diagnostics both PASS with zero remaining findings after the separate held-request and partial-startup test-only corrections. Root commit/integration pending. Historical pending statements above describe earlier checkpoints.
+
+## Operational completion
+
+- [x] Root verification/build/push/closure/notification. Status: source14ecab407e630949d506b1a8aefa7139d1600aef -> main514d882d73ecf8164ba88e8f68eec0d65fc9c322 pushed/remote verified (4aab1c); CLOSED2026-09-08T12:43:17Z comment5585315275 Telegram3994(67/59). Root30877/2ba6e6 three suites/19tests PASS22.831seconds natural exit0; build3078af exit0.
+Root supplied these facts. At closure59CLOSED/59notified of67; current active status SSOT is execution plan. Original9FAIL/control,18PASS and later fixture-contract corrections remain separate. No remaining #54 completion gate. At that checkpoint #47 initial design/probe approval was pending; the later authorized CN/CA probe failed ERR_TLS_CERT_ALTNAME_INVALID and now requires valid DNS/SAN fixture redesign/review before harness implementation.

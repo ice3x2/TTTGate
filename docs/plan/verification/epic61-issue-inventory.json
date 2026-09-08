@@ -121,7 +121,7 @@
   {
     "body": "## 요약\r\n\r\n하네스가 클라이언트 수를 1로 하드코딩합니다. 여러 클라이언트가 동시에 붙는 상황을 테스트로 표현할 수 없습니다.\r\n\r\n## 근거\r\n\r\n- `test/helpers/tunnelHarness.ts:129` — 클라이언트 상태 배열의 길이가 1인지 확인합니다.\r\n- `test/helpers/tunnelHarness.ts:83` — 신뢰 클라이언트 목록이 원소 하나로 구성됩니다.\r\n\r\n## 영향\r\n\r\n클라이언트별 세션 격리와 한쪽 단절의 파급이 검증되지 않습니다. 이 제품은 여러 내부망 클라이언트를 하나의 서버에 붙이는 것이 기본 사용 형태이므로, 검증 공백이 실제 사용 형태와 정확히 어긋납니다.\r\n\r\n## 권고\r\n\r\n하네스를 클라이언트 N개로 일반화하고, 동시 접속과 개별 단절 시나리오를 추가합니다.\r\n\r\n## 검증 상태\r\n\r\n- 확인 방법: 하네스 코드 확인.\r\n\r\n---\r\n근거 문서: `docs/research/2026-09-05-tttgate-full-inspection.md` §7.4",
     "number": 54,
-    "state": "OPEN",
+    "state": "CLOSED",
     "title": "테스트 하네스가 다중 클라이언트 동시 접속을 구조적으로 표현하지 못함",
     "url": "https://github.com/ice3x2/TTTGate/issues/54"
   },
@@ -373,7 +373,7 @@
   {
     "body": "## 요약\r\n\r\n세션 TTL 이 60초로 고정되어 있고, 활동 시각은 데이터 송수신으로만 갱신됩니다. 조용한 시간이 긴 터널이 1분마다 끊깁니다.\r\n\r\n## 근거\r\n\r\n- `src/server/TunnelServer.ts:66` — `DEFAULT_SESSION_TTL_MS` 가 60,000 입니다.\r\n- `src/server/TunnelServer.ts:199-230` — TTL 초과 세션을 강제 종료합니다.\r\n- `src/server/TunnelServer.ts:312`, `:333`, `:546` — 활동 시각 갱신 지점이 이 세 곳뿐입니다. 모두 데이터 송수신과 세션 개시이며, TCP keepalive 프로브는 활동으로 집계되지 않습니다.\r\n- `src/server/TunnelServer.ts:160-169` — `configureSessionTtl` 이 최소 1초에서 최대 1시간만 허용해 비활성화가 불가능합니다. 실제 코드에서는 테스트만 이 함수를 호출하므로 운영 환경은 항상 60초로 동작합니다.\r\n\r\n## 재현과 영향\r\n\r\n세션을 열고 양방향 모두 데이터를 보내지 않은 채 60초가 지나면 발생합니다. 유휴 SSH 세션, RDP, 데이터베이스 커넥션 풀처럼 조용한 시간이 긴 TCP 터널이 1분마다 끊겨 터널링 도구의 핵심 용도가 깨집니다.\r\n\r\n## 권고\r\n\r\n세 가지를 함께 적용하십시오.\r\n\r\n1. 기본 TTL 을 크게 올립니다. 유휴 SSH 세션과 데이터베이스 커넥션 풀을 견디려면 최소 30분이 필요하며, 상용 터널링 도구의 관례를 따르면 1시간이 무난합니다.\r\n2. 허용 범위의 하한을 없애 0 이나 음수로 비활성화할 수 있게 합니다. 지금은 최소 1초라서 끌 수가 없습니다.\r\n3. TTL 을 서버 옵션으로 노출해 운영자가 조정할 수 있게 합니다. 현재는 테스트만 이 값을 바꿀 수 있습니다.\r\n\r\n아울러 제어 채널의 세션 관련 패킷 수신을 활동으로 집계하면, 데이터가 흐르지 않는 세션도 살아 있음을 표현할 수 있습니다.\r\n\r\n## 검증 상태\r\n\r\n- 기존 테스트 커버: 반대로 고정되어 있습니다. `test/e2e/req-09-pool-swap-zombie.test.ts:101` 이 TTL 을 1초로 낮춰 이 동작을 정상으로 단언합니다. **수정과 함께 이 테스트를 개정해야 합니다.**\r\n- 도입 시점: 신규. 배포본 `1.0.11b` 의 `TunnelServer` 에는 세션 TTL 기능 자체가 없습니다.\r\n- 확인 방법: 코드 확인 및 활동 갱신 지점 전수 조사.\r\n\r\n---\r\n근거 문서: `docs/research/2026-09-05-tttgate-full-inspection.md` §5.1",
     "number": 18,
-    "state": "OPEN",
+    "state": "CLOSED",
     "title": "유휴 터널 세션이 60초마다 강제 종료됨",
     "url": "https://github.com/ice3x2/TTTGate/issues/18"
   },

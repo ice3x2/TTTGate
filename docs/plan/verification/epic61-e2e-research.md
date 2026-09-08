@@ -1,11 +1,11 @@
 # E2E prerequisites — #48 → #54 → #47 → #53
 
-Status: #48 complete3990; exact #54 API independently PASS/root approved and assigned fix_supply15/listeners fix/epic61-multi-client-harness at eb546cd. Only tunnelHarness.ts and dedicated tests/fixture/ledger54; network.ts read-only, actual RED before behavior edits. #47/#53 later separate gates; current progress SSOT is execution plan.
+Status: #48/#54 complete3990/3994. #47 initial temp CN/CA probe completed with ERR_TLS_CERT_ALTNAME_INVALID: d7f213 oneFAIL3.176s, outer4.652s, generation2.637s, natural exit1/expired=false; E Temp/tls47-probe-evidence-JwqlkZ. Valid DNS/SAN certificate-fixture design requires independent re-review; no harness implementation authorized. Exact receipts in control ledger47; current progress SSOT is execution plan.
 
 - [x] Read original48/54/47/53 and current helper/data paths. Status: concrete findings below.
 - [x] Separate readiness, byte fidelity, multiple owners and protocol/cache evidence. Status: proposed serial order below.
 - [x] Identify policy dependencies and independent finite scopes. Status: #18/#28/#29/#40 are not blanket blockers.
-- [ ] Independently review/freeze first-stage API and writable files. Status: pending.
+- [x] Review/freeze and complete #48/#54 stages. Status: both completed through3990/3994; #47 exact API approval remains a separate gate.
 - [x] Execute/review/integrate #48. Status: complete3990; successors #54/#47/#53 remain separately gated.
 
 ## Current reusable paths and gaps
@@ -223,11 +223,100 @@ failure uncovered remains a separate approval boundary before production edits.
 
 ## #47 third: complete HTTP/TLS and mixed finite modes
 
-Reuse multi-owner mapping and one-shot fidelity helpers. Add owned actual HTTP/1.1 endpoint servers and raw finite responses where necessary; external requests traverse public forwarding listener → server data/control → real TTTClient → endpoint and back. Assert endpoint-observed method/Host/body and Node client status/headers/decoded body/end/complete. Start with finite CL and chunked, keep-alive two-request contexts, HTTP mode and TCP mode simultaneously. #30 codec/component proof remains distinct from full-tunnel proof.
+Status: read-only exact proposal against main5637959 and the unintegrated #54
+listeners harness candidate. #54 must complete and its final API be independently
+reviewed before #47 assignment. No source/test execution or production edits.
 
-TLS must specify which legs are exercised: encrypted control/data channels, encrypted public listener and/or TLS internal endpoint are different contracts. Existing `generateSelfSignedCert` issues localhost/127.0.0.1 SAN certificates; reuse it and actual CertificationStore/option APIs. Positive peers trust that exact test CA with hostname verification on; assert actual secure connection/authorized peer plus bytes, and include a wrong-CA or wrong-host negative control with no plaintext fallback. Do not set blanket rejectUnauthorized=false or label a tls:true option assertion as a completed TLS handshake. Internal TLS endpoint verification may reveal a distinct production policy issue; report rather than silently weaken or expand scope.
+The candidate #54 harness supplies per-client identity/forwardPort/endpointPort,
+actual start/stop/reconnect ownership and cleanup, but still creates one EchoServer
+per owner. sendAndReceive is deliberately a TCP echo equality helper: it configures
+finite request length and waits for peerFIN. Do not feed raw HTTP to that helper and
+claim Node HTTP parser/completion coverage. The full HTTP path must be external
+Node HTTP client -> actual forwarding HttpHandler -> authenticated control/data ->
+real TTTClient/EndPointClientPool -> owned HTTP endpoint -> reverse path.
 
-Server restart is a distinct phase: existing session terminal/cleanup must be observed, then existing scheduler reconnect readiness and a new one-shot request succeed. Do not require an in-flight payload to survive restart unless an existing requirement guarantees that; do not hide its interruption with resend. Any new test that passes existing source is coverage strengthening, not a fabricated production RED. Missing capability/weak mutation controls must be described honestly.
+### Minimum fixture/API extensions for review
+
+Proposed test writes: existing test/helpers/tunnelHarness.ts only for (1) an optional
+per-owner endpoint factory and (2) explicit generated-control-certificate trust
+setup; new test/e2e/tunnel/http-tls-tunnel.test.ts and, if necessary to keep server
+ownership readable, one dedicated test/fixtures/http-tls-endpoint.ts; ledger47.
+Network.ts/sendTcpAndReceiveOnce, production and existing #54 identity rules remain
+read-only. Prefer the existing certificate helper and actual cert store over a
+second certificate implementation.
+
+Endpoint factory exact proposal: optional HarnessClientSpec endpointFactory():
+Promise<{port:number; close():Promise<void>}>. Harness owns/awaits its cleanup exactly
+like default echo. Only default echo owners use sendAndReceive/setFiniteResponseLength;
+a custom protocol owner is exercised by its own external Node consumer and an
+explicit misuse result if echo helper is requested. Avoid requiring HTTP endpoint
+to pretend it is an EchoServer or adding a fake finite-response method. Exposed
+per-owner forwardPort already suffices for http.request; no new transport helper.
+The supplied factory's closure records actual endpoint request headers/body/counters.
+
+Control trust setup: after CertificationStore.load and before client creation,
+optional harness trustedControlTls configures server/client TLS together and uses
+actual getTempCert().cert.value as trust anchor. Current CACertGenerator default
+subject CN is `Testing CA - DO NOT TRUST`, with no SAN; do not assume localhost.
+TTTServer.createTunnelServer uses that exact temp certificate, and TunnelClient
+passes ca/serverName/allowInsecureTls through makeConnectOpt to the native factory.
+Freeze positive setup as ca equal to that owned certificate and serverName equal
+to its actual generated CN, with rejectUnauthorized enabled. An actual native
+authorized handshake must validate this mapping before it is claimed successful;
+if current runtime rejects this certificate/name combination, stop for a reviewed
+test-certificate setup decision, never bypass identity verification.
+
+Recommended flag precedence: trustedControlTls owns the positive fixture's server
+tls/client tls/ca/serverName/allowInsecureTls fields. Reject conflicting explicit
+overrides before allocating/starting resources rather than silently overwriting
+caller intent. Other identity/options preserve #54 rules. This is a proposed
+test-fixture policy requiring root freeze, not a product configuration change.
+If equivalent explicit owned setup needs no new flag after final54 integration,
+omit the extra flag while preserving the same CA/name/verification contract.
+
+Do not put an intentionally wrong-trust client in harness.clients: #54 readiness
+requires the complete authenticated identity set and disposes every owner when
+one fails. First start the fully trusted healthy harness, prove its actual echo,
+then attach a separately test-owned negative SocketHandler/TunnelClient to the
+same owned server. Supply that attempt an unrelated owned CA or deliberately
+wrong name with verification still enabled; observe native verification rejection,
+zero secure establishment/application bytes, then prove the original harness
+still serves a fresh roundtrip. Own/stop the negative object independently so it
+cannot make harness readiness fail or dispose healthy owners. No partial-ready
+API or production change is necessary. Negative control rejection that prevents
+data connection must not be labelled a negative-data-handshake test.
+
+### Distinct TLS legs and acceptance
+
+| Leg | Initial #47 target | Required proof/limit |
+| --- | --- | --- |
+| Tunnel control and data sockets | Required encrypted variant alongside plaintext HTTP/TCP | Actual client native secureConnect/authorized and corresponding server TLS secureConnection; classify control vs data by actual handler identity, then application full-tunnel roundtrip. Wrapper Connected is TCP progress, as #57 established. |
+| External public forwarding listener | Separate optional additional TLS case, not implied by encrypted control/data | https.request to an actual configured certificate/forward listener, explicit owned CA/name, Node secure/authorized plus HTTP end/complete. No claim unless configured and executed. |
+| Internal client-to-endpoint TLS | Not silently included in initial positive scope | TTTServer.ts:128 currently sends OpenOpt host/port/tls/bufferLimit, with no CA/serverName propagation. A self-signed endpoint cannot be made trusted through the existing tunnel option alone; report any needed product trust API as a separate issue/proposal. Do not use rejectUnauthorized=false or pretend control CA covers this leg. |
+| Administrator TLS | Not needed for full data-plane proof | No admin listener/UI authentication test is implied or added here. |
+
+Trusted control/data positive must prove both actual TLS legs, not just control
+online. Wrong-CA or wrong-name selected client rejects native secure establishment
+without plaintext fallback or application delivery; a separate trusted client on
+the same server still authenticates/echoes. Data TLS observes the native socket too;
+control success alone does not prove that later connection. Use delegated factory/
+SocketHandler observers only to capture real returned sockets/events, never return
+fake sockets or treat option tls:true as handshake evidence. If negative control
+prevents a data socket from ever being attempted, state that limit; a separately
+routed wrong-trust data attempt needs explicit bounded fault setup/approval.
+
+### Concrete actual consumer tests
+
+- [ ] HTTP request/response path. Status: actual http.request sends a finite body to the owner's forwardPort; owned HTTP endpoint records exact method/path, Host rewritten to destination and unchanged unrelated header values, exact request bytes. Endpoint returns explicit CL or chunked UTF8 body containing its internal hostname URL; client observes correct public-host rewrite, headers/status, decoded body, end and complete. Keep upstream alive until finite completion; no unknown-length EOF success.
+- [ ] Keepalive/context and mixed owners. Status: two requests on one external HTTP agent exercise per-request Host association and response order; concurrently another owner forwards TCP exact binary data through its existing one-shot helper. Assert identity-specific endpoint routing, no cross-delivery, actual overlap/barrier and both owners' cleanup. #54 multiple-client proof is reused, not claimed replaced by two sequential connections.
+- [ ] TLS control/data matrix. Status: run trusted encrypted HTTP full path and trusted encrypted TCP finite path; native secure/authorized observations on both roles. Start the complete healthy harness first, then separately own a wrong-trust negative attachment to the same server; assert native verification failure/no application bytes and subsequent healthy roundtrip. Do not include that negative attachment in harness.clients or change all-identities readiness. Freeze the actual temp-cert CN/trust mapping and conflicting-override rejection policy above before fixture changes.
+- [ ] Restart/shutdown. Status: begin an owned in-flight session, restart actual server through existing harness, observe old session terminal without automatic payload resend; real scheduler reauthenticates identities and a new finite HTTP request succeeds. Assert shutdown closes every endpoint/owner/listener and no late callback revives state. Do not promise in-flight payload survives restart.
+- [ ] Evidence classification. Status: new tests passing current production are coverage strengthening. Any fixture/API change requires valid RED first; transport/HTTP/TLS production defect found by actual RED is separately reported before widening writes. No fake missing-feature RED or weakened assertions.
+
+This stage does not implement #53 large spill, #29 unknown-length EOF, #28 >4GiB
+wire policy or #40 buffer-policy decision. Existing finite CL/chunked support and
+#18 idle policy can bound owned tests without changing operator policy. No benchmark,
+external endpoint, denied artifact operation or process-name-wide termination.
 
 ## #53 fourth: real large transfer, spill and recovery
 
@@ -258,4 +347,12 @@ All resources belong to fresh owned roots and loopback listeners, with tracked c
 ## Current #54 assignment
 
 - [x] Root approve exact multi-client API and create branch. Status: fix_supply15/listeners fix/epic61-multi-client-harness at eb546cd assigned after independent API PASS.
-- [ ] Observe assignment then actual multi-client and partial-startup RED. Status: required before harness edits; exact clients[]/identity/detached-map/stopClient/alias/option-conflict contract above and actual two-endpoint/ACL/held-sibling/no-revive/finite-once checks remain mandatory. No network helper or production writes.
+- [x] Observe #54 assignment and actual multi-client/partial-startup RED. Status: implementation, fixture corrections, independent rereviews and per-issue gates complete3994.
+
+## #47 initial probe assignment
+
+- [ ] Run actual owned temp CA/CN probe before harness implementation. Status: root created control fix/epic61-http-tls-e2e at514d882 (d0a299), owner fix_lint_diagnostics. Write ledger47 and test/component/tls-temp-cert-contract.test.ts only. Fixed diagnostic test30s/outer observer60s are budgets, not measurements. Require native authorized TLS and echo; preserve failed result and redesign if needed. No production/harness write; implementation requires subsequent independent gate.
+
+## Initial trust-probe outcome and redesign gate
+
+Actual default temp-certificate trust probe failed native name verification: ERR_TLS_CERT_ALTNAME_INVALID. Receipt d7f213: one failed test3.176s; outer observer4.652s, certificate generation2.637s, natural exit1 and expired=false. Preserved E: C:/Users/beom/AppData/Local/Temp/tls47-probe-evidence-JwqlkZ. These observations are distinct from the predeclared30s/60s budgets. Do not treat CA trust alone as authorized identity or weaken verification. A valid DNS/SAN test-certificate setup needs independent design review before any harness implementation; the earlier CN-based proposal is a failed hypothesis, not an approved working fixture.
