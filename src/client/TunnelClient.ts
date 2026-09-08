@@ -249,6 +249,7 @@ class TunnelClient {
     }
 
     private onCtrlHandlerEvent = (handler: SocketHandler, state: SocketState, data?: any) : void => {
+        if(handler !== this._ctrlHandler) return;
         if(state == SocketState.Connected && this._ctrlHandler) {
             this.sendSyncAndSyncSyncCmd(this._ctrlHandler);
         }
@@ -258,11 +259,18 @@ class TunnelClient {
             if(data) {
                 logger.error(`onCtrlHandlerEvent - id:${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`, data);
             }
-            this._state = CtrlState.None;
-            this._ctrlHandler = undefined;
-            this.destroyAllDataHandler();
-            this._onCtrlStateCallback?.(this, 'closed');
+            this.closeControlHandler(handler);
         }
+    }
+
+    private closeControlHandler(handler: SocketHandler, error?: Error): void {
+        if(handler !== this._ctrlHandler) return;
+        this._state = CtrlState.None;
+        this._ctrlHandler = undefined;
+        this.destroyAllDataHandler();
+        for(const sessionID of this._waitBufferQueueMap.keys()) this.clearWaitBuffer(sessionID);
+        handler.destroy();
+        this._onCtrlStateCallback?.(this, 'closed', error);
     }
 
     private destroyAllDataHandler() : void {
@@ -289,8 +297,13 @@ class TunnelClient {
             logger.error(`onReceiveFromCtrlHandler - packetStreamer is undefined for handler: ${handler.id}`);
             return;
         }
-        let packetList :  Array<CtrlPacket> = handler.packetStreamer.readCtrlPacketList(data);
-        for(let packet of packetList) {
+        const result = handler.packetStreamer.readCtrlPacketResult(data);
+        if(result.error) {
+            logger.error(`Control protocol ${result.error.kind} failure; closing current connection`);
+            this.closeControlHandler(handler, result.error.cause);
+            return;
+        }
+        for(let packet of result.packets) {
             logger.info(`onReceiveFromCtrlHandler - cmd:${CtrlCmd[packet.cmd]}, sessionID:${packet.sessionID}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
             if(this._state == CtrlState.Syncing && packet.cmd == CtrlCmd.SyncCtrlAck) {
                 const syncMeta = packet.syncCtrlAckMeta;

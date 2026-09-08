@@ -385,6 +385,8 @@ type CtrlStreamerOptions = {
     maxPendingBytes?: number;
 };
 
+type CtrlReadResult = {packets: CtrlPacket[]; error?: {kind: "framing" | "overflow"; cause: Error}};
+
 class CtrlPacketStreamer {
 
     // R2-REQ-03: 불완전 패킷 누적 DoS 방지. 기본 상한 = 헤더 + 페이로드*2.
@@ -404,10 +406,12 @@ class CtrlPacketStreamer {
         return new RangeError(`CtrlPacketStreamer pending bytes overflow (pending=${this._pendingBytes}, incoming=${incoming}, max=${this._maxPendingBytes})`);
     }
 
-    private _handleOverflow(incoming: number) : void {
-        const err = this._overflow(incoming);
+    private resetPending(): void {
         this._dequeue.clear();
         this._pendingBytes = 0;
+    }
+
+    private _handleOverflow(err: Error) : void {
         if(this._onOverflow) {
             this._onOverflow(err);
             return;
@@ -417,9 +421,15 @@ class CtrlPacketStreamer {
     }
 
     public feed(buffer: Buffer) : void {
+        const error = this.feedResult(buffer);
+        if(error) this._handleOverflow(error);
+    }
+
+    private feedResult(buffer: Buffer): Error | undefined {
         if(this._pendingBytes + buffer.length > this._maxPendingBytes) {
-            this._handleOverflow(buffer.length);
-            return;
+            const error = this._overflow(buffer.length);
+            this.resetPending();
+            return error;
         }
         this._dequeue.pushBack(buffer);
         this._pendingBytes += buffer.length;
@@ -445,37 +455,60 @@ class CtrlPacketStreamer {
     }
 
     public readPacket() : CtrlPacket | null {
+        const result = this.readPacketResult();
+        if(result.error?.kind === "overflow") this._handleOverflow(result.error.cause);
+        else if(result.error) throw result.error.cause;
+        return result.packet;
+    }
+
+    private readPacketResult(): {packet: CtrlPacket | null; error?: CtrlReadResult['error']} {
         let buffer = this._popFront();
         let discarded = 0;
         try {
             while(buffer !== undefined) {
                 const result = CtrlPacket.fromBuffer(buffer);
-                if(result.state == ParsedState.Complete) return this.toPacketAtComplete(result);
+                if(result.state == ParsedState.Complete) return {packet: this.toPacketAtComplete(result)};
                 if(result.state == ParsedState.Discarded) {
                     discarded++;
                     if(result.remain.length > 0) this._pushFront(result.remain);
                     buffer = this._popFront();
                     continue;
                 }
-                if(result.state == ParsedState.Error) throw result.error;
+                if(result.state == ParsedState.Error) return {packet: null, error: {kind: "framing", cause: result.error}};
                 const nextBuffer = this._popFront();
                 if(nextBuffer === undefined) {
                     this._pushFront(buffer);
-                    return null;
+                    return {packet: null};
                 }
                 // Preserve the pending-byte limit before concatenating fragments.
                 if(buffer.length + nextBuffer.length > this._maxPendingBytes) {
-                    this._handleOverflow(nextBuffer.length);
-                    return null;
+                    const error = this._overflow(nextBuffer.length);
+                    this.resetPending();
+                    return {packet: null, error: {kind: "overflow", cause: error}};
                 }
                 buffer = Buffer.concat([buffer, nextBuffer]);
             }
-            return null;
+            return {packet: null};
         } finally {
             if(discarded > 0) {
                 LoggerFactory.getLogger("default", "CtrlPacketStreamer")
                     .warn(`Discarded ${discarded} control frame(s) with incomplete command payloads`);
             }
+        }
+    }
+
+    public readCtrlPacketResult(buffer: Buffer): CtrlReadResult {
+        const overflow = this.feedResult(buffer);
+        if(overflow) return {packets: [], error: {kind: "overflow", cause: overflow}};
+        const packets: CtrlPacket[] = [];
+        while(true) {
+            const result = this.readPacketResult();
+            if(result.error) {
+                this.resetPending();
+                return {packets: [], error: result.error};
+            }
+            if(!result.packet) return {packets};
+            packets.push(result.packet);
         }
     }
 
@@ -498,4 +531,4 @@ class CtrlPacketStreamer {
     }
  }
 
-export { CtrlPacket, CtrlCmd, ParsedState, ParsingResult, CtrlPacketStreamer, OpenOpt};
+export { CtrlPacket, CtrlCmd, ParsedState, ParsingResult, CtrlPacketStreamer, CtrlReadResult, OpenOpt};
