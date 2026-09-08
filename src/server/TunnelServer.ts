@@ -60,6 +60,7 @@ type PendingControlHandshake = {
 
 
 const HANDLER_TYPE_BUNDLE_KEY = 'T';
+const DATA_HANDSHAKE_POOL_BUNDLE_KEY = 'data-handshake-pool';
 
 // P6-T1 / REQ-09: 세션-TTL/heartbeat. 기본 60초 무응답 시 강제 종료.
 // 테스트에서는 정적 setter로 짧게 조정할 수 있다(스테이트리스 싱글턴 회피 → per-instance 설정).
@@ -503,22 +504,43 @@ class TunnelServer {
                 handler.leftOverBuffer = undefined;
             }
             try {
-                let result = DataStatePacket.fromBuffer(data);
+                const fixed = DataStatePacket.readFixedHeader(data);
+                if(fixed.kind === 'incomplete') {
+                    handler.leftOverBuffer = data;
+                    return;
+                }
+                if(fixed.kind === 'invalid') {
+                    logger.error(fixed.reason);
+                    handler.deleteBundle(DATA_HANDSHAKE_POOL_BUNDLE_KEY);
+                    handler.endImmediate();
+                    return;
+                }
+                const clientHandlerPool = this._clientHandlerPoolMap.get(fixed.ctrlID);
+                const expectedPool = handler.getBundle(DATA_HANDSHAKE_POOL_BUNDLE_KEY) as ClientHandlerPool | undefined;
+                if(!clientHandlerPool || (expectedPool && expectedPool !== clientHandlerPool)) {
+                    logger.error(`Data handshake control pool is missing or changed: ${fixed.ctrlID}`);
+                    handler.deleteBundle(DATA_HANDSHAKE_POOL_BUNDLE_KEY);
+                    handler.endImmediate();
+                    return;
+                }
+                handler.setBundle(DATA_HANDSHAKE_POOL_BUNDLE_KEY, clientHandlerPool);
+                const result = DataStatePacket.fromBuffer(data, clientHandlerPool.legacyMode ? 'legacy' : 'token');
+                if(result.error) {
+                    logger.error(result.error);
+                    handler.deleteBundle(DATA_HANDSHAKE_POOL_BUNDLE_KEY);
+                    handler.endImmediate();
+                    return;
+                }
                 if (result.packet) {
+                    handler.deleteBundle(DATA_HANDSHAKE_POOL_BUNDLE_KEY);
                     handler.dataHandlerState = DataHandlerState.Initializing;
                     handler.leftOverBuffer = result.remainBuffer;
                     handler.ctrlID = result.packet.ctrlID;
                     handler.handlerID = result.packet.handlerID;
                     handler.sessionID = result.packet.firstSessionID;
                     handler.bindingToken = result.packet.bindingToken;
-                    let clientHandlerPool = this._clientHandlerPoolMap.get(handler.ctrlID);
-                    if (!clientHandlerPool) {
-                        logger.error(`onHandlerEvent - Not Found ClientHandlerPool. id: ${handler.ctrlID}`);
-                        handler.end_();
-                        return;
-                    }
                     clientHandlerPool.putNewDataHandler(handler);
-                    this.markHandlerAuthenticated(handler);
+                    if(!handler.isEnd()) this.markHandlerAuthenticated(handler);
 
                 } else {
                     handler.leftOverBuffer = result.remainBuffer;

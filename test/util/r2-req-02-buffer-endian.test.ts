@@ -161,7 +161,7 @@ describe("R2-REQ-02 BufferReader/Writer endian consistency", () => {
             expect(hex).toContain("05060708");
             expect(hex).toContain("090a0b0c");
 
-            const parsed = DataStatePacket.fromBuffer(buf);
+            const parsed = DataStatePacket.fromBuffer(buf, "legacy");
             expect(parsed.packet!.ctrlID).toBe(0x01020304);
             expect(parsed.packet!.handlerID).toBe(0x05060708);
             expect(parsed.packet!.firstSessionID).toBe(0x090A0B0C);
