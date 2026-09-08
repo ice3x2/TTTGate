@@ -1,11 +1,11 @@
 # Discovery #72: invalid existing server configuration enters default-save startup
 
-Status: #72 registered and exact non-ready API independently PASS/root approved; assigned fix_supply15/process fix/epic61-invalid-config atfc6e286. Production only ServerOptionStore.ts/ServerApp.ts plus dedicated tests/fixture/ledger72. Actual RED required before source; #18 remains unassigned prerequisite-dependent. #40 value policy unchanged.
+Status: #72 complete; source5ba80f6 -> maina64a901f138dc2831d0006b8a107d8d321458490 pushed/remote verified; eight suites76testsPASS179.243seconds naturalexit0/forcedbuildPASS; CLOSED2026-09-08T11:54:00Z comment5584718146 Telegram3989(67/56). Original static discovery/API/assignment statements below are historical; execution/ledger72 hold current completion evidence. #18 exact design approved and assigned review_cert_conflict/process fix/epic61-session-idle-policy ata64a901.
 
 - [x] Inspect original Store, File/Files and ServerApp startup paths. Status: static facts below.
 - [x] Independent static review/root issue registration. Status: PASS; root registered https://github.com/ice3x2/TTTGate/issues/72. This document is not implementation authorization.
-- [ ] Observe owned-child RED under the frozen result/startup refusal contract. Status: API approved and owner assigned; execution evidence belongs in ledger72.
-- [ ] Implement minimum Store/ServerApp repair and regressions. Status: assigned under exact approved two-file contract; actual RED before source.
+- [x] Observe owned-child RED under the frozen result/startup refusal contract. Status: completed; original and independent correction evidence preserved in ledger72.
+- [x] Implement minimum Store/ServerApp repair and regressions. Status: complete through root integration/closure/receipt3989; original scope and failed-run evidence remain historical.
 
 ## Observed source facts and limits
 

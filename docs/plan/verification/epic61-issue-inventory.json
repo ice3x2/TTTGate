@@ -100,7 +100,7 @@
   {
     "body": "## 요약\r\n\r\n신뢰되지 않은 인증서를 거부하는지 확인하는 테스트가 연결 미성립을 단언하지 않습니다. 연결이 성립한 뒤 닫혀도 통과합니다.\r\n\r\n## 근거\r\n\r\n- `test/component/client/TlsVerification.test.ts:79` — 거부 케이스에 연결 성립 배제 단언이 없습니다.\r\n- `test/component/client/TlsVerification.test.ts:115-118` — 대비되는 긍정 케이스는 연결 성립을 단언합니다.\r\n\r\n## 영향\r\n\r\nTLS 검증이 무력화되어도 테스트가 녹색으로 남을 수 있습니다.\r\n\r\n## 권고\r\n\r\n거부 테스트에 연결 성립 이벤트가 발생하지 않았음을 단언하는 검사를 추가합니다.\r\n\r\n## 검증 상태\r\n\r\n- 확인 방법: 테스트 코드 확인 및 긍정 케이스와 대조.\r\n\r\n---\r\n근거 문서: `docs/research/2026-09-05-tttgate-full-inspection.md` §7.5",
     "number": 57,
-    "state": "OPEN",
+    "state": "CLOSED",
     "title": "TLS 신뢰 거부 테스트가 연결 성립을 배제하지 않아 위양성으로 통과할 수 있음",
     "url": "https://github.com/ice3x2/TTTGate/issues/57"
   },
@@ -114,7 +114,7 @@
   {
     "body": "## 요약\r\n\r\n설정 파일이 실환경 테스트만 허용한다고 선언하지만, 일부 테스트가 TCP 서버를 빈 객체로 대체합니다.\r\n\r\n## 근거\r\n\r\n- `jest.config.ts:4` — \"실환경 테스트만 허용(NO-MOCK)\" 이라고 선언합니다.\r\n- `test/unit/server/TunnelServer.keepalive.test.ts:10` — `TCPServer.create` 를 대체합니다.\r\n- `test/unit/server/http/HttpHandler.rewrite.test.ts:25`, `:96` — 동일한 방식입니다.\r\n\r\n## 영향\r\n\r\nkeepAlive 가 실제 리스너에 반영되는지가 아니라 인자 전달 여부만 확인됩니다. #23 (H-06) 이 지적한 keepalive 기본값 문제를 이 테스트가 잡지 못한 이유이기도 합니다.\r\n\r\n## 권고\r\n\r\n정책을 현실에 맞게 개정하거나 두 테스트를 실환경 소켓 기반으로 바꿉니다. 선언과 실제가 어긋난 상태로 두면 정책이 판단 기준으로 기능하지 못합니다.\r\n\r\n## 검증 상태\r\n\r\n- 확인 방법: 설정 주석과 테스트 코드 대조.\r\n\r\n---\r\n근거 문서: `docs/research/2026-09-05-tttgate-full-inspection.md` §7.5",
     "number": 55,
-    "state": "OPEN",
+    "state": "CLOSED",
     "title": "NO-MOCK 정책 선언과 실제 테스트가 어긋남",
     "url": "https://github.com/ice3x2/TTTGate/issues/55"
   },
@@ -163,7 +163,7 @@
   {
     "body": "## 요약\r\n\r\n왕복 헬퍼가 페이로드 불일치 시 예외를 던지고, 상위 대기 함수가 10초 동안 50밀리초 간격으로 전체 왕복을 재시도합니다. 첫 시도에서 바이트가 유실되어도 재시도가 성공하면 테스트가 통과합니다.\r\n\r\n## 근거\r\n\r\n- `test/helpers/tunnelHarness.ts:170-179` — 불일치 시 예외를 던지고 재시도 대상이 됩니다.\r\n- `test/e2e/req-09-pool-swap-zombie.test.ts:85-92` — 이 헬퍼로 \"초기 바이트 손실 0\" 을 주장합니다.\r\n\r\n## 영향\r\n\r\n검증하려는 요구사항이 실제로는 검증되지 않습니다. 풀 교체 시점의 바이트 유실이라는 결함이 있어도 테스트가 녹색으로 남습니다.\r\n\r\n## 권고\r\n\r\n첫 왕복 결과만 단언하는 별도 경로를 두어, 초기 손실 요구사항을 재시도 없이 검증합니다. 연결 수립 대기와 데이터 정확성 검증을 분리하는 것이 핵심입니다.\r\n\r\n## 검증 상태\r\n\r\n- 확인 방법: 헬퍼와 호출부 코드 확인.\r\n\r\n---\r\n근거 문서: `docs/research/2026-09-05-tttgate-full-inspection.md` §7.5",
     "number": 48,
-    "state": "OPEN",
+    "state": "CLOSED",
     "title": "왕복 테스트 헬퍼가 실패를 10초 재시도로 덮어 초기 바이트 유실을 통과시킴",
     "url": "https://github.com/ice3x2/TTTGate/issues/48"
   },
@@ -471,7 +471,7 @@
   {
     "body": "Existing server configuration load failures are treated as first startup: the store\ncreates defaults and attempts to save them, resetting persisted revision metadata.\nA parsing/validation failure can also publish a partial candidate internally before\nload reports failure. An operator correcting a bad file can lose the original\nconfiguration instead of receiving a startup error.\n\nSeparate truly missing configuration from an existing invalid/unreadable/non-file\npath. Create and persist defaults only for confirmed absence. Validate parsed data\nlocally and publish only a complete successful candidate. Return a bounded explicit\nload status for predictable invalid input. Refuse normal startup before certificate\nload, CLI option persistence and any listener start when existing configuration\ncannot load, preserving configuration and revision-state bytes. Keep intentional\nexplicit reset behavior, with its existing authorization/CLI semantics, intact.\n\nEvidence status: static source diagnosis only; actual reproductions and RED must be\ncollected after approved assignment. This is a separate prerequisite for #18 because\nadding a rejected TTL value to current validation would otherwise trigger the same\nexisting overwrite path. No #40 memory-limit decision is made by this issue.\n\n\nParent: #61.\n\nAcceptance: preserve existing config and revision bytes for invalid/read-error/non-file inputs; refuse normal startup before cert load, CLI persistence and listeners; validate a local candidate before publication; preserve missing-file initialization and explicit reset. Obtain actual RED, independent reviews, commit/push/closure and per-issue notification.\n",
     "number": 72,
-    "state": "OPEN",
+    "state": "CLOSED",
     "title": "잘못된 기존 서버 설정이 로드 실패 시 기본값으로 덮어써짐",
     "url": "https://github.com/ice3x2/TTTGate/issues/72"
   }

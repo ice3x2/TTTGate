@@ -1,6 +1,6 @@
 # Session lifecycle research (#24 -> #25 -> #23 -> #18)
 
-Status: #24/#25/#23 complete; latest #23 receipt3985. #18 exact load-refusal scope under review, not assigned. Earlier approval/implementation-pending prose is historical; current counts/active state SSOT is execution plan.
+Status: #24/#25/#23 complete; latest #23 receipt3985. #18 exact five-file design independently PASS/root approved and assigned review_cert_conflict/process fix/epic61-session-idle-policy ata64a901; actual RED precedes source. Earlier approval/implementation-pending prose is historical; current counts/active state SSOT is execution plan.
 At the initial research checkpoint, implementation assignment followed the joint #45/#46 milestone; that research performed no source, server, test or timing execution.
 Researcher review_cert_conflict; initial inspection main `07c083d`; ownership paths
 rechecked on current main `35a5d5f` including the #46 metadata changes.
@@ -89,85 +89,91 @@ RangeError contract is retained without using throws as normal config control fl
 - [ ] #18 real idle tests. Status: planned; existing configureSessionTtl(1000,200) provides a short real timer. Keep a live owned TCP echo socket open: idle expiration must occur, actual data before expiry must refresh activity, and an approved disabled policy must preserve the socket beyond the previously configured deadline and permit later echo. Observe real timer/socket/state conditions, not a fake clock or sleep-only PASS.
 - [ ] #18 shutdown/failed apply. Status: planned; timer stops at owned server shutdown, no stale scan affects replacement state, and pending/config/effective timer policy survive approved failure recovery. Existing test/helpers and post-apply fault pattern are reused and disclosed.
 
-### #18 exact integration and unresolved startup gate
+### #18 final bounded design after #72 infrastructure
 
-Status: source paths rechecked for the requested latest-main TTL design; research
-only, no source/test execution. Root/independent review freezes the following APIs
-before assignment.
+Status: read-only recheck against local integration a64a901. #72 regression/closure
+and independent final design review precede separate #18 assignment. No #18 source
+or test execution. Earlier startup-refusal investigation led to separate #72 and
+is now replaced by this bounded scope; ServerApp is NOT a #18 writable file.
 
-Retain configureSessionTtl(ttlMs:number, checkIntervalMs?:number):void and its direct
-invalid-argument RangeError compatibility, but do not use a caught RangeError to
-validate normal file/API input. Add a small shared result-based TTL policy validator
-in the existing option module, reused before store mutation and runtime application.
-Expose sessionTtlMs in ServerOption; default3600000,0alone disables, positive range
-1000..3600000, negative/nonfinite/non-number rejected. Existing direct interval
-bounds100..60000 and explicit interval<positiveTTL remain strict. Resolve only an
-implicit interval downward within those bounds when necessary. Read-only effective
-policy capture should return both ttlMs/checkIntervalMs; configure0 stops scans,
-and configurepositive on a running server restarts even when0 left no timer.
-An independent server-running state must distinguish disabled-live from closed;
-never restart scans on a closed server merely because configure is called.
+Exact production paths: src/types/TunnelingOption.ts (option/default/result validator),
+src/server/ServerOptionStore.ts (TTL default and validation only),
+src/server/TunnelServer.ts (effective policy and existing timer lifecycle),
+src/server/TTTServer.ts (create/apply/capture/restore and TTL scope identity),
+src/server/admin/AdminServer.ts (only necessary TTL update/scope result classification).
+Dedicated tests/ledger plus explicit TTL cases in
+ test/e2e/req-09-pool-swap-zombie.test.ts are the proposed test scope. No ServerApp,
+ClientHandlerPool, File/Files, certificate, producer, UI widget or pool/EOF writes.
 
-TTTServer.controlOptionsChanged (:185) already lists restart fields explicitly;
-do not add TTL. createTunnelServer must configure normalized startup policy.
-applyServerOption (:258) validates/resolves policy before changing memory/ACL/runtime
-and, on the non-restart branch, configures TTL live before recordAppliedServerOption.
-An applied scope such as session-ttl records its own revision without falsely
-advancing tunnel-control/admin identities. Existing pending admin restart semantics
-stay intact. No TTL-only listener/control recreation or new admin restart warning.
+Proposed exact APIs for independent freeze:
 
-captureRuntimeState (:193) currently captures applied options/scopes but no actual
-TTL/scan values: add the actual effective pair from the live TunnelServer, not a
-reconstructed value from committed config. restoreRuntimeState (:201) restores that
-pair whether it reuses or recreates the control server, and reports a bounded scope
-failure if recovery fails. On success restore scope identities only as existing
-code does. Preserve #35 baseline tuple: previously accepted committed option/files/
-currentRevision remain, actual runtime returns to the captured LKG values/identity,
-and pendingRestart metadata remains. Do not turn a candidate into an applied LKG.
-Both positive->0->positive and failed post-apply recovery must restore scan interval
-and timer-enabled state, using original lastActivity; terminated sessions never revive.
+```ts
+// Existing shared option module. Optional input field preserves callers omitting it.
+// ServerOption: sessionTtlMs?: number
+resolveSessionTtlMs(value: unknown):
+  {success: true; ttlMs: number} | {success: false; message: string};
+// TunnelServer: detached read-only effective values, including explicit scan overrides.
+get sessionTtlPolicy(): Readonly<{ttlMs: number; checkIntervalMs: number}>;
+// Existing direct configuration signature retained.
+configureSessionTtl(ttlMs: number, checkIntervalMs?: number): void;
+```
 
-AdminServer server-option mutation (:463) already calls prepareServerOption before
-commit and executes the existing shared transaction/recovery path. Reuse that path
-for invalidTTL400 with updated:false and no config/revision/file change. Only amend
-scope reporting/apply classification if required; no separate TTL endpoint/UI or
-second transaction queue. ServerOptionStore verification/default creation and YAML
-serialization are the natural option exposure points.
+Undefined selects shared default3600000. Only finite numbers are accepted:0 disables,
+positive1000..3600000 is valid, negative/nonfinite/nonnumeric values fail by result.
+Store uses this result before mutating its candidate and writes the normalized field
+only on success. #72 already preserves existing invalid YAML/revision bytes and
+blocks startup through readServerOption; reuse it without another load-status or
+startup gate. API prepare failure remains400/updated:false before persistence.
+No caught native TypeError/RangeError is used for normal file/API validation.
 
-Important source finding: ServerOptionStore constructor (:227) currently treats
-missing file OR load failure identically and calls makeDefaultOption/save. load
-(:256) returns false on YAML/validation failure. Therefore there is currently NO
-safe existing invalid-YAML preservation path to reuse. Separate absent-file default
-creation from existing-invalid-file load result before enabling TTL validation.
-Recommended explicit load-status/result retained by store and checked before startup
-option persistence/listener start, with a bounded operator diagnostic and startup
-refusal for an existing invalid file; no ordinary config-validation throw. This
-requires a narrowly approved ServerApp startup gate in addition to the initial
-five-file set. Root must freeze this refusal/result contract and exact consumer
-coverage before source: silently starting defaults merely to avoid overwriting is
-not assumed approved. Validate against a local parsed candidate before publishing
-_serverOption, and preserve both original YAML bytes and revision-state file.
+Direct configureSessionTtl keeps its established invalid-argument RangeError caller
+contract. Validate the complete TTL/interval pair before changing either value or
+timer. Explicit interval must remain finite100..60000 and below a positiveTTL;
+with TTL0 it must still satisfy interval bounds. An implicit retained interval is
+reused if valid; only when a positiveTTL is smaller, lower it to a valid value below
+TTL within bounds (for example min(retained, ttlMs-1)). Do not silently repair an
+explicit invalid interval. Add no exposed scan option or new scheduler API.
 
-Minimum proposed write set: types/TunnelingOption.ts, ServerOptionStore.ts,
-TunnelServer.ts, TTTServer.ts, necessary server/admin/AdminServer.ts scope fields,
-and conditional narrow ServerApp.ts invalid-load startup gate after root approval;
-dedicated tests/ledger and the specifically required req09 TTL test correction.
-No ClientHandlerPool, new heartbeat, UI widget, producer/wire or pool/EOF changes.
+TunnelServer existing _closed/isRunning gate distinguishes live-disabled from
+stopped. configure0 stops the existing unref timer. On a running server,0->positive
+starts scans even with no previous timer; on a stopped server it only updates policy,
+and start later schedules if positive. close stops it. Existing lastActivity is not
+reset by policy change; next scan applies the new threshold. Already terminated
+sessions never revive. A repeated start must not install duplicate timers.
 
-Original18 explicitly lists the three core changes (longer default, disable,
-operator exposure) and presents control-packet activity as an additional suggestion.
-Root's existing no-control-activity-expansion scope can satisfy those core requirements
-without inventing periodic traffic. Recommend retain existing activity sources and
-state that optional enhancement is deferred. If root elects to include it, first
-freeze exact already-valid session-bound packet events after successful identity/
-metadata admission; invalid/unbound/unknown packets must never refresh TTL. That
-would require separate consumer scope, not relaxed authentication/schema or a new
-heartbeat. No such expansion is authorized here.
+TTTServer.createTunnelServer (:78) applies resolved startup TTL. controlOptionsChanged
+(:186) must not include TTL. applyServerOption validates before memory/ACL or other
+runtime mutation and updates the live policy on its non-restart path before recording
+applied values. TTL-only global save preserves real control/admin/external listener
+identities and active sessions, with a separate session-ttl applied-scope revision;
+it does not claim pending admin configuration was applied.
 
-- [ ] Policy/store RED. Status: absent/default/0/positive/invalidTTL file+API, original invalid YAML/revision bytes preserved, no mutation before rejection; direct configure invalid compatibility retained.
-- [ ] Owned real timer RED. Status: configure1000/200 for bounded real idle expiry, actual data refresh and0survival beyond the old deadline with later echo; running0->positive resumes next scans using retained lastActivity. Observe sockets/timer state, not fake clock or one-hour-survival extrapolation.
-- [ ] Apply/recovery RED. Status: TTL-only live session/control/listener identities unchanged, actualeffectiveTTL/scan/scope snapshots restored after injected later apply failure while committed pending values/files stay baseline; explicit invalid interval rejects without mutation, implicit lowering stays bounded, closed runtime never restarts a scan.
-- [ ] Revise existing req09 TTL expectation intentionally. Status: keep explicit1000ms opt-in idle-expiry as a positive policy control, distinguish it from default operational behavior, and add approved disabled/default propagation assertions. Preserve pool-swap/zombie and artifact ownership assertions; no blanket removal of shortTTL coverage or timeout relaxation.
+captureRuntimeState (:193) adds the live sessionTtlPolicy pair; restoreRuntimeState
+(:201) restores that pair both on reused and recreated control server paths, not
+one reconstructed from committed option. Existing #35/#71 baseline tuple remains:
+accepted committed files/currentRevision and pendingRestart survive; runtime restores
+its actual LKG TTL/scan and applied scope identity. CandidateTTL is never treated as
+LKG merely because commit succeeded. On restoration failure report a bounded
+session-ttl failure and do not claim successful LKG recovery. Existing successful
+scope restore gates remain. No timer object/pending scheduled callback is persisted.
+
+AdminServer reuses prepare/commit/shared queue and existing rollback snapshot path;
+update only TTL change/reporting classification needed for live apply and separate
+scope. No new endpoint, queue or restart requirement. Valid existing configuration
+without sessionTtlMs receives the new default through Store validation; malformed
+or explicit invalid TTL follows #72's ready/result refusal and original-byte safety.
+
+Original18's three core recommendations are longer default, disable and operator
+exposure. Its additional control-packet-activity suggestion is deliberately NOT
+included under the approved scope. Preserve existing valid data/session-open activity;
+no new heartbeat or control-event refresh, and no metadata/identity/authentication
+relaxation. Native keepalive from #23 remains distinct from application idleTTL.
+
+- [ ] Store/API RED. Status: absent/default/0/positive/range/type rejection; invalid YAMLTTL byte/revision preservation through #72; no configuration mutation before result failure, no new #40 value policy.
+- [ ] Owned real timer RED. Status: explicit1000/200 idle expiry, real data refresh, disabled survival beyond prior deadline with later echo, positive->0->positive and stopped/restarted lifecycle. Observe timer/session/socket outcomes under bounded real time, no fake clock or one-hour survival extrapolation.
+- [ ] Live apply/recovery RED. Status: TTL-only no listener/control restart, retained lastActivity, actual explicit scan override captured, failure after candidate apply restores actualTTL/scan and scope with previously accepted committed/pending baseline intact; no terminated-session resurrection.
+- [ ] Existing req09 amendment. Status: retain case(3) as explicitly configured1000/200 idle-expiry control and replace obsolete default60s comment. Case(3b) changes only0 rejection to valid disable assertion; retain999,3600001, explicit bad interval and other guard assertions. Add negative/nonfinite rejection and positive re-enable as needed. Do not delete shortTTL coverage, change pool/zombie semantics or weaken artifact ownership controls.
+- [ ] Independent freeze and assignment. Status: root confirmed72complete and assigned review_cert_conflict/process fix/epic61-session-idle-policy ata64a901; five production paths above only.
 
 ## #23: consistent native keepalive defaults and propagation
 

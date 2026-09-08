@@ -1,6 +1,6 @@
 # Issue #72 — Preserve invalid existing server configuration
 
-Status: final full review_wave0 and independent fix_lint_diagnostics M1-M4 rereviews PASS; source/test frozen for root commit/integration. Original author fix_supply15 separately reviewed only the independent fixer delta, not its own whole implementation.
+Status: complete; source5ba80f6 -> maina64a901f138dc2831d0006b8a107d8d321458490 pushed/remote verified; eight suites76testsPASS179.243seconds naturalexit0/forcedbuildPASS; CLOSED2026-09-08T11:54:00Z comment5584718146 Telegram3989(67/56). Earlier implementation/review/pending clauses are historical; current state is execution Status/Resume.
 Read approved main `epic61-invalid-config-discovery.md` and original72. Scope only ServerOptionStore/ServerApp plus dedicated owned tests/driver/ledger. File/Files/cert/TTTServer/YAML/TTL/buffer policy unchanged.
 
 - [x] Read exact loadStatus/readServerOption/ready-only invariant and mutation guards. Status: reuse existing validators/atomic batch and reset flow; no placeholder configuration.
@@ -28,7 +28,7 @@ Further explicit reset-write-failure control d430c2 selected1PASS14filtered0.437
 
 ## Independent M1/M2/M3/M4 correction checkpoint
 
-Status: fixer review_cert_conflict; original author source/failures/66-test receipt remain historical above. Exact six-file candidate retained. Focused31PASS/buildPASS; final broader64595 seven suites73PASS182.424seconds naturalexit0. Correction frozen for two independent reviewers.
+Status: complete; source5ba80f6 -> maina64a901f138dc2831d0006b8a107d8d321458490 pushed/remote verified; eight suites76testsPASS179.243seconds naturalexit0/forcedbuildPASS; CLOSED2026-09-08T11:54:00Z comment5584718146 Telegram3989(67/56). Earlier implementation/review/pending clauses are historical; current state is execution Status/Resume.
 
 - [x] Preserve author candidate before baseline comparison. Status:66449c new owned E C:/Users/beom/AppData/Local/Temp/tttgate-72-fix-7ffe4450cba8422c92efde590cb91f9c contains both original production files. SHA256 Store319C821B8014A9AACBB153FF5AFBD2A93648C9619CE72B0BB8B4145643C9E040 and ServerApp642012E526A337A564EC28D9473C2D3AB7DF9F9951C950F6DB0A4DCC15E37285. Only these task files restored to branchHEADfc6e286; no other checkout/source touched.
 - [x] Correct baseline fixture limitations. Status:5f344e initial4FAIL2.669s included unavailable additive APIs and file-symlink privilege/setup failure, not four behavior REDs. Driver now explicitly labels fallback baseline-api-absent and observes real legacy getter values for comparison. New owned dangling directory junction needs no existing path and preserves its metadata; no dependent node_modules link/deletion involved.
@@ -50,3 +50,7 @@ Final correction title remains the original issue title proposal: `fix: 잘못�
 
 Root confirmed review_wave0 final full code/content/exact-title PASS and fix_lint_diagnostics final M1-M4 correction rereview PASS, zero Critical/High/Medium/Low findings. Neither performed additional execution for these final reviews. Original author fix_supply15 also reviewed the separate review_cert_conflict fixer delta with PASS; this is not self-approval of the entire original implementation.
 Original66PASS, correction31PASS/build, later73PASS and earlier compile/setup failures remain separate unchanged receipts. Actual valid/reset startup, local-candidate readiness/mutation guards, optional legacy compatibility, invalid-shape and dangling-entry refusal, file/revision preservation and raw child receipts satisfy the approved scope. Existing exact proposed title remains PASS. Root commit/integration pending; this update changes only the ledger, no source/test.
+
+## Operational completion
+
+- [x] Root integration, remote verification, closure and notification. Status: source5ba80f6 -> maina64a901f138dc2831d0006b8a107d8d321458490 pushed/remote verified; eight suites76testsPASS179.243seconds naturalexit0/forcedbuildPASS; CLOSED2026-09-08T11:54:00Z comment5584718146 Telegram3989(67/56). Root supplied these receipts; no new test run is claimed by this document update. #18 is now assigned review_cert_conflict/process fix/epic61-session-idle-policy ata64a901; overall epic remains incomplete.

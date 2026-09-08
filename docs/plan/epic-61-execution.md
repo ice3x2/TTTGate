@@ -1,6 +1,6 @@
 # Epic #61 execution plan
 
-Status: active;2026-09-08;baseline376b65c;67tracked issues,53CLOSED/53notified complete. #72 exact non-ready API independently PASS and root assigned fix_supply15/process fix/epic61-invalid-config atfc6e286, actual RED before source. #18 awaits this prerequisite and remains unassigned. #28/#40 await replies; #29 hold/no-bypass and Process Termination Safety unchanged.
+Status: active; 67 tracked issues, 57 CLOSED/57 notified complete. #54 multi-client harness assigned fix_supply15/listeners at eb546cd; #18 process broader36217 running. #47/#53 separately gated after prerequisites. #28/#40 replies pending; #29 hold/no-bypass and process termination safety unchanged.
 
 ## Scope and decisions
 
@@ -147,7 +147,7 @@ Approved bounded #43 assignment: own only `src/commons/DataStatePacket.ts` and t
 - [x] #24 data-terminal lifecycle. Status: complete; source643afe2 -> mainc497ecd5feb6403315894b7c7d928b6a8aca3776 pushed/remote verified; GitHub CLOSED2026-09-08T09:36:26Z, comment5582813455; root Telegram3980(66/48). Eight suites/55tests PASS164.834seconds, natural exit0; forced build PASS.
 - [x] #25 stale callbacks. Status: complete; sourceef11102 -> maind1ad8ffa8fc1857ab894594e175741050bac3e4a pushed/remote verified; CLOSED2026-09-08T10:58:29Z, comment5584078471, Telegram3982(66/50); six suites/46tests PASS145.728seconds natural exit0/buildPASS.
 - [x] #23 client keepalive. Status: complete; source602a24e -> mainfc6e286bcd91a33203bf3d52f7dde780b010318b pushed/remote verified; CLOSED2026-09-08T11:13:55Z comment5584258275 Telegram3985(66/53). Seven suites/46tests PASS70.867seconds natural exit0/buildPASS.
-- [ ] #18 idle-session lifetime. Status: pending reviewed #23 integration and separate assignment.
+- [ ] #18 idle-session lifetime. Status: root-approved exact design and assigned review_cert_conflict/process fix/epic61-session-idle-policy ata64a901 after72 completion; five production hunks only, actual RED first.
 
 Lane B, parallel with A:
 
@@ -191,18 +191,18 @@ Status: pending Wave 4. Lane A owns the shared tunnel harness and E2E/stress tes
 
 Lane A, serial:
 
-- [ ] #48 retry-free roundtrip. Status: pending Wave 4.
-- [ ] #54 multiple clients. Status: pending previous lane item.
+- [x] #48 retry-free roundtrip. Status: complete; source3522c44 -> maineb546cd8a909433386d3d86572798ce9b9507203 pushed/remote verified; CLOSED2026-09-08T12:01:10Z comment5584801437 Telegram3990(67/57). Root dedicated7PASS8.993seconds and separate req09 selected1PASS/4filtered3.42seconds, each natural exit0; buildPASS.
+- [ ] #54 multiple clients. Status: exact API independently reviewed PASS/root approved; fix_supply15/listeners fix/epic61-multi-client-harness at eb546cd created and assigned. tunnelHarness.ts plus dedicated tests/fixture/ledger54 only; network.ts read-only. Actual RED after assignment record.
 - [ ] #47 HTTP/TLS E2E. Status: pending previous lane item.
 - [ ] #53 large transfer/cache spill. Status: pending previous lane item.
 
 Lane B, parallel with A/C:
 
-- [ ] #57 strict TLS rejection. Status: pending Wave 4.
+- [x] #57 TLS rejection evidence. Status: complete; sourcee9ab13e -> main59f493f8a8c55eb5b136296bf58b2c53d0698df9 pushed/remote verified; CLOSED2026-09-08T11:39:02Z comment5584549126 Telegram3987(67/54); three suites/9tests PASS3.368seconds natural exit0/buildPASS.
 
 Lane C, parallel with A/B:
 
-- [ ] #55 truthful mock policy. Status: pending Wave 4.
+- [x] #55 truthful test-evidence policy. Status: complete; sourcef88d52a -> main61f60f16bb4ecbda62e226ed9e5371f39372e032 pushed/remote verified; CLOSED2026-09-08T11:42:01Z comment5584583045 Telegram3988(67/55); comment/guide-only correction, two independent reviews PASS and Jest config load exit0, no test-count claim.
 
 ### Wave 6 — complete evidence and release audit
 
@@ -222,17 +222,17 @@ Bounded #49 prerequisite cleanup: independent baseline probing of the untouched 
 3. Implement minimum fix in assigned worktree; record green and appropriate regression evidence.
 4. Independent reviewer checks original requirements and diff. A different fixer handles findings, followed by independent re-review until no material findings remain. Record findings by critical/high/medium/low.
 5. Review commit content/message independently, commit without signature or progress markers, integrate serially, run integration checks, push without force, verify remote hash, then close issue with evidence.
-6. Send Telegram after each closed issue: `TDD Gate {issue number} {issue title} ({total issue count}/{completed issue count})`. Current total 67 and completed count 53 (original 56 plus #62 through #72); add newly discovered in-scope issues explicitly. Persist delivery result to prevent duplicate reporting.
+6. Send Telegram after each closed issue: `TDD Gate {issue number} {issue title} ({total issue count}/{completed issue count})`. Current total 67 and completed count 57 (original 56 plus #62 through #72); add newly discovered in-scope issues explicitly. Persist delivery result to prevent duplicate reporting.
 
 ## Issue completion ledger
 
-Fifty-three of 67 issues completed: #14, #62, #15, #17, #50, #9, #63, #64, #66, #16, #5, #21, #10, #6, #39, #7, #67, #26, #27, #13, #8, #51, #19, #20, #44, #65, #70, #34, #68, #69, #11, #35, #12, #71, #36, #22, #38, #41, #37, #43, #42, #59, #60, #45, #46, #31, #33, #24, #30, #25, #32, #56 and #23. Independent Wave 0 review evidence: `docs/plan/verification/epic61-wave0-review.md`. Each checklist item is completed only after all per-issue gates. Store its ledger in `docs/plan/verification/epic61-issue-N.md`, where N is the issue number. Required fields: original title/requirements, assigned agent/worktree/branch/writable paths, current status and next command, reuse findings, red command/result before implementation, green/regression commands/results, review findings and independent reviewer/fixer identity, integration commit, pushed remote hash, GitHub closure evidence, Telegram title/delivery receipt. Allowed states: pending, assigned, red, implementing, reviewing, integrating, pushed, closed, notified, complete, blocked. Update the checklist status when any state changes. Newly discovered defects receive their own issue, schedule item and ledger; update total count before subsequent notifications.
+Fifty-seven of 67 issues completed: #14, #62, #15, #17, #50, #9, #63, #64, #66, #16, #5, #21, #10, #6, #39, #7, #67, #26, #27, #13, #8, #51, #19, #20, #44, #65, #70, #34, #68, #69, #11, #35, #12, #71, #36, #22, #38, #41, #37, #43, #42, #59, #60, #45, #46, #31, #33, #24, #30, #25, #32, #56, #23, #57, #55 and #72, #48. Independent Wave 0 review evidence: `docs/plan/verification/epic61-wave0-review.md`. Each checklist item is completed only after all per-issue gates. Store its ledger in `docs/plan/verification/epic61-issue-N.md`, where N is the issue number. Required fields: original title/requirements, assigned agent/worktree/branch/writable paths, current status and next command, reuse findings, red command/result before implementation, green/regression commands/results, review findings and independent reviewer/fixer identity, integration commit, pushed remote hash, GitHub closure evidence, Telegram title/delivery receipt. Allowed states: pending, assigned, red, implementing, reviewing, integrating, pushed, closed, notified, complete, blocked. Update the checklist status when any state changes. Newly discovered defects receive their own issue, schedule item and ledger; update total count before subsequent notifications.
 
 Plan review evidence: `docs/plan/verification/epic61-plan-review.md`. A different reviewer must rereview this amended plan before treating its findings as resolved.
 
 ## Resume
 
-Inspect live Git/worktree/GitHub and agent state before resuming. Current53CLOSED/53notified of67; historical receipt denominators66 stay unchanged. Current owner fix_supply15 starts #72 in process fix/epic61-invalid-config atfc6e286 under the approved non-ready API below. Actual RED precedes source; #18 remains unassigned until prerequisite integration and its separate gate. #28/#40 await user replies; #29 remains held without bypass. Process Termination Safety a751f79 applies: no process-name-wide termination and verify exact task PID/commandline/ownership before termination. Preserve original dirty workspace/denied artifacts; epic incomplete.
+Inspect live Git/worktree/GitHub and agent state before resuming. Current 57 CLOSED/57 notified of 67. #54 owner fix_supply15/listeners fix/epic61-multi-client-harness at eb546cd is assigned exact harness/test/ledger scope; actual RED follows assignment observation. #18 process broader36217 running; obtain terminal evidence from owner before final claims. #47/#53 require separate subsequent gates. #28/#40 await user replies; #29 remains held without bypass. Preserve original workspace/denied artifacts and verify PID/current command line/task ownership before any termination; no Node process-name-wide termination. Epic incomplete.
 
 ## Current execution interruption
 
@@ -344,9 +344,31 @@ Both branches were created by root after independent design PASS. Integrate seri
 
 ## Registered invalid-configuration prerequisite
 
-- [ ] #72 preserve invalid existing server configuration. Status: root approved exact API after independent PASS; fix_supply15/process fix/epic61-invalid-config atfc6e286 created and assigned. Store/ServerApp plus dedicated tests/fixture/ledger72 only; actual RED mandatory before source. #18 prerequisite.
-Registration increases tracked work from66 to67;53 remain complete/notified. Historical Telegram denominators66 remain unchanged. The next newly completed issue would use67/54; registration itself sends no completion receipt. #28/#40 decisions and #29 hold remain unchanged.
+- [x] #72 preserve invalid existing server configuration. Status: complete; source5ba80f6 -> maina64a901f138dc2831d0006b8a107d8d321458490 pushed/remote verified; eight suites76testsPASS179.243seconds naturalexit0/forcedbuildPASS; CLOSED2026-09-08T11:54:00Z comment5584718146 Telegram3989(67/56).
+At the registration checkpoint, tracked work increased from66 to67 and53 were complete/notified. Historical Telegram denominators66 remain unchanged. At that checkpoint the next newly completed issue would use67/54; registration itself sends no completion receipt. #28/#40 decisions and #29 hold remain unchanged.
 
 ## Approved #72 invalid-configuration preservation assignment
 
-- [ ] Observe owned invalid-load/API/startup RED then implement minimum refusal. Status: fix_supply15/process fix/epic61-invalid-config atfc6e286, root created branch after independent exact API PASS. Exclusive production ServerOptionStore.ts and ServerApp.ts plus dedicated tests/fixture/ledger72. Follow verification/epic61-invalid-config-discovery.md: detached loadStatus/readServerOption results, ready-only legacy getter programming-invariant error allowed, normal invalid startup uses result only; guard every non-reset mutation before side effects/default state access; validate local candidate and publish after writes; explicit reset remains deliberate escape. Refuse normal invalid startup before cert load/CLI writes/listeners and preserve configuration/revision bytes. #18 waits, #40 value policy unchanged; no other production scope approved.
+- [x] Observe owned invalid-load/API/startup RED then implement minimum refusal. Status: completed3989; historical assignment: fix_supply15/process fix/epic61-invalid-config atfc6e286, root created branch after independent exact API PASS. Exclusive production ServerOptionStore.ts and ServerApp.ts plus dedicated tests/fixture/ledger72. Follow verification/epic61-invalid-config-discovery.md: detached loadStatus/readServerOption results, ready-only legacy getter programming-invariant error allowed, normal invalid startup uses result only; guard every non-reset mutation before side effects/default state access; validate local candidate and publish after writes; explicit reset remains deliberate escape. Refuse normal invalid startup before cert load/CLI writes/listeners and preserve configuration/revision bytes. #18 waits, #40 value policy unchanged; no other production scope approved.
+
+## Approved #57 TLS rejection evidence assignment
+
+- [x] Observe native TLS baseline/sensitivity RED then strengthen existing rejection evidence. Status: completed3987; historical review_cert_conflict/control fix/epic61-tls-rejection-evidence atd53ce84 created by root after independent design PASS. Only test/component/client/TlsVerification.test.ts and ledger57. Native secureConnect/authorized, verification failure category, no application bytes, trusted actual echo and same-peer healthy control define the contract. Declared one-attempt insecure mutation demonstrates old Closed-only false-positive sensitivity; do not claim a new production defect RED. Wrapper Connected remains TCP progress and production verification defaults are unchanged. No node.exe-wide termination, denied-temp operation or benchmark. Existing #72 work/#18 prerequisite and #28/#40/#29 boundaries remain unchanged; count67tracked/53complete.
+
+## Approved #55 evidence-policy correction
+
+- [x] Correct blanket declaration and independently review policy documentation. Status: completed3988; historical root assignment: fix_supply15/listeners fix/epic61-test-evidence-policy atd53ce84. Only jest.config.ts blanket NO-MOCK comment, docs/guide/test-evidence-policy.md and ledger55. Existing cited test descriptions need no edit. Explicitly distinguish unit doubles, delegated observers, fault injection and actual I/O. Retain hard actual transport/security/lifecycle acceptance gates, strict TDD and independent review; #48/#47/#54/#53/#52/#58 obligations stay separate and mandatory. No behavior change/new production RED, no historical-plan/receipt rewrite; document review precedes commit.
+
+## Approved #48 first E2E fidelity stage
+
+- [x] Execute single-attempt exchange RED and minimum test-helper repair. Status: completed3990; historical fix_supply15/listeners fix/epic61-roundtrip-once at61f60f1 created and assigned. Initial scope test/helpers/network.ts, existing test/helpers/tunnelHarness.ts relevant hunks and opt-in finite endpoint mode, dedicated tests/ledger48; owner must freeze actual paths in ledger before writing. sendTcpAndReceiveOnce makes one connect/write, accumulates full peer-FIN response and returns all bytes; harness uses exact Buffer.equals with no retry. Readiness polling is separate and does not send payload. Error/close-before-end/deadline fail with owned socket/timer cleanup. Preserve legacy prefix helper semantics for unrelated callers. #54/#47/#53 separately gated after48. Production changes need actual RED and separate scope approval; no #29 EOF workaround.
+
+#72 operational completion: source5ba80f6 -> maina64a901f138dc2831d0006b8a107d8d321458490 pushed/remote verified; eight suites76testsPASS179.243seconds naturalexit0/forcedbuildPASS; CLOSED2026-09-08T11:54:00Z comment5584718146 Telegram3989(67/56). Original #57/#55 receipts3987/3988 and their counts remain unchanged.
+
+## Approved #18 session idle policy assignment
+
+- [ ] Implement explicit sessionTtlMs after actual RED. Status: root assigned review_cert_conflict/process fix/epic61-session-idle-policy ata64a901; at assignment56of67, current57 progress is in Status/Resume. Exact production types/TunnelingOption.ts, ServerOptionStore.ts TTL validation, TunnelServer.ts timer/effective policy, TTTServer.ts TTL-only apply/capture/restore and AdminServer.ts necessary hot-apply classification. API resolveSessionTtlMs result, read-only sessionTtlPolicy pair, existing configureSessionTtl signature; default1h,0disable,positive1000..3600000, invalidnegative/nonfinite. Existing72 invalid-load protection reused, no ServerApp writes. Dedicated owned tests and specified req09TTL cases/ledger only. Real positive0positive/no listener restart/effectiveLKG pending rollback required. No heartbeat/control activity expansion/EOF/pool/28/29/40 policy or benchmark changes. Freeze two reviews, no agent commit.
+
+## Approved #54 multi-client harness stage
+
+- [ ] Observe actual multi-owner/partial-startup RED before implementation. Status: fix_supply15/listeners fix/epic61-multi-client-harness at eb546cd created by root after exact API independent PASS. Only test/helpers/tunnelHarness.ts plus dedicated tests/fixture/ledger54; #48 network helper is read-only. Follow approved E2E clients[] identity/config and detached-map API, stopClient(id), legacy single-client alias invariants and mandatory identity in multi-client calls. Unknown/stopped IDs fail before I/O; preserve root-approved conflicting-option fixture policy and partial-startup cleanup. Require real authenticated identity set, two owned endpoints and ACL routing, held B while A stops, no stopped-client revival, exact-once finite exchange and partial-failure RED. Observe assignment record before actual RED. No production scope; #47/#53 later separate gates.
