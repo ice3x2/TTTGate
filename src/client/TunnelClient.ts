@@ -52,6 +52,8 @@ type WaitBufferState = {
     limitBytes: number;
 }
 
+type DataAttempt = {handler?: TunnelDataHandler; settled: boolean};
+
 /**
  * Client 는 Ctrl(컨트롤) 클라이언트와 Session.ts(세션) 클라이언트로 구성된다.
  * Ctrl 클라이언트는 서버와 연결을 맺으면 Sync 와 SyncSync 패킷을 받는다. 이후 Ack 패킷을 보내면 연결이 완료된다. 이후 Open 패킷을 받기만한다.
@@ -67,6 +69,7 @@ class TunnelClient {
     private _state : CtrlState = CtrlState.None;
     private _ctrlHandler: TunnelControlHandler | undefined = undefined;
     private _activatedSessionDataHandlerMap : Map<number, TunnelDataHandler> = new Map<number, TunnelDataHandler>();
+    private _pendingDataAttempts = new Map<number, DataAttempt>();
     private _waitBufferQueueMap : Map<number, WaitBufferState> = new Map<number, WaitBufferState>();
     private _waitBufferBytesTotal: number = 0;
     private _protocolVersion: number = 1;
@@ -230,6 +233,8 @@ class TunnelClient {
     }
 
     public terminateEndPointSession(sessionID: number) : void {
+        const attempt = this._pendingDataAttempts.get(sessionID);
+        if(attempt) { attempt.settled = true; this._pendingDataAttempts.delete(sessionID); attempt.handler?.destroy(); }
         let handler = this._activatedSessionDataHandlerMap.get(sessionID);
         this._activatedSessionDataHandlerMap.delete(sessionID);
         this.clearWaitBuffer(sessionID);
@@ -239,6 +244,13 @@ class TunnelClient {
     }
 
     private deleteDataHandler(handler: TunnelDataHandler) : void {
+        const sessionID = handler.sessionID ?? -1;
+        const attempt = this._pendingDataAttempts.get(sessionID);
+        if(this._activatedSessionDataHandlerMap.get(sessionID) !== handler && attempt?.handler !== handler) {
+            handler.destroy();
+            return;
+        }
+        if(attempt?.handler === handler) { attempt.settled = true; this._pendingDataAttempts.delete(sessionID); }
         this.clearWaitBuffer(handler.sessionID ?? -1);
         handler.dataHandlerState = DataHandlerState.Terminated;
         this._activatedSessionDataHandlerMap.delete(handler.sessionID ?? 0);
@@ -274,6 +286,9 @@ class TunnelClient {
     }
 
     private destroyAllDataHandler() : void {
+        const pending = [...this._pendingDataAttempts.values()];
+        this._pendingDataAttempts.clear();
+        for(const attempt of pending) { attempt.settled = true; attempt.handler?.destroy(); }
         // Race condition 방지: 먼저 세션 ID들을 배열로 복사
         const sessionIDs = Array.from(this._activatedSessionDataHandlerMap.keys());
         
@@ -362,7 +377,10 @@ class TunnelClient {
                     let dataHandler = this._activatedSessionDataHandlerMap.get(packet.sessionID);
                     if(!dataHandler) {
                         logger.error(`onReceiveFromCtrlHandler - Fail close session. invalid sessionID: ${packet.sessionID}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
-                        this._onEndPointCloseCallback?.(packet.sessionID, 0);
+                        if(this._pendingDataAttempts.has(packet.sessionID)) {
+                            this.terminateEndPointSession(packet.sessionID);
+                            this._onEndPointCloseCallback?.(packet.sessionID, 0);
+                        }
                     } else {
                         dataHandler.addOnceDrainListener(() => {
                             if (dataHandler) {
@@ -405,6 +423,14 @@ class TunnelClient {
      * @private
      */
     private connectDataHandler(handlerID: number,  sessionID: number, bindingToken?: string) : void {
+        const previous = this._pendingDataAttempts.get(sessionID);
+        if(previous) {
+            previous.settled = true;
+            this._pendingDataAttempts.delete(sessionID);
+            previous.handler?.destroy();
+        }
+        const attempt: DataAttempt = {settled: false};
+        this._pendingDataAttempts.set(sessionID, attempt);
         // P6-T2 / REQ-14: race 해소 — SocketHandler.connect는 (tls/net 레이어의 즉시 accept 시나리오에서)
         // Connected 이벤트를 동기 실행할 수 있다. 따라서 handlerID/sessionID/bindingToken은
         // "connect 반환 후 속성 할당"으로는 100% 주입 보장이 불가능하다.
@@ -416,6 +442,20 @@ class TunnelClient {
         let dataHandler : TunnelDataHandler = SocketHandler.connect(this.makeConnectOpt(), (handler, state, data) => {
             // Closure capture 문제 해결: 매개변수 handler를 안전하게 캐스팅하여 사용
             const tunnelDataHandler = handler as TunnelDataHandler;
+            attempt.handler ??= tunnelDataHandler;
+            tunnelDataHandler.handlerID = handlerID;
+            tunnelDataHandler.sessionID = sessionID;
+            tunnelDataHandler.bindingToken = bindingToken;
+            if(attempt.settled || (this._pendingDataAttempts.get(sessionID) !== attempt &&
+                this._activatedSessionDataHandlerMap.get(sessionID) !== tunnelDataHandler)) {
+                tunnelDataHandler.destroy();
+                return;
+            }
+            if(state === SocketState.End || state === SocketState.Closed) {
+                attempt.settled = true;
+                this.onDataHandlerTerminated(tunnelDataHandler, sessionID, handlerID);
+                return;
+            }
 
             if(state == SocketState.Connected) {
                 // P6-T2: 반드시 Connected 직후(동기 순서) 식별자 세트. 외부 post-connect 할당에 의존하지 않음.
@@ -425,6 +465,7 @@ class TunnelClient {
                 tunnelDataHandler.handlerType = HandlerType.Data;
                 tunnelDataHandler.dataHandlerState = DataHandlerState.Initializing;
                 this._activatedSessionDataHandlerMap.set(sessionID, tunnelDataHandler);
+                this._pendingDataAttempts.delete(sessionID);
                 // P6-T1: waitBuffer queue 선할당.
                 if(!this._waitBufferQueueMap.has(sessionID)) {
                     this._waitBufferQueueMap.set(sessionID, {
@@ -450,6 +491,8 @@ class TunnelClient {
         // 연결 생성 후 속성 세트 — Connected 콜백에서 이미 주입했더라도, 후속 대기 중 상태(None)
         // 노출을 막기 위해 post-connect fallback으로 한 번 더 주입한다. (idempotent)
         if (dataHandler) {
+            attempt.handler ??= dataHandler;
+            if(attempt.settled) { dataHandler.destroy(); return; }
             dataHandler.handlerID = dataHandler.handlerID ?? handlerID;
             dataHandler.handlerType = HandlerType.Data;
             dataHandler.sessionID = dataHandler.sessionID ?? sessionID;
@@ -458,6 +501,15 @@ class TunnelClient {
         } else {
             logger.error(`connectDataHandler: Failed to create data handler for sessionID: ${sessionID}`);
         }
+    }
+
+    private onDataHandlerTerminated(handler: TunnelDataHandler, sessionID: number, handlerID: number): void {
+        const state = handler.dataHandlerState;
+        const control = this._ctrlHandler;
+        this.deleteDataHandler(handler);
+        if(!control || control.isEnd() || state === DataHandlerState.Terminated) return;
+        if(state === DataHandlerState.OnlineSession) this.sendCloseSession(handlerID, sessionID, 0);
+        else control.sendData(CtrlPacket.resultOfOpenSession(handlerID, sessionID, false, {handlerID}).toBuffer());
     }
 
     // noinspection JSUnusedLocalSymbols
