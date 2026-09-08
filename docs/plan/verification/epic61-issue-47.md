@@ -1,6 +1,6 @@
 # Issue #47: full HTTP/TLS tunnel evidence
 
-Status: full approved test-only helper/E2E stage completed; seven selected suites61PASS42.706s and build0, frozen for two independent reviews. Original default-CN positive-assumption failure remains preserved. Control branch fix/epic61-http-tls-e2e, base514d882. Author fix_lint_diagnostics. No production change or commit authorized.
+Status: complete; sourceb9c977c0e2402c091f2bd42e090082edcb339f99 -> main1370993d4339dfd4e8a09cc241ced4b4f600ff96 pushed/remote verified (74d286); CLOSED2026-09-08T13:11:11Z comment5585672264 Telegram3996(67/60). Root8348/bea20d seven suites/61tests PASS44.617seconds natural exit0; build24f316 exit0. Original default-CN failure, SAN probe and full-stage executions remain separate historical evidence.
 
 ## Root-approved full finite E2E implementation assignment
 
@@ -51,6 +51,11 @@ Amended baseline command remained `node node_modules/jest/bin/jest.js --runInBan
 ## Final independent candidate reviews
 
 - [x] Full candidate and exact-title reviews. Status: review_wave0 and review_cert_conflict both PASS with no remaining Critical/High/Medium/Low findings. Earlier unchecked review/assignment entries describe their historical checkpoints. Final seven-suite61PASS42.706seconds/build0 and original failed observations remain separately recorded above.
-- [ ] Root source commit, serial integration, regression, push and issue notification. Status: pending. Main source integration waits until the independently owned #49 five-suite observation finishes, so its source checkpoint does not change during measurement.
+- [x] Root source commit/integration/regression/push/closure/notification. Status: complete; operational receipt below.
 
 Exact approved title: `test: 실제 터널의 HTTP와 TLS 왕복 검증`. This ledger-only recording changes no source, fixtures, tests or preserved evidence.
+
+## Operational completion
+
+- [x] Root final per-issue gates. Status: sourceb9c977c0e2402c091f2bd42e090082edcb339f99 -> main1370993d4339dfd4e8a09cc241ced4b4f600ff96 pushed/remote verified (74d286); CLOSED2026-09-08T13:11:11Z comment5585672264 Telegram3996(67/60). Root8348/bea20d seven suites/61tests PASS44.617seconds natural exit0; build24f316 exit0.
+Root supplied these operational facts. At closure60CLOSED/60notified of67; current active status SSOT is execution plan. Earlier probe-only/pending/checkpoint statements are historical; no remaining #47 gate. #49 machine/nonpass interpretation, #53 research, #52 coverage and #58 semantic traceability remain separate and incomplete.

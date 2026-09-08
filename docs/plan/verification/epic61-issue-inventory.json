@@ -170,7 +170,7 @@
   {
     "body": "## 요약\r\n\r\n이 제품의 본질은 외부 요청이 터널을 타고 내부 엔드포인트에 도달하고 응답이 돌아오는 것입니다. 그 왕복을 검증하는 테스트는 한 건이며, 20바이트 문자열 하나를 TCP 로 echo 하는 것이 전부입니다.\r\n\r\n## 근거\r\n\r\n- `test/e2e/tunnel/baseline-tunnel.test.ts:17` — 유일한 왕복 테스트입니다.\r\n- `test/helpers/tunnelHarness.ts:66-74` — 프로토콜을 `tcp`, TLS 를 꺼짐으로 고정합니다.\r\n- `test/helpers/tunnelHarness.ts:15-17` — `serverOptionOverride` 와 `tunnelingOptionOverride` 와 `clientOptionOverride` 확장 지점이 정의되어 있으나, 하네스를 쓰는 세 파일 어디에서도 사용되지 않습니다.\r\n- `docs/plan/integration-test-guide.md` — P1 기준선 항목으로 \"HTTP tunnel 기본 프록시 동작\" 을 명시했으나 구현되지 않았습니다.\r\n\r\n## 검증되지 않는 것\r\n\r\n- HTTP 모드 터널 프록시 동작\r\n- TLS 를 켠 터널 왕복\r\n- 여러 터널링 옵션 동시 운용\r\n- HTTP 모드와 TCP 모드 혼용\r\n- 서버 재시작 중의 세션 거동\r\n\r\nHTTP 계층에서 발견된 결함 여덟 건이 모두 이 공백 안에 있습니다.\r\n\r\n## 권고\r\n\r\n하네스의 기존 확장 지점을 사용해 HTTP 모드 왕복과 TLS 왕복을 먼저 추가합니다. 확장 지점이 이미 준비되어 있으므로 하네스 구조 변경 없이 시작할 수 있습니다.\r\n\r\n## 검증 상태\r\n\r\n- 확인 방법: 테스트 파일 정독 및 하네스 확장 지점 사용처 전수 검색.\r\n\r\n---\r\n근거 문서: `docs/research/2026-09-05-tttgate-full-inspection.md` §7.4",
     "number": 47,
-    "state": "OPEN",
+    "state": "CLOSED",
     "title": "터널 왕복 E2E 가 TCP 평문 단일 시나리오뿐이라 제품 핵심 경로가 검증되지 않음",
     "url": "https://github.com/ice3x2/TTTGate/issues/47"
   },

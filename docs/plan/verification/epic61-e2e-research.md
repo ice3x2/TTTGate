@@ -1,6 +1,6 @@
 # E2E prerequisites — #48 → #54 → #47 → #53
 
-Status: #48/#54 complete3990/3994. #47 initial temp CN/CA probe completed with ERR_TLS_CERT_ALTNAME_INVALID: d7f213 oneFAIL3.176s, outer4.652s, generation2.637s, natural exit1/expired=false; E Temp/tls47-probe-evidence-JwqlkZ. Valid DNS/SAN certificate-fixture design requires independent re-review; no harness implementation authorized. Exact receipts in control ledger47; current progress SSOT is execution plan.
+Status: #48/#54/#47 complete3990/3994/3996; latest #47 verified1370993, root61PASS44.617/buildPASS. #53 exact separate research awaits independent review/assignment. Original failed-CN/probe/design prose is historical; current progress SSOT is execution plan.
 
 - [x] Read original48/54/47/53 and current helper/data paths. Status: concrete findings below.
 - [x] Separate readiness, byte fidelity, multiple owners and protocol/cache evidence. Status: proposed serial order below.
@@ -356,3 +356,8 @@ All resources belong to fresh owned roots and loopback listeners, with tracked c
 ## Initial trust-probe outcome and redesign gate
 
 Actual default temp-certificate trust probe failed native name verification: ERR_TLS_CERT_ALTNAME_INVALID. Receipt d7f213: one failed test3.176s; outer observer4.652s, certificate generation2.637s, natural exit1 and expired=false. Preserved E: C:/Users/beom/AppData/Local/Temp/tls47-probe-evidence-JwqlkZ. These observations are distinct from the predeclared30s/60s budgets. Do not treat CA trust alone as authorized identity or weaken verification. A valid DNS/SAN test-certificate setup needs independent design review before any harness implementation; the earlier CN-based proposal is a failed hypothesis, not an approved working fixture.
+
+## #47 completed execution checkpoint
+
+- [x] Full HTTP/TLS E2E review/integration/push/closure/notification. Status: sourceb9c977c0e2402c091f2bd42e090082edcb339f99 -> main1370993d4339dfd4e8a09cc241ced4b4f600ff96 pushed/remote verified (74d286); CLOSED2026-09-08T13:11:11Z comment5585672264 Telegram3996(67/60). Root8348/bea20d seven suites/61tests PASS44.617seconds natural exit0; build24f316 exit0.
+Original d7f213 failure and separate SAN2PASS remain immutable prior evidence, not retroactively passing the default-CN hypothesis. Exact #53 research is separate and not yet assigned.
