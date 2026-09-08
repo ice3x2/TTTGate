@@ -1,6 +1,6 @@
 # Data-channel handshake framing and retained payload research (#43 -> #42)
 
-Status: #43 complete; source a1edfa5, integration f2400463f7c2cb0fd31e4030418101c7fd813cfd pushed and remote verified; GitHub CLOSED 2026-09-08T04:16:24Z, comment 5579102771; root Telegram receipt 3971 (66/40). Integrated eight suites/50 tests PASS in 69.895 seconds, natural exit 0; forced build PASS. #42 independently reviewed and approved by root; owner review_cert_conflict, control branch fix/epic61-data-handshake-payload at f240046. Earlier unapproved statements below describe the research checkpoints.
+Status: #42 complete; source 9c3f393, integration 43221c082e17e7edd7c1d08632cf00441fe5bf31 pushed/remote verified; GitHub CLOSED 2026-09-08T05:03:28Z, comment 5579537380; root Telegram receipt 3972 (66/41). Integrated ten suites/64 tests PASS, 110.086 seconds, natural exit 0; forced build PASS. Earlier proposed/assigned/pending wording is historical research evidence; the count at that completion checkpoint was42/66; current progress is in the execution plan.
 Researcher: review_cert_conflict. Original GitHub #43 and #42 and current main
 sources were read; no source edit, server or test execution occurred during this research. At the original research checkpoint, #41 was frozen for review. It is now complete and integrated as `b6dbf014745a97b6a85805d1691abab5e9de4e50`, CLOSED 2026-09-08T03:34:05Z, Telegram receipt 3966 (66/38). Its identity-admission behavior must be preserved.
 
@@ -213,4 +213,9 @@ No external endpoint, daemon, server or test was run during this research. The o
 
 - [x] Root approves #42 exact scope after independent review. Status: branch fix/epic61-data-handshake-payload at f240046 created in control, owner review_cert_conflict.
 - [ ] Execute #42 ledger/actual RED before implementation. Status: assigned; TunnelServer/helper plus dedicated tests/ledger and strengthened existing suffix assertion only. Conditional overflow guard requires actual overflow RED and missing-queue control. No ClientHandlerPool or producer/wire change.
-Current epic count is 40/66. Earlier #42 unapproved wording is historical and is superseded only by this bounded assignment; all behavioral and test constraints remain mandatory.
+The count at that checkpoint was40/66; current progress is in the execution plan. Earlier #42 unapproved wording is historical and is superseded only by this bounded assignment; all behavioral and test constraints remain mandatory.
+
+## Current operational completion
+
+- [x] Complete #42 implementation and per-issue gates. Status: complete; source 9c3f393, integration 43221c082e17e7edd7c1d08632cf00441fe5bf31 pushed/remote verified; GitHub CLOSED 2026-09-08T05:03:28Z, comment 5579537380; root Telegram receipt 3972 (66/41). Integrated ten suites/64 tests PASS, 110.086 seconds, natural exit 0; forced build PASS.
+Earlier planned checklist items describe the design-phase test contract; detailed completed execution evidence is in the issue ledger. No successor implementation is approved by this completion.

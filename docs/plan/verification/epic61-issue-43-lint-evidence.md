@@ -1,6 +1,6 @@
 # Issue #43 — Public format lint alignment
 
-Status: two-comment correction, focused checks and both independent reviews complete; frozen for root commit/integration. Independent fixer fix_supply15, listeners branch `fix/epic61-public-format-lint`, base `99a18ae`.
+Status: follow-up complete; source 369952c -> main 74eb213efaa96bea57a0a38457d70e706d8315e6 pushed and remote verified; root integration four suites/32 tests PASS, 1.106 seconds, natural exit 0; GitHub #43 follow-up comment 5579301164 posted.
 Scope: two public format comparison comments in DataStatePacket.ts and this ledger only. Scanner rules, credentials and runtime behavior remain unchanged. Existing process #59 dirty work and denied temporary directories remain untouched.
 
 - [x] Read root assignment/main plan and existing allow-comment mechanism. Status: `scanFile` skips a line bearing `lint-auth-compare-allow`; only the two public enum-like discriminator comparisons qualify.
@@ -38,3 +38,8 @@ confirmation of this reviewer-authored record; source comments remain frozen.
 Root relayed review_cert_conflict's second independent code/content/exact-title
 PASS with zero Critical/High/Medium/Low findings. No additional execution was
 performed by that reviewer. Root owns subsequent commit and integration.
+
+## Operational completion
+
+- [x] Root integration/push and existing-issue follow-up. Status: source 369952c -> main 74eb213efaa96bea57a0a38457d70e706d8315e6 pushed and remote verified; root integration four suites/32 tests PASS, 1.106 seconds, natural exit 0; GitHub #43 follow-up comment 5579301164 posted.
+Root supplied these operational receipts. Earlier commit/integration-pending statements describe completed handoffs. Original #43 closure, Telegram receipt and epic count 40/66 are unchanged. This supplement creates no new issue completion or notification. #59 final verification follows its separate supplement uptake; its initial failure is preserved.

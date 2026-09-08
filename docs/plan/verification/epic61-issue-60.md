@@ -1,6 +1,6 @@
 # Issue #60 — Owned test artifacts
 
-Status: implementation, canonical-alias correction, focused contracts and both final independent rereviews PASS; source frozen for root commit/integration.
+Status: complete; Telegram retry succeeded 2026-09-08T06:17:24Z, receipt3974 (66/43), pending store cleared; source 60509df, integration 0f22b68951328f240da723d5dd471df761fbf99e pushed/remote verified; GitHub CLOSED 2026-09-08T06:06:07Z, comment 5580111594. Forced build PASS; fresh R-6M15BR/E-4D7LTQ four artifact contracts outer PASS with child statuses 0/0/1/1 preserved; alias unit one PASS, 0.616 seconds, natural exit 0.
 Owner fix_supply15; listeners worktree branch `fix/epic61-test-artifacts`, base `f3c2a10`.
 Approved research: main `epic61-issue-60-research.md`; consult its concrete R/E mapping.
 Writable: req04 constant-time test artifact case only, req09 pool-swap report lifecycle only, dedicated artifact sandbox/contract fixture and this ledger. No timing code/threshold/execution, #59 helper, scanner, production or historical artifact cleanup.
@@ -92,3 +92,15 @@ frozen for two other reviewers. Existing proposed title remains
 
 Root confirmed review_wave0 and fix_lint_diagnostics final M1 rereviews both PASS with zero Critical/High/Medium/Low findings and existing exact-title PASS. Neither reviewer performed additional execution for the final rereview. review_wave0 read the actual owned alias RED/GREEN receipts and fresh four-mode R/E records; canonical creation fixes legitimate parent aliases without relaxing cleanup ownership. Successful child0 and expected injected-failure child1 remain distinct from their outer cleanup-contract results. Prior setup failure remains excluded from behavior RED. No benchmark, denied path or producer/runtime change was inferred.
 This entry was written by review_wave0 only; source/test files stay frozen. Root coordinates independent confirmation and subsequent commit/integration.
+
+## Root integration and pending notification
+
+Exact pending title: `TDD Gate 60 테스트가 작업 트리에 산출물을 남김 (66/43)`.
+
+- [x] Root integration/push/GitHub closure. Status: source 60509df, integration 0f22b68951328f240da723d5dd471df761fbf99e pushed/remote verified; GitHub CLOSED 2026-09-08T06:06:07Z, comment 5580111594. Forced build PASS; fresh R-6M15BR/E-4D7LTQ four artifact contracts outer PASS with child statuses 0/0/1/1 preserved; alias unit one PASS, 0.616 seconds, natural exit 0.
+- [x] Telegram notification and final completion. Status: after original429/retry-after497 and not-before2026-09-08T06:15:31Z, root retry succeeded2026-09-08T06:17:24Z with receipt3974 (66/43); pending store cleared.
+At that pre-notification checkpoint:43CLOSED but42notified/complete out of66. At that checkpoint this issue was not yet fully complete; the later3974 receipt completes it. Prior author/fixer and failed-child evidence remains historical and unchanged.
+
+## Final notification receipt
+
+Root confirmed retry at 2026-09-08T06:17:24Z succeeded with messageId3974 using the unchanged exact title/count above. Original429 and waiting receipts remain historical evidence. The notification-completion count was43CLOSED/43notified,43of66; current progress is in the execution plan; #60 has no remaining completion gate. At that notification checkpoint, #45/#46 remained open; #28/#40 decisions and #29hold remain unchanged.

@@ -1,6 +1,6 @@
 # Issue #42 — Deliver the admitted handshake suffix once
 
-Status: implementation/regression/build and both independent code/content/title reviews PASS; source frozen for root commit/integration.
+Status: complete; source 9c3f393, integration 43221c082e17e7edd7c1d08632cf00441fe5bf31 pushed/remote verified; GitHub CLOSED 2026-09-08T05:03:28Z, comment 5579537380; root Telegram receipt 3972 (66/41). Integrated ten suites/64 tests PASS, 110.086 seconds, natural exit 0; forced build PASS.
 Owner review_cert_conflict; control worktree `fix/epic61-data-handshake-payload`,
 base `f2400463f7c2cb0fd31e4030418101c7fd813cfd`. Main assignment/research approved.
 
@@ -95,3 +95,8 @@ this record. Source and tests remain frozen.
 Root relayed fix_supply15's final code/content/exact-title PASS, zero Critical/
 High/Medium/Low findings, without additional test execution. Both reviewer results
 are complete; root owns subsequent commit/integration and closure.
+
+## Operational completion
+
+- [x] Root commit/integration/push/closure/notification. Status: complete; source 9c3f393, integration 43221c082e17e7edd7c1d08632cf00441fe5bf31 pushed/remote verified; GitHub CLOSED 2026-09-08T05:03:28Z, comment 5579537380; root Telegram receipt 3972 (66/41). Integrated ten suites/64 tests PASS, 110.086 seconds, natural exit 0; forced build PASS.
+Root supplied these operational receipts. The count at that completion checkpoint was42/66; current progress is in the execution plan. Earlier pending handoffs, original failed runs and separate supplements remain historical facts. This completion does not retroactively change failed runs or add duplicate follow-up counts. #28/#40 await decisions; #29 remains held without bypass.

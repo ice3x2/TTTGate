@@ -1,6 +1,6 @@
 # Issue #59 — Lint subprocess reliability research
 
-Status: independently reviewed PASS and approved by root; assigned to fix_supply15 in process branch fix/epic61-lint-process-contract at f240046. Original research below executed no scripts/tests; actual RED is mandatory before implementation.
+Status: #59 complete; source 5ac9ef8, integration f3c2a10fc1fffeeb561249a41ea7feea80b2b80e pushed/remote verified; GitHub CLOSED 2026-09-08T05:08:02Z, comment 5579579381; root Telegram receipt 3973 (66/42). Integrated three suites/16 tests PASS, 2.982 seconds, natural exit 0; forced build PASS. Earlier proposed/assigned/pending wording is historical research evidence; the count at that completion checkpoint was42/66; current progress is in the execution plan.
 
 - [x] Read original #59/#60 and current lint callers. Status: complete.
 - [x] Separate observed failures from causal hypotheses. Status: complete; exact historical child diagnostics are unavailable in the cited issue.
@@ -39,3 +39,8 @@ New tests can use their own `mkdtemp` root as the two tools suites already do. R
 Before implementation, root must approve the exact test/helper write set and whether the adjacent strict-tools fail-open assertion is included. #60 remains a separate assignment and any denied old-path cleanup remains denied. After actual RED/minimal repair, focused real subprocess tests and independent reviews are required; no heavy-load experiment or system fault claim is authorized by this research.
 
 Current assignment supersedes earlier approval-pending prose only for the explicitly listed test/helper scope. Historical abnormal-exit cause remains unclassified; #40/#28 decisions and #29 hold remain unchanged.
+
+## Current operational completion
+
+- [x] Complete #59 implementation and per-issue gates. Status: complete; source 5ac9ef8, integration f3c2a10fc1fffeeb561249a41ea7feea80b2b80e pushed/remote verified; GitHub CLOSED 2026-09-08T05:08:02Z, comment 5579579381; root Telegram receipt 3973 (66/42). Integrated three suites/16 tests PASS, 2.982 seconds, natural exit 0; forced build PASS.
+Earlier planned checklist items describe the design-phase test contract; detailed completed execution evidence is in the issue ledger. No successor implementation is approved by this completion.

@@ -1,6 +1,6 @@
 # Issue #46 — Packet-local metadata results
 
-Status: implementation and test-only completion-barrier LOW correction passed both final independent rereviews; frozen for root commit/integration. #45/#46 both remain OPEN until joint verification/closure gates.
+Status: complete; Joint final integration35a5d5f30c4b2e894ca9daf266c864bbc7871afa pushed/remote verified, sourcefdc4ad6;12suites/85tests PASS164.236seconds, natural exit0; forced build PASS. GitHub CLOSED2026-09-08T07:11:34Z, comment5580852898; root Telegram3976(66/45). Historical stage/review/pending statements below record the execution sequence; current progress SSOT is the main execution plan.
 Approved research: main `epic61-client-control-research.md`. Four production files only: CtrlMetaGuards, CtrlPacket metadata readers, TunnelClient three sites, ClientHandlerPool two sites. #45 remains OPEN; joint closure requires both verified stages.
 
 - [x] Read original issue, legacy getters and approved adapter/reuse. Status: reuse existing field predicates, SAFE_REVIVER and real handshake fixtures; sixth parseAckCtrlData fallback unchanged.
@@ -53,3 +53,8 @@ Related regression command: `node node_modules/jest/bin/jest.js --runInBand --si
 
 Root confirmed review_wave0 and fix_lint_diagnostics final code/content/exact-title rereviews PASS, zero Critical/High/Medium/Low findings. Neither final reviewer executed additional tests. LOW is resolved by waiting for expected processed Message count or unique sysinfo marker; split-delivery RED and original production RED remain distinct. Existing coalesced/Sync controls and bounded timeout failure behavior remain intact.
 review_wave0 independently hashed the four production files and confirmed they match the preserved before/after values above. Existing proposed title remains PASS. This entry changes only the ledger; production/tests are frozen. Root commit/integration remain pending and neither #45 nor #46 closes or receives its completion Telegram before joint verification.
+
+## Joint operational completion
+
+- [x] Final joint verification, integration/push and individual closure/notification. Status: Joint final integration35a5d5f30c4b2e894ca9daf266c864bbc7871afa pushed/remote verified, sourcefdc4ad6;12suites/85tests PASS164.236seconds, natural exit0; forced build PASS. GitHub CLOSED2026-09-08T07:11:34Z, comment5580852898; root Telegram3976(66/45).
+Root supplied these operational receipts. Earlier stage-only integration, original RED, independent test-only correction and pending gate records are historical; neither issue remains OPEN or awaiting notification. The final count at joint completion was45CLOSED/45notified of66; current active work is recorded only in the execution plan. #28/#40/#29 boundaries remain unchanged.

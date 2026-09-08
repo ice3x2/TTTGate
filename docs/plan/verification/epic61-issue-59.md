@@ -1,6 +1,6 @@
 # Issue #59 — Lint subprocess contracts
 
-Status: remediation complete and both independent final rereviews PASS; source frozen for root commit/integration. Original execution failures and separate dependency correction remain preserved.
+Status: complete; source 5ac9ef8, integration f3c2a10fc1fffeeb561249a41ea7feea80b2b80e pushed/remote verified; GitHub CLOSED 2026-09-08T05:08:02Z, comment 5579579381; root Telegram receipt 3973 (66/42). Integrated three suites/16 tests PASS, 2.982 seconds, natural exit 0; forced build PASS.
 Owner fix_supply15; worktree `C:/Work/git/_Snoworca/TTTGate-epic61-process`, branch `fix/epic61-lint-process-contract`, base `f2400463f7c2cb0fd31e4030418101c7fd813cfd`.
 Approved research: main `epic61-issue-59-research.md`. Scope: two tools lint tests, small shared test helper, dedicated process tests and this ledger. Scanner/package/production timeout and #60 preserved; no old temporary directory deletion.
 
@@ -35,3 +35,8 @@ Final remediation GREEN command: `node node_modules/jest/bin/jest.js --runInBand
 
 Root confirmed review_wave0 and review_cert_conflict final rereviews both PASS, zero Critical/High/Medium/Low findings. M1 is resolved by preserving malformed stdout/report JSON cause and execution context; LOW is resolved by visible owned-root cleanup errors, canonical creation/validation and idempotent absent-root handling. Existing mode, semantic summary/report checks, scanner rules and historical-cause limitations remain unchanged.
 Neither final reviewer performed an additional execution; both assessed the actual diff, declared RED distinctions and existing final three-suite/16-test PASS receipt. The original exact proposed title recorded above remains PASS. Root commit/integration/push/closure remain pending. This entry was written by review_wave0; source/helper/test files were not edited.
+
+## Operational completion
+
+- [x] Root commit/integration/push/closure/notification. Status: complete; source 5ac9ef8, integration f3c2a10fc1fffeeb561249a41ea7feea80b2b80e pushed/remote verified; GitHub CLOSED 2026-09-08T05:08:02Z, comment 5579579381; root Telegram receipt 3973 (66/42). Integrated three suites/16 tests PASS, 2.982 seconds, natural exit 0; forced build PASS.
+Root supplied these operational receipts. The count at that completion checkpoint was42/66; current progress is in the execution plan. Earlier pending handoffs, original failed runs and separate supplements remain historical facts. This completion does not retroactively change failed runs or add duplicate follow-up counts. #28/#40 await decisions; #29 remains held without bypass.

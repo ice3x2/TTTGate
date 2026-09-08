@@ -1,6 +1,6 @@
 # Issue #45 — Client framing boundary and owned reconnect
 
-Status: first-stage implementation and separate M1 coverage correction passed both final independent rereviews; source frozen for root stage commit/integration. Joint #45/#46 closure/notification gate remains pending.
+Status: complete; Joint final integration35a5d5f30c4b2e894ca9daf266c864bbc7871afa pushed/remote verified, sourcefdc4ad6;12suites/85tests PASS164.236seconds, natural exit0; forced build PASS. GitHub CLOSED2026-09-08T07:11:13Z, comment5580848645; root Telegram3975(66/44). Historical stage/review/pending statements below record the execution sequence; current progress SSOT is the main execution plan.
 Research: main `epic61-client-control-research.md`, approved additive CtrlReadResult API and joint #45 → #46 milestone. Writable: CtrlPacket streamer/result, TunnelClient, dedicated tests/fixture and ledger only. Neither issue closes until both stages are verified.
 
 - [x] Read issues45/46, approved API and reuse. Status: existing parser/queue, withLegacyIds real server/peer fixture and TTTClient scheduler are reusable; no new framing parser or reconnect loop.
@@ -48,3 +48,13 @@ Five-file scope: two production files, two dedicated tests and this ledger. Sour
 
 Root confirmed review_wave0 and review_cert_conflict final code/content/exact-title rereviews PASS, zero Critical/High/Medium/Low findings. Neither reviewer executed additional tests in this final rereview. review_wave0 directly compared both production SHA256 values with the preserved candidate and read actual populated-queue RED/GREEN facts. Baseline already cleared queue bytes; its failure was generic error handling, missing classified error and control socket state at notification. The GREEN adds no false claim of newly discovered baseline queue leakage.
 Root may commit/integrate the #45 stage, but neither #45 nor #46 may close or receive its completion Telegram until both stages are verified. This reviewer-authored update changes the ledger only; production and tests remain frozen.
+
+## Root stage integration
+
+- [x] Review/integrate/push #45 stage. Status: source 89e66e2 -> main 07c083d3dc02a382511c95024ed2d32b148c55a2 remote verified; root nine suites/52 PASS, 41.037 seconds, natural exit 0; build PASS.
+- [x] Joint #45/#46 verification and individual closure/notification. Status: complete; Joint final integration35a5d5f30c4b2e894ca9daf266c864bbc7871afa pushed/remote verified, sourcefdc4ad6;12suites/85tests PASS164.236seconds, natural exit0; forced build PASS. GitHub CLOSED2026-09-08T07:11:13Z, comment5580848645; root Telegram3975(66/44).
+
+## Joint operational completion
+
+- [x] Final joint verification, integration/push and individual closure/notification. Status: Joint final integration35a5d5f30c4b2e894ca9daf266c864bbc7871afa pushed/remote verified, sourcefdc4ad6;12suites/85tests PASS164.236seconds, natural exit0; forced build PASS. GitHub CLOSED2026-09-08T07:11:13Z, comment5580848645; root Telegram3975(66/44).
+Root supplied these operational receipts. Earlier stage-only integration, original RED, independent test-only correction and pending gate records are historical; neither issue remains OPEN or awaiting notification. The final count at joint completion was45CLOSED/45notified of66; current active work is recorded only in the execution plan. #28/#40/#29 boundaries remain unchanged.
