@@ -282,7 +282,7 @@
   {
     "body": "## 요약\r\n\r\n호스트 치환 함수가 헤더 이름을 가리지 않고 모든 헤더 값에서 호스트 문자열을 부분 문자열로 찾아 바꿉니다.\r\n\r\n## 근거\r\n\r\n- `src/server/http/HttpHandler.ts:350-356` — `replaceHostInHeader` 가 전체 헤더를 순회하며 값에 호스트가 포함되면 치환합니다.\r\n\r\n## 재현과 영향\r\n\r\n짧은 호스트명이나 IP 주소를 쓰는 배포에서 재현됩니다. 감사 과정에서 확인한 사례는 다음과 같습니다.\r\n\r\n| 원본 헤더 | 치환 후 |\r\n|---|---|\r\n| `User-Agent: Mozilla/5.0` | `Mozillinternal.example/5.0` |\r\n| `Cookie: sid=aaa` | `sid=internal.exampleaa` |\r\n\r\n쿠키와 인증 헤더가 손상되어 로그인 세션이 깨집니다.\r\n\r\n## 권고\r\n\r\n치환 대상을 Host 헤더로 한정하고, 필요한 다른 헤더는 명시적으로 열거합니다.\r\n\r\n## 검증 상태\r\n\r\n- 기존 테스트 커버: 없음.\r\n- 도입 시점: 기존.\r\n- 확인 방법: 실행 재현.\r\n\r\n---\r\n근거 문서: `docs/research/2026-09-05-tttgate-full-inspection.md` §5.14",
     "number": 31,
-    "state": "OPEN",
+    "state": "CLOSED",
     "title": "Host 치환이 모든 헤더 값에 부분 문자열로 적용되어 무관한 헤더를 훼손함",
     "url": "https://github.com/ice3x2/TTTGate/issues/31"
   },

@@ -1,6 +1,6 @@
 # Issue #31: Host-only header replacement
 
-Status: implementation/tests/build and two independent code/content/title reviews PASS; source frozen for root commit/integration. Root-approved process branch fix/epic61-host-header, base35a5d5f.
+Status: complete; source b76a10c -> main4b5015f2b08b7784924754e3c09f5a8299131854 pushed/remote verified; GitHub CLOSED2026-09-08T09:14:59Z, comment5582451863; root Telegram3978(66/46). Integrated six suites/58tests PASS3.443seconds, natural exit0; forced build PASS. Earlier assignment/review-pending prose records historical stages; current progress SSOT is execution plan.
 
 - [x] Read original31 and main independent HTTP research. Status: header-value substring replacement corrupts unrelated values; approved helper-only lane is independent of held29 EOF.
 - [x] Check reuse. Status: HttpUtil.findHeaders already selects case-insensitive names; existing http-duplex-fixture supplies real owned sockets and bounded conditions. No new fixture.
@@ -30,3 +30,8 @@ Finite Content-Length requests/responses and existing chunked/direction/upgrade/
 
 Root confirmed review_wave0 and fix_lint_diagnostics final code/content/exact-title PASS, zero Critical/High/Medium/Low findings. review_wave0 independently compared original issue/scope, one-line helper selection, real finite exchanges and historical RED/GREEN receipts.
 Independent selected command: node node_modules/jest/bin/jest.js --runInBand --silent --runTestsByPath test/component/http-host-header.test.ts. Execution d7182f exited0 naturally: one suite/four tests PASS,0.912seconds. The other reviewer performed no additional execution; no second run is inferred. Existing exact proposed title remains PASS. Root commit/integration/push/closure pending; source/test files remain frozen.
+
+## Operational completion
+
+- [x] Root integration/push/closure/notification. Status: source b76a10c -> main4b5015f2b08b7784924754e3c09f5a8299131854 pushed/remote verified; GitHub CLOSED2026-09-08T09:14:59Z, comment5582451863; root Telegram3978(66/46). Integrated six suites/58tests PASS3.443seconds, natural exit0; forced build PASS.
+Root supplied these receipts. Original RED, tests and reviewer results remain intact; no pending completion gate remains for #31. At closure the epic reached46CLOSED/46notified of66. At that closure checkpoint, #33 was unapproved pending policy review and #24 compatibility was ongoing; #28/#40/#29 unchanged.
