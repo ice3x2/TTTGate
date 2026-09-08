@@ -110,6 +110,28 @@ class HttpUtil {
     /**
      * HTTP 헤더가 텍스트 컨텐츠 타입인지 확인
      */
+    public static canRewriteTextEncoding(header: HttpHeader): boolean {
+        const types = HttpUtil.findHeaders(header, "Content-Type");
+        const encodings = HttpUtil.findHeaders(header, "Content-Encoding");
+        if(types.length > 1 || encodings.length > 1) return false;
+        if(encodings.length === 1 && !["identity", "gzip", "deflate", "br"].includes(encodings[0].value.trim().toLowerCase())) return false;
+        let charsetSeen = false;
+        for(const parameter of (types[0]?.value ?? '').split(';').slice(1)) {
+            const equals = parameter.indexOf('=');
+            const name = (equals < 0 ? parameter : parameter.slice(0, equals)).trim().toLowerCase();
+            if(name !== 'charset') continue;
+            if(charsetSeen || equals < 0) return false;
+            charsetSeen = true;
+            let value = parameter.slice(equals + 1).trim();
+            if(value.startsWith('"') || value.startsWith("'")) {
+                if(value.length < 2 || value.at(-1) !== value[0]) return false;
+                value = value.slice(1, -1);
+            }
+            if(value.toLowerCase() !== 'utf-8') return false;
+        }
+        return true;
+    }
+
     public static isTextContentType(httpHeader: HttpHeader): boolean {
         let contentType = HttpUtil.findHeader(httpHeader, "Content-Type");
         

@@ -306,7 +306,7 @@ class HttpHandler {
         this.removeDomainInSetCookie(<HttpResponseHeader>header);
         
         this._isReplaceHostInBody = this._responseHasBody && this._option.rewriteHostInTextBody == true &&
-                                   HttpUtil.isTextContentType(header) && 
+                                   HttpUtil.isTextContentType(header) && HttpUtil.canRewriteTextEncoding(header) &&
                                    (header.contentLength > 0 || header.chunked);
         
         this.changeModeOfReplaceHostInBodyInResponseHeader(header);
