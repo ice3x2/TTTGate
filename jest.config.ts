@@ -1,7 +1,7 @@
 import type { Config } from "jest";
 
 // NOTE: package.json inline jest 블록을 이 파일로 이관(P1-T1/REQ-20).
-// 실환경 테스트만 허용(NO-MOCK).
+// 단위 대역과 실제 통신 증거의 범위: docs/guide/test-evidence-policy.md.
 //
 // Phase 1 커버리지 정책 (round 4 개정):
 // ------------------------------------------------------------
