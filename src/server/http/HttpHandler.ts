@@ -125,7 +125,7 @@ class HttpHandler {
 
     private onSocketEventFromSocketHandler = (handler: SocketHandler, state: SocketState, data?: any): void => {
         if (state == SocketState.Receive && !this._socketHandler.isEnd()) {
-            if(this._inputRejected) return;
+            if(this._inputRejected || this._rejectionSent) return;
             if (this._isUpgrade || this._isWebSocket) {
                 // 웹소켓이나 다른 프로토콜로 업그레이드된 경우
                 this.callEvent(SocketState.Receive, data);
@@ -308,6 +308,19 @@ class HttpHandler {
         this._isReplaceHostInBody = this._responseHasBody && this._option.rewriteHostInTextBody == true &&
                                    HttpUtil.isTextContentType(header) && HttpUtil.canRewriteTextEncoding(header) &&
                                    (header.contentLength > 0 || header.chunked);
+
+        if(this._isReplaceHostInBody && header.contentLength > MAX_BUFFER_SIZE) {
+            this._inputRejected = false;
+            this._rejectionSent = true;
+            this._responsePipe.reset(MessageType.Response);
+            this._pendingRequests.length = 0;
+            this._bodyBuffer = Buffer.alloc(0);
+            this._socketHandler.sendData(Buffer.from("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"), (_handler, success) => {
+                if(!success) this.destroy();
+            });
+            this._socketHandler.end_();
+            return;
+        }
         
         this.changeModeOfReplaceHostInBodyInResponseHeader(header);
         
@@ -397,6 +410,7 @@ class HttpHandler {
             // 최대 버퍼 크기 점검
             if (this._bodyBuffer.length + data.length > MAX_BUFFER_SIZE) {
                 logger.error(`Body buffer size would exceed maximum (${this._bodyBuffer.length + data.length} > ${MAX_BUFFER_SIZE})`);
+                this.destroy();
                 return false;
             }
             this._bodyBuffer = Buffer.concat([this._bodyBuffer, data]);
@@ -412,6 +426,7 @@ class HttpHandler {
     }
 
     private onHttpMessageEnd = (): void => {
+        if(this._socketHandler.isEnd() || this._rejectionSent) return;
         const status = (this._currentHttpHeader as HttpResponseHeader | null)?.status;
         if (this._isReplaceHostInBody) {
             this.replaceAndSendHostInBody();
