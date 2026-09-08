@@ -189,9 +189,9 @@ class CertificationStore {
         this._revisionState = ObjectUtil.cloneDeep(state.revisionState);
     }
 
-    private persistCertificateChange(type: 'admin' | 'external', adminCert: CertInfo, externalCert: ExternalCertFileInfo,
+    private prepareCertificateChange(type: 'admin' | 'external', adminCert: CertInfo, externalCert: ExternalCertFileInfo,
         previous: CertInfo | undefined, next: CertInfo | undefined,
-        options: {markLastKnownGood?: boolean, pendingRestartScopes?: string[]}): void {
+        options: {markLastKnownGood?: boolean, pendingRestartScopes?: string[]}) {
         const revisionState = this.revisionState;
         revisionState.currentRevision++;
         revisionState.lastCommittedAt = Date.now();
@@ -210,21 +210,41 @@ class CertificationStore {
         const directory = new File(type === 'admin' ? Environment.path.adminCertDir : Environment.path.externalCertDir);
         if(!directory.exists()) directory.mkdirs();
         this.secureDirectory(directory);
-        try {
-            Files.writeAtomicBatchSync([
+        const files: AtomicFileValue[] = [
                 {file: type === 'admin' ? this._adminCertFile : this._externalCertFile,
                     data: JSON.stringify(type === 'admin' ? adminCert : externalCert, null, 4), mode: 0o600},
                 ...(next ? this.certificateFiles(next, type) : []),
                 ...removed,
                 {file: this._stateFile, data: JSON.stringify(revisionState, null, 2), mode: 0o600},
-            ]);
+            ];
+        return {adminCert: ObjectUtil.cloneDeep(adminCert), externalCert: ObjectUtil.cloneDeep(externalCert), revisionState, files};
+    }
+
+    public publishPreparedCertificateChange(prepared: ReturnType<CertificationStore['prepareCertificateChange']>): void {
+        this._adminCert = ObjectUtil.cloneDeep(prepared.adminCert);
+        this._externalCert = ObjectUtil.cloneDeep(prepared.externalCert);
+        this._revisionState = ObjectUtil.cloneDeep(prepared.revisionState);
+    }
+
+    public prepareExternalCertificateChange(port: number, certInfo?: CertInfo, previousPort?: number) {
+        const external = this.getAllExternalCert();
+        const previous = external[previousPort ?? port];
+        if(previousPort !== undefined && previousPort !== port) delete external[previousPort];
+        if(certInfo) external[port] = ObjectUtil.cloneDeep(certInfo);
+        return this.prepareCertificateChange('external', this._adminCert, external, previous, certInfo, {});
+    }
+
+    private persistCertificateChange(type: 'admin' | 'external', adminCert: CertInfo, externalCert: ExternalCertFileInfo,
+        previous: CertInfo | undefined, next: CertInfo | undefined,
+        options: {markLastKnownGood?: boolean, pendingRestartScopes?: string[]}): void {
+        const prepared = this.prepareCertificateChange(type, adminCert, externalCert, previous, next, options);
+        try {
+            Files.writeAtomicBatchSync(prepared.files);
         } catch(error) {
             Object.assign(error as object, {persistenceScope: 'certificate'});
             throw error;
         }
-        this._adminCert = ObjectUtil.cloneDeep(adminCert);
-        this._externalCert = ObjectUtil.cloneDeep(externalCert);
-        this._revisionState = revisionState;
+        this.publishPreparedCertificateChange(prepared);
     }
 
     public async commitAdminServerCert(certInfo: CertInfo,

@@ -75,8 +75,8 @@ test.each([[false, true], [true, true], [false, false]])("old-port replacement r
             });
             await app.page.getByRole("button", {name: "Apply and Restart"}).click();
             await app.page.getByText(stale ? /Fail/ : /Success to apply/).first().waitFor();
-            expect(mutations).toEqual(stale ? ["DELETE /api/tunnelingOption"] : ["DELETE /api/tunnelingOption", "POST /api/tunnelingOption"]);
-            expect(revisions).toEqual(stale ? [current.revisionState.currentRevision] : [current.revisionState.currentRevision, current.revisionState.currentRevision + 1]);
+            expect(mutations).toEqual(["POST /api/tunnelingOption"]);
+            expect(revisions).toEqual([current.revisionState.currentRevision]);
             expect(await app.page.locator("#input-external-port").inputValue()).toBe(String(newPort));
             const final = JSON.parse((await request("GET", "/api/tunnelingOption")).body);
             expect(final.tunnelingOptions.map((option: any) => option.forwardPort)).toEqual([stale ? oldPort : newPort]);

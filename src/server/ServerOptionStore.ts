@@ -94,6 +94,15 @@ class ServerOptionStore {
         serverOption: ServerOption,
         options: {markLastKnownGood?: boolean, pendingRestartScopes?: string[]} = {}
     ): {success: boolean, message: string, revisionState?: RevisionState} {
+        const result = this.prepareServerOptionCommit(serverOption, options);
+        if(!result.prepared) return {success: false, message: result.message};
+        Files.writeAtomicBatchSync(result.prepared.files);
+        this.publishPreparedServerOption(result.prepared);
+        return {success: true, message: "", revisionState: this.revisionState};
+    }
+
+    public prepareServerOptionCommit(serverOption: ServerOption,
+        options: {markLastKnownGood?: boolean, pendingRestartScopes?: string[]} = {}) {
         const result = this.prepareServerOption(ObjectUtil.cloneDeep(serverOption));
         if(!result.success) {
             return {success: false, message: result.message};
@@ -109,13 +118,16 @@ class ServerOptionStore {
             revisionState.lastKnownGoodAt = revisionState.lastCommittedAt;
         }
         revisionState.lastRollback = undefined;
-        Files.writeAtomicBatchSync([
+        const files = [
             {file: this._configFile, data: YAML.stringify(result.serverOption), mode: 0o600},
             {file: this._stateFile, data: JSON.stringify(revisionState, null, 2), mode: 0o600},
-        ]);
-        this._serverOption = result.serverOption!;
-        this._revisionState = revisionState;
-        return {success: true, message: "", revisionState: this.revisionState};
+        ];
+        return {success: true, message: "", prepared: {serverOption: result.serverOption!, revisionState, files}};
+    }
+
+    public publishPreparedServerOption(prepared: NonNullable<ReturnType<ServerOptionStore['prepareServerOptionCommit']>['prepared']>): void {
+        this._serverOption = ObjectUtil.cloneDeep(prepared.serverOption);
+        this._revisionState = ObjectUtil.cloneDeep(prepared.revisionState);
     }
 
     public captureCommittedState() {

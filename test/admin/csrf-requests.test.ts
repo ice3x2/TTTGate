@@ -151,7 +151,7 @@ test("all seven authenticated browser controller mutations succeed against the r
                 () => server.activeExternalPortServer(true, data.forwardPort),
                 () => certificates.updateAdminCert(data.certInfo),
                 () => certificates.updateExternalServerCert(data.forwardPort, data.certInfo),
-                () => certificates.deleteExternalServerCert(data.forwardPort),
+                async () => { const read = await certificates.loadExternalServerCert(data.forwardPort); return certificates.deleteExternalServerCert(data.forwardPort, read.revision); },
             ];
             const results = [];
             for(const call of calls) results.push(await call());

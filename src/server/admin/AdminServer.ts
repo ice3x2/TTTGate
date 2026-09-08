@@ -20,6 +20,7 @@ import {AdminSecurityPolicyRegistry, evaluateAdminSecurityPolicy, formatAdminSec
 import {timingSafeStringEqual} from "../../util/timingSafeStringEqual";
 import {computeBackoffMs} from "./loginBackoff";
 import crypto from "crypto";
+import {TunnelingOption} from "../../types/TunnelingOption";
 
 const logger = LoggerFactory.getLogger('server', 'AdminServer');
 
@@ -595,8 +596,13 @@ class AdminServer {
         if(!await this.checkSession(req, res)) {
             return;
         }
-        const tunnelingOption = await AdminServer.readJson(req);
-        await this.mutateConfiguration(res, tunnelingOption, async (serverOptionStore) => {
+        const payload = await AdminServer.readJson(req);
+        await this.mutateConfiguration(res, payload, async (serverOptionStore) => {
+            const {certInfo, expectedCertificateRevision, previousForwardPort, ...tunnelingOption} = payload;
+            if(certInfo !== undefined || previousForwardPort !== undefined) {
+                await this.applyCompoundTunnelingOption(res, tunnelingOption, certInfo, expectedCertificateRevision, previousForwardPort);
+                return;
+            }
             let previousOption = serverOptionStore.getTunnelingOption(tunnelingOption.forwardPort);
             let composeResult = serverOptionStore.composeServerOptionWithTunnelingOption(ObjectUtil.cloneDeep(tunnelingOption));
             if(!composeResult.success || !composeResult.serverOption) {
@@ -657,6 +663,85 @@ class AdminServer {
                 revisionState: commitResult.revisionState
             });
         });
+    }
+
+    private admitCertificateRevision(res: ServerResponse, revision: unknown): boolean {
+        if(!Number.isSafeInteger(revision) || (revision as number) <= 0) {
+            this.sendApiFailure(res, 400, {message: 'A positive safe-integer expectedCertificateRevision is required.'});
+            return false;
+        }
+        if(revision !== CertificationStore.instance.revisionState.currentRevision) {
+            this.sendApiFailure(res, 409, {message: 'Certificate changed. Reload before saving.', certificateRevisionState: CertificationStore.instance.revisionState});
+            return false;
+        }
+        return true;
+    }
+
+    private async applyCompoundTunnelingOption(res: ServerResponse, option: TunnelingOption, certInfo: CertInfo | undefined,
+        expectedCertificateRevision: unknown, previousForwardPort?: number): Promise<void> {
+        const store = ServerOptionStore.instance, certificates = CertificationStore.instance;
+        if(previousForwardPort !== undefined && (!Number.isSafeInteger(previousForwardPort) || previousForwardPort < 1 || previousForwardPort > 65535 || !store.getTunnelingOption(previousForwardPort))) {
+            this.sendApiFailure(res, 400, {message: 'The original configured row does not exist.'}); return;
+        }
+        const rename = previousForwardPort !== undefined && previousForwardPort !== option.forwardPort;
+        const previousOption = store.getTunnelingOption(option.forwardPort);
+        if(rename && previousOption) {
+            this.sendApiFailure(res, 409, {message: 'The target port is already a configured row.'}); return;
+        }
+        const certificateChange = certInfo !== undefined || (rename && certificates.getAllExternalCert()[previousForwardPort!] !== undefined);
+        if(certificateChange && !this.admitCertificateRevision(res, expectedCertificateRevision)) return;
+        if(certInfo !== undefined && (!certInfo || !certInfo.key || !certInfo.cert || !certInfo.ca ||
+            !ObjectUtil.equalsType(EMPTY_CERT_INFO, certInfo) || !certificates.prepareExternalServerCert(certInfo))) {
+            this.sendApiFailure(res, 400, {message: 'Invalid certificate.'}); return;
+        }
+        const composed = store.composeServerOptionWithTunnelingOption(ObjectUtil.cloneDeep(option));
+        if(!composed.success || !composed.serverOption) {
+            this.sendApiFailure(res, 400, {message: 'Tunneling options update failed.'}); return;
+        }
+        if(rename) composed.serverOption.tunnelingOptions = composed.serverOption.tunnelingOptions.filter(row => row.forwardPort !== previousForwardPort);
+        if(!previousOption && !await UsablePortChecker.check(option.forwardPort)) {
+            this.sendApiFailure(res, 400, {message: `${option.forwardPort} is an unusable port number.`}); return;
+        }
+        const committedBefore = store.captureCommittedState();
+        const certificateBefore = certificates.captureCommittedState(certInfo ? {info: certInfo, type: 'external'} : undefined);
+        const runtimeBefore = this._tttServer?.captureRuntimeState();
+        const prepared = store.prepareServerOptionCommit(composed.serverOption);
+        if(!prepared.prepared) {
+            this.sendApiFailure(res, 400, {message: prepared.message}); return;
+        }
+        const preparedCertificate = certificateChange ? certificates.prepareExternalCertificateChange(option.forwardPort, certInfo, rename ? previousForwardPort : undefined) : undefined;
+        try {
+            Files.writeAtomicBatchSync([...prepared.prepared.files, ...(preparedCertificate?.files ?? [])]);
+        } catch(error) {
+            const failedPaths = (error as {recoveryFailedPaths?: string[]}).recoveryFailedPaths ?? [];
+            const failedScopes = [...new Set(failedPaths.map(file => prepared.prepared!.files.some(entry => entry.file.toString() === file) ? 'configuration-restore' : 'certificate-restore'))];
+            this.sendApiFailure(res, 500, {message: `Compound publication failed: ${error}`, partial: failedScopes.length > 0, failedScopes}); return;
+        }
+        store.publishPreparedServerOption(prepared.prepared);
+        if(preparedCertificate) certificates.publishPreparedCertificateChange(preparedCertificate);
+        let runtime: Awaited<ReturnType<TTTServer['applyTunnelingOption']>> =
+            {success: false, partial: false, failedScopes: ['server-runtime'], warnings: [], restartRequiredScopes: []};
+        try {
+            if(this._tttServer) runtime = await this._tttServer.applyTunnelingOption(option, previousOption, certInfo);
+            if(runtime.success && rename && !await this._tttServer!.stopExternalPortServer(previousForwardPort!, true)) {
+                runtime.success = false; runtime.failedScopes.push(`external-listener:${previousForwardPort}`);
+            }
+        } catch(error) {
+            logger.error('compound runtime apply failed', error);
+            runtime = {success: false, partial: false, failedScopes: [`external-listener:${option.forwardPort}`], warnings: [], restartRequiredScopes: []};
+        }
+        if(!runtime.success) {
+            const recoveryFailures = preparedCertificate ? await this.restoreCertificateBaseline(certificateBefore) : [];
+            recoveryFailures.push(...await this.restoreConfigurationBaseline(committedBefore, runtimeBefore));
+            if(recoveryFailures.length === 0) {
+                try { store.recordRollback('compound apply failed; prior baseline restored', runtime.failedScopes,
+                    committedBefore.revisionState.currentRevision + 1, committedBefore.revisionState.currentRevision); }
+                catch(error) { logger.error('rollback diagnostic persistence failed', error); recoveryFailures.push('configuration-rollback-metadata'); }
+            }
+            this.sendApiFailure(res, 400, {message: 'Unable to apply compound tunneling option.', partial: recoveryFailures.length > 0,
+                failedScopes: [...runtime.failedScopes, ...recoveryFailures], revisionState: store.revisionState, certificateRevisionState: certificates.revisionState}); return;
+        }
+        this.sendApiSuccess(res, {forwardPort: option.forwardPort, revisionState: store.revisionState, certificateRevisionState: certificates.revisionState});
     }
 
     private onRemoveTunnelingOption = async (req: IncomingMessage, res: ServerResponse) => {
@@ -804,7 +889,9 @@ class AdminServer {
     private onDeleteExternalServerCert = async (req: IncomingMessage, res: ServerResponse) => {
         let port = await this.getNumberInPath(req, res,'/api/externalCert/');
         if(port == undefined) return;
+        const payload = await AdminServer.readJson(req);
         await ServerOptionStore.instance.runConfigurationMutation(async () => {
+            if(!this.admitCertificateRevision(res, payload?.expectedCertificateRevision)) return;
             await CertificationStore.instance.removeForExternalServer(port);
             this.sendApiSuccess(res, {revisionState: CertificationStore.instance.revisionState});
         });

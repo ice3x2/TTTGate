@@ -4,6 +4,7 @@ import {spawnSync} from "child_process";
 import AdminServer from "../../src/server/admin/AdminServer";
 import SessionStore, {BOOTSTRAP_TOKEN_FILE_NAME} from "../../src/server/admin/SessionStore";
 import ServerOptionStore from "../../src/server/ServerOptionStore";
+import {CertificationStore} from "../../src/server/CertificationStore";
 import {applyTestRoot, cleanupTestRoot, createTestRoot} from "../helpers/runtime";
 import {httpRequest} from "../helpers/http";
 import {startAdminBrowser} from "../helpers/adminBrowser";
@@ -85,8 +86,9 @@ test.each([false, true])("actual configured proxy adapts only trusted present or
             outcomes.push({name, actual: response.statusCode, expected});
         }
         for(const includeToken of [true, false]) {
+            const body = JSON.stringify({expectedCertificateRevision: CertificationStore.instance.revisionState.currentRevision});
             const response = await httpRequest({port: proxyPort, path: "/api/externalCert/65000", method: "DELETE",
-                headers: {...headers, ...(includeToken ? {} : {"X-CSRF-Token": ""})}});
+                headers: {...headers, "Content-Type": "application/json", "Content-Length": String(Buffer.byteLength(body)), ...(includeToken ? {} : {"X-CSRF-Token": ""})}, body});
             outcomes.push({name: `no Origin DELETE (CSRF=${includeToken})`, actual: response.statusCode,
                 expected: includeToken ? 200 : 403});
         }

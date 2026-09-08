@@ -1,20 +1,25 @@
 # Issue #71 — Compound TLS edit consistency
 
-Status: design, approval status and exact title approved by both independent reviewers and root; document-only commit authorized. #35 foundation implementation must precede #71 production.
+Status: both independent final rereviews PASS after separate-fixer repairs; root authorized the scoped #71 commit. Integration/push/closure remain root-owned.
 Original title: 오래된 TLS 편집본이 설정 충돌 전에 인증서를 변경함.
-Owner: `fix_supply15`; branch `fix/epic61-certificate-transaction`;
-worktree: `C:/Work/git/_Snoworca/TTTGate-epic61-listeners`; base `6a94729`.
-Current writable scope: this design/evidence ledger only. Root approved the #35
-foundation's config/certificate/runtime snapshot scope and #35 -> #71 sequence.
-#71 production remains on hold until the #35 foundation is implemented, reviewed
-and integrated; #35 itself needs its new branch and test-first assignment.
+Implementation owner: `fix_ci14`; original design/repro author: `fix_supply15`.
+Branch `fix/epic61-compound-tls-save`; worktree
+`C:/Work/git/_Snoworca/TTTGate-epic61-listeners`; base `0f83a90`.
+Root integrated/closed #35 and approved this ledger's backend/store/runtime scope,
+minimal Files reuse, ServerOptionCtrl/CertificationCtrl/TunnelOptionSetLayout and
+related tests/docs. Historical design-phase statements below remain evidence of
+the original sequencing, not current implementation authorization limits.
 
 - [x] Record assignment and original issue. Status: complete; issue #71 read from GitHub; clean branch confirmed.
 - [x] Inspect ADR-005, preserved repro, shared revision queue and existing certificate staging/apply/persistence. Status: complete; source anchors and limitations below.
 - [x] Propose minimum compound consistency boundary, writable paths and #35 separation. Status: proposal written below; no implementation authorization implied.
 - [x] Independent design review and explicit root approval. Status: both independent rereviews PASS and root approved the revised certificate-delete token, coherent baseline tuple, occupied-row rename rejection and failure matrix. #35 foundation precedes #71; no production changes in this design phase.
-- [ ] Restore ordinary `.test.ts` collection and reconfirm original RED before implementation. Status: pending authorization; `.discovery.repro.ts` remains preserved.
-- [ ] Add concurrent/new-port/invalid-input/disk/fresh-handshake regressions, implement approved scope and obtain independent reviews. Status: pending #35 foundation and implementation RED.
+- [x] Restore ordinary `.test.ts` collection and reconfirm original RED before implementation. Status: renamed preserved repro to configuration-certificate-conflict.discovery.test.ts; handle 7992 exited 1 before production edits, one browser test failed in 11.148 seconds because stale editor replaced the certificate.
+- [x] Add concurrent/new-port/invalid-input/disk/fresh-handshake regressions and implement approved scope. Status: initial 22 API cases passed; runtime exception RED and four additional recovery/stale-writer cases passed. Receipts at the implementation checkpoint below.
+- [x] Latest backend regression/build. Status: handle 50502 exited 0 naturally, seven suites/60 tests passed in 351.759s, then forced build passed. Includes all 26 compound cases, #35 configuration/certificate/fixer rollback, publication, #34 revision and legacy apply tests.
+- [x] Final affected controls. Status: handle 65471 exited 0 naturally, proxy/admission/real TLS hot-swap three suites/eight tests passed in 21.073s. Same-row stale no-op, config-only certificate-revision preservation and queue release after invalid preparation are explicit passing controls.
+- [x] Two independent reviews. Status: review_cert_conflict and review_wave0 final rereviews PASS; receipts below.
+- [ ] Scoped commit/root integration/push/closure. Status: root authorized the complete reviewed #71 commit; remote operations pending.
 
 Known evidence: the preserved browser repro records certificate POST 200 followed
 by configuration POST 409 and directly asserts the in-memory certificate value.
@@ -22,7 +27,7 @@ Fresh TLS handshake and persisted-file assertions must be added; they are not
 already established by runtime log messages. A preflight GET or reordering two
 independent requests cannot establish a compound concurrency boundary.
 
-## Reuse findings and source anchors
+## Original design-phase reuse findings and source anchors
 
 | Existing path | Reuse and limit |
 | --- | --- |
@@ -246,20 +251,21 @@ The original dirty workspace remains untouched.
 
 ## Test-first gates for the approved boundary
 
-- [ ] Restore preserved repro to `.test.ts` and reconfirm RED unchanged. Status: pending approval.
-- [ ] Before implementation add stale/config-certificate concurrency regressions. Status: pending; assert store/option revisions, actual file bytes and fresh TLS fingerprint remain old; use a declared async barrier only for overlap, with real HTTP and real crypto/runtime.
-- [ ] Verify a certificate-only request queued during a compound save cannot interleave. Status: pending; stale certificate token must conflict without changes and no recursive-lock deadlock.
-- [ ] Stale certificate rename/delete RED. Status: pending; load A's certificate token, replace its certificate through another authenticated request, then rename A without certInfo or issue external-certificate DELETE with the old token. Both must return 409 and preserve configuration, certificate/index/PEM bytes/revisions and fresh TLS fingerprint. Missing token is 400 even when the only certificate effect is deletion.
-- [ ] A -> occupied configured B RED. Status: pending; configure A and B, stop B's listener without removing its row, then rename A -> B. Expect 409, both original rows/certificates/fingerprints or offline status preserved; separately verify same-row A -> A behavior.
-- [ ] Add fresh same-port, new TLS port and renamed TLS port cases. Status: pending; matching certificate is served on a fresh TLS connection, persisted bytes agree, the old port is removed only on successful rename.
-- [ ] Add malformed/mismatched PEM/CA, stale no-op, busy-port and queue-release cases. Status: pending; all rejected preparation paths leave old files, stores, revisions and listeners intact.
-- [ ] Add #35 stage/publication/metadata/runtime/recovery failure RED before shared recovery code. Status: pending assignment; exact test inputs and baseline outcomes below.
-- [ ] Run #34 CAS/editor/security regressions and existing real TLS hot-swap tests, forced build/admin check, then two independent reviews. Status: pending implementation.
+- [x] Restore preserved repro to `.test.ts` and reconfirm RED unchanged. Status: 7992 failed before implementation; corrected browser later passed.
+- [x] Before implementation add stale/config-certificate concurrency regressions. Status: API RED/22-case GREEN recorded; real files/revisions/fresh TLS are asserted.
+- [x] Verify a certificate-only request queued during a compound save cannot interleave. Status: delegating actual apply barrier proves writer waits; matching certificate revision pair then advances in order.
+- [x] Stale certificate rename/delete admission. Status: missing/stale RED then GREEN, plus actual other-writer replacement followed by stale rename/delete GREEN preserves replacement files and fresh TLS.
+- [x] A -> occupied configured B conflict. Status: offline configured B is rejected with 409; snapshots/files/A TLS and B offline state remain unchanged.
+- [x] Fresh same-port, new TLS port and renamed TLS port cases. Status: fresh peer identity and exact revision increments pass; old row/certificate/listener removed only on successful rename.
+- [x] Malformed/mismatched PEM/CA and busy-port controls. Status: invalid certificate paths reject without state change; wildcard busy-port control passes without unrelated availability changes.
+- [x] #35 stage/publication/metadata/runtime/recovery foundation and compound failure tests. Status: #35 is integrated; compound tests reuse its real-file fault boundary and separately cover runtime return failure, thrown apply and failed restoration.
+- [x] Latest browser/security controls. Status: backend 60 tests/forced build, restored browser/editor/CSRF 12 tests, and proxy/admission/TLS eight tests passed; no ordinary suite was weakened or left opt-in.
+- [ ] Two independent implementation reviews. Status: pending root assignment/results.
 
-Current next action: authorized document-only commit, then root main integration
-and a new #35 branch. #71
-production awaits the implemented/reviewed/integrated #35 foundation. No production
-file has been modified and no heavy tests run during the design phase.
+Current next action: obtain two independent reviews of the frozen implementation
+and evidence. The
+original design-only phase performed no production edits/heavy tests; the current
+implementation receipts are recorded separately below.
 
 ### #35 failure-test inputs and expected state
 
@@ -297,3 +303,104 @@ Approved document-only title: `docs: 설정 복구와 TLS 편집의 일관성 �
 state. Root corrected the final LOW to distinguish pending foundation/implementation
 RED from already-approved design, then authorized this one-file commit. This receipt
 authorizes the design commit, not #71 production or an unassigned #35 edit.
+
+## Implementation checkpoint after #35 integration
+
+Current implementation owner is fix_ci14 on fix/epic61-compound-tls-save,
+base 0f83a90. The historical design receipt above is superseded by root's explicit
+#71 implementation assignment. Original browser RED: handle 7992 exit 1, one
+failure in 11.148s. The repro is back in ordinary .test.ts collection.
+
+API/TLS/file RED before production: compound-tls-save.test.ts handle 50515 exit1,
+17 failed/two controls passed in 96.502s. New/rotation/rename served the wrong
+fresh certificate; stale/missing certificate admission and invalid PEM checks
+were absent, certificate publication fault targets were never reached, and a
+concurrent admitted save lacked a matching certificate revision. Additional
+pending/queued-writer cases failed before implementation (92731); an IPv4-only
+busy-port fixture did not match the availability check's binding scope and was
+corrected to a wildcard listener. Its baseline control then passed in 7.646s;
+that initial busy-port observation is not counted as an implementation RED.
+
+The two stores now expose narrow preparation/publication operations reused by
+their original commit methods and the compound endpoint. One existing Files
+batch stages/publishes both stores' files before either memory state/runtime is
+advanced. Private metadata is extracted before normal option composition.
+TTTServer's #35 staged-certificate input and baseline restore are reused without
+pool/socket changes. The UI holds each row's certificate revision/original port
+and submits one compound save; separate pre-save certificate POST/row DELETE is
+removed. External DELETE's token contract and affected browser tests are migrated.
+
+Initial API GREEN: 22 tests passed in 142.372s. A further genuine runtime-throw
+boundary RED (48265, 8.749s) retained advanced revisions after a thrown apply;
+the compound handler now catches that exceptional failure and restores its
+baseline. Runtime-throw, actual later-writer stale rename/delete and restoration
+failure checks then passed (four selected cases, 27.951s). Existing restored
+browser repro/editor/CSRF suites passed 12 tests in 69.694s. Admin static check
+reported zero errors and ten existing warnings. These are intermediate results;
+latest complete regressions, build and independent reviews remain pending.
+
+Compatibility instructions: docs/guide/compound-tls-save.md. No crash atomicity,
+mock-free fault injection, general pool change or #36 filename validation is
+claimed. Test-only fresh TLS probes inspect self-signed peer identity explicitly;
+production trust defaults are unchanged.
+
+Final execution receipts: 50502 naturally exited 0 (seven backend suites/60 tests,
+351.759s) then forced compilation passed; 65471 naturally exited 0 (three suites/
+eight admission, proxy and TLS tests, 21.073s). Earlier browser/editor/CSRF 26793
+naturally exited 0 (three suites/12 tests, 69.694s). The original stale-TLS browser
+case now asserts one configuration POST409 and no earlier certificate POST.
+New no-op/queue-release and later-writer controls strengthen validation on the
+implemented boundary without claiming an additional production RED.
+
+Proposed exact implementation title: `fix: TLS 설정과 인증서를 한 번의 저장으로 일관되게 적용`.
+
+## Independent fixer checkpoint
+
+Root assigned `fix_supply15` as separate fixer after both initial reviewers found
+the same HIGH/MEDIUM; original implementation author is `fix_ci14`. HTTP #29 is
+frozen in another worktree and is not part of these edits.
+
+New RED command: `node node_modules/jest/bin/jest.js --runInBand --silent --runTestsByPath test/component/server/admin/compound-malformed-certificate.test.ts test/admin/compound-stale-rename.test.ts`.
+Handle 99738 exited 1 naturally: two tests failed in 16.434 seconds before any
+fixer production edit. Real browser A -> B draft, later A certificate replacement,
+then TLS-off/B lookup sent certificate token 4 instead of original 3 and returned
+200 instead of 409. Seven malformed certificate shapes each returned 500 instead
+of 400. Tests also capture real config/cert file bytes, revisions and fresh TLS
+identity; the malformed test sends a valid empty-CA follow-up through the second
+AdminServer before assertions to exercise queue release.
+
+Root released production hold after the secondary reviewer confirmed both findings
+and no additional blockers. Minimum repair completed: originalCertificateRevision
+is retained independently of later source/target certificate reads and used for a
+persisted-row rename's deletion. The controller strips that UI-only field before
+serialization. Compound validation guards null/missing subfields then reuses
+ObjectUtil.equalsType(EMPTY_CERT_INFO, certInfo) before cryptographic preparation;
+a present empty CA remains valid.
+
+Initial fixer GREEN 41722: two suites/two tests passed naturally in 17.314 seconds.
+Extended command:
+`node node_modules/jest/bin/jest.js --runInBand --silent --runTestsByPath test/admin/compound-stale-rename.test.ts test/component/server/admin/compound-malformed-certificate.test.ts test/component/server/admin/compound-admission-controls.test.ts test/admin/configuration-certificate-conflict.discovery.test.ts test/admin/configuration-editor.test.ts`.
+Handle 83780 exited 0 naturally: five suites/11 tests passed in 75.008 seconds.
+Controls include target-port TLS toggle and original-port TLS toggle after a later
+writer, unchanged real files/revisions/fresh TLS identity, and successful fresh
+TLS-off rename without persisting internal snapshot metadata. The malformed test
+also proves a valid empty-CA request progresses on the other admin listener.
+
+Final forced `npm run build -- --force` exited 0; admin `npm run check` exited 0
+with zero errors and ten existing warnings. No changes to the HTTP #29 worktree,
+pool/socket/wire or certificate cryptography. Original production author remains
+fix_ci14; independent fixer is fix_supply15. Both final rereviews and root commit
+authorization are now received; final receipt follows.
+
+## Final review and commit authorization
+
+review_cert_conflict confirmed both findings resolved and reviewed the complete
+evidence. review_wave0 independently ran the malformed-certificate regression:
+one test passed in 4.92 seconds, natural exit 0. Both final code/content/title
+reviews PASS. Root authorized combining the original fix_ci14 implementation and
+the independent fix_supply15 repairs, restored ordinary repro, added tests and guide.
+
+Approved title: `fix: TLS 설정과 인증서를 한 번의 저장으로 일관되게 적용`.
+The scoped status contains 18 paths: ten modified paths, six new files and the old
+and new paths of the restored repro. Git rename detection represents these as
+17 logical changed files. No HTTP #29 file is included.

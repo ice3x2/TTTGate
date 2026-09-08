@@ -42,6 +42,7 @@ test("stale TLS editor cannot replace the live certificate before its config con
             await app.page.getByText(/Configuration changed/).first().waitFor();
             console.log(JSON.stringify({responses, certificateChanged: CertificationStore.instance.getExternalCert(forwardPort).cert.value === next.certPem}));
             expect(CertificationStore.instance.getExternalCert(forwardPort).cert.value).toBe(old.certPem);
+            expect(responses).toEqual([{path: "/api/tunnelingOption", status: 409}]);
         } finally { await app.close(); }
     });
 }, 60_000);

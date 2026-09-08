@@ -1,11 +1,11 @@
-import { type ServerOption } from "./Types";
+import { type ServerOption, type CertInfo } from "./Types";
 import type {TunnelingStatus, Options} from "./Options";
 import InvalidSession from "./InvalidSession";
 import {adminRequest} from "./AdminRequest";
 
 
 export type ConfigurationSnapshot<T> = {value: T, readonly revision: number};
-export type ConfigurationResult = {success: boolean, message: string, revisionState?: {currentRevision: number}};
+export type ConfigurationResult = {success: boolean, message: string, revisionState?: {currentRevision: number}, certificateRevisionState?: {currentRevision: number}};
 
 class ServerOptionCtrl {
 
@@ -143,14 +143,17 @@ class ServerOptionCtrl {
         });
     }
 
-    public async updateTunnelingOption(tunnelingOption : Options, expectedRevision: number) : Promise<ConfigurationResult> {
+    public async updateTunnelingOption(tunnelingOption : Options, expectedRevision: number,
+        compound: {certInfo?: CertInfo, expectedCertificateRevision?: number, previousForwardPort?: number} = {}) : Promise<ConfigurationResult> {
+        const option: Record<string, unknown> = {...tunnelingOption};
+        for(const name of ['certInfo', 'certificateRevision', 'originalCertificateRevision', 'originalForwardPort', 'previousForwardPort', 'expectedCertificateRevision', 'isSync', 'updatable', 'allowedClientNamesQuery', 'activeTimeout']) delete option[name];
         return adminRequest("/api/tunnelingOption", {
             method: "POST",
             credentials: "same-origin",
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({...tunnelingOption, expectedRevision})
+            body: JSON.stringify({...option, ...compound, expectedRevision})
         });
     }
 

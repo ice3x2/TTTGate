@@ -13,19 +13,17 @@
     import Switch from "../component/Switch.svelte";
     import Timer from "../component/Timer.svelte";
     import InvalidSession from "../controller/InvalidSession";
-    import _ from "lodash";
 
     type Timers = {
         [key: number]: Timer
     }
 
-    type TunnelingOptionEx = Options & {updatable?: boolean, isSync?: boolean, certInfo?: CertInfo, allowedClientNamesQuery?: string, activeTimeout?: number};
+    type TunnelingOptionEx = Options & {updatable?: boolean, isSync?: boolean, certInfo?: CertInfo, certificateRevision?: number, originalCertificateRevision?: number, originalForwardPort?: number, allowedClientNamesQuery?: string, activeTimeout?: number};
 
     let _externalServerStatuses : {[key: number]: TunnelingStatus} = {};
 
     let _serverTime : number = 0;
     let _tunnelOptions : Array<TunnelingOptionEx> = [];
-    let _originTunnelOptions : Array<TunnelingOptionEx> = [];
     let _isInit = false;
     let _snapshotRevision: number;
     let _loading = false;
@@ -102,12 +100,12 @@
             _snapshotRevision = snapshot.revision;
             for(let tunnelOption of _tunnelOptions) {
                 tunnelOption.isSync = true;
+                tunnelOption.originalForwardPort = tunnelOption.forwardPort;
                 tunnelOption.updatable = true;
                 tunnelOption.allowedClientNamesQuery = tunnelOption.allowedClientNames?.join("; ");
                 if(!tunnelOption.allowedClientNamesQuery) tunnelOption.allowedClientNamesQuery = "";
                 else tunnelOption.allowedClientNamesQuery += ";";
             }
-            _originTunnelOptions = _.cloneDeep(_tunnelOptions);
 
             await _loadCertInfoAll();
             _checkUpdatable();
@@ -138,7 +136,12 @@
             if(tunnelOption === undefined) {
                 return;
             }
-            tunnelOption.certInfo = await CertificationCtrl.instance.loadExternalServerCert(port);
+            const snapshot = await CertificationCtrl.instance.loadExternalServerCert(port);
+            tunnelOption.certInfo = snapshot.value;
+            tunnelOption.certificateRevision = snapshot.revision;
+            if(tunnelOption.originalCertificateRevision === undefined && tunnelOption.originalForwardPort === port) {
+                tunnelOption.originalCertificateRevision = snapshot.revision;
+            }
             _tunnelOptions = [..._tunnelOptions];
         } catch (e) {
             console.error(e);
@@ -272,45 +275,17 @@
         }
     }
 
-    let _removeOldServerPort = async (workingRevision: number) => {
-        let oldPorts = _originTunnelOptions.map((option) => option.forwardPort);
-        let newPorts = _tunnelOptions.map((option) => option.forwardPort);
-        for(let oldPort of oldPorts) {
-            if(newPorts.indexOf(oldPort) === -1) {
-                const result = await ServerOptionCtrl.instance.removeTunnelingOption({forwardPort: oldPort}, workingRevision);
-                if(!result.success) return {success: false, message: result.message, revision: workingRevision};
-                workingRevision = result.revisionState!.currentRevision;
-                let option = _originTunnelOptions.find((option) => option.forwardPort === oldPort);
-                if(option && option.certInfo) {
-                    const certificate = await CertificationCtrl.instance.deleteExternalServerCert(oldPort);
-                    if(!certificate.success) return {success: false, message: certificate.message, revision: workingRevision};
-                }
-            }
-        }
-        return {success: true, message: '', revision: workingRevision};
-    }
-
     let _onClickApply = async (index: number) => {
         _loading = true;
         let tunnelOption = _tunnelOptions[index];
         tunnelOption.allowedClientNames = tunnelOption.allowedClientNamesQuery!.split(";").map((name) => name.trim()).filter((name) => name !== "");
         try {
-            const removal = await _removeOldServerPort(_snapshotRevision);
-            if(!removal.success) {
-                _loading = false;
-                _alert("Fail to apply tunneling option: " + removal.message);
-                return;
-            }
-
-            if(tunnelOption.tls && tunnelOption.certInfo) {
-                let result = await CertificationCtrl.instance.updateExternalServerCert(tunnelOption.forwardPort, tunnelOption.certInfo);
-                if(!result.success) {
-                    _loading = false;
-                    _alert("Fail to apply tunneling option: " + result.message);
-                    return;
-                }
-            }
-            let result = await ServerOptionCtrl.instance.updateTunnelingOption(tunnelOption, removal.revision);
+            let result = await ServerOptionCtrl.instance.updateTunnelingOption(tunnelOption, _snapshotRevision, {
+                certInfo: tunnelOption.tls ? tunnelOption.certInfo : undefined,
+                expectedCertificateRevision: tunnelOption.originalForwardPort !== undefined && tunnelOption.originalForwardPort !== tunnelOption.forwardPort
+                    ? tunnelOption.originalCertificateRevision : tunnelOption.certificateRevision,
+                previousForwardPort: tunnelOption.originalForwardPort,
+            });
 
             _loading = false;
             if (result.success) {
@@ -318,7 +293,6 @@
                 if(_timerElements[tunnelOption.forwardPort] && _externalServerStatuses[tunnelOption.forwardPort]?.activeTimeout) {
                     _timerElements[tunnelOption.forwardPort].reset(_externalServerStatuses[tunnelOption.forwardPort].activeTimeout);
                 }
-                _originTunnelOptions = _.cloneDeep(_tunnelOptions);
                 _alert("Success to apply tunneling option");
             } else {
                 _alert("Fail to apply tunneling option: " + result.message);
