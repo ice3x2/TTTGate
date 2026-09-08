@@ -1,8 +1,10 @@
 import tls from "tls";
+import {once} from "node:events";
+import {TlsOptionsFactoryRegistry} from "../../../src/util/TlsOptionsFactory";
 import forge from "node-forge";
 import {SocketHandler} from "../../../src/util/SocketHandler";
 import SocketState from "../../../src/util/SocketState";
-import {getFreePort, waitFor} from "../../helpers/network";
+import {waitFor} from "../../helpers/network";
 import {applyTestRoot, cleanupTestRoot, createTestRoot, TestRoot} from "../../helpers/runtime";
 
 jest.setTimeout(30000);
@@ -52,76 +54,76 @@ describe("TLS verification defaults", () => {
         };
     };
 
-    it("rejects a TLS server that is not anchored in the configured trust store", async () => {
+    const withPeer = async (check: (peer: {port: number; cert: string; application: Buffer[]; closeAfterSecure: () => void}) => Promise<void>) => {
         const certInfo = await createLocalhostCert();
-        const port = await getFreePort();
-        const server = tls.createServer({
-            key: certInfo.key,
-            cert: certInfo.cert
+        const sockets = new Set<tls.TLSSocket>();
+        const application: Buffer[] = [];
+        let closeSecure = false;
+        const server = tls.createServer({key: certInfo.key, cert: certInfo.cert}, socket => {
+            sockets.add(socket);
+            socket.on("data", data => { application.push(Buffer.from(data)); socket.write(data); });
+            if(closeSecure) socket.end("owned-insecure-welcome");
         });
-        await new Promise<void>((resolve, reject) => {
-            server.once("error", reject);
-            server.listen(port, "127.0.0.1", () => resolve());
-        });
+        server.on("connection", socket => { sockets.add(socket as tls.TLSSocket); socket.on("error", () => {}); });
+        server.on("tlsClientError", () => {});
+        server.listen(0, "127.0.0.1"); await once(server, "listening");
+        try { await check({port: (server.address() as import("node:net").AddressInfo).port, cert: certInfo.cert,
+            application, closeAfterSecure: () => { closeSecure = true; }}); }
+        finally { sockets.forEach(socket => socket.destroy()); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
+    };
 
-        const events: SocketState[] = [];
-        let handlerRef: SocketHandler | undefined;
-        SocketHandler.connect({
-            host: "localhost",
-            port,
-            tls: true
-        }, (_handler, state) => {
-            handlerRef = _handler;
-            events.push(state);
-        });
+    const observe = (port: number, ca?: string) => {
+        const events: SocketState[] = [], errors: string[] = [], received: Buffer[] = [];
+        let secure = 0;
+        const handler = SocketHandler.connect({host: "127.0.0.1", serverName: "localhost", port, tls: true, ...(ca ? {ca} : {})},
+            (_handler, state, data) => { events.push(state); if(state === SocketState.Receive) received.push(Buffer.from(data)); });
+        const socket = handler.socket as tls.TLSSocket;
+        // Registered synchronously before returning to the event loop.
+        socket.on("secureConnect", () => { secure++; });
+        socket.on("error", (error: NodeJS.ErrnoException) => errors.push(error.code ?? "unknown"));
+        return {handler, socket, events, errors, received, secure: () => secure};
+    };
 
-        await waitFor(() => {
-            if(!events.includes(SocketState.Closed)) {
-                throw new Error("TLS client did not reject the untrusted server");
-            }
-            return true;
-        }, {timeoutMs: 5000, intervalMs: 25});
+    const trustedEcho = async (peer: {port: number; cert: string; application: Buffer[]}) => {
+        const connection = observe(peer.port, peer.cert);
+        try {
+            await waitFor(() => { expect(connection.secure()).toBe(1); return true; }, {timeoutMs: 5000, intervalMs: 25});
+            expect(connection.socket.authorized).toBe(true);
+            const before = Buffer.concat(peer.application).length;
+            const marker = Buffer.from("owned-trusted-TLS-echo");
+            connection.handler.sendData(marker);
+            await waitFor(() => { expect(Buffer.concat(connection.received)).toEqual(marker); return true; }, {timeoutMs: 5000, intervalMs: 25});
+            expect(Buffer.concat(peer.application).subarray(before)).toEqual(marker);
+            expect(connection.errors).toEqual([]);
+            expect(connection.events).not.toContain(SocketState.Closed);
+        } finally { connection.handler.destroy(); }
+    };
 
-        handlerRef?.destroy();
-        await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
-    });
+    it("rejects untrusted native TLS establishment and leaves the same peer usable", async () => withPeer(async peer => {
+        const original = TlsOptionsFactoryRegistry.current();
+        const mutation = process.env.TTTGATE_TLS57_SENSITIVITY === "1";
+        if(mutation) {
+            peer.closeAfterSecure();
+            TlsOptionsFactoryRegistry.configure({...original, createClientSocketOptions(options) {
+                return {...original.createClientSocketOptions(options), rejectUnauthorized: false};
+            }});
+        }
+        const connection = observe(peer.port);
+        TlsOptionsFactoryRegistry.configure(original);
+        try {
+            await waitFor(() => { expect(connection.events).toContain(SocketState.Closed); return true; }, {timeoutMs: 5000, intervalMs: 25});
+            // The old Closed-only contract passes even in the declared insecure run.
+            expect(connection.events).toContain(SocketState.Closed);
+            if(mutation) console.info(JSON.stringify({sensitivity: true, oldClosedOnly: true, nativeSecure: connection.secure(), receivedBytes: Buffer.concat(connection.received).length}));
+            expect(connection.secure()).toBe(0);
+            expect(connection.socket.authorized).toBe(false);
+            expect(connection.errors).toContain("DEPTH_ZERO_SELF_SIGNED_CERT");
+            expect(connection.socket.authorizationError).toBeTruthy();
+            expect(connection.received).toHaveLength(0);
+            expect(peer.application).toHaveLength(0);
+        } finally { connection.handler.destroy(); TlsOptionsFactoryRegistry.configure(original); }
+        await trustedEcho(peer);
+    }));
 
-    it("accepts the TLS server when the matching CA is configured", async () => {
-        const certInfo = await createLocalhostCert();
-        const port = await getFreePort();
-        const server = tls.createServer({
-            key: certInfo.key,
-            cert: certInfo.cert
-        });
-        await new Promise<void>((resolve, reject) => {
-            server.once("error", reject);
-            server.listen(port, "127.0.0.1", () => resolve());
-        });
-
-        const events: SocketState[] = [];
-        let handlerRef: SocketHandler | undefined;
-        SocketHandler.connect({
-            host: "localhost",
-            port,
-            tls: true,
-            ca: certInfo.cert,
-            serverName: "localhost"
-        }, (_handler, state) => {
-            handlerRef = _handler;
-            events.push(state);
-        });
-
-        await waitFor(() => {
-            if(!events.includes(SocketState.Connected)) {
-                throw new Error("TLS client did not connect with the configured CA");
-            }
-            if(events.includes(SocketState.Closed)) {
-                throw new Error("TLS client connected and then closed unexpectedly");
-            }
-            return true;
-        }, {timeoutMs: 5000, intervalMs: 25});
-
-        handlerRef?.destroy();
-        await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
-    });
+    it("accepts matching trust only after native secureConnect and actual echo", async () => withPeer(trustedEcho));
 });
