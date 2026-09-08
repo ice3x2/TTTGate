@@ -73,8 +73,8 @@ class TTTClient {
         owner.pool.onEndPointClientStateChangeCallback = (id, state, bundle) => {
             if(this.isCurrentOwner(owner)) this.onEndPointClientStateChangeCallback(id, state, bundle);
         };
-        owner.pool.onEndPointTerminateCallback = id => {
-            if(this.isCurrentOwner(owner)) this.onEndPointTerminateCallback(id);
+        owner.pool.onEndPointTerminateCallback = (id, mode) => {
+            if(this.isCurrentOwner(owner)) this.onEndPointTerminateCallback(id, mode);
         };
         this._stopped = false;
         this._isOnline = false;
@@ -140,8 +140,8 @@ class TTTClient {
         this._endPointClientPool.send(id, data);
     }
 
-    private onEndPointTerminateCallback = (sessionID: number) : void => {
-        this._tunnelClient.terminateEndPointSession(sessionID);
+    private onEndPointTerminateCallback = (sessionID: number, mode?: 'graceful' | 'abort') : void => {
+        this._tunnelClient.terminateEndPointSession(sessionID, mode);
     }
 
 

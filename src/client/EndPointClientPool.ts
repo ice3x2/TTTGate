@@ -16,13 +16,14 @@ interface OnEndPointClientStateChangeCallback {
 }
 
 interface OnEndPointTerminateCallback {
-    (id: number) : void;
+    (id: number, mode?: 'graceful' | 'abort') : void;
 }
 
 const SESSION_CLEANUP_INTERVAL : number = 10000;
 
 class EndPointClientPool {
 
+    private _endpointOwners = new Map<number, {handler?: EndpointHandler; terminal: boolean}>();
     private _connectOptMap: Map<number, ConnectOpt> = new Map<number, ConnectOpt>();
     private _endPointClientMap: Map<number, EndpointHandler> = new Map<number, EndpointHandler>();
     private _onEndPointClientStateChangeCallback: OnEndPointClientStateChangeCallback | null = null;
@@ -65,12 +66,23 @@ class EndPointClientPool {
 
     public open(sessionID: number, connectOpt: OpenOpt) {
 
+        const previous = this._endpointOwners.get(sessionID);
+        const owner: {handler?: EndpointHandler; terminal: boolean} = {terminal: false};
+        this._endpointOwners.set(sessionID, owner);
+        this._endPointClientMap.delete(sessionID);
+        previous?.handler?.destroy();
         this._connectOptMap.set(sessionID, connectOpt);
         logger.info("Connect to endpoint: (sessionID " + sessionID +") " + connectOpt.host + ":" + connectOpt.port);
         let endPointClient = SocketHandler.connect(connectOpt,(client: SocketHandler, state: SocketState, data?: any) => {
+            owner.handler ??= client as EndpointHandler;
+            if(this._endpointOwners.get(sessionID) !== owner) { client.destroy(); return; }
+            if(owner.terminal) return;
+            this._endPointClientMap.set(sessionID, client as EndpointHandler);
             client.setBufferSizeLimit(connectOpt.bufferLimit);
             this.onEndPointHandlerEvent(sessionID, client, state, data);
         }) as EndpointHandler;
+        owner.handler ??= endPointClient;
+        if(owner.terminal || this._endpointOwners.get(sessionID) !== owner) return;
         endPointClient.closeWait = false;
         endPointClient.closeInitiated = false;
         endPointClient.lastSendTime = Date.now();
@@ -119,51 +131,37 @@ class EndPointClientPool {
 
 
 
-    private onEndPointHandlerEvent = (sessionID: number, client: SocketHandler, state: SocketState, data? :any) : void => {
-        if(!client.hasBundle(ID_BUNDLE_KEY)) {
-            client.setBundle(ID_BUNDLE_KEY, sessionID);
-        }
-        if(this._connectOptMap.has(sessionID)) {
-            // 임시 조건문
-            if(state == SocketState.Connected) {
-                logger.info("Successfully connected to endpoint: (sessionID " + sessionID +") " + this._connectOptMap.get(sessionID)?.host + ":" + this._connectOptMap.get(sessionID)?.port);
-            }
-
-            let handler = (client as EndpointHandler);
-            this._onEndPointClientStateChangeCallback?.(sessionID,state,{data: data, receiveLength:handler.breakBufferFlush ? 0 :(handler.receiveLength ?? 0)});
-            if(!this._endPointClientMap.has(sessionID)) {
-                this._endPointClientMap.set(sessionID, client as EndpointHandler);
-            }
-        } else {
-            logger.warn(`Invalid sessionID(${sessionID}). Terminates the connection. (addr: ${client.remoteAddress}:${client.remotePort})`);
-            client.end_();
-        }
-        if(SocketState.End == state || SocketState.Closed == state /*|| SocketState.Error == state*/) {
-            logger.info("Disconnected from endpoint: (sessionID " + sessionID +") " + this._connectOptMap.get(sessionID)?.host + ":" + this._connectOptMap.get(sessionID)?.port);
-            let hasSession = this._endPointClientMap.has(sessionID);
+    private onEndPointHandlerEvent = (sessionID: number, client: SocketHandler, state: SocketState, data?: any) : void => {
+        const owner = this._endpointOwners.get(sessionID);
+        if(!owner || owner.handler !== client || owner.terminal) return;
+        if(!client.hasBundle(ID_BUNDLE_KEY)) client.setBundle(ID_BUNDLE_KEY, sessionID);
+        const handler = client as EndpointHandler;
+        const receiveLength = handler.breakBufferFlush ? 0 : (handler.receiveLength ?? 0);
+        if(state === SocketState.End || state === SocketState.Closed) {
+            const graceful = state === SocketState.End && client.socket.readableEnded && !client.socket.errored &&
+                !handler.breakBufferFlush && !handler.closeWait && !handler.closeInitiated;
+            logger.info(`Disconnected from endpoint: sessionID:${sessionID}`);
+            owner.terminal = true;
             this._endPointClientMap.delete(sessionID);
             this._connectOptMap.delete(sessionID);
-            if(hasSession) {
-                let handler = (client as EndpointHandler);
-                this._onEndPointClientStateChangeCallback?.(sessionID,state,{receiveLength: handler.breakBufferFlush ? 0 :(handler.receiveLength ?? 0)});
-                setImmediate(() => {
-                    this._onEndPointTerminateCallback?.(sessionID);
-                });
-            }
-
-
-
-
+            this._onEndPointClientStateChangeCallback?.(sessionID, state, {receiveLength});
+            setImmediate(() => {
+                if(this._endpointOwners.get(sessionID) !== owner) return;
+                this._endpointOwners.delete(sessionID);
+                this._onEndPointTerminateCallback?.(sessionID, graceful ? 'graceful' : 'abort');
+            });
+            return;
         }
+        if(state === SocketState.Connected) logger.info(`Successfully connected to endpoint: sessionID:${sessionID}`);
+        this._onEndPointClientStateChangeCallback?.(sessionID, state, {data, receiveLength});
     }
-
-
 
     public closeAll() {
         this.dispose();
     }
 
     public dispose() {
+        this._endpointOwners.clear();
         this._onEndPointClientStateChangeCallback = null;
         if(this._sessionCleanupIntervalID) {
             clearInterval(this._sessionCleanupIntervalID);

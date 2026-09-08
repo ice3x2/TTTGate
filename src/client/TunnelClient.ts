@@ -69,6 +69,7 @@ class TunnelClient {
     private _state : CtrlState = CtrlState.None;
     private _ctrlHandler: TunnelControlHandler | undefined = undefined;
     private _activatedSessionDataHandlerMap : Map<number, TunnelDataHandler> = new Map<number, TunnelDataHandler>();
+    private _gracefulDataHandlers = new WeakSet<TunnelDataHandler>();
     private _pendingDataAttempts = new Map<number, DataAttempt>();
     private _waitBufferQueueMap : Map<number, WaitBufferState> = new Map<number, WaitBufferState>();
     private _waitBufferBytesTotal: number = 0;
@@ -232,7 +233,15 @@ class TunnelClient {
         this._waitBufferQueueMap.delete(sessionID);
     }
 
-    public terminateEndPointSession(sessionID: number) : void {
+    public terminateEndPointSession(sessionID: number, mode: 'graceful' | 'abort' = 'abort') : void {
+        const current = this._activatedSessionDataHandlerMap.get(sessionID);
+        if(mode === 'graceful' && current && current.dataHandlerState === DataHandlerState.OnlineSession && !current.isEnd()) {
+            if(this._gracefulDataHandlers.has(current)) return;
+            this._gracefulDataHandlers.add(current);
+            current.end_();
+            return;
+        }
+        if(current) this._gracefulDataHandlers.delete(current);
         const attempt = this._pendingDataAttempts.get(sessionID);
         if(attempt) { attempt.settled = true; this._pendingDataAttempts.delete(sessionID); attempt.handler?.destroy(); }
         let handler = this._activatedSessionDataHandlerMap.get(sessionID);
@@ -243,7 +252,8 @@ class TunnelClient {
         }
     }
 
-    private deleteDataHandler(handler: TunnelDataHandler) : void {
+    private deleteDataHandler(handler: TunnelDataHandler, notifyEndpoint: boolean = true) : void {
+        this._gracefulDataHandlers.delete(handler);
         const sessionID = handler.sessionID ?? -1;
         const attempt = this._pendingDataAttempts.get(sessionID);
         if(this._activatedSessionDataHandlerMap.get(sessionID) !== handler && attempt?.handler !== handler) {
@@ -254,7 +264,7 @@ class TunnelClient {
         this.clearWaitBuffer(handler.sessionID ?? -1);
         handler.dataHandlerState = DataHandlerState.Terminated;
         this._activatedSessionDataHandlerMap.delete(handler.sessionID ?? 0);
-        if(handler.sessionID) {
+        if(notifyEndpoint && handler.sessionID) {
             this._onEndPointCloseCallback?.(handler.sessionID, 0);
         }
         handler.destroy();
@@ -382,7 +392,9 @@ class TunnelClient {
                             this._onEndPointCloseCallback?.(packet.sessionID, 0);
                         }
                     } else {
-                        dataHandler.addOnceDrainListener(() => {
+                        dataHandler.addOnceDrainListener((drained, success) => {
+                            if(!dataHandler || drained !== dataHandler || this._activatedSessionDataHandlerMap.get(packet.sessionID) !== dataHandler ||
+                                !success || dataHandler.isEnd() || !dataHandler.isOutputDrained) return;
                             if (dataHandler) {
                                 dataHandler.setBufferSizeLimit(-1);
                                 dataHandler.dataHandlerState = DataHandlerState.Terminated;
@@ -506,7 +518,9 @@ class TunnelClient {
     private onDataHandlerTerminated(handler: TunnelDataHandler, sessionID: number, handlerID: number): void {
         const state = handler.dataHandlerState;
         const control = this._ctrlHandler;
-        this.deleteDataHandler(handler);
+        const graceful = this._gracefulDataHandlers.has(handler) && handler.isOutputDrained && !handler.socket.errored;
+        this.deleteDataHandler(handler, !graceful);
+        if(graceful) return;
         if(!control || control.isEnd() || state === DataHandlerState.Terminated) return;
         if(state === DataHandlerState.OnlineSession) this.sendCloseSession(handlerID, sessionID, 0);
         else control.sendData(CtrlPacket.resultOfOpenSession(handlerID, sessionID, false, {handlerID}).toBuffer());
@@ -668,6 +682,7 @@ class TunnelClient {
 
     public sendData(sessionID: number, data: Buffer) : boolean {
         let dataHandler = this._activatedSessionDataHandlerMap.get(sessionID);
+        if(dataHandler && this._gracefulDataHandlers.has(dataHandler)) return false;
         if (!dataHandler) {
             return this.writeWaitBuffer(sessionID, data);
         }
