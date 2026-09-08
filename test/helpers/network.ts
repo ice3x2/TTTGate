@@ -3,6 +3,7 @@ import net from "net";
 type EchoServer = {
     port: number;
     close(): Promise<void>;
+    setFiniteResponseLength(length: number): void;
 }
 
 const sleep = async (ms: number): Promise<void> => {
@@ -32,9 +33,15 @@ const getFreePort = async (): Promise<number> => {
 };
 
 const startEchoServer = async (): Promise<EchoServer> => {
+    let finiteLength: number | undefined;
     const server = net.createServer((socket) => {
+        const expected = finiteLength, parts: Buffer[] = [];
+        let received = 0, replied = false;
         socket.on("data", (chunk) => {
-            socket.write(chunk);
+            if(expected === undefined) { socket.write(chunk); return; }
+            if(replied) return;
+            parts.push(chunk); received += chunk.length;
+            if(received >= expected) { replied = true; socket.end(Buffer.concat(parts)); }
         });
     });
 
@@ -48,6 +55,7 @@ const startEchoServer = async (): Promise<EchoServer> => {
 
     return {
         port,
+        setFiniteResponseLength(length: number) { finiteLength = length; },
         async close(): Promise<void> {
             await new Promise<void>((resolve, reject) => {
                 server.close((err) => {
@@ -61,6 +69,24 @@ const startEchoServer = async (): Promise<EchoServer> => {
         }
     };
 };
+
+const sendTcpAndReceiveOnce = ({host, port, payload, timeoutMs}: {
+    host: string; port: number; payload: Buffer | string; timeoutMs: number
+}): Promise<Buffer> => new Promise((resolve, reject) => {
+    const socket = net.createConnection({host, port}), chunks: Buffer[] = [];
+    let settled = false;
+    const finish = (error?: Error) => {
+        if(settled) return;
+        settled = true; clearTimeout(timer); socket.destroy();
+        if(error) reject(error); else resolve(Buffer.concat(chunks));
+    };
+    const timer = setTimeout(() => finish(new Error('One-shot TCP exchange deadline exceeded')), timeoutMs);
+    socket.once('connect', () => socket.write(payload));
+    socket.on('data', data => chunks.push(Buffer.from(data)));
+    socket.once('end', () => finish());
+    socket.once('error', error => finish(error));
+    socket.once('close', () => { if(!settled) finish(new Error('TCP connection closed before peer FIN')); });
+});
 
 const sendTcpAndReceive = async (port: number, payload: Buffer | string, host: string = "127.0.0.1"): Promise<Buffer> => {
     const expected = Buffer.isBuffer(payload) ? payload : Buffer.from(payload);
@@ -125,4 +151,4 @@ const waitFor = async <T>(callback: () => Promise<T> | T, {timeoutMs = 10000, in
     throw new Error(`Timed out after ${timeoutMs}ms`);
 };
 
-export { EchoServer, getFreePort, sendTcpAndReceive, sleep, startEchoServer, waitFor };
+export { EchoServer, getFreePort, sendTcpAndReceive, sendTcpAndReceiveOnce, sleep, startEchoServer, waitFor };

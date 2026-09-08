@@ -6,7 +6,7 @@ import ServerOptionStore from "../../src/server/ServerOptionStore";
 import TTTServer from "../../src/server/TTTServer";
 import {DEFAULT_KEY, ClientOption, ServerOption, TunnelingOption} from "../../src/types/TunnelingOption";
 import {collectResourceStats, ResourceStats} from "./resourceStats";
-import {EchoServer, getFreePort, sendTcpAndReceive, startEchoServer, waitFor} from "./network";
+import {EchoServer, getFreePort, sendTcpAndReceiveOnce, startEchoServer, waitFor} from "./network";
 import {applyTestRoot, cleanupTestRoot, createTestRoot, TestRoot} from "./runtime";
 
 type TunnelHarnessOptions = {
@@ -169,13 +169,10 @@ const createTunnelHarness = async (options: TunnelHarnessOptions = {}): Promise<
         },
         async sendAndReceive(payload: Buffer | string): Promise<Buffer> {
             const expected = Buffer.isBuffer(payload) ? payload : Buffer.from(payload, "utf-8");
-            return await waitFor(async () => {
-                const received = await sendTcpAndReceive(forwardPort, expected);
-                if(!received.equals(expected)) {
-                    throw new Error("Echo payload mismatch");
-                }
-                return received;
-            }, {timeoutMs: 10000, intervalMs: 50});
+            echoServer.setFiniteResponseLength(expected.length);
+            const received = await sendTcpAndReceiveOnce({host: '127.0.0.1', port: forwardPort, payload: expected, timeoutMs: 10_000});
+            if(!received.equals(expected)) throw new Error("Echo payload mismatch");
+            return received;
         },
         collectResourceStats(): ResourceStats {
             return collectResourceStats();
