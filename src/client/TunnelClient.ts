@@ -3,7 +3,7 @@ import SocketState from "../util/SocketState";
 import {Buffer} from "buffer";
 import {CtrlCmd, CtrlPacket, CtrlPacketStreamer, OpenOpt} from "../commons/CtrlPacket";
 import {buildHandshakeProof, CONTROL_PROTOCOL_V2, DEFAULT_PROTOCOL_V2_CAPABILITIES} from "../commons/ProtocolV2";
-import {ClientOption} from "../types/TunnelingOption";
+import {ClientOption, resolveClientKeepAlive} from "../types/TunnelingOption";
 import ConnectOpt from "../util/ConnectOpt";
 import {TunnelControlHandler,TunnelDataHandler,DataHandlerState} from "../types/TunnelHandler";
 import DataStatePacket from "../commons/DataStatePacket";
@@ -109,12 +109,13 @@ class TunnelClient {
     }
 
     private constructor(option: ClientOption) {
-        this._option = option;
+        this._option = {...option, keepAlive: resolveClientKeepAlive(option.keepAlive, message => logger.warn(message))};
     }
 
     private makeConnectOpt() : ConnectOpt {
         return {
             host: this._option.host,
+            keepalive: this._option.keepAlive,
             port: this._option.port,
             tls: this._option.tls,
             ca: this._option.ca,
@@ -133,7 +134,6 @@ class TunnelClient {
         
         try {
             let connOpt = this.makeConnectOpt();
-            connOpt.keepalive = this._option.keepAlive;
             this._ctrlHandler = SocketHandler.connect(connOpt, this.onCtrlHandlerEvent) as TunnelControlHandler;
             
             // 연결 핸들러 생성 실패 체크

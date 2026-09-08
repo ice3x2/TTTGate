@@ -89,7 +89,7 @@ const DEFAULT_KEY = "hello-TTTGate";
  *
  * 정책:
  *   - port: 1 ~ 65535. 벗어나면 기본값(9126)으로 폴백 + WARN.
- *   - keepAlive: 양수(0은 "비활성"이므로 허용). < 0 이면 -1(비활성)로 폴백 + WARN.
+ *   - keepAlive: 0은 비활성. 음수/잘못된 값은 공유 기본값으로 폴백 + WARN.
  *   - globalMemCacheLimit: >= 16 (MiB). 그 미만이면 기본값(128) 폴백 + WARN.
  *     단, -1 sentinel은 "제한 없음"으로 허용.
  *
@@ -98,12 +98,24 @@ const DEFAULT_KEY = "hello-TTTGate";
 type NormalizationClientOptionWarner = (msg: string) => void;
 
 const DEFAULT_CLIENT_PORT = 9126;
-const DEFAULT_CLIENT_KEEP_ALIVE = 0;
+const DEFAULT_CLIENT_KEEP_ALIVE = 10000;
 const DEFAULT_CLIENT_MEM_LIMIT_MIB = 128;
 const MIN_CLIENT_MEM_LIMIT_MIB = 16;
 
 const defaultWarn: NormalizationClientOptionWarner = (msg: string): void => {
     try { console.warn(msg); } catch { /* noop */ }
+};
+
+const resolveClientKeepAlive = (value: unknown, warn: NormalizationClientOptionWarner = defaultWarn): number => {
+    if(value == undefined || typeof value !== "number" || !Number.isFinite(value)) {
+        if(value != undefined) warn(`normalizationClientOption: keepAlive invalid (got: ${value}). Falling back to ${DEFAULT_CLIENT_KEEP_ALIVE}.`);
+        return DEFAULT_CLIENT_KEEP_ALIVE;
+    }
+    if(value < 0) {
+        warn(`normalizationClientOption: keepAlive must be >= 0 (got: ${value}). Falling back to ${DEFAULT_CLIENT_KEEP_ALIVE}.`);
+        return DEFAULT_CLIENT_KEEP_ALIVE;
+    }
+    return value;
 };
 
 /**
@@ -144,19 +156,7 @@ const normalizationClientOption = (clientOption: ClientOption, warn: Normalizati
         out.name = out.name ?? "";
     }
 
-    // keepAlive: 0(비활성) 이상을 허용. 음수는 -1(비활성)로 폴백.
-    const rawKeep: any = out.keepAlive;
-    if(rawKeep == undefined
-        || typeof rawKeep !== "number"
-        || !Number.isFinite(rawKeep)) {
-        if(rawKeep != undefined) {
-            warn(`normalizationClientOption: keepAlive invalid (got: ${rawKeep}). Falling back to ${DEFAULT_CLIENT_KEEP_ALIVE}.`);
-        }
-        out.keepAlive = DEFAULT_CLIENT_KEEP_ALIVE;
-    } else if(rawKeep < 0) {
-        warn(`normalizationClientOption: keepAlive must be >= 0 (got: ${rawKeep}). Falling back to ${DEFAULT_CLIENT_KEEP_ALIVE}.`);
-        out.keepAlive = DEFAULT_CLIENT_KEEP_ALIVE;
-    }
+    out.keepAlive = resolveClientKeepAlive(out.keepAlive, warn);
 
     // globalMemCacheLimit: >= 16. -1 sentinel 허용.
     const rawMem: any = out.globalMemCacheLimit;
@@ -185,6 +185,7 @@ export {
     TrustedClient,
     DEFAULT_KEY,
     normalizationClientOption,
+    resolveClientKeepAlive,
     NormalizationClientOptionWarner,
     DEFAULT_CLIENT_PORT,
     DEFAULT_CLIENT_KEEP_ALIVE,

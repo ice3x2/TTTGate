@@ -1,4 +1,4 @@
-import {ClientOption, DEFAULT_KEY, normalizationClientOption as normalizeClientOptionShared} from "../types/TunnelingOption";
+import {ClientOption, DEFAULT_KEY, DEFAULT_CLIENT_KEEP_ALIVE, normalizationClientOption as normalizeClientOptionShared} from "../types/TunnelingOption";
 import TunnelNames from "./TunnelNames";
 import TTTClient from "./TTTClient";
 import File from "../util/File";
@@ -119,7 +119,7 @@ let _loadClientOption = (cliOptions?: {[key: string]: string}) : ClientOption =>
         allowLegacyFallback: false,
         allowInsecureTls: false,
         globalMemCacheLimit: 128,
-        keepAlive: 0
+        keepAlive: DEFAULT_CLIENT_KEEP_ALIVE
     }
     let argv = cliOptions ?? CLI.parseCommandLine().options;
     let savedOption = _loadClientOptionFromFile(argv);
@@ -143,14 +143,6 @@ let _loadClientOption = (cliOptions?: {[key: string]: string}) : ClientOption =>
     }
     if(argv["keepAlive"]) {
         clientOption.keepAlive = Math.floor(parseInt(argv["keepAlive"]));
-        if(isNaN(clientOption.keepAlive)){
-            console.warn(`keepAlive '${argv["keepAlive"]}' is not number.`);
-            clientOption.keepAlive = -1;
-        }
-        else if(clientOption.keepAlive < 0) {
-            console.warn(`keepAlive is disabled. (keepAlive: ${clientOption.keepAlive})`);
-            clientOption.keepAlive = -1;
-        }
     }
     if(argv["tls"] != undefined && (argv["tls"] == "" || argv["tls"].toLowerCase() != "false")) {
         clientOption.tls = true;
