@@ -306,7 +306,12 @@ class TunnelClient {
         for(let packet of result.packets) {
             logger.info(`onReceiveFromCtrlHandler - cmd:${CtrlCmd[packet.cmd]}, sessionID:${packet.sessionID}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
             if(this._state == CtrlState.Syncing && packet.cmd == CtrlCmd.SyncCtrlAck) {
-                const syncMeta = packet.syncCtrlAckMeta;
+                const metadata = packet.syncCtrlAckMetaResult;
+                if(metadata.kind === 'invalid') {
+                    logger.warn(`Invalid SyncCtrlAck metadata: ${metadata.reason}`);
+                    continue;
+                }
+                const syncMeta = metadata.kind === 'valid' ? metadata.value : undefined;
                 this._id = syncMeta?.controlID ?? packet.ID;
                 if(syncMeta && this._option.clientId && this._option.clientSecret) {
                     this._protocolVersion = syncMeta.protocolVersion;
@@ -332,8 +337,13 @@ class TunnelClient {
             }
             if(this._state == CtrlState.Connected) {
                 if(packet.cmd == CtrlCmd.NewDataHandler) {
-                    const handlerID = packet.newDataHandlerMeta?.handlerID ?? packet.ID;
-                    this.connectDataHandler(handlerID, packet.sessionID, packet.newDataHandlerMeta?.bindingToken);
+                    const metadata = packet.newDataHandlerMetaResult;
+                    if(metadata.kind === 'invalid') {
+                        logger.warn(`Invalid NewDataHandler metadata for session ${packet.sessionID}: ${metadata.reason}`);
+                        continue;
+                    }
+                    const value = metadata.kind === 'valid' ? metadata.value : undefined;
+                    this.connectDataHandler(value?.handlerID ?? packet.ID, packet.sessionID, value?.bindingToken);
                 }
                 else if(packet.cmd == CtrlCmd.SuccessOfOpenSessionAck) {
                     this.flushWaitBuffer(packet.sessionID);
@@ -374,7 +384,12 @@ class TunnelClient {
     }
 
     private processReceiveMessage(packet: CtrlPacket) {
-        let message = CtrlPacket.getMessageFromPacket(packet);
+        const metadata = packet.messageMetaResult;
+        if(metadata.kind !== 'valid') {
+            logger.warn(`Invalid Message metadata for session ${packet.sessionID}`);
+            return;
+        }
+        const message = metadata.value;
         if(message.type == 'log') {
             logger.info(`Receive Server message:  ${message.payload}`)
         }

@@ -326,13 +326,23 @@ class ClientHandlerPool {
     public delegateReceivePacketOfControlHandler(handler: TunnelControlHandler, packet: CtrlPacket) : void {
         logger.info(`Received a packet from the control handler. cmd: ${CtrlCmd[packet.cmd]} sessionID: ${packet.sessionID}`)
         if(packet.cmd == CtrlCmd.Message) {
-            let message = CtrlPacket.getMessageFromPacket(packet);
+            const metadata = packet.messageMetaResult;
+            if(metadata.kind !== 'valid') {
+                logger.warn(`Invalid Message metadata for session ${packet.sessionID}`);
+                return;
+            }
+            const message = metadata.value;
             if(message.type == 'sysinfo') {
                 this._sysInfo = message.payload as SysInfo;
             }
         }
         else if(packet.cmd == CtrlCmd.SuccessOfOpenSession || packet.cmd == CtrlCmd.FailOfOpenSession) {
-            let handlerID = packet.handlerWideIdMeta?.handlerID ?? packet.ID;
+            const metadata = packet.handlerWideIdMetaResult;
+            if(metadata.kind === 'invalid') {
+                logger.warn(`Invalid ${CtrlCmd[packet.cmd]} metadata for session ${packet.sessionID}: ${metadata.reason}`);
+                return;
+            }
+            const handlerID = (metadata.kind === 'valid' ? metadata.value.handlerID : undefined) ?? packet.ID;
             let sessionID = packet.sessionID;
             logger.info(`Attempt to connect data handler: sessionID${packet.sessionID}  ${packet.cmd == CtrlCmd.SuccessOfOpenSession ? '<Success>' : '<Fail>'}`);
             let connected = packet.cmd == CtrlCmd.SuccessOfOpenSession;

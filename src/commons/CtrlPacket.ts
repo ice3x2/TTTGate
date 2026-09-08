@@ -10,7 +10,8 @@ import {
     assertMessageMeta,
     assertNewDataHandlerMeta,
     assertSyncCtrlAckMeta,
-    safeJsonParse
+    safeJsonParse, readJsonMeta, MetaResult, MessageMeta,
+    validateMessageMeta, validateSyncCtrlAckMeta, validateNewDataHandlerMeta, validateHandlerWideIdMeta
 } from "./CtrlMetaGuards";
 
 
@@ -303,6 +304,31 @@ class CtrlPacket {
 
     public get cmd() : CtrlCmd {
         return this._cmd;
+    }
+
+    public get syncCtrlAckMetaResult(): MetaResult<SyncCtrlAckMeta> {
+        if(this._cmd !== CtrlCmd.SyncCtrlAck || this._data.length === 0) return {kind: 'absent'};
+        return readJsonMeta(this._data, validateSyncCtrlAckMeta);
+    }
+
+    public get newDataHandlerMetaResult(): MetaResult<NewDataHandlerMeta> {
+        if(this._cmd !== CtrlCmd.NewDataHandler || this._data.length === 0) return {kind: 'absent'};
+        return readJsonMeta(this._data, validateNewDataHandlerMeta);
+    }
+
+    public get messageMetaResult(): MetaResult<MessageMeta> {
+        if(this._cmd !== CtrlCmd.Message) return {kind: 'invalid', reason: 'Invalid message command'};
+        return readJsonMeta(this._data, validateMessageMeta);
+    }
+
+    public get handlerWideIdMetaResult(): MetaResult<HandlerWideIdMeta> {
+        let data: Buffer;
+        if(this._cmd === CtrlCmd.CloseSession) data = this._data.subarray(4);
+        else if(this._cmd === CtrlCmd.FailOfOpenSession || this._cmd === CtrlCmd.SuccessOfOpenSession ||
+            this._cmd === CtrlCmd.SuccessOfOpenSessionAck) data = this._data;
+        else return {kind: 'absent'};
+        if(data.length === 0) return {kind: 'absent'};
+        return readJsonMeta(data, validateHandlerWideIdMeta);
     }
 
     private static hasRequiredPayload(cmd: CtrlCmd, data: Buffer): boolean {

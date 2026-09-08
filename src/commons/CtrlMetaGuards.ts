@@ -5,7 +5,7 @@
  *  - O(필드수) 경량 검사(typeof + 문자열 길이 상한)만 수행.
  *  - 깊은 순회·재귀·정규식 매칭 금지. 마이크로 벤치(10k parse) 기준 기존 대비 < 5% 오버헤드.
  *  - `__proto__` / `constructor` / `prototype` 키 reviver로 drop → prototype pollution 차단.
- *  - 가드 실패는 `Error` throw. 호출부에서 try/catch로 흡수하여 패킷 폐기.
+ *  - 기존 assert/getter는 throw 계약 유지. 실시간 소비자는 공용 검증 결과로 무효 패킷만 폐기.
  *
  * 6곳 JSON.parse ↔ 5 guard 매핑 (Plan §4 Phase 2 P2-T3):
  *  - line 107 getMessageFromPacket          → assertMessageMeta
@@ -21,7 +21,7 @@ import { AckCtrlV2Meta, HandlerWideIdMeta, NewDataHandlerMeta, SyncCtrlAckMeta }
 // 기본 문자열 필드 상한 (필요 시 환경변수로 조정).
 const DEFAULT_STRING_LIMIT = 8192;
 
-type MessageMeta = { type: string; payload: object | string };
+export type MessageMeta = { type: string; payload: object | string };
 
 const isPlainObject = (v: unknown): v is Record<string, unknown> => {
     return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -44,45 +44,65 @@ const isCapabilityArray = (v: unknown): v is Array<string> => {
     return true;
 };
 
-export function assertMessageMeta(obj: unknown): asserts obj is MessageMeta {
-    if(!isPlainObject(obj)) throw new Error("MessageMeta: not object");
-    if(!isStringCapped(obj.type, 128)) throw new Error("MessageMeta.type invalid");
+export function validateMessageMeta(obj: unknown): string | undefined {
+    if(!isPlainObject(obj)) return "MessageMeta: not object";
+    if(!isStringCapped(obj.type, 128)) return "MessageMeta.type invalid";
     const payload = obj.payload;
-    if(payload === undefined) throw new Error("MessageMeta.payload missing");
+    if(payload === undefined) return "MessageMeta.payload missing";
     if(typeof payload !== "string" && !isPlainObject(payload) && !Array.isArray(payload)) {
-        throw new Error("MessageMeta.payload type invalid");
+        return "MessageMeta.payload type invalid";
     }
     if(typeof payload === "string" && payload.length > DEFAULT_STRING_LIMIT) {
-        throw new Error("MessageMeta.payload too long");
+        return "MessageMeta.payload too long";
+    }
+}
+
+export function assertMessageMeta(obj: unknown): asserts obj is MessageMeta {
+    const reason = validateMessageMeta(obj);
+    if(reason) throw new Error(reason);
+}
+
+export function validateSyncCtrlAckMeta(obj: unknown): string | undefined {
+    if(!isPlainObject(obj)) return "SyncCtrlAckMeta: not object";
+    if(!isUInt(obj.protocolVersion, 65535)) return "SyncCtrlAckMeta.protocolVersion invalid";
+    if(!isCapabilityArray(obj.capabilities)) return "SyncCtrlAckMeta.capabilities invalid";
+    if(!isStringCapped(obj.challengeNonce, 256)) return "SyncCtrlAckMeta.challengeNonce invalid";
+    if(!isStringCapped(obj.serverMode, 32)) return "SyncCtrlAckMeta.serverMode invalid";
+    if(obj.controlID !== undefined && !isUInt(obj.controlID, 0xFFFFFFFF)) {
+        return "SyncCtrlAckMeta.controlID invalid";
     }
 }
 
 export function assertSyncCtrlAckMeta(obj: unknown): asserts obj is SyncCtrlAckMeta {
-    if(!isPlainObject(obj)) throw new Error("SyncCtrlAckMeta: not object");
-    if(!isUInt(obj.protocolVersion, 65535)) throw new Error("SyncCtrlAckMeta.protocolVersion invalid");
-    if(!isCapabilityArray(obj.capabilities)) throw new Error("SyncCtrlAckMeta.capabilities invalid");
-    if(!isStringCapped(obj.challengeNonce, 256)) throw new Error("SyncCtrlAckMeta.challengeNonce invalid");
-    if(!isStringCapped(obj.serverMode, 32)) throw new Error("SyncCtrlAckMeta.serverMode invalid");
-    if(obj.controlID !== undefined && !isUInt(obj.controlID, 0xFFFFFFFF)) {
-        throw new Error("SyncCtrlAckMeta.controlID invalid");
+    const reason = validateSyncCtrlAckMeta(obj);
+    if(reason) throw new Error(reason);
+}
+
+export function validateNewDataHandlerMeta(obj: unknown): string | undefined {
+    if(!isPlainObject(obj)) return "NewDataHandlerMeta: not object";
+    if(obj.handlerID !== undefined && !isUInt(obj.handlerID, 0xFFFFFFFF)) {
+        return "NewDataHandlerMeta.handlerID invalid";
+    }
+    if(obj.bindingToken !== undefined && !isStringCapped(obj.bindingToken, 512)) {
+        return "NewDataHandlerMeta.bindingToken invalid";
     }
 }
 
 export function assertNewDataHandlerMeta(obj: unknown): asserts obj is NewDataHandlerMeta {
-    if(!isPlainObject(obj)) throw new Error("NewDataHandlerMeta: not object");
+    const reason = validateNewDataHandlerMeta(obj);
+    if(reason) throw new Error(reason);
+}
+
+export function validateHandlerWideIdMeta(obj: unknown): string | undefined {
+    if(!isPlainObject(obj)) return "HandlerWideIdMeta: not object";
     if(obj.handlerID !== undefined && !isUInt(obj.handlerID, 0xFFFFFFFF)) {
-        throw new Error("NewDataHandlerMeta.handlerID invalid");
-    }
-    if(obj.bindingToken !== undefined && !isStringCapped(obj.bindingToken, 512)) {
-        throw new Error("NewDataHandlerMeta.bindingToken invalid");
+        return "HandlerWideIdMeta.handlerID invalid";
     }
 }
 
 export function assertHandlerWideIdMeta(obj: unknown): asserts obj is HandlerWideIdMeta {
-    if(!isPlainObject(obj)) throw new Error("HandlerWideIdMeta: not object");
-    if(obj.handlerID !== undefined && !isUInt(obj.handlerID, 0xFFFFFFFF)) {
-        throw new Error("HandlerWideIdMeta.handlerID invalid");
-    }
+    const reason = validateHandlerWideIdMeta(obj);
+    if(reason) throw new Error(reason);
 }
 
 export function assertAckCtrlV2Meta(obj: unknown): asserts obj is AckCtrlV2Meta {
@@ -111,6 +131,21 @@ const SAFE_REVIVER = (key: string, value: unknown): unknown => {
     }
     return value;
 };
+
+export type MetaResult<T> = {kind: 'absent'} | {kind: 'invalid'; reason: string} | {kind: 'valid'; value: T};
+
+export function readJsonMeta<T>(data: Buffer, validate: (obj: unknown) => string | undefined): MetaResult<T> {
+    let parsed: unknown;
+    const text = data.toString('utf8');
+    try {
+        parsed = JSON.parse(text, SAFE_REVIVER);
+    } catch(error) {
+        if(error instanceof SyntaxError) return {kind: 'invalid', reason: 'Invalid metadata JSON'};
+        throw error;
+    }
+    const reason = validate(parsed);
+    return reason ? {kind: 'invalid', reason} : {kind: 'valid', value: parsed as T};
+}
 
 export function safeJsonParse<T>(
     data: Buffer | string,
