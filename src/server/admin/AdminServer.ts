@@ -194,7 +194,9 @@ class AdminServer {
                 }
                 logger.warn('HTTP Admin server processing error', e);
                 if(!res.headersSent) {
-                    this.sendApiFailure(res, status, {message, url: url});
+                    this.sendApiFailure(res, status, {message, url: url,
+                        partial: Boolean(e?.recoveryFailedPaths?.length),
+                        failedScopes: e?.recoveryFailedPaths?.length ? [`${e.persistenceScope ?? 'configuration'}-restore`] : []});
                 }
                 return;
             } catch (e) {
@@ -344,30 +346,37 @@ class AdminServer {
             return;
         }
         let json = await AdminServer.readJson(req);
-        let certInfo = json['certInfo'];
-        let certStore = CertificationStore.instance;
-        if(!ObjectUtil.equalsType(EMPTY_CERT_INFO, certInfo) || !certStore.prepareAdminServerCert(certInfo)) {
-            this.sendApiFailure(res, 400, {message: 'Invalid certificate'});
-            return;
-        }
-        // P3-T5 / REQ-08: 우선 hot-swap을 시도하고, 성공하면 restart 예약을 비운다.
-        const hotSwapped = this.applyTlsCertificateHotSwap(certInfo);
-        const pendingRestartScopes = hotSwapped ? [] : ["admin-cert"];
-        let success = await certStore.commitAdminServerCert(certInfo, {
-            markLastKnownGood: hotSwapped,
-            pendingRestartScopes
-        });
-        if(!success) {
-            this.sendApiFailure(res, 400, {message: 'Invalid certificate'});
-            return;
-        }
-        this.sendApiSuccess(res, {
-            partial: !hotSwapped,
-            warnings: hotSwapped
-                ? ["admin certificate hot-applied"]
-                : ["admin certificate stored; restart required to apply"],
-            restartRequiredScopes: pendingRestartScopes,
-            revisionState: certStore.revisionState
+        await ServerOptionStore.instance.runConfigurationMutation(async () => {
+            let certInfo = json['certInfo'];
+            let certStore = CertificationStore.instance;
+            if(!ObjectUtil.equalsType(EMPTY_CERT_INFO, certInfo) || !certStore.prepareAdminServerCert(certInfo)) {
+                this.sendApiFailure(res, 400, {message: 'Invalid certificate'});
+                return;
+            }
+            const committedBefore = certStore.captureCommittedState({info: certInfo, type: 'admin'});
+            const tlsBefore = this._currentTlsOptions ? {...this._currentTlsOptions} : undefined;
+            const pendingRestartScopes = this._tls ? [] : ['admin-cert'];
+            const success = await certStore.commitAdminServerCert(certInfo, {markLastKnownGood: this._tls, pendingRestartScopes});
+            if(!success) { this.sendApiFailure(res, 400, {message: 'Invalid certificate'}); return; }
+            const hotSwapped = this.applyTlsCertificateHotSwap(certInfo);
+            if(this._tls && !hotSwapped) {
+                const failures = await this.restoreCertificateBaseline(committedBefore);
+                if(tlsBefore) {
+                    try { (this._server as https.Server).setSecureContext(tlsBefore); this._currentTlsOptions = tlsBefore; }
+                    catch(error) { logger.error('admin TLS restore failed', error); failures.push('admin-cert-restore'); }
+                }
+                this.sendApiFailure(res, 400, {message: 'Unable to apply administrator certificate', partial: failures.length > 0,
+                    failedScopes: ['admin-cert', ...failures], revisionState: certStore.revisionState});
+                return;
+            }
+            this.sendApiSuccess(res, {
+                partial: !hotSwapped,
+                warnings: hotSwapped
+                    ? ["admin certificate hot-applied"]
+                    : ["admin certificate stored; restart required to apply"],
+                restartRequiredScopes: pendingRestartScopes,
+                revisionState: certStore.revisionState
+            });
         });
     }
 
@@ -401,6 +410,24 @@ class AdminServer {
             }
         }
         return result;
+    }
+
+    private async restoreCertificateBaseline(committed: ReturnType<CertificationStore['captureCommittedState']>,
+        runtime?: ReturnType<TTTServer['captureRuntimeState']>): Promise<string[]> {
+        const failures: string[] = [];
+        try { CertificationStore.instance.restoreCommittedState(committed); }
+        catch(error) { logger.error('certificate baseline restore failed', error); failures.push('certificate-restore'); }
+        if(runtime) failures.push(...await this._tttServer!.restoreRuntimeState(runtime));
+        return failures;
+    }
+
+    private async restoreConfigurationBaseline(committed: ReturnType<ServerOptionStore['captureCommittedState']>,
+        runtime?: ReturnType<TTTServer['captureRuntimeState']>): Promise<string[]> {
+        const failures: string[] = [];
+        try { ServerOptionStore.instance.restoreCommittedState(committed); }
+        catch(error) { logger.error('configuration baseline restore failed', error); failures.push('configuration-restore'); }
+        if(runtime) failures.push(...await this._tttServer!.restoreRuntimeState(runtime));
+        return failures;
     }
 
     private async mutateConfiguration(res: ServerResponse, payload: any, operation: (store: ServerOptionStore) => Promise<void>): Promise<void> {
@@ -493,6 +520,23 @@ class AdminServer {
                 || (currentServerOption.allowLegacyControlAuth === true) !== (serverOption.allowLegacyControlAuth === true)
                 || (currentServerOption.globalMemCacheLimit ?? 128) !== (serverOption.globalMemCacheLimit ?? 128)
                 || !ObjectUtil.canonicalEquals(currentServerOption.trustedClients ?? [], serverOption.trustedClients ?? []);
+            const committedBefore = serverOptionStore.captureCommittedState();
+            const runtimeBefore = this._tttServer?.captureRuntimeState?.();
+            const pendingScopes = (updates['adminPort'] !== undefined || updates['adminBindHost'] !== undefined || updates['adminTls'] !== undefined) ? ['admin-server'] : [];
+            let commitResult = serverOptionStore.commitPreparedServerOption(serverOption, {
+                markLastKnownGood: pendingScopes.length === 0,
+                pendingRestartScopes: pendingScopes
+            });
+            if(!commitResult.success) {
+                serverOptionStore.recordRollback('server option commit failed', ["server-option"]);
+                this.sendApiFailure(res, 500, {
+                    message: 'Unable to commit server option.',
+                    updated: false,
+                    failedScopes: ["server-option"],
+                    revisionState: serverOptionStore.revisionState
+                });
+                return;
+            }
             let runtimeResult;
             if(typeof (this._tttServer as any)?.applyServerOption == "function") {
                 runtimeResult = await (this._tttServer as any).applyServerOption(serverOption, currentServerOption);
@@ -514,28 +558,22 @@ class AdminServer {
                 };
             }
             if(!runtimeResult.success) {
-                serverOptionStore.recordRollback('server option runtime apply failed', runtimeResult.failedScopes);
+                const recoveryFailures = await this.restoreConfigurationBaseline(committedBefore, runtimeBefore);
+                if(recoveryFailures.length === 0) {
+                    try { serverOptionStore.recordRollback('runtime apply failed; prior baseline restored', runtimeResult.failedScopes,
+                        committedBefore.revisionState.currentRevision + 1, committedBefore.revisionState.currentRevision); }
+                    catch(error) { logger.error('rollback diagnostic persistence failed', error); recoveryFailures.push('configuration-rollback-metadata'); }
+                }
+                runtimeResult.partial = recoveryFailures.length > 0;
+                runtimeResult.failedScopes.push(...recoveryFailures);
                 this.sendApiFailure(res, 400, {
                     message: 'Unable to apply server option.',
+                    partial: runtimeResult.partial,
                     updated: false,
                     updates,
                     warnings: runtimeResult.warnings,
                     failedScopes: runtimeResult.failedScopes,
                     restartRequiredScopes: runtimeResult.restartRequiredScopes,
-                    revisionState: serverOptionStore.revisionState
-                });
-                return;
-            }
-            let commitResult = serverOptionStore.commitPreparedServerOption(serverOption, {
-                markLastKnownGood: runtimeResult.restartRequiredScopes.length == 0,
-                pendingRestartScopes: runtimeResult.restartRequiredScopes
-            });
-            if(!commitResult.success) {
-                serverOptionStore.recordRollback('server option commit failed', ["server-option"]);
-                this.sendApiFailure(res, 500, {
-                    message: 'Unable to commit server option.',
-                    updated: false,
-                    failedScopes: ["server-option"],
                     revisionState: serverOptionStore.revisionState
                 });
                 return;
@@ -575,6 +613,19 @@ class AdminServer {
                 });
                 return;
             }
+            const committedBefore = serverOptionStore.captureCommittedState();
+            const runtimeBefore = this._tttServer?.captureRuntimeState?.();
+            const commitResult = serverOptionStore.commitPreparedServerOption(composeResult.serverOption);
+            if(!commitResult.success) {
+                serverOptionStore.recordRollback('tunneling option commit failed', ["tunneling-option"]);
+                this.sendApiFailure(res, 500, {
+                    message: 'Unable to commit tunneling option.',
+                    forwardPort: tunnelingOption.forwardPort,
+                    failedScopes: ["tunneling-option"],
+                    revisionState: serverOptionStore.revisionState
+                });
+                return;
+            }
             let runtimeResult = await this._tttServer?.applyTunnelingOption(tunnelingOption, previousOption) ?? {
                 success: false,
                 partial: false,
@@ -583,23 +634,20 @@ class AdminServer {
                 restartRequiredScopes: []
             };
             if(!runtimeResult.success) {
-                serverOptionStore.recordRollback('tunneling option runtime apply failed', runtimeResult.failedScopes);
+                const recoveryFailures = await this.restoreConfigurationBaseline(committedBefore, runtimeBefore);
+                if(recoveryFailures.length === 0) {
+                    try { serverOptionStore.recordRollback('runtime apply failed; prior baseline restored', runtimeResult.failedScopes,
+                        committedBefore.revisionState.currentRevision + 1, committedBefore.revisionState.currentRevision); }
+                    catch(error) { logger.error('rollback diagnostic persistence failed', error); recoveryFailures.push('configuration-rollback-metadata'); }
+                }
+                runtimeResult.partial = recoveryFailures.length > 0;
+                runtimeResult.failedScopes.push(...recoveryFailures);
                 this.sendApiFailure(res, 400, {
                     message: 'Unable to restart tunneling server.',
+                    partial: runtimeResult.partial,
                     forwardPort: tunnelingOption.forwardPort,
                     failedScopes: runtimeResult.failedScopes,
                     warnings: runtimeResult.warnings,
-                    revisionState: serverOptionStore.revisionState
-                });
-                return;
-            }
-            const commitResult = serverOptionStore.commitPreparedServerOption(composeResult.serverOption);
-            if(!commitResult.success) {
-                serverOptionStore.recordRollback('tunneling option commit failed', ["tunneling-option"]);
-                this.sendApiFailure(res, 500, {
-                    message: 'Unable to commit tunneling option.',
-                    forwardPort: tunnelingOption.forwardPort,
-                    failedScopes: ["tunneling-option"],
                     revisionState: serverOptionStore.revisionState
                 });
                 return;
@@ -623,23 +671,8 @@ class AdminServer {
                 this.sendApiFailure(res, 404, {message: `External port(${forwardPort}) server already removed.`, forwardPort});
                 return;
             }
-            let warnings: string[] = [];
-            let status = this._tttServer?.externalServerStatus(forwardPort);
-            if(status?.online) {
-                let stopped = await this._tttServer?.stopExternalPortServer(forwardPort);
-                if(!stopped) {
-                    serverOptionStore.recordRollback('tunneling option remove failed', [`external-listener:${forwardPort}`]);
-                    this.sendApiFailure(res, 400, {
-                        message: `Unable to stop external port(${forwardPort}) listener.`,
-                        forwardPort,
-                        failedScopes: [`external-listener:${forwardPort}`],
-                        revisionState: serverOptionStore.revisionState
-                    });
-                    return;
-                }
-            } else {
-                warnings.push(`listener ${forwardPort} was already offline`);
-            }
+            const committedBefore = serverOptionStore.captureCommittedState();
+            const runtimeBefore = this._tttServer?.captureRuntimeState?.();
             let composeResult = serverOptionStore.composeServerOptionWithoutTunnelingOption(forwardPort);
             if(!composeResult.success || !composeResult.serverOption) {
                 this.sendApiFailure(res, 400, {message: `External port(${forwardPort}) server already removed.`, forwardPort});
@@ -655,6 +688,29 @@ class AdminServer {
                     revisionState: serverOptionStore.revisionState
                 });
                 return;
+            }
+            let warnings: string[] = [];
+            let status = this._tttServer?.externalServerStatus(forwardPort);
+            if(status?.online) {
+                let stopped = await this._tttServer?.stopExternalPortServer(forwardPort, true);
+                if(!stopped) {
+                    const recoveryFailures = await this.restoreConfigurationBaseline(committedBefore, runtimeBefore);
+                    if(recoveryFailures.length === 0) {
+                        try { serverOptionStore.recordRollback('tunneling option remove failed; prior baseline restored', [`external-listener:${forwardPort}`],
+                            committedBefore.revisionState.currentRevision + 1, committedBefore.revisionState.currentRevision); }
+                        catch(error) { logger.error('rollback diagnostic persistence failed', error); recoveryFailures.push('configuration-rollback-metadata'); }
+                    }
+                    this.sendApiFailure(res, 400, {
+                        message: `Unable to stop external port(${forwardPort}) listener.`,
+                        forwardPort,
+                        partial: recoveryFailures.length > 0,
+                        failedScopes: [`external-listener:${forwardPort}`, ...recoveryFailures],
+                        revisionState: serverOptionStore.revisionState
+                    });
+                    return;
+                }
+            } else {
+                warnings.push(`listener ${forwardPort} was already offline`);
             }
             this.sendApiSuccess(res, {forwardPort, warnings, revisionState: commitResult.revisionState});
         });
@@ -703,9 +759,11 @@ class AdminServer {
         if(!await this.checkSession(req, res)) {
             return;
         }
-        let certStore = CertificationStore.instance;
-        let certInfo = certStore.getAdminCert();
-        this.sendApiSuccess(res, {certInfo: certInfo, revisionState: certStore.revisionState});
+        await ServerOptionStore.instance.runConfigurationMutation(async () => {
+            let certStore = CertificationStore.instance;
+            let certInfo = certStore.getAdminCert();
+            this.sendApiSuccess(res, {certInfo: certInfo, revisionState: certStore.revisionState});
+        });
     }
 
     private getNumberInPath = async (req: IncomingMessage, res: ServerResponse, pathStart: string, errorMessage: string ='Invalid port' ) : Promise<number | undefined> => {
@@ -732,72 +790,84 @@ class AdminServer {
         if(timeout == undefined || isNaN(timeout)) {
             timeout = 0;
         }
-        // noinspection JSUnusedAssignment
-        let success = false;
-        if(!this._tttServer) {
-            success = false;
-        }
-        else if(active == true) {
-            success = await this._tttServer.activeExternalPortServer(port, timeout);
-        } else {
-            success = await this._tttServer.inactiveExternalPortServer(port);
-        }
-        this.sendApiEnvelope(res, success ? 200 : 400, {success: success, message: success ? '' : 'Unable to change listener active state'});
+        await ServerOptionStore.instance.runConfigurationMutation(async () => {
+            let success = false;
+            if(this._tttServer) {
+                success = active == true
+                    ? await this._tttServer.activeExternalPortServer(port, timeout)
+                    : await this._tttServer.inactiveExternalPortServer(port);
+            }
+            this.sendApiEnvelope(res, success ? 200 : 400, {success: success, message: success ? '' : 'Unable to change listener active state'});
+        });
     }
 
     private onDeleteExternalServerCert = async (req: IncomingMessage, res: ServerResponse) => {
         let port = await this.getNumberInPath(req, res,'/api/externalCert/');
         if(port == undefined) return;
-        await CertificationStore.instance.removeForExternalServer(port);
-        this.sendApiSuccess(res, {revisionState: CertificationStore.instance.revisionState});
+        await ServerOptionStore.instance.runConfigurationMutation(async () => {
+            await CertificationStore.instance.removeForExternalServer(port);
+            this.sendApiSuccess(res, {revisionState: CertificationStore.instance.revisionState});
+        });
     }
 
     private onUpdateExternalServerCert = async (req: IncomingMessage, res: ServerResponse) => {
         let port = await this.getNumberInPath(req, res,'/api/externalCert/');
         if(port == undefined) return;
         let json = await AdminServer.readJson(req);
-        let certInfo = json['certInfo'];
-        let certStore = CertificationStore.instance;
-        let previousCert = certStore.getExternalCert(port);
-        if(!ObjectUtil.equalsType(EMPTY_CERT_INFO, certInfo) || !certStore.prepareExternalServerCert(certInfo)) {
-            this.sendApiFailure(res, 400, {message: 'Invalid certificate'});
-            return;
-        }
-        let runtimeResult = await this._tttServer?.applyExternalServerCert(port, certInfo, previousCert) ?? {
-            success: false,
-            partial: false,
-            warnings: [],
-            failedScopes: [`external-cert:${port}`],
-            restartRequiredScopes: []
-        };
-        if(!runtimeResult.success) {
-            certStore.recordRollback('external certificate runtime apply failed', runtimeResult.failedScopes);
-            this.sendApiFailure(res, 400, {
-                message: 'Invalid certificate',
-                failedScopes: runtimeResult.failedScopes,
-                warnings: runtimeResult.warnings,
-                revisionState: certStore.revisionState
+        await ServerOptionStore.instance.runConfigurationMutation(async () => {
+            let certInfo = json['certInfo'];
+            let certStore = CertificationStore.instance;
+            let previousCert = certStore.getExternalCert(port);
+            if(!ObjectUtil.equalsType(EMPTY_CERT_INFO, certInfo) || !certStore.prepareExternalServerCert(certInfo)) {
+                this.sendApiFailure(res, 400, {message: 'Invalid certificate'});
+                return;
+            }
+            const committedBefore = certStore.captureCommittedState({info: certInfo, type: 'external'});
+            const runtimeBefore = this._tttServer?.captureRuntimeState?.();
+            let success = await certStore.commitExternalServerCert(port, certInfo, {
+                markLastKnownGood: true,
+                pendingRestartScopes: []
             });
-            return;
-        }
-        let success = await certStore.commitExternalServerCert(port, certInfo, {
-            markLastKnownGood: runtimeResult.restartRequiredScopes.length == 0,
-            pendingRestartScopes: runtimeResult.restartRequiredScopes
-        });
-        if(!success) {
-            certStore.recordRollback('external certificate commit failed', [`external-cert:${port}`]);
-            this.sendApiFailure(res, 500, {
-                message: 'Unable to commit certificate',
+            if(!success) {
+                certStore.recordRollback('external certificate commit failed', [`external-cert:${port}`]);
+                this.sendApiFailure(res, 500, {
+                    message: 'Unable to commit certificate',
+                    failedScopes: [`external-cert:${port}`],
+                    revisionState: certStore.revisionState
+                });
+                return;
+            }
+            let runtimeResult = await this._tttServer?.applyExternalServerCert(port, certInfo, previousCert) ?? {
+                success: false,
+                partial: false,
+                warnings: [],
                 failedScopes: [`external-cert:${port}`],
+                restartRequiredScopes: []
+            };
+            if(!runtimeResult.success) {
+                const recoveryFailures = await this.restoreCertificateBaseline(committedBefore, runtimeBefore);
+                if(recoveryFailures.length === 0) {
+                    try { certStore.recordRollback('runtime apply failed; prior baseline restored', runtimeResult.failedScopes,
+                        committedBefore.revisionState.currentRevision + 1, committedBefore.revisionState.currentRevision); }
+                    catch(error) { logger.error('certificate rollback diagnostic persistence failed', error); recoveryFailures.push('certificate-rollback-metadata'); }
+                }
+                runtimeResult.partial = recoveryFailures.length > 0;
+                runtimeResult.failedScopes.push(...recoveryFailures);
+                this.sendApiFailure(res, 400, {
+                    message: 'Invalid certificate',
+                    partial: runtimeResult.partial,
+                    failedScopes: runtimeResult.failedScopes,
+                    warnings: runtimeResult.warnings,
+                    revisionState: certStore.revisionState
+                });
+                return;
+            }
+            this.sendApiSuccess(res, {
+                partial: runtimeResult.partial,
+                warnings: runtimeResult.warnings,
+                restartRequiredScopes: runtimeResult.restartRequiredScopes,
                 revisionState: certStore.revisionState
             });
-            return;
-        }
-        this.sendApiSuccess(res, {
-            partial: runtimeResult.partial,
-            warnings: runtimeResult.warnings,
-            restartRequiredScopes: runtimeResult.restartRequiredScopes,
-            revisionState: certStore.revisionState
         });
     }
 
@@ -810,13 +880,15 @@ class AdminServer {
     private onGetExternalServerCert = async (req: IncomingMessage, res: ServerResponse) => {
         let port = await this.getNumberInPath(req, res,'/api/externalCert/');
         if(port == undefined) return;
-        let certStore = CertificationStore.instance;
-        let certInfo = certStore.getExternalCert(port);
-        if(certInfo == undefined) {
-            this.sendApiFailure(res, 400, {message: 'Invalid port'});
-            return;
-        }
-        this.sendApiSuccess(res, {certInfo: certInfo, revisionState: certStore.revisionState});
+        await ServerOptionStore.instance.runConfigurationMutation(async () => {
+            let certStore = CertificationStore.instance;
+            let certInfo = certStore.getExternalCert(port);
+            if(certInfo == undefined) {
+                this.sendApiFailure(res, 400, {message: 'Invalid port'});
+                return;
+            }
+            this.sendApiSuccess(res, {certInfo: certInfo, revisionState: certStore.revisionState});
+        });
     }
 
 
@@ -981,13 +1053,15 @@ class AdminServer {
         }
         // P5-T1 / REQ-03: Vary + CORS whitelist. 자기 호스트 아닐 시 CORS 헤더 생략.
         this.applySelfOriginCorsHeaders(req, res);
-        let store = ServerOptionStore.instance;
-        // P5-T1 / REQ-03: store.serverOption 은 cloneDeep 복사본을 반환하지만,
-        // delete 연산 의존성을 제거하기 위해 구조 분해로 tunnelingOptions 를 제외한 신규 객체 구성.
-        const cloned = ObjectUtil.cloneDeep(store.serverOption) as any;
-        const { tunnelingOptions: _omit, ...pureServerOption } = cloned;
-        void _omit;
-        this.sendApiSuccess(res, {serverOption: pureServerOption, revisionState: store.revisionState});
+        await ServerOptionStore.instance.runConfigurationMutation(async () => {
+            let store = ServerOptionStore.instance;
+            // P5-T1 / REQ-03: store.serverOption 은 cloneDeep 복사본을 반환하지만,
+            // delete 연산 의존성을 제거하기 위해 구조 분해로 tunnelingOptions 를 제외한 신규 객체 구성.
+            const cloned = ObjectUtil.cloneDeep(store.serverOption) as any;
+            const { tunnelingOptions: _omit, ...pureServerOption } = cloned;
+            void _omit;
+            this.sendApiSuccess(res, {serverOption: pureServerOption, revisionState: store.revisionState});
+        });
     }
 
 
@@ -1020,12 +1094,14 @@ class AdminServer {
         if(!await this.checkSession(req, res)) {
             return;
         }
-        let store = ServerOptionStore.instance;
-        let tunnelingOptions = store.serverOption.tunnelingOptions;
-        for(let tunnelingOption of tunnelingOptions) {
-            tunnelingOption.keepAlive = tunnelingOption.keepAlive ?? TCPServer.DEFAULT_KEEP_ALIVE;
-        }
-        this.sendApiSuccess(res, {tunnelingOptions: tunnelingOptions, revisionState: store.revisionState});
+        await ServerOptionStore.instance.runConfigurationMutation(async () => {
+            let store = ServerOptionStore.instance;
+            let tunnelingOptions = store.serverOption.tunnelingOptions;
+            for(let tunnelingOption of tunnelingOptions) {
+                tunnelingOption.keepAlive = tunnelingOption.keepAlive ?? TCPServer.DEFAULT_KEEP_ALIVE;
+            }
+            this.sendApiSuccess(res, {tunnelingOptions: tunnelingOptions, revisionState: store.revisionState});
+        });
     }
 
     private onGetExternalServerStatuses = async (req: IncomingMessage, res: ServerResponse) => {
@@ -1045,14 +1121,16 @@ class AdminServer {
         // P5-T1 / REQ-03: 자기 호스트 CORS 화이트리스트 + Vary: Origin 항상.
         const corsHeaders = this.buildSelfOriginCorsHeaders(req);
         // P5-T1 / REQ-03: cloneDeep 후 구조 분해로 tunnelingOptions 제외 — 런타임 상태 파괴 방지.
-        const storeOption = ServerOptionStore.instance.serverOption;
-        const cloned = ObjectUtil.cloneDeep(storeOption) as any;
-        const { tunnelingOptions: _omit, ...pureServerOption } = cloned;
-        void _omit;
-        const adminCert = CertificationStore.instance.getAdminCert();
-        const hash = createHash('sha512').update(JSON.stringify(pureServerOption) + JSON.stringify(adminCert)).digest('hex');
-        res.writeHead(200, {'Content-Type': 'application/json', 'Vary': 'Origin', ...corsHeaders});
-        res.end(JSON.stringify({success: true, partial: false, failedScopes: [], warnings: [], message: '', hash: hash}));
+        await ServerOptionStore.instance.runConfigurationMutation(async () => {
+            const storeOption = ServerOptionStore.instance.serverOption;
+            const cloned = ObjectUtil.cloneDeep(storeOption) as any;
+            const { tunnelingOptions: _omit, ...pureServerOption } = cloned;
+            void _omit;
+            const adminCert = CertificationStore.instance.getAdminCert();
+            const hash = createHash('sha512').update(JSON.stringify(pureServerOption) + JSON.stringify(adminCert)).digest('hex');
+            res.writeHead(200, {'Content-Type': 'application/json', 'Vary': 'Origin', ...corsHeaders});
+            res.end(JSON.stringify({success: true, partial: false, failedScopes: [], warnings: [], message: '', hash: hash}));
+        });
     }
 
 

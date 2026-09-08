@@ -8,6 +8,7 @@ import LoggerFactory  from "../util/logger/LoggerFactory";
 import {SysInfo} from "../commons/SysMonitor";
 import AppCompositionRoot from "../bootstrap/AppCompositionRoot";
 import ObjectUtil from "../util/ObjectUtil";
+import {SocketHandler} from "../util/SocketHandler";
 const logger = LoggerFactory.getLogger('server', 'TTTServer');
 
 type RuntimeApplyResult = {
@@ -27,6 +28,11 @@ type RuntimeApplyResult = {
 
 class TTTServer {
 
+    private _appliedServerOption: ServerOption;
+    private _appliedExternal: Record<number, {option: TunnelingOption, cert: CertInfo, configurationRevision: number, certificateRevision: number}> = {};
+    private _appliedScopeRevisions: Record<string, number> = {};
+    private _dirtyControl = false;
+    private _dirtyExternal = new Set<number>();
     private _externalPortServerPool : ExternalPortServerPool;
     private _tunnelServer : TunnelServer;
     private _sessions : Set<number> = new Set<number>();
@@ -40,6 +46,9 @@ class TTTServer {
 
     private constructor(serverOption: ServerOption) {
         if(serverOption.tls == undefined) serverOption.tls = false;
+        this._appliedServerOption = ObjectUtil.cloneDeep(serverOption);
+        this._appliedScopeRevisions = {"tunnel-control": ServerOptionStore.instance.revisionState.currentRevision,
+            "memory-limit": ServerOptionStore.instance.revisionState.currentRevision};
         this._externalPortServerPool = ExternalPortServerPool.create(serverOption.tunnelingOptions);
         this._tunnelServer = this.createTunnelServer(serverOption);
         this._externalPortServerPool.OnHandlerEventCallback = this.onHandlerEventOnExternalPortServer;
@@ -174,6 +183,79 @@ class TTTServer {
         return this._tunnelServer.clientStatuses();
     }
 
+    private controlOptionsChanged(next: ServerOption, previous: ServerOption): boolean {
+        return ['port', 'tls', 'key', 'keepAlive', 'controlProtocolMode', 'allowLegacyControlAuth', 'trustedClients']
+            .some(key => key === 'trustedClients'
+                ? !ObjectUtil.canonicalEquals(next.trustedClients ?? [], previous.trustedClients ?? [])
+                : (next as any)[key] !== (previous as any)[key]);
+    }
+
+    public captureRuntimeState() {
+        return {serverOption: ObjectUtil.cloneDeep(this._appliedServerOption), external: ObjectUtil.cloneDeep(this._appliedExternal),
+            allowClientNames: Array.from(this._allowClientNamesMap, ([port, names]) => [port, [...names]] as const),
+            allowClientIds: Array.from(this._allowClientIdsMap, ([port, ids]) => [port, [...ids]] as const),
+            scopes: {...this._appliedScopeRevisions}, memoryLimit: SocketHandler.maxGlobalMemoryBufferSize,
+            statuses: Object.fromEntries(Object.keys(this._appliedExternal).map(port => [port, {...this._externalPortServerPool.getServerStatus(Number(port))}]))};
+    }
+
+    public async restoreRuntimeState(state: ReturnType<TTTServer['captureRuntimeState']>): Promise<string[]> {
+        const failures: string[] = [];
+        if(this._dirtyControl || this.controlOptionsChanged(this._appliedServerOption, state.serverOption)) {
+            try {
+                await this._tunnelServer.close();
+                const restored = this.createTunnelServer(state.serverOption);
+                await restored.start();
+                this._tunnelServer = restored;
+                this._appliedServerOption = ObjectUtil.cloneDeep(state.serverOption);
+                this._dirtyControl = false;
+            } catch(error) { logger.error('control runtime restore failed', error); failures.push('tunnel-control-restore'); }
+        }
+        if(SocketHandler.maxGlobalMemoryBufferSize !== state.memoryLimit) AppCompositionRoot.applyGlobalMemLimitMiB(state.memoryLimit / (1024 * 1024));
+        for(const port of new Set([...Object.keys(state.external).map(Number), ...Object.keys(this._appliedExternal).map(Number), ...this._dirtyExternal])) {
+            const previous = state.external[port];
+            const status = this._externalPortServerPool.getServerStatus(port);
+            const beforeStatus = state.statuses[port];
+            if(!this._dirtyExternal.has(port) && ObjectUtil.equalsDeep(previous ?? {}, this._appliedExternal[port] ?? {})
+                && status.online === beforeStatus?.online && status.active === beforeStatus?.active) continue;
+            try {
+                if(status.online && !await this._externalPortServerPool.stop(port)) { failures.push(`external-listener:${port}:restore`); continue; }
+                if(previous && beforeStatus.online) {
+                    if(!await this._externalPortServerPool.startServer(previous.option, previous.cert)) { failures.push(`external-listener:${port}:restore`); continue; }
+                    const remaining = beforeStatus.activeTimeout > 0
+                        ? Math.max(0, (beforeStatus.activeStart + beforeStatus.activeTimeout * 1000 - Date.now()) / 1000) : 0;
+                    if(beforeStatus.active && (beforeStatus.activeTimeout === 0 || remaining > 0)) {
+                        await this._externalPortServerPool.active(port, remaining);
+                    } else await this._externalPortServerPool.inactive(port);
+                    const restoredStatus = this._externalPortServerPool.getServerStatus(port);
+                    restoredStatus.activeStart = beforeStatus.activeStart;
+                    restoredStatus.activeTimeout = beforeStatus.activeTimeout;
+                }
+                this._allowClientNamesMap.delete(port);
+                this._allowClientIdsMap.delete(port);
+                if(previous) {
+                    this._appliedExternal[port] = ObjectUtil.cloneDeep(previous);
+                    this.applyAllowedClientsForPort(previous.option);
+                } else delete this._appliedExternal[port];
+                this._dirtyExternal.delete(port);
+            } catch(error) { logger.error(`external runtime restore failed ${port}`, error); failures.push(`external-listener:${port}:restore`); }
+        }
+        this._allowClientNamesMap = new Map(state.allowClientNames.map(([port, names]) => [port, [...names]]));
+        this._allowClientIdsMap = new Map(state.allowClientIds.map(([port, ids]) => [port, [...ids]]));
+        if(failures.length === 0) {
+            this._appliedScopeRevisions = {...state.scopes};
+            this._appliedServerOption = ObjectUtil.cloneDeep(state.serverOption);
+        }
+        return failures;
+    }
+
+    private recordAppliedServerOption(next: ServerOption, controlChanged: boolean): void {
+        const {adminPort, adminBindHost, adminTls} = this._appliedServerOption;
+        if(this._appliedServerOption.globalMemCacheLimit !== next.globalMemCacheLimit)
+            this._appliedScopeRevisions['memory-limit'] = ServerOptionStore.instance.revisionState.currentRevision;
+        this._appliedServerOption = {...ObjectUtil.cloneDeep(next), adminPort, adminBindHost, adminTls};
+        if(controlChanged) this._appliedScopeRevisions['tunnel-control'] = ServerOptionStore.instance.revisionState.currentRevision;
+    }
+
     public async applyServerOption(nextOption: ServerOption, previousOption: ServerOption): Promise<RuntimeApplyResult> {
         const restartRequiredScopes: string[] = [];
         const warnings: string[] = [];
@@ -187,16 +269,11 @@ class TTTServer {
             AppCompositionRoot.applyGlobalMemLimitMiB(nextOption.globalMemCacheLimit ?? 128);
         }
 
-        const requiresTunnelRestart = previousOption.port !== nextOption.port
-            || previousOption.tls !== nextOption.tls
-            || previousOption.key !== nextOption.key
-            || previousOption.keepAlive !== nextOption.keepAlive
-            || previousOption.controlProtocolMode !== nextOption.controlProtocolMode
-            || previousOption.allowLegacyControlAuth !== nextOption.allowLegacyControlAuth
-            || !ObjectUtil.canonicalEquals(previousOption.trustedClients ?? [], nextOption.trustedClients ?? []);
+        const requiresTunnelRestart = this.controlOptionsChanged(nextOption, previousOption);
 
         if(!requiresTunnelRestart) {
             this.syncAllowedClientMaps(nextOption);
+            this.recordAppliedServerOption(nextOption, false);
             return {
                 success: true,
                 partial: restartRequiredScopes.length > 0,
@@ -208,11 +285,14 @@ class TTTServer {
 
         const oldTunnelServer = this._tunnelServer;
         try {
+            this._dirtyControl = true;
             await oldTunnelServer.close();
             const nextTunnelServer = this.createTunnelServer(nextOption);
             await nextTunnelServer.start();
             this._tunnelServer = nextTunnelServer;
             this.syncAllowedClientMaps(nextOption);
+            this.recordAppliedServerOption(nextOption, true);
+            this._dirtyControl = false;
             return {
                 success: true,
                 partial: restartRequiredScopes.length > 0,
@@ -240,12 +320,13 @@ class TTTServer {
         }
     }
 
-    public async applyTunnelingOption(nextOption: TunnelingOption, previousOption?: TunnelingOption): Promise<RuntimeApplyResult> {
+    public async applyTunnelingOption(nextOption: TunnelingOption, previousOption?: TunnelingOption, stagedCert?: CertInfo): Promise<RuntimeApplyResult> {
         const port = nextOption.forwardPort;
         const lastServerStatus = this._externalPortServerPool.getServerStatus(port);
-        const nextCert = CertificationStore.instance.getExternalCert(port);
+        const nextCert = stagedCert ?? CertificationStore.instance.getExternalCert(port);
 
         try {
+            this._dirtyExternal.add(port);
             if(lastServerStatus.online) {
                 const stopped = await this._externalPortServerPool.stop(port);
                 if(!stopped) {
@@ -255,6 +336,10 @@ class TTTServer {
             await this._externalPortServerPool.startServer(nextOption, nextCert);
             await this.restoreExternalPortStatus(port, nextOption, lastServerStatus);
             this.applyAllowedClientsForPort(nextOption);
+            this._appliedExternal[port] = {option: ObjectUtil.cloneDeep(nextOption), cert: ObjectUtil.cloneDeep(nextCert),
+                configurationRevision: ServerOptionStore.instance.revisionState.currentRevision,
+                certificateRevision: CertificationStore.instance.revisionState.currentRevision};
+            this._dirtyExternal.delete(port);
             return {
                 success: true,
                 partial: false,
@@ -311,9 +396,15 @@ class TTTServer {
             // P3-T5 / REQ-08: 하향 호환성 있는 경우 setSecureContext 기반 hot-swap 우선 시도.
             //   - TLS 서버이고 end 상태가 아니면 true 반환 → 재기동(stop→start) 스킵.
             //   - TLS off / 종료 / 미지원 시 false → 기존 stop/start 폴백.
+            this._dirtyExternal.add(port);
             const hotSwapped = this._externalPortServerPool.applyTlsCertificateHotSwap(port, nextCert);
             if(hotSwapped) {
                 logger.info(`applyExternalServerCert: hot-swapped TLS cert on port ${port} (no restart)`);
+                if(this._appliedExternal[port]) {
+                    this._appliedExternal[port].cert = ObjectUtil.cloneDeep(nextCert);
+                    this._appliedExternal[port].certificateRevision = CertificationStore.instance.revisionState.currentRevision;
+                }
+                this._dirtyExternal.delete(port);
                 return {
                     success: true,
                     partial: false,
@@ -328,6 +419,11 @@ class TTTServer {
             }
             await this._externalPortServerPool.startServer(currentOption, nextCert);
             await this.restoreExternalPortStatus(port, currentOption, lastServerStatus);
+            if(this._appliedExternal[port]) {
+                this._appliedExternal[port].cert = ObjectUtil.cloneDeep(nextCert);
+                this._appliedExternal[port].certificateRevision = CertificationStore.instance.revisionState.currentRevision;
+            }
+            this._dirtyExternal.delete(port);
             return {
                 success: true,
                 partial: false,
@@ -354,10 +450,16 @@ class TTTServer {
     }
 
 
-    public async stopExternalPortServer(port: number) : Promise<boolean> {
+    public async stopExternalPortServer(port: number, removeConfiguration = false) : Promise<boolean> {
+        this._dirtyExternal.add(port);
         this._allowClientNamesMap.delete(port);
         this._allowClientIdsMap.delete(port);
-        return await this._externalPortServerPool.stop(port);
+        const stopped = await this._externalPortServerPool.stop(port);
+        if(stopped) {
+            if(removeConfiguration) delete this._appliedExternal[port];
+            this._dirtyExternal.delete(port);
+        }
+        return stopped;
     }
 
     public async activeExternalPortServer(port: number, timeout: number) : Promise<boolean> {
@@ -403,7 +505,10 @@ class TTTServer {
         let certStore = CertificationStore.instance;
         for(let tunnelOption of tunnelOptions) {
             try {
-                await this._externalPortServerPool.startServer(tunnelOption, certStore.getExternalCert(tunnelOption.forwardPort));
+                const cert = certStore.getExternalCert(tunnelOption.forwardPort);
+                await this._externalPortServerPool.startServer(tunnelOption, cert);
+                this._appliedExternal[tunnelOption.forwardPort] = {option: ObjectUtil.cloneDeep(tunnelOption), cert,
+                    configurationRevision: optionStore.revisionState.currentRevision, certificateRevision: certStore.revisionState.currentRevision};
             } catch (err) {
                 logger.error(`start - failed to start external port server. ${JSON.stringify(tunnelOption)}`,err);
             }

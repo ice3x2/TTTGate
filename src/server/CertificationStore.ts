@@ -1,4 +1,4 @@
-import Files from "../util/Files";
+import Files, {AtomicFileValue} from "../util/Files";
 import File from "../util/File";
 import Environment from "../Environment";
 import CACertGenerator from "../commons/CACertGenerator";
@@ -159,47 +159,6 @@ class CertificationStore {
     }
 
 
-    private async save(file : File, data : any) {
-        let strData =  typeof data == 'string' ? data : JSON.stringify(data, null, 4);
-        let parent = file.getParentFile();
-        if(!parent.exists()) {
-            parent.mkdirs();
-        }
-        await Files.writeAtomic(file, strData);
-        this.secureFile(file);
-    }
-
-    private async writeCertFile(info : CertInfo, type: 'admin' | 'external') {
-        const dir = type == 'admin' ? Environment.path.adminCertDir : Environment.path.externalCertDir;
-        let dirFile = new File(dir);
-        if(!dirFile.exists()) {
-            dirFile.mkdirs();
-        }
-        this.secureDirectory(dirFile);
-        if(info.key.name != '' && info.key.value != '') {
-            await this.save(new File(dir, info.key.name), info.key.value);
-        }
-        if(info.cert.name != '' && info.cert.value != '') {
-            await this.save(new File(dir, info.cert.name), info.cert.value);
-        }
-        if(info.ca.name != '' && info.ca.value != '') {
-            await this.save(new File(dir, info.ca.name), info.ca.value);
-        }
-    }
-
-    private removeCertFile(info : CertInfo, type: 'admin' | 'external') {
-        const dir = type == 'admin' ? Environment.path.adminCertDir : Environment.path.externalCertDir;
-        if(info.key.name != '') {
-            new File(dir, info.key.name).delete();
-        }
-        if(info.cert.name != '') {
-            new File(dir, info.cert.name).delete();
-        }
-        if(info.ca.name != '') {
-            new File(dir, info.ca.name).delete();
-        }
-    }
-
     public prepareAdminServerCert(certInfo: CertInfo): boolean {
         return this.checkKeyPair(certInfo);
     }
@@ -208,37 +167,78 @@ class CertificationStore {
         return this.checkKeyPair(certInfo);
     }
 
-    public async commitAdminServerCert(
-        certInfo: CertInfo,
-        options: {markLastKnownGood?: boolean, pendingRestartScopes?: string[]} = {}
-    ): Promise<boolean> {
-        if(!this.prepareAdminServerCert(certInfo)) {
-            return false;
+    private certificateFiles(info: CertInfo, type: 'admin' | 'external'): AtomicFileValue[] {
+        const directory = type === 'admin' ? Environment.path.adminCertDir : Environment.path.externalCertDir;
+        return [info.key, info.cert, info.ca].filter(part => part.name !== '' && part.value !== '')
+            .map(part => ({file: new File(directory, part.name), data: part.value, mode: 0o600}));
+    }
+
+    public captureCommittedState(candidate?: {info: CertInfo, type: 'admin' | 'external'}) {
+        const files = [this._adminCertFile, this._externalCertFile, this._stateFile,
+            ...this.certificateFiles(this._adminCert, 'admin').map(entry => entry.file),
+            ...Object.values(this._externalCert).flatMap(info => this.certificateFiles(info, 'external').map(entry => entry.file)),
+            ...(candidate ? this.certificateFiles(candidate.info, candidate.type).map(entry => entry.file) : [])];
+        return {adminCert: this.getAdminCert(), externalCert: this.getAllExternalCert(), revisionState: this.revisionState,
+            files: Files.captureFiles([...new Map(files.map(file => [file.toString(), file])).values()])};
+    }
+
+    public restoreCommittedState(state: ReturnType<CertificationStore['captureCommittedState']>): void {
+        Files.writeAtomicBatchSync(state.files);
+        this._adminCert = ObjectUtil.cloneDeep(state.adminCert);
+        this._externalCert = ObjectUtil.cloneDeep(state.externalCert);
+        this._revisionState = ObjectUtil.cloneDeep(state.revisionState);
+    }
+
+    private persistCertificateChange(type: 'admin' | 'external', adminCert: CertInfo, externalCert: ExternalCertFileInfo,
+        previous: CertInfo | undefined, next: CertInfo | undefined,
+        options: {markLastKnownGood?: boolean, pendingRestartScopes?: string[]}): void {
+        const revisionState = this.revisionState;
+        revisionState.currentRevision++;
+        revisionState.lastCommittedAt = Date.now();
+        const remaining = revisionState.pendingRestartScopes.filter(scope => !(type === 'admin' && options.markLastKnownGood !== false && scope === 'admin-cert'));
+        revisionState.pendingRestartScopes = [...new Set([...remaining, ...(options.pendingRestartScopes ?? [])])];
+        if(options.markLastKnownGood !== false && revisionState.pendingRestartScopes.length === 0) {
+            revisionState.lastKnownGoodRevision = revisionState.currentRevision;
+            revisionState.lastKnownGoodAt = revisionState.lastCommittedAt;
         }
-        this.removeCertFile(this._adminCert, 'admin');
-        this._adminCert = certInfo;
-        await this.save(this._adminCertFile, this._adminCert);
-        await this.writeCertFile(this._adminCert, 'admin');
-        this.bumpRevision(options);
+        revisionState.lastRollback = undefined;
+        const retained = type === 'admin' ? this.certificateFiles(adminCert, type)
+            : Object.values(externalCert).flatMap(info => this.certificateFiles(info, type));
+        const retainedPaths = new Set(retained.map(entry => entry.file.toString()));
+        const removed = previous ? this.certificateFiles(previous, type).filter(entry => !retainedPaths.has(entry.file.toString()))
+            .map(entry => ({file: entry.file})) : [];
+        const directory = new File(type === 'admin' ? Environment.path.adminCertDir : Environment.path.externalCertDir);
+        if(!directory.exists()) directory.mkdirs();
+        this.secureDirectory(directory);
+        try {
+            Files.writeAtomicBatchSync([
+                {file: type === 'admin' ? this._adminCertFile : this._externalCertFile,
+                    data: JSON.stringify(type === 'admin' ? adminCert : externalCert, null, 4), mode: 0o600},
+                ...(next ? this.certificateFiles(next, type) : []),
+                ...removed,
+                {file: this._stateFile, data: JSON.stringify(revisionState, null, 2), mode: 0o600},
+            ]);
+        } catch(error) {
+            Object.assign(error as object, {persistenceScope: 'certificate'});
+            throw error;
+        }
+        this._adminCert = ObjectUtil.cloneDeep(adminCert);
+        this._externalCert = ObjectUtil.cloneDeep(externalCert);
+        this._revisionState = revisionState;
+    }
+
+    public async commitAdminServerCert(certInfo: CertInfo,
+        options: {markLastKnownGood?: boolean, pendingRestartScopes?: string[]} = {}): Promise<boolean> {
+        if(!this.prepareAdminServerCert(certInfo)) return false;
+        this.persistCertificateChange('admin', certInfo, this._externalCert, this._adminCert, certInfo, options);
         return true;
     }
 
-    public async commitExternalServerCert(
-        port: number,
-        certInfo: CertInfo,
-        options: {markLastKnownGood?: boolean, pendingRestartScopes?: string[]} = {}
-    ): Promise<boolean> {
-        if(!this.prepareExternalServerCert(certInfo)) {
-            return false;
-        }
-        let oldInfo : CertInfo | undefined = this._externalCert[port];
-        if(oldInfo) {
-            this.removeCertFile(oldInfo, 'external');
-        }
-        this._externalCert[port] = certInfo;
-        await this.save(this._externalCertFile, this._externalCert);
-        await this.writeCertFile(this._externalCert[port], 'external');
-        this.bumpRevision(options);
+    public async commitExternalServerCert(port: number, certInfo: CertInfo,
+        options: {markLastKnownGood?: boolean, pendingRestartScopes?: string[]} = {}): Promise<boolean> {
+        if(!this.prepareExternalServerCert(certInfo)) return false;
+        this.persistCertificateChange('external', this._adminCert, {...this._externalCert, [port]: certInfo},
+            this._externalCert[port], certInfo, options);
         return true;
     }
 
@@ -252,17 +252,13 @@ class CertificationStore {
         this.saveRevisionState();
     }
 
-    public recordRollback(reason: string, failedScopes: string[], attemptedRevision?: number): void {
-        this._revisionState.lastRollback = {
-            at: Date.now(),
-            reason,
-            failedScopes: [...failedScopes],
-            attemptedRevision: attemptedRevision ?? (this._revisionState.currentRevision + 1),
-            restoredRevision: this._revisionState.lastKnownGoodRevision
-        };
-        this.saveRevisionState();
+    public recordRollback(reason: string, failedScopes: string[], attemptedRevision?: number, restoredRevision = this._revisionState.currentRevision): void {
+        const revisionState = this.revisionState;
+        revisionState.lastRollback = {at: Date.now(), reason, failedScopes: [...failedScopes],
+            attemptedRevision: attemptedRevision ?? (revisionState.currentRevision + 1), restoredRevision};
+        Files.writeAtomicBatchSync([{file: this._stateFile, data: JSON.stringify(revisionState, null, 2), mode: 0o600}]);
+        this._revisionState = revisionState;
     }
-
 
     public async updateAdminServerCert(certInfo: CertInfo) : Promise<boolean>  {
         return await this.commitAdminServerCert(certInfo);
@@ -273,22 +269,14 @@ class CertificationStore {
     }
 
     public async removeForExternalServer(port: number) {
-        let oldInfo : CertInfo | undefined = this._externalCert[port];
-        if(oldInfo) {
-            this.removeCertFile(oldInfo, 'external');
-        }
-        delete this._externalCert[port];
-        await this.save(this._externalCertFile, this._externalCert);
-        this.bumpRevision();
+        const external = this.getAllExternalCert();
+        delete external[port];
+        this.persistCertificateChange('external', this._adminCert, external, this._externalCert[port], undefined, {});
     }
 
     public async removeForAdminServer() {
-        this.removeCertFile(this._adminCert, 'admin');
-        this._adminCert = CertificationStore.makeEmptyCertFileInfo();
-        await this.save(this._adminCertFile, this._adminCert);
-        this.bumpRevision();
+        this.persistCertificateChange('admin', CertificationStore.makeEmptyCertFileInfo(), this._externalCert, this._adminCert, undefined, {});
     }
-
 
     public async saveForExternalServer(port: number, certInfo: CertInfo) : Promise<boolean> {
         return await this.commitExternalServerCert(port, certInfo);
@@ -334,19 +322,6 @@ class CertificationStore {
             };
             await this.updateAdminServerCert(adminCert);
         }
-    }
-
-    private bumpRevision(options: {markLastKnownGood?: boolean, pendingRestartScopes?: string[]} = {}): void {
-        this._revisionState.currentRevision += 1;
-        this._revisionState.lastCommittedAt = Date.now();
-        this._revisionState.pendingRestartScopes = [...(options.pendingRestartScopes ?? [])];
-        if(options.markLastKnownGood !== false) {
-            this._revisionState.lastKnownGoodRevision = this._revisionState.currentRevision;
-            this._revisionState.lastKnownGoodAt = this._revisionState.lastCommittedAt;
-            this._revisionState.pendingRestartScopes = [];
-        }
-        this._revisionState.lastRollback = undefined;
-        this.saveRevisionState();
     }
 
     private loadRevisionState(): RevisionState {

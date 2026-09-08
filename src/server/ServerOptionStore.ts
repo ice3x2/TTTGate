@@ -100,18 +100,33 @@ class ServerOptionStore {
         }
         const updatedValues = ObjectUtil.findUpdates(this._serverOption, result.serverOption!);
         logger.info(`commitPreparedServerOption - ${JSON.stringify(redactSecrets(updatedValues))}`);
-        this._serverOption = result.serverOption!;
-        this._revisionState.currentRevision += 1;
-        this._revisionState.lastCommittedAt = Date.now();
-        this._revisionState.pendingRestartScopes = [...(options.pendingRestartScopes ?? [])];
-        if(options.markLastKnownGood !== false) {
-            this._revisionState.lastKnownGoodRevision = this._revisionState.currentRevision;
-            this._revisionState.lastKnownGoodAt = this._revisionState.lastCommittedAt;
-            this._revisionState.pendingRestartScopes = [];
+        const revisionState = this.revisionState;
+        revisionState.currentRevision += 1;
+        revisionState.lastCommittedAt = Date.now();
+        revisionState.pendingRestartScopes = [...new Set([...revisionState.pendingRestartScopes, ...(options.pendingRestartScopes ?? [])])];
+        if(options.markLastKnownGood !== false && revisionState.pendingRestartScopes.length === 0) {
+            revisionState.lastKnownGoodRevision = revisionState.currentRevision;
+            revisionState.lastKnownGoodAt = revisionState.lastCommittedAt;
         }
-        this._revisionState.lastRollback = undefined;
-        this.save();
+        revisionState.lastRollback = undefined;
+        Files.writeAtomicBatchSync([
+            {file: this._configFile, data: YAML.stringify(result.serverOption), mode: 0o600},
+            {file: this._stateFile, data: JSON.stringify(revisionState, null, 2), mode: 0o600},
+        ]);
+        this._serverOption = result.serverOption!;
+        this._revisionState = revisionState;
         return {success: true, message: "", revisionState: this.revisionState};
+    }
+
+    public captureCommittedState() {
+        return {serverOption: this.serverOption, revisionState: this.revisionState,
+            files: Files.captureFiles([this._configFile, this._stateFile])};
+    }
+
+    public restoreCommittedState(state: ReturnType<ServerOptionStore['captureCommittedState']>): void {
+        Files.writeAtomicBatchSync(state.files);
+        this._serverOption = ObjectUtil.cloneDeep(state.serverOption);
+        this._revisionState = ObjectUtil.cloneDeep(state.revisionState);
     }
 
     public markLastKnownGood(revision: number = this._revisionState.currentRevision, pendingRestartScopes: string[] = []): void {
@@ -124,15 +139,12 @@ class ServerOptionStore {
         this.saveRevisionState();
     }
 
-    public recordRollback(reason: string, failedScopes: string[], attemptedRevision?: number): void {
-        this._revisionState.lastRollback = {
-            at: Date.now(),
-            reason,
-            failedScopes: [...failedScopes],
-            attemptedRevision: attemptedRevision ?? (this._revisionState.currentRevision + 1),
-            restoredRevision: this._revisionState.lastKnownGoodRevision
-        };
-        this.saveRevisionState();
+    public recordRollback(reason: string, failedScopes: string[], attemptedRevision?: number, restoredRevision = this._revisionState.currentRevision): void {
+        const revisionState = this.revisionState;
+        revisionState.lastRollback = {at: Date.now(), reason, failedScopes: [...failedScopes],
+            attemptedRevision: attemptedRevision ?? (revisionState.currentRevision + 1), restoredRevision};
+        Files.writeAtomicBatchSync([{file: this._stateFile, data: JSON.stringify(revisionState, null, 2), mode: 0o600}]);
+        this._revisionState = revisionState;
     }
 
     public updateServerOption(serverOption: ServerOption): boolean {
