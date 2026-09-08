@@ -1,6 +1,6 @@
 # Issue #69 — Runnable binary archive layout
 
-Status: RED, selected GREEN, two code/title reviews, actual pipeline, fresh native HTTP and two final artifact reviews passed; scoped commit authorized.
+Status: complete; source `0dda03c`, integration `d33e9cb` pushed and remote verified; issue closed and Telegram receipt 3942 (66/30) sent.
 Original title: 바이너리 배포 아카이브의 디렉터리 구조와 웹 자산 누락으로 서버 실행과 관리자 화면이 실패함.
 Owner fix_ci14; worktree C:/Work/git/_Snoworca/TTTGate-epic61-release;
 branch fix/epic61-binary-layout; baseline 2106e48 (includes #34 at 6a94729).
@@ -14,7 +14,7 @@ validation, original #65 flat archives and denied lint temporary directory.
 - [x] Coordinate one actual node deploy.js for latest #34 code/web/binaries. Status: root confirmed no backend heavy tests and authorized execution. Handle 86900 terminated with exit 0; log results/release/issue69-actual-pipeline.log. Full 97 suites passed/one skipped, 492 tests passed/four online skipped/496 total, 437.912s; final production admin build 2.89s then pkg 6.22.0 completed. Existing --forceExit remains, so this does not close #49 natural-exit cleanup.
 - [x] Generate all five current archives, verify members/hashes and fresh Windows HTTP/assets. Status: archive generation handle 88905 exited 0. All five archives contain exactly their platform executable under bin plus four production web files; all extracted bytes/SHA match newly generated dist originals. Fresh Windows child 10800 served HTTP 200 HTML and matching JS/CSS, with runtime bin/.pid_foreground present. Probe exited 0; owned child cleanup was SIGTERM and awaited, not falsely described as natural server termination.
 - [x] Two independent code/title and final artifact reviews. Status: primary review_cert_conflict and secondary review_wave0 PASS. Both independently checked all five latest archive members/original SHA and native HTTP/PID/asset evidence. Child cleanup is explicitly observed SIGTERM, not natural server termination.
-- [ ] Scoped commit/root remote completion. Status: pending final actual evidence.
+- [x] Scoped commit/root remote completion. Status: source `0dda03c`, integration `d33e9cb305f1c2673776a869bfd67081dcefa384` remote verified by root; GitHub CLOSED 2026-09-08T00:05:06Z; Telegram receipt 3942 (66/30). Integrated three suites/36 tests passed in 6.109 seconds.
 
 Final native verification must use newly generated binaries from this integrated
 baseline, not earlier #65/#44 binaries. Original archives remain RED evidence.
@@ -49,3 +49,7 @@ Windows bsdtar produced/extracted all archives and Windows x64 ran the actual
 server. Linux/ARM execution and a hosted release are not claimed. No publication
 command was used. Both independent reviewers approved these final results; root
 authorized the nine-file commit and retains remote integration/closure ownership.
+
+## Root completion receipt
+
+Status: complete; 66 tracked issues, 30 completed. The bounded release lane is complete. The entire epic and #49 natural-exit work remain unfinished; earlier --forceExit evidence and explicit native SIGTERM cleanup remain unchanged. HTTP follow-up is research only, with no implementation authorization. Earlier pre-commit instructions above are historical gates now completed.

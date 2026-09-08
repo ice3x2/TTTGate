@@ -1,6 +1,6 @@
 # Issue #65 — Exact binary release archives
 
-Status: archive collection and primary final evidence review passed; root authorized scoped commit. Separate #68/#69/#70 remain open.
+Status: complete within original exact-binary archive collection scope; independently reviewed, committed, integrated, pushed, closed and notified. Runtime layout/web and workflow input were tracked separately as #69 and #70; their subsequent completion does not change this issue's original collection scope.
 Original title: 릴리스 워크플로우가 실제 바이너리 경로와 다른 이름을 찾아 아카이브를 누락함.
 Owner: fix_ci14; worktree C:/Work/git/_Snoworca/TTTGate-epic61-release;
 branch fix/epic61-binary-archives; baseline c064c53.
@@ -13,7 +13,7 @@ a separate checkpoint. Existing actual binaries and lint temp are retained.
 - [x] Implement and run focused GREEN. Status: same command handle 45111 exited 0 naturally, 14 tests/two suites passed in 39.462 seconds. Archive subprocess tests use actual tar/ZIP tools and recover original fixture bytes; missing and empty last binaries fail before any archive appears. Existing nine gates and explicit skip fixture pass. No npm dependency added.
 - [x] Archive retained actual five binaries and independently verify bytes/hash/native execution. Status: review_wave0 independently confirmed all five archive members, sizes and hashes match original/extracted files and evidence JSON. Actual native server diagnosis found the separate #69 layout defect below; native server usability is not marked PASS. No duplicate pkg run performed.
 - [x] Two independent reviews. Status: primary review_wave0 and secondary fix_supply15 code/content/exact-title PASS; primary final artifact review additionally covers the intentional seventh file, archive evidence JSON.
-- [ ] Scoped commit and integration/push/closure. Status: root authorized the seven-file commit; remote operations remain root-owned.
+- [x] Scoped commit and integration/push/closure. Status: complete; operational evidence below.
 
 Tool decision: use existing tar/zip on Ubuntu, Windows built-in bsdtar for ZIP
 creation (host tar.exe reports bsdtar 3.8.4). No npm dependency is required.
@@ -42,6 +42,14 @@ Windows bsdtar 3.8.4 produced all actual archives; the existing Linux tar/zip
 branch is not claimed as locally executed. No archive was published.
 
 Proposed exact title: `fix: 실제 바이너리 경로로 릴리스 아카이브 생성`.
+
+## Operational completion
+
+Source commit: `efd18a8`. Integration commit and independently observed pushed `origin/fix/epic-61` HEAD: `ae39352b355892c03c469a56aa643e2aeffc591c`. GitHub independently confirmed CLOSED at `2026-09-07T23:05:08Z`. Root reports two suites/14 integrated tests passed naturally in 37.536 seconds.
+
+Telegram title: `TDD Gate 65 릴리스 워크플로우가 실제 바이너리 경로와 다른 이름을 찾아 아카이브를 누락함 (65/26)`. Successful message `3932` is from the orchestrator's tool receipt, not an independent Telegram fetch. Existing receipt denominators are unchanged. Do not duplicate the notification.
+
+Completion covers exact five-binary archive collection and its failure gates. #69 preserves the extracted native layout/absent-web failures, #70 preserves existing workflow input evaluation, and #68 preserves source archive layout work. Those issues were open when #65 closed and have their own later completion records; this issue does not claim overall epic readiness. The subsequent release order was #70, then #68 and #69.
 
 ## Independent final review and remaining release defects
 

@@ -1,6 +1,6 @@
 # Issue #70 — Release version is shell data
 
-Status: implementation, focused GREEN and two independent reviews passed; root authorized scoped commit.
+Status: complete; source `39136cd`, integration `ed79ee0` pushed and remote verified; issue closed and notification sent.
 Original title: 릴리스 워크플로우가 버전 입력을 셸 코드로 해석함.
 Owner fix_ci14; worktree C:/Work/git/_Snoworca/TTTGate-epic61-release;
 branch fix/epic61-release-input; baseline ae39352.
@@ -13,7 +13,7 @@ binary archive helper, dedicated tests and this ledger. #68 source layout and
 - [x] Minimum shared validation and quoted environment handling. Status: existing archive regex moved into validate-release-version.cjs, reused by archive-binaries.cjs; each workflow sets job RELEASE_VERSION and validates it in its first shell step after Node setup, before installs/build/archive/notes. All shell version consumers now use quoted environment data; structured action fields are unchanged.
 - [x] Focused regression. Status: release-version and binary-archives suites passed 17 tests in 4.669 seconds with exit 0. Additional trailing LF/CRLF boundary cases passed without further implementation changes: release-version alone 15 passed in 4.147 seconds, exit 0. Real Git Bash/tar subprocesses verify invalid values create neither notes nor archives; valid v1.0.11b, 1.2.3-rc.1 and release_2026 preserve filenames/metadata. Existing archive regression passed; no actual large archives/pkg were rebuilt.
 - [x] Two independent reviews. Status: primary review_wave0 and secondary fix_supply15 code/content/exact-title PASS. Primary independently ran 15 real Bash tests with natural exit 0 in 3.478 seconds and confirmed trailing LF/CRLF/CR are rejected.
-- [ ] Scoped commit/root integration/push/closure. Status: pending.
+- [x] Scoped commit/root integration/push/closure/notification. Status: source `39136cd`; integration `ed79ee0641721f6ef58957ff64a62383bf7ed095` remote verified by root; GitHub CLOSED at 2026-09-07T23:16:53Z; Telegram receipt 3933 (66/27). Integration two suites/19 tests passed with natural exit 0 in 8.692 seconds. No hosted workflow execution claimed.
 
 Validation must precede every shell input consumer. Structured action fields
 remain data, and workflow dispatch permissions remain unchanged. No hosted
@@ -27,3 +27,5 @@ an actual GitHub Actions release or permission escalation demonstration.
 At commit handoff, root reports 66 tracked issues and 26 completed following
 discovery of separate #71. #68/#69 remain unresolved; root owns remote closure
 and notifications after integration.
+
+Final closure: 66 tracked issues, 27 completed. Root assigned #68 next to fix_ci14 on branch fix/epic61-source-archives from ed79ee0; #69 remains separate and follows #68.

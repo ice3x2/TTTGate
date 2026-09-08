@@ -1,6 +1,6 @@
 # Issue #34 — Snapshot-bound configuration revisions
 
-Status: both independent reviews PASS; scoped commit authorized by root; integration/push/closure remain root-owned. Separate certificate defect tracked as #71.
+Status: complete; source `04dec2c`, integration `6a94729` pushed and remote verified; issue closed and notification sent. Separate certificate defect #71 remains open.
 Assigned agent: `fix_supply15`; branch `fix/epic61-admin-revision`.
 Worktree: `C:/Work/git/_Snoworca/TTTGate-epic61-listeners`; base `d8f335e`.
 Original issue: GitHub #34 (관리자 설정 저장에 낙관적 잠금이 없어 동시 저장 시 앞선 변경이 조용히 사라짐).
@@ -16,7 +16,7 @@ certificate implementation changes. #35/#36/#38 require later serial assignments
 - [x] Carry read revision with each editor snapshot and stop failed dependent mutations. Status: explicit controller snapshot/result types, editor-owned revisions, stopped false responses and successful local working-revision advancement implemented; initial browser checks passed.
 - [x] Detect/report compound certificate side effects outside configuration CAS. Status: actual certificate-store change before config 409 reproduced in handle 45527; independent review_cert_conflict classified distinct issue #71, created by root. No whole-edit atomicity claim.
 - [x] Run relevant browser/API/compatibility checks, forced build and independent reviews. Status: passed; objective results and two independent reviewer receipts below.
-- [ ] Scoped commit and root integration/push/closure/notification. Status: root authorized exact reviewed commit; remote operations pending.
+- [x] Scoped commit and root integration/push/closure/notification. Status: source `04dec2c`; integration `6a9472906134275314eb7838066ef0c2e04f2e61` remote verified by root; GitHub CLOSED 2026-09-07T23:27:24Z; Telegram receipt 3936 (66/28). Integration four suites/17 tests passed in 99.261 seconds, natural exit 0; forced build passed.
 
 ## Fixed request policy
 
@@ -167,3 +167,9 @@ was corrected by root: the diagnostic records the response array and directly
 asserts the in-memory store value. Primary rereview confirmed that correction.
 No material findings remain for #34. Root authorized committing the reviewed #34
 scope plus preserved #71 repro; no #71 implementation is included or authorized.
+
+## Final root completion receipt
+
+Status: complete; 66 tracked issues, 28 completed. Source `04dec2c` and integration `6a9472906134275314eb7838066ef0c2e04f2e61`; root confirmed remote integration, GitHub closure at 2026-09-07T23:27:24Z and Telegram receipt 3936 (66/28). Integrated configuration/editor/compatibility regression passed four suites/17 tests in 99.261 seconds with natural exit 0; forced build passed. Earlier pending statements and test results above describe historical execution stages, not outstanding #34 gates.
+
+Root created clean successor branch `fix/epic61-certificate-transaction` at `6a94729` in the listeners worktree and assigned only #71 design to `fix_supply15`. Production implementation is prohibited before independent design review and explicit scope/ownership approval. Preserve the existing diagnostic assertion, restore ordinary `.test.ts` collection and reconfirm RED before changing behavior. #68 has two independent review PASS receipts but remains unclosed at this receipt. No #35/#36/#38 or #28 work is authorized by #34 completion.
