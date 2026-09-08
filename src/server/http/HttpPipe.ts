@@ -1,3 +1,4 @@
+import HttpUtil from "./HttpUtil";
 import {Buffer} from "buffer";
 enum HttpMethod {
     GET,
@@ -95,6 +96,12 @@ class HttpPipe {
     private _onDataCallback?: OnData;
     private _onEndCallback?: OnEnd;
     private _onHeaderCallback?: OnHeader;
+    private _requestRejected = false;
+    private _onRequestRejected?: (reason: 'duplicate-host') => void;
+
+    public set onRequestRejected(callback: (reason: 'duplicate-host') => void) {
+        this._onRequestRejected = callback;
+    }
 
     public set onErrorCallback(callback: OnError) {
         this._onErrorCallback = callback;
@@ -161,6 +168,7 @@ class HttpPipe {
     }
 
     public write(buffer: Buffer): void {
+        if(this._requestRejected) return;
         try {
             this._buffer = Buffer.concat([this._buffer, buffer]);
             if(this._state === ParseState.END) return;
@@ -175,6 +183,12 @@ class HttpPipe {
                     return;
                 }
                 
+                if(this._header.type === MessageType.Request && HttpUtil.findHeaders(this._header, "Host").length > 1) {
+                    this._requestRejected = true;
+                    this.reset(MessageType.Request);
+                    this._onRequestRejected?.('duplicate-host');
+                    return;
+                }
                 if(!this._onHeaderCallback) {
                     return;
                 }

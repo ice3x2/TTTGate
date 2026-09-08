@@ -24,6 +24,8 @@ class HttpHandler {
     private readonly _responsePipe: HttpPipe = new HttpPipe();
     private readonly _pendingRequests: RequestContext[] = [];
     private _isUpgrade: boolean = false;
+    private _inputRejected = false;
+    private _rejectionSent = false;
     private _originHost: string = "";
     private _currentHttpHeader: HttpRequestHeader | HttpResponseHeader | null = null;
     private _event: OnSocketEvent | null = null;
@@ -104,6 +106,10 @@ class HttpHandler {
         socketHandler.onSocketEvent = this.onSocketEventFromSocketHandler;
         this._responsePipe.reset(MessageType.Response);
         this._requestPipe.onHeaderCallback = this.onHttpHeader;
+        this._requestPipe.onRequestRejected = () => {
+            this._inputRejected = true;
+            this.sendRequestRejectionIfReady();
+        };
         this._requestPipe.onDataCallback = data => {
             if(this._socketHandler.isEnd()) return false;
             this.callEvent(SocketState.Receive, data);
@@ -119,6 +125,7 @@ class HttpHandler {
 
     private onSocketEventFromSocketHandler = (handler: SocketHandler, state: SocketState, data?: any): void => {
         if (state == SocketState.Receive && !this._socketHandler.isEnd()) {
+            if(this._inputRejected) return;
             if (this._isUpgrade || this._isWebSocket) {
                 // 웹소켓이나 다른 프로토콜로 업그레이드된 경우
                 this.callEvent(SocketState.Receive, data);
@@ -157,6 +164,10 @@ class HttpHandler {
                 origin: HttpUtil.findHeaderValue(header, "Origin") ?? "", method: header.method,
                 webSocket: this.checkWebSocketUpgrade(header)}));
         } else {
+            if(this._inputRejected && header.status === 101 && header.upgrade) {
+                this.destroy();
+                return;
+            }
             this._currentHttpHeader = header;
             const context = this._pendingRequests[0];
             if(context) {
@@ -408,6 +419,17 @@ class HttpHandler {
         if(status !== undefined && status >= 200) this._pendingRequests.shift();
         this._currentHttpHeader = null;
         this._responsePipe.reset(MessageType.Response, true);
+        this.sendRequestRejectionIfReady();
+    }
+
+    private sendRequestRejectionIfReady(): void {
+        if(!this._inputRejected || this._rejectionSent || this._pendingRequests.length > 0 || this._socketHandler.isEnd()) return;
+        this._rejectionSent = true;
+        this._responsePipe.reset(MessageType.Response);
+        this._socketHandler.sendData(Buffer.from("HTTP/1.1 400 Bad Request\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"), (_handler, success) => {
+            if(!success) this.destroy();
+        });
+        this._socketHandler.end_();
     }
 
     private onHttpMessageError = (error: Error): void => {
@@ -416,7 +438,7 @@ class HttpHandler {
     }
 
     public sendData(data: Buffer): void {
-        if (this._socketHandler.isEnd()) {
+        if (this._rejectionSent || this._socketHandler.isEnd()) {
             return;
         }
         
@@ -448,6 +470,8 @@ class HttpHandler {
     }
 
     private release(): void {
+        this._inputRejected = false;
+        this._rejectionSent = false;
         this._requestPipe.reset(MessageType.Request);
         this._responsePipe.reset(MessageType.Response);
         this._pendingRequests.length = 0;
