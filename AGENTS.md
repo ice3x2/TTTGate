@@ -100,6 +100,12 @@ If insecure behavior is needed for interoperability or recovery, it must be:
 - off by default
 
 
+## Process Termination Safety
+
+- Never terminate all `node.exe` processes, including through `taskkill /IM node.exe`, `Stop-Process -Name node`, or equivalent process-name-wide commands.
+- Terminate only a specific process started by the current task. Before termination, verify its PID, command line, and task ownership; a PID alone is insufficient because it may have been reused.
+- Do not terminate the user's Node.js services, other agents' processes, or any process whose ownership is uncertain.
+
 ## Quality Bar
 
 This repository should be developed as a serious networked application, not a demo.
