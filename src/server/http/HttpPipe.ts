@@ -607,8 +607,8 @@ class HttpPipe {
             return ReadResult.End;
         }
         
-        // 버퍼에 충분한 데이터가 없음
-        if (this._buffer.length < readable) {
+        // Keep payload buffered until its following CRLF is complete.
+        if (this._buffer.length < readable + CRLF_BUFFER.length) {
             return ReadResult.End;
         }
         
@@ -654,6 +654,9 @@ class HttpPipe {
         // 빈 줄이면(CRLF만 있으면) 청크 전송 완료
         if (this._buffer[0] === 13 && this._buffer[1] === 10) {
             this._buffer = this._buffer.subarray(2);
+            if(!this._deliverPureData && (!this._onDataCallback || !this._onDataCallback(CRLF_BUFFER))) {
+                return ReadResult.Closed;
+            }
             this.setEnd();
             return ReadResult.Continue;
         }
@@ -670,6 +673,7 @@ class HttpPipe {
         
         // trailer 헤더 파싱
         let trailerBuffer = this._buffer.subarray(0, trailerEnd);
+        const trailerFrame = this._buffer.subarray(0, trailerEnd + DOUBLE_CRLF_BUFFER.length);
         this._buffer = this._buffer.subarray(trailerEnd + 4);
         
         // trailer 헤더 처리
@@ -679,6 +683,10 @@ class HttpPipe {
         // HTTP 헤더에 trailer 추가 (선택적)
         if (this._header && this._trailerHeaders.length > 0) {
             this._header.headers = [...this._header.headers, ...this._trailerHeaders];
+        }
+
+        if(!this._deliverPureData && (!this._onDataCallback || !this._onDataCallback(trailerFrame))) {
+            return ReadResult.Closed;
         }
         
         this.setEnd();
