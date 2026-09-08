@@ -362,7 +362,7 @@ class HttpHandler {
     }
 
     private replaceHostInHeader(header: HttpHeader, host: string, replaceHost: string): void {
-        for (let nameValue of header.headers) {
+        for (let nameValue of HttpUtil.findHeaders(header, "Host")) {
             if (nameValue.value.indexOf(host) > -1) {
                 nameValue.value = nameValue.value.replace(host, replaceHost);
             }
