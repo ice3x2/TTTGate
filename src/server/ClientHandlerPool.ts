@@ -32,6 +32,7 @@ type WaitingQueueState = {
 class ClientHandlerPool {
 
     private static LAST_DATA_HANDLER_ID : number = 10000;
+    private _legacyHandlerCursor: number = 10000;
     private readonly _createTime : number = Date.now();
     private readonly _remoteAddress : string = '';
     private readonly _id : number;
@@ -118,11 +119,11 @@ class ClientHandlerPool {
     }
 
     public putNewDataHandler(dataHandler: TunnelDataHandler) : void {
-        let pendingDataState = Array.from(this._pendingSessionIDMap.values()).find((value) => {
-          return value.handlerID == dataHandler.handlerID;
-        });
-        if(!pendingDataState) {
+        let pendingDataState = this._pendingSessionIDMap.get(dataHandler.sessionID ?? -1);
+        if(!pendingDataState || pendingDataState.handlerID !== dataHandler.handlerID) {
             logger.error(`putNewDataHandler: invalid handlerID: ${dataHandler.handlerID}`);
+            // Terminal cleanup must not trust an unadmitted session claim.
+            dataHandler.sessionID = undefined;
             dataHandler.endImmediate();
             return;
         }
@@ -280,8 +281,26 @@ class ClientHandlerPool {
         this._legacyMode = identity.legacy;
     }
 
+    private allocateLegacyHandlerID(): number | undefined {
+        const used = new Set(Array.from(this._pendingSessionIDMap.values(), pending => pending.handlerID));
+        for(const handler of this._activatedSessionHandlerMap_.values()) {
+            if(handler.handlerID !== undefined) used.add(handler.handlerID);
+        }
+        for(let scanned = 0; scanned < 65535; scanned++) {
+            this._legacyHandlerCursor = this._legacyHandlerCursor % 65535 + 1;
+            if(!used.has(this._legacyHandlerCursor)) return this._legacyHandlerCursor;
+        }
+        return undefined;
+    }
+
     public sendConnectEndPoint(sessionID: number, opt : OpenOpt) : void {
         if(this._waitingDataBufferQueueMap.has(sessionID)) {
+            return;
+        }
+        const handlerID = this._legacyMode ? this.allocateLegacyHandlerID() : ++ClientHandlerPool.LAST_DATA_HANDLER_ID;
+        if(handlerID === undefined) {
+            logger.warn(`No legacy data handler ID available for sessionID: ${sessionID}`);
+            this.closeSessionAndCallback(sessionID, 0);
             return;
         }
         this._waitingDataBufferQueueMap.set(sessionID,{
@@ -291,9 +310,8 @@ class ClientHandlerPool {
             receiveBytes: 0,
             limitBytes: opt.bufferLimit
         });
-        let pendingSessionState = {handlerID: 0, sessionID: sessionID, openOpt: opt, available: true, bindingToken: undefined as string | undefined};
+        let pendingSessionState = {handlerID, sessionID: sessionID, openOpt: opt, available: true, bindingToken: undefined as string | undefined};
         this._pendingSessionIDMap.set(sessionID,pendingSessionState);
-        pendingSessionState.handlerID = ++ClientHandlerPool.LAST_DATA_HANDLER_ID;
         if(!this._legacyMode) {
             pendingSessionState.bindingToken = createOpaqueToken(24);
         }
