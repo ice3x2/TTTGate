@@ -8,10 +8,13 @@ import {DEFAULT_KEY, ClientOption, ServerOption, TunnelingOption} from "../../sr
 import {collectResourceStats, ResourceStats} from "./resourceStats";
 import {EchoServer, getFreePort, sendTcpAndReceiveOnce, startEchoServer, sleep} from "./network";
 import {applyTestRoot, cleanupTestRoot, createTestRoot} from "./runtime";
+import {generateSelfSignedCert} from "./testCerts";
 
 type HarnessClientSpec = {clientId: string; clientSecret: string; name?: string;
+    endpointFactory?: () => Promise<{port: number; close(): Promise<void>}>;
     clientOptionOverride?: Partial<ClientOption>; tunnelingOptionOverride?: Partial<TunnelingOption>};
 type TunnelHarnessOptions = {
+    trustedControlTls?: boolean;
     clients?: HarnessClientSpec[];
     reconnectIntervalMs?: number;
     clientName?: string;
@@ -49,8 +52,13 @@ const createTunnelHarness = async (options: TunnelHarnessOptions = {}): Promise<
         specs.some(s => ['clientId', 'clientSecret', 'name'].some(key => Object.prototype.hasOwnProperty.call(s.clientOptionOverride ?? {}, key)) ||
             ['allowedClientIds', 'allowedClientNames'].some(key => Object.prototype.hasOwnProperty.call(s.tunnelingOptionOverride ?? {}, key)))))
         throw new Error('Conflicting multi-client fixture configuration');
+    if(options.trustedControlTls && (Object.prototype.hasOwnProperty.call(options.serverOptionOverride ?? {}, 'tls') ||
+        specs.some(spec => ['tls', 'ca', 'serverName', 'allowInsecureTls'].some(key =>
+            Object.prototype.hasOwnProperty.call(spec.clientOptionOverride ?? {}, key)))))
+        throw new Error('Conflicting trusted TLS fixture configuration');
     const testRoot = await createTestRoot('tunnel-harness');
-    type Owner = {spec: HarnessClientSpec; endpoint: EchoServer; option: TunnelingOption; client?: TTTClient; stopped: boolean; endpointClosed: boolean};
+    type Owner = {spec: HarnessClientSpec; endpoint: {port: number; close(): Promise<void>}; echo?: EchoServer;
+        option: TunnelingOption; client?: TTTClient; stopped: boolean; endpointClosed: boolean};
     const owners: Owner[] = [];
     let server: TTTServer | undefined, started = false, shutdown = false, disposed = false;
     const shutdownHarness = async (): Promise<void> => {
@@ -97,14 +105,25 @@ const createTunnelHarness = async (options: TunnelHarnessOptions = {}): Promise<
     const serverPort = await getFreePort();
     for(const spec of specs) {
         const forwardPort = await getFreePort();
-        const endpoint = await startEchoServer();
-        const owner: Owner = {spec, endpoint, stopped: false, endpointClosed: false,
+        const echo = spec.endpointFactory ? undefined : await startEchoServer();
+        const endpoint = echo ?? await spec.endpointFactory!();
+        const owner: Owner = {spec, endpoint, echo, stopped: false, endpointClosed: false,
             option: {forwardPort, protocol: 'tcp', destinationAddress: '127.0.0.1', destinationPort: endpoint.port,
                 tls: false, keepAlive: 0, allowedClientIds: [spec.clientId], ...spec.tunnelingOptionOverride}};
         owners.push(owner);
     }
-    await CertificationStore.instance.load();
-    const serverOption: ServerOption = {key: DEFAULT_KEY, adminPort: 9300, port: serverPort, tls: false, controlProtocolMode: 'mixed',
+    const certificates = CertificationStore.instance, makeTempCert = certificates.makeTempCert;
+    try {
+        if(options.trustedControlTls) {
+            const generated = generateSelfSignedCert('localhost');
+            // Only owned certificate input is substituted; original load publishes it and all TLS is native.
+            certificates.makeTempCert = async () => ({cert: {name: 'owned-localhost.pem', value: generated.certPem},
+                key: {name: 'owned-localhost.key', value: generated.keyPem}, ca: {name: '', value: ''}});
+        }
+        await certificates.load();
+    } finally { certificates.makeTempCert = makeTempCert; }
+    const clientTls = options.trustedControlTls ? {tls: true, ca: certificates.getTempCert().cert.value, serverName: 'localhost', allowInsecureTls: false} : {};
+    const serverOption: ServerOption = {key: DEFAULT_KEY, adminPort: 9300, port: serverPort, tls: options.trustedControlTls === true, controlProtocolMode: 'mixed',
         trustedClients: owners.map(o => ({clientId: o.spec.clientId, clientSecret: o.spec.clientSecret, displayName: o.spec.name ?? o.spec.clientId})),
         tunnelingOptions: owners.map(o => o.option), keepAlive: 0, globalMemCacheLimit: 128, ...options.serverOptionOverride};
     if(!ServerOptionStore.instance.updateServerOption(serverOption)) throw new Error('Failed to update server option for tunnel harness');
@@ -138,7 +157,7 @@ const createTunnelHarness = async (options: TunnelHarnessOptions = {}): Promise<
                     owner.client = TTTClient.create({key: DEFAULT_KEY, host: '127.0.0.1', port: serverPort, tls: false,
                         name: owner.spec.name ?? owner.spec.clientId, clientId: owner.spec.clientId, clientSecret: owner.spec.clientSecret,
                         displayName: owner.spec.name ?? owner.spec.clientId, allowLegacyFallback: false, globalMemCacheLimit: 128,
-                        keepAlive: 0, ...owner.spec.clientOptionOverride});
+                        keepAlive: 0, ...owner.spec.clientOptionOverride, ...clientTls});
                     owner.client.start();
                 }
                 await waitForClientOnline(); started = true;
@@ -160,8 +179,9 @@ const createTunnelHarness = async (options: TunnelHarnessOptions = {}): Promise<
             if(id === undefined && owners.length !== 1) throw new Error('Client identity required for multi-client exchange');
             const owner = find(id ?? owners[0].spec.clientId);
             if(owner.stopped) throw new Error('Client is stopped');
+            if(!owner.echo) throw new Error('Custom endpoint requires its own protocol consumer');
             const expected = Buffer.isBuffer(payload) ? payload : Buffer.from(payload, 'utf8');
-            owner.endpoint.setFiniteResponseLength(expected.length);
+            owner.echo.setFiniteResponseLength(expected.length);
             const received = await sendTcpAndReceiveOnce({host: '127.0.0.1', port: owner.option.forwardPort, payload: expected, timeoutMs: 10_000});
             if(!received.equals(expected)) throw new Error('Echo payload mismatch');
             return received;
