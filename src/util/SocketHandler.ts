@@ -12,7 +12,7 @@ import {computeWatermarkBytes, ResourcePolicyRegistry} from "./ResourcePolicy";
 import {TlsOptionsFactoryRegistry} from "./TlsOptionsFactory";
 
 import LoggerFactory  from "../util/logger/LoggerFactory";
-const logger = LoggerFactory.getLogger('', 'SocketHandler');
+const logger = LoggerFactory.getLogger('socket', 'SocketHandler');
 interface OnSocketEvent {
     (handler: SocketHandler, state: SocketState, data?: any) : void;
 }

@@ -11,6 +11,7 @@ const AppCompositionRoot = {
         config.appendWriteConfig({name: "server", console: true, history: 2});
         config.appendWriteConfig({name: "client", console: true});
         config.appendWriteConfig({name: "boot", console: true});
+        config.appendWriteConfig({name: "socket", console: true});
         LoggerFactory.updateConfig(config);
     },
     useServerCacheDir(): void {

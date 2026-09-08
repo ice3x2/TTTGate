@@ -5,7 +5,7 @@ import * as tls from "tls";
 import LoggerFactory from "../util/logger/LoggerFactory";
 import {TlsOptionsFactoryRegistry} from "./TlsOptionsFactory";
 
-const logger = LoggerFactory.getLogger('', 'TCPServer');
+const logger = LoggerFactory.getLogger('socket', 'TCPServer');
 
 
 const DEFAULT_KEEP_ALIVE : number = 10000;
