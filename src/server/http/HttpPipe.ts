@@ -87,6 +87,7 @@ class HttpPipe {
     private _chunkedSizeRead: number = 0;
     private _contentLengthRead: number = 0;
     private _deliverPureData: boolean = false;
+    private _bodyForbidden: boolean = false;
     private _recursiveCallLevel: number = 0;
     private _trailerHeaders: Array<NameValue> = [];
 
@@ -121,6 +122,10 @@ class HttpPipe {
         this._deliverPureData = enable;
     }
 
+    public setBodyForbidden(forbidden: boolean): void {
+        this._bodyForbidden = forbidden;
+    }
+
     public get messageType(): MessageType {
         return this._messageType;
     }
@@ -131,10 +136,11 @@ class HttpPipe {
 
     public constructor() {}
 
-    public reset(messageType: MessageType): void {
+    public reset(messageType: MessageType, preserveTail: boolean = false): void {
         this._deliverPureData = false;
+        this._bodyForbidden = false;
         this._messageType = messageType;
-        this._buffer = Buffer.alloc(0);
+        if(!preserveTail) this._buffer = Buffer.alloc(0);
         this._state = ParseState.SEARCHING_FOR_HEADER;
         this._chunkedSize = 0;
         this._chunkedSizeRead = 0;
@@ -157,6 +163,7 @@ class HttpPipe {
     public write(buffer: Buffer): void {
         try {
             this._buffer = Buffer.concat([this._buffer, buffer]);
+            if(this._state === ParseState.END) return;
             
             if (this._state == ParseState.SEARCHING_FOR_HEADER) {
                 this._header = this.parseHeader();
@@ -173,9 +180,13 @@ class HttpPipe {
                 }
 
                 this._onHeaderCallback?.(this._header);
+                if(!this._header) return; // The consumer may have closed/reset on a rejected header.
                 
-                if (this._header.upgrade) {
+                if (this._header.type === MessageType.Response && this._header.status === 101 && this._header.upgrade) {
                     this._state = ParseState.UPGRADE;
+                } else if (this._bodyForbidden || (this._header.type === MessageType.Response &&
+                    (this._header.status < 200 || this._header.status === 204 || this._header.status === 304))) {
+                    this.setEnd();
                 } else if (this._header.chunked) {
                     this._state = ParseState.CHUNKED_SIZE;
                 } else if (this._header.contentLength > 0) {
@@ -185,7 +196,6 @@ class HttpPipe {
                 }
                 else if(this._header.type == MessageType.Request && this.isNoneBodyMethod(this._header.method)) {
                     this.setEnd();
-                    return;
                 }
                 else {
                     // HTTP/1.0은 Content-Length가 없으면 연결 종료 시점까지가 본문임

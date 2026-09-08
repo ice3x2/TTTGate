@@ -208,9 +208,9 @@ describe("HttpPipe branch coverage", () => {
         expect(state.end).toBe(true);
     });
 
-    it("Upgrade: websocket 경로", () => {
-        const { pipe, state } = makePipe();
-        const payload = "GET /ws HTTP/1.1\r\nHost: a\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\nRAW-FRAME";
+    it("accepted 101 response enters the websocket raw-data path", () => {
+        const { pipe, state } = makePipe(MessageType.Response);
+        const payload = "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\nRAW-FRAME";
         pipe.write(Buffer.from(payload));
         expect(state.errors.length).toBe(0);
         expect(state.headers[0].upgrade).toBe(true);
