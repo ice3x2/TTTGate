@@ -97,7 +97,7 @@ describe("REQ-09 Pool swap / zombie sessions", () => {
         await harness.start();
 
         const tunnelServer = harness.getServer()!.tunnelServer;
-        // TTL=1s, check=200ms 로 주입. 기본 60s 로는 검증 불가능.
+        // TTL=1s, check=200ms 로 주입. 운영 기본 1시간 대신 명시적 짧은 TTL을 검증한다.
         tunnelServer.configureSessionTtl(1000, 200);
 
         // 1회 echo로 세션 라이프사이클 실행 → 외부 연결 close 후 맵에서 제거되어야 하지만,
@@ -117,7 +117,9 @@ describe("REQ-09 Pool swap / zombie sessions", () => {
         harness = await createTunnelHarness({ reconnectIntervalMs: 50, clientName: "ttl-guard" });
         await harness.start();
         const tunnelServer = harness.getServer()!.tunnelServer;
-        expect(() => tunnelServer.configureSessionTtl(0)).toThrow(RangeError);
+        expect(() => tunnelServer.configureSessionTtl(0)).not.toThrow();
+        expect(() => tunnelServer.configureSessionTtl(-1)).toThrow(RangeError);
+        expect(() => tunnelServer.configureSessionTtl(Number.NaN)).toThrow(RangeError);
         expect(() => tunnelServer.configureSessionTtl(999)).toThrow(RangeError);
         expect(() => tunnelServer.configureSessionTtl(3_600_001)).toThrow(RangeError);
         expect(() => tunnelServer.configureSessionTtl(5000, 50)).toThrow(RangeError);

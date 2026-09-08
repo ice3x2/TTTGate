@@ -1,3 +1,4 @@
+import {DEFAULT_SESSION_TTL_MS, resolveSessionTtlMs} from "../types/TunnelingOption";
 import {SocketHandler} from "../util/SocketHandler";
 import {ServerOption, TCPServer} from "../util/TCPServer";
 import SocketState from "../util/SocketState";
@@ -62,14 +63,11 @@ type PendingControlHandshake = {
 const HANDLER_TYPE_BUNDLE_KEY = 'T';
 const DATA_HANDSHAKE_POOL_BUNDLE_KEY = 'data-handshake-pool';
 
-// P6-T1 / REQ-09: 세션-TTL/heartbeat. 기본 60초 무응답 시 강제 종료.
+// P6-T1 / REQ-09: 세션-TTL/heartbeat. 기본 1시간 무응답 시 강제 종료.
 // 테스트에서는 정적 setter로 짧게 조정할 수 있다(스테이트리스 싱글턴 회피 → per-instance 설정).
-const DEFAULT_SESSION_TTL_MS = 60_000;
 const DEFAULT_SESSION_HEARTBEAT_CHECK_INTERVAL_MS = 5_000;
 
 // P6-T1 개선 1회차 / F4: configureSessionTtl 범위 방어. REQ-15와 대칭.
-const MIN_SESSION_TTL_MS = 1_000;
-const MAX_SESSION_TTL_MS = 3_600_000;
 const MIN_SESSION_TTL_CHECK_INTERVAL_MS = 100;
 const MAX_SESSION_TTL_CHECK_INTERVAL_MS = 60_000;
 
@@ -149,6 +147,7 @@ class TunnelServer {
                     reject(err);
                 } else {
                     this.isRunning = true;
+                    this._closed = false;
                     this.startSessionTtlTimer();
                     resolve();
                 }
@@ -158,29 +157,26 @@ class TunnelServer {
 
     // P6-T1 / REQ-09: 세션 TTL 설정 API. 테스트/운영에서 동적 조정 가능.
     // P6-T1 개선 1회차 / F4: 범위 밖 값은 예외로 차단(REQ-15 handshake policy 검증과 대칭).
+    public get sessionTtlPolicy(): Readonly<{ttlMs: number; checkIntervalMs: number}> {
+        return {ttlMs: this._sessionTtlMs, checkIntervalMs: this._sessionTtlCheckIntervalMs};
+    }
+
     public configureSessionTtl(ttlMs: number, checkIntervalMs?: number) : void {
-        if(!Number.isFinite(ttlMs) || ttlMs < MIN_SESSION_TTL_MS || ttlMs > MAX_SESSION_TTL_MS) {
-            throw new RangeError(`configureSessionTtl: ttlMs must be within [${MIN_SESSION_TTL_MS}, ${MAX_SESSION_TTL_MS}] ms (got ${ttlMs})`);
-        }
-        if(checkIntervalMs !== undefined) {
-            if(!Number.isFinite(checkIntervalMs) || checkIntervalMs < MIN_SESSION_TTL_CHECK_INTERVAL_MS || checkIntervalMs > MAX_SESSION_TTL_CHECK_INTERVAL_MS) {
-                throw new RangeError(`configureSessionTtl: checkIntervalMs must be within [${MIN_SESSION_TTL_CHECK_INTERVAL_MS}, ${MAX_SESSION_TTL_CHECK_INTERVAL_MS}] ms (got ${checkIntervalMs})`);
-            }
-            if(checkIntervalMs >= ttlMs) {
-                throw new RangeError(`configureSessionTtl: checkIntervalMs (${checkIntervalMs}) must be less than ttlMs (${ttlMs})`);
-            }
-            this._sessionTtlCheckIntervalMs = checkIntervalMs;
-        }
-        this._sessionTtlMs = ttlMs;
-        if(this._sessionTtlTimer) {
-            clearInterval(this._sessionTtlTimer);
-            this._sessionTtlTimer = undefined;
-            this.startSessionTtlTimer();
-        }
+        if(ttlMs === undefined) throw new RangeError('session TTL is required');
+        const result = resolveSessionTtlMs(ttlMs);
+        if(!result.success) throw new RangeError(result.message);
+        if(checkIntervalMs !== undefined && (!Number.isFinite(checkIntervalMs) || checkIntervalMs < MIN_SESSION_TTL_CHECK_INTERVAL_MS ||
+            checkIntervalMs > MAX_SESSION_TTL_CHECK_INTERVAL_MS || (ttlMs > 0 && checkIntervalMs >= ttlMs)))
+            throw new RangeError('Invalid session TTL check interval');
+        const interval = checkIntervalMs ?? (ttlMs > 0 ? Math.min(this._sessionTtlCheckIntervalMs, ttlMs - 1) : this._sessionTtlCheckIntervalMs);
+        this.stopSessionTtlTimer();
+        this._sessionTtlMs = result.ttlMs;
+        this._sessionTtlCheckIntervalMs = interval;
+        this.startSessionTtlTimer();
     }
 
     private startSessionTtlTimer() : void {
-        if(this._sessionTtlTimer) return;
+        if(this._sessionTtlTimer || this._closed || !this.isRunning || this._sessionTtlMs === 0) return;
         this._sessionTtlTimer = setInterval(() => {
             this.enforceSessionTtl();
         }, this._sessionTtlCheckIntervalMs);

@@ -1,6 +1,6 @@
 import Environment from "../Environment";
 import File from "../util/File";
-import {ControlProtocolMode, DEFAULT_KEY, HttpOption, ServerOption, TunnelingOption} from "../types/TunnelingOption";
+import {ControlProtocolMode, DEFAULT_KEY, DEFAULT_SESSION_TTL_MS, resolveSessionTtlMs, HttpOption, ServerOption, TunnelingOption} from "../types/TunnelingOption";
 import YAML from "yaml";
 import Files from "../util/Files";
 import ObjectUtil from "../util/ObjectUtil";
@@ -337,6 +337,9 @@ class ServerOptionStore {
     }
 
     public verificationServerOption(option: ServerOption) : {success: boolean, message: string, serverOption?: ServerOption} {
+        const ttl = resolveSessionTtlMs(option.sessionTtlMs);
+        if(!ttl.success) return ttl;
+        option.sessionTtlMs = ttl.ttlMs;
         if(!option.key) {
             return {success: false, message: "key is undefined"};
         }
@@ -511,6 +514,7 @@ class ServerOptionStore {
             allowLegacyControlAuth: false,
             trustedClients: [],
             tunnelingOptions: [],
+            sessionTtlMs: DEFAULT_SESSION_TTL_MS,
             keepAlive: TCPServer.DEFAULT_KEEP_ALIVE
         }
     }

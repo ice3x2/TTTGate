@@ -50,6 +50,7 @@ type TrustedClient = {
 }
 
 type ServerOption = {
+    sessionTtlMs?: number,
     key: string,
     adminPort?: number,
     adminBindHost?: string,
@@ -96,6 +97,14 @@ const DEFAULT_KEY = "hello-TTTGate";
  * logger 주입: 순환 의존 회피를 위해 console.warn 기반 `defaultWarn`이 기본. 호출부에서 외부 logger 주입 가능.
  */
 type NormalizationClientOptionWarner = (msg: string) => void;
+
+const DEFAULT_SESSION_TTL_MS = 3_600_000;
+const resolveSessionTtlMs = (value: unknown): {success: true; ttlMs: number} | {success: false; message: string} => {
+    if(value === undefined) return {success: true, ttlMs: DEFAULT_SESSION_TTL_MS};
+    if(typeof value !== 'number' || !Number.isFinite(value) || (value !== 0 && (value < 1000 || value > DEFAULT_SESSION_TTL_MS)))
+        return {success: false, message: 'sessionTtlMs must be 0 or within 1000..3600000'};
+    return {success: true, ttlMs: value};
+};
 
 const DEFAULT_CLIENT_PORT = 9126;
 const DEFAULT_CLIENT_KEEP_ALIVE = 10000;
@@ -184,6 +193,8 @@ export {
     CustomHeader,
     TrustedClient,
     DEFAULT_KEY,
+    DEFAULT_SESSION_TTL_MS,
+    resolveSessionTtlMs,
     normalizationClientOption,
     resolveClientKeepAlive,
     NormalizationClientOptionWarner,

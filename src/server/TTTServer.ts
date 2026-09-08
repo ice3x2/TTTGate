@@ -1,6 +1,6 @@
 import {ExternalPortServerPool, ExternalPortServerStatus } from "./ExternalPortServerPool";
 import {TunnelServer, ClientStatus} from "./TunnelServer";
-import {ServerOption, TunnelingOption} from "../types/TunnelingOption";
+import {ServerOption, TunnelingOption, resolveSessionTtlMs} from "../types/TunnelingOption";
 import SocketState from "../util/SocketState";
 import {CertInfo, CertificationStore} from "./CertificationStore";
 import ServerOptionStore from "./ServerOptionStore";
@@ -48,7 +48,8 @@ class TTTServer {
         if(serverOption.tls == undefined) serverOption.tls = false;
         this._appliedServerOption = ObjectUtil.cloneDeep(serverOption);
         this._appliedScopeRevisions = {"tunnel-control": ServerOptionStore.instance.revisionState.currentRevision,
-            "memory-limit": ServerOptionStore.instance.revisionState.currentRevision};
+            "memory-limit": ServerOptionStore.instance.revisionState.currentRevision,
+            "session-ttl": ServerOptionStore.instance.revisionState.currentRevision};
         this._externalPortServerPool = ExternalPortServerPool.create(serverOption.tunnelingOptions);
         this._tunnelServer = this.createTunnelServer(serverOption);
         this._externalPortServerPool.OnHandlerEventCallback = this.onHandlerEventOnExternalPortServer;
@@ -86,6 +87,8 @@ class TTTServer {
             allowLegacyControlAuth: serverOption.allowLegacyControlAuth === true,
             trustedClients: serverOption.trustedClients ?? []
         }, tempCert);
+        const ttl = resolveSessionTtlMs(serverOption.sessionTtlMs);
+        if(ttl.success) tunnelServer.configureSessionTtl(ttl.ttlMs);
         this.bindTunnelServerCallbacks(tunnelServer);
         return tunnelServer;
     }
@@ -191,7 +194,7 @@ class TTTServer {
     }
 
     public captureRuntimeState() {
-        return {serverOption: ObjectUtil.cloneDeep(this._appliedServerOption), external: ObjectUtil.cloneDeep(this._appliedExternal),
+        return {sessionTtlPolicy: this._tunnelServer.sessionTtlPolicy, serverOption: ObjectUtil.cloneDeep(this._appliedServerOption), external: ObjectUtil.cloneDeep(this._appliedExternal),
             allowClientNames: Array.from(this._allowClientNamesMap, ([port, names]) => [port, [...names]] as const),
             allowClientIds: Array.from(this._allowClientIdsMap, ([port, ids]) => [port, [...ids]] as const),
             scopes: {...this._appliedScopeRevisions}, memoryLimit: SocketHandler.maxGlobalMemoryBufferSize,
@@ -210,6 +213,8 @@ class TTTServer {
                 this._dirtyControl = false;
             } catch(error) { logger.error('control runtime restore failed', error); failures.push('tunnel-control-restore'); }
         }
+        try { this._tunnelServer.configureSessionTtl(state.sessionTtlPolicy.ttlMs, state.sessionTtlPolicy.checkIntervalMs); }
+        catch(error) { logger.error('session TTL restore failed', error); failures.push('session-ttl-restore'); }
         if(SocketHandler.maxGlobalMemoryBufferSize !== state.memoryLimit) AppCompositionRoot.applyGlobalMemLimitMiB(state.memoryLimit / (1024 * 1024));
         for(const port of new Set([...Object.keys(state.external).map(Number), ...Object.keys(this._appliedExternal).map(Number), ...this._dirtyExternal])) {
             const previous = state.external[port];
@@ -250,6 +255,8 @@ class TTTServer {
 
     private recordAppliedServerOption(next: ServerOption, controlChanged: boolean): void {
         const {adminPort, adminBindHost, adminTls} = this._appliedServerOption;
+        if(this._appliedServerOption.sessionTtlMs !== next.sessionTtlMs)
+            this._appliedScopeRevisions['session-ttl'] = ServerOptionStore.instance.revisionState.currentRevision;
         if(this._appliedServerOption.globalMemCacheLimit !== next.globalMemCacheLimit)
             this._appliedScopeRevisions['memory-limit'] = ServerOptionStore.instance.revisionState.currentRevision;
         this._appliedServerOption = {...ObjectUtil.cloneDeep(next), adminPort, adminBindHost, adminTls};
@@ -257,6 +264,8 @@ class TTTServer {
     }
 
     public async applyServerOption(nextOption: ServerOption, previousOption: ServerOption): Promise<RuntimeApplyResult> {
+        const ttl = resolveSessionTtlMs(nextOption.sessionTtlMs);
+        if(!ttl.success) return {success: false, partial: false, failedScopes: ['session-ttl'], warnings: [ttl.message], restartRequiredScopes: []};
         const restartRequiredScopes: string[] = [];
         const warnings: string[] = [];
 
@@ -272,6 +281,7 @@ class TTTServer {
         const requiresTunnelRestart = this.controlOptionsChanged(nextOption, previousOption);
 
         if(!requiresTunnelRestart) {
+            this._tunnelServer.configureSessionTtl(ttl.ttlMs);
             this.syncAllowedClientMaps(nextOption);
             this.recordAppliedServerOption(nextOption, false);
             return {

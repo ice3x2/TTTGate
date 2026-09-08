@@ -518,7 +518,8 @@ class AdminServer {
                 });
                 return;
             }
-            const hotApplyRequired = currentServerOption.port !== serverOption.port
+            const hotApplyRequired = currentServerOption.sessionTtlMs !== serverOption.sessionTtlMs
+                || currentServerOption.port !== serverOption.port
                 || (currentServerOption.tls === true) !== (serverOption.tls === true)
                 || currentServerOption.key !== serverOption.key
                 || (currentServerOption.keepAlive ?? TCPServer.DEFAULT_KEEP_ALIVE) !== (serverOption.keepAlive ?? TCPServer.DEFAULT_KEEP_ALIVE)
