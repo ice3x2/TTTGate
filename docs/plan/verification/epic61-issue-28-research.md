@@ -53,3 +53,11 @@ Issues 41 (ID reuse) and 43 (data-handshake framing) are not technical prerequis
 - [ ] Independently review the implementation and run appropriate protocol/lifecycle regressions. Status: pending implementation.
 
 Boundary fixtures can prove encoding and the close predicate without allocating or transmitting 4GiB. They cannot substitute for the separately scheduled large-transfer/cache-spill tests, and should not be described as equivalent empirical coverage.
+
+## Current decision audit (main df11da6)
+
+Status: read-only audit; original issue and current source checked. No user policy selection was found in the supplied session or current execution record. Broad authorization to complete the epic does not choose legacy compatibility semantics. Earlier scheduling references to issues8/13/41/43 above are historical checkpoints, not current assignments.
+
+- [x] Confirm remaining technical constraint. Status: CtrlPacket.ts87/144 still reads/writes the four-byte close target; metadata begins after four bytes. Existing negotiated capabilities provide reuse, but no approved large-count extension exists. #73 graceful output draining does not enlarge this count. Saturation/zero/wrap can close early and are not acceptable substitutes.
+- [ ] Select compatibility contract. Status: recommend negotiated exact safe-integer count extension, retaining old small-count wire bytes; peers without support must explicitly reject/abort an oversized session without claiming graceful completion. Alternative: require lossless >4GiB operation with unmodified old peers, which needs additional protocol design and is not established feasible by current code. This materially changes old-peer behavior and scope; no selection made.
+- [ ] Freeze implementation/TDD scope after selection. Status: CtrlPacket/ProtocolV2/CtrlMetaGuards plus both sender/receiver capability paths in TunnelClient/ClientHandlerPool/TunnelServer as actually needed. Test packet boundaries and support combinations first, then real owned close notifications and small remaining payload with explicitly prepared near-limit counters. No4GiB live-transfer claim, BigInt/fulluint64 expansion, or held29 EOF changes.
