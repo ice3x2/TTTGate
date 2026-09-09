@@ -1,12 +1,12 @@
 # Issue #40 — Server buffer lower-bound research
 
-Status: read-only research complete; policy/scope and independent review pending. No production edits, tests or implementation authorization.
+Status: research complete; user approved the finite-only server-buffer policy on 2026-09-09. Implementation and TDD are pending.
 
 - [x] Read original issue and current consumers. Status: complete, source anchors below.
 - [x] Compare UI and historical policy. Status: complete; zero is explicitly documented by the UI as unlimited, so rejecting it is a deliberate compatibility change.
 - [x] Propose bounded RED and reuse. Status: proposed, not executed.
-- [ ] Approve numeric/legacy-load policy and writable scope. Status: pending root and independent review.
-- [ ] Write implementation ledger and observe RED before code. Status: pending separate assignment after #37.
+- [x] Approve numeric/legacy-load policy and writable scope. Status: user approved finite numeric values of at least 1 MiB, omitted value normalized to 8 MiB, and rejection of zero, negative, sub-one, non-number and non-finite values on 2026-09-09. Preserve the original bytes when existing YAML is invalid. Scope remains server validation, server UI/help and dedicated tests; client policy is unchanged.
+- [ ] Write implementation ledger and observe RED before code. Status: pending concrete design/review and RED; #37/#72 complete.
 
 ## Evidence and meaning of zero
 
@@ -20,7 +20,7 @@ The issue's whole-memory-exhaustion statement is not proved by this read-only wo
 
 ## Proposed minimum and decisions
 
-Propose server configuration validation requiring a finite numeric value **at least 1 MiB**, with omission still normalized to 8. Do not require integer values without a separate reason: fractions at or above 1 already produce finite byte limits. Reject zero, negative values (including the documented -1 override), sub-one fractions and non-number/non-finite values with an ordinary validation result. This is a proposed intentional compatibility break, not an already approved policy. A new unlimited enum/flag is unnecessary to repair #40 and is not proposed.
+Propose server configuration validation requiring a finite numeric value **at least 1 MiB**, with omission still normalized to 8. Do not require integer values without a separate reason: fractions at or above 1 already produce finite byte limits. Reject zero, negative values (including the documented -1 override), sub-one fractions and non-number/non-finite values with an ordinary validation result. User approved finite-only on 2026-09-09: omitted8, minimum1, invalid reject and original-file preservation. A new unlimited enum/flag is unnecessary to repair #40 and is not proposed.
 
 Minimum likely production scope: `ServerOptionStore.ts` plus the server input/description in `TunnelOptionSetLayout.svelte`; dedicated store/API/browser tests and a small configuration migration note. Reuse `verificationTunnelingOption`, prepared candidate validation and the existing API failure envelope rather than duplicate validation in AdminServer. Preserve client field semantics and distinguish its help text if only the server field changes. No ExternalPortServerPool, SocketHandler, EOF, wire, or #29 changes are proposed.
 
@@ -38,11 +38,11 @@ After approved RED and minimal fix: targeted store/API/UI regressions, existing 
 
 ## Current decision audit (main df11da6)
 
-Status: read-only audit; original issue and current source checked. No user selection between finite-only and explicit-risk unlimited was found in the supplied session or current execution record. Original issue recommends rejecting accidental zero but leaves intentional unlimited behavior open; historical unsafe overrides are compatibility evidence, not a current policy selection.
+Historical pre-decision checkpoint: Status: read-only audit; original issue and current source checked. No user selection between finite-only and explicit-risk unlimited was found in the supplied session or current execution record. Original issue recommends rejecting accidental zero but leaves intentional unlimited behavior open; historical unsafe overrides are compatibility evidence, not a current policy selection. The no-selection/answer-pending statements apply only to that checkpoint; user policy is now approved on 2026-09-09.
 
 - [x] Update prerequisite fact. Status: approved72 now provides readServerOption readiness admission (ServerApp.ts75), non-ready mutation guards and existing-file preservation. The earlier paragraph describing constructor overwrite is historical and no longer a missing prerequisite. Reuse this infrastructure; no new ServerApp write scope is needed for the finite-only option.
 - [x] Confirm remaining gap. Status: ServerOptionStore.ts406 still defaults omission to8 and accepts zero/sub-one inputs; ExternalPortServerPool.ts342 maps below1 to internal-1; UI still advertises unlimited. Global spill/file safeguards remain separate; no claim of total protection removal.
-- [ ] Select server-buffer policy. Status: recommend finite numeric minimum1MiB, omitted8, valid fractions>=1 retained; invalid existing YAML is refused while original bytes remain untouched through72. Alternative: permit intentional unlimited only through a new explicit off-by-default risk setting, never accidental numeric0. The alternative changes schema/UI/migration and requires separately scoped propagation; current internal-1 is not sufficient authorization. No selection made.
-- [ ] Freeze implementation/TDD after selection. Status: finite-only minimum scope ServerOptionStore validation and server input/help in TunnelOptionSetLayout; reuse ordinary/compound mutation rejection and72 startup refusal. Actual owned store/API/browser RED for0,-1,sub-one/nonfinite/type errors and file/revision/listener preservation; positive1/8/fraction and unchanged client-limit controls. No global SocketHandler semantic rewrite, client buffer policy change or29 EOF work.
+- [x] Select server-buffer policy. Status: user approved finite numeric minimum1MiB, omitted8 and valid fractions>=1 on 2026-09-09. Invalid existing YAML is refused while original bytes remain untouched through72. No unlimited server option is retained.
+- [ ] Freeze implementation/TDD after selection. Status: concrete design/review and RED pending; bounded scope: finite-only minimum scope ServerOptionStore validation and server input/help in TunnelOptionSetLayout; reuse ordinary/compound mutation rejection and72 startup refusal. Actual owned store/API/browser RED for0,-1,sub-one/nonfinite/type errors and file/revision/listener preservation; positive1/8/fraction and unchanged client-limit controls. No global SocketHandler semantic rewrite, client buffer policy change or29 EOF work.
 
-#28 and finite-only #40 have disjoint expected production files and can be prepared independently after policy choices; serialize shared main integration and any heavy verification. Explicit-risk #40 needs a fresh overlap audit if shared types/consumers enter scope. Both remain separate from #29 hold.
+#28/#40 approved policies permit parallel branches with disjoint expected write scopes; concrete design/review and RED remain pending. Integration/heavy tests are serial. #29 separately follows fresh read-only audit -> independent design review -> safe method; no bypass of the historical block.
