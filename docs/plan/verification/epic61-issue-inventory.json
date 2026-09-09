@@ -93,7 +93,7 @@
   {
     "body": "## 요약\r\n\r\n요구사항 문서에 테스트 파일 참조가 한 건도 없습니다. 테스트 쪽 REQ 번호 체계와 SRS 번호 체계가 서로 연결되지 않습니다.\r\n\r\n## 근거\r\n\r\n- `docs/plan/srs/` — 366개 요구사항이 등록되어 있으나 개별 요구사항과 테스트 파일을 잇는 매핑이 없습니다. `test/` 라는 문자열이 산문 속에 두 번 나타날 뿐입니다.\r\n- `docs/plans/plan-remediation-r1.md` 부터 `r3.md` — 별도의 REQ 번호 체계를 사용합니다.\r\n\r\n## 영향\r\n\r\n요구사항 하나를 짚어 그것을 검증하는 테스트가 무엇인지 찾을 방법이 없습니다. 요구사항이 구현되었다는 주장과 검증되었다는 주장을 구분할 수 없습니다.\r\n\r\n## 권고\r\n\r\n요구사항 추적 매트릭스에 테스트 파일 열을 추가하고, 테스트 쪽 REQ 주석을 SRS 번호로 연결합니다.\r\n\r\n## 검증 상태\r\n\r\n- 확인 방법: 요구사항 문서와 테스트 디렉터리 상호 참조 검색.\r\n\r\n---\r\n근거 문서: `docs/research/2026-09-05-tttgate-full-inspection.md` §7.5, §9.5.5",
     "number": 58,
-    "state": "OPEN",
+    "state": "CLOSED",
     "title": "SRS 요구사항 366건과 테스트 사이에 추적 링크가 없음",
     "url": "https://github.com/ice3x2/TTTGate/issues/58"
   },
