@@ -18,10 +18,10 @@
     "outputPath": "dist/bin/"
   },
   "scripts": {
-    "test": "jest --detectOpenHandles --forceExit",
+    "test": "jest --detectOpenHandles",
     "test:admin": "jest --runInBand test/admin",
     "test:browser:install": "playwright install chromium",
-    "test:coverage": "jest --detectOpenHandles --forceExit --coverage",
+    "test:coverage": "jest --detectOpenHandles --coverage",
     "lint": "node scripts/lint-auth-compare.mjs src --strict",
     "smoke": "node scripts/smoke.mjs",
     "build": "tsc -b",

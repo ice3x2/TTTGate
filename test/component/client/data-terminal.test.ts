@@ -154,6 +154,11 @@ test('queued target terminal clears only A before held server close; B bytes and
         const ah = h.tunnel._activatedSessionDataHandlerMap.get(a), bh = h.tunnel._activatedSessionDataHandlerMap.get(b);
         const aq = h.tunnel._waitBufferQueueMap.get(a), bq = h.tunnel._waitBufferQueueMap.get(b);
         expect(aq.bytes).toBe(33); expect(bq.bytes).toBe(33);
+        const ownedEndpoint = endpointPool._endPointClientMap.get(a);
+        expect(ownedEndpoint).toBeDefined();
+        const endpointTerminal: string[] = [];
+        ownedEndpoint.socket.once('end', () => endpointTerminal.push('end'));
+        ownedEndpoint.socket.once('close', () => endpointTerminal.push('close'));
         let terminal = 0; const event = ah._event;
         ah.onSocketEvent = (...args: any[]) => { if(args[1] === SocketState.End || args[1] === SocketState.Closed) terminal++; return event(...args); };
         // Explicit remote-close injection through the real server producer; delivery remains held.
@@ -172,6 +177,12 @@ test('queued target terminal clears only A before held server close; B bytes and
         expect(h.tunnel._activatedSessionDataHandlerMap.get(b)).toBe(bh);
         expect(local.filter(id => id === a)).toHaveLength(1);
         expect(peer.filter(p => p.sessionID === a && p.cmd === CtrlCmd.FailOfOpenSession)).toHaveLength(1);
+        facts.endpointBeforeBarrier = {native: [...endpointTerminal], mapped: endpointPool._endPointClientMap.get(a) === ownedEndpoint};
+        const endpointWaitStarted = Date.now();
+        await until(() => endpointTerminal.length > 0 && !endpointPool._endPointClientMap.has(a), 'Owned endpoint native terminal/map cleanup not observed');
+        facts.endpointAfterBarrier = {native: [...endpointTerminal], mapped: endpointPool._endPointClientMap.has(a),
+            elapsedMs: Date.now() - endpointWaitStarted, remoteConsumed};
+        expect(remoteConsumed).toBe(0);
         expect(endpointPool._endPointClientMap.has(a)).toBe(false);
         expect(h.tunnel._ctrlHandler).toBe(control); expect(h.client._tunnelClient).toBe(h.tunnel);
         expect(h.tunnel._activatedSessionDataHandlerMap.get(activeID)).toBe(active);

@@ -53,6 +53,7 @@ const controlCase = async () => {
         await until(() => mapOf(server).size === 2);
         const data = [...mapOf(server).values()].find((handler) => handler !== control)! as TunnelDataHandler;
         data.handlerID = packet.ID;
+        data.sessionID = packet.sessionID;
         pool.putNewDataHandler(data);
         assert.equal(pool.activatedSessionCount, 1);
         const survivor = await connect(port, clients);

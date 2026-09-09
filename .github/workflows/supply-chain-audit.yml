@@ -103,6 +103,6 @@ jobs:
           NODE_ENV: development
 
       - name: R3 supply-chain tests
-        run: npx jest test/supply-chain/ --detectOpenHandles --forceExit
+        run: npx jest test/supply-chain/ --detectOpenHandles
         env:
           NODE_ENV: development
