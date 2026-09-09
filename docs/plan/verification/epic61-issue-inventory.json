@@ -128,7 +128,7 @@
   {
     "body": "## 요약\r\n\r\n터널을 실제로 통과하는 최대 페이로드가 22바이트 수준입니다. 모두 단일 TCP 세그먼트에 담기므로 분할 전송과 재조립과 백프레셔와 캐시 스필이 한 번도 발동하지 않습니다.\r\n\r\n## 근거\r\n\r\n- `test/e2e/req-09-pool-swap-zombie.test.ts:85` — 터널을 지나는 최대 페이로드가 정의된 지점입니다.\r\n- `test/unit/util/SocketHandler.resource.test.ts:79` — 스필 로직이 4KiB 청크로 단독 검증될 뿐입니다.\r\n- `src/util/FileCache.ts` — 어떤 테스트도 이 모듈을 참조하지 않습니다.\r\n\r\n## 영향\r\n\r\n기본값 128MiB 인 전역 메모리 캐시 한도가 한 번도 발동하지 않습니다. #19 (H-02) 와 #20 (H-03) 이 지적한 데이터 유실 연쇄가 정확히 이 미검증 경로에 있습니다.\r\n\r\n## 권고\r\n\r\n수십 MiB 페이로드를 터널로 왕복시켜 스필과 회수를 확인하는 E2E 를 추가합니다. 송수신 바이트를 해시로 대조해 무결성까지 검증해야 #19 (H-02) 를 잡을 수 있습니다.\r\n\r\n## 검증 상태\r\n\r\n- 확인 방법: 테스트 파일 정독 및 `FileCache` 참조 전수 검색.\r\n\r\n---\r\n근거 문서: `docs/research/2026-09-05-tttgate-full-inspection.md` §7.4",
     "number": 53,
-    "state": "OPEN",
+    "state": "CLOSED",
     "title": "대용량 전송과 캐시 스필 경로가 터널을 통해 한 번도 검증되지 않음",
     "url": "https://github.com/ice3x2/TTTGate/issues/53"
   },
@@ -156,7 +156,7 @@
   {
     "body": "## 요약\r\n\r\n테스트 스크립트가 `--forceExit` 를 사용합니다. 프로세스가 종료되지 않는다는 가장 강한 자원 누수 신호가 차단됩니다.\r\n\r\n## 근거\r\n\r\n- `package.json` 의 `test` 스크립트 — `jest --detectOpenHandles --forceExit`.\r\n- `test/helpers/resourceStats.ts:54-65` — 상주 메모리와 힙과 파일 서술자와 캐시 바이트를 수집합니다. 그러나 프로세스가 종료되지 못하는 상태 자체는 이 수치들로 드러나지 않습니다.\r\n\r\n## 영향\r\n\r\n#26 (H-09) 와 #27 (H-10) 이 지적한 핸들러 맵 누수가 이 옵션 뒤에 가려져 있을 가능성이 있습니다. 누수가 있어도 테스트가 정상 종료된 것처럼 보입니다.\r\n\r\n## 권고\r\n\r\n`--forceExit` 를 제거해 누수를 실패로 승격합니다. 제거 후 종료되지 않는 스위트가 드러나면 그것이 곧 수정 대상입니다. 단계적으로 진행하려면 신규 테스트부터 이 옵션 없이 실행하는 별도 잡을 두는 방법도 있습니다.\r\n\r\n## 검증 상태\r\n\r\n- 확인 방법: 테스트 스크립트 확인.\r\n\r\n---\r\n근거 문서: `docs/research/2026-09-05-tttgate-full-inspection.md` §7.5, §9.5.4",
     "number": 49,
-    "state": "OPEN",
+    "state": "CLOSED",
     "title": "`--forceExit` 가 자원 누수 신호를 차단해 핸들러 누수를 가림",
     "url": "https://github.com/ice3x2/TTTGate/issues/49"
   },
@@ -474,5 +474,12 @@
     "state": "CLOSED",
     "title": "잘못된 기존 서버 설정이 로드 실패 시 기본값으로 덮어써짐",
     "url": "https://github.com/ice3x2/TTTGate/issues/72"
-  }
+  },
+{
+  "body": "## 요약\n\n정상 TCP endpoint가 응답 쓰기를 마치고 FIN을 보낼 때, 클라이언트가 아직 전송하지 못한 메모리·파일 캐시 응답을 폐기합니다. 외부 연결은 이미 전달받은 전체 길이를 기다리므로 응답 꼬리와 FIN을 받지 못합니다. #53 대용량 실제 터널 검증 중 발견했으며 독립 읽기 검토에서 HIGH 제품 결함으로 확인했습니다.\n\n## 실제 재현과 근거\n\n소스 기준 1370993의 테스트 전용 fixture에서 32MiB 요청/응답, local16MiB/global1MiB의 기존 한도 API, 실제 양방향 cache spill/read를 사용했습니다. 생산 코드와 종료 순서는 변경하지 않았습니다. 최초 정상 실행 FAIL은 보존했고, 동일 조건에서 역할·종료 시점만 관측한 1회 진단도 실패했습니다.\n\n- 요청 33,554,432바이트와 SHA는 정상입니다.\n- SID2 client-data handler10은 endpoint End 후 terminate 호출 직전에 2,359,296바이트를 대기 중이었습니다. 그중 파일 cache는 2,097,152바이트였습니다.\n- terminateEndPointSession → destroy 직후 대기열과 cache가 0이 됩니다. 같은 cache의 미읽기 record 32개(2,097,152바이트)가 remove됩니다.\n- 외부 수신은 31,195,136바이트에서 멈춥니다. 기대 길이와의 차이 2,359,296바이트가 파괴 직전 대기량과 정확히 같습니다.\n- 외부 서버 handler는 endLength33,554,432/closeWait=true 상태이며, 외부 소비자는 paused=false/ended=false/closed=false입니다. 고정 60초 FIN 완료 제한에서 실패합니다.\n\n관측 경로: EndPointClientPool.onEndPointHandlerEvent → onEndPointTerminateCallback → TunnelClient.terminateEndPointSession의 즉시 data handler.destroy. 추가 관측은 원 함수의 this/인자/반환을 그대로 위임했습니다.\n\n근거: #53 작업의 docs/plan/verification/epic61-issue-53.md (현재 해당 작업 브랜치의 미커밋 진단 기록), Temp/large53-evidence-yQUR7T 최초 실패, Temp/large53-observation-SDuYJf 추가 raw 출력·facts. 추가 진단 1 FAIL/2 filtered, 64.126초, 자연 종료1, 전체 관측65.486초. 다른 실행의 record 수·시간을 합산하지 않습니다.\n\n## 완료 조건\n\n- [ ] 정상 endpoint FIN에서 대기 memory/file/native 응답을 끝까지 전달한 뒤 외부 FIN이 완료된다.\n- [ ] 실제 터널 응답의 전체 길이·hash와 teardown 전 queue/cache 회수가 입증된다.\n- [ ] 종료 처리는 한 번만 완료되고, 실제 오류·강제 종료·동일 SID 교체의 기존 안전한 정리 동작을 보존한다.\n- [ ] 실제 RED 후 최소 구현, 독립 리뷰와 회귀 검증을 거쳐 통합한다.\n\n이 이슈는 raw TCP의 응답 폐기 경계입니다. #29의 HTTP EOF 보류 작업을 우회하거나 프로토콜·4GiB 정책을 변경하지 않습니다. 이 결함을 고치기 전 #53의 전체 응답/FIN/회수 검증은 미완료입니다.",
+  "number": 73,
+  "state": "CLOSED",
+  "title": "엔드포인트 종료 시 대기 중인 터널 응답이 폐기되어 외부 연결이 끝나지 않음",
+  "url": "https://github.com/ice3x2/TTTGate/issues/73"
+}
 ]

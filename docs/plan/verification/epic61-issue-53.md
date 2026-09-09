@@ -1,11 +1,11 @@
 # Issue #53 — Actual large tunnel cache transfer
 
-Status: original two failures preserved; after73 original normal case passed, then independent failure-cleanup/record-contract corrections completed with small contracts and one unchanged normal-case revalidation. Both final independent reviews passed with no remaining findings; three files are frozen for root integration. No production/harness changes.
+Status: complete; source18e08b2 -> main1e7595b integrated, root whole-file9PASS13.946seconds natural exit0, build40e4c2 PASS and push a2f2d8 verified. GitHub CLOSED2026-09-08T16:27:10Z comment5588442525; Telegram3998(68/62). Original two failures, original after73 normal and corrected-fixture normal receipts remain preserved below; no production/harness changes.
 
 - [x] Read approved root contract and reuse actual harness/network/cache APIs. Status: source inspected before test work; network/harness/production remain read-only.
 - [x] Observe actual corrupt/extra endpoint sensitivity failures. Status:76abe9 exited1 naturally, two actual endpoint mismatch failures0.349s before normal case; corrupt23/23 bytes hash mismatch and extra24/23 length mismatch. Tests now require these expected verifier rejections; not production RED.
 - [x] Complete fixed normal transfer acceptance. Status: after73 original normal1PASS13.628/outer15.133 and separately corrected-fixture normal1PASS15.185/outer17.006; prior two failures retained, same fixed parameters.
-- [x] Independent review. Status: review_large_transfer full rereview and fix_lint_diagnostics separate-fixer delta review PASS, no remaining Critical/High/Medium/Low findings. Root integration remains pending.
+- [x] Independent review. Status: review_large_transfer full rereview and fix_lint_diagnostics separate-fixer delta review PASS, no remaining Critical/High/Medium/Low findings. Root integration, whole-file regression, push, closure and notification completed; receipt below.
 
 Frozen parameters:32MiB each direction,64KiB application writes, local server/client
 buffers16MiB each; actual SocketHandler.GlobalMemCacheLimit setter1048576bytes is
@@ -81,7 +81,7 @@ Actual SID2 large-owner roles: client-data handler10, client-endpoint12, server-
 
 At63453ms timeout snapshot server-external9 still had sendLength31195136 versus endLength33554432, closeWait=true/closeInitiated=false, pending queues0 and socket still alive/unpaused. Client-data10 and server-data11 were already destroyed. This sequence supports independent investigation of premature data-handler termination while outbound work remains; it does not authorize a fix or declare the exact production root cause settled. Root will obtain independent review and register/assign any confirmed runtime defect separately. No #29 held EOF implementation, #28 encoding or #40 policy change follows from these observations.
 
-- [ ] Independent review of observation and classification. Status: root to assign review_cert_conflict; source/test/ledger frozen. No further normal-case retry or production mutation without a separate approved scope.
+- [x] Independent review of observation and classification. Status: subsequently completed and routed to separately approved #73; this observation checkpoint was frozen before that assignment. Later authorized runs and closure are recorded below.
 
 ## After73 original unchanged normal acceptance
 
@@ -117,4 +117,10 @@ Exact title: `test: 터널 대용량 전송과 캐시 회수 검증`.
 
 ## Final review checkpoint
 
-Both final reviews confirm the cancellation/settlement, actual instance/file/record/logical-length correspondence and updated execution history. The measured15.185-second normal run is distinct from8small helper contracts0.603seconds and the earlier13.628-second normal run. Root must integrate, run the selected complete test file, push and verify the remote before issue closure. Exact title: test: 터널 대용량 전송과 캐시 회수 검증.
+Both final reviews confirm the cancellation/settlement, actual instance/file/record/logical-length correspondence and updated execution history. The measured15.185-second normal run is distinct from8small helper contracts0.603seconds and the earlier13.628-second normal run. At that historical review checkpoint, root integration/full-file regression/push/closure remained pending; all subsequently completed as recorded below. Exact title: test: 터널 대용량 전송과 캐시 회수 검증.
+
+
+## Root integration and closure receipt
+
+- [x] Integrate and validate the complete dedicated file. Status: source18e08b2 -> main1e7595b;9tests PASS13.946seconds, natural exit0; forced build40e4c2 PASS; push/remote verification a2f2d8. This complete-file receipt is separate from the prior normal-only13.628/15.185second and small-contract runs.
+- [x] Close and notify. Status: GitHub CLOSED2026-09-08T16:27:10Z, comment5588442525; Telegram3998(68/62). Original failed runs and all earlier denominators remain unchanged.
