@@ -1,0 +1,2512 @@
+{
+  "artifactKind": "bounded-semantic-draft",
+  "batch": {
+    "number": 14,
+    "firstOrdinal": 326,
+    "lastOrdinal": 350,
+    "count": 25
+  },
+  "status": "candidate; independent review pending",
+  "sourceManifest": {
+    "path": "docs/plan/srs/TTTGate.md",
+    "markdownSha256": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+    "sidecarPath": "docs/plan/srs/TTTGate.items.jsonl",
+    "sidecarSha256": "364071a1f67e07501e7277e15ebdac057eb17ae8e6c2e076a3a550d916625657"
+  },
+  "sourceCheckpoint": {
+    "head": "e21d2cd65c0fac7910b86d77656d1eddbf96df30",
+    "mode": "source/test text reads only"
+  },
+  "execution": {
+    "testsRun": false,
+    "validatorRun": false,
+    "buildRun": false,
+    "evidence": []
+  },
+  "rows": [
+    {
+      "originalOrdinal": 326,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "OOS-UI-ROUTING-001"
+      },
+      "category": "out_of_scope",
+      "title": "라우팅 라이브러리 부재",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3629,
+        "exactHeading": "#### OOS-UI-ROUTING-001 — 라우팅 라이브러리 부재",
+        "sidecarId": "OOS-UI-ROUTING-001"
+      },
+      "originalRecord": {
+        "id": "OOS-UI-ROUTING-001",
+        "type": "out_of_scope",
+        "title": "라우팅 라이브러리 부재",
+        "description": "App.svelte 가 세션 상태 조건부 렌더만 사용하고 URL 기반 라우터(svelte-routing 등)를 도입하지 않음. 화면 전환은 location.href 재이동에 의존.",
+        "source": [
+          "admin/src/App.svelte:43-52",
+          "admin/src/layout/ServerSetLayout.svelte:163-170"
+        ],
+        "confidence": 0.9,
+        "inferred": true,
+        "phase_added": 2,
+        "related_ids": []
+      },
+      "acceptance": {
+        "originalDescription": "App.svelte 가 세션 상태 조건부 렌더만 사용하고 URL 기반 라우터(svelte-routing 등)를 도입하지 않음. 화면 전환은 location.href 재이동에 의존.",
+        "clauses": [
+          {
+            "id": "OOS-UI-ROUTING-001::c1",
+            "text": "App uses session-conditional rendering without a URL routing library.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          },
+          {
+            "id": "OOS-UI-ROUTING-001::c2",
+            "text": "Screen changes rely on location.href navigation.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "document",
+        "modes": [],
+        "rationale": "Historical scope descriptions remain records; behavior-bearing actors/glossaries are not exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/App.svelte",
+            "line": 14,
+            "symbol": "_validSession",
+            "exactSource": "  let _validSession: SessionState = 'Checking';",
+            "rationale": "Read source anchor only, not full execution or policy proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "OOS-UI-ROUTING-001::c1",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        },
+        {
+          "clauseRef": "OOS-UI-ROUTING-001::c2",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 327,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "OOS-UI-COUNTER-001"
+      },
+      "category": "out_of_scope",
+      "title": "Counter.svelte 샘플 미사용",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3621,
+        "exactHeading": "#### OOS-UI-COUNTER-001 — Counter.svelte 샘플 미사용",
+        "sidecarId": "OOS-UI-COUNTER-001"
+      },
+      "originalRecord": {
+        "id": "OOS-UI-COUNTER-001",
+        "type": "out_of_scope",
+        "title": "Counter.svelte 샘플 미사용",
+        "description": "admin/src/lib/Counter.svelte 는 Svelte 템플릿 예제 수준의 카운터 컴포넌트로 실제 앱에서 사용되지 않음. 주: Counter.svelte 참조 자료는 현재 저장소에 존재하지 않으며 관리자 UI 에는 독립 카운터 컴포넌트가 존재하지 않는다.",
+        "source": [
+          "admin/src/**"
+        ],
+        "confidence": 0.85,
+        "inferred": true,
+        "phase_added": 2,
+        "related_ids": []
+      },
+      "acceptance": {
+        "originalDescription": "admin/src/lib/Counter.svelte 는 Svelte 템플릿 예제 수준의 카운터 컴포넌트로 실제 앱에서 사용되지 않음. 주: Counter.svelte 참조 자료는 현재 저장소에 존재하지 않으며 관리자 UI 에는 독립 카운터 컴포넌트가 존재하지 않는다.",
+        "clauses": [
+          {
+            "id": "OOS-UI-COUNTER-001::c1",
+            "text": "Preserve historical Counter sample/non-use and absent-source statements without removing this original record.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "document",
+        "modes": [],
+        "rationale": "Historical scope descriptions remain records; behavior-bearing actors/glossaries are not exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/App.svelte",
+            "line": 1,
+            "symbol": "<script",
+            "exactSource": "<script lang=\"ts\">",
+            "rationale": "Read source anchor only, not full execution or policy proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "OOS-UI-COUNTER-001::c1",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Counter absence/non-use is a historical source inventory statement, not a runtime test or removal of the original ID.",
+        "contextLinks": []
+      }
+    },
+    {
+      "originalOrdinal": 328,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "GLOSS-INVALID-SESSION-001"
+      },
+      "category": "glossary",
+      "title": "InvalidSession",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2611,
+        "exactHeading": "#### GLOSS-INVALID-SESSION-001 — InvalidSession",
+        "sidecarId": "GLOSS-INVALID-SESSION-001"
+      },
+      "originalRecord": {
+        "id": "GLOSS-INVALID-SESSION-001",
+        "type": "glossary",
+        "title": "InvalidSession",
+        "description": "admin Ctrl 들이 401/무응답 시 throw 하는 커스텀 Error. 각 레이아웃의 _sessionOut 핸들러가 알림 후 '/' 로 이동시킨다.",
+        "source": [
+          "admin/src/controller/InvalidSession.ts:1-6"
+        ],
+        "confidence": 0.98,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "MODE-UI-SESSION-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "admin Ctrl 들이 401/무응답 시 throw 하는 커스텀 Error. 각 레이아웃의 _sessionOut 핸들러가 알림 후 '/' 로 이동시킨다.",
+        "clauses": [
+          {
+            "id": "GLOSS-INVALID-SESSION-001::c1",
+            "text": "Controllers use InvalidSession for unauthorized or absent responses.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          },
+          {
+            "id": "GLOSS-INVALID-SESSION-001::c2",
+            "text": "Layouts notify session expiry and navigate to /.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Historical scope descriptions remain records; behavior-bearing actors/glossaries are not exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/InvalidSession.ts",
+            "line": 1,
+            "symbol": "class InvalidSession",
+            "exactSource": "class InvalidSession extends Error {",
+            "rationale": "Read source anchor only, not full execution or policy proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "GLOSS-INVALID-SESSION-001::c1",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        },
+        {
+          "clauseRef": "GLOSS-INVALID-SESSION-001::c2",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Fetch rejection and malformed JSON are not uniformly converted to InvalidSession; current layout exception paths require individual mapping.",
+        "contextLinks": []
+      }
+    },
+    {
+      "originalOrdinal": 329,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "GLOSS-UI-GLOBAL-COUNTER-001"
+      },
+      "category": "glossary",
+      "title": "GlobalCounter",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2703,
+        "exactHeading": "#### GLOSS-UI-GLOBAL-COUNTER-001 — GlobalCounter",
+        "sidecarId": "GLOSS-UI-GLOBAL-COUNTER-001"
+      },
+      "originalRecord": {
+        "id": "GLOSS-UI-GLOBAL-COUNTER-001",
+        "type": "glossary",
+        "title": "GlobalCounter",
+        "description": "모듈 전역 숫자 카운터. Timer 컴포넌트 인스턴스마다 고유 id 부여용으로 사용(incrementAndGet).",
+        "source": [
+          "admin/src/controller/GlobalCounter.ts:1-24",
+          "admin/src/component/Timer.svelte:30-30"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "IF-UI-TIMER-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "모듈 전역 숫자 카운터. Timer 컴포넌트 인스턴스마다 고유 id 부여용으로 사용(incrementAndGet).",
+        "clauses": [
+          {
+            "id": "GLOSS-UI-GLOBAL-COUNTER-001::c1",
+            "text": "Maintain module-global numeric counter.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          },
+          {
+            "id": "GLOSS-UI-GLOBAL-COUNTER-001::c2",
+            "text": "incrementAndGet gives Timer instances unique IDs.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Historical scope descriptions remain records; behavior-bearing actors/glossaries are not exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/GlobalCounter.ts",
+            "line": 6,
+            "symbol": "incrementAndGet",
+            "exactSource": "    public static incrementAndGet() : number {",
+            "rationale": "Read source anchor only, not full execution or policy proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "GLOSS-UI-GLOBAL-COUNTER-001::c1",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        },
+        {
+          "clauseRef": "GLOSS-UI-GLOBAL-COUNTER-001::c2",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 330,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "GLOSS-UI-EXMATH-001"
+      },
+      "category": "glossary",
+      "title": "ExMath",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2693,
+        "exactHeading": "#### GLOSS-UI-EXMATH-001 — ExMath",
+        "sidecarId": "GLOSS-UI-EXMATH-001"
+      },
+      "originalRecord": {
+        "id": "GLOSS-UI-EXMATH-001",
+        "type": "glossary",
+        "title": "ExMath",
+        "description": "map/floor/ceil/round 산술 헬퍼. Gauge 각도 매핑, byte 단위 반올림에 사용.",
+        "source": [
+          "admin/src/controller/ExMath.ts:1-23"
+        ],
+        "confidence": 0.98,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "IF-UI-GAUGE-001",
+          "FR-UI-STATUS-GAUGE-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "map/floor/ceil/round 산술 헬퍼. Gauge 각도 매핑, byte 단위 반올림에 사용.",
+        "clauses": [
+          {
+            "id": "GLOSS-UI-EXMATH-001::c1",
+            "text": "Provide map/floor/ceil/round arithmetic helpers.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          },
+          {
+            "id": "GLOSS-UI-EXMATH-001::c2",
+            "text": "Use helpers in Gauge angle and byte rounding.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Historical scope descriptions remain records; behavior-bearing actors/glossaries are not exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/ExMath.ts",
+            "line": 4,
+            "symbol": "public static map",
+            "exactSource": "    public static map(value: number, in_min: number, in_max: number, out_min: number, out_max: number) : number {",
+            "rationale": "Read source anchor only, not full execution or policy proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "GLOSS-UI-EXMATH-001::c1",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        },
+        {
+          "clauseRef": "GLOSS-UI-EXMATH-001::c2",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 331,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "GLOSS-UI-OBJECT-UTIL-001"
+      },
+      "category": "glossary",
+      "title": "ObjectUtil",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2713,
+        "exactHeading": "#### GLOSS-UI-OBJECT-UTIL-001 — ObjectUtil",
+        "sidecarId": "GLOSS-UI-OBJECT-UTIL-001"
+      },
+      "originalRecord": {
+        "id": "GLOSS-UI-OBJECT-UTIL-001",
+        "type": "glossary",
+        "title": "ObjectUtil",
+        "description": "findUpdates(변경 필드 추출), equalsDeep(재귀적 동등성 비교) 제공. Gauge 이전 값 비교와 ServerSetLayout 변경 감지에 사용.",
+        "source": [
+          "admin/src/controller/ObjectUtil.ts:10-106"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-SERVEROPT-FORM-001",
+          "IF-UI-GAUGE-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "findUpdates(변경 필드 추출), equalsDeep(재귀적 동등성 비교) 제공. Gauge 이전 값 비교와 ServerSetLayout 변경 감지에 사용.",
+        "clauses": [
+          {
+            "id": "GLOSS-UI-OBJECT-UTIL-001::c1",
+            "text": "findUpdates extracts changed fields.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          },
+          {
+            "id": "GLOSS-UI-OBJECT-UTIL-001::c2",
+            "text": "equalsDeep performs recursive equality.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          },
+          {
+            "id": "GLOSS-UI-OBJECT-UTIL-001::c3",
+            "text": "Use in Gauge prior-value and server form change detection.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Historical scope descriptions remain records; behavior-bearing actors/glossaries are not exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/ObjectUtil.ts",
+            "line": 78,
+            "symbol": "equalsDeep",
+            "exactSource": "    public static equalsDeep<T>(obj1: T | undefined, obj2: T | undefined) : boolean {",
+            "rationale": "Read source anchor only, not full execution or policy proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "GLOSS-UI-OBJECT-UTIL-001::c1",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        },
+        {
+          "clauseRef": "GLOSS-UI-OBJECT-UTIL-001::c2",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        },
+        {
+          "clauseRef": "GLOSS-UI-OBJECT-UTIL-001::c3",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 332,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "ACT-THREAT-001"
+      },
+      "category": "actor",
+      "title": "침입자/공격자 (threat actor)",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 110,
+        "exactHeading": "#### ACT-THREAT-001 — 침입자/공격자 (threat actor)",
+        "sidecarId": "ACT-THREAT-001"
+      },
+      "originalRecord": {
+        "id": "ACT-THREAT-001",
+        "type": "actor",
+        "title": "침입자/공격자 (threat actor)",
+        "description": "외부에서 Admin Console 또는 터널 제어 포트를 공격 대상으로 삼는 잠재적 위협 행위자. 로그인 브루트포스, CSRF, CORS 우회, 핸드셰이크 DoS, HTTP smuggling, path traversal 시도 대상.",
+        "source": [
+          "src/server/admin/AdminServer.ts",
+          "src/server/TunnelHandshakePolicy.ts"
+        ],
+        "confidence": 0.9,
+        "inferred": true,
+        "phase_added": 2,
+        "related_ids": [
+          "NFR-SEC-LOGIN-BACKOFF-001",
+          "NFR-SEC-CSRF-001",
+          "NFR-AVAIL-HANDSHAKE-001",
+          "NFR-SEC-PATH-TRAVERSAL-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "외부에서 Admin Console 또는 터널 제어 포트를 공격 대상으로 삼는 잠재적 위협 행위자. 로그인 브루트포스, CSRF, CORS 우회, 핸드셰이크 DoS, HTTP smuggling, path traversal 시도 대상.",
+        "clauses": [
+          {
+            "id": "ACT-THREAT-001::c1",
+            "text": "Preserve threat actor scope: login brute force,CSRF,CORS bypass,handshake DoS,HTTP smuggling and path traversal.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Historical scope descriptions remain records; behavior-bearing actors/glossaries are not exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/admin/AdminServer.ts",
+            "line": 249,
+            "symbol": "validate",
+            "exactSource": "        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');",
+            "rationale": "Read source anchor only, not full execution or policy proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "ACT-THREAT-001::c1",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 333,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "ACT-BACKEND-001"
+      },
+      "category": "actor",
+      "title": "내부 백엔드 서비스",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 76,
+        "exactHeading": "#### ACT-BACKEND-001 — 내부 백엔드 서비스",
+        "sidecarId": "ACT-BACKEND-001"
+      },
+      "originalRecord": {
+        "id": "ACT-BACKEND-001",
+        "type": "actor",
+        "title": "내부 백엔드 서비스",
+        "description": "클라이언트가 터널을 통해 외부 요청을 중계할 대상이 되는 NAT 내부 TCP/HTTP 서비스. destinationAddress/destinationPort 로 지정됨.",
+        "source": [
+          "src/types/TunnelingOption.ts",
+          "src/server/ServerOptionStore.ts"
+        ],
+        "confidence": 0.9,
+        "inferred": true,
+        "phase_added": 2,
+        "related_ids": [
+          "DATA-TUN-OPT-SRV-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "클라이언트가 터널을 통해 외부 요청을 중계할 대상이 되는 NAT 내부 TCP/HTTP 서비스. destinationAddress/destinationPort 로 지정됨.",
+        "clauses": [
+          {
+            "id": "ACT-BACKEND-001::c1",
+            "text": "Relay to a NAT-internal TCP/HTTP service selected by destinationAddress/destinationPort.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Historical scope descriptions remain records; behavior-bearing actors/glossaries are not exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/types/TunnelingOption.ts",
+            "line": 75,
+            "symbol": "destinationAddress",
+            "exactSource": "    destinationAddress: string,",
+            "rationale": "Read source anchor only, not full execution or policy proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "ACT-BACKEND-001::c1",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 334,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "GLOSS-TUNNEL-001"
+      },
+      "category": "glossary",
+      "title": "Tunnel",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2685,
+        "exactHeading": "#### GLOSS-TUNNEL-001 — Tunnel",
+        "sidecarId": "GLOSS-TUNNEL-001"
+      },
+      "originalRecord": {
+        "id": "GLOSS-TUNNEL-001",
+        "type": "glossary",
+        "title": "Tunnel",
+        "description": "외부 포트(서버) ↔ 내부 엔드포인트(클라이언트) 를 양방향으로 중계하는 데이터 채널. 제어 채널의 허가 후 per-session 으로 생성.",
+        "source": [
+          "src/server/TunnelServer.ts",
+          "src/client/TunnelClient.ts"
+        ],
+        "confidence": 0.9,
+        "inferred": true,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "외부 포트(서버) ↔ 내부 엔드포인트(클라이언트) 를 양방향으로 중계하는 데이터 채널. 제어 채널의 허가 후 per-session 으로 생성.",
+        "clauses": [
+          {
+            "id": "GLOSS-TUNNEL-001::c1",
+            "text": "Bidirectionally relay server external port and client internal endpoint.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          },
+          {
+            "id": "GLOSS-TUNNEL-001::c2",
+            "text": "Create per-session data channels after control authorization.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Historical scope descriptions remain records; behavior-bearing actors/glossaries are not exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/TunnelClient.ts",
+            "line": 371,
+            "symbol": "connectDataHandler",
+            "exactSource": "                    this.connectDataHandler(value?.handlerID ?? packet.ID, packet.sessionID, value?.bindingToken);",
+            "rationale": "Read source anchor only, not full execution or policy proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "GLOSS-TUNNEL-001::c1",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        },
+        {
+          "clauseRef": "GLOSS-TUNNEL-001::c2",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 335,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "GLOSS-CONTROL-PROTOCOL-001"
+      },
+      "category": "glossary",
+      "title": "Control Protocol v1/v2",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2573,
+        "exactHeading": "#### GLOSS-CONTROL-PROTOCOL-001 — Control Protocol v1/v2",
+        "sidecarId": "GLOSS-CONTROL-PROTOCOL-001"
+      },
+      "originalRecord": {
+        "id": "GLOSS-CONTROL-PROTOCOL-001",
+        "type": "glossary",
+        "title": "Control Protocol v1/v2",
+        "description": "제어 채널 프로토콜. v1=shared-key 기반 레거시, v2=clientId+HMAC-SHA256 proof-of-possession+challengeNonce 기반. controlProtocolMode 로 허용 범위 제어.",
+        "source": [
+          "src/commons/ProtocolV2.ts",
+          "src/server/TunnelServer.ts"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "MODE-CTRL-PROTO-001",
+          "BR-AUTH-V2-001",
+          "BR-AUTH-LEGACY-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "제어 채널 프로토콜. v1=shared-key 기반 레거시, v2=clientId+HMAC-SHA256 proof-of-possession+challengeNonce 기반. controlProtocolMode 로 허용 범위 제어.",
+        "clauses": [
+          {
+            "id": "GLOSS-CONTROL-PROTOCOL-001::c1",
+            "text": "v1 uses shared-key legacy authentication.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          },
+          {
+            "id": "GLOSS-CONTROL-PROTOCOL-001::c2",
+            "text": "v2 uses clientId,HMAC-SHA256 proof and challengeNonce.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          },
+          {
+            "id": "GLOSS-CONTROL-PROTOCOL-001::c3",
+            "text": "controlProtocolMode limits admitted protocols.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Historical scope descriptions remain records; behavior-bearing actors/glossaries are not exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/commons/ProtocolV2.ts",
+            "line": 43,
+            "symbol": "buildHandshakeProof",
+            "exactSource": "const buildHandshakeProof = (secret: string, clientId: string, handlerId: number, challengeNonce: string): string => {",
+            "rationale": "Read source anchor only, not full execution or policy proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "GLOSS-CONTROL-PROTOCOL-001::c1",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        },
+        {
+          "clauseRef": "GLOSS-CONTROL-PROTOCOL-001::c2",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        },
+        {
+          "clauseRef": "GLOSS-CONTROL-PROTOCOL-001::c3",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 336,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "GLOSS-MTLS-001"
+      },
+      "category": "glossary",
+      "title": "mTLS / mtls-strict",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2629,
+        "exactHeading": "#### GLOSS-MTLS-001 — mTLS / mtls-strict",
+        "sidecarId": "GLOSS-MTLS-001"
+      },
+      "originalRecord": {
+        "id": "GLOSS-MTLS-001",
+        "type": "glossary",
+        "title": "mTLS / mtls-strict",
+        "description": "상호 TLS. controlProtocolMode='mtls-strict' 는 클라이언트 인증서 검증(handler.isSecure())이 필수.",
+        "source": [
+          "src/server/TunnelServer.ts:662-665"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "BR-AUTH-MTLS-STRICT-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "상호 TLS. controlProtocolMode='mtls-strict' 는 클라이언트 인증서 검증(handler.isSecure())이 필수.",
+        "clauses": [
+          {
+            "id": "GLOSS-MTLS-001::c1",
+            "text": "mtls-strict requires verified client TLS identity via handler.isSecure.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Historical scope descriptions remain records; behavior-bearing actors/glossaries are not exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/TunnelServer.ts",
+            "line": 686,
+            "symbol": "!ctrlHandler.isSecure",
+            "exactSource": "                if(this._serverOption.controlProtocolMode === \"mtls-strict\" && !ctrlHandler.isSecure()) {",
+            "rationale": "Read source anchor only, not full execution or policy proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "GLOSS-MTLS-001::c1",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "isSecure wrapper setting is not by itself a captured native peer authorization/strict rollout proof.",
+        "contextLinks": []
+      }
+    },
+    {
+      "originalOrdinal": 337,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "GLOSS-BOOTSTRAP-TOKEN-001"
+      },
+      "category": "glossary",
+      "title": "Bootstrap Token",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2555,
+        "exactHeading": "#### GLOSS-BOOTSTRAP-TOKEN-001 — Bootstrap Token",
+        "sidecarId": "GLOSS-BOOTSTRAP-TOKEN-001"
+      },
+      "originalRecord": {
+        "id": "GLOSS-BOOTSTRAP-TOKEN-001",
+        "type": "glossary",
+        "title": "Bootstrap Token",
+        "description": "최초 관리자 비밀번호가 미설정일 때 config/.bootstrap-token 에 32B CSPRNG hex 로 1회 생성되는 토큰. 최초 POST /api/login 에 수반되며 성공 시 즉시 삭제.",
+        "source": [
+          "src/server/admin/SessionStore.ts:141-270"
+        ],
+        "confidence": 0.98,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "MODE-ADMIN-BOOTSTRAP-001",
+          "FR-SRV-BOOTSTRAP-GEN-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "최초 관리자 비밀번호가 미설정일 때 config/.bootstrap-token 에 32B CSPRNG hex 로 1회 생성되는 토큰. 최초 POST /api/login 에 수반되며 성공 시 즉시 삭제.",
+        "clauses": [
+          {
+            "id": "GLOSS-BOOTSTRAP-TOKEN-001::c1",
+            "text": "Generate bootstrap token on missing initial administrator password.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          },
+      {
+        "id": "GLOSS-BOOTSTRAP-TOKEN-001::c2",
+        "text": "Use32-byte CSPRNG hex and persist config/.bootstrap-token.",
+        "sourceRef": "description",
+        "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+        "state": "unverified"
+      },
+      {
+        "id": "GLOSS-BOOTSTRAP-TOKEN-001::c2-reuse",
+        "text": "Create the token once and reuse an existing nonempty bootstrap-token file instead of regenerating it.",
+        "sourceRef": "description: 1회 생성",
+        "rationale": "The original one-time condition is independent from token size, encoding and file persistence; source reuse is not runtime verification.",
+        "state": "unverified"
+      },
+          {
+            "id": "GLOSS-BOOTSTRAP-TOKEN-001::c3",
+            "text": "Require token with first login.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          },
+          {
+            "id": "GLOSS-BOOTSTRAP-TOKEN-001::c4",
+            "text": "Delete token immediately on successful initialization.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Historical scope descriptions remain records; behavior-bearing actors/glossaries are not exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/admin/SessionStore.ts",
+            "line": 204,
+            "symbol": "crypto.randomBytes(32)",
+            "exactSource": "        this._bootstrapToken = crypto.randomBytes(32).toString(\"hex\");",
+            "rationale": "Read source anchor only, not full execution or policy proof."
+          }
+        ]
+      },
+      "verification": [
+        {
+          "testPath": "test/unit/server/admin/SessionStore.security.test.ts",
+          "caseLine": 36,
+          "exactTitle": "SessionStore security behavior creates a bootstrap token file and requires it for first login",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "GLOSS-BOOTSTRAP-TOKEN-001::c3",
+            "GLOSS-BOOTSTRAP-TOKEN-001::c4"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 54,
+              "text": "expect(bootstrapLogin.success).toBe(true);"
+            },
+            {
+              "line": 55,
+              "text": "expect(fs.existsSync(bootstrapTokenFile)).toBe(false);"
+            }
+          ],
+          "technique": "actual-filesystem-store-candidate",
+          "rationale": "Actual isolated store login rejects absent token and accepts token then file disappears; not HTTP browser request,32-byte entropy or crash/parallel initialization coverage.",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "GLOSS-BOOTSTRAP-TOKEN-001::c1",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        },
+    {
+      "clauseRef": "GLOSS-BOOTSTRAP-TOKEN-001::c2",
+      "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+      "issueOrOwner": "#58 batch14",
+      "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+    },
+    {
+      "clauseRef": "GLOSS-BOOTSTRAP-TOKEN-001::c2-reuse",
+      "explanation": "SessionStore has an existing-file reuse branch, but no direct candidate proves one-time generation and stable reuse across store initialization without regeneration.",
+      "issueOrOwner": "#58 batch14",
+      "nextGate": "Independent semantic review and an authentic reuse/non-regeneration execution receipt."
+    },
+        {
+          "clauseRef": "GLOSS-BOOTSTRAP-TOKEN-001::c3",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        },
+        {
+          "clauseRef": "GLOSS-BOOTSTRAP-TOKEN-001::c4",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 338,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "GLOSS-TRUSTED-CLIENT-001"
+      },
+      "category": "glossary",
+      "title": "Trusted Client",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2675,
+        "exactHeading": "#### GLOSS-TRUSTED-CLIENT-001 — Trusted Client",
+        "sidecarId": "GLOSS-TRUSTED-CLIENT-001"
+      },
+      "originalRecord": {
+        "id": "GLOSS-TRUSTED-CLIENT-001",
+        "type": "glossary",
+        "title": "Trusted Client",
+        "description": "서버 서버옵션에 사전 등록된 v2 클라이언트(clientId/clientSecret). HMAC proof 검증 및 allowedClientIds 화이트리스트에 사용.",
+        "source": [
+          "src/types/TunnelingOption.ts:46-50",
+          "src/server/IdentityRegistry.ts"
+        ],
+        "confidence": 0.97,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "DATA-TRUSTED-CLIENT-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "서버 서버옵션에 사전 등록된 v2 클라이언트(clientId/clientSecret). HMAC proof 검증 및 allowedClientIds 화이트리스트에 사용.",
+        "clauses": [
+          {
+            "id": "GLOSS-TRUSTED-CLIENT-001::c1",
+            "text": "Pre-register clientId/clientSecret.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          },
+          {
+            "id": "GLOSS-TRUSTED-CLIENT-001::c2",
+            "text": "Use trusted identity for HMAC proof validation.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          },
+          {
+            "id": "GLOSS-TRUSTED-CLIENT-001::c3",
+            "text": "Apply allowedClientIds access control.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Historical scope descriptions remain records; behavior-bearing actors/glossaries are not exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/IdentityRegistry.ts",
+            "line": 25,
+            "symbol": "class IdentityRegistry",
+            "exactSource": "class IdentityRegistry {",
+            "rationale": "Read source anchor only, not full execution or policy proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "GLOSS-TRUSTED-CLIENT-001::c1",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        },
+        {
+          "clauseRef": "GLOSS-TRUSTED-CLIENT-001::c2",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        },
+        {
+          "clauseRef": "GLOSS-TRUSTED-CLIENT-001::c3",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 339,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "GLOSS-SESSION-001"
+      },
+      "category": "glossary",
+      "title": "Session",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2665,
+        "exactHeading": "#### GLOSS-SESSION-001 — Session",
+        "sidecarId": "GLOSS-SESSION-001"
+      },
+      "originalRecord": {
+        "id": "GLOSS-SESSION-001",
+        "type": "glossary",
+        "title": "Session",
+        "description": "외부 사용자 1건 연결이 터널을 통해 내부 엔드포인트로 중계되는 단위. sessionID(uint32) 로 식별. TTL/heartbeat 적용.",
+        "source": [
+          "src/server/TunnelServer.ts:64-230"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "MODE-SESSION-TTL-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "외부 사용자 1건 연결이 터널을 통해 내부 엔드포인트로 중계되는 단위. sessionID(uint32) 로 식별. TTL/heartbeat 적용.",
+        "clauses": [
+          {
+            "id": "GLOSS-SESSION-001::c1",
+            "text": "One external connection is a session relayed to an internal endpoint.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          },
+          {
+            "id": "GLOSS-SESSION-001::c2",
+            "text": "Identify session with uint32 sessionID.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          },
+          {
+            "id": "GLOSS-SESSION-001::c3",
+            "text": "Apply TTL/heartbeat.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Historical scope descriptions remain records; behavior-bearing actors/glossaries are not exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/TunnelServer.ts",
+            "line": 88,
+            "symbol": "_sessionTtlMs",
+            "exactSource": "    private _sessionTtlMs : number = DEFAULT_SESSION_TTL_MS;",
+            "rationale": "Read source anchor only, not full execution or policy proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "GLOSS-SESSION-001::c1",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        },
+        {
+          "clauseRef": "GLOSS-SESSION-001::c2",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        },
+        {
+          "clauseRef": "GLOSS-SESSION-001::c3",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Approved18 changes idle TTL default to1hour with0disable; no new control heartbeat mechanism is implied. Original count width remains subject to28, not proven by type/getter.",
+        "contextLinks": [
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/18",
+            "ledger": "docs/plan/verification/epic61-issue-18.md"
+          },
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/28",
+            "ledger": "docs/plan/verification/epic61-issue-28.md"
+          }
+        ]
+      }
+    },
+    {
+      "originalOrdinal": 340,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "GLOSS-ADMIN-CONSOLE-001"
+      },
+      "category": "glossary",
+      "title": "Admin Console",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2539,
+        "exactHeading": "#### GLOSS-ADMIN-CONSOLE-001 — Admin Console",
+        "sidecarId": "GLOSS-ADMIN-CONSOLE-001"
+      },
+      "originalRecord": {
+        "id": "GLOSS-ADMIN-CONSOLE-001",
+        "type": "glossary",
+        "title": "Admin Console",
+        "description": "Svelte SPA + AdminServer REST API 로 구성된 관리자 웹 UI. 기본 127.0.0.1:9300 TLS 바인드.",
+        "source": [
+          "admin/src/App.svelte",
+          "src/server/admin/AdminServer.ts"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "Svelte SPA + AdminServer REST API 로 구성된 관리자 웹 UI. 기본 127.0.0.1:9300 TLS 바인드.",
+        "clauses": [
+          {
+            "id": "GLOSS-ADMIN-CONSOLE-001::c1",
+            "text": "Admin Console comprises Svelte SPA and AdminServer REST API.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          },
+          {
+            "id": "GLOSS-ADMIN-CONSOLE-001::c2",
+            "text": "Default bind is TLS on127.0.0.1:9300.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Historical scope descriptions remain records; behavior-bearing actors/glossaries are not exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/admin/AdminServer.ts",
+            "line": 61,
+            "symbol": "class AdminServer",
+            "exactSource": "class AdminServer {",
+            "rationale": "Read source anchor only, not full execution or policy proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "GLOSS-ADMIN-CONSOLE-001::c1",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        },
+        {
+          "clauseRef": "GLOSS-ADMIN-CONSOLE-001::c2",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 341,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "GLOSS-CSRF-001"
+      },
+      "category": "glossary",
+      "title": "CSRF (double-submit)",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2583,
+        "exactHeading": "#### GLOSS-CSRF-001 — CSRF (double-submit)",
+        "sidecarId": "GLOSS-CSRF-001"
+      },
+      "originalRecord": {
+        "id": "GLOSS-CSRF-001",
+        "type": "glossary",
+        "title": "CSRF (double-submit)",
+        "description": "쿠키에 저장된 csrfToken 과 X-CSRF-Token 헤더를 timingSafeStringEqual 로 비교하여 상태변경 API 보호.",
+        "source": [
+          "src/server/admin/AdminServer.ts:1308-1375"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "NFR-SEC-CSRF-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "쿠키에 저장된 csrfToken 과 X-CSRF-Token 헤더를 timingSafeStringEqual 로 비교하여 상태변경 API 보호.",
+        "clauses": [
+          {
+            "id": "GLOSS-CSRF-001::c1",
+            "text": "Protect mutating APIs with csrfToken cookie and X-CSRF-Token double submit.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          },
+          {
+            "id": "GLOSS-CSRF-001::c2",
+            "text": "Compare tokens using timingSafeStringEqual.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Historical scope descriptions remain records; behavior-bearing actors/glossaries are not exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/admin/AdminServer.ts",
+            "line": 1523,
+            "symbol": "timingSafeStringEqual(headerToken",
+            "exactSource": "            if(!timingSafeStringEqual(headerToken, cookieToken, 'utf8')) {",
+            "rationale": "Read source anchor only, not full execution or policy proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "GLOSS-CSRF-001::c1",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        },
+        {
+          "clauseRef": "GLOSS-CSRF-001::c2",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 342,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "GLOSS-REVISION-STATE-001"
+      },
+      "category": "glossary",
+      "title": "Revision State",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2655,
+        "exactHeading": "#### GLOSS-REVISION-STATE-001 — Revision State",
+        "sidecarId": "GLOSS-REVISION-STATE-001"
+      },
+      "originalRecord": {
+        "id": "GLOSS-REVISION-STATE-001",
+        "type": "glossary",
+        "title": "Revision State",
+        "description": "서버옵션/인증서 변경 내역과 LKG 앵커, pendingRestartScopes 를 기록하는 상태. .server.state.json 에 저장.",
+        "source": [
+          "src/server/RevisionState.ts"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "DATA-REVISION-STATE-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "서버옵션/인증서 변경 내역과 LKG 앵커, pendingRestartScopes 를 기록하는 상태. .server.state.json 에 저장.",
+        "clauses": [
+          {
+            "id": "GLOSS-REVISION-STATE-001::c1",
+            "text": "Record option/certificate revision, LKG anchor and pendingRestartScopes.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          },
+          {
+            "id": "GLOSS-REVISION-STATE-001::c2",
+            "text": "Persist revision state in .server.state.json as originally stated.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Historical scope descriptions remain records; behavior-bearing actors/glossaries are not exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/RevisionState.ts",
+            "line": 9,
+            "symbol": "type RevisionState",
+            "exactSource": "type RevisionState = {",
+            "rationale": "Read source anchor only, not full execution or policy proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "GLOSS-REVISION-STATE-001::c1",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        },
+        {
+          "clauseRef": "GLOSS-REVISION-STATE-001::c2",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Server and certificate revision stores have distinct scope/state persistence; direct pending inputs do not prove runtime branch choice. Preserve35 baseline tuple/current!=LKG and71 atomic compound contract.",
+        "contextLinks": [
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/35",
+            "ledger": "docs/plan/verification/epic61-issue-35.md"
+          },
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/71",
+            "ledger": "docs/plan/verification/epic61-issue-71.md"
+          }
+        ]
+      }
+    },
+    {
+      "originalOrdinal": 343,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "GLOSS-HTTP-PIPE-001"
+      },
+      "category": "glossary",
+      "title": "HTTP Pipe",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2601,
+        "exactHeading": "#### GLOSS-HTTP-PIPE-001 — HTTP Pipe",
+        "sidecarId": "GLOSS-HTTP-PIPE-001"
+      },
+      "originalRecord": {
+        "id": "GLOSS-HTTP-PIPE-001",
+        "type": "glossary",
+        "title": "HTTP Pipe",
+        "description": "HTTP 터널 프로토콜 파서/재작성 파이프라인. 헤더/바디/청크/웹소켓 업그레이드 상태머신으로 동작.",
+        "source": [
+          "src/server/http/HttpPipe.ts"
+        ],
+        "confidence": 0.9,
+        "inferred": true,
+        "phase_added": 2,
+        "related_ids": [
+          "IF-HTTP-PIPE-STATES-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "HTTP 터널 프로토콜 파서/재작성 파이프라인. 헤더/바디/청크/웹소켓 업그레이드 상태머신으로 동작.",
+        "clauses": [
+          {
+            "id": "GLOSS-HTTP-PIPE-001::c1",
+            "text": "Maintain HTTP header/body/chunk/upgrade parser-rewrite state machine topology.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Historical scope descriptions remain records; behavior-bearing actors/glossaries are not exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/http/HttpPipe.ts",
+            "line": 80,
+            "symbol": "class HttpPipe",
+            "exactSource": "class HttpPipe {",
+            "rationale": "Read source anchor only, not full execution or policy proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "GLOSS-HTTP-PIPE-001::c1",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Approved11/12/30/31/32/33 fix finite parsing/rewrites;29 EOF hold remains and no complete arbitrary EOF/upgrade proof is implied.",
+        "contextLinks": [
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/11",
+            "ledger": "docs/plan/verification/epic61-issue-11.md"
+          },
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/12",
+            "ledger": "docs/plan/verification/epic61-issue-12.md"
+          },
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/29",
+            "ledger": "docs/plan/verification/epic61-issue-29.md"
+          },
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/30",
+            "ledger": "docs/plan/verification/epic61-issue-30.md"
+          },
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/31",
+            "ledger": "docs/plan/verification/epic61-issue-31.md"
+          },
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/32",
+            "ledger": "docs/plan/verification/epic61-issue-32.md"
+          },
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/33",
+            "ledger": "docs/plan/verification/epic61-issue-33.md"
+          }
+        ]
+      }
+    },
+    {
+      "originalOrdinal": 344,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "UC-CROSS-001"
+      },
+      "category": "use_case",
+      "title": "클라이언트 최초 등록→서버 Trusted Client 기록→연결 성공",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2765,
+        "exactHeading": "#### UC-CROSS-001 — 클라이언트 최초 등록→서버 Trusted Client 기록→연결 성공",
+        "sidecarId": "UC-CROSS-001"
+      },
+      "originalRecord": {
+        "id": "UC-CROSS-001",
+        "type": "use_case",
+        "title": "클라이언트 최초 등록→서버 Trusted Client 기록→연결 성공",
+        "description": "1) 관리자가 관리 UI(혹은 server.yaml)에서 trustedClients 에 clientId/clientSecret 추가 → 2) 서버 재기동 또는 runtime apply → 3) 클라이언트 운영자가 ClientOption 의 clientId/clientSecret 를 동일하게 설정하고 기동 → 4) SyncCtrlAck 에 v2 capability 포함 → 5) 클라이언트가 HMAC proof 생성해 AckCtrl → 6) 서버 proof 검증 성공 → ClientHandlerPool 생성.",
+        "source": [
+          "src/server/IdentityRegistry.ts",
+          "src/server/TunnelServer.ts:650-694",
+          "src/client/TunnelClient.ts:295-318"
+        ],
+        "confidence": 0.9,
+        "inferred": true,
+        "phase_added": 2,
+        "related_ids": [
+          "BR-AUTH-V2-001",
+          "FR-TUN-HANDSHAKE-V2-CLI-001",
+          "DATA-TRUSTED-CLIENT-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "1) 관리자가 관리 UI(혹은 server.yaml)에서 trustedClients 에 clientId/clientSecret 추가 → 2) 서버 재기동 또는 runtime apply → 3) 클라이언트 운영자가 ClientOption 의 clientId/clientSecret 를 동일하게 설정하고 기동 → 4) SyncCtrlAck 에 v2 capability 포함 → 5) 클라이언트가 HMAC proof 생성해 AckCtrl → 6) 서버 proof 검증 성공 → ClientHandlerPool 생성.",
+        "clauses": [
+          {
+            "id": "UC-CROSS-001::c1",
+            "text": "Preserve complete six-stage registration sequence: add trusted identity, restart/apply, launch real matching client, advertisev2, client proof Ack, server verification and pool creation.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Historical scope descriptions remain records; behavior-bearing actors/glossaries are not exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/TunnelClient.ts",
+            "line": 5,
+            "symbol": "buildHandshakeProof",
+            "exactSource": "import {buildHandshakeProof, CONTROL_PROTOCOL_V2, DEFAULT_PROTOCOL_V2_CAPABILITIES} from \"../commons/ProtocolV2\";",
+            "rationale": "Read source anchor only, not full execution or policy proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "UC-CROSS-001::c1",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "RawControlClient server-handshake tests cannot prove actual TunnelClient proof production nor UI registration ordering.",
+        "contextLinks": []
+      }
+    },
+    {
+      "originalOrdinal": 345,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "UC-CROSS-002"
+      },
+      "category": "use_case",
+      "title": "외부 요청→서버 External Port→튜널→클라이언트→내부 엔드포인트",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2775,
+        "exactHeading": "#### UC-CROSS-002 — 외부 요청→서버 External Port→튜널→클라이언트→내부 엔드포인트",
+        "sidecarId": "UC-CROSS-002"
+      },
+      "originalRecord": {
+        "id": "UC-CROSS-002",
+        "type": "use_case",
+        "title": "외부 요청→서버 External Port→튜널→클라이언트→내부 엔드포인트",
+        "description": "1) 외부 사용자가 forwardPort 에 TCP/HTTP 연결 → 2) ExternalPortServerPool 이 세션 생성 → 3) TunnelServer 가 allowedClientIds/Names 로 pool 선택 → 4) OpenSession 패킷 송신 + NewDataHandler 요청 → 5) 클라이언트가 EndPointClientPool.open 으로 내부 destination 연결 → 6) DataStatePacket ack → 7) 양방향 데이터 중계 시작 (http 의 경우 HttpPipe 가 호스트/헤더/바디 재작성).",
+        "source": [
+          "src/server/TTTServer.ts:111-121",
+          "src/server/TunnelServer.ts:323-336",
+          "src/client/TunnelClient.ts:287-361",
+          "src/client/EndPointClientPool.ts:66-80"
+        ],
+        "confidence": 0.92,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "UC-SRV-EXT-SESSION-OPEN-001",
+          "UC-CLI-SESSION-OPEN-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "1) 외부 사용자가 forwardPort 에 TCP/HTTP 연결 → 2) ExternalPortServerPool 이 세션 생성 → 3) TunnelServer 가 allowedClientIds/Names 로 pool 선택 → 4) OpenSession 패킷 송신 + NewDataHandler 요청 → 5) 클라이언트가 EndPointClientPool.open 으로 내부 destination 연결 → 6) DataStatePacket ack → 7) 양방향 데이터 중계 시작 (http 의 경우 HttpPipe 가 호스트/헤더/바디 재작성).",
+        "clauses": [
+          {
+            "id": "UC-CROSS-002::c1",
+            "text": "Preserve complete seven-stage external session sequence: external connect, create session, ACL pool selection,OpenSession/NewDataHandler,endpoint open,data acknowledgement,bidirectional TCP/HTTP relay.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Historical scope descriptions remain records; behavior-bearing actors/glossaries are not exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/EndPointClientPool.ts",
+            "line": 67,
+            "symbol": "public open",
+            "exactSource": "    public open(sessionID: number, connectOpt: OpenOpt) {",
+            "rationale": "Read source anchor only, not full execution or policy proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "UC-CROSS-002::c1",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current43/42 negotiated frame plus immediate suffix handling differs from loose acknowledgement wording. Finite real echo does not by itself prove every ordered packet step.",
+        "contextLinks": [
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/42",
+            "ledger": "docs/plan/verification/epic61-issue-42.md"
+          },
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/43",
+            "ledger": "docs/plan/verification/epic61-issue-43.md"
+          }
+        ]
+      }
+    },
+    {
+      "originalOrdinal": 346,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "UC-CROSS-003"
+      },
+      "category": "use_case",
+      "title": "mtls-strict 롤아웃 절차",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2785,
+        "exactHeading": "#### UC-CROSS-003 — mtls-strict 롤아웃 절차",
+        "sidecarId": "UC-CROSS-003"
+      },
+      "originalRecord": {
+        "id": "UC-CROSS-003",
+        "type": "use_case",
+        "title": "mtls-strict 롤아웃 절차",
+        "description": "1) tls=true 구성 → 2) trustedClients 등록 → 3) 클라이언트가 clientId/Secret+cert/key/ca 로 접속 성공(mixed 모드에서 검증) → 4) controlProtocolMode 를 mtls-strict 로 전환(POST /api/serverOption) → 5) verificationServerOption 에서 tls==true 검증 → 6) 제어 리스너 재기동 → 7) v1 클라이언트/비-TLS 연결은 즉시 rejectHandshake.",
+        "source": [
+          "src/server/ServerOptionStore.ts:280-284",
+          "src/server/TunnelServer.ts:662-665",
+          "src/server/TTTServer.ts:177-241"
+        ],
+        "confidence": 0.88,
+        "inferred": true,
+        "phase_added": 2,
+        "related_ids": [
+          "BR-AUTH-MTLS-STRICT-001",
+          "BR-AUTH-MTLS-STRICT-002",
+          "MODE-CTRL-PROTO-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "1) tls=true 구성 → 2) trustedClients 등록 → 3) 클라이언트가 clientId/Secret+cert/key/ca 로 접속 성공(mixed 모드에서 검증) → 4) controlProtocolMode 를 mtls-strict 로 전환(POST /api/serverOption) → 5) verificationServerOption 에서 tls==true 검증 → 6) 제어 리스너 재기동 → 7) v1 클라이언트/비-TLS 연결은 즉시 rejectHandshake.",
+        "clauses": [
+          {
+            "id": "UC-CROSS-003::c1",
+            "text": "Preserve complete seven-stage strict rollout: enableTLS/registeridentity,successinmixed,POSTstrict,validateTLS,restartlistener,rejectlegacy/plain connections.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Historical scope descriptions remain records; behavior-bearing actors/glossaries are not exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/TunnelServer.ts",
+            "line": 686,
+            "symbol": "mtls-strict",
+            "exactSource": "                if(this._serverOption.controlProtocolMode === \"mtls-strict\" && !ctrlHandler.isSecure()) {",
+            "rationale": "Read source anchor only, not full execution or policy proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "UC-CROSS-003::c1",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "35 rollback/runtime applied state makes restart an observed transition rather than assumed from configuration. Native strict rollout requires dedicated mode-switch evidence.",
+        "contextLinks": [
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/35",
+            "ledger": "docs/plan/verification/epic61-issue-35.md"
+          }
+        ]
+      }
+    },
+    {
+      "originalOrdinal": 347,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "UC-CROSS-004"
+      },
+      "category": "use_case",
+      "title": "인증서 핫스왑→실패 시 재기동 예약",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2795,
+        "exactHeading": "#### UC-CROSS-004 — 인증서 핫스왑→실패 시 재기동 예약",
+        "sidecarId": "UC-CROSS-004"
+      },
+      "originalRecord": {
+        "id": "UC-CROSS-004",
+        "type": "use_case",
+        "title": "인증서 핫스왑→실패 시 재기동 예약",
+        "description": "1) POST /api/adminCert 또는 /api/externalCert/{port} → 2) 키페어 검증 → 3) setSecureContext/applyTlsCertificateHotSwap 시도 → 4) 성공 시 markLastKnownGood, 실패 시 pendingRestartScopes 에 admin-cert 또는 해당 포트 기록 → 5) 관리자에게 restartRequiredScopes 로 알림 → 6) 서버 재기동 시 새 인증서 적용.",
+        "source": [
+          "src/server/admin/AdminServer.ts:342-372",
+          "src/server/TTTServer.ts:289-353",
+          "src/util/TCPServer.ts:132-158"
+        ],
+        "confidence": 0.92,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "BR-CERT-HOTSWAP-ADMIN-001",
+          "BR-CERT-HOTSWAP-EXT-001",
+          "FR-TLS-HOTSWAP-001",
+          "UC-SRV-CERT-ROTATE-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "1) POST /api/adminCert 또는 /api/externalCert/{port} → 2) 키페어 검증 → 3) setSecureContext/applyTlsCertificateHotSwap 시도 → 4) 성공 시 markLastKnownGood, 실패 시 pendingRestartScopes 에 admin-cert 또는 해당 포트 기록 → 5) 관리자에게 restartRequiredScopes 로 알림 → 6) 서버 재기동 시 새 인증서 적용.",
+        "clauses": [
+          {
+            "id": "UC-CROSS-004::c1",
+            "text": "Preserve complete certificate rotation sequence: request,keypairvalidation,hotapply,LKGorpendingscope,administratornotification,restartnewcert.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Historical scope descriptions remain records; behavior-bearing actors/glossaries are not exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/TTTServer.ts",
+            "line": 384,
+            "symbol": "applyExternalServerCert",
+            "exactSource": "    public async applyExternalServerCert(port: number, nextCert: CertInfo, previousCert: CertInfo): Promise<RuntimeApplyResult> {",
+            "rationale": "Read source anchor only, not full execution or policy proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "UC-CROSS-004::c1",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Approved35/71 commit/apply atomicity and rollback supersede simple hotapply-failure=pending wording. A failed operation can restore prior candidate/runtime tuple, not necessarily retain failed cert pending restart.",
+        "contextLinks": [
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/35",
+            "ledger": "docs/plan/verification/epic61-issue-35.md"
+          },
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/71",
+            "ledger": "docs/plan/verification/epic61-issue-71.md"
+          }
+        ]
+      }
+    },
+    {
+      "originalOrdinal": 348,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "UC-CROSS-005"
+      },
+      "category": "use_case",
+      "title": "v1 클라이언트 폴백/거부",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2805,
+        "exactHeading": "#### UC-CROSS-005 — v1 클라이언트 폴백/거부",
+        "sidecarId": "UC-CROSS-005"
+      },
+      "originalRecord": {
+        "id": "UC-CROSS-005",
+        "type": "use_case",
+        "title": "v1 클라이언트 폴백/거부",
+        "description": "1) 구버전 클라이언트가 접속(SyncCtrl) → 2) 서버가 SyncCtrlAck(v2 meta) 회신 → 3) 클라이언트에 clientId/secret 가 없으면 v1 shared-key Ack 송신 → 4) 서버 controlProtocolMode != mtls-strict && allowLegacyControlAuth=true 면 key timingSafe 비교 후 승인, 아니면 notMatchedAuthKey 1000ms 뒤 destroy. 반대로 v2 identity 가 설정된 클라이언트에서 서버가 v2 meta 미회신 시 allowLegacyFallback=false 이면 failHandshake.",
+        "source": [
+          "src/server/TunnelServer.ts:696-750",
+          "src/client/TunnelClient.ts:311-318"
+        ],
+        "confidence": 0.92,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "BR-AUTH-LEGACY-001",
+          "BR-TUN-LEGACY-FALLBACK-CLI-001",
+          "GLOSS-LEGACY-FALLBACK-SRV-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "1) 구버전 클라이언트가 접속(SyncCtrl) → 2) 서버가 SyncCtrlAck(v2 meta) 회신 → 3) 클라이언트에 clientId/secret 가 없으면 v1 shared-key Ack 송신 → 4) 서버 controlProtocolMode != mtls-strict && allowLegacyControlAuth=true 면 key timingSafe 비교 후 승인, 아니면 notMatchedAuthKey 1000ms 뒤 destroy. 반대로 v2 identity 가 설정된 클라이언트에서 서버가 v2 meta 미회신 시 allowLegacyFallback=false 이면 failHandshake.",
+        "clauses": [
+          {
+            "id": "UC-CROSS-005::c1",
+            "text": "Preserve legacy handshake/fallback/denial decision topology and original1000ms delayed destroy.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-CROSS-005::c2",
+            "text": "Identity-configured client without serverv2 metadata refuses when allowLegacyFallback=false.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Historical scope descriptions remain records; behavior-bearing actors/glossaries are not exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/TunnelClient.ts",
+            "line": 354,
+            "symbol": "allowLegacyFallback",
+            "exactSource": "                if((this._option.clientId || this._option.clientSecret) && this._option.allowLegacyFallback !== true) {",
+            "rationale": "Read source anchor only, not full execution or policy proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "UC-CROSS-005::c1",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        },
+        {
+          "clauseRef": "UC-CROSS-005::c2",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Invalid metadata is packet-local rejection under46, distinct from absent-metadata fallback. Full legacy denial delay and all credential branches remain unverified.",
+        "contextLinks": [
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/46",
+            "ledger": "docs/plan/verification/epic61-issue-46.md"
+          }
+        ]
+      }
+    },
+    {
+      "originalOrdinal": 349,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "NFR-SEC-020"
+      },
+      "category": "nonfunctional_req",
+      "title": "리플레이 공격 방어 (nonce + 30s 바인딩 토큰)",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 993,
+        "exactHeading": "##### NFR-SEC-020 — 리플레이 공격 방어 (nonce + 30s 바인딩 토큰)",
+        "sidecarId": "NFR-SEC-020"
+      },
+      "originalRecord": {
+        "id": "NFR-SEC-020",
+        "type": "nonfunctional_req",
+        "title": "리플레이 공격 방어 (nonce + 30s 바인딩 토큰)",
+        "description": "제어 프로토콜 v2 핸드셰이크에서 서버가 발급한 proof nonce 와 30초 수명 binding token 을 사용해 동일 인증 증거의 재사용을 차단한다. 만료 또는 재사용 시 핸드셰이크 거부.",
+        "category": "security",
+        "rationale": "트러스트 클라이언트 자격증명 탈취 시의 재전송 공격 완화",
+        "measurement": "nonce 재사용/만료 토큰으로 핸드셰이크 요청 시 거부 응답 확인",
+        "source": [
+          "src/server/TunnelHandshakePolicy.ts:1-48",
+          "src/commons/ProtocolV2.ts:1-76"
+        ],
+        "phase_added": 3,
+        "confidence": 0.82,
+        "inferred": false
+      },
+      "acceptance": {
+        "originalDescription": "제어 프로토콜 v2 핸드셰이크에서 서버가 발급한 proof nonce 와 30초 수명 binding token 을 사용해 동일 인증 증거의 재사용을 차단한다. 만료 또는 재사용 시 핸드셰이크 거부.",
+        "clauses": [
+          {
+            "id": "NFR-SEC-020::c1",
+            "text": "Server-issued v2 nonce prevents reuse of proof.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-020::c2",
+            "text": "Binding token has original30-second lifetime.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-020::c3",
+            "text": "Expired or reused evidence rejects handshake.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-020::measurement",
+            "text": "nonce 재사용/만료 토큰으로 핸드셰이크 요청 시 거부 응답 확인",
+            "sourceRef": "measurement",
+            "rationale": "Original auxiliary statement retained without exemption.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-020::rationale",
+            "text": "트러스트 클라이언트 자격증명 탈취 시의 재전송 공격 완화",
+            "sourceRef": "rationale",
+            "rationale": "Original auxiliary statement retained without exemption.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Historical scope descriptions remain records; behavior-bearing actors/glossaries are not exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/ClientHandlerPool.ts",
+            "line": 316,
+            "symbol": "createOpaqueToken(24)",
+            "exactSource": "            pendingSessionState.bindingToken = createOpaqueToken(24);",
+            "rationale": "Read source anchor only, not full execution or policy proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "NFR-SEC-020::c1",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        },
+        {
+          "clauseRef": "NFR-SEC-020::c2",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        },
+        {
+          "clauseRef": "NFR-SEC-020::c3",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        },
+        {
+          "clauseRef": "NFR-SEC-020::measurement",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        },
+        {
+          "clauseRef": "NFR-SEC-020::rationale",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "TunnelHandshakePolicy currently defines timeout5000/unauthlimit32, not30-second binding-token expiry. ClientHandlerPool token binding and consumption are source context only; invalid-token rejection is not replay/expiry proof. Original30-second requirement remains pending, not a confirmed defect.",
+        "contextLinks": []
+      }
+    },
+    {
+      "originalOrdinal": 350,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "NFR-SEC-021"
+      },
+      "category": "nonfunctional_req",
+      "title": "프로토타입 오염 방어 (SAFE_REVIVER)",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1001,
+        "exactHeading": "##### NFR-SEC-021 — 프로토타입 오염 방어 (SAFE_REVIVER)",
+        "sidecarId": "NFR-SEC-021"
+      },
+      "originalRecord": {
+        "id": "NFR-SEC-021",
+        "type": "nonfunctional_req",
+        "title": "프로토타입 오염 방어 (SAFE_REVIVER)",
+        "description": "JSON.parse 시 SAFE_REVIVER 를 적용해 __proto__/constructor/prototype 키를 제거하여 config/요청 바디 로드 시 Object.prototype 오염을 방지한다.",
+        "category": "security",
+        "rationale": "악의적 YAML/JSON 입력으로 런타임 프로토타입을 오염시키는 공급망/입력 기반 공격 차단",
+        "measurement": "__proto__ 키가 포함된 페이로드 처리 후 Object.prototype.polluted === undefined",
+        "source": [
+          "src/commons/CtrlMetaGuards.ts:1-123"
+        ],
+        "phase_added": 3,
+        "confidence": 0.78,
+        "inferred": true
+      },
+      "acceptance": {
+        "originalDescription": "JSON.parse 시 SAFE_REVIVER 를 적용해 __proto__/constructor/prototype 키를 제거하여 config/요청 바디 로드 시 Object.prototype 오염을 방지한다.",
+        "clauses": [
+          {
+            "id": "NFR-SEC-021::c1",
+            "text": "Apply SAFE_REVIVER during JSON.parse to drop __proto__,constructor,prototype.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-021::c2",
+            "text": "Prevent Object.prototype pollution through original stated config/request-body loads.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/limit or complete decision/sequence topology.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-021::measurement",
+            "text": "__proto__ 키가 포함된 페이로드 처리 후 Object.prototype.polluted === undefined",
+            "sourceRef": "measurement",
+            "rationale": "Original auxiliary statement retained without exemption.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-021::rationale",
+            "text": "악의적 YAML/JSON 입력으로 런타임 프로토타입을 오염시키는 공급망/입력 기반 공격 차단",
+            "sourceRef": "rationale",
+            "rationale": "Original auxiliary statement retained without exemption.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Historical scope descriptions remain records; behavior-bearing actors/glossaries are not exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/commons/CtrlMetaGuards.ts",
+            "line": 128,
+            "symbol": "const SAFE_REVIVER",
+            "exactSource": "const SAFE_REVIVER = (key: string, value: unknown): unknown => {",
+            "rationale": "Read source anchor only, not full execution or policy proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [
+        {
+          "testPath": "test/commons/metadata-result.test.ts",
+          "caseLine": 15,
+          "exactTitle": "valid metadata preserves SAFE_REVIVER and unexpected native parser failures propagate",
+          "parameters": [],
+          "assertedClauseRefs": [],
+          "rationale": "Explicit serialized poison keys exercise control metadata result, not original full config/request-body scope.",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "NFR-SEC-021::c1",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        },
+        {
+          "clauseRef": "NFR-SEC-021::c2",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        },
+        {
+          "clauseRef": "NFR-SEC-021::measurement",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        },
+        {
+          "clauseRef": "NFR-SEC-021::rationale",
+          "explanation": "No complete direct assertion mapped; source declaration,configuration,getter or successful setup alone is not whole behavior proof.",
+          "issueOrOwner": "#58 batch14",
+          "nextGate": "Independent semantic review/disposition and authentic per-case evidence."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "SAFE_REVIVER is located in control metadata JSON boundary under46; that alone cannot prove all YAML config or HTTP request-body paths. Old object-literal __proto__ JSON.stringify controls may omit an own poison key; use actual serialized-key assertions as context.",
+        "contextLinks": [
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/46",
+            "ledger": "docs/plan/verification/epic61-issue-46.md"
+          }
+        ]
+      }
+    }
+  ]
+}

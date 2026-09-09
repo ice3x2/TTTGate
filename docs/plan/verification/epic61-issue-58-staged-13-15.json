@@ -56470,8 +56470,7 @@
     }
   ],
   "staging": {
-  "status": "Historical pre-publication final candidate normalization; canonical/view/bridge were unchanged at that checkpoint.",
-  "checkpointKind": "historical-pre-publication",
+    "status": "Noncanonical final candidate normalization; canonical/view/bridge unchanged.",
     "sourceStagePath": "docs/plan/verification/epic61-issue-58-staged-09-12.json",
     "sourceStageSha256": "845de58d579102389a176cbabfb532551def9b048fe73560482b4827d25d4205",
     "sourceDrafts": [
@@ -56498,9 +56497,8 @@
       }
     ],
     "scope": "Only original301..366 replaced from reviewed drafts13..15. First300 rows preserved deep-equal to staged09..12. All366 original IDs retained.",
-  "normalizationReview": {
-    "state": "unreviewed",
-    "checkpointKind": "historical-pre-publication",
+    "normalizationReview": {
+      "state": "unreviewed",
       "reviewer": null,
       "decision": null,
       "rationale": "Separate independent normalization review pending; semantic draft PASS is not normalization or runtime approval."

@@ -1,6 +1,6 @@
 # Issue #58: original SRS trace structure and semantic batches
 
-Status: structural tooling committed as7068ee9 after final18contractPASS32.882s. Root-authorized first100 reviewed candidate mappings are now applied to canonical366 rows with74 candidate links; remaining266 preserve their prior unverified bootstrap data. Renderer and read-only validator47bdbb both exited0. Runtime verified0 and execution evidence empty; final publication data review/root commit pending. Earlier waiting/preparation/11PASS/first25-only clauses below are historical checkpoints, not current status.
+Status: all366 reviewed candidate mappings are published in the canonical matrix with142 candidate links after structural tooling commit7068ee9 and final18contractPASS32.882s. Final renderer and read-only validation both exited0 in root publication894389. Runtime verified0 and execution evidence remain empty; authentic evidence and every gap/disposition are still required before issue completion. Earlier waiting/preparation/11PASS/first25/first100/first300 clauses below are historical checkpoints.
 
 - [x] Preserve immutable original source inventory. Status: all366 scoped IDs remain required; approved hashes651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d and364071a1f67e07501e7277e15ebdac057eb17ae8e6c2e076a3a550d916625657. No original bytes/comments changed.
 - [x] Prepare structural test before implementation. Status: test/unit/tools/srs-trace-validator.test.ts defines owned-source-copy fixtures, default read-only validation, explicit deterministic view rendering, complete IDs/hash/heading/type, exact case/parameter links, reverse bridge and false-verified rejection. Historical preparation: tests were held while the first #49 ordinary138-suite run was active; later executions are recorded below.
@@ -8,7 +8,7 @@ Status: structural tooling committed as7068ee9 after final18contractPASS32.882s.
 - [x] Implement validator and initial unverified366 canonical rows after RED. Status: historical bootstrap created all366 rows before semantic mapping; first100 are now applied as recorded above.
 - [x] Draft semantic batch01. Status: docs/plan/verification/epic61-issue-58-draft-batch-01.json contains only original sidecar positions1..25, exact headings/types and manually selected implementation/test candidates/gaps. The initial draft was unreviewed; subsequent independent corrections/reviews and first100 publication are recorded below. No runtime verified promotion or execution receipt was invented.
 - [x] Independent structural and first100 candidate mapping reviews. Status: structural final18PASS and separate fixer cross-reviews completed; batches01..04 clause/candidate/gap placement independently reviewed. First100 canonical publication preserves runtime unverified status; this does not close #58.
-- [ ] Independent publication review/root commit and subsequent mapping. Status: first100 applied with74 candidate links, remaining266 unverified and unchanged. Subsequent bounded batches and runtime evidence remain separate gates.
+- [x] Independent candidate publication review and complete mapping draft. Status: all366 rows are published with142 candidate links after independent semantic, normalization and render reviews. Runtime evidence and gap disposition remain separate incomplete gates.
 
 ## Historical initial preparation and structural checkpoints
 
@@ -82,6 +82,15 @@ Proposed publication title: `docs: 원본 요구사항 200개의 테스트 추�
 - [ ] Publish the final 66 reviewed rows and attach authentic execution evidence. Status: batches 13–15 remain in staging. All current rows remain unverified/candidate; publication is not issue completion.
 
 Proposed publication title: `docs: 원본 요구사항 300개의 테스트 추적 연결`.
+
+## All 366 candidate mappings published
+
+- [x] Complete independent semantic review and normalization for batches 13–15. Status: the final 66 rows retain every original record, clause, limited candidate, context, gap and pending disposition. The first 300 rows stayed deep-equal to their reviewed stage.
+- [x] Validate the complete staging data in an owned render root. Status: the initial read-only run reported only the expected derived-output mismatch; owned render and read-only validation exited 0 under `srs58-final366-3y5pLd`. The stage contains 366 rows and 142 candidate links with zero verified links and zero runtime evidence.
+- [x] Publish all 366 candidate mappings. Status: root applied the reviewed stage `3ec42db8633a9724f1c5c6cca84365c2c10ec5e54e21f889d1a43313da95a6b1`, generated the Markdown and test bridge, and passed read-only validation. After marking embedded staging metadata as historical, current hashes are matrix `e292d59743b119d0fa1e879db6baae4a3e4be79a3086da066361c9977c3e22c2`, Markdown `5511ee10e51eb4ee39fb349a9c9e5b550c2404bded823d2732988417b97aa4df`, bridge `f8d95ce1b344793fce4f907948a723c4d2e0fc5d9e1a749b6a9d138e24294d18`. Previous outputs are preserved under `srs58-final366-publish-eb1a1802bf204e3f8d668751b0f362b0`.
+- [ ] Attach authentic execution evidence and resolve every explicit gap/disposition. Status: all rows remain unverified/candidate. The complete candidate inventory satisfies the mapping draft milestone but does not prove implementation or runtime verification and does not by itself close issue #58.
+
+Proposed publication title: `docs: 원본 요구사항 366개의 테스트 추적 초안 완성`.
 
 ## Semantic draft batch02: original positions 26 through 50
 

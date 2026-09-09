@@ -1,0 +1,3328 @@
+{
+  "artifactKind": "noncanonical-semantic-draft",
+  "batch": "13",
+  "status": "candidate-unreviewed; no runtime execution",
+  "sourceManifest": {
+    "path": "docs/plan/srs/TTTGate.md",
+    "sidecarPath": "docs/plan/srs/TTTGate.items.jsonl",
+    "documentVersion": "1.0",
+    "markdownSha256": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+    "sidecarSha256": "364071a1f67e07501e7277e15ebdac057eb17ae8e6c2e076a3a550d916625657"
+  },
+  "sourceCheckpoint": "58f71969ef2df77bb729e21cb4b709b4c61d8acb",
+  "inventoryPolicy": {
+    "canonicalRequired": 366,
+    "batchSize": 25,
+    "selected": "Original sidecar ordinals301 through325 inclusive"
+  },
+  "execution": {
+    "testsRun": false,
+    "validatorRun": false,
+    "buildRun": false,
+    "evidence": []
+  },
+  "rows": [
+    {
+      "originalOrdinal": 301,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "API-ADMIN-TUNNEL-ACTIVE-002"
+      },
+      "originalRecord": {
+        "id": "API-ADMIN-TUNNEL-ACTIVE-002",
+        "type": "api_contract",
+        "title": "POST /api/tunneling/active/{port}",
+        "description": "요청 body: {active:boolean, timeout:number(초)}. 응답 {success, message}. 포트별 외부 서버 활성/비활성 및 자동 해제 타임아웃.",
+        "source": [
+          "admin/src/controller/ServerOptionCtrl.ts:192-208"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-TUNNEL-ACTIVATION-001"
+        ]
+      },
+      "category": "api_contract",
+      "title": "POST /api/tunneling/active/{port}",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1457,
+        "exactHeading": "##### API-ADMIN-TUNNEL-ACTIVE-002 — POST /api/tunneling/active/{port}",
+        "sidecarId": "API-ADMIN-TUNNEL-ACTIVE-002"
+      },
+      "acceptance": {
+        "descriptionRef": "API-ADMIN-TUNNEL-ACTIVE-002",
+        "originalDescription": "요청 body: {active:boolean, timeout:number(초)}. 응답 {success, message}. 포트별 외부 서버 활성/비활성 및 자동 해제 타임아웃.",
+        "clauses": [
+          {
+            "id": "API-ADMIN-TUNNEL-ACTIVE-002::c1",
+            "text": "POST activation to /api/tunneling/active/{port}.",
+            "sourceRef": "title",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "API-ADMIN-TUNNEL-ACTIVE-002::c2",
+            "text": "Send active:boolean.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "API-ADMIN-TUNNEL-ACTIVE-002::c3",
+            "text": "Send timeout in seconds.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "API-ADMIN-TUNNEL-ACTIVE-002::c4",
+            "text": "Return success.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "API-ADMIN-TUNNEL-ACTIVE-002::c5",
+            "text": "Return message.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "API-ADMIN-TUNNEL-ACTIVE-002::c6",
+            "text": "Activate or deactivate the port-specific server.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "API-ADMIN-TUNNEL-ACTIVE-002::c7",
+            "text": "Apply automatic deactivation timeout.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/ServerOptionCtrl.ts",
+            "line": 184,
+            "symbol": "public async activeExternalPortServer",
+            "rationale": "Current read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing API/UI/build/assumption obligations remain candidates, not automatic exemptions."
+      },
+      "verification": [
+        {
+          "testPath": "test/admin/csrf-requests.test.ts",
+          "caseLine": 141,
+          "exactTitle": "all seven authenticated browser controller mutations succeed against the real admin API",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "API-ADMIN-TUNNEL-ACTIVE-002::c4",
+            "API-ADMIN-TUNNEL-ACTIVE-002::c6"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 169,
+              "text": "expect(fixture.tunnel.externalServerStatus(fixture.forwardPort).active).toBe(true);"
+            },
+            {
+              "line": 161,
+              "text": "expect(results.map((result: any) => ({success: result.success, message: result.success ? \"\" : result.message})))"
+            }
+          ],
+          "rationale": "Actual browser controller activation returns success and backend active=true. Other mutations share the case; no inactive/timeout precision or raw message field assertion.",
+          "technique": "source-read-candidate",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "API-ADMIN-TUNNEL-ACTIVE-002::c1",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "API-ADMIN-TUNNEL-ACTIVE-002::c2",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "API-ADMIN-TUNNEL-ACTIVE-002::c3",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "API-ADMIN-TUNNEL-ACTIVE-002::c4",
+          "explanation": "Concrete candidate only; full clause/parameter coverage and exact non-skipped receipt absent.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "API-ADMIN-TUNNEL-ACTIVE-002::c5",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "API-ADMIN-TUNNEL-ACTIVE-002::c6",
+          "explanation": "Concrete candidate only; full clause/parameter coverage and exact non-skipped receipt absent.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "API-ADMIN-TUNNEL-ACTIVE-002::c7",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "timeout is optional at controller boundary and defaults0; original describes numeric seconds. Successful activation without timeout is not auto-deactivation timing proof."
+      }
+    },
+    {
+      "originalOrdinal": 302,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "API-ADMIN-EXT-CERT-GET-002"
+      },
+      "originalRecord": {
+        "id": "API-ADMIN-EXT-CERT-GET-002",
+        "type": "api_contract",
+        "title": "GET /api/externalCert/{port}",
+        "description": "응답 {certInfo:CertInfo} — 특정 외부 포트 전용 인증서.",
+        "source": [
+          "admin/src/controller/CertificationCtrl.ts:44-54"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-TUNNEL-LOAD-001"
+        ]
+      },
+      "category": "api_contract",
+      "title": "GET /api/externalCert/{port}",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1351,
+        "exactHeading": "##### API-ADMIN-EXT-CERT-GET-002 — GET /api/externalCert/{port}",
+        "sidecarId": "API-ADMIN-EXT-CERT-GET-002"
+      },
+      "acceptance": {
+        "descriptionRef": "API-ADMIN-EXT-CERT-GET-002",
+        "originalDescription": "응답 {certInfo:CertInfo} — 특정 외부 포트 전용 인증서.",
+        "clauses": [
+          {
+            "id": "API-ADMIN-EXT-CERT-GET-002::c1",
+            "text": "GET /api/externalCert/{port}.",
+            "sourceRef": "title",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "API-ADMIN-EXT-CERT-GET-002::c2",
+            "text": "Return certInfo for the specified external port.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/CertificationCtrl.ts",
+            "line": 41,
+            "symbol": "public async loadExternalServerCert",
+            "rationale": "Current read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing API/UI/build/assumption obligations remain candidates, not automatic exemptions."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "API-ADMIN-EXT-CERT-GET-002::c1",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "API-ADMIN-EXT-CERT-GET-002::c2",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current response includes revisionState; controller returns {value:certInfo,revision}. Preserve original wire certInfo field, distinguish controller snapshot wrapper and missing full schema assertion under #34/#71."
+      }
+    },
+    {
+      "originalOrdinal": 303,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "API-ADMIN-EXT-CERT-POST-002"
+      },
+      "originalRecord": {
+        "id": "API-ADMIN-EXT-CERT-POST-002",
+        "type": "api_contract",
+        "title": "POST /api/externalCert/{port}",
+        "description": "요청 body: {certInfo:CertInfo}. 응답 {success, message}.",
+        "source": [
+          "admin/src/controller/CertificationCtrl.ts:56-69"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-TUNNEL-APPLY-001"
+        ]
+      },
+      "category": "api_contract",
+      "title": "POST /api/externalCert/{port}",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1369,
+        "exactHeading": "##### API-ADMIN-EXT-CERT-POST-002 — POST /api/externalCert/{port}",
+        "sidecarId": "API-ADMIN-EXT-CERT-POST-002"
+      },
+      "acceptance": {
+        "descriptionRef": "API-ADMIN-EXT-CERT-POST-002",
+        "originalDescription": "요청 body: {certInfo:CertInfo}. 응답 {success, message}.",
+        "clauses": [
+          {
+            "id": "API-ADMIN-EXT-CERT-POST-002::c1",
+            "text": "POST /api/externalCert/{port}.",
+            "sourceRef": "title",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "API-ADMIN-EXT-CERT-POST-002::c2",
+            "text": "Send certInfo in the request body.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "API-ADMIN-EXT-CERT-POST-002::c3",
+            "text": "Return success.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "API-ADMIN-EXT-CERT-POST-002::c4",
+            "text": "Return message.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/CertificationCtrl.ts",
+            "line": 53,
+            "symbol": "public async updateExternalServerCert",
+            "rationale": "Current read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing API/UI/build/assumption obligations remain candidates, not automatic exemptions."
+      },
+      "verification": [
+        {
+          "testPath": "test/admin/csrf-requests.test.ts",
+          "caseLine": 141,
+          "exactTitle": "all seven authenticated browser controller mutations succeed against the real admin API",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "API-ADMIN-EXT-CERT-POST-002::c3"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 161,
+              "text": "expect(results.map((result: any) => ({success: result.success, message: result.success ? \"\" : result.message})))"
+            }
+          ],
+          "rationale": "Ordered real browser calls include external certificate POST and every result.success true. Synthetic message='' in assertion does not prove response message; cert body/PEM not independently asserted for external path.",
+          "technique": "source-read-candidate",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "API-ADMIN-EXT-CERT-POST-002::c1",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "API-ADMIN-EXT-CERT-POST-002::c2",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "API-ADMIN-EXT-CERT-POST-002::c3",
+          "explanation": "Concrete candidate only; full clause/parameter coverage and exact non-skipped receipt absent.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "API-ADMIN-EXT-CERT-POST-002::c4",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current standalone certificate controller still POSTs {certInfo}; compound tunnel changes use a separate #71 path. Never treat one as proof of the other."
+      }
+    },
+    {
+      "originalOrdinal": 304,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "API-ADMIN-EXT-CERT-DEL-002"
+      },
+      "originalRecord": {
+        "id": "API-ADMIN-EXT-CERT-DEL-002",
+        "type": "api_contract",
+        "title": "DELETE /api/externalCert/{port}",
+        "description": "응답 {success, message}. 포트 제거 시 호출.",
+        "source": [
+          "admin/src/controller/CertificationCtrl.ts:71-80"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-TUNNEL-CLEANUP-001"
+        ]
+      },
+      "category": "api_contract",
+      "title": "DELETE /api/externalCert/{port}",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1333,
+        "exactHeading": "##### API-ADMIN-EXT-CERT-DEL-002 — DELETE /api/externalCert/{port}",
+        "sidecarId": "API-ADMIN-EXT-CERT-DEL-002"
+      },
+      "acceptance": {
+        "descriptionRef": "API-ADMIN-EXT-CERT-DEL-002",
+        "originalDescription": "응답 {success, message}. 포트 제거 시 호출.",
+        "clauses": [
+          {
+            "id": "API-ADMIN-EXT-CERT-DEL-002::c1",
+            "text": "DELETE /api/externalCert/{port}.",
+            "sourceRef": "title",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "API-ADMIN-EXT-CERT-DEL-002::c2",
+            "text": "Return success.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "API-ADMIN-EXT-CERT-DEL-002::c3",
+            "text": "Return message.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "API-ADMIN-EXT-CERT-DEL-002::c4",
+            "text": "Invoke deletion when removing the port.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/CertificationCtrl.ts",
+            "line": 64,
+            "symbol": "public async deleteExternalServerCert",
+            "rationale": "Current read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing API/UI/build/assumption obligations remain candidates, not automatic exemptions."
+      },
+      "verification": [
+        {
+          "testPath": "test/admin/csrf-requests.test.ts",
+          "caseLine": 141,
+          "exactTitle": "all seven authenticated browser controller mutations succeed against the real admin API",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "API-ADMIN-EXT-CERT-DEL-002::c2"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 161,
+              "text": "expect(results.map((result: any) => ({success: result.success, message: result.success ? \"\" : result.message})))"
+            }
+          ],
+          "rationale": "Actual external DELETE uses expectedCertificateRevision from preceding read and reports success; original port-removal sequence and response message not asserted.",
+          "technique": "source-read-candidate",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "API-ADMIN-EXT-CERT-DEL-002::c1",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "API-ADMIN-EXT-CERT-DEL-002::c2",
+          "explanation": "Concrete candidate only; full clause/parameter coverage and exact non-skipped receipt absent.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "API-ADMIN-EXT-CERT-DEL-002::c3",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "API-ADMIN-EXT-CERT-DEL-002::c4",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current DELETE requires expectedCertificateRevision and compound port removal no longer follows separate certificate-before-tunnel sequence (#71). Original contract is incomplete; disposition pending.",
+        "contextLedger": "docs/plan/verification/epic61-issue-71.md"
+      }
+    },
+    {
+      "originalOrdinal": 305,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "API-ADMIN-CLIENT-SYSINFO-002"
+      },
+      "originalRecord": {
+        "id": "API-ADMIN-CLIENT-SYSINFO-002",
+        "type": "api_contract",
+        "title": "GET /api/clientSysInfo/{id}",
+        "description": "응답 SysInfo (success=false 시 message throw). 클라이언트 ID 별 시스템 정보.",
+        "source": [
+          "admin/src/controller/ServerStatusCtrl.ts:71-93"
+        ],
+        "confidence": 0.94,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-STATUS-SYSINFO-001"
+        ]
+      },
+      "category": "api_contract",
+      "title": "GET /api/clientSysInfo/{id}",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1297,
+        "exactHeading": "##### API-ADMIN-CLIENT-SYSINFO-002 — GET /api/clientSysInfo/{id}",
+        "sidecarId": "API-ADMIN-CLIENT-SYSINFO-002"
+      },
+      "acceptance": {
+        "descriptionRef": "API-ADMIN-CLIENT-SYSINFO-002",
+        "originalDescription": "응답 SysInfo (success=false 시 message throw). 클라이언트 ID 별 시스템 정보.",
+        "clauses": [
+          {
+            "id": "API-ADMIN-CLIENT-SYSINFO-002::c1",
+            "text": "GET /api/clientSysInfo/{id}.",
+            "sourceRef": "title",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "API-ADMIN-CLIENT-SYSINFO-002::c2",
+            "text": "Return that client's SysInfo.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "API-ADMIN-CLIENT-SYSINFO-002::c3",
+            "text": "Throw the response message on success=false.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/ServerStatusCtrl.ts",
+            "line": 71,
+            "symbol": "public async getClientSysInfo",
+            "rationale": "Current read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing API/UI/build/assumption obligations remain candidates, not automatic exemptions."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "API-ADMIN-CLIENT-SYSINFO-002::c1",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "API-ADMIN-CLIENT-SYSINFO-002::c2",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "API-ADMIN-CLIENT-SYSINFO-002::c3",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 306,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "MODE-UI-SESSION-001"
+      },
+      "originalRecord": {
+        "id": "MODE-UI-SESSION-001",
+        "type": "system_mode",
+        "title": "세션 상태(Checking/Valid/Invalid)",
+        "description": "App.svelte 의 SessionState 타입으로 초기 Checking, validateSession 결과에 따라 Valid 또는 Invalid. 모든 Ctrl 는 401 응답 시 InvalidSession 예외 throw → 레이아웃이 세션 만료 알림 후 '/' 로 이동.",
+        "source": [
+          "admin/src/App.svelte:12-20",
+          "admin/src/controller/InvalidSession.ts:1-6",
+          "admin/src/layout/ServerSetLayout.svelte:185-189"
+        ],
+        "confidence": 0.96,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-BOOT-001"
+        ]
+      },
+      "category": "system_mode",
+      "title": "세션 상태(Checking/Valid/Invalid)",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1943,
+        "exactHeading": "#### MODE-UI-SESSION-001 — 세션 상태(Checking/Valid/Invalid)",
+        "sidecarId": "MODE-UI-SESSION-001"
+      },
+      "acceptance": {
+        "descriptionRef": "MODE-UI-SESSION-001",
+        "originalDescription": "App.svelte 의 SessionState 타입으로 초기 Checking, validateSession 결과에 따라 Valid 또는 Invalid. 모든 Ctrl 는 401 응답 시 InvalidSession 예외 throw → 레이아웃이 세션 만료 알림 후 '/' 로 이동.",
+        "clauses": [
+          {
+            "id": "MODE-UI-SESSION-001::c1",
+            "text": "Initialize App session state to Checking.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "MODE-UI-SESSION-001::c2",
+            "text": "Transition to Valid or Invalid according to validateSession.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "MODE-UI-SESSION-001::c3",
+            "text": "Every controller throws InvalidSession on HTTP401.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "MODE-UI-SESSION-001::c4",
+            "text": "Layouts alert session expiry then redirect to '/'.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/App.svelte",
+            "line": 14,
+            "symbol": "let _validSession",
+            "rationale": "Current read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing API/UI/build/assumption obligations remain candidates, not automatic exemptions."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "MODE-UI-SESSION-001::c1",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "MODE-UI-SESSION-001::c2",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "MODE-UI-SESSION-001::c3",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "MODE-UI-SESSION-001::c4",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Not every controller throws on401: LoginCtrl.validateSession returns json.valid without a status guard, LoginCtrl.login returns structured failure, and getVersion returns JSON directly. SessionState and layout exception behavior require method-specific disposition."
+      }
+    },
+    {
+      "originalOrdinal": 307,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "BR-UI-SESSION-COOKIE-001"
+      },
+      "originalRecord": {
+        "id": "BR-UI-SESSION-COOKIE-001",
+        "type": "business_rule",
+        "title": "same-origin 쿠키 기반 세션",
+        "description": "모든 fetch 호출은 credentials:'same-origin' 으로 수행되어 서버가 설정한 세션 쿠키를 자동으로 전송. 토큰을 JS 수준에서 저장하지 않는다.",
+        "source": [
+          "admin/src/controller/LoginCtrl.ts:9-36",
+          "admin/src/controller/ServerOptionCtrl.ts:41-205",
+          "admin/src/controller/CertificationCtrl.ts:18-75"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "MODE-UI-SESSION-001"
+        ]
+      },
+      "category": "business_rule",
+      "title": "same-origin 쿠키 기반 세션",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3565,
+        "exactHeading": "#### BR-UI-SESSION-COOKIE-001 — same-origin 쿠키 기반 세션",
+        "sidecarId": "BR-UI-SESSION-COOKIE-001"
+      },
+      "acceptance": {
+        "descriptionRef": "BR-UI-SESSION-COOKIE-001",
+        "originalDescription": "모든 fetch 호출은 credentials:'same-origin' 으로 수행되어 서버가 설정한 세션 쿠키를 자동으로 전송. 토큰을 JS 수준에서 저장하지 않는다.",
+        "clauses": [
+          {
+            "id": "BR-UI-SESSION-COOKIE-001::c1",
+            "text": "Every fetch explicitly uses credentials:same-origin.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-UI-SESSION-COOKIE-001::c2",
+            "text": "Automatically send server-provided session cookies.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-UI-SESSION-COOKIE-001::c3",
+            "text": "Do not store tokens at JavaScript level as originally stated.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/AdminRequest.ts",
+            "line": 10,
+            "symbol": "const requestJson",
+            "rationale": "Current read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing API/UI/build/assumption obligations remain candidates, not automatic exemptions."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "BR-UI-SESSION-COOKIE-001::c1",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "BR-UI-SESSION-COOKIE-001::c2",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "BR-UI-SESSION-COOKIE-001::c3",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Some GET methods omit explicit credentials but fetch defaults same-origin. AdminRequest reads csrfToken into local JS variables and tracks an in-flight recovery promise; original tokens wording should distinguish HttpOnly session cookie from JS-readable CSRF token. No blanket no-JS-token assertion."
+      }
+    },
+    {
+      "originalOrdinal": 308,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "NFR-UI-POLLING-001"
+      },
+      "originalRecord": {
+        "id": "NFR-UI-POLLING-001",
+        "type": "nonfunctional_req",
+        "title": "상태 폴링 주기 1초",
+        "description": "ServerStatusLayout 및 TunnelOptionSetLayout 모두 1000ms setInterval 로 서버 상태와 외부 서버 상태를 갱신. 실패 시 interval 중단.",
+        "source": [
+          "admin/src/layout/ServerStatusLayout.svelte:37-42",
+          "admin/src/layout/TunnelOptionSetLayout.svelte:151-161"
+        ],
+        "confidence": 0.97,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-STATUS-POLL-001",
+          "FR-UI-TUNNEL-STATUSCARD-001"
+        ]
+      },
+      "category": "nonfunctional_req",
+      "title": "상태 폴링 주기 1초",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 879,
+        "exactHeading": "##### NFR-UI-POLLING-001 — 상태 폴링 주기 1초",
+        "sidecarId": "NFR-UI-POLLING-001"
+      },
+      "acceptance": {
+        "descriptionRef": "NFR-UI-POLLING-001",
+        "originalDescription": "ServerStatusLayout 및 TunnelOptionSetLayout 모두 1000ms setInterval 로 서버 상태와 외부 서버 상태를 갱신. 실패 시 interval 중단.",
+        "clauses": [
+          {
+            "id": "NFR-UI-POLLING-001::c1",
+            "text": "ServerStatusLayout polls on1000ms intervals.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-UI-POLLING-001::c2",
+            "text": "TunnelOptionSetLayout polls on1000ms intervals.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-UI-POLLING-001::c3",
+            "text": "Stop the polling interval after a failed update.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/ServerStatusLayout.svelte",
+            "line": 34,
+            "symbol": "let _startStatusUpdate",
+            "rationale": "Current read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing API/UI/build/assumption obligations remain candidates, not automatic exemptions."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "NFR-UI-POLLING-001::c1",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "NFR-UI-POLLING-001::c2",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "NFR-UI-POLLING-001::c3",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "ServerStatusLayout performs initial load and stops on later false; TunnelOptionSetLayout uses its own loading/ignore-error paths. Source1000ms is not measured cadence/cleanup evidence."
+      }
+    },
+    {
+      "originalOrdinal": 309,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "NFR-UI-RESTART-TIMEOUT-001"
+      },
+      "originalRecord": {
+        "id": "NFR-UI-RESTART-TIMEOUT-001",
+        "type": "nonfunctional_req",
+        "title": "서버 옵션 재시작 감지 타임아웃",
+        "description": "checkChangeServerOption 은 1초 주기로 serverOptionHash 폴링하며 120초(120000ms) 내에 해시 변화가 없으면 실패 처리.",
+        "source": [
+          "admin/src/controller/ServerOptionCtrl.ts:67-99"
+        ],
+        "confidence": 0.96,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-SERVEROPT-APPLY-001"
+        ]
+      },
+      "category": "nonfunctional_req",
+      "title": "서버 옵션 재시작 감지 타임아웃",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 889,
+        "exactHeading": "##### NFR-UI-RESTART-TIMEOUT-001 — 서버 옵션 재시작 감지 타임아웃",
+        "sidecarId": "NFR-UI-RESTART-TIMEOUT-001"
+      },
+      "acceptance": {
+        "descriptionRef": "NFR-UI-RESTART-TIMEOUT-001",
+        "originalDescription": "checkChangeServerOption 은 1초 주기로 serverOptionHash 폴링하며 120초(120000ms) 내에 해시 변화가 없으면 실패 처리.",
+        "clauses": [
+          {
+            "id": "NFR-UI-RESTART-TIMEOUT-001::c1",
+            "text": "Poll serverOptionHash every1000ms.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-UI-RESTART-TIMEOUT-001::c2",
+            "text": "If no hash change occurs within120000ms treat restart detection as failure.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/ServerOptionCtrl.ts",
+            "line": 71,
+            "symbol": "public async checkChangeServerOption",
+            "rationale": "Current read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing API/UI/build/assumption obligations remain candidates, not automatic exemptions."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "NFR-UI-RESTART-TIMEOUT-001::c1",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "NFR-UI-RESTART-TIMEOUT-001::c2",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "checkChangeServerOption resolves(newHash!=oldHash) on the first nonempty successful hash, including unchanged hash;120000ms guards exception paths. It does not keep polling unchanged hashes for120seconds as original wording implies."
+      }
+    },
+    {
+      "originalOrdinal": 310,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "NFR-USAB-UI-FEEDBACK-001"
+      },
+      "originalRecord": {
+        "id": "NFR-USAB-UI-FEEDBACK-001",
+        "type": "nonfunctional_req",
+        "title": "사용자 피드백(로딩/알림)",
+        "description": "긴 비동기 작업은 Loading 오버레이와 Alert 모달로 진행/결과를 전달. Retry 버튼으로 재시도 가능.",
+        "source": [
+          "admin/src/layout/ServerSetLayout.svelte:96-102",
+          "admin/src/layout/ServerSetLayout.svelte:136-140",
+          "admin/src/layout/TunnelOptionSetLayout.svelte:335-339"
+        ],
+        "confidence": 0.92,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "IF-UI-LOADING-001",
+          "IF-UI-ALERT-001"
+        ]
+      },
+      "category": "nonfunctional_req",
+      "title": "사용자 피드백(로딩/알림)",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 899,
+        "exactHeading": "##### NFR-USAB-UI-FEEDBACK-001 — 사용자 피드백(로딩/알림)",
+        "sidecarId": "NFR-USAB-UI-FEEDBACK-001"
+      },
+      "acceptance": {
+        "descriptionRef": "NFR-USAB-UI-FEEDBACK-001",
+        "originalDescription": "긴 비동기 작업은 Loading 오버레이와 Alert 모달로 진행/결과를 전달. Retry 버튼으로 재시도 가능.",
+        "clauses": [
+          {
+            "id": "NFR-USAB-UI-FEEDBACK-001::c1",
+            "text": "Show loading overlay for long asynchronous work.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-USAB-UI-FEEDBACK-001::c2",
+            "text": "Show alert results.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-USAB-UI-FEEDBACK-001::c3",
+            "text": "Offer Retry for a failed operation.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/ServerSetLayout.svelte",
+            "line": 123,
+            "symbol": "let _apply",
+            "rationale": "Current read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing API/UI/build/assumption obligations remain candidates, not automatic exemptions."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "NFR-USAB-UI-FEEDBACK-001::c1",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "NFR-USAB-UI-FEEDBACK-001::c2",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "NFR-USAB-UI-FEEDBACK-001::c3",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Retry exists on selected ServerSetLayout failures; no universal automatic retry or all-long-operation overlay coverage inferred."
+      }
+    },
+    {
+      "originalOrdinal": 311,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "NFR-USAB-UI-RESPONSIVE-001"
+      },
+      "originalRecord": {
+        "id": "NFR-USAB-UI-RESPONSIVE-001",
+        "type": "nonfunctional_req",
+        "title": "반응형 레이아웃(모바일 대응)",
+        "description": "Gauge/Login/TunnelOption 에서 media query(max-width 400px/480px/580px)로 폰트 크기와 레이아웃을 축소.",
+        "source": [
+          "admin/src/layout/Login.svelte:118-139",
+          "admin/src/component/Gauge.svelte:253-285",
+          "admin/src/layout/TunnelOptionSetLayout.svelte:741-753"
+        ],
+        "confidence": 0.9,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": []
+      },
+      "category": "nonfunctional_req",
+      "title": "반응형 레이아웃(모바일 대응)",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 909,
+        "exactHeading": "##### NFR-USAB-UI-RESPONSIVE-001 — 반응형 레이아웃(모바일 대응)",
+        "sidecarId": "NFR-USAB-UI-RESPONSIVE-001"
+      },
+      "acceptance": {
+        "descriptionRef": "NFR-USAB-UI-RESPONSIVE-001",
+        "originalDescription": "Gauge/Login/TunnelOption 에서 media query(max-width 400px/480px/580px)로 폰트 크기와 레이아웃을 축소.",
+        "clauses": [
+          {
+            "id": "NFR-USAB-UI-RESPONSIVE-001::c1",
+            "text": "Use responsive media queries at the original400px/480px/580px breakpoints across Gauge/Login/TunnelOption.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-USAB-UI-RESPONSIVE-001::c2",
+            "text": "Reduce fonts and layout through those queries.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/Login.svelte",
+            "line": 125,
+            "symbol": "@media",
+            "rationale": "Current read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing API/UI/build/assumption obligations remain candidates, not automatic exemptions."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "NFR-USAB-UI-RESPONSIVE-001::c1",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "NFR-USAB-UI-RESPONSIVE-001::c2",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 312,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "CONSTR-UI-BUILD-001"
+      },
+      "originalRecord": {
+        "id": "CONSTR-UI-BUILD-001",
+        "type": "constraint",
+        "title": "Vite 4 + Svelte 4 빌드",
+        "description": "admin/package.json 은 vite ^4.4.5, svelte ^4.0.5, @sveltejs/vite-plugin-svelte 2.x, typescript ^5.0.2 사용. script 는 dev/build/preview/check(svelte-check).",
+        "source": [
+          "admin/package.json:6-20"
+        ],
+        "confidence": 0.98,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": []
+      },
+      "category": "constraint",
+      "title": "Vite 4 + Svelte 4 빌드",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2233,
+        "exactHeading": "#### CONSTR-UI-BUILD-001 — Vite 4 + Svelte 4 빌드",
+        "sidecarId": "CONSTR-UI-BUILD-001"
+      },
+      "acceptance": {
+        "descriptionRef": "CONSTR-UI-BUILD-001",
+        "originalDescription": "admin/package.json 은 vite ^4.4.5, svelte ^4.0.5, @sveltejs/vite-plugin-svelte 2.x, typescript ^5.0.2 사용. script 는 dev/build/preview/check(svelte-check).",
+        "clauses": [
+          {
+            "id": "CONSTR-UI-BUILD-001::c1",
+            "text": "Use vite ^4.4.5.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-UI-BUILD-001::c2",
+            "text": "Use svelte ^4.0.5.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-UI-BUILD-001::c3",
+            "text": "Use vite-plugin-svelte2.x.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-UI-BUILD-001::c4",
+            "text": "Use typescript ^5.0.2.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-UI-BUILD-001::c5",
+            "text": "Provide dev script.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-UI-BUILD-001::c6",
+            "text": "Provide build script.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-UI-BUILD-001::c7",
+            "text": "Provide preview script.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-UI-BUILD-001::c8",
+            "text": "Provide check using svelte-check.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/package.json",
+            "line": 6,
+            "symbol": "\"scripts\"",
+            "rationale": "Current read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing API/UI/build/assumption obligations remain candidates, not automatic exemptions."
+      },
+      "verification": [],
+      "contextTests": [
+        {
+          "testPath": "test/admin/crypto-replacement.test.ts",
+          "caseLine": 7,
+          "exactTitle": "admin removes crypto-js and its certificate challenge uses the shared native random helper",
+          "parameters": [],
+          "assertedClauseRefs": [],
+          "assertionAnchors": [
+            {
+              "line": 10,
+              "text": "expect(manifest.dependencies[\"crypto-js\"]).toBeUndefined();"
+            }
+          ],
+          "rationale": "Static dependency replacement test is not original Vite4/Svelte4/version/script proof.",
+          "technique": "source-read-candidate",
+          "state": "candidate",
+          "evidence": [],
+          "disposition": "context-only; no direct original acceptance claim"
+        }
+      ],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "CONSTR-UI-BUILD-001::c1",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "CONSTR-UI-BUILD-001::c2",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "CONSTR-UI-BUILD-001::c3",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "CONSTR-UI-BUILD-001::c4",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "CONSTR-UI-BUILD-001::c5",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "CONSTR-UI-BUILD-001::c6",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "CONSTR-UI-BUILD-001::c7",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "CONSTR-UI-BUILD-001::c8",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Approved #5/#63 upgrade current manifest to Vite6/Svelte5/plugin5/TypeScript5.9 and Node24. Preserve original old versions as superseded pending formal disposition; no downgrade authorized.",
+        "contextLedger": "docs/plan/verification/epic61-issue-5.md"
+      }
+    },
+    {
+      "originalOrdinal": 313,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "CONSTR-UI-VITE-PROXY-001"
+      },
+      "originalRecord": {
+        "id": "CONSTR-UI-VITE-PROXY-001",
+        "type": "constraint",
+        "title": "Vite 개발 프록시 /api → localhost:9300",
+        "description": "vite.config.ts 가 '/api' 요청을 http://localhost:9300/api 로 proxy 하며 changeOrigin:true, rewrite 로 prefix 제거, secure:false, ws:true. 개발 환경에서 admin 백엔드(9300)가 실행되어야 한다.",
+        "source": [
+          "admin/vite.config.ts:5-18"
+        ],
+        "confidence": 0.98,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": null
+      },
+      "category": "constraint",
+      "title": "Vite 개발 프록시 /api → localhost:9300",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2259,
+        "exactHeading": "#### CONSTR-UI-VITE-PROXY-001 — Vite 개발 프록시 /api → localhost:9300",
+        "sidecarId": "CONSTR-UI-VITE-PROXY-001"
+      },
+      "acceptance": {
+        "descriptionRef": "CONSTR-UI-VITE-PROXY-001",
+        "originalDescription": "vite.config.ts 가 '/api' 요청을 http://localhost:9300/api 로 proxy 하며 changeOrigin:true, rewrite 로 prefix 제거, secure:false, ws:true. 개발 환경에서 admin 백엔드(9300)가 실행되어야 한다.",
+        "clauses": [
+          {
+            "id": "CONSTR-UI-VITE-PROXY-001::c1",
+            "text": "Proxy /api to http://localhost:9300/api.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-UI-VITE-PROXY-001::c2",
+            "text": "Enable changeOrigin.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-UI-VITE-PROXY-001::c3",
+            "text": "Remove the /api prefix using rewrite.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-UI-VITE-PROXY-001::c4",
+            "text": "Use secure:false.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-UI-VITE-PROXY-001::c5",
+            "text": "Enable WebSocket proxy.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-UI-VITE-PROXY-001::c6",
+            "text": "Require the development backend on9300.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/vite.config.ts",
+            "line": 58,
+            "symbol": "target: 'http://localhost:9300/api'",
+            "rationale": "Current read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing API/UI/build/assumption obligations remain candidates, not automatic exemptions."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "CONSTR-UI-VITE-PROXY-001::c1",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "CONSTR-UI-VITE-PROXY-001::c2",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "CONSTR-UI-VITE-PROXY-001::c3",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "CONSTR-UI-VITE-PROXY-001::c4",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "CONSTR-UI-VITE-PROXY-001::c5",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "CONSTR-UI-VITE-PROXY-001::c6",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Existing target/rewrite options remain, with approved development-origin middleware validating and adapting trusted origins. Local proxy tests use ephemeral backend overrides and do not prove fixed9300/ws behavior."
+      }
+    },
+    {
+      "originalOrdinal": 314,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "CONSTR-UI-TSCONFIG-001"
+      },
+      "originalRecord": {
+        "id": "CONSTR-UI-TSCONFIG-001",
+        "type": "constraint",
+        "title": "admin tsconfig: Svelte 확장",
+        "description": "@tsconfig/svelte 베이스 확장, target/module=ESNext, allowJs/checkJs/isolatedModules=true, useDefineForClassFields=true. include 에 .ts/.js/.svelte.",
+        "source": [
+          "admin/tsconfig.json:1-20"
+        ],
+        "confidence": 0.98,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": []
+      },
+      "category": "constraint",
+      "title": "admin tsconfig: Svelte 확장",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2251,
+        "exactHeading": "#### CONSTR-UI-TSCONFIG-001 — admin tsconfig: Svelte 확장",
+        "sidecarId": "CONSTR-UI-TSCONFIG-001"
+      },
+      "acceptance": {
+        "descriptionRef": "CONSTR-UI-TSCONFIG-001",
+        "originalDescription": "@tsconfig/svelte 베이스 확장, target/module=ESNext, allowJs/checkJs/isolatedModules=true, useDefineForClassFields=true. include 에 .ts/.js/.svelte.",
+        "clauses": [
+          {
+            "id": "CONSTR-UI-TSCONFIG-001::c1",
+            "text": "Extend @tsconfig/svelte.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-UI-TSCONFIG-001::c2",
+            "text": "Set target ESNext.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-UI-TSCONFIG-001::c3",
+            "text": "Set module ESNext.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-UI-TSCONFIG-001::c4",
+            "text": "Enable allowJs.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-UI-TSCONFIG-001::c5",
+            "text": "Enable checkJs.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-UI-TSCONFIG-001::c6",
+            "text": "Enable isolatedModules.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-UI-TSCONFIG-001::c7",
+            "text": "Enable useDefineForClassFields.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-UI-TSCONFIG-001::c8",
+            "text": "Include TS files.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-UI-TSCONFIG-001::c9",
+            "text": "Include JS files.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-UI-TSCONFIG-001::c10",
+            "text": "Include Svelte files.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/tsconfig.json",
+            "line": 2,
+            "symbol": "\"extends\"",
+            "rationale": "Current read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing API/UI/build/assumption obligations remain candidates, not automatic exemptions."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "CONSTR-UI-TSCONFIG-001::c1",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "CONSTR-UI-TSCONFIG-001::c2",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "CONSTR-UI-TSCONFIG-001::c3",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "CONSTR-UI-TSCONFIG-001::c4",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "CONSTR-UI-TSCONFIG-001::c5",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "CONSTR-UI-TSCONFIG-001::c6",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "CONSTR-UI-TSCONFIG-001::c7",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "CONSTR-UI-TSCONFIG-001::c8",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "CONSTR-UI-TSCONFIG-001::c9",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "CONSTR-UI-TSCONFIG-001::c10",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 315,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "UC-UI-BOOTSTRAP-PW-001"
+      },
+      "originalRecord": {
+        "id": "UC-UI-BOOTSTRAP-PW-001",
+        "type": "use_case",
+        "title": "최초 부트스트랩 비밀번호 설정",
+        "description": "1) 브라우저로 접속 → 2) validateSession=false → Login 렌더 → 3) isEmptyKey=true → 'No password has been set' 안내 → 4) 12자+숫자/특수문자 입력 → 5) POST /api/login 으로 해시 전송 → 6) 성공 시 / 로 리다이렉트. [제약] 본 시나리오 5) 단계에서 UI 는 bootstrapToken 을 전송하지 않으므로(admin/src/controller/LoginCtrl.ts:27-39) 최초 로그인이 실제로 성공하지 않는다. 현 구현에서는 API 를 직접 호출하는 별도 초기화 경로가 필요하다.",
+        "source": [
+          "admin/src/layout/Login.svelte:10-47",
+          "admin/src/controller/LoginCtrl.ts:27-48"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-LOGIN-002",
+          "BR-UI-PW-POLICY-001"
+        ]
+      },
+      "category": "use_case",
+      "title": "최초 부트스트랩 비밀번호 설정",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2885,
+        "exactHeading": "#### UC-UI-BOOTSTRAP-PW-001 — 최초 부트스트랩 비밀번호 설정",
+        "sidecarId": "UC-UI-BOOTSTRAP-PW-001"
+      },
+      "acceptance": {
+        "descriptionRef": "UC-UI-BOOTSTRAP-PW-001",
+        "originalDescription": "1) 브라우저로 접속 → 2) validateSession=false → Login 렌더 → 3) isEmptyKey=true → 'No password has been set' 안내 → 4) 12자+숫자/특수문자 입력 → 5) POST /api/login 으로 해시 전송 → 6) 성공 시 / 로 리다이렉트. [제약] 본 시나리오 5) 단계에서 UI 는 bootstrapToken 을 전송하지 않으므로(admin/src/controller/LoginCtrl.ts:27-39) 최초 로그인이 실제로 성공하지 않는다. 현 구현에서는 API 를 직접 호출하는 별도 초기화 경로가 필요하다.",
+        "clauses": [
+          {
+            "id": "UC-UI-BOOTSTRAP-PW-001::c1",
+            "text": "Preserve original bootstrap sequence: browser -> invalid session/Login -> emptyKey message ->12-character digit/special password -> hashed login ->redirect.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-BOOTSTRAP-PW-001::c2",
+            "text": "Preserve original constraint that missing bootstrapToken prevents UI-only success and requires separate initialization.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/Login.svelte",
+            "line": 11,
+            "symbol": "let onClickButton",
+            "rationale": "Current read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing API/UI/build/assumption obligations remain candidates, not automatic exemptions."
+      },
+      "verification": [],
+      "contextTests": [
+        {
+          "testPath": "test/admin/login-bootstrap.test.ts",
+          "caseLine": 77,
+          "exactTitle": "bootstrap response completes first setup without obsolete discovery requests",
+          "parameters": [],
+          "assertedClauseRefs": [],
+          "assertionAnchors": [
+            {
+              "line": 96,
+              "text": "expect(discoveryRequests).toEqual([]);"
+            },
+            {
+              "line": 91,
+              "text": "expect((await submit()).status()).toBe(200);"
+            }
+          ],
+          "rationale": "Approved #8 current flow succeeds with bootstrapToken and no emptyKey discovery; not historical sequence proof.",
+          "technique": "source-read-candidate",
+          "state": "candidate",
+          "evidence": [],
+          "disposition": "context-only; no direct original acceptance claim"
+        }
+      ],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "UC-UI-BOOTSTRAP-PW-001::c1",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-BOOTSTRAP-PW-001::c2",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Approved #8 supersedes emptyKey discovery,12-character policy,hashPassword and missing-bootstrap impossibility; current browser flow uses backend policy and raw password plus token.",
+        "contextLedger": "docs/plan/verification/epic61-issue-8.md"
+      }
+    },
+    {
+      "originalOrdinal": 316,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "UC-UI-LOGIN-001"
+      },
+      "originalRecord": {
+        "id": "UC-UI-LOGIN-001",
+        "type": "use_case",
+        "title": "관리자 로그인",
+        "description": "1) Invalid 세션 상태 → Login 화면 → 2) 비밀번호 입력 → 3) hashPassword→POST /api/login → 4) success 시 '/' 이동, 실패 시 'The password is incorrect.' 메시지.",
+        "source": [
+          "admin/src/layout/Login.svelte:18-41"
+        ],
+        "confidence": 0.97,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": null
+      },
+      "category": "use_case",
+      "title": "관리자 로그인",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2905,
+        "exactHeading": "#### UC-UI-LOGIN-001 — 관리자 로그인",
+        "sidecarId": "UC-UI-LOGIN-001"
+      },
+      "acceptance": {
+        "descriptionRef": "UC-UI-LOGIN-001",
+        "originalDescription": "1) Invalid 세션 상태 → Login 화면 → 2) 비밀번호 입력 → 3) hashPassword→POST /api/login → 4) success 시 '/' 이동, 실패 시 'The password is incorrect.' 메시지.",
+        "clauses": [
+          {
+            "id": "UC-UI-LOGIN-001::c1",
+            "text": "Render Login on Invalid.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-LOGIN-001::c2",
+            "text": "Accept password input.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-LOGIN-001::c3",
+            "text": "Hash password then POST login as originally specified.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-LOGIN-001::c4",
+            "text": "Redirect to '/' on success.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-LOGIN-001::c5",
+            "text": "Show The password is incorrect on failure.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/LoginCtrl.ts",
+            "line": 26,
+            "symbol": "public static async login",
+            "rationale": "Current read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing API/UI/build/assumption obligations remain candidates, not automatic exemptions."
+      },
+      "verification": [
+        {
+          "testPath": "test/admin/login-bootstrap.test.ts",
+          "caseLine": 113,
+          "exactTitle": "first-login UI requests the bootstrap token and accepts the existing server password policy",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "UC-UI-LOGIN-001::c2",
+            "UC-UI-LOGIN-001::c4"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 115,
+              "text": "await app.page.getByLabel(\"Password\", {exact: true}).fill(\"plainword\");"
+            },
+            {
+              "line": 122,
+              "text": "await app.page.waitForURL(`${origin()}/`);"
+            }
+          ],
+          "rationale": "Password entry and success redirect with bootstrap flow only. Invalid-session App rendering, old hash algorithm and wrong-password message remain gaps.",
+          "technique": "source-read-candidate",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "UC-UI-LOGIN-001::c1",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-LOGIN-001::c2",
+          "explanation": "Concrete candidate only; full clause/parameter coverage and exact non-skipped receipt absent.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-LOGIN-001::c3",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-LOGIN-001::c4",
+          "explanation": "Concrete candidate only; full clause/parameter coverage and exact non-skipped receipt absent.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-LOGIN-001::c5",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Approved #8 sends raw key/token; old hashPassword is absent. Wrong-password,429,network and bootstrap failures now have distinct messages, not a single blanket message.",
+        "contextLedger": "docs/plan/verification/epic61-issue-8.md"
+      }
+    },
+    {
+      "originalOrdinal": 317,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "UC-UI-SERVER-OPT-EDIT-001"
+      },
+      "originalRecord": {
+        "id": "UC-UI-SERVER-OPT-EDIT-001",
+        "type": "use_case",
+        "title": "서버 옵션 편집/저장",
+        "description": "1) onMount 로 getServerOption + getServerOptionHash + loadAdminCert → 2) 폼 편집(_isNewValue 활성화) → 3) Apply → 4) updateServerOption → 5) checkChangeServerOption 폴링(1s, 120s timeout) → 6) 해시 변경 감지 시 새 adminPort/adminTls 로 location.href 이동.",
+        "source": [
+          "admin/src/layout/ServerSetLayout.svelte:30-173"
+        ],
+        "confidence": 0.96,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-SERVEROPT-APPLY-001"
+        ]
+      },
+      "category": "use_case",
+      "title": "서버 옵션 편집/저장",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2913,
+        "exactHeading": "#### UC-UI-SERVER-OPT-EDIT-001 — 서버 옵션 편집/저장",
+        "sidecarId": "UC-UI-SERVER-OPT-EDIT-001"
+      },
+      "acceptance": {
+        "descriptionRef": "UC-UI-SERVER-OPT-EDIT-001",
+        "originalDescription": "1) onMount 로 getServerOption + getServerOptionHash + loadAdminCert → 2) 폼 편집(_isNewValue 활성화) → 3) Apply → 4) updateServerOption → 5) checkChangeServerOption 폴링(1s, 120s timeout) → 6) 해시 변경 감지 시 새 adminPort/adminTls 로 location.href 이동.",
+        "clauses": [
+          {
+            "id": "UC-UI-SERVER-OPT-EDIT-001::c1",
+            "text": "On mount load server options/hash/admin certificate.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-SERVER-OPT-EDIT-001::c2",
+            "text": "Editing enables Apply.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-SERVER-OPT-EDIT-001::c3",
+            "text": "Apply updates server options.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-SERVER-OPT-EDIT-001::c4",
+            "text": "Poll with1s interval/120s limit.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-SERVER-OPT-EDIT-001::c5",
+            "text": "On changed hash redirect to new adminPort/adminTls.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-SERVER-OPT-EDIT-001::c6",
+            "text": "Preserve the complete original mount->edit->apply->poll->redirect sequence.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/ServerSetLayout.svelte",
+            "line": 123,
+            "symbol": "let _apply",
+            "rationale": "Current read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing API/UI/build/assumption obligations remain candidates, not automatic exemptions."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "UC-UI-SERVER-OPT-EDIT-001::c1",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-SERVER-OPT-EDIT-001::c2",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-SERVER-OPT-EDIT-001::c3",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-SERVER-OPT-EDIT-001::c4",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-SERVER-OPT-EDIT-001::c5",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-SERVER-OPT-EDIT-001::c6",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "#34 captures held revision and #35 separates committed/pending/runtime scope. Changed hash is not proof that process/admin listener restarted; original order and notification need disposition.",
+        "contextLedger": "docs/plan/verification/epic61-issue-35.md"
+      }
+    },
+    {
+      "originalOrdinal": 318,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "UC-UI-TUNNEL-ADD-001"
+      },
+      "originalRecord": {
+        "id": "UC-UI-TUNNEL-ADD-001",
+        "type": "use_case",
+        "title": "튜널 추가 및 활성화",
+        "description": "1) 'Add tunneling service' → _addEmptyOption 으로 목록에 랜덤 포트 기본값 추가 → 2) 사용자 편집 → 3) Start 버튼(_onClickApply) → 4) (tls 면) updateExternalServerCert → updateTunnelingOption → 5) 1초 후 externalServerStatuses 에서 Online 상태 확인.",
+        "source": [
+          "admin/src/layout/TunnelOptionSetLayout.svelte:193-332",
+          "admin/src/layout/TunnelOptionSetLayout.svelte:478-537"
+        ],
+        "confidence": 0.94,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-TUNNEL-ADD-001",
+          "FR-UI-TUNNEL-APPLY-001"
+        ]
+      },
+      "category": "use_case",
+      "title": "튜널 추가 및 활성화",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2943,
+        "exactHeading": "#### UC-UI-TUNNEL-ADD-001 — 튜널 추가 및 활성화",
+        "sidecarId": "UC-UI-TUNNEL-ADD-001"
+      },
+      "acceptance": {
+        "descriptionRef": "UC-UI-TUNNEL-ADD-001",
+        "originalDescription": "1) 'Add tunneling service' → _addEmptyOption 으로 목록에 랜덤 포트 기본값 추가 → 2) 사용자 편집 → 3) Start 버튼(_onClickApply) → 4) (tls 면) updateExternalServerCert → updateTunnelingOption → 5) 1초 후 externalServerStatuses 에서 Online 상태 확인.",
+        "clauses": [
+          {
+            "id": "UC-UI-TUNNEL-ADD-001::c1",
+            "text": "Add row with random-port defaults.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-TUNNEL-ADD-001::c2",
+            "text": "Allow editing.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-TUNNEL-ADD-001::c3",
+            "text": "Start submits the row.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-TUNNEL-ADD-001::c4",
+            "text": "For TLS save certificate before tunneling option as originally stated.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-TUNNEL-ADD-001::c5",
+            "text": "Check Online status after1second.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/TunnelOptionSetLayout.svelte",
+            "line": 278,
+            "symbol": "let _onClickApply",
+            "rationale": "Current read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing API/UI/build/assumption obligations remain candidates, not automatic exemptions."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "UC-UI-TUNNEL-ADD-001::c1",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-TUNNEL-ADD-001::c2",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-TUNNEL-ADD-001::c3",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-TUNNEL-ADD-001::c4",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-TUNNEL-ADD-001::c5",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "#71 uses one compound POST with certInfo/revisions rather than external-cert-first calls. Source immediately reloads statuses as well as interval polling; exact1second Online claim unverified.",
+        "contextLedger": "docs/plan/verification/epic61-issue-71.md"
+      }
+    },
+    {
+      "originalOrdinal": 319,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "UC-UI-TUNNEL-UPDATE-001"
+      },
+      "originalRecord": {
+        "id": "UC-UI-TUNNEL-UPDATE-001",
+        "type": "use_case",
+        "title": "기존 튜널 수정(Apply and Restart)",
+        "description": "기존 isSync=true 옵션을 편집 → Apply and Restart 버튼 → _removeOldServerPort → updateExternalServerCert(선택) → updateTunnelingOption → 성공 시 Timer reset, 외부 서버 재시작.",
+        "source": [
+          "admin/src/layout/TunnelOptionSetLayout.svelte:272-332"
+        ],
+        "confidence": 0.92,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-TUNNEL-APPLY-001"
+        ]
+      },
+      "category": "use_case",
+      "title": "기존 튜널 수정(Apply and Restart)",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2963,
+        "exactHeading": "#### UC-UI-TUNNEL-UPDATE-001 — 기존 튜널 수정(Apply and Restart)",
+        "sidecarId": "UC-UI-TUNNEL-UPDATE-001"
+      },
+      "acceptance": {
+        "descriptionRef": "UC-UI-TUNNEL-UPDATE-001",
+        "originalDescription": "기존 isSync=true 옵션을 편집 → Apply and Restart 버튼 → _removeOldServerPort → updateExternalServerCert(선택) → updateTunnelingOption → 성공 시 Timer reset, 외부 서버 재시작.",
+        "clauses": [
+          {
+            "id": "UC-UI-TUNNEL-UPDATE-001::c1",
+            "text": "Edit an existing isSync row.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-TUNNEL-UPDATE-001::c2",
+            "text": "Click Apply and Restart.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-TUNNEL-UPDATE-001::c3",
+            "text": "Remove old port before update as originally stated.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-TUNNEL-UPDATE-001::c4",
+            "text": "Optionally update external certificate before tunnel update.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-TUNNEL-UPDATE-001::c5",
+            "text": "Update tunneling option.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-TUNNEL-UPDATE-001::c6",
+            "text": "Reset timer on success.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-TUNNEL-UPDATE-001::c7",
+            "text": "Restart external server.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/TunnelOptionSetLayout.svelte",
+            "line": 278,
+            "symbol": "let _onClickApply",
+            "rationale": "Current read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing API/UI/build/assumption obligations remain candidates, not automatic exemptions."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "UC-UI-TUNNEL-UPDATE-001::c1",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-TUNNEL-UPDATE-001::c2",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-TUNNEL-UPDATE-001::c3",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-TUNNEL-UPDATE-001::c4",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-TUNNEL-UPDATE-001::c5",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-TUNNEL-UPDATE-001::c6",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-TUNNEL-UPDATE-001::c7",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "#71 removed _removeOldServerPort and separate certificate update; preserves current snapshot identity and uses one compound request. Old ordering is not proved by current successful rename.",
+        "contextLedger": "docs/plan/verification/epic61-issue-71.md"
+      }
+    },
+    {
+      "originalOrdinal": 320,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "UC-UI-TUNNEL-DELETE-001"
+      },
+      "originalRecord": {
+        "id": "UC-UI-TUNNEL-DELETE-001",
+        "type": "use_case",
+        "title": "튜널 삭제",
+        "description": "Stop and Remove 버튼 클릭 → isSync=true 면 DELETE /api/tunnelingOption → 'Tunneling option has been removed' 알림 → 목록에서 splice.",
+        "source": [
+          "admin/src/layout/TunnelOptionSetLayout.svelte:238-270"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-TUNNEL-REMOVE-001"
+        ]
+      },
+      "category": "use_case",
+      "title": "튜널 삭제",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2953,
+        "exactHeading": "#### UC-UI-TUNNEL-DELETE-001 — 튜널 삭제",
+        "sidecarId": "UC-UI-TUNNEL-DELETE-001"
+      },
+      "acceptance": {
+        "descriptionRef": "UC-UI-TUNNEL-DELETE-001",
+        "originalDescription": "Stop and Remove 버튼 클릭 → isSync=true 면 DELETE /api/tunnelingOption → 'Tunneling option has been removed' 알림 → 목록에서 splice.",
+        "clauses": [
+          {
+            "id": "UC-UI-TUNNEL-DELETE-001::c1",
+            "text": "Click Stop and Remove.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-TUNNEL-DELETE-001::c2",
+            "text": "DELETE saved tunnelingOption.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-TUNNEL-DELETE-001::c3",
+            "text": "Show removal notification.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-TUNNEL-DELETE-001::c4",
+            "text": "Splice row from list.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/TunnelOptionSetLayout.svelte",
+            "line": 244,
+            "symbol": "let _onClickRemove",
+            "rationale": "Current read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing API/UI/build/assumption obligations remain candidates, not automatic exemptions."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "UC-UI-TUNNEL-DELETE-001::c1",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-TUNNEL-DELETE-001::c2",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-TUNNEL-DELETE-001::c3",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-TUNNEL-DELETE-001::c4",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current removal splices before notification and reloads options. Original ordering is not asserted by a successful backend DELETE."
+      }
+    },
+    {
+      "originalOrdinal": 321,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "UC-UI-TUNNEL-ACTIVATION-001"
+      },
+      "originalRecord": {
+        "id": "UC-UI-TUNNEL-ACTIVATION-001",
+        "type": "use_case",
+        "title": "튜널 활성/타임아웃 제어",
+        "description": "Online 튜널의 Switch 토글 또는 Timer 시간 변경 → activeExternalPortServer(active, port, timeout) → 응답에 따라 상태/복원.",
+        "source": [
+          "admin/src/layout/TunnelOptionSetLayout.svelte:418-462"
+        ],
+        "confidence": 0.93,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-TUNNEL-ACTIVATION-001"
+        ]
+      },
+      "category": "use_case",
+      "title": "튜널 활성/타임아웃 제어",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2933,
+        "exactHeading": "#### UC-UI-TUNNEL-ACTIVATION-001 — 튜널 활성/타임아웃 제어",
+        "sidecarId": "UC-UI-TUNNEL-ACTIVATION-001"
+      },
+      "acceptance": {
+        "descriptionRef": "UC-UI-TUNNEL-ACTIVATION-001",
+        "originalDescription": "Online 튜널의 Switch 토글 또는 Timer 시간 변경 → activeExternalPortServer(active, port, timeout) → 응답에 따라 상태/복원.",
+        "clauses": [
+          {
+            "id": "UC-UI-TUNNEL-ACTIVATION-001::c1",
+            "text": "Switch/Timer interaction invokes activeExternalPortServer(active,port,timeout).",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-TUNNEL-ACTIVATION-001::c2",
+            "text": "Apply or restore state according to response.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/TunnelOptionSetLayout.svelte",
+            "line": 398,
+            "symbol": "let _onChangeActive",
+            "rationale": "Current read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing API/UI/build/assumption obligations remain candidates, not automatic exemptions."
+      },
+      "verification": [],
+      "contextTests": [
+        {
+          "testPath": "test/admin/csrf-requests.test.ts",
+          "caseLine": 141,
+          "exactTitle": "all seven authenticated browser controller mutations succeed against the real admin API",
+          "parameters": [],
+          "assertedClauseRefs": [],
+          "assertionAnchors": [
+            {
+              "line": 169,
+              "text": "expect(fixture.tunnel.externalServerStatus(fixture.forwardPort).active).toBe(true);"
+            }
+          ],
+          "rationale": "Controller activation plus backend active state does not exercise Switch/Timer UI event wiring or restoration.",
+          "technique": "source-read-candidate",
+          "state": "candidate",
+          "evidence": [],
+          "disposition": "context-only; no direct original acceptance claim"
+        }
+      ],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "UC-UI-TUNNEL-ACTIVATION-001::c1",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-TUNNEL-ACTIVATION-001::c2",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Response success=false restores oldActive; exception path differs. Controller-only integration is not full Switch/Timer UX acceptance."
+      }
+    },
+    {
+      "originalOrdinal": 322,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "UC-UI-CERT-UPDATE-001"
+      },
+      "originalRecord": {
+        "id": "UC-UI-CERT-UPDATE-001",
+        "type": "use_case",
+        "title": "Admin TLS 인증서 교체",
+        "description": "adminTls 체크 → InputCertFile 로 key/cert/ca 업로드 → 형식/키쌍 검증 통과 → update 이벤트 → CertificationCtrl.updateAdminCert → Apply 시 서버 재시작 확인 후 적용.",
+        "source": [
+          "admin/src/layout/ServerSetLayout.svelte:75-102",
+          "admin/src/layout/InputCertFile.svelte:204-254"
+        ],
+        "confidence": 0.93,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-CERT-ADMIN-001",
+          "FR-UI-CERT-INPUT-001"
+        ]
+      },
+      "category": "use_case",
+      "title": "Admin TLS 인증서 교체",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2895,
+        "exactHeading": "#### UC-UI-CERT-UPDATE-001 — Admin TLS 인증서 교체",
+        "sidecarId": "UC-UI-CERT-UPDATE-001"
+      },
+      "acceptance": {
+        "descriptionRef": "UC-UI-CERT-UPDATE-001",
+        "originalDescription": "adminTls 체크 → InputCertFile 로 key/cert/ca 업로드 → 형식/키쌍 검증 통과 → update 이벤트 → CertificationCtrl.updateAdminCert → Apply 시 서버 재시작 확인 후 적용.",
+        "clauses": [
+          {
+            "id": "UC-UI-CERT-UPDATE-001::c1",
+            "text": "Enable adminTls.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-CERT-UPDATE-001::c2",
+            "text": "Upload key/cert/ca.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-CERT-UPDATE-001::c3",
+            "text": "Validate format and pair.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-CERT-UPDATE-001::c4",
+            "text": "Dispatch update.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-CERT-UPDATE-001::c5",
+            "text": "Call CertificationCtrl.updateAdminCert.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-CERT-UPDATE-001::c6",
+            "text": "On Apply confirm restart then apply certificate as originally described.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-CERT-UPDATE-001::c7",
+            "text": "Preserve complete upload->validation->update->Apply/restart order.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/ServerSetLayout.svelte",
+            "line": 82,
+            "symbol": "let _updateAdminCert",
+            "rationale": "Current read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing API/UI/build/assumption obligations remain candidates, not automatic exemptions."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "UC-UI-CERT-UPDATE-001::c1",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-CERT-UPDATE-001::c2",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-CERT-UPDATE-001::c3",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-CERT-UPDATE-001::c4",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-CERT-UPDATE-001::c5",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-CERT-UPDATE-001::c6",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-CERT-UPDATE-001::c7",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Certificate update can occur immediately on the component event before Apply. Issue #35 owns certificate persistence/runtime restoration and pending-restart recovery; the actual AdminServer and ServerSetLayout paths must be mapped separately. The original Apply-then-effective sequence remains pending disposition.",
+        "contextLedger": "docs/plan/verification/epic61-issue-35.md",
+        "decisionLinks": [
+          "https://github.com/ice3x2/TTTGate/issues/35",
+          "src/server/admin/AdminServer.ts",
+          "admin/src/layout/ServerSetLayout.svelte"
+        ]
+      }
+    },
+    {
+      "originalOrdinal": 323,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "UC-UI-STATUS-MONITOR-001"
+      },
+      "originalRecord": {
+        "id": "UC-UI-STATUS-MONITOR-001",
+        "type": "use_case",
+        "title": "서버 상태/시스템 정보 조회",
+        "description": "1) 로그인 후 ServerStatusLayout 자동 폴링(1s) → CPU/Memory/Heap/Buffer 게이지 업데이트 → 2) INFO 클릭 → SysinfoPopup → 3) Client id 클릭 → getClientSysInfo → 팝업 표시.",
+        "source": [
+          "admin/src/layout/ServerStatusLayout.svelte:28-127"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-STATUS-POLL-001",
+          "FR-UI-STATUS-SYSINFO-001"
+        ]
+      },
+      "category": "use_case",
+      "title": "서버 상태/시스템 정보 조회",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2923,
+        "exactHeading": "#### UC-UI-STATUS-MONITOR-001 — 서버 상태/시스템 정보 조회",
+        "sidecarId": "UC-UI-STATUS-MONITOR-001"
+      },
+      "acceptance": {
+        "descriptionRef": "UC-UI-STATUS-MONITOR-001",
+        "originalDescription": "1) 로그인 후 ServerStatusLayout 자동 폴링(1s) → CPU/Memory/Heap/Buffer 게이지 업데이트 → 2) INFO 클릭 → SysinfoPopup → 3) Client id 클릭 → getClientSysInfo → 팝업 표시.",
+        "clauses": [
+          {
+            "id": "UC-UI-STATUS-MONITOR-001::c1",
+            "text": "After login poll status every1second.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-STATUS-MONITOR-001::c2",
+            "text": "Update CPU/Memory/Heap/Buffer gauges.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-STATUS-MONITOR-001::c3",
+            "text": "INFO opens system popup.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-UI-STATUS-MONITOR-001::c4",
+            "text": "Client ID click obtains client sysinfo then opens popup.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/ServerStatusLayout.svelte",
+            "line": 45,
+            "symbol": "let _loadServerStatus",
+            "rationale": "Current read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing API/UI/build/assumption obligations remain candidates, not automatic exemptions."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "UC-UI-STATUS-MONITOR-001::c1",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-STATUS-MONITOR-001::c2",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-STATUS-MONITOR-001::c3",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "UC-UI-STATUS-MONITOR-001::c4",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 324,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "ASM-UI-ADMIN-BASE-001"
+      },
+      "originalRecord": {
+        "id": "ASM-UI-ADMIN-BASE-001",
+        "type": "assumption",
+        "title": "Admin 백엔드와 동일 origin",
+        "description": "모든 API 호출이 /api/* 경로 상대 URL 로 수행되므로 프로덕션에선 Admin 서버가 동일 host:port 에서 정적 SPA 와 REST 를 서빙한다고 가정. 개발 환경은 vite proxy 로 localhost:9300 매핑.",
+        "source": [
+          "admin/src/controller/LoginCtrl.ts:9-36",
+          "admin/vite.config.ts:5-18"
+        ],
+        "confidence": 0.9,
+        "inferred": true,
+        "phase_added": 2,
+        "related_ids": [
+          "CONSTR-UI-VITE-PROXY-001"
+        ]
+      },
+      "category": "assumption",
+      "title": "Admin 백엔드와 동일 origin",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 319,
+        "exactHeading": "#### ASM-UI-ADMIN-BASE-001 — Admin 백엔드와 동일 origin",
+        "sidecarId": "ASM-UI-ADMIN-BASE-001"
+      },
+      "acceptance": {
+        "descriptionRef": "ASM-UI-ADMIN-BASE-001",
+        "originalDescription": "모든 API 호출이 /api/* 경로 상대 URL 로 수행되므로 프로덕션에선 Admin 서버가 동일 host:port 에서 정적 SPA 와 REST 를 서빙한다고 가정. 개발 환경은 vite proxy 로 localhost:9300 매핑.",
+        "clauses": [
+          {
+            "id": "ASM-UI-ADMIN-BASE-001::c1",
+            "text": "Use relative /api/* URLs for every API call as originally stated.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "ASM-UI-ADMIN-BASE-001::c2",
+            "text": "Production serves SPA and REST from the same host/port.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "ASM-UI-ADMIN-BASE-001::c3",
+            "text": "Development maps through Vite proxy to localhost9300.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/ServerOptionCtrl.ts",
+            "line": 106,
+            "symbol": "public async getServerOptionHash",
+            "rationale": "Current read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing API/UI/build/assumption obligations remain candidates, not automatic exemptions."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "ASM-UI-ADMIN-BASE-001::c1",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "ASM-UI-ADMIN-BASE-001::c2",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "ASM-UI-ADMIN-BASE-001::c3",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "ServerOptionCtrl.getServerOptionHash constructs absolute protocol/hostname/port URL, including potential new admin origin. Original every-relative claim is broader than current source; proxy defaults do not prove production deployment topology."
+      }
+    },
+    {
+      "originalOrdinal": 325,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "ASM-UI-TYPES-DUP-001"
+      },
+      "originalRecord": {
+        "id": "ASM-UI-TYPES-DUP-001",
+        "type": "assumption",
+        "title": "Types.ts vs Options.ts 중복 정의",
+        "description": "ServerOption, HttpOption, CustomHeader 등이 Types.ts 와 Options.ts 에 서로 다른 필드 구성으로 중복 정의되어 있어 레이아웃별로 다른 파일을 import. Types.ts 의 ServerOption 이 최신(globalMemCacheLimit/keepAlive 포함)이며 Options.ts 는 tunneling 옵션 전용으로 보인다.",
+        "source": [
+          "admin/src/controller/Types.ts:14-22",
+          "admin/src/controller/Options.ts:37-62"
+        ],
+        "confidence": 0.8,
+        "inferred": true,
+        "phase_added": 2,
+        "related_ids": [
+          "DATA-UI-SRV-OPTION-001",
+          "DATA-UI-TUN-OPT-001"
+        ]
+      },
+      "category": "assumption",
+      "title": "Types.ts vs Options.ts 중복 정의",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 329,
+        "exactHeading": "#### ASM-UI-TYPES-DUP-001 — Types.ts vs Options.ts 중복 정의",
+        "sidecarId": "ASM-UI-TYPES-DUP-001"
+      },
+      "acceptance": {
+        "descriptionRef": "ASM-UI-TYPES-DUP-001",
+        "originalDescription": "ServerOption, HttpOption, CustomHeader 등이 Types.ts 와 Options.ts 에 서로 다른 필드 구성으로 중복 정의되어 있어 레이아웃별로 다른 파일을 import. Types.ts 의 ServerOption 이 최신(globalMemCacheLimit/keepAlive 포함)이며 Options.ts 는 tunneling 옵션 전용으로 보인다.",
+        "clauses": [
+          {
+            "id": "ASM-UI-TYPES-DUP-001::c1",
+            "text": "Types.ts and Options.ts duplicate ServerOption with differing fields.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "ASM-UI-TYPES-DUP-001::c2",
+            "text": "They duplicate HttpOption/CustomHeader definitions.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "ASM-UI-TYPES-DUP-001::c3",
+            "text": "Layouts import different type modules.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "ASM-UI-TYPES-DUP-001::c4",
+            "text": "Types.ts ServerOption includes globalMemCacheLimit/keepAlive.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "ASM-UI-TYPES-DUP-001::c5",
+            "text": "Original inference views Options.ts as tunnel-specific.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior/schema field or intact sequence; no complete-ID coverage claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/Types.ts",
+            "line": 14,
+            "symbol": "type ServerOption",
+            "rationale": "Current read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing API/UI/build/assumption obligations remain candidates, not automatic exemptions."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "ASM-UI-TYPES-DUP-001::c1",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "ASM-UI-TYPES-DUP-001::c2",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "ASM-UI-TYPES-DUP-001::c3",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "ASM-UI-TYPES-DUP-001::c4",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        },
+        {
+          "clauseRef": "ASM-UI-TYPES-DUP-001::c5",
+          "explanation": "No direct assertion mapped; helper/controller/setup/schema presence does not prove this complete behavior.",
+          "issueOrOwner": "#58 batch13",
+          "nextGate": "Independent semantic review, original/current disposition and authentic execution mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Both modules retain different ServerOption/HttpOption/CustomHeader types. Historical latest/tunnel-only wording is an inference, not an enforced source-of-truth or runtime schema."
+      }
+    }
+  ]
+}

@@ -1,0 +1,1849 @@
+{
+  "artifactKind": "bounded-semantic-draft",
+  "batch": {
+    "number": 15,
+    "firstOrdinal": 351,
+    "lastOrdinal": 366,
+    "count": 16
+  },
+  "status": "candidate; independent semantic review pending, not366 verified completion",
+  "sourceManifest": {
+    "path": "docs/plan/srs/TTTGate.md",
+    "markdownSha256": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+    "sidecarPath": "docs/plan/srs/TTTGate.items.jsonl",
+    "sidecarSha256": "364071a1f67e07501e7277e15ebdac057eb17ae8e6c2e076a3a550d916625657"
+  },
+  "sourceCheckpoint": {
+    "head": "e21d2cd65c0fac7910b86d77656d1eddbf96df30",
+    "mode": "source/test text reads only"
+  },
+  "execution": {
+    "testsRun": false,
+    "validatorRun": false,
+    "buildRun": false,
+    "evidence": []
+  },
+  "rows": [
+    {
+      "originalOrdinal": 351,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "NFR-SEC-022"
+      },
+      "category": "nonfunctional_req",
+      "title": "HTTP 요청 스머글링 방어 (CR/LF/NUL 금지)",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1009,
+        "exactHeading": "##### NFR-SEC-022 — HTTP 요청 스머글링 방어 (CR/LF/NUL 금지)",
+        "sidecarId": "NFR-SEC-022"
+      },
+      "originalRecord": {
+        "id": "NFR-SEC-022",
+        "type": "nonfunctional_req",
+        "title": "HTTP 요청 스머글링 방어 (CR/LF/NUL 금지)",
+        "description": "customRequestHeaders/customResponseHeaders 및 HTTP 리라이팅 경로에서 헤더 이름/값에 CR(0x0D), LF(0x0A), NUL(0x00) 문자 포함 시 즉시 거부하여 request smuggling 및 헤더 인젝션을 차단한다.",
+        "category": "security",
+        "rationale": "프록시 구조에서의 클래식 스머글링/헤더 인젝션 취약점 대응",
+        "measurement": "'Foo: bar\r\nX: y' 헤더 값 투입 시 검증 실패 또는 정규화 후 안전 전달",
+        "source": [
+          "src/server/http/HttpUtil.ts:1-495",
+          "src/server/http/HttpHandler.ts:1-598"
+        ],
+        "phase_added": 3,
+        "confidence": 0.85,
+        "inferred": false
+      },
+      "acceptance": {
+        "originalDescription": "customRequestHeaders/customResponseHeaders 및 HTTP 리라이팅 경로에서 헤더 이름/값에 CR(0x0D), LF(0x0A), NUL(0x00) 문자 포함 시 즉시 거부하여 request smuggling 및 헤더 인젝션을 차단한다.",
+        "clauses": [
+          {
+            "id": "NFR-SEC-022::c1",
+            "text": "Reject CR/LF/NUL in custom request header names/values.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "NFR-SEC-022::c2",
+            "text": "Reject CR/LF/NUL in custom response header names/values.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "NFR-SEC-022::c3",
+            "text": "Reject injection introduced during HTTP rewriting before forwarding.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "NFR-SEC-022::measurement",
+            "text": "'Foo: bar\r\nX: y' 헤더 값 투입 시 검증 실패 또는 정규화 후 안전 전달",
+            "sourceRef": "measurement",
+            "state": "unverified",
+            "rationale": "Original auxiliary meaning retained without verification/exemption."
+          },
+          {
+            "id": "NFR-SEC-022::rationale",
+            "text": "프록시 구조에서의 클래식 스머글링/헤더 인젝션 취약점 대응",
+            "sourceRef": "rationale",
+            "state": "unverified",
+            "rationale": "Original auxiliary meaning retained without verification/exemption."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Original threat/scope statements require document disposition; behavior remains unmapped, not waived."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/http/HttpUtil.ts",
+            "line": 20,
+            "symbol": "const INJECT_RE",
+            "exactSource": "        const INJECT_RE = /[\\r\\n\\0]/;",
+            "rationale": "Static source/sample location; not native behavior or complete scenario proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "NFR-SEC-022::c1",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "NFR-SEC-022::c2",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "NFR-SEC-022::c3",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "NFR-SEC-022::measurement",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "NFR-SEC-022::rationale",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Original description requires rejection but measurement allows safe normalization. Preserve both; CL/TE smuggling tests do not directly verify custom-header CR/LF/NUL matrix.",
+        "contextLinks": []
+      }
+    },
+    {
+      "originalOrdinal": 352,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "NFR-SEC-023"
+      },
+      "category": "nonfunctional_req",
+      "title": "제어 채널 DoS 방어 (pending bytes 상한)",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1017,
+        "exactHeading": "##### NFR-SEC-023 — 제어 채널 DoS 방어 (pending bytes 상한)",
+        "sidecarId": "NFR-SEC-023"
+      },
+      "originalRecord": {
+        "id": "NFR-SEC-023",
+        "type": "nonfunctional_req",
+        "title": "제어 채널 DoS 방어 (pending bytes 상한)",
+        "description": "CtrlPacket 조립 과정에서 단일 연결의 누적 pending 바이트가 상한을 초과하면 연결을 절단해 메모리 고갈형 DoS 를 방어한다. QueueLimiter 는 내부 큐 적체를 제한한다.",
+        "category": "security",
+        "rationale": "무한 길이 조각 전송으로 메모리 소진 유도 공격 차단",
+        "measurement": "pending bytes 상한 초과 시나리오에서 소켓 close + 로그 기록",
+        "source": [
+          "src/commons/CtrlPacket.ts:1-479",
+          "src/util/QueueLimiter.ts:1-35"
+        ],
+        "phase_added": 3,
+        "confidence": 0.8,
+        "inferred": false
+      },
+      "acceptance": {
+        "originalDescription": "CtrlPacket 조립 과정에서 단일 연결의 누적 pending 바이트가 상한을 초과하면 연결을 절단해 메모리 고갈형 DoS 를 방어한다. QueueLimiter 는 내부 큐 적체를 제한한다.",
+        "clauses": [
+          {
+            "id": "NFR-SEC-023::c1",
+            "text": "Disconnect a control connection when assembled pending bytes exceed its cap.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "NFR-SEC-023::c2",
+            "text": "QueueLimiter bounds internal queued bytes.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+      {
+        "id": "NFR-SEC-023::c3",
+        "text": "Record closure and diagnostics for overflow.",
+        "sourceRef": "measurement",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "NFR-SEC-023::measurement",
+            "text": "pending bytes 상한 초과 시나리오에서 소켓 close + 로그 기록",
+            "sourceRef": "measurement",
+            "state": "unverified",
+            "rationale": "Original auxiliary meaning retained without verification/exemption."
+          },
+          {
+            "id": "NFR-SEC-023::rationale",
+            "text": "무한 길이 조각 전송으로 메모리 소진 유도 공격 차단",
+            "sourceRef": "rationale",
+            "state": "unverified",
+            "rationale": "Original auxiliary meaning retained without verification/exemption."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Original threat/scope statements require document disposition; behavior remains unmapped, not waived."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/commons/CtrlPacket.ts",
+            "line": 416,
+            "symbol": "class CtrlPacketStreamer",
+            "exactSource": "class CtrlPacketStreamer {",
+            "rationale": "Static source/sample location; not native behavior or complete scenario proof."
+          }
+        ]
+      },
+  "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "NFR-SEC-023::c1",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "NFR-SEC-023::c2",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "NFR-SEC-023::c3",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "NFR-SEC-023::measurement",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "NFR-SEC-023::rationale",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "45 distinguishes fatal frame/owner cleanup from46 packet-local metadata discard. Parser cap getters/unit errors alone do not prove real socket close and diagnostics.",
+        "contextLinks": [
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/45",
+            "ledger": "docs/plan/verification/epic61-issue-45.md"
+          },
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/46",
+            "ledger": "docs/plan/verification/epic61-issue-46.md"
+          }
+        ]
+      }
+    },
+    {
+      "originalOrdinal": 353,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "NFR-SEC-024"
+      },
+      "category": "nonfunctional_req",
+      "title": "가짜 클라이언트 인증 시도 탐지/차단",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1025,
+        "exactHeading": "##### NFR-SEC-024 — 가짜 클라이언트 인증 시도 탐지/차단",
+        "sidecarId": "NFR-SEC-024"
+      },
+      "originalRecord": {
+        "id": "NFR-SEC-024",
+        "type": "nonfunctional_req",
+        "title": "가짜 클라이언트 인증 시도 탐지/차단",
+        "description": "v2 clientId 는 알려졌지만 clientSecret 이 틀린 경우, 또는 allowedClientIds 에 없는 clientId 로 터널 점유를 시도할 때 timing-safe 비교 후 인증 실패를 기록하고 연결을 즉시 종료한다.",
+        "category": "security",
+        "rationale": "자격증명 추측(brute-force) 및 범위 외 튜널 탈취 차단",
+        "measurement": "잘못된 secret 반복 시 연결 수립 0건, 실패 이벤트 로그",
+        "source": [
+          "src/server/IdentityRegistry.ts:1-99",
+          "src/util/timingSafeStringEqual.ts:1-91"
+        ],
+        "phase_added": 3,
+        "confidence": 0.88,
+        "inferred": false
+      },
+      "acceptance": {
+        "originalDescription": "v2 clientId 는 알려졌지만 clientSecret 이 틀린 경우, 또는 allowedClientIds 에 없는 clientId 로 터널 점유를 시도할 때 timing-safe 비교 후 인증 실패를 기록하고 연결을 즉시 종료한다.",
+        "clauses": [
+          {
+            "id": "NFR-SEC-024::c1",
+            "text": "Reject v2 proof with a known clientId but wrong secret.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "NFR-SEC-024::c2",
+            "text": "Reject tunnel use outside allowedClientIds scope.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "NFR-SEC-024::c3",
+            "text": "Use timing-safe comparisons for relevant credentials.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "NFR-SEC-024::c4",
+            "text": "Log failed authentication and terminate as originally specified.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "NFR-SEC-024::measurement",
+            "text": "잘못된 secret 반복 시 연결 수립 0건, 실패 이벤트 로그",
+            "sourceRef": "measurement",
+            "state": "unverified",
+            "rationale": "Original auxiliary meaning retained without verification/exemption."
+          },
+          {
+            "id": "NFR-SEC-024::rationale",
+            "text": "자격증명 추측(brute-force) 및 범위 외 튜널 탈취 차단",
+            "sourceRef": "rationale",
+            "state": "unverified",
+            "rationale": "Original auxiliary meaning retained without verification/exemption."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Original threat/scope statements require document disposition; behavior remains unmapped, not waived."
+      },
+  "implementation": {
+    "state": "unverified",
+    "links": []
+  },
+  "verification": [
+    {
+      "testPath": "test/component/server/ProtocolV2.test.ts",
+      "caseLine": 175,
+      "exactTitle": "protocol v2 control plane rejects spoofed identity attempts with an invalid proof",
+      "parameters": [],
+      "assertionAnchors": [
+        {"line": 190, "text": "proof: buildHandshakeProof(\"wrong-secret\", \"client-a\", controlID, syncMeta.challengeNonce)"},
+        {"line": 193, "text": "await rawClient.waitForClose();"},
+        {"line": 194, "text": "expect(server.clientStatus()).toHaveLength(0);"}
+      ],
+      "assertedClauseRefs": ["NFR-SEC-024::c1"],
+      "technique": "actual-control-channel-candidate",
+      "state": "candidate",
+      "evidence": [],
+      "rationale": "Actual connection with a known clientId and wrong secret is closed and never registered. Timing-safe comparison, ACL denial, logging and repeated-attempt behavior remain gaps."
+    }
+  ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "NFR-SEC-024::c1",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "NFR-SEC-024::c2",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "NFR-SEC-024::c3",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "NFR-SEC-024::c4",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "NFR-SEC-024::measurement",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "NFR-SEC-024::rationale",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Identity proof authentication and per-port ACL denial are different decisions. Unauthorized port access need not terminate the authenticated control owner; immediate-close wording and existing denial timing require disposition.",
+        "contextLinks": []
+      }
+    },
+    {
+      "originalOrdinal": 354,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "ASM-THREAT-001"
+      },
+      "category": "assumption",
+      "title": "가정된 위협 모델",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 311,
+        "exactHeading": "#### ASM-THREAT-001 — 가정된 위협 모델",
+        "sidecarId": "ASM-THREAT-001"
+      },
+      "originalRecord": {
+        "id": "ASM-THREAT-001",
+        "type": "assumption",
+        "title": "가정된 위협 모델",
+        "description": "침입자는 (a) 관리자 쿠키/CSRF 토큰 탈취, (b) v2 clientSecret 탈취/추측, (c) HTTP 헤더 인젝션/스머글링, (d) JSON 프로토타입 오염, (e) 제어 채널 DoS, (f) nonce/token 리플레이를 시도할 수 있다고 가정한다. 물리적 호스트 침해 및 사이드채널은 범위 외.",
+        "source": [
+          "README.md:1-103",
+          "src/server/TunnelServer.ts:60-230",
+          "src/server/admin/AdminServer.ts:1-200"
+        ],
+        "phase_added": 3,
+        "confidence": 0.7,
+        "inferred": true
+      },
+      "acceptance": {
+        "originalDescription": "침입자는 (a) 관리자 쿠키/CSRF 토큰 탈취, (b) v2 clientSecret 탈취/추측, (c) HTTP 헤더 인젝션/스머글링, (d) JSON 프로토타입 오염, (e) 제어 채널 DoS, (f) nonce/token 리플레이를 시도할 수 있다고 가정한다. 물리적 호스트 침해 및 사이드채널은 범위 외.",
+        "clauses": [
+          {
+            "id": "ASM-THREAT-001::c1",
+            "text": "Preserve complete threat model: stolen admin cookie/CSRF,secret theft/guessing,HTTP injection,JSON pollution,control DoS,nonce/token replay.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "ASM-THREAT-001::c2",
+            "text": "Original scope excludes physical host compromise and side channels; not an exemption of listed defenses.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "document",
+        "modes": [],
+        "rationale": "Original threat/scope statements require document disposition; behavior remains unmapped, not waived."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/TunnelServer.ts",
+            "line": 74,
+            "symbol": "class TunnelServer",
+            "exactSource": "class TunnelServer {",
+            "rationale": "Static source/sample location; not native behavior or complete scenario proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "ASM-THREAT-001::c1",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "ASM-THREAT-001::c2",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 355,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "BR-AUTH-005"
+      },
+      "category": "nonfunctional_req",
+      "title": "관리자 세션 TTL (기본 12시간)",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1247,
+        "exactHeading": "##### BR-AUTH-005 — 관리자 세션 TTL (기본 12시간)",
+        "sidecarId": "BR-AUTH-005"
+      },
+      "originalRecord": {
+        "id": "BR-AUTH-005",
+        "type": "nonfunctional_req",
+        "title": "관리자 세션 TTL (기본 12시간)",
+        "description": "SessionStore 는 로그인 성공 시 세션 엔트리를 생성하고 기본 12시간(43,200,000ms) 후 만료시킨다. 만료된 sessionKey 쿠키로 보호 엔드포인트 접근 시 401 반환. 본 항목의 세션은 관리자 로그인 세션(admin login session)을 의미한다(터널 데이터 세션과 구분).",
+        "source": [
+          "src/server/admin/SessionStore.ts:1-304"
+        ],
+        "phase_added": 3,
+        "confidence": 0.95,
+        "inferred": false
+      },
+      "acceptance": {
+        "originalDescription": "SessionStore 는 로그인 성공 시 세션 엔트리를 생성하고 기본 12시간(43,200,000ms) 후 만료시킨다. 만료된 sessionKey 쿠키로 보호 엔드포인트 접근 시 401 반환. 본 항목의 세션은 관리자 로그인 세션(admin login session)을 의미한다(터널 데이터 세션과 구분).",
+        "clauses": [
+          {
+            "id": "BR-AUTH-005::c1",
+            "text": "Create an administrator login session on successful login.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "BR-AUTH-005::c2",
+            "text": "Expire administrator session after43200000ms default12hours.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "BR-AUTH-005::c3",
+            "text": "Return401 for protected endpoint access with expired session cookie.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Original threat/scope statements require document disposition; behavior remains unmapped, not waived."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/admin/SessionStore.ts",
+            "line": 19,
+            "symbol": "const DEFAULT_TIMEOUT",
+            "exactSource": "const DEFAULT_TIMEOUT = 1000 * 60 * 60 * 12; // 12 hours",
+            "rationale": "Static source/sample location; not native behavior or complete scenario proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [
+        {
+          "testPath": "test/unit/server/admin/SessionStore.test.ts",
+          "caseLine": 39,
+          "exactTitle": "SessionStore baseline behavior expires sessions when the clock advances past the default timeout",
+          "parameters": [],
+          "assertedClauseRefs": [],
+          "technique": "explicit-fake-clock-context",
+          "rationale": "ClockRngProvider fake clock advances12h+1; store false result is not real elapsed timeout or HTTP401.",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "BR-AUTH-005::c1",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "BR-AUTH-005::c2",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "BR-AUTH-005::c3",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Fake-clock unit validates store expiry only, not12h real wall-clock/protectedHTTP401. Administrator TTL is separate from18 tunnel idle policy.",
+        "contextLinks": [
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/18",
+            "ledger": "docs/plan/verification/epic61-issue-18.md"
+          }
+        ]
+      }
+    },
+    {
+      "originalOrdinal": 356,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "BR-AUTH-006"
+      },
+      "category": "business_rule",
+      "title": "명시적 로그아웃 엔드포인트 부재 (TTL-only 설계)",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3263,
+        "exactHeading": "#### BR-AUTH-006 — 명시적 로그아웃 엔드포인트 부재 (TTL-only 설계)",
+        "sidecarId": "BR-AUTH-006"
+      },
+      "originalRecord": {
+        "id": "BR-AUTH-006",
+        "type": "business_rule",
+        "title": "명시적 로그아웃 엔드포인트 부재 (TTL-only 설계)",
+        "description": "명시적 로그아웃 엔드포인트(/api/logout)는 현재 구현되어 있지 않다. sessionKey 쿠키는 HttpOnly 이므로 브라우저 JS 에서 document.cookie 로 삭제할 수 없고, admin/src/controller 어디에도 쿠키 클리어 로직이 존재하지 않는다. 결과적으로 세션 무효화 경로는 (a) 서버측 TTL(12h) 경과, (b) 브라우저 개발자 도구를 통한 수동 쿠키 삭제, (c) 서버 재시작으로 제한된다. \"수동 쿠키 삭제\" 는 일반 사용자에게 실질적으로 불가능하다.",
+        "source": [
+          "src/server/admin/AdminServer.ts:244-310"
+        ],
+        "phase_added": 3,
+        "confidence": 0.9,
+        "inferred": false
+      },
+      "acceptance": {
+        "originalDescription": "명시적 로그아웃 엔드포인트(/api/logout)는 현재 구현되어 있지 않다. sessionKey 쿠키는 HttpOnly 이므로 브라우저 JS 에서 document.cookie 로 삭제할 수 없고, admin/src/controller 어디에도 쿠키 클리어 로직이 존재하지 않는다. 결과적으로 세션 무효화 경로는 (a) 서버측 TTL(12h) 경과, (b) 브라우저 개발자 도구를 통한 수동 쿠키 삭제, (c) 서버 재시작으로 제한된다. \"수동 쿠키 삭제\" 는 일반 사용자에게 실질적으로 불가능하다.",
+        "clauses": [
+          {
+            "id": "BR-AUTH-006::c1",
+            "text": "Original API has no explicit /api/logout.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "BR-AUTH-006::c2",
+            "text": "HttpOnly sessionKey is not removable via document.cookie.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "BR-AUTH-006::c3",
+            "text": "Preserve original invalidation paths:serverTTL,manual browser deletion,server restart; distinguish cookie removal from server-side invalidation.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Original threat/scope statements require document disposition; behavior remains unmapped, not waived."
+      },
+      "implementation": {
+        "state": "unverified",
+        "links": []
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "BR-AUTH-006::c1",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "BR-AUTH-006::c2",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "BR-AUTH-006::c3",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Cookie deletion prevents browser presentation but does not itself erase the server session map. No logout exposure or invalidation policy change inferred.",
+        "contextLinks": []
+      }
+    },
+    {
+      "originalOrdinal": 357,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "UC-CROSS-006"
+      },
+      "category": "use_case",
+      "title": "트러스트 클라이언트 신규 등록 플로우",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2815,
+        "exactHeading": "#### UC-CROSS-006 — 트러스트 클라이언트 신규 등록 플로우",
+        "sidecarId": "UC-CROSS-006"
+      },
+      "originalRecord": {
+        "id": "UC-CROSS-006",
+        "type": "use_case",
+        "title": "트러스트 클라이언트 신규 등록 플로우",
+        "description": "1) 관리자가 admin UI 에서 trustedClients 에 clientId/clientSecret/displayName 엔트리 추가 → POST /api/serverOption 2) ServerOptionStore 검증 후 revisionState 증가, config/server.yaml 원자적 쓰기(0o600) 3) TTTServer.applyServerOption 이 IdentityRegistry 를 hot-reload 4) 해당 clientId 를 가진 클라이언트가 (재)연결 시 v2 핸드셰이크 성공.",
+        "actors": [
+          "ACT-ADMIN",
+          "ACT-SRV",
+          "ACT-BACKEND"
+        ],
+        "source": [
+          "src/server/ServerOptionStore.ts:1-120",
+          "src/server/IdentityRegistry.ts:1-99",
+          "src/server/TTTServer.ts:1-200"
+        ],
+        "phase_added": 3,
+        "confidence": 0.85,
+        "inferred": false
+      },
+      "acceptance": {
+        "originalDescription": "1) 관리자가 admin UI 에서 trustedClients 에 clientId/clientSecret/displayName 엔트리 추가 → POST /api/serverOption 2) ServerOptionStore 검증 후 revisionState 증가, config/server.yaml 원자적 쓰기(0o600) 3) TTTServer.applyServerOption 이 IdentityRegistry 를 hot-reload 4) 해당 clientId 를 가진 클라이언트가 (재)연결 시 v2 핸드셰이크 성공.",
+        "clauses": [
+          {
+            "id": "UC-CROSS-006::c1",
+            "text": "Preserve complete registration sequence:UI trustedidentity POST,validated atomic0o600 YAML/revision,IdentityRegistry hotreload,realmatchingv2reconnect.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "UC-CROSS-006::actors",
+            "text": [
+              "ACT-ADMIN",
+              "ACT-SRV",
+              "ACT-BACKEND"
+            ],
+            "sourceRef": "actors",
+            "state": "unverified",
+            "rationale": "Original auxiliary meaning retained without verification/exemption."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Original threat/scope statements require document disposition; behavior remains unmapped, not waived."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/TTTServer.ts",
+            "line": 266,
+            "symbol": "applyServerOption",
+            "exactSource": "    public async applyServerOption(nextOption: ServerOption, previousOption: ServerOption): Promise<RuntimeApplyResult> {",
+            "rationale": "Static source/sample location; not native behavior or complete scenario proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "UC-CROSS-006::c1",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "UC-CROSS-006::actors",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "35 persistence/rollback and34 snapshot admission alter preparation/apply failure boundaries; a raw server-handshake fixture does not exercise UI registration/hotreload.",
+        "contextLinks": [
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/34",
+            "ledger": "docs/plan/verification/epic61-issue-34.md"
+          },
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/35",
+            "ledger": "docs/plan/verification/epic61-issue-35.md"
+          }
+        ]
+      }
+    },
+    {
+      "originalOrdinal": 358,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "UC-CROSS-007"
+      },
+      "category": "use_case",
+      "title": "HTTP 튜널 리라이팅 완전 플로우",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2823,
+        "exactHeading": "#### UC-CROSS-007 — HTTP 튜널 리라이팅 완전 플로우",
+        "sidecarId": "UC-CROSS-007"
+      },
+      "originalRecord": {
+        "id": "UC-CROSS-007",
+        "type": "use_case",
+        "title": "HTTP 튜널 리라이팅 완전 플로우",
+        "description": "1) 외부 클라이언트가 forwardPort 로 HTTP 요청 2) HttpHandler 가 요청 라인/헤더 파싱 후 CR/LF/NUL 검증 3) customRequestHeaders 병합, rewriteHostInTextBody/bodyRewriteRules 적용 4) CtrlPacket 에 실어 TunnelServer → 내부 클라이언트로 전달 5) 내부 서버 응답 수신 후 customResponseHeaders 병합, replaceAccessControlAllowOrigin 처리 후 외부로 반환.",
+        "actors": [
+          "ACT-EXT",
+          "ACT-SRV",
+          "ACT-TUNNEL",
+          "ACT-BACKEND"
+        ],
+        "source": [
+          "src/server/http/HttpHandler.ts:1-598",
+          "src/server/http/HttpUtil.ts:1-495",
+          "src/client/EndPointClientPool.ts:1-183"
+        ],
+        "phase_added": 3,
+        "confidence": 0.82,
+        "inferred": false
+      },
+      "acceptance": {
+        "originalDescription": "1) 외부 클라이언트가 forwardPort 로 HTTP 요청 2) HttpHandler 가 요청 라인/헤더 파싱 후 CR/LF/NUL 검증 3) customRequestHeaders 병합, rewriteHostInTextBody/bodyRewriteRules 적용 4) CtrlPacket 에 실어 TunnelServer → 내부 클라이언트로 전달 5) 내부 서버 응답 수신 후 customResponseHeaders 병합, replaceAccessControlAllowOrigin 처리 후 외부로 반환.",
+        "clauses": [
+          {
+            "id": "UC-CROSS-007::c1",
+            "text": "Preserve complete rewrite sequence:forwardHTTP,parse/injectioncheck,customrequest/bodyrewrite,original claimed CtrlPacket transport,responseheaders/CORSreturn.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "UC-CROSS-007::actors",
+            "text": [
+              "ACT-EXT",
+              "ACT-SRV",
+              "ACT-TUNNEL",
+              "ACT-BACKEND"
+            ],
+            "sourceRef": "actors",
+            "state": "unverified",
+            "rationale": "Original auxiliary meaning retained without verification/exemption."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Original threat/scope statements require document disposition; behavior remains unmapped, not waived."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/http/HttpHandler.ts",
+            "line": 21,
+            "symbol": "class HttpHandler",
+            "exactSource": "class HttpHandler {",
+            "rationale": "Static source/sample location; not native behavior or complete scenario proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "UC-CROSS-007::c1",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "UC-CROSS-007::actors",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Payload uses data-channel transport, not CtrlPacket as original says. Finite47 HTTP/TLS and30/32 eligibility/limits are scoped controls;29 EOF remains held.",
+        "contextLinks": [
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/29",
+            "ledger": "docs/plan/verification/epic61-issue-29.md"
+          },
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/30",
+            "ledger": "docs/plan/verification/epic61-issue-30.md"
+          },
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/32",
+            "ledger": "docs/plan/verification/epic61-issue-32.md"
+          },
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/47",
+            "ledger": "docs/plan/verification/epic61-issue-47.md"
+          }
+        ]
+      }
+    },
+    {
+      "originalOrdinal": 359,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "UC-CROSS-008"
+      },
+      "category": "use_case",
+      "title": "관리자 세션 만료 플로우",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2831,
+        "exactHeading": "#### UC-CROSS-008 — 관리자 세션 만료 플로우",
+        "sidecarId": "UC-CROSS-008"
+      },
+      "originalRecord": {
+        "id": "UC-CROSS-008",
+        "type": "use_case",
+        "title": "관리자 세션 만료 플로우",
+        "description": "1) 관리자가 로그인 후 12시간(관리자 로그인 세션 TTL) 경과 또는 수동 트리거(현재 구현에선 브라우저 쿠키 삭제/세션 만료까지 대기) 발생 2) 이후 보호 엔드포인트 호출 시 SessionStore 가 세션 만료/부재 판단 후 401 반환 3) Admin SPA 가 로그인 화면으로 리다이렉트, sessionKey/CSRF 쿠키는 서버측 TTL 경과로 무효화 4) 재로그인 성공 시 새 sessionKey 와 CSRF 토큰 발급. 주: 명시적 /api/logout 엔드포인트는 현재 구현되지 않음(BR-AUTH-006 참조).",
+        "actors": [
+          "ACT-ADMIN"
+        ],
+        "source": [
+          "src/server/admin/SessionStore.ts:1-304",
+          "src/server/admin/AdminServer.ts:244-310"
+        ],
+        "phase_added": 3,
+        "confidence": 0.85,
+        "inferred": false
+      },
+      "acceptance": {
+        "originalDescription": "1) 관리자가 로그인 후 12시간(관리자 로그인 세션 TTL) 경과 또는 수동 트리거(현재 구현에선 브라우저 쿠키 삭제/세션 만료까지 대기) 발생 2) 이후 보호 엔드포인트 호출 시 SessionStore 가 세션 만료/부재 판단 후 401 반환 3) Admin SPA 가 로그인 화면으로 리다이렉트, sessionKey/CSRF 쿠키는 서버측 TTL 경과로 무효화 4) 재로그인 성공 시 새 sessionKey 와 CSRF 토큰 발급. 주: 명시적 /api/logout 엔드포인트는 현재 구현되지 않음(BR-AUTH-006 참조).",
+        "clauses": [
+          {
+            "id": "UC-CROSS-008::c1",
+            "text": "Preserve complete admin expiration sequence:12h/manualcookie trigger,protected401,SPAredirect/cookie semantics,newsession+CSRFonrelogin; no explicit logout.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "UC-CROSS-008::actors",
+            "text": [
+              "ACT-ADMIN"
+            ],
+            "sourceRef": "actors",
+            "state": "unverified",
+            "rationale": "Original auxiliary meaning retained without verification/exemption."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Original threat/scope statements require document disposition; behavior remains unmapped, not waived."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/admin/SessionStore.ts",
+            "line": 99,
+            "symbol": "isSessionValid",
+            "exactSource": "    public async isSessionValid(sessionKeyList: Array<string>) : Promise<boolean> {",
+            "rationale": "Static source/sample location; not native behavior or complete scenario proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "UC-CROSS-008::c1",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "UC-CROSS-008::actors",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Server session expiry does not actively delete browser cookies; cookie Max-Age and SPA error/redirect are distinct. No composite scenario receipt mapped.",
+        "contextLinks": []
+      }
+    },
+    {
+      "originalOrdinal": 360,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "VER-SESSION-001"
+      },
+      "category": "verification",
+      "title": "세션 TTL 및 CSRF 방어 검증",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2493,
+        "exactHeading": "#### VER-SESSION-001 — 세션 TTL 및 CSRF 방어 검증",
+        "sidecarId": "VER-SESSION-001"
+      },
+      "originalRecord": {
+        "id": "VER-SESSION-001",
+        "type": "verification",
+        "title": "세션 TTL 및 CSRF 방어 검증",
+        "description": "테스트: (a) 12h+ 경과 sessionKey 로 /api/serverOption POST → 401 (b) 유효 세션이라도 CSRF 헤더 누락/불일치 시 403 (c) Origin 화이트리스트 외 요청 거부.",
+        "method": "jest/unit + component 테스트",
+        "source": [
+          "src/server/admin/AdminServer.ts:1308-1375",
+          "src/server/admin/SessionStore.ts:87-114"
+        ],
+        "phase_added": 3,
+        "confidence": 0.8,
+        "inferred": true
+      },
+      "acceptance": {
+        "originalDescription": "테스트: (a) 12h+ 경과 sessionKey 로 /api/serverOption POST → 401 (b) 유효 세션이라도 CSRF 헤더 누락/불일치 시 403 (c) Origin 화이트리스트 외 요청 거부.",
+        "clauses": [
+          {
+            "id": "VER-SESSION-001::c1",
+            "text": "POST /api/serverOption with12h-expired session returns401.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "VER-SESSION-001::c2",
+            "text": "Valid session with missing/mismatched CSRF header returns403.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "VER-SESSION-001::c3",
+            "text": "Reject Origin outside allowlist.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "VER-SESSION-001::method",
+            "text": "jest/unit + component 테스트",
+            "sourceRef": "method",
+            "state": "unverified",
+            "rationale": "Original auxiliary meaning retained without verification/exemption."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Original threat/scope statements require document disposition; behavior remains unmapped, not waived."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/admin/AdminServer.ts",
+            "line": 1523,
+            "symbol": "timingSafeStringEqual(headerToken",
+            "exactSource": "            if(!timingSafeStringEqual(headerToken, cookieToken, 'utf8')) {",
+            "rationale": "Static source/sample location; not native behavior or complete scenario proof."
+          }
+        ]
+      },
+      "verification": [
+        {
+          "testPath": "test/security/req-12-csrf.test.ts",
+          "caseLine": 112,
+          "exactTitle": "REQ-12 CSRF + Origin guard for state-changing APIs (f) 세션 O + CSRF 쿠키만 있고 헤더 누락 → 403",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "VER-SESSION-001::c2"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 124,
+              "text": "expect(r.statusCode).toBe(403);"
+            }
+          ],
+          "technique": "actual-owned-admin-http-candidate",
+          "rationale": "Real isolated AdminServer and valid session/CSRF cookie with missing header yields403. Does not cover mismatched token,12h expiry,all mutations or browser flow.",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "VER-SESSION-001::c1",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "VER-SESSION-001::c2",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "VER-SESSION-001::c3",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "VER-SESSION-001::method",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 361,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "DATA-CFG-003"
+      },
+      "category": "data_model",
+      "title": "client.sample.yaml 전체 스키마 (참조)",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2983,
+        "exactHeading": "#### DATA-CFG-003 — client.sample.yaml 전체 스키마 (참조)",
+        "sidecarId": "DATA-CFG-003"
+      },
+      "originalRecord": {
+        "id": "DATA-CFG-003",
+        "type": "data_model",
+        "title": "client.sample.yaml 전체 스키마 (참조)",
+        "description": "client.yaml 키: key, host, port, tls, name, clientId, clientSecret, displayName, ca(파일경로), serverName, allowLegacyFallback, allowInsecureTls, globalMemCacheLimit, keepAlive. ca 는 서버 루트 CA 의 PEM 경로, serverName 은 SNI 및 인증서 CN 매칭에 사용.",
+        "source": [
+          "config/client.sample.yaml:1-17"
+        ],
+        "phase_added": 3,
+        "confidence": 0.97,
+        "inferred": false
+      },
+      "acceptance": {
+        "originalDescription": "client.yaml 키: key, host, port, tls, name, clientId, clientSecret, displayName, ca(파일경로), serverName, allowLegacyFallback, allowInsecureTls, globalMemCacheLimit, keepAlive. ca 는 서버 루트 CA 의 PEM 경로, serverName 은 SNI 및 인증서 CN 매칭에 사용.",
+        "clauses": [
+          {
+            "id": "DATA-CFG-003::c1",
+        "text": "Runtime client.yaml schema includes key,host,port,tls,name,clientId,clientSecret,displayName.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "DATA-CFG-003::c2",
+        "text": "Runtime client.yaml schema includes ca,serverName,allowLegacyFallback,allowInsecureTls,globalMemCacheLimit,keepAlive.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "DATA-CFG-003::c3",
+            "text": "ca is server-root PEM path; serverName controls SNI/name validation.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Original threat/scope statements require document disposition; behavior remains unmapped, not waived."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "config/client.sample.yaml",
+            "line": 5,
+            "symbol": "host:",
+            "exactSource": "host: \"example.com\"",
+            "rationale": "Static source/sample location; not native behavior or complete scenario proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "DATA-CFG-003::c1",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "DATA-CFG-003::c2",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "DATA-CFG-003::c3",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "The immutable obligation describes the runtime client.yaml schema; config/client.sample.yaml is source context, not a narrowing of that runtime contract. Current ClientApp persisted-insecure gate requires yes-insecure and save strips insecure fields; this existing source behavior is not attributed to the administrator bootstrap issue8. Approved23 changes keepalive defaults separately. Sample/type fields alone do not prove native CA/SNI behavior.",
+        "contextLinks": [
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/23",
+            "ledger": "docs/plan/verification/epic61-issue-23.md"
+          }
+        ]
+      }
+    },
+    {
+      "originalOrdinal": 362,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "DATA-CFG-004"
+      },
+      "category": "data_model",
+      "title": "server.sample.yaml 전체 스키마 (참조)",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2991,
+        "exactHeading": "#### DATA-CFG-004 — server.sample.yaml 전체 스키마 (참조)",
+        "sidecarId": "DATA-CFG-004"
+      },
+      "originalRecord": {
+        "id": "DATA-CFG-004",
+        "type": "data_model",
+        "title": "server.sample.yaml 전체 스키마 (참조)",
+        "description": "server.yaml 키: key, adminPort, adminBindHost, adminTls, port, tls, controlProtocolMode(legacy|mixed|mtls-strict), allowLegacyControlAuth, trustedClients[](clientId,clientSecret,displayName), globalMemCacheLimit, keepAlive, tunnelingOptions[](forwardPort, protocol, destinationAddress, destinationPort, allowedClientIds[], inactiveOnStartup, tls, bufferLimitOnServer, bufferLimitOnClient, keepAlive, httpOption{rewriteHostInTextBody, replaceAccessControlAllowOrigin, customRequestHeaders[], customResponseHeaders[], bodyRewriteRules[]}).",
+        "source": [
+          "config/server.sample.yaml:1-35"
+        ],
+        "phase_added": 3,
+        "confidence": 0.97,
+        "inferred": false
+      },
+      "acceptance": {
+        "originalDescription": "server.yaml 키: key, adminPort, adminBindHost, adminTls, port, tls, controlProtocolMode(legacy|mixed|mtls-strict), allowLegacyControlAuth, trustedClients[](clientId,clientSecret,displayName), globalMemCacheLimit, keepAlive, tunnelingOptions[](forwardPort, protocol, destinationAddress, destinationPort, allowedClientIds[], inactiveOnStartup, tls, bufferLimitOnServer, bufferLimitOnClient, keepAlive, httpOption{rewriteHostInTextBody, replaceAccessControlAllowOrigin, customRequestHeaders[], customResponseHeaders[], bodyRewriteRules[]}).",
+        "clauses": [
+          {
+            "id": "DATA-CFG-004::c1",
+        "text": "Runtime server.yaml schema includes key,adminPort,adminBindHost,adminTls,port,tls.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "DATA-CFG-004::c2",
+            "text": "Model controlProtocolMode legacy/mixed/mtls-strict and allowLegacyControlAuth.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "DATA-CFG-004::c3",
+            "text": "Model trustedClients clientId/clientSecret/displayName.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "DATA-CFG-004::c4",
+            "text": "Model globalMemCacheLimit and keepAlive.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "DATA-CFG-004::c5",
+            "text": "Model tunnelingOptions forward/protocol/destination/allowedClientIds/inactive/tls/bufferlimits/keepAlive.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "DATA-CFG-004::c6",
+            "text": "Model nested httpOption rewriteHostInTextBody,CORS,customheaders,bodyrules.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Original threat/scope statements require document disposition; behavior remains unmapped, not waived."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "config/server.sample.yaml",
+            "line": 5,
+            "symbol": "adminPort:",
+            "exactSource": "adminPort: 9300",
+            "rationale": "Static source/sample location; not native behavior or complete scenario proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "DATA-CFG-004::c1",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "DATA-CFG-004::c2",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "DATA-CFG-004::c3",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "DATA-CFG-004::c4",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "DATA-CFG-004::c5",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "DATA-CFG-004::c6",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "The immutable obligation describes the runtime server.yaml schema; config/server.sample.yaml is source context, not a narrowing of that runtime contract. The current sample may include later #18 TTL additions; preserve the original field set and current defaults separately.",
+        "contextLinks": [
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/18",
+            "ledger": "docs/plan/verification/epic61-issue-18.md"
+          }
+        ]
+      }
+    },
+    {
+      "originalOrdinal": 363,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "OOS-UI-BOOTSTRAP-PW-001"
+      },
+      "category": "out_of_scope",
+      "title": "OOS-UI-BOOTSTRAP-PW-001",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3611,
+        "exactHeading": "#### OOS-UI-BOOTSTRAP-PW-001 — ",
+        "sidecarId": "OOS-UI-BOOTSTRAP-PW-001"
+      },
+      "originalRecord": {
+        "id": "OOS-UI-BOOTSTRAP-PW-001",
+        "type": "out_of_scope",
+        "description": "UI 기반 최초 비밀번호 설정(bootstrap): 현재 Admin SPA 의 LoginCtrl.login 은 bootstrapToken 을 전송하지 않으므로, SRS Iteration 1 기준 UI 경로는 bootstrap 을 완결하지 못한다. 초기화는 API 직접 호출 또는 별도 운영 절차에 위임된다.",
+        "source": [
+          "admin/src/controller/LoginCtrl.ts:27-39",
+          "src/server/admin/SessionStore.ts:141-222"
+        ],
+        "related_ids": [
+          "UC-UI-BOOTSTRAP-PW-001",
+          "FR-UI-LOGIN-002",
+          "BR-ADMIN-LOGIN-001"
+        ],
+        "confidence": 0.9,
+        "phase_added": 4
+      },
+      "acceptance": {
+        "originalDescription": "UI 기반 최초 비밀번호 설정(bootstrap): 현재 Admin SPA 의 LoginCtrl.login 은 bootstrapToken 을 전송하지 않으므로, SRS Iteration 1 기준 UI 경로는 bootstrap 을 완결하지 못한다. 초기화는 API 직접 호출 또는 별도 운영 절차에 위임된다.",
+        "clauses": [
+          {
+            "id": "OOS-UI-BOOTSTRAP-PW-001::c1",
+            "text": "Preserve original historical UI bootstrap inability and API/operations-only initialization scope statement.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "document",
+        "modes": [],
+        "rationale": "Original threat/scope statements require document disposition; behavior remains unmapped, not waived."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/LoginCtrl.ts",
+            "line": 26,
+            "symbol": "login(",
+            "exactSource": "    public static async login(key: string, bootstrapToken?: string) : Promise<LoginResult> {",
+            "rationale": "Static source/sample location; not native behavior or complete scenario proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "OOS-UI-BOOTSTRAP-PW-001::c1",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Approved8 implemented browser bootstrap token submission. Original inability is historical and cannot exclude current UI acceptance.",
+        "contextLinks": [
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/8",
+            "ledger": "docs/plan/verification/epic61-issue-8.md"
+          }
+        ]
+      }
+    },
+    {
+      "originalOrdinal": 364,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "CONSTR-CLI-SRV-USAGE-GAP-001"
+      },
+      "category": "constraint",
+      "title": "CONSTR-CLI-SRV-USAGE-GAP-001",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2103,
+        "exactHeading": "#### CONSTR-CLI-SRV-USAGE-GAP-001 — ",
+        "sidecarId": "CONSTR-CLI-SRV-USAGE-GAP-001"
+      },
+      "originalRecord": {
+        "id": "CONSTR-CLI-SRV-USAGE-GAP-001",
+        "type": "constraint",
+        "description": "서버 CLI 의 -trustXForwardedFor, -requireCsrfHeader 플래그는 AdminSecurityPolicy 에서 파싱되지만(src/server/AdminSecurityPolicy.ts:60-69) src/app.ts usage 블록(40-49) 및 README.md(32-40)에 노출되지 않는 \"숨겨진 플래그\" 다. 문서화 갭이며 운영자 가시성 저하 요인.",
+        "source": [
+          "src/app.ts:40-49",
+          "src/server/AdminSecurityPolicy.ts:60-69",
+          "README.md:32-40"
+        ],
+        "related_ids": [
+          "CONSTR-CLI-SRV-SECFLAGS-001",
+          "NFR-SEC-CSRF-001"
+        ],
+        "confidence": 0.95,
+        "phase_added": 4
+      },
+      "acceptance": {
+        "originalDescription": "서버 CLI 의 -trustXForwardedFor, -requireCsrfHeader 플래그는 AdminSecurityPolicy 에서 파싱되지만(src/server/AdminSecurityPolicy.ts:60-69) src/app.ts usage 블록(40-49) 및 README.md(32-40)에 노출되지 않는 \"숨겨진 플래그\" 다. 문서화 갭이며 운영자 가시성 저하 요인.",
+        "clauses": [
+          {
+            "id": "CONSTR-CLI-SRV-USAGE-GAP-001::c1",
+            "text": "AdminSecurityPolicy parses trustXForwardedFor and requireCsrfHeader.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "CONSTR-CLI-SRV-USAGE-GAP-001::c2",
+            "text": "Original usage/README omitted these flags; documentation-gap statement retained.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Original threat/scope statements require document disposition; behavior remains unmapped, not waived."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/AdminSecurityPolicy.ts",
+            "line": 12,
+            "symbol": "trustXForwardedFor",
+            "exactSource": "    trustXForwardedFor: boolean;",
+            "rationale": "Static source/sample location; not native behavior or complete scenario proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "CONSTR-CLI-SRV-USAGE-GAP-001::c1",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "CONSTR-CLI-SRV-USAGE-GAP-001::c2",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 365,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "CONSTR-CLI-CLIENT-USAGE-GAP-001"
+      },
+      "category": "constraint",
+      "title": "CONSTR-CLI-CLIENT-USAGE-GAP-001",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1995,
+        "exactHeading": "#### CONSTR-CLI-CLIENT-USAGE-GAP-001 — ",
+        "sidecarId": "CONSTR-CLI-CLIENT-USAGE-GAP-001"
+      },
+      "originalRecord": {
+        "id": "CONSTR-CLI-CLIENT-USAGE-GAP-001",
+        "type": "constraint",
+        "description": "클라이언트 CLI 의 -cert, -privateKey, --yes-insecure 플래그는 ClientApp._loadClientOption(src/client/ClientApp.ts:176-181)에서 수용되지만 src/app.ts usage(51-67) 및 README.md(58-74)에 노출되지 않는다. mTLS 클라이언트 인증서 경로가 실질적으로 은닉되어 있어 문서화 갭에 해당한다.",
+        "source": [
+          "src/app.ts:51-67",
+          "src/client/ClientApp.ts:176-220",
+          "README.md:58-74"
+        ],
+        "related_ids": [
+          "FR-CLI-CLIENT-OPTS-001"
+        ],
+        "confidence": 0.95,
+        "phase_added": 4
+      },
+      "acceptance": {
+        "originalDescription": "클라이언트 CLI 의 -cert, -privateKey, --yes-insecure 플래그는 ClientApp._loadClientOption(src/client/ClientApp.ts:176-181)에서 수용되지만 src/app.ts usage(51-67) 및 README.md(58-74)에 노출되지 않는다. mTLS 클라이언트 인증서 경로가 실질적으로 은닉되어 있어 문서화 갭에 해당한다.",
+        "clauses": [
+          {
+            "id": "CONSTR-CLI-CLIENT-USAGE-GAP-001::c1",
+            "text": "ClientApp accepts cert/privateKey/yes-insecure.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "CONSTR-CLI-CLIENT-USAGE-GAP-001::c2",
+            "text": "Original usage/README omitted these flags; mTLS visibility-gap statement retained.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Original threat/scope statements require document disposition; behavior remains unmapped, not waived."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/ClientApp.ts",
+            "line": 168,
+            "symbol": "argv[\"cert\"]",
+            "exactSource": "    if(argv[\"cert\"]) {",
+            "rationale": "Static source/sample location; not native behavior or complete scenario proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "CONSTR-CLI-CLIENT-USAGE-GAP-001::c1",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "CONSTR-CLI-CLIENT-USAGE-GAP-001::c2",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 366,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "CONSTR-CLI-CLI-DAEMON-001"
+      },
+      "category": "constraint",
+      "title": "CONSTR-CLI-CLI-DAEMON-001",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1985,
+        "exactHeading": "#### CONSTR-CLI-CLI-DAEMON-001 — ",
+        "sidecarId": "CONSTR-CLI-CLI-DAEMON-001"
+      },
+      "originalRecord": {
+        "id": "CONSTR-CLI-CLI-DAEMON-001",
+        "type": "constraint",
+        "description": "클라이언트 CLI 의 -daemon 플래그: ClientApp 도 -daemon 을 수용하며 Sentinel 기반 백그라운드(데몬) 실행에 진입한다. 부모 감시자(sentinel) 프로세스가 클라이언트 자식을 재시작한다.",
+        "source": [
+          "src/app.ts:51-77",
+          "src/Sentinel.ts:1-200"
+        ],
+        "related_ids": [
+          "CONSTR-CLI-SRV-DAEMON-001"
+        ],
+        "confidence": 0.9,
+        "phase_added": 4
+      },
+      "acceptance": {
+        "originalDescription": "클라이언트 CLI 의 -daemon 플래그: ClientApp 도 -daemon 을 수용하며 Sentinel 기반 백그라운드(데몬) 실행에 진입한다. 부모 감시자(sentinel) 프로세스가 클라이언트 자식을 재시작한다.",
+        "clauses": [
+          {
+            "id": "CONSTR-CLI-CLI-DAEMON-001::c1",
+            "text": "Client daemon flag enters Sentinel-backed background execution.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          },
+          {
+            "id": "CONSTR-CLI-CLI-DAEMON-001::c2",
+            "text": "Parent Sentinel restarts the client child.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Independent original behavior/limit or intact sequence/decision topology."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Original threat/scope statements require document disposition; behavior remains unmapped, not waived."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/Sentinel.ts",
+            "line": 14,
+            "symbol": "class Sentinel",
+            "exactSource": "class Sentinel {",
+            "rationale": "Static source/sample location; not native behavior or complete scenario proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "CONSTR-CLI-CLI-DAEMON-001::c1",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        },
+        {
+          "clauseRef": "CONSTR-CLI-CLI-DAEMON-001::c2",
+          "explanation": "No complete direct assertion mapped; related setup/helper/getter or configuration does not prove this clause.",
+          "issueOrOwner": "#58 batch15",
+          "nextGate": "Independent semantic review/disposition and authentic non-skipped execution evidence."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Process supervision/restart requires owned actual child evidence; source daemon branches or log messages alone are context. No process is launched or terminated by this draft.",
+        "contextLinks": []
+      }
+    }
+  ]
+}

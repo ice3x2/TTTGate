@@ -42,6 +42,38 @@
       ]
     },
     {
+      "testPath": "test/admin/csrf-requests.test.ts",
+      "exactTitle": "all seven authenticated browser controller mutations succeed against the real admin API",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "API-ADMIN-TUNNEL-ACTIVE-002",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "API-ADMIN-TUNNEL-ACTIVE-002::c4",
+            "API-ADMIN-TUNNEL-ACTIVE-002::c6"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "API-ADMIN-EXT-CERT-POST-002",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "API-ADMIN-EXT-CERT-POST-002::c3"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "API-ADMIN-EXT-CERT-DEL-002",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "API-ADMIN-EXT-CERT-DEL-002::c2"
+          ]
+        }
+      ]
+    },
+    {
       "testPath": "test/admin/login-bootstrap.test.ts",
       "exactTitle": "controller sends the actual raw key and bootstrap token accepted by the server",
       "parameters": [],
@@ -93,6 +125,15 @@
           "assertedClauseRefs": [
             "FR-UI-LOGIN-001::c1",
             "FR-UI-LOGIN-001::c5"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "UC-UI-LOGIN-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "UC-UI-LOGIN-001::c2",
+            "UC-UI-LOGIN-001::c4"
           ]
         }
       ]
@@ -561,6 +602,14 @@
             "BR-AUTH-V2-001::c3",
             "BR-AUTH-V2-001::c6"
           ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-SEC-024",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-SEC-024::c1"
+          ]
         }
       ]
     },
@@ -923,6 +972,21 @@
           "state": "candidate",
           "assertedClauseRefs": [
             "NFR-SEC-CSRF-001::c2"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/security/req-12-csrf.test.ts",
+      "exactTitle": "REQ-12 CSRF + Origin guard for state-changing APIs (f) 세션 O + CSRF 쿠키만 있고 헤더 누락 → 403",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "VER-SESSION-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "VER-SESSION-001::c2"
           ]
         }
       ]
@@ -1414,6 +1478,15 @@
             "FR-SRV-BOOTSTRAP-GEN-001::c1",
             "FR-SRV-BOOTSTRAP-GEN-001::c3",
             "FR-SRV-BOOTSTRAP-GEN-001::c5"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "GLOSS-BOOTSTRAP-TOKEN-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "GLOSS-BOOTSTRAP-TOKEN-001::c3",
+            "GLOSS-BOOTSTRAP-TOKEN-001::c4"
           ]
         }
       ]
