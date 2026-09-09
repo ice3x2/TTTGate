@@ -121,3 +121,98 @@ was run. At that initial research checkpoint, the only new file was this researc
 - [ ] Independent review/root commit. Status: only .gitattributes, provenance.md and this research changed; imported Markdown/JSONL and original workspace files were never edited/moved/deleted. No commit by author, no npm/test/coverage/benchmark or process termination. Temporary clone/evidence retained for reviewers.
 
 Exact byte evidence directory: C:/Users/beom/AppData/Local/Temp/tttgate58-checkout-4de816b778434f4d8221751560f3df54. RED git checkout HEAD used original attributes; GREEN git checkout-index --prefix=<new-green-dir>/ used candidate exact-path attributes against identical HEADbb500d0 blobs. The two commands exercise actual Git worktree conversion, not a text-copy simulation. No repository-wide EOL rule or source-content normalization was introduced.
+## Proposed exact implementation artifacts and bounded semantic stages
+
+Status: design proposal only; original366 references remain immutable. No validator,
+trace matrix, test comment or test implementation was written/executed here.
+
+Minimal artifact paths proposed for root freeze:
+
+- docs/plan/traceability/original-srs-matrix.json: canonical366-row machine-readable matrix.
+- docs/plan/traceability/original-srs-matrix.md: generated browsing view, explicitly showing unverified/gaps.
+- test/srs-trace-index.json: test-side bridge, keyed by test path plus exact case title/parameter identity, linking to original scoped SRS IDs and any document-qualified legacy REQ aliases. This addresses the test-to-SRS direction without mass editing existing test comments before semantic review.
+- scripts/validate-srs-trace.mjs: one read-only validator with optional explicit --write-view mode for deterministic Markdown/bridge rendering; default validation must not change files. Reuse one parsed model for checks/rendering rather than separate parsers.
+- test/unit/tools/srs-trace-validator.test.ts: meaningful structural-contract RED/negative fixtures built under a new owned temporary root; original imported files never mutated. Dedicated ledger58 records structure and semantic batches separately.
+
+The canonical matrix stores source manifest `{path, sidecarPath, documentVersion,
+markdownSha256, sidecarSha256}` with the two approved original hashes. Every row:
+
+```text
+key: {sourceHash, originalId}             # document scoped; no bare REQ join
+category: exact sidecar type
+source: {markdownPath, headingLine, exactHeading, sidecarId}
+acceptance: {descriptionRef: original sidecar ID, clauses: optional reviewed splits}
+applicability: {kind: runtime | document | unresolved, modes, rationale}
+implementation: {state: unverified | located | partial, links: [{path,symbol,rationale}]}
+legacyAliases: [{documentPath, documentVersionOrHash, scope, id, rationale}]
+verification: [{testPath, exactTitle, parameters, assertedClauseRefs,
+                technique, rationale, state: candidate | verified,
+                evidence: [{commitOrTreeHash, command, selection, resultPath,
+                            resultHash, outcome, observedAt, skippedOrFiltered}]}]
+review: {state: unreviewed | reviewed, reviewer, decision, rationale}
+status: unverified | candidate | partial | verified | uncovered | document-reviewed
+gaps: [{clauseRef, explanation, issueOrOwner, nextGate}]
+```
+
+Use exact heading text plus1-based line as the source anchor; validator must check
+that immutable Markdown line contains this exact original ID as a full token, at
+its actual heading depth, and that descriptionRef exists in sidecar. Generate source
+links with original file/heading context and line information; do not invent new
+anchors by editing imported Markdown. Sidecar source-code references are historical
+metadata, not proof current implementation still matches. Do not copy them directly
+into implementation located/verified status without checking current symbols.
+
+Matrix is canonical; test/srs-trace-index.json and Markdown are deterministic views
+of its links, carrying the same candidate/verified state. Validate exact reverse
+consistency so a test-side index cannot claim a verified link absent from the row.
+An existing test REQ comment maps through `{sourceDocument, scope, id}`, not REQ-01
+alone. Case title must identify the actual describe/test hierarchy; parameterized
+cases store their parameter identity rather than pretending one textual template
+proves every row. Structural title existence can use parsed declarations/explicit
+manifest, but dynamic titles that cannot be resolved without execution are marked
+unresolved and cannot become verified from grep. No new test execution is implied.
+
+Only after independent semantic review may a small existing test comment add a
+reference to original ID or the bridge. Such edits are optional when the explicit
+test-side bridge already makes the mapping discoverable; do not mass relabel tests,
+rewrite legacy REQ comments or make original-SRS-looking labels imply acceptance.
+Root decides any expanded test-comment write set before those files are touched.
+
+### Genuine structural TDD
+
+- [ ] Freeze validator CLI/schema before code. Status: proposal `node scripts/validate-srs-trace.mjs --matrix <path> --source-root <root>` returns0 only when structure is valid,1 with bounded path/ID diagnostics otherwise; --write-view is explicit. No network/runtime imports or coverage execution.
+- [ ] Observe structural RED. Status: before validator implementation, contracts require complete366 unique scoped IDs from immutable source, valid hashes/headings/types, real test paths/titles, reverse bridge/view agreement and no verified row without required reviewed evidence metadata. A minimal valid generated fixture then deliberate missing ID, duplicate ID, changed source hash, wrong heading/type, nonexistent test, ambiguous legacy alias and false verified state must fail. Missing-module/setup errors alone are not accepted behavioral RED; preserve that distinction.
+- [ ] Minimum validator and GREEN. Status: ensure each corruption is rejected and valid structure accepted; check deterministic outputs without importing app entrypoints. Structural PASS explicitly says nothing about semantic clause satisfaction or actual runtime evidence authenticity.
+
+Evidence file/hash existence is checkable, but a JSON result saying PASS may not be
+honest or relevant. The validator must never manufacture reviewer IDs, timestamps,
+actual executions or requirement coverage. Semantic verification remains human/
+independent-agent judgment against stimuli/assertions and actual immutable receipts.
+
+### Bounded stages and review workload
+
+1. Bootstrap all366 rows mechanically from original IDs/types/heading anchors with
+   status unverified, applicability unresolved, no invented implementation/test links.
+   Preserve contextual categories and expose empty links/gaps visibly. Import metadata
+   and structure are independently reviewed before semantic assignment.
+2. Generate lexical candidates only into candidate fields; no automatic verified
+   upgrade from filename/comment/coverage hit. Freeze batches of at most25 original
+   IDs, grouped by category/subsystem; keep a batch manifest listing every ID and
+   reviewer status so no row disappears between iterations.
+3. For each batch, independently inspect original acceptance, current implementation,
+   actual test statements and receipts; promote only justified clauses. Actor/glossary/
+   out-of-scope items may be document-reviewed with applicability rationale and reviewer,
+   not given dummy runtime tests. Do not treat every contextual category as automatically
+   non-runtime: decide per item and preserve any behavior-bearing clause.
+4. Record unmet clauses as explicit gaps/partial/uncovered with next gate/owner/issue;
+   mapping inventory completion and runtime acceptance completion remain separate.
+   Required47/49/52/53 evidence and28/29/40 constraints cannot be waived by trace status.
+   A verified item must cite its actual parameter cases and non-skipped execution.
+5. Final independent reconciliation checks all366 scoped IDs, source provenance,
+   bidirectional test bridge, semantic review completeness and unresolved dispositions.
+   Root decides #58 closure against truthful trace completeness; never describe all366
+   as implemented/verified while uncovered or policy-blocked rows remain.
+
+This proposal separates initial durable artifacts from sustained semantic work. It
+adds no SRS requirement, changes no original source bytes and authorizes no tests,
+production implementation, benchmark, full coverage or cleanup operation.

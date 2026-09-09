@@ -30211,7 +30211,7 @@
     }
   ],
   "staging": {
-    "status": "Historical pre-publication candidate normalization; canonical and bridge were unchanged at that checkpoint.",
+    "status": "candidate normalization; canonical and bridge unchanged",
     "sourceHead": "1e7595b088528deb8d009fc6b66f24f922ef341a",
     "sourceDrafts": [
       {
@@ -30251,9 +30251,7 @@
       "state": "unreviewed",
       "reviewer": null,
       "decision": null,
-      "rationale": "Separate independent review required for this normalized staging and reference portability preparation.",
-      "checkpointKind": "historical-pre-publication"
-    },
-    "checkpointKind": "historical-pre-publication"
+      "rationale": "Separate independent review required for this normalized staging and reference portability preparation."
+    }
   }
 }

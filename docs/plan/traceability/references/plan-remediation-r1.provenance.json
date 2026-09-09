@@ -1,0 +1,16 @@
+{
+  "artifactKind": "exact-working-byte-reference-snapshot",
+  "originalPath": "docs/plans/plan-remediation-r1.md",
+  "snapshotPath": "docs/plan/traceability/references/plan-remediation-r1.md",
+  "sourceHead": "1e7595b088528deb8d009fc6b66f24f922ef341a",
+  "workingTreeSha256": "cdb672bba16fa8e4b7aed57b9e38b7335638c4f93e3e2b574fa47b2c762ee5e8",
+  "snapshotSha256": "cdb672bba16fa8e4b7aed57b9e38b7335638c4f93e3e2b574fa47b2c762ee5e8",
+  "gitBlobObjectId": "1c8b56cd71d9c6e942202e5812f07f2df139240b",
+  "gitBlobSha256": "120191df133e823bf898329f6670928329b93fed7f26ad2cc47e7d5ba3a2e01b",
+  "difference": {
+    "equalBytes": false,
+    "equalAfterCRLFtoLF": true,
+    "policy": "Snapshot preserves the reviewed CRLF working bytes exactly. Git LF blob is separately identified; no immutable source hash is substituted or normalized."
+  },
+  "scope": "Qualified legacy reference only; no requirement equivalence, runtime verification or policy change."
+}

@@ -1,5 +1,1059 @@
 {
   "schemaVersion": 1,
   "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
-  "entries": []
+  "entries": [
+    {
+      "testPath": "test/admin/login-bootstrap.test.ts",
+      "exactTitle": "controller sends the actual raw key and bootstrap token accepted by the server",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "ACT-ADMIN-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "ACT-ADMIN-001::c7"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "API-ADMIN-LOGIN-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "API-ADMIN-LOGIN-001::c1",
+            "API-ADMIN-LOGIN-001::c2"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-SEC-BCRYPT-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-SEC-BCRYPT-001::c1"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/admin/login-bootstrap.test.ts",
+      "exactTitle": "first-login UI requests the bootstrap token and accepts the existing server password policy",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "API-ADMIN-VALIDATE-SESSION-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "API-ADMIN-VALIDATE-SESSION-001::c1"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/commons/ctrl-read-result.test.ts",
+      "exactTitle": "result drops complete fatal command batch and resets for a fresh input",
+      "parameters": [
+        "command"
+      ],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "VER-CTRL-CMD-RANGE-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "VER-CTRL-CMD-RANGE-001::c1"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/commons/ctrl-read-result.test.ts",
+      "exactTitle": "result drops complete fatal prefix batch and resets for a fresh input",
+      "parameters": [
+        "prefix"
+      ],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "VER-CTRL-PREFIX-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "VER-CTRL-PREFIX-001::c1"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/commons/ctrl-read-result.test.ts",
+      "exactTitle": "result overflow never invokes callback while legacy default/callback policies stay intact",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-PERF-STREAMER-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-PERF-STREAMER-001::c3",
+            "NFR-PERF-STREAMER-001::c4"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/commons/metadata-result.test.ts",
+      "exactTitle": "valid metadata preserves SAFE_REVIVER and unexpected native parser failures propagate",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-SEC-JSON-GUARD-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-SEC-JSON-GUARD-001::c2"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/commons/r2-req-01-ctrl-payload-limit.test.ts",
+      "exactTitle": "R2-REQ-01 CtrlPacket payload limit (pure payload, header 제외) 64000B 페이로드 정상 파싱",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-PERF-PAYLOAD-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-PERF-PAYLOAD-001::c1",
+            "NFR-PERF-PAYLOAD-001::c3"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/commons/r2-req-01-ctrl-payload-limit.test.ts",
+      "exactTitle": "R2-REQ-01 CtrlPacket payload limit (pure payload, header 제외) 64001B 페이로드 거부 (Data length too large)",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-PERF-PAYLOAD-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-PERF-PAYLOAD-001::c3",
+            "NFR-PERF-PAYLOAD-001::c5"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/commons/r2-req-01-ctrl-payload-limit.test.ts",
+      "exactTitle": "R2-REQ-01 CtrlPacket payload limit (pure payload, header 제외) 송신 측: 64001B 데이터를 가진 패킷 toBuffer는 RangeError throw",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-PERF-PAYLOAD-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-PERF-PAYLOAD-001::c2",
+            "NFR-PERF-PAYLOAD-001::c4"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/commons/r2-req-03-streamer-overflow.test.ts",
+      "exactTitle": "R2-REQ-03 CtrlPacketStreamer pending bytes overflow DEFAULT_MAX_PENDING_BYTES 상수 정의 존재",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-PERF-STREAMER-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-PERF-STREAMER-001::c2"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/http-directions.test.ts",
+      "exactTitle": "upgraded connection forwards binary bytes in both directions without HTTP parsing",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "BR-HTTP-WS-UPGRADE-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "BR-HTTP-WS-UPGRADE-001::c2"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/http-host-header.test.ts",
+      "exactTitle": "response Host selection preserves unrelated values and existing explicit response policies",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "BR-HTTP-REWRITE-HOST-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "BR-HTTP-REWRITE-HOST-001::c2"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/http-host-header.test.ts",
+      "exactTitle": "rewrites only Host for host a and preserves subsequent finite exchange",
+      "parameters": [
+        "Host",
+        "a"
+      ],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "BR-HTTP-REWRITE-HOST-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "BR-HTTP-REWRITE-HOST-001::c1"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/sentinel-exit.test.ts",
+      "exactTitle": "a present application remains monitored for a second real polling interval",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "CONSTR-CLI-SRV-DAEMON-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "CONSTR-CLI-SRV-DAEMON-001::c2"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/server/ProtocolV2.test.ts",
+      "exactTitle": "protocol v2 control plane accepts legacy clients only in mixed mode",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "ACT-TUNNEL-CLIENT-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "ACT-TUNNEL-CLIENT-001::c2"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "CONSTR-CLI-SRV-LEGACYCTRLAUTH-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "CONSTR-CLI-SRV-LEGACYCTRLAUTH-001::c1"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "MODE-CTRL-PROTO-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "MODE-CTRL-PROTO-001::c2"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "BR-AUTH-LEGACY-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "BR-AUTH-LEGACY-001::c1",
+            "BR-AUTH-LEGACY-001::c5"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/server/ProtocolV2.test.ts",
+      "exactTitle": "protocol v2 control plane registers an authenticated v2 client identity",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "ACT-TUNNEL-CLIENT-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "ACT-TUNNEL-CLIENT-001::c1"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "MODE-CTRL-PROTO-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "MODE-CTRL-PROTO-001::c3"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "BR-AUTH-V2-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "BR-AUTH-V2-001::c5"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/server/ProtocolV2.test.ts",
+      "exactTitle": "protocol v2 control plane rejects AckCtrl packets whose packet ID does not match the bound handler",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "BR-AUTH-V2-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "BR-AUTH-V2-001::c1",
+            "BR-AUTH-V2-001::c6"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/server/ProtocolV2.test.ts",
+      "exactTitle": "protocol v2 control plane rejects legacy shared-key clients unless the server explicitly opts in",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "BR-AUTH-LEGACY-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "BR-AUTH-LEGACY-001::c2"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/server/ProtocolV2.test.ts",
+      "exactTitle": "protocol v2 control plane rejects spoofed identity attempts with an invalid proof",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "BR-AUTH-V2-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "BR-AUTH-V2-001::c3",
+            "BR-AUTH-V2-001::c6"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/server/TunnelServer.handshake.test.ts",
+      "exactTitle": "TunnelServer handshake guardrails closes partial handshake sockets after the configured deadline",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-AVAIL-HANDSHAKE-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-AVAIL-HANDSHAKE-001::c3"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/server/TunnelServer.handshake.test.ts",
+      "exactTitle": "TunnelServer handshake guardrails rejects connections above the unauthenticated cap until a slot is freed",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-AVAIL-HANDSHAKE-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-AVAIL-HANDSHAKE-001::c4"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/server/admin/AdminServer.security.test.ts",
+      "exactTitle": "AdminServer security hardening rejects traversal requests and does not fall back unknown api paths to static files",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "API-ADMIN-WEB-ASSET-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "API-ADMIN-WEB-ASSET-001::c1",
+            "API-ADMIN-WEB-ASSET-001::c2"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/server/admin/compound-tls-save.test.ts",
+      "exactTitle": "invalid-pem preserves files, revisions and fresh certificate",
+      "parameters": [
+        "invalid-pem"
+      ],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "BR-CERT-KEYPAIR-SRV-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "BR-CERT-KEYPAIR-SRV-001::c1",
+            "BR-CERT-KEYPAIR-SRV-001::c2"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/server/admin/compound-tls-save.test.ts",
+      "exactTitle": "mismatched-key preserves files, revisions and fresh certificate",
+      "parameters": [
+        "mismatched-key"
+      ],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "BR-CERT-KEYPAIR-SRV-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "BR-CERT-KEYPAIR-SRV-001::c1",
+            "BR-CERT-KEYPAIR-SRV-001::c2"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/server/admin/configuration-revision.test.ts",
+      "exactTitle": "failed asynchronous port validation releases the mutation queue without advancing revision",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "BR-CONFIG-PORT-USABLE-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "BR-CONFIG-PORT-USABLE-001::c1",
+            "BR-CONFIG-PORT-USABLE-001::c2"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/server/admin/configuration-revision.test.ts",
+      "exactTitle": "tunnel creation, update and removal share revision admission",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "API-ADMIN-TUNNEL-OPT-POST-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "API-ADMIN-TUNNEL-OPT-POST-001::c1"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "API-ADMIN-TUNNEL-OPT-DEL-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "API-ADMIN-TUNNEL-OPT-DEL-001::c1"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/server/admin/configuration-rollback.test.ts",
+      "exactTitle": "runtime bind failure restores actual memory limit and pending committed identity",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "API-ADMIN-SERVER-OPT-POST-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "API-ADMIN-SERVER-OPT-POST-001::c6"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/server/session-idle-policy.test.ts",
+      "exactTitle": "effective interval result is detached and invalid explicit changes are atomic",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "VER-TTL-RANGE-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "VER-TTL-RANGE-001::c1",
+            "VER-TTL-RANGE-001::c2"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/server/session-idle-policy.test.ts",
+      "exactTitle": "running idle policy disables and re-enables real expiry without restarting listeners",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "MODE-SESSION-TTL-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "MODE-SESSION-TTL-001::c1",
+            "MODE-SESSION-TTL-001::c3",
+            "MODE-SESSION-TTL-001::c5"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/security/req-03-server-option-hash.test.ts",
+      "exactTitle": "REQ-03 /api/serverOptionHash auth + CORS + cloneDeep (++) Origin 포트가 다르면 CORS 허용 아님 (hostname 만 일치하는 우회 차단)",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-SEC-ORIGIN-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-SEC-ORIGIN-001::c4"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/security/req-03-server-option-hash.test.ts",
+      "exactTitle": "REQ-03 /api/serverOptionHash auth + CORS + cloneDeep (a) 세션 쿠키 없이 → 401",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "API-ADMIN-SERVER-OPT-HASH-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "API-ADMIN-SERVER-OPT-HASH-001::c3"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/security/req-06-crlf-injection.test.ts",
+      "exactTitle": "REQ-06 / REQ-10 CRLF/NUL header injection and obs-fold (e) 재직렬화 전 악의적 치환(value에 CRLF) 주입 → convertHttpHeaderToBuffer 예외",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "BR-HTTP-INJECT-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "BR-HTTP-INJECT-001::c1"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/security/req-12-csrf.test.ts",
+      "exactTitle": "REQ-12 CSRF + Origin guard for state-changing APIs (b) 동일 오리진 + 정상 CSRF double-submit → 200/400 (허용)",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-SEC-CSRF-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-SEC-CSRF-001::c2"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/security/req-12-csrf.test.ts",
+      "exactTitle": "REQ-12 CSRF + Origin guard for state-changing APIs (e) 세션 쿠키 O + CSRF 쿠키/헤더 모두 없음 → 403 (쿠키 탈취 + Origin 생략 우회 차단)",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-SEC-CSRF-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-SEC-CSRF-001::c2"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/security/req-12-csrf.test.ts",
+      "exactTitle": "REQ-12 CSRF + Origin guard for state-changing APIs (h) /api/csrfToken GET → 세션 필수 + 새 csrfToken 쿠키 재발급",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "API-ADMIN-CSRF-TOKEN-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "API-ADMIN-CSRF-TOKEN-001::c1",
+            "API-ADMIN-CSRF-TOKEN-001::c2",
+            "API-ADMIN-CSRF-TOKEN-001::c3"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/commons/CtrlPacket.test.ts",
+      "exactTitle": "CtrlPacket baseline contract preserves wide IDs through v2 metadata when the 16-bit header would overflow",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "DATA-CTRL-PACKET-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "DATA-CTRL-PACKET-001::c8",
+            "DATA-CTRL-PACKET-001::c9"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "DATA-CTRL-SYNC-ACK-META-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "DATA-CTRL-SYNC-ACK-META-001::c12"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/commons/CtrlPacket.test.ts",
+      "exactTitle": "CtrlPacket baseline contract roundtrips full handler IDs for v2 data-handler packets",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "DATA-CTRL-NEW-HANDLER-META-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "DATA-CTRL-NEW-HANDLER-META-001::c4",
+            "DATA-CTRL-NEW-HANDLER-META-001::c6"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/commons/CtrlPacket.test.ts",
+      "exactTitle": "CtrlPacket baseline contract roundtrips protocol v2 handshake metadata without breaking AckCtrl compatibility",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "DATA-CTRL-ACKV2-META-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "DATA-CTRL-ACKV2-META-001::c4",
+            "DATA-CTRL-ACKV2-META-001::c6",
+            "DATA-CTRL-ACKV2-META-001::c8",
+            "DATA-CTRL-ACKV2-META-001::c10",
+            "DATA-CTRL-ACKV2-META-001::c14"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/commons/DataStatePacket.test.ts",
+      "exactTitle": "DataStatePacket baseline contract roundtrips an optional binding token for protocol v2 data channel binding",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "DATA-DATA-STATE-PACKET-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "DATA-DATA-STATE-PACKET-001::c12"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/commons/DataStatePacket.test.ts",
+      "exactTitle": "DataStatePacket baseline contract roundtrips packet fields without altering the binary layout",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "DATA-DATA-STATE-PACKET-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "DATA-DATA-STATE-PACKET-001::c6",
+            "DATA-DATA-STATE-PACKET-001::c8",
+            "DATA-DATA-STATE-PACKET-001::c10"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/server/AdminSecurityPolicy.test.ts",
+      "exactTitle": "AdminSecurityPolicy builds legacy allowances from cli options and treats undefined host as remote bind",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "CONSTR-CLI-SRV-SECFLAGS-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "CONSTR-CLI-SRV-SECFLAGS-001::c1",
+            "CONSTR-CLI-SRV-SECFLAGS-001::c3"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/server/AdminSecurityPolicy.test.ts",
+      "exactTitle": "AdminSecurityPolicy rejects insecure admin http and remote bind until explicit legacy flags are present",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "CONSTR-CLI-SRV-LEGACYHTTP-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "CONSTR-CLI-SRV-LEGACYHTTP-001::c3"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/server/ServerOptionStore.revision.test.ts",
+      "exactTitle": "ServerOptionStore revision metadata tracks pending restart scopes and rollback metadata separately from last-known-good",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "DATA-REVISION-STATE-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "DATA-REVISION-STATE-001::c1",
+            "DATA-REVISION-STATE-001::c2",
+            "DATA-REVISION-STATE-001::c4",
+            "DATA-REVISION-STATE-001::c6",
+            "DATA-REVISION-STATE-001::c12",
+            "DATA-REVISION-STATE-001::c14"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "BR-CONFIG-COMMIT-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "BR-CONFIG-COMMIT-001::c2"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/server/ServerOptionStore.test.ts",
+      "exactTitle": "ServerOptionStore baseline behavior creates the default server option file when config is missing",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "DATA-CFG-SRV-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "DATA-CFG-SRV-001::c1",
+            "DATA-CFG-SRV-001::c2",
+            "DATA-CFG-SRV-001::c6",
+            "DATA-CFG-SRV-001::c8",
+            "DATA-CFG-SRV-001::c10",
+            "DATA-CFG-SRV-001::c12",
+            "DATA-CFG-SRV-001::c14",
+            "DATA-CFG-SRV-001::c16",
+            "DATA-CFG-SRV-001::c18"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/server/ServerOptionStore.test.ts",
+      "exactTitle": "ServerOptionStore baseline behavior normalizes tunneling options without altering valid baseline fields",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "DATA-TUN-OPT-SRV-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "DATA-TUN-OPT-SRV-001::c4",
+            "DATA-TUN-OPT-SRV-001::c6",
+            "DATA-TUN-OPT-SRV-001::c8",
+            "DATA-TUN-OPT-SRV-001::c10",
+            "DATA-TUN-OPT-SRV-001::c18",
+            "DATA-TUN-OPT-SRV-001::c20"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "DATA-HTTP-OPT-SRV-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "DATA-HTTP-OPT-SRV-001::c1",
+            "DATA-HTTP-OPT-SRV-001::c2",
+            "DATA-HTTP-OPT-SRV-001::c10"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "BR-HTTP-CORS-LEGACY-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "BR-HTTP-CORS-LEGACY-001::c2"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/server/ServerOptionStore.test.ts",
+      "exactTitle": "ServerOptionStore baseline behavior preserves legacy origin reflection when loading an existing http tunnel without an explicit policy",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "DATA-HTTP-OPT-SRV-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "DATA-HTTP-OPT-SRV-001::c1",
+            "DATA-HTTP-OPT-SRV-001::c2"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "BR-HTTP-CORS-LEGACY-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "BR-HTTP-CORS-LEGACY-001::c1"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/server/ServerOptionStore.test.ts",
+      "exactTitle": "ServerOptionStore baseline behavior rejects strict control mode when the control listener is not using TLS",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "BR-AUTH-MTLS-STRICT-002",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "BR-AUTH-MTLS-STRICT-002::c1"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/server/admin/SessionStore.security.test.ts",
+      "exactTitle": "SessionStore security behavior creates a bootstrap token file and requires it for first login",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "MODE-ADMIN-BOOTSTRAP-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "MODE-ADMIN-BOOTSTRAP-001::c1",
+            "MODE-ADMIN-BOOTSTRAP-001::c5"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-SEC-FILE-PERM-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-SEC-FILE-PERM-001::c2"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "BR-ADMIN-LOGIN-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "BR-ADMIN-LOGIN-001::c1",
+            "BR-ADMIN-LOGIN-001::c2",
+            "BR-ADMIN-LOGIN-001::c3"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/server/admin/SessionStore.security.test.ts",
+      "exactTitle": "SessionStore security behavior upgrades legacy password hashes to bcrypt on successful login",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-SEC-BCRYPT-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-SEC-BCRYPT-001::c4"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-SEC-FILE-PERM-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-SEC-FILE-PERM-001::c1"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/server/admin/loginBackoff.test.ts",
+      "exactTitle": "REQ-07 computeBackoffMs (pure function) fail=1 -> 200, fail=5 -> 3200",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-SEC-LOGIN-BACKOFF-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-SEC-LOGIN-BACKOFF-001::c1"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/server/admin/loginBackoff.test.ts",
+      "exactTitle": "REQ-07 computeBackoffMs (pure function) fail>=6 -> cap at 5000",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-SEC-LOGIN-BACKOFF-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-SEC-LOGIN-BACKOFF-001::c1"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/server/admin/req-07-rate-limit.test.ts",
+      "exactTitle": "REQ-07 login rate limit (network bucket) explicit trusted XFF retains separate network buckets and groups the same IPv4 /24",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-SEC-XFF-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-SEC-XFF-001::c1"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/server/admin/req-07-rate-limit.test.ts",
+      "exactTitle": "REQ-07 login rate limit (network bucket) rotating passwords and untrusted XFF headers cannot create fresh buckets",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-SEC-XFF-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-SEC-XFF-001::c2"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-SEC-LOGIN-BACKOFF-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-SEC-LOGIN-BACKOFF-001::c3"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/server/admin/req-11-body-limit.test.ts",
+      "exactTitle": "REQ-11 JSON body size / timeout (+) headersTimeout / requestTimeout 런타임 스냅샷",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-PERF-ADMIN-HTTP-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-PERF-ADMIN-HTTP-001::c1",
+            "NFR-PERF-ADMIN-HTTP-001::c2"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/server/req-04-constant-time-compare.test.ts",
+      "exactTitle": "REQ-04 상수시간 비교 전환 (b) IdentityRegistry.consumeBindingToken — clientId 상수시간, 의미론 보존",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-AVAIL-BINDING-TTL-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-AVAIL-BINDING-TTL-001::c4"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/util/CLI.test.ts",
+      "exactTitle": "CLI.parseCommandLine detects the execution mode even when options come first",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "CONSTR-CLI-MODE-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "CONSTR-CLI-MODE-001::c1"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/util/CLI.test.ts",
+      "exactTitle": "CLI.parseCommandLine keeps server options stable regardless of positional order",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "CONSTR-CLI-MODE-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "CONSTR-CLI-MODE-001::c1"
+          ]
+        }
+      ]
+    }
+  ]
 }
