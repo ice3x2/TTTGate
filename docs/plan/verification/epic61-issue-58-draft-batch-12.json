@@ -1,0 +1,2739 @@
+{
+  "artifactKind": "bounded-semantic-draft",
+  "batch": {
+    "number": 12,
+    "firstOrdinal": 276,
+    "lastOrdinal": 300,
+    "count": 25
+  },
+  "status": "candidate; independent semantic review pending",
+  "sourceManifest": {
+    "path": "docs/plan/srs/TTTGate.md",
+    "markdownSha256": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+    "sidecarPath": "docs/plan/srs/TTTGate.items.jsonl",
+    "sidecarSha256": "364071a1f67e07501e7277e15ebdac057eb17ae8e6c2e076a3a550d916625657"
+  },
+  "sourceCheckpoint": {
+    "head": "e64c968de67172e65b93dc8ed1e9980330e246da",
+    "mode": "read-only source/test inspection"
+  },
+  "execution": {
+    "testsRun": false,
+    "validatorRun": false,
+    "buildRun": false,
+    "evidence": []
+  },
+  "rows": [
+    {
+      "originalOrdinal": 276,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "BR-UI-TUNNEL-VALID-001"
+      },
+      "category": "business_rule",
+      "title": "튜널 옵션 유효성 규칙",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3575,
+        "exactHeading": "#### BR-UI-TUNNEL-VALID-001 — 튜널 옵션 유효성 규칙",
+        "sidecarId": "BR-UI-TUNNEL-VALID-001"
+      },
+      "originalRecord": {
+        "id": "BR-UI-TUNNEL-VALID-001",
+        "type": "business_rule",
+        "title": "튜널 옵션 유효성 규칙",
+        "description": "ServerOptionCtrl.checkValidTunnelingOption: tls/forwardPort(1~65535)/protocol∈{tcp,http,https}/destinationAddress(non-empty)/destinationPort(1~65535) 필수. http/https 면 httpOption.{rewriteHostInTextBody, customRequestHeaders, customResponseHeaders, bodyRewriteRules, replaceAccessControlAllowOrigin} 모두 정의 필요.",
+        "source": [
+          "admin/src/controller/ServerOptionCtrl.ts:212-243"
+        ],
+        "confidence": 0.98,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-TUNNEL-APPLY-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "ServerOptionCtrl.checkValidTunnelingOption: tls/forwardPort(1~65535)/protocol∈{tcp,http,https}/destinationAddress(non-empty)/destinationPort(1~65535) 필수. http/https 면 httpOption.{rewriteHostInTextBody, customRequestHeaders, customResponseHeaders, bodyRewriteRules, replaceAccessControlAllowOrigin} 모두 정의 필요.",
+        "clauses": [
+          {
+            "id": "BR-UI-TUNNEL-VALID-001::c1",
+            "text": "Require tls to be defined.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "BR-UI-TUNNEL-VALID-001::c2",
+            "text": "Require forwardPort within1..65535.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "BR-UI-TUNNEL-VALID-001::c3",
+            "text": "Require protocol in tcp/http/https.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "BR-UI-TUNNEL-VALID-001::c4",
+            "text": "Require nonempty destinationAddress.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "BR-UI-TUNNEL-VALID-001::c5",
+            "text": "Require destinationPort within1..65535.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "BR-UI-TUNNEL-VALID-001::c6",
+            "text": "For HTTP/HTTPS require all five named httpOption fields to be defined.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/ServerOptionCtrl.ts",
+            "line": 199,
+            "symbol": "checkValidTunnelingOption",
+            "exactSource": "    public static checkValidTunnelingOption(tunnelingOption: Options) : boolean {",
+            "rationale": "Actual source declaration/handling location only; not browser/runtime verification."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "BR-UI-TUNNEL-VALID-001::c1",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "BR-UI-TUNNEL-VALID-001::c2",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "BR-UI-TUNNEL-VALID-001::c3",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "BR-UI-TUNNEL-VALID-001::c4",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "BR-UI-TUNNEL-VALID-001::c5",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "BR-UI-TUNNEL-VALID-001::c6",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current validation tests undefined/ranges and field presence, not full boolean/array schema; preserve original without implying malformed NaN/type coverage."
+      }
+    },
+    {
+      "originalOrdinal": 277,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "BR-UI-PORT-RANGE-001"
+      },
+      "category": "business_rule",
+      "title": "포트 허용 범위",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3535,
+        "exactHeading": "#### BR-UI-PORT-RANGE-001 — 포트 허용 범위",
+        "sidecarId": "BR-UI-PORT-RANGE-001"
+      },
+      "originalRecord": {
+        "id": "BR-UI-PORT-RANGE-001",
+        "type": "business_rule",
+        "title": "포트 허용 범위",
+        "description": "모든 포트 입력(adminPort/server port/forwardPort/destinationPort)은 0~65535 범위에서만 허용되고 UI 레벨에서 강제된다.",
+        "source": [
+          "admin/src/layout/ServerSetLayout.svelte:206-222",
+          "admin/src/layout/TunnelOptionSetLayout.svelte:67-75"
+        ],
+        "confidence": 0.97,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-SERVEROPT-MINMAX-001",
+          "FR-UI-TUNNEL-NORMALIZE-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "모든 포트 입력(adminPort/server port/forwardPort/destinationPort)은 0~65535 범위에서만 허용되고 UI 레벨에서 강제된다.",
+        "clauses": [
+          {
+            "id": "BR-UI-PORT-RANGE-001::c1",
+            "text": "Enforce all admin/server/forward/destination port inputs within0..65535 at UI level.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/ServerSetLayout.svelte",
+            "line": 66,
+            "symbol": "_enforceMinMax",
+            "exactSource": "    let _enforceMinMax = (e: KeyboardEvent) => {",
+            "rationale": "Actual source declaration/handling location only; not browser/runtime verification."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "BR-UI-PORT-RANGE-001::c1",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Original UI0 minimum differs from tunnel validator1 minimum. keyup DOM clamp does not prove bound state or every input method; no policy correction inferred."
+      }
+    },
+    {
+      "originalOrdinal": 278,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "BR-UI-BUFFER-RANGE-001"
+      },
+      "category": "business_rule",
+      "title": "버퍼 크기 의미 규칙",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3505,
+        "exactHeading": "#### BR-UI-BUFFER-RANGE-001 — 버퍼 크기 의미 규칙",
+        "sidecarId": "BR-UI-BUFFER-RANGE-001"
+      },
+      "originalRecord": {
+        "id": "BR-UI-BUFFER-RANGE-001",
+        "type": "business_rule",
+        "title": "버퍼 크기 의미 규칙",
+        "description": "bufferLimitOnServer/Client: n<=0 은 무제한 메모리 버퍼, n>0 은 초과 시 파일 캐시로 저장. 값은 -1~1048576 MiB 로 클램프된다.",
+        "source": [
+          "admin/src/layout/TunnelOptionSetLayout.svelte:77-85",
+          "admin/src/layout/TunnelOptionSetLayout.svelte:586-591"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "DATA-UI-TUN-OPT-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "bufferLimitOnServer/Client: n<=0 은 무제한 메모리 버퍼, n>0 은 초과 시 파일 캐시로 저장. 값은 -1~1048576 MiB 로 클램프된다.",
+        "clauses": [
+          {
+            "id": "BR-UI-BUFFER-RANGE-001::c1",
+            "text": "Interpret nonpositive server/client buffer limits as unlimited memory.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "BR-UI-BUFFER-RANGE-001::c2",
+            "text": "Positive limit overflow spills to file cache.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "BR-UI-BUFFER-RANGE-001::c3",
+            "text": "Clamp both limits within-1..1048576 MiB.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/TunnelOptionSetLayout.svelte",
+            "line": 62,
+            "symbol": "bufferLimitOnServer",
+            "exactSource": "            option.bufferLimitOnServer = _normalizeMemBufferSize(option.bufferLimitOnServer!);",
+            "rationale": "Actual source declaration/handling location only; not browser/runtime verification."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "BR-UI-BUFFER-RANGE-001::c1",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "BR-UI-BUFFER-RANGE-001::c2",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "BR-UI-BUFFER-RANGE-001::c3",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Nonpositive unlimited wording is not established native behavior: global budget/file quota still apply and #40 policy remains unresolved. UI labels/clamps and #53 global-spill fixture cannot prove unlimited memory.",
+        "decisionLink": "https://github.com/ice3x2/TTTGate/issues/40",
+        "contextLedger": "docs/plan/verification/epic61-issue-40.md"
+      }
+    },
+    {
+      "originalOrdinal": 279,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-UI-STATUS-POLL-001"
+      },
+      "category": "functional_req",
+      "title": "서버 상태 폴링(1초)",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 629,
+        "exactHeading": "##### FR-UI-STATUS-POLL-001 — 서버 상태 폴링(1초)",
+        "sidecarId": "FR-UI-STATUS-POLL-001"
+      },
+      "originalRecord": {
+        "id": "FR-UI-STATUS-POLL-001",
+        "type": "functional_req",
+        "title": "서버 상태 폴링(1초)",
+        "description": "ServerStatusLayout 는 onMount 에 1초 setInterval 로 getSysUsage + getClientStatus 를 호출하고, InvalidSession 발생 시 세션 만료 알림으로 중단.",
+        "source": [
+          "admin/src/layout/ServerStatusLayout.svelte:28-57"
+        ],
+        "confidence": 0.98,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "NFR-UI-POLLING-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "ServerStatusLayout 는 onMount 에 1초 setInterval 로 getSysUsage + getClientStatus 를 호출하고, InvalidSession 발생 시 세션 만료 알림으로 중단.",
+        "clauses": [
+          {
+            "id": "FR-UI-STATUS-POLL-001::c1",
+            "text": "Start status polling on mount.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "FR-UI-STATUS-POLL-001::c2",
+            "text": "Poll getSysUsage then getClientStatus on a1000ms interval.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "FR-UI-STATUS-POLL-001::c3",
+            "text": "Stop and show session-expired alert on InvalidSession.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/ServerStatusLayout.svelte",
+            "line": 37,
+            "symbol": "setInterval",
+            "exactSource": "        _intervalId = setInterval(async () => {",
+            "rationale": "Actual source declaration/handling location only; not browser/runtime verification."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-UI-STATUS-POLL-001::c1",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "FR-UI-STATUS-POLL-001::c2",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "FR-UI-STATUS-POLL-001::c3",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current load returns false for any caught error, and interval stops on false; InvalidSession additionally alerts. The initial immediate load and interval lifecycle are separate, no actual cadence/unmount test mapped."
+      }
+    },
+    {
+      "originalOrdinal": 280,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-UI-STATUS-GAUGE-001"
+      },
+      "category": "functional_req",
+      "title": "Gauge 메트릭 표시 (CPU/Memory/Heap/Buffer)",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 619,
+        "exactHeading": "##### FR-UI-STATUS-GAUGE-001 — Gauge 메트릭 표시 (CPU/Memory/Heap/Buffer)",
+        "sidecarId": "FR-UI-STATUS-GAUGE-001"
+      },
+      "originalRecord": {
+        "id": "FR-UI-STATUS-GAUGE-001",
+        "type": "functional_req",
+        "title": "Gauge 메트릭 표시 (CPU/Memory/Heap/Buffer)",
+        "description": "Usage 객체에서 cpu.process, memory.process/total, heap.used/total, totalBuffer.used/total 값을 Gauge 컴포넌트로 표시. bytes 는 TiB/GiB/MiB/KiB/B 단위로 포맷.",
+        "source": [
+          "admin/src/layout/ServerStatusLayout.svelte:80-96",
+          "admin/src/layout/ServerStatusLayout.svelte:155-170"
+        ],
+        "confidence": 0.97,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "IF-UI-GAUGE-001",
+          "DATA-UI-USAGE-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "Usage 객체에서 cpu.process, memory.process/total, heap.used/total, totalBuffer.used/total 값을 Gauge 컴포넌트로 표시. bytes 는 TiB/GiB/MiB/KiB/B 단위로 포맷.",
+        "clauses": [
+          {
+            "id": "FR-UI-STATUS-GAUGE-001::c1",
+            "text": "Render CPU process usage gauge.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "FR-UI-STATUS-GAUGE-001::c2",
+            "text": "Render memory process/total gauge.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "FR-UI-STATUS-GAUGE-001::c3",
+            "text": "Render heap used/total gauge.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "FR-UI-STATUS-GAUGE-001::c4",
+            "text": "Render totalBuffer used/total gauge.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "FR-UI-STATUS-GAUGE-001::c5",
+            "text": "Format byte values as TiB/GiB/MiB/KiB/B.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/ServerStatusLayout.svelte",
+            "line": 80,
+            "symbol": "_byteToUnit",
+            "exactSource": "let _byteToUnit = (length: number,hideUnit?: boolean) : string => {",
+            "rationale": "Actual source declaration/handling location only; not browser/runtime verification."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-UI-STATUS-GAUGE-001::c1",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "FR-UI-STATUS-GAUGE-001::c2",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "FR-UI-STATUS-GAUGE-001::c3",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "FR-UI-STATUS-GAUGE-001::c4",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "FR-UI-STATUS-GAUGE-001::c5",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Formatting uses strictly greater-than thresholds, so exact1024 boundaries stay in lower units. No numerical-rendering test mapped."
+      }
+    },
+    {
+      "originalOrdinal": 281,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-UI-STATUS-CLIENTLIST-001"
+      },
+      "category": "functional_req",
+      "title": "클라이언트 리스트 및 Uptime 표시",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 611,
+        "exactHeading": "##### FR-UI-STATUS-CLIENTLIST-001 — 클라이언트 리스트 및 Uptime 표시",
+        "sidecarId": "FR-UI-STATUS-CLIENTLIST-001"
+      },
+      "originalRecord": {
+        "id": "FR-UI-STATUS-CLIENTLIST-001",
+        "type": "functional_req",
+        "title": "클라이언트 리스트 및 Uptime 표시",
+        "description": "_clientStatuses(id/name/address/uptime/activeSessionCount) 리스트와 _usage.uptime 을 _timeToDMH 로 'Xd Yh Zm Ws' 포맷 표시.",
+        "source": [
+          "admin/src/layout/ServerStatusLayout.svelte:120-127",
+          "admin/src/layout/ServerStatusLayout.svelte:173-188"
+        ],
+        "confidence": 0.97,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": null
+      },
+      "acceptance": {
+        "originalDescription": "_clientStatuses(id/name/address/uptime/activeSessionCount) 리스트와 _usage.uptime 을 _timeToDMH 로 'Xd Yh Zm Ws' 포맷 표시.",
+        "clauses": [
+          {
+            "id": "FR-UI-STATUS-CLIENTLIST-001::c1",
+            "text": "Render each client id/name/address/uptime/activeSessionCount.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "FR-UI-STATUS-CLIENTLIST-001::c2",
+            "text": "Format server/client uptime as Xd Yh Zm Ws.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/ServerStatusLayout.svelte",
+            "line": 120,
+            "symbol": "_timeToDMH",
+            "exactSource": "let _timeToDMH =(time: number) => {",
+            "rationale": "Actual source declaration/handling location only; not browser/runtime verification."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-UI-STATUS-CLIENTLIST-001::c1",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "FR-UI-STATUS-CLIENTLIST-001::c2",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 282,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-UI-STATUS-SYSINFO-001"
+      },
+      "category": "functional_req",
+      "title": "INFO 클릭 시 시스템 상세 팝업",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 639,
+        "exactHeading": "##### FR-UI-STATUS-SYSINFO-001 — INFO 클릭 시 시스템 상세 팝업",
+        "sidecarId": "FR-UI-STATUS-SYSINFO-001"
+      },
+      "originalRecord": {
+        "id": "FR-UI-STATUS-SYSINFO-001",
+        "type": "functional_req",
+        "title": "INFO 클릭 시 시스템 상세 팝업",
+        "description": "CPU 아이콘 클릭 시 getSysInfo() 호출 → SysinfoPopup 에 HW Info(CPU/Cores/RAM), OS Info, Network 인터페이스 상세 표시. 클라이언트 ID 클릭 시 getClientSysInfo(id) 호출.",
+        "source": [
+          "admin/src/layout/ServerStatusLayout.svelte:98-118",
+          "admin/src/layout/SysinfoPopup.svelte:41-89"
+        ],
+        "confidence": 0.96,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "API-ADMIN-CLIENT-SYSINFO-002"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "CPU 아이콘 클릭 시 getSysInfo() 호출 → SysinfoPopup 에 HW Info(CPU/Cores/RAM), OS Info, Network 인터페이스 상세 표시. 클라이언트 ID 클릭 시 getClientSysInfo(id) 호출.",
+        "clauses": [
+          {
+            "id": "FR-UI-STATUS-SYSINFO-001::c1",
+            "text": "CPU INFO click obtains getSysInfo then opens detailed popup.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "FR-UI-STATUS-SYSINFO-001::c2",
+            "text": "Client ID click obtains getClientSysInfo(id).",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "FR-UI-STATUS-SYSINFO-001::c3",
+            "text": "Display CPU/Cores/RAM, OS and network details.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/ServerStatusLayout.svelte",
+            "line": 98,
+            "symbol": "onClickShowInfo",
+            "exactSource": "let  onClickShowInfo = async (e: Event) => {",
+            "rationale": "Actual source declaration/handling location only; not browser/runtime verification."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-UI-STATUS-SYSINFO-001::c1",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "FR-UI-STATUS-SYSINFO-001::c2",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "FR-UI-STATUS-SYSINFO-001::c3",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 283,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-UI-SYSINFO-POPUP-001"
+      },
+      "category": "functional_req",
+      "title": "SysinfoPopup 팝업 표시",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 649,
+        "exactHeading": "##### FR-UI-SYSINFO-POPUP-001 — SysinfoPopup 팝업 표시",
+        "sidecarId": "FR-UI-SYSINFO-POPUP-001"
+      },
+      "originalRecord": {
+        "id": "FR-UI-SYSINFO-POPUP-001",
+        "type": "functional_req",
+        "title": "SysinfoPopup 팝업 표시",
+        "description": "show prop 으로 표시되며 sysInfo.osInfo/cpuInfo/ram/network 를 계층적으로 렌더링. 네트워크는 interface 별로 address/netmask/mac/internal/family/cidr 나열.",
+        "source": [
+          "admin/src/layout/SysinfoPopup.svelte:46-82"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "DATA-UI-SYSINFO-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "show prop 으로 표시되며 sysInfo.osInfo/cpuInfo/ram/network 를 계층적으로 렌더링. 네트워크는 interface 별로 address/netmask/mac/internal/family/cidr 나열.",
+        "clauses": [
+          {
+            "id": "FR-UI-SYSINFO-POPUP-001::c1",
+            "text": "show controls popup visibility.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "FR-UI-SYSINFO-POPUP-001::c2",
+            "text": "Render osInfo/cpuInfo/ram/network hierarchically.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "FR-UI-SYSINFO-POPUP-001::c3",
+            "text": "Render each interface address/netmask/mac/internal/family/cidr.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/SysinfoPopup.svelte",
+            "line": 7,
+            "symbol": "export let",
+            "exactSource": "    export let show = false;",
+            "rationale": "Actual source declaration/handling location only; not browser/runtime verification."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-UI-SYSINFO-POPUP-001::c1",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "FR-UI-SYSINFO-POPUP-001::c2",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "FR-UI-SYSINFO-POPUP-001::c3",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 284,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "IF-UI-ALERT-001"
+      },
+      "category": "interface",
+      "title": "AlertLayout 모달 컴포넌트",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1549,
+        "exactHeading": "##### IF-UI-ALERT-001 — AlertLayout 모달 컴포넌트",
+        "sidecarId": "IF-UI-ALERT-001"
+      },
+      "originalRecord": {
+        "id": "IF-UI-ALERT-001",
+        "type": "interface",
+        "title": "AlertLayout 모달 컴포넌트",
+        "description": "show/button props 와 close 이벤트, 슬롯 컨텐츠 기반 범용 모달. 전역 피드백(세션 만료, 연결 실패, 저장 성공 등)에 사용.",
+        "source": [
+          "admin/src/component/AlertLayout.svelte:1-32"
+        ],
+        "confidence": 0.98,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-STATUS-SYSINFO-001",
+          "FR-UI-TUNNEL-REMOVE-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "show/button props 와 close 이벤트, 슬롯 컨텐츠 기반 범용 모달. 전역 피드백(세션 만료, 연결 실패, 저장 성공 등)에 사용.",
+        "clauses": [
+          {
+            "id": "IF-UI-ALERT-001::c1",
+            "text": "Accept show/button props and slot content.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "IF-UI-ALERT-001::c2",
+            "text": "Emit close event from generic modal.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "IF-UI-ALERT-001::c3",
+            "text": "Use modal for session expiry, connection failure and save feedback.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/component/AlertLayout.svelte",
+            "line": 4,
+            "symbol": "export let",
+            "exactSource": "    export let width = 320;",
+            "rationale": "Actual source declaration/handling location only; not browser/runtime verification."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "IF-UI-ALERT-001::c1",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "IF-UI-ALERT-001::c2",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "IF-UI-ALERT-001::c3",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 285,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "IF-UI-LOADING-001"
+      },
+      "category": "interface",
+      "title": "Loading 오버레이 컴포넌트",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1589,
+        "exactHeading": "##### IF-UI-LOADING-001 — Loading 오버레이 컴포넌트",
+        "sidecarId": "IF-UI-LOADING-001"
+      },
+      "originalRecord": {
+        "id": "IF-UI-LOADING-001",
+        "type": "interface",
+        "title": "Loading 오버레이 컴포넌트",
+        "description": "show 가 true 면 반투명 배경 + 200ms 간격 45도 회전 이미지. transition prop 로 opacity 0 처리 모드 지원.",
+        "source": [
+          "admin/src/component/Loading.svelte:1-34"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": []
+      },
+      "acceptance": {
+        "originalDescription": "show 가 true 면 반투명 배경 + 200ms 간격 45도 회전 이미지. transition prop 로 opacity 0 처리 모드 지원.",
+        "clauses": [
+          {
+            "id": "IF-UI-LOADING-001::c1",
+            "text": "show=true displays translucent overlay.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "IF-UI-LOADING-001::c2",
+            "text": "Rotate image45 degrees every200ms.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "IF-UI-LOADING-001::c3",
+            "text": "transition mode sets opacity0.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/component/Loading.svelte",
+            "line": 5,
+            "symbol": "export let show",
+            "exactSource": "    export let show = false;",
+            "rationale": "Actual source declaration/handling location only; not browser/runtime verification."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "IF-UI-LOADING-001::c1",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "IF-UI-LOADING-001::c2",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "IF-UI-LOADING-001::c3",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Rotation interval is installed in image.onload after mount; declared200ms is not measured actual cadence or cleanup proof."
+      }
+    },
+    {
+      "originalOrdinal": 286,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "IF-UI-GAUGE-001"
+      },
+      "category": "interface",
+      "title": "Gauge 컴포넌트",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1569,
+        "exactHeading": "##### IF-UI-GAUGE-001 — Gauge 컴포넌트",
+        "sidecarId": "IF-UI-GAUGE-001"
+      },
+      "originalRecord": {
+        "id": "IF-UI-GAUGE-001",
+        "type": "interface",
+        "title": "Gauge 컴포넌트",
+        "description": "min/max/value 입력을 -82°~+82° 니들 각도로 매핑(ExMath.map)하고 Animation API 로 duration 동안 부드럽게 회전. title/message/percent 표시.",
+        "source": [
+          "admin/src/component/Gauge.svelte:7-95"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-STATUS-GAUGE-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "min/max/value 입력을 -82°~+82° 니들 각도로 매핑(ExMath.map)하고 Animation API 로 duration 동안 부드럽게 회전. title/message/percent 표시.",
+        "clauses": [
+          {
+            "id": "IF-UI-GAUGE-001::c1",
+            "text": "Map min/max/value to needle angles-82..82 using ExMath.map.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "IF-UI-GAUGE-001::c2",
+            "text": "Animate rotation with Animation API for duration.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "IF-UI-GAUGE-001::c3",
+            "text": "Render title/message/percent.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/component/Gauge.svelte",
+            "line": 19,
+            "symbol": "START_ANGLE",
+            "exactSource": "    const START_ANGLE = -82;",
+            "rationale": "Actual source declaration/handling location only; not browser/runtime verification."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [
+        {
+          "testPath": "test/admin/certificate-lifecycle.test.ts",
+          "caseLine": 75,
+          "exactTitle": "related Gauge and Timer lifecycle paths mount, update and unmount under Svelte 5",
+          "parameters": [],
+          "assertionAnchors": [
+            {"line": 81, "text": "await app.page.waitForFunction(() => document.querySelector(\".percent-box\")?.textContent?.includes(\"50\"));"},
+            {"line": 84, "text": "expect(await app.page.locator(\".percent-box\").count()).toBe(0);"}
+          ],
+          "assertedClauseRefs": [],
+          "state": "candidate",
+          "evidence": [],
+          "rationale": "Actual browser fixture observes the rendered Gauge percent only; angle mapping, animation, title and message remain gaps."
+        }
+      ],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "IF-UI-GAUGE-001::c1",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "IF-UI-GAUGE-001::c2",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "IF-UI-GAUGE-001::c3",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 287,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "IF-UI-SWITCH-001"
+      },
+      "category": "interface",
+      "title": "Switch 토글 컴포넌트",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1597,
+        "exactHeading": "##### IF-UI-SWITCH-001 — Switch 토글 컴포넌트",
+        "sidecarId": "IF-UI-SWITCH-001"
+      },
+      "originalRecord": {
+        "id": "IF-UI-SWITCH-001",
+        "type": "interface",
+        "title": "Switch 토글 컴포넌트",
+        "description": "on prop 바인딩, 상태 변경 시 change 이벤트({on}) 디스패치. 튜널 활성화 토글에 사용.",
+        "source": [
+          "admin/src/component/Switch.svelte:1-42"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-TUNNEL-ACTIVATION-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "on prop 바인딩, 상태 변경 시 change 이벤트({on}) 디스패치. 튜널 활성화 토글에 사용.",
+        "clauses": [
+          {
+            "id": "IF-UI-SWITCH-001::c1",
+            "text": "Bind on state.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "IF-UI-SWITCH-001::c2",
+            "text": "Dispatch change with {on} when state changes.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "IF-UI-SWITCH-001::c3",
+            "text": "Use switch for tunnel activation.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/component/Switch.svelte",
+            "line": 5,
+            "symbol": "export let on",
+            "exactSource": "    export let on = false;",
+            "rationale": "Actual source declaration/handling location only; not browser/runtime verification."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "IF-UI-SWITCH-001::c1",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "IF-UI-SWITCH-001::c2",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "IF-UI-SWITCH-001::c3",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 288,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "IF-UI-TIMER-001"
+      },
+      "category": "interface",
+      "title": "Timer 컴포넌트(활성 타임아웃)",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1607,
+        "exactHeading": "##### IF-UI-TIMER-001 — Timer 컴포넌트(활성 타임아웃)",
+        "sidecarId": "IF-UI-TIMER-001"
+      },
+      "originalRecord": {
+        "id": "IF-UI-TIMER-001",
+        "type": "interface",
+        "title": "Timer 컴포넌트(활성 타임아웃)",
+        "description": "clock 위젯으로 남은 시간(d/h/m/s)을 표시. reset/update 메서드로 외부 제어 가능. _startTime<=0 은 무한(infinity) 모드. 클릭 시 AlertLayout 기반 day/hour/min 입력 창을 열고 변경 시 change 이벤트 디스패치.",
+        "source": [
+          "admin/src/component/Timer.svelte:42-95",
+          "admin/src/component/Timer.svelte:138-175",
+          "admin/src/component/Timer.svelte:198-211"
+        ],
+        "confidence": 0.93,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-TUNNEL-ACTIVATION-001",
+          "API-ADMIN-TUNNEL-ACTIVE-002"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "clock 위젯으로 남은 시간(d/h/m/s)을 표시. reset/update 메서드로 외부 제어 가능. _startTime<=0 은 무한(infinity) 모드. 클릭 시 AlertLayout 기반 day/hour/min 입력 창을 열고 변경 시 change 이벤트 디스패치.",
+        "clauses": [
+          {
+            "id": "IF-UI-TIMER-001::c1",
+            "text": "Render remaining day/hour/minute/second time.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "IF-UI-TIMER-001::c2",
+            "text": "Expose reset and update external controls.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "IF-UI-TIMER-001::c3",
+            "text": "Nonpositive _startTime selects infinite mode.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "IF-UI-TIMER-001::c4",
+            "text": "Click opens day/hour/minute input modal.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "IF-UI-TIMER-001::c5",
+            "text": "Dispatch change on changed duration.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/component/Timer.svelte",
+            "line": 42,
+            "symbol": "export const reset",
+            "exactSource": "    export const reset = (time? : number) :void => {",
+            "rationale": "Actual source declaration/handling location only; not browser/runtime verification."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [
+        {
+          "testPath": "test/admin/certificate-lifecycle.test.ts",
+          "caseLine": 75,
+          "exactTitle": "related Gauge and Timer lifecycle paths mount, update and unmount under Svelte 5",
+          "parameters": [],
+          "assertionAnchors": [
+            {"line": 82, "text": "expect(await app.page.locator(\".time-text\").textContent()).toMatch(/\\d+m.*\\d+s/);"},
+            {"line": 83, "text": "await app.page.evaluate(() => (window as any).unmountFixture());"}
+          ],
+          "assertedClauseRefs": [],
+          "state": "candidate",
+          "evidence": [],
+          "rationale": "Actual browser fixture observes minute/second text and unmount cleanup only; day/hour, controls, infinity, modal and change dispatch remain gaps."
+        }
+      ],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "IF-UI-TIMER-001::c1",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "IF-UI-TIMER-001::c2",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "IF-UI-TIMER-001::c3",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "IF-UI-TIMER-001::c4",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "IF-UI-TIMER-001::c5",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current template distinguishes _startTime===0 infinity from negative values (other placeholder branch). Preserve original <=0 wording and seek semantic disposition; no native timing claim."
+      }
+    },
+    {
+      "originalOrdinal": 289,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "IF-UI-HEADER-APPENDER-001"
+      },
+      "category": "interface",
+      "title": "HeaderAppender 커스텀 헤더 편집",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1579,
+        "exactHeading": "##### IF-UI-HEADER-APPENDER-001 — HeaderAppender 커스텀 헤더 편집",
+        "sidecarId": "IF-UI-HEADER-APPENDER-001"
+      },
+      "originalRecord": {
+        "id": "IF-UI-HEADER-APPENDER-001",
+        "type": "interface",
+        "title": "HeaderAppender 커스텀 헤더 편집",
+        "description": "name/value/replace(체크박스) 배열 편집, +/- 버튼으로 항목 추가/삭제, 최소 1 항목 보장. 배경 컬러는 랜덤 pastel.",
+        "source": [
+          "admin/src/layout/HeaderAppender.svelte:1-74"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "DATA-UI-HTTP-OPT-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "name/value/replace(체크박스) 배열 편집, +/- 버튼으로 항목 추가/삭제, 최소 1 항목 보장. 배경 컬러는 랜덤 pastel.",
+        "clauses": [
+          {
+            "id": "IF-UI-HEADER-APPENDER-001::c1",
+            "text": "Edit name/value/replace entries.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "IF-UI-HEADER-APPENDER-001::c2",
+            "text": "Add/remove entries through plus/minus controls.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "IF-UI-HEADER-APPENDER-001::c3",
+            "text": "Keep at least one entry.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "IF-UI-HEADER-APPENDER-001::c4",
+            "text": "Use random pastel backgrounds.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/HeaderAppender.svelte",
+            "line": 9,
+            "symbol": "export let options",
+            "exactSource": "    export let options : Array<Options> = [{",
+            "rationale": "Actual source declaration/handling location only; not browser/runtime verification."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "IF-UI-HEADER-APPENDER-001::c1",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "IF-UI-HEADER-APPENDER-001::c2",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "IF-UI-HEADER-APPENDER-001::c3",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "IF-UI-HEADER-APPENDER-001::c4",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 290,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "IF-UI-BODY-REPLACE-001"
+      },
+      "category": "interface",
+      "title": "BodyReplaceAppender 바디 치환 규칙 편집",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1559,
+        "exactHeading": "##### IF-UI-BODY-REPLACE-001 — BodyReplaceAppender 바디 치환 규칙 편집",
+        "sidecarId": "IF-UI-BODY-REPLACE-001"
+      },
+      "originalRecord": {
+        "id": "IF-UI-BODY-REPLACE-001",
+        "type": "interface",
+        "title": "BodyReplaceAppender 바디 치환 규칙 편집",
+        "description": "from/to 쌍 배열 편집. 'From' 에 JavaScript 정규식 허용(주석 기반 안내문). Add/Remove 버튼으로 관리.",
+        "source": [
+          "admin/src/layout/BodyReplaceAppender.svelte:1-76"
+        ],
+        "confidence": 0.93,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "DATA-UI-HTTP-OPT-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "from/to 쌍 배열 편집. 'From' 에 JavaScript 정규식 허용(주석 기반 안내문). Add/Remove 버튼으로 관리.",
+        "clauses": [
+          {
+            "id": "IF-UI-BODY-REPLACE-001::c1",
+            "text": "Edit from/to pairs.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "IF-UI-BODY-REPLACE-001::c2",
+            "text": "Describe JavaScript regular expressions for From.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "IF-UI-BODY-REPLACE-001::c3",
+            "text": "Provide add/remove controls.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/BodyReplaceAppender.svelte",
+            "line": 9,
+            "symbol": "export let options",
+            "exactSource": "    export let options : Array<RewriteRule> = [{",
+            "rationale": "Actual source declaration/handling location only; not browser/runtime verification."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "IF-UI-BODY-REPLACE-001::c1",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "IF-UI-BODY-REPLACE-001::c2",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "IF-UI-BODY-REPLACE-001::c3",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 291,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "DATA-UI-SRV-OPTION-001"
+      },
+      "category": "data_model",
+      "title": "ServerOption ViewModel",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3181,
+        "exactHeading": "#### DATA-UI-SRV-OPTION-001 — ServerOption ViewModel",
+        "sidecarId": "DATA-UI-SRV-OPTION-001"
+      },
+      "originalRecord": {
+        "id": "DATA-UI-SRV-OPTION-001",
+        "type": "data_model",
+        "title": "ServerOption ViewModel",
+        "description": "{key:string, adminPort:number, adminTls:boolean, port:number, tls:boolean, globalMemCacheLimit:number(MiB, default 128), keepAlive:number(ms)}. ServerOptionCtrl 에 캐시됨.",
+        "source": [
+          "admin/src/controller/Types.ts:14-22",
+          "admin/src/controller/ServerOptionCtrl.ts:11-19"
+        ],
+        "confidence": 0.98,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-SERVEROPT-FORM-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "{key:string, adminPort:number, adminTls:boolean, port:number, tls:boolean, globalMemCacheLimit:number(MiB, default 128), keepAlive:number(ms)}. ServerOptionCtrl 에 캐시됨.",
+        "clauses": [
+          {
+            "id": "DATA-UI-SRV-OPTION-001::c1",
+            "text": "Model key:string.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "DATA-UI-SRV-OPTION-001::c2",
+            "text": "Model adminPort:number and adminTls:boolean.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "DATA-UI-SRV-OPTION-001::c3",
+            "text": "Model port:number and tls:boolean.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "DATA-UI-SRV-OPTION-001::c4",
+            "text": "Model globalMemCacheLimit:number in MiB with default128.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "DATA-UI-SRV-OPTION-001::c5",
+            "text": "Model keepAlive:number in milliseconds.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "DATA-UI-SRV-OPTION-001::c6",
+            "text": "Cache server option in ServerOptionCtrl.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/Types.ts",
+            "line": 14,
+            "symbol": "type ServerOption",
+            "exactSource": "type ServerOption = {",
+            "rationale": "Actual source declaration/handling location only; not browser/runtime verification."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "DATA-UI-SRV-OPTION-001::c1",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "DATA-UI-SRV-OPTION-001::c2",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "DATA-UI-SRV-OPTION-001::c3",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "DATA-UI-SRV-OPTION-001::c4",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "DATA-UI-SRV-OPTION-001::c5",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "DATA-UI-SRV-OPTION-001::c6",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Type declarations do not install default128 or prove controller cache reuse; current API includes revisions under #34, separate from original fields.",
+        "decisionLink": "https://github.com/ice3x2/TTTGate/issues/34",
+        "contextLedger": "docs/plan/verification/epic61-issue-34.md"
+      }
+    },
+    {
+      "originalOrdinal": 292,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "DATA-UI-TUN-OPT-001"
+      },
+      "category": "data_model",
+      "title": "Tunneling Options 폼 모델",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3201,
+        "exactHeading": "#### DATA-UI-TUN-OPT-001 — Tunneling Options 폼 모델",
+        "sidecarId": "DATA-UI-TUN-OPT-001"
+      },
+      "originalRecord": {
+        "id": "DATA-UI-TUN-OPT-001",
+        "type": "data_model",
+        "title": "Tunneling Options 폼 모델",
+        "description": "Options: forwardPort, protocol(tcp|http|https), httpOption(HttpOption), destinationAddress, destinationPort, tls, inactiveOnStartup, allowedClientNames[], bufferLimitOnServer, bufferLimitOnClient, keepAlive. UI 확장형 TunnelingOptionEx 는 updatable/isSync/certInfo/allowedClientNamesQuery/activeTimeout 필드 추가.",
+        "source": [
+          "admin/src/controller/Options.ts:50-62",
+          "admin/src/layout/TunnelOptionSetLayout.svelte:22-22"
+        ],
+        "confidence": 0.97,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "BR-UI-TUNNEL-VALID-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "Options: forwardPort, protocol(tcp|http|https), httpOption(HttpOption), destinationAddress, destinationPort, tls, inactiveOnStartup, allowedClientNames[], bufferLimitOnServer, bufferLimitOnClient, keepAlive. UI 확장형 TunnelingOptionEx 는 updatable/isSync/certInfo/allowedClientNamesQuery/activeTimeout 필드 추가.",
+        "clauses": [
+          {
+            "id": "DATA-UI-TUN-OPT-001::c1",
+            "text": "Model forwardPort and tcp/http/https protocol.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "DATA-UI-TUN-OPT-001::c2",
+            "text": "Model httpOption, destinationAddress and destinationPort.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "DATA-UI-TUN-OPT-001::c3",
+            "text": "Model tls, inactiveOnStartup and allowedClientNames[].",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "DATA-UI-TUN-OPT-001::c4",
+            "text": "Model bufferLimitOnServer,bufferLimitOnClient and keepAlive.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "DATA-UI-TUN-OPT-001::c5",
+            "text": "UI extension adds updatable,isSync,certInfo,allowedClientNamesQuery and activeTimeout.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/Options.ts",
+            "line": 50,
+            "symbol": "type Options",
+            "exactSource": "type Options = {",
+            "rationale": "Actual source declaration/handling location only; not browser/runtime verification."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "DATA-UI-TUN-OPT-001::c1",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "DATA-UI-TUN-OPT-001::c2",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "DATA-UI-TUN-OPT-001::c3",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "DATA-UI-TUN-OPT-001::c4",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "DATA-UI-TUN-OPT-001::c5",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current compound TLS editor adds revision/previousForwardPort metadata under #71; preserve original fields rather than substitute current additions.",
+        "decisionLink": "https://github.com/ice3x2/TTTGate/issues/71",
+        "contextLedger": "docs/plan/verification/epic61-issue-71.md"
+      }
+    },
+    {
+      "originalOrdinal": 293,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "DATA-UI-HTTP-OPT-001"
+      },
+      "category": "data_model",
+      "title": "HttpOption 모델",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3171,
+        "exactHeading": "#### DATA-UI-HTTP-OPT-001 — HttpOption 모델",
+        "sidecarId": "DATA-UI-HTTP-OPT-001"
+      },
+      "originalRecord": {
+        "id": "DATA-UI-HTTP-OPT-001",
+        "type": "data_model",
+        "title": "HttpOption 모델",
+        "description": "{rewriteHostInTextBody?:boolean, customRequestHeaders?:CustomHeader[], customResponseHeaders?:CustomHeader[], bodyRewriteRules?:RewriteRule[], replaceAccessControlAllowOrigin?:boolean}. CustomHeader={name,value,replace?}, RewriteRule={from,to}.",
+        "source": [
+          "admin/src/controller/Options.ts:5-25",
+          "admin/src/controller/Options.ts:12-17"
+        ],
+        "confidence": 0.97,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-TUNNEL-HTTPOPT-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "{rewriteHostInTextBody?:boolean, customRequestHeaders?:CustomHeader[], customResponseHeaders?:CustomHeader[], bodyRewriteRules?:RewriteRule[], replaceAccessControlAllowOrigin?:boolean}. CustomHeader={name,value,replace?}, RewriteRule={from,to}.",
+        "clauses": [
+          {
+            "id": "DATA-UI-HTTP-OPT-001::c1",
+            "text": "Model optional rewriteHostInTextBody:boolean.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "DATA-UI-HTTP-OPT-001::c2",
+            "text": "Model optional customRequestHeaders/customResponseHeaders arrays.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "DATA-UI-HTTP-OPT-001::c3",
+            "text": "Model optional bodyRewriteRules array.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "DATA-UI-HTTP-OPT-001::c4",
+            "text": "Model optional replaceAccessControlAllowOrigin:boolean.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "DATA-UI-HTTP-OPT-001::c5",
+            "text": "CustomHeader has name/value/optional replace.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "DATA-UI-HTTP-OPT-001::c6",
+            "text": "RewriteRule has from/to.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/Options.ts",
+            "line": 18,
+            "symbol": "type HttpOption",
+            "exactSource": "type HttpOption = {",
+            "rationale": "Actual source declaration/handling location only; not browser/runtime verification."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "DATA-UI-HTTP-OPT-001::c1",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "DATA-UI-HTTP-OPT-001::c2",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "DATA-UI-HTTP-OPT-001::c3",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "DATA-UI-HTTP-OPT-001::c4",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "DATA-UI-HTTP-OPT-001::c5",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "DATA-UI-HTTP-OPT-001::c6",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 294,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "DATA-UI-TUN-STATUS-001"
+      },
+      "category": "data_model",
+      "title": "TunnelingStatus 모델",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3211,
+        "exactHeading": "#### DATA-UI-TUN-STATUS-001 — TunnelingStatus 모델",
+        "sidecarId": "DATA-UI-TUN-STATUS-001"
+      },
+      "originalRecord": {
+        "id": "DATA-UI-TUN-STATUS-001",
+        "type": "data_model",
+        "title": "TunnelingStatus 모델",
+        "description": "{port, online, sessions, uptime, active, activeStart, activeTimeout, rx, tx}. loadTunnelingStatus 응답 항목으로 사용.",
+        "source": [
+          "admin/src/controller/Options.ts:28-38"
+        ],
+        "confidence": 0.97,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": null
+      },
+      "acceptance": {
+        "originalDescription": "{port, online, sessions, uptime, active, activeStart, activeTimeout, rx, tx}. loadTunnelingStatus 응답 항목으로 사용.",
+        "clauses": [
+          {
+            "id": "DATA-UI-TUN-STATUS-001::c1",
+            "text": "Model port,online,sessions and uptime.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "DATA-UI-TUN-STATUS-001::c2",
+            "text": "Model active,activeStart and activeTimeout.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "DATA-UI-TUN-STATUS-001::c3",
+            "text": "Model rx and tx.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "DATA-UI-TUN-STATUS-001::c4",
+            "text": "Use rows in loadTunnelingStatus responses.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/Options.ts",
+            "line": 28,
+            "symbol": "type TunnelingStatus",
+            "exactSource": "type TunnelingStatus = {",
+            "rationale": "Actual source declaration/handling location only; not browser/runtime verification."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "DATA-UI-TUN-STATUS-001::c1",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "DATA-UI-TUN-STATUS-001::c2",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "DATA-UI-TUN-STATUS-001::c3",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "DATA-UI-TUN-STATUS-001::c4",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 295,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "DATA-UI-CERT-INFO-001"
+      },
+      "category": "data_model",
+      "title": "CertInfo 모델",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3151,
+        "exactHeading": "#### DATA-UI-CERT-INFO-001 — CertInfo 모델",
+        "sidecarId": "DATA-UI-CERT-INFO-001"
+      },
+      "originalRecord": {
+        "id": "DATA-UI-CERT-INFO-001",
+        "type": "data_model",
+        "title": "CertInfo 모델",
+        "description": "{key:PemData, cert:PemData, ca:PemData} where PemData={name:string, value:string}. admin cert 와 external cert 에서 공용.",
+        "source": [
+          "admin/src/controller/Types.ts:3-12"
+        ],
+        "confidence": 0.98,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-CERT-ADMIN-001",
+          "FR-UI-CERT-INPUT-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "{key:PemData, cert:PemData, ca:PemData} where PemData={name:string, value:string}. admin cert 와 external cert 에서 공용.",
+        "clauses": [
+          {
+            "id": "DATA-UI-CERT-INFO-001::c1",
+            "text": "CertInfo contains key/cert/ca PemData.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "DATA-UI-CERT-INFO-001::c2",
+            "text": "PemData contains name:string and value:string.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "DATA-UI-CERT-INFO-001::c3",
+            "text": "Share the model between admin and external certificates.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/Types.ts",
+            "line": 8,
+            "symbol": "type CertInfo",
+            "exactSource": "type CertInfo = {",
+            "rationale": "Actual source declaration/handling location only; not browser/runtime verification."
+          }
+        ]
+      },
+  "verification": [
+    {
+      "testPath": "test/admin/certificate-lifecycle.test.ts",
+      "caseLine": 23,
+      "exactTitle": "partial file edits survive component and unrelated parent updates until the pair is complete",
+      "parameters": [],
+      "assertionAnchors": [
+        {"line": 41, "text": "expect(value.key).toEqual({name: \"draft-key.pem\", value: bundle.keyPem});"},
+        {"line": 42, "text": "expect(value.cert).toEqual({name: \"draft-cert.pem\", value: bundle.certPem});"}
+      ],
+      "assertedClauseRefs": ["DATA-UI-CERT-INFO-001::c2"],
+      "technique": "actual-browser-file-input-candidate",
+      "state": "candidate",
+      "evidence": [],
+      "rationale": "Actual FileReader inputs assert name/value pairs for key and cert only; CA and shared admin/external use remain gaps."
+    }
+  ],
+  "contextTests": [
+        {
+          "testPath": "test/admin/certificate-lifecycle.test.ts",
+          "caseLine": 23,
+          "exactTitle": "partial file edits survive component and unrelated parent updates until the pair is complete",
+          "parameters": [],
+          "assertionAnchors": [
+            {
+              "line": 41,
+              "text": "expect(value.key).toEqual({name: \"draft-key.pem\", value: bundle.keyPem});"
+            },
+            {
+              "line": 42,
+              "text": "expect(value.cert).toEqual({name: \"draft-cert.pem\", value: bundle.certPem});"
+            }
+          ],
+          "assertedClauseRefs": [],
+          "state": "candidate",
+          "evidence": [],
+          "rationale": "Actual FileReader fixture asserts key/cert name/value for a pair, not complete CA/admin/external model coverage."
+        }
+      ],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "DATA-UI-CERT-INFO-001::c1",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "DATA-UI-CERT-INFO-001::c2",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "DATA-UI-CERT-INFO-001::c3",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 296,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "DATA-UI-USAGE-001"
+      },
+      "category": "data_model",
+      "title": "Usage 메트릭 모델",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3219,
+        "exactHeading": "#### DATA-UI-USAGE-001 — Usage 메트릭 모델",
+        "sidecarId": "DATA-UI-USAGE-001"
+      },
+      "originalRecord": {
+        "id": "DATA-UI-USAGE-001",
+        "type": "data_model",
+        "title": "Usage 메트릭 모델",
+        "description": "{memory:{free,total,process}, cpu:{total,process}, uptime, heap:{used,total}, totalBuffer:{used,total}}.",
+        "source": [
+          "admin/src/controller/Types.ts:46-65"
+        ],
+        "confidence": 0.98,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-STATUS-GAUGE-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "{memory:{free,total,process}, cpu:{total,process}, uptime, heap:{used,total}, totalBuffer:{used,total}}.",
+        "clauses": [
+          {
+            "id": "DATA-UI-USAGE-001::c1",
+            "text": "Model memory free/total/process.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "DATA-UI-USAGE-001::c2",
+            "text": "Model cpu total/process and uptime.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "DATA-UI-USAGE-001::c3",
+            "text": "Model heap used/total.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "DATA-UI-USAGE-001::c4",
+            "text": "Model totalBuffer used/total.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/Types.ts",
+            "line": 46,
+            "symbol": "interface Usage",
+            "exactSource": "interface Usage {",
+            "rationale": "Actual source declaration/handling location only; not browser/runtime verification."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "DATA-UI-USAGE-001::c1",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "DATA-UI-USAGE-001::c2",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "DATA-UI-USAGE-001::c3",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "DATA-UI-USAGE-001::c4",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 297,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "DATA-UI-SYSINFO-001"
+      },
+      "category": "data_model",
+      "title": "SysInfo 모델",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3191,
+        "exactHeading": "#### DATA-UI-SYSINFO-001 — SysInfo 모델",
+        "sidecarId": "DATA-UI-SYSINFO-001"
+      },
+      "originalRecord": {
+        "id": "DATA-UI-SYSINFO-001",
+        "type": "data_model",
+        "title": "SysInfo 모델",
+        "description": "{osInfo:{platform,release,type,hostname}, cpuInfo:{model,speed,cores}, ram:number, network:{[name]:NetworkInterface[]}}. NetworkInterface={address,netmask,family,mac,internal,cidr}.",
+        "source": [
+          "admin/src/controller/Types.ts:33-81"
+        ],
+        "confidence": 0.98,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-SYSINFO-POPUP-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "{osInfo:{platform,release,type,hostname}, cpuInfo:{model,speed,cores}, ram:number, network:{[name]:NetworkInterface[]}}. NetworkInterface={address,netmask,family,mac,internal,cidr}.",
+        "clauses": [
+          {
+            "id": "DATA-UI-SYSINFO-001::c1",
+            "text": "Model osInfo platform/release/type/hostname.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "DATA-UI-SYSINFO-001::c2",
+            "text": "Model cpuInfo model/speed/cores and numeric ram.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "DATA-UI-SYSINFO-001::c3",
+            "text": "Model network map of interface arrays.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "DATA-UI-SYSINFO-001::c4",
+            "text": "Each interface contains address/netmask/family/mac/internal/cidr.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/Types.ts",
+            "line": 67,
+            "symbol": "interface SysInfo",
+            "exactSource": "interface SysInfo {",
+            "rationale": "Actual source declaration/handling location only; not browser/runtime verification."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "DATA-UI-SYSINFO-001::c1",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "DATA-UI-SYSINFO-001::c2",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "DATA-UI-SYSINFO-001::c3",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "DATA-UI-SYSINFO-001::c4",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 298,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "DATA-UI-CLIENT-STATUS-001"
+      },
+      "category": "data_model",
+      "title": "ClientStatus 모델",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3161,
+        "exactHeading": "#### DATA-UI-CLIENT-STATUS-001 — ClientStatus 모델",
+        "sidecarId": "DATA-UI-CLIENT-STATUS-001"
+      },
+      "originalRecord": {
+        "id": "DATA-UI-CLIENT-STATUS-001",
+        "type": "data_model",
+        "title": "ClientStatus 모델",
+        "description": "{id:number, name:string, uptime:number, address:string, activeSessionCount:number}.",
+        "source": [
+          "admin/src/controller/Types.ts:82-88"
+        ],
+        "confidence": 0.98,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-STATUS-CLIENTLIST-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "{id:number, name:string, uptime:number, address:string, activeSessionCount:number}.",
+        "clauses": [
+          {
+            "id": "DATA-UI-CLIENT-STATUS-001::c1",
+            "text": "ClientStatus has numeric id,uptime and activeSessionCount.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "DATA-UI-CLIENT-STATUS-001::c2",
+            "text": "ClientStatus has string name and address.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/Types.ts",
+            "line": 82,
+            "symbol": "interface ClientStatus",
+            "exactSource": "interface ClientStatus {",
+            "rationale": "Actual source declaration/handling location only; not browser/runtime verification."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "DATA-UI-CLIENT-STATUS-001::c1",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "DATA-UI-CLIENT-STATUS-001::c2",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 299,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "DATA-UI-VERSION-001"
+      },
+      "category": "data_model",
+      "title": "VersionInfo 모델",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3229,
+        "exactHeading": "#### DATA-UI-VERSION-001 — VersionInfo 모델",
+        "sidecarId": "DATA-UI-VERSION-001"
+      },
+      "originalRecord": {
+        "id": "DATA-UI-VERSION-001",
+        "type": "data_model",
+        "title": "VersionInfo 모델",
+        "description": "{name:string, build:string}.",
+        "source": [
+          "admin/src/controller/Types.ts:24-27"
+        ],
+        "confidence": 0.98,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": null
+      },
+      "acceptance": {
+        "originalDescription": "{name:string, build:string}.",
+        "clauses": [
+          {
+            "id": "DATA-UI-VERSION-001::c1",
+            "text": "VersionInfo has string name and build.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/Types.ts",
+            "line": 24,
+            "symbol": "type VersionInfo",
+            "exactSource": "type VersionInfo = {",
+            "rationale": "Actual source declaration/handling location only; not browser/runtime verification."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "DATA-UI-VERSION-001::c1",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 300,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "API-ADMIN-EMPTY-KEY-001"
+      },
+      "category": "api_contract",
+      "title": "GET /api/emptyKey",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1315,
+        "exactHeading": "##### API-ADMIN-EMPTY-KEY-001 — GET /api/emptyKey",
+        "sidecarId": "API-ADMIN-EMPTY-KEY-001"
+      },
+      "originalRecord": {
+        "id": "API-ADMIN-EMPTY-KEY-001",
+        "type": "api_contract",
+        "title": "GET /api/emptyKey",
+        "description": "초기 비밀번호 미설정 여부 조회. 응답 {emptyKey:boolean}. [구현 현황] 본 엔드포인트는 AdminServer.onGetEmptyKey 가 현재 404(스텁)만 반환하고 GET 라우트 스위치(src/server/admin/AdminServer.ts:244-283)에도 /api/emptyKey 가 등록되어 있지 않다. 따라서 UI(LoginCtrl.isEmptyKey)는 의미 있는 응답을 받지 못하며, emptyKey 추론은 실패 상태로 간주된다. 향후 구현 예정.",
+        "source": [
+          "admin/src/controller/LoginCtrl.ts:8-15",
+          "src/server/admin/AdminServer.ts:841-843"
+        ],
+        "confidence": 0.97,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-LOGIN-002"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "초기 비밀번호 미설정 여부 조회. 응답 {emptyKey:boolean}. [구현 현황] 본 엔드포인트는 AdminServer.onGetEmptyKey 가 현재 404(스텁)만 반환하고 GET 라우트 스위치(src/server/admin/AdminServer.ts:244-283)에도 /api/emptyKey 가 등록되어 있지 않다. 따라서 UI(LoginCtrl.isEmptyKey)는 의미 있는 응답을 받지 못하며, emptyKey 추론은 실패 상태로 간주된다. 향후 구현 예정.",
+        "clauses": [
+          {
+            "id": "API-ADMIN-EMPTY-KEY-001::c1",
+            "text": "Original GET /api/emptyKey is intended to report {emptyKey:boolean}.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          },
+          {
+            "id": "API-ADMIN-EMPTY-KEY-001::c2",
+            "text": "Preserve original implementation-status statement: handler404/unregistered route and UI discovery unavailable, future implementation mentioned.",
+            "sourceRef": "description",
+            "state": "unverified",
+            "rationale": "Original independent field/limit/behavior; preserve compound topology where needed."
+          }
+        ]
+      },
+      "implementation": {
+        "state": "unverified",
+        "links": []
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "API-ADMIN-EMPTY-KEY-001::c1",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        },
+        {
+          "clauseRef": "API-ADMIN-EMPTY-KEY-001::c2",
+          "explanation": "No direct complete assertion mapped. Component/type/setup or getter use is not native/browser behavior proof. Exact assertion and non-skipped receipt mapping remain pending.",
+          "issueOrOwner": "#58 batch12",
+          "nextGate": "Independent semantic review and exact execution evidence after required disposition."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Approved #8 removed empty-key discovery in favor of bootstrap-token login. Original planned GET and old stub status are historical, not authorization to expose password initialization discovery.",
+        "decisionLink": "https://github.com/ice3x2/TTTGate/issues/8",
+        "contextLedger": "docs/plan/verification/epic61-issue-8.md"
+      }
+    }
+  ]
+}

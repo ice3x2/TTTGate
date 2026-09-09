@@ -74,6 +74,15 @@ Approved title: docs: 요구사항 추적 구조와 검증 도구 추가. This e
 
 Proposed publication title: `docs: 원본 요구사항 200개의 테스트 추적 연결`.
 
+## First 300 candidate mappings published
+
+- [x] Normalize and independently review batches 09–12. Status: original ordinals 201–300 were applied after semantic and normalization review; the published first 200 rows and remaining 66 bootstrap rows stayed deep-equal. The stage contains 366 rows, 135 candidate links, zero verified rows and zero runtime evidence.
+- [x] Validate the stage without mutating repository outputs. Status: the initial read-only run reported only the expected derived-output mismatch. Owned render and read-only validation both exited 0 under `srs58-render09-12-OBikf0`; protected repository hashes remained unchanged.
+- [x] Publish the canonical matrix and derived files. Status: root applied only the reviewed stage, generated the Markdown and test bridge with the single renderer, then passed read-only validation. Final hashes: matrix `845de58d579102389a176cbabfb532551def9b048fe73560482b4827d25d4205`, Markdown `49ee7702ed5154c910ad96996e504fbde16b2736f819a55172e1a69fa905124a`, bridge `9bd2c455965d4b6af275e9c6b438d2fb4383331779ca847b2b3a8d0dd38b24d5`. Previous outputs are preserved under `srs58-first300-publish-f3088c6080b74d2faccca2c3dc5db098`.
+- [ ] Publish the final 66 reviewed rows and attach authentic execution evidence. Status: batches 13–15 remain in staging. All current rows remain unverified/candidate; publication is not issue completion.
+
+Proposed publication title: `docs: 원본 요구사항 300개의 테스트 추적 연결`.
+
 ## Semantic draft batch02: original positions 26 through 50
 
 - [x] Read-only bounded mapping draft. Status: `epic61-issue-58-draft-batch-02.json` preserves exactly the next25 sidecar records, their full original objects, immutable source hashes and exact Markdown headings. Current source symbols and inspected test assertion excerpts are recorded; sentence/schema/field/status clauses remain unverified, including contextual behavior.

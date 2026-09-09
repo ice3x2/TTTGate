@@ -3,6 +3,45 @@
   "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
   "entries": [
     {
+      "testPath": "test/admin/certificate-lifecycle.test.ts",
+      "exactTitle": "certificate component mounts and unmounts without update-depth errors",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "FR-UI-CERT-INPUT-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "FR-UI-CERT-INPUT-001::c1"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/admin/certificate-lifecycle.test.ts",
+      "exactTitle": "partial file edits survive component and unrelated parent updates until the pair is complete",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "FR-UI-CERT-INPUT-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "FR-UI-CERT-INPUT-001::c3",
+            "FR-UI-CERT-INPUT-001::c6"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "DATA-UI-CERT-INFO-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "DATA-UI-CERT-INFO-001::c2"
+          ]
+        }
+      ]
+    },
+    {
       "testPath": "test/admin/login-bootstrap.test.ts",
       "exactTitle": "controller sends the actual raw key and bootstrap token accepted by the server",
       "parameters": [],
@@ -45,6 +84,15 @@
           "state": "candidate",
           "assertedClauseRefs": [
             "API-ADMIN-VALIDATE-SESSION-001::c1"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "FR-UI-LOGIN-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "FR-UI-LOGIN-001::c1",
+            "FR-UI-LOGIN-001::c5"
           ]
         }
       ]
@@ -212,6 +260,14 @@
           "assertedClauseRefs": [
             "FR-CLI-RECONNECT-001::c4"
           ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "UC-CLI-RECONNECT-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "UC-CLI-RECONNECT-001::c3"
+          ]
         }
       ]
     },
@@ -226,6 +282,21 @@
           "state": "candidate",
           "assertedClauseRefs": [
             "MODE-ENDPOINT-CLOSE-001::c1"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/client/endpoint-graceful-drain.test.ts",
+      "exactTitle": "real pending remote-close drain callback cannot close a replacement with the same SID",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "UC-CLI-SESSION-CLOSE-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "UC-CLI-SESSION-CLOSE-001::c1"
           ]
         }
       ]
@@ -729,6 +800,14 @@
             "IF-LOGGER-CFG-001::c1",
             "IF-LOGGER-CFG-001::c3"
           ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "FR-SOCKET-HANDLER-TIMEOUT-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "FR-SOCKET-HANDLER-TIMEOUT-001::c1"
+          ]
         }
       ]
     },
@@ -901,6 +980,23 @@
           "assertedClauseRefs": [
             "NFR-SEC-TLS-CLIENT-001::c3"
           ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "BR-CLI-SAVE-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "BR-CLI-SAVE-001::c2",
+            "BR-CLI-SAVE-001::c3"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "UC-CLI-BOOTSTRAP-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "UC-CLI-BOOTSTRAP-001::c6"
+          ]
         }
       ]
     },
@@ -925,6 +1021,29 @@
           "assertedClauseRefs": [
             "CONSTR-CLI-EXIT78-001::c1"
           ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "CONSTR-INSECURE-YAML-STR-BOOL-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "CONSTR-INSECURE-YAML-STR-BOOL-001::c1"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/client/req-02-insecure-tls-yaml.test.ts",
+      "exactTitle": "REQ-02 allowInsecureTls/allowLegacyFallback YAML gate (2b) allowInsecureTls:false 는 게이트 트리거하지 않음 (--yes-insecure 없이 exit 0)",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "CONSTR-INSECURE-YAML-STR-BOOL-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "CONSTR-INSECURE-YAML-STR-BOOL-001::c3"
+          ]
         }
       ]
     },
@@ -939,6 +1058,21 @@
           "state": "candidate",
           "assertedClauseRefs": [
             "BR-CLI-INSECURE-YAML-001::c4"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/client/req-14-connect-race.test.ts",
+      "exactTitle": "REQ-14 TunnelClient.connectDataHandler race handler.handlerID/sessionID/bindingToken 100/100 defined on immediate accept",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "BR-CLI-CONNECT-RACE-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "BR-CLI-CONNECT-RACE-001::c1"
           ]
         }
       ]
@@ -1542,6 +1676,14 @@
             "CONSTR-SECURE-RANDOM-MAX-001::c1",
             "CONSTR-SECURE-RANDOM-MAX-001::c2"
           ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "GLOSS-CLOCKRNG-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "GLOSS-CLOCKRNG-001::c4"
+          ]
         }
       ]
     },
@@ -1633,6 +1775,45 @@
             "IF-RESOURCE-POLICY-001::c2",
             "IF-RESOURCE-POLICY-001::c4"
           ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-AVAIL-RESOURCE-STRICT-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-AVAIL-RESOURCE-STRICT-001::c2",
+            "NFR-AVAIL-RESOURCE-STRICT-001::c5"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/util/r2-req-06-resource-policy-strict.test.ts",
+      "exactTitle": "R2-REQ-06 ResourcePolicy strict mode (b-2) strict 모드: 음수 byte limit → RangeError throw",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-AVAIL-RESOURCE-STRICT-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-AVAIL-RESOURCE-STRICT-001::c4"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/util/r2-req-06-resource-policy-strict.test.ts",
+      "exactTitle": "R2-REQ-06 ResourcePolicy strict mode (b-3) strict 모드: NaN → RangeError throw",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-AVAIL-RESOURCE-STRICT-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-AVAIL-RESOURCE-STRICT-001::c3"
+          ]
         }
       ]
     },
@@ -1648,6 +1829,14 @@
           "assertedClauseRefs": [
             "IF-RESOURCE-POLICY-001::c3",
             "IF-RESOURCE-POLICY-001::c4"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-AVAIL-RESOURCE-STRICT-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-AVAIL-RESOURCE-STRICT-001::c1"
           ]
         }
       ]

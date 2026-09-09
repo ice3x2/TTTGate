@@ -1,0 +1,3386 @@
+{
+  "artifactKind": "noncanonical-semantic-draft",
+  "batch": "11",
+  "status": "candidate-unreviewed; no runtime execution",
+  "sourceManifest": {
+    "path": "docs/plan/srs/TTTGate.md",
+    "sidecarPath": "docs/plan/srs/TTTGate.items.jsonl",
+    "documentVersion": "1.0",
+    "markdownSha256": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+    "sidecarSha256": "364071a1f67e07501e7277e15ebdac057eb17ae8e6c2e076a3a550d916625657"
+  },
+  "sourceCheckpoint": "58f71969ef2df77bb729e21cb4b709b4c61d8acb",
+  "inventoryPolicy": {
+    "canonicalRequired": 366,
+    "batchSize": 25,
+    "selected": "Original sidecar ordinals 251 through 275 inclusive"
+  },
+  "execution": {
+    "testsRun": false,
+    "validatorRun": false,
+    "buildRun": false,
+    "evidence": []
+  },
+  "rows": [
+    {
+      "originalOrdinal": 251,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-UI-LOGIN-001"
+      },
+      "category": "functional_req",
+      "title": "관리자 로그인 화면",
+      "originalRecord": {
+        "id": "FR-UI-LOGIN-001",
+        "type": "functional_req",
+        "title": "관리자 로그인 화면",
+        "description": "Login.svelte 는 비밀번호 입력 + OK 버튼(엔터 키 지원)을 제공하고 LoginCtrl.login() 을 호출한다. 성공 시 location.href='/' 으로 재로딩.",
+        "source": [
+          "admin/src/layout/Login.svelte:18-47",
+          "admin/src/layout/Login.svelte:51-63"
+        ],
+        "confidence": 0.98,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "UC-UI-LOGIN-001"
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 551,
+        "exactHeading": "##### FR-UI-LOGIN-001 — 관리자 로그인 화면",
+        "sidecarId": "FR-UI-LOGIN-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-UI-LOGIN-001",
+        "originalDescription": "Login.svelte 는 비밀번호 입력 + OK 버튼(엔터 키 지원)을 제공하고 LoginCtrl.login() 을 호출한다. 성공 시 location.href='/' 으로 재로딩.",
+        "clauses": [
+          {
+            "id": "FR-UI-LOGIN-001::c1",
+            "text": "Provide a password input.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-LOGIN-001::c2",
+            "text": "Provide an OK button.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-LOGIN-001::c3",
+            "text": "Support Enter-key submission.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-LOGIN-001::c4",
+            "text": "Invoke LoginCtrl.login.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-LOGIN-001::c5",
+            "text": "On success reload through location.href='/'.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/Login.svelte",
+            "symbol": "let onClickButton",
+            "line": 11,
+            "rationale": "Current source boundary only; not runtime acceptance."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing original UI requirements remain candidates even when historical behavior is superseded."
+      },
+      "verification": [
+        {
+          "testPath": "test/admin/login-bootstrap.test.ts",
+          "caseLine": 113,
+          "exactTitle": "first-login UI requests the bootstrap token and accepts the existing server password policy",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "FR-UI-LOGIN-001::c1",
+            "FR-UI-LOGIN-001::c5"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 115,
+              "text": "await app.page.getByLabel(\"Password\", {exact: true}).fill(\"plainword\");"
+            },
+            {
+              "line": 122,
+              "text": "await app.page.waitForURL(`${origin()}/`);"
+            }
+          ],
+          "technique": "source-read-candidate",
+          "rationale": "Real browser password entry and successful redirect after bootstrap token. No explicit Enter-key assertion.",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-UI-LOGIN-001::c1",
+          "explanation": "Concrete candidate only; full clause coverage and exact non-skipped browser/runtime receipt remain absent.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-LOGIN-001::c2",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-LOGIN-001::c3",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-LOGIN-001::c4",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-LOGIN-001::c5",
+          "explanation": "Concrete candidate only; full clause coverage and exact non-skipped browser/runtime receipt remain absent.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current login UI also handles bootstrap, errors and in-flight prevention under #8. Positive form submission is not Enter-key coverage.",
+        "contextLedger": "docs/plan/verification/epic61-issue-8.md"
+      }
+    },
+    {
+      "originalOrdinal": 252,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-UI-LOGIN-002"
+      },
+      "category": "functional_req",
+      "title": "초기 비밀번호 설정 모드 UI",
+      "originalRecord": {
+        "id": "FR-UI-LOGIN-002",
+        "type": "functional_req",
+        "title": "초기 비밀번호 설정 모드 UI",
+        "description": "onMount 에서 LoginCtrl.isEmptyKey() 호출 후 true 이면 'No password has been set.' 메시지를 표시하고 이후 입력을 새 비밀번호 등록용으로 사용. [UI-BACKEND 간극] 현재 UI(LoginCtrl.login) 는 {key: hash} 만 전송하며 bootstrapToken 을 절대 보내지 않는다(admin/src/controller/LoginCtrl.ts:27-39). 따라서 최초 비밀번호 설정(UC-UI-BOOTSTRAP-PW-001) 흐름을 UI 만으로는 완료할 수 없으며, 관리자는 API 직접 호출 등 별도 경로로 초기화해야 한다.",
+        "source": [
+          "admin/src/layout/Login.svelte:10-16"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "API-ADMIN-EMPTY-KEY-001",
+          "BR-UI-PW-POLICY-001"
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 561,
+        "exactHeading": "##### FR-UI-LOGIN-002 — 초기 비밀번호 설정 모드 UI",
+        "sidecarId": "FR-UI-LOGIN-002"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-UI-LOGIN-002",
+        "originalDescription": "onMount 에서 LoginCtrl.isEmptyKey() 호출 후 true 이면 'No password has been set.' 메시지를 표시하고 이후 입력을 새 비밀번호 등록용으로 사용. [UI-BACKEND 간극] 현재 UI(LoginCtrl.login) 는 {key: hash} 만 전송하며 bootstrapToken 을 절대 보내지 않는다(admin/src/controller/LoginCtrl.ts:27-39). 따라서 최초 비밀번호 설정(UC-UI-BOOTSTRAP-PW-001) 흐름을 UI 만으로는 완료할 수 없으며, 관리자는 API 직접 호출 등 별도 경로로 초기화해야 한다.",
+        "clauses": [
+          {
+            "id": "FR-UI-LOGIN-002::c1",
+            "text": "On mount call LoginCtrl.isEmptyKey.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-LOGIN-002::c2",
+            "text": "Show No password has been set when empty.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-LOGIN-002::c3",
+            "text": "Treat input as initial password registration.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-LOGIN-002::c4",
+            "text": "The original records a gap: only hashed key is sent without bootstrapToken.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-LOGIN-002::c5",
+            "text": "The original therefore requires external API initialization.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/Login.svelte",
+            "symbol": "let _bootstrapRequired",
+            "line": 8,
+            "rationale": "Current source boundary only; not runtime acceptance."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing original UI requirements remain candidates even when historical behavior is superseded."
+      },
+      "verification": [],
+      "contextTests": [
+        {
+          "testPath": "test/admin/login-bootstrap.test.ts",
+          "caseLine": 77,
+          "exactTitle": "bootstrap response completes first setup without obsolete discovery requests",
+          "parameters": [],
+          "assertedClauseRefs": [],
+          "assertionAnchors": [
+            {
+              "line": 96,
+              "text": "expect(discoveryRequests).toEqual([]);"
+            },
+            {
+              "line": 91,
+              "text": "expect((await submit()).status()).toBe(200);"
+            }
+          ],
+          "technique": "source-read-candidate",
+          "rationale": "Actual current #8 flow contradicts obsolete isEmptyKey discovery and UI-impossible bootstrap statement; context only.",
+          "state": "candidate",
+          "evidence": [],
+          "disposition": "context-only; original differing behavior not verified"
+        }
+      ],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-UI-LOGIN-002::c1",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-LOGIN-002::c2",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-LOGIN-002::c3",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-LOGIN-002::c4",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-LOGIN-002::c5",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Approved #8 removes isEmptyKey discovery and sends bootstrapToken with raw password, allowing browser-only initialization. Preserve original gap statement as superseded pending formal disposition, not a current runtime impossibility.",
+        "contextLedger": "docs/plan/verification/epic61-issue-8.md"
+      }
+    },
+    {
+      "originalOrdinal": 253,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "BR-UI-PW-POLICY-001"
+      },
+      "category": "business_rule",
+      "title": "초기 비밀번호 정책 (클라이언트 검증)",
+      "originalRecord": {
+        "id": "BR-UI-PW-POLICY-001",
+        "type": "business_rule",
+        "title": "초기 비밀번호 정책 (클라이언트 검증)",
+        "description": "_isEmptyPassword 가 true 일 때 비밀번호는 최소 12자 이상이며 숫자 또는 특수문자 [~!@#$%^&*()_+|<>?:{}] 중 하나 이상을 포함해야 한다.",
+        "source": [
+          "admin/src/layout/Login.svelte:26-32"
+        ],
+        "confidence": 0.98,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-LOGIN-002"
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3555,
+        "exactHeading": "#### BR-UI-PW-POLICY-001 — 초기 비밀번호 정책 (클라이언트 검증)",
+        "sidecarId": "BR-UI-PW-POLICY-001"
+      },
+      "acceptance": {
+        "descriptionRef": "BR-UI-PW-POLICY-001",
+        "originalDescription": "_isEmptyPassword 가 true 일 때 비밀번호는 최소 12자 이상이며 숫자 또는 특수문자 [~!@#$%^&*()_+|<>?:{}] 중 하나 이상을 포함해야 한다.",
+        "clauses": [
+          {
+            "id": "BR-UI-PW-POLICY-001::c1",
+            "text": "When the original empty-password mode is true require at least12 characters.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-UI-PW-POLICY-001::c2",
+            "text": "Require a digit or one of the original listed special characters.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/Login.svelte",
+            "symbol": "else if(result.weakPassword)",
+            "line": 27,
+            "rationale": "Current source boundary only; not runtime acceptance."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing original UI requirements remain candidates even when historical behavior is superseded."
+      },
+      "verification": [],
+      "contextTests": [
+        {
+          "testPath": "test/admin/login-bootstrap.test.ts",
+          "caseLine": 113,
+          "exactTitle": "first-login UI requests the bootstrap token and accepts the existing server password policy",
+          "parameters": [],
+          "assertedClauseRefs": [],
+          "assertionAnchors": [
+            {
+              "line": 121,
+              "text": "expect((await submit()).status()).toBe(200);"
+            }
+          ],
+          "technique": "source-read-candidate",
+          "rationale": "Current plainword accepted through server policy; not original12-character numeric/special policy.",
+          "state": "candidate",
+          "evidence": [],
+          "disposition": "context-only; original differing behavior not verified"
+        }
+      ],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "BR-UI-PW-POLICY-001::c1",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "BR-UI-PW-POLICY-001::c2",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Approved #8 defers password validation to existing backend minimum length policy; original _isEmptyPassword12-character rule is absent. Do not reintroduce it to satisfy historical wording.",
+        "contextLedger": "docs/plan/verification/epic61-issue-8.md"
+      }
+    },
+    {
+      "originalOrdinal": 254,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "BR-UI-PW-HASH-001"
+      },
+      "category": "business_rule",
+      "title": "로그인 시 비밀번호 해시화",
+      "originalRecord": {
+        "id": "BR-UI-PW-HASH-001",
+        "type": "business_rule",
+        "title": "로그인 시 비밀번호 해시화",
+        "description": "LoginCtrl.hashPassword 는 password.trim()+'@' 를 평문으로 삼고, 각 문자 코드를 2로 나눈 정수의 16진수를 이어붙여 salt 를 생성한 뒤 CryptoJS.SHA512(password+salt) 문자열로 전송한다.",
+        "source": [
+          "admin/src/controller/LoginCtrl.ts:28-48"
+        ],
+        "confidence": 0.97,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "CONSTR-UI-CRYPTO-001"
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3545,
+        "exactHeading": "#### BR-UI-PW-HASH-001 — 로그인 시 비밀번호 해시화",
+        "sidecarId": "BR-UI-PW-HASH-001"
+      },
+      "acceptance": {
+        "descriptionRef": "BR-UI-PW-HASH-001",
+        "originalDescription": "LoginCtrl.hashPassword 는 password.trim()+'@' 를 평문으로 삼고, 각 문자 코드를 2로 나눈 정수의 16진수를 이어붙여 salt 를 생성한 뒤 CryptoJS.SHA512(password+salt) 문자열로 전송한다.",
+        "clauses": [
+          {
+            "id": "BR-UI-PW-HASH-001::c1",
+            "text": "Use password.trim()+'@' as the hashing input.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-UI-PW-HASH-001::c2",
+            "text": "Build salt by concatenating hexadecimal floor(characterCode/2).",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-UI-PW-HASH-001::c3",
+            "text": "Send CryptoJS.SHA512(password+salt) as a string.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/LoginCtrl.ts",
+            "symbol": "public static async login",
+            "line": 26,
+            "rationale": "Current source boundary only; not runtime acceptance."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing original UI requirements remain candidates even when historical behavior is superseded."
+      },
+      "verification": [],
+      "contextTests": [
+        {
+          "testPath": "test/admin/login-bootstrap.test.ts",
+          "caseLine": 100,
+          "exactTitle": "controller sends the actual raw key and bootstrap token accepted by the server",
+          "parameters": [],
+          "assertedClauseRefs": [],
+          "assertionAnchors": [
+            {
+              "line": 106,
+              "text": "expect((await pending).postDataJSON()).toEqual({key: password, bootstrapToken});"
+            }
+          ],
+          "technique": "source-read-candidate",
+          "rationale": "Actual current raw-password POST contradicts original client hash algorithm; keep #8 changed-path context.",
+          "state": "candidate",
+          "evidence": [],
+          "disposition": "context-only; original differing behavior not verified"
+        }
+      ],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "BR-UI-PW-HASH-001::c1",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "BR-UI-PW-HASH-001::c2",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "BR-UI-PW-HASH-001::c3",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Approved #8 sends raw key/bootstrapToken; original trim/salt/CryptoJS algorithm is removed. Tests of raw wire values are changed-behavior context, not historical-hash verification.",
+        "contextLedger": "docs/plan/verification/epic61-issue-8.md"
+      }
+    },
+    {
+      "originalOrdinal": 255,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "CONSTR-UI-CRYPTO-001"
+      },
+      "category": "constraint",
+      "title": "프론트엔드 crypto-js 의존",
+      "originalRecord": {
+        "id": "CONSTR-UI-CRYPTO-001",
+        "type": "constraint",
+        "title": "프론트엔드 crypto-js 의존",
+        "description": "admin/package.json 이 crypto-js 4.2.0 과 node-forge 1.4.0 에 의존. LoginCtrl/InputCertFile 내에서 SHA-512 및 RSA 키 쌍 검증에 사용. 백엔드는 node-forge 로 표준화되었지만 관리 UI 는 여전히 crypto-js 사용.",
+        "source": [
+          "admin/package.json:21-26",
+          "admin/src/controller/LoginCtrl.ts:1-2",
+          "admin/src/layout/InputCertFile.svelte:2-3"
+        ],
+        "confidence": 0.92,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "BR-UI-PW-HASH-001"
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2241,
+        "exactHeading": "#### CONSTR-UI-CRYPTO-001 — 프론트엔드 crypto-js 의존",
+        "sidecarId": "CONSTR-UI-CRYPTO-001"
+      },
+      "acceptance": {
+        "descriptionRef": "CONSTR-UI-CRYPTO-001",
+        "originalDescription": "admin/package.json 이 crypto-js 4.2.0 과 node-forge 1.4.0 에 의존. LoginCtrl/InputCertFile 내에서 SHA-512 및 RSA 키 쌍 검증에 사용. 백엔드는 node-forge 로 표준화되었지만 관리 UI 는 여전히 crypto-js 사용.",
+        "clauses": [
+          {
+            "id": "CONSTR-UI-CRYPTO-001::c1",
+            "text": "Depend on crypto-js4.2.0.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-UI-CRYPTO-001::c2",
+            "text": "Depend on node-forge1.4.0.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-UI-CRYPTO-001::c3",
+            "text": "Use SHA512 for LoginCtrl.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-UI-CRYPTO-001::c4",
+            "text": "Use RSA pair validation in InputCertFile.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/package.json",
+            "symbol": "\"dependencies\"",
+            "line": 22,
+            "rationale": "Current source boundary only; not runtime acceptance."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing original UI requirements remain candidates even when historical behavior is superseded."
+      },
+      "verification": [],
+      "contextTests": [
+        {
+          "testPath": "test/admin/crypto-replacement.test.ts",
+          "caseLine": 7,
+          "exactTitle": "admin removes crypto-js and its certificate challenge uses the shared native random helper",
+          "parameters": [],
+          "assertedClauseRefs": [],
+          "assertionAnchors": [
+            {
+              "line": 10,
+              "text": "expect(manifest.dependencies[\"crypto-js\"]).toBeUndefined();"
+            },
+            {
+              "line": 14,
+              "text": "expect(component).toContain(\"randomHex(64)\");"
+            }
+          ],
+          "technique": "source-read-candidate",
+          "rationale": "Static manifest/source checks for approved #5 replacement; not original dependency verification or live pair validation.",
+          "state": "candidate",
+          "evidence": [],
+          "disposition": "context-only; original differing behavior not verified"
+        }
+      ],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "CONSTR-UI-CRYPTO-001::c1",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "CONSTR-UI-CRYPTO-001::c2",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "CONSTR-UI-CRYPTO-001::c3",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "CONSTR-UI-CRYPTO-001::c4",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Approved #5 removes crypto-js. Current admin manifest uses node-forge ^1.4.0, not an exact pinned dependency expression. InputCertFile uses native randomHex; original dependency and SHA512 use require superseded disposition.",
+        "contextLedger": "docs/plan/verification/epic61-issue-5.md"
+      }
+    },
+    {
+      "originalOrdinal": 256,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-UI-SERVEROPT-FORM-001"
+      },
+      "category": "functional_req",
+      "title": "서버 옵션 편집 폼",
+      "originalRecord": {
+        "id": "FR-UI-SERVEROPT-FORM-001",
+        "type": "functional_req",
+        "title": "서버 옵션 편집 폼",
+        "description": "ServerSetLayout 는 key(인증 키), adminPort, adminTls, port, tls, globalMemCacheLimit, keepAlive 를 입력/체크박스 폼으로 제공한다. 값 변경 시 _isNewValue reactivity 로 Apply 버튼 활성화.",
+        "source": [
+          "admin/src/layout/ServerSetLayout.svelte:56-58",
+          "admin/src/layout/ServerSetLayout.svelte:194-246"
+        ],
+        "confidence": 0.97,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "DATA-UI-SRV-OPTION-001"
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 581,
+        "exactHeading": "##### FR-UI-SERVEROPT-FORM-001 — 서버 옵션 편집 폼",
+        "sidecarId": "FR-UI-SERVEROPT-FORM-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-UI-SERVEROPT-FORM-001",
+        "originalDescription": "ServerSetLayout 는 key(인증 키), adminPort, adminTls, port, tls, globalMemCacheLimit, keepAlive 를 입력/체크박스 폼으로 제공한다. 값 변경 시 _isNewValue reactivity 로 Apply 버튼 활성화.",
+        "clauses": [
+          {
+            "id": "FR-UI-SERVEROPT-FORM-001::c1",
+            "text": "Render key input.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-SERVEROPT-FORM-001::c2",
+            "text": "Render adminPort input.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-SERVEROPT-FORM-001::c3",
+            "text": "Render adminTls checkbox.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-SERVEROPT-FORM-001::c4",
+            "text": "Render tunnel port input.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-SERVEROPT-FORM-001::c5",
+            "text": "Render tunnel TLS checkbox.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-SERVEROPT-FORM-001::c6",
+            "text": "Render globalMemCacheLimit input.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-SERVEROPT-FORM-001::c7",
+            "text": "Render keepAlive input.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-SERVEROPT-FORM-001::c8",
+            "text": "Enable Apply when values differ from the saved baseline.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/ServerSetLayout.svelte",
+            "symbol": "_isNewValue = !ObjectUtil",
+            "line": 60,
+            "rationale": "Current source boundary only; not runtime acceptance."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing original UI requirements remain candidates even when historical behavior is superseded."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-UI-SERVEROPT-FORM-001::c1",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-SERVEROPT-FORM-001::c2",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-SERVEROPT-FORM-001::c3",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-SERVEROPT-FORM-001::c4",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-SERVEROPT-FORM-001::c5",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-SERVEROPT-FORM-001::c6",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-SERVEROPT-FORM-001::c7",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-SERVEROPT-FORM-001::c8",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "The reactive flag also compares certificate state. A stale-editor test cannot establish every field binding or exact Apply enabled/disabled matrix."
+      }
+    },
+    {
+      "originalOrdinal": 257,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-UI-SERVEROPT-APPLY-001"
+      },
+      "category": "functional_req",
+      "title": "서버 옵션 저장 Apply 플로우",
+      "originalRecord": {
+        "id": "FR-UI-SERVEROPT-APPLY-001",
+        "type": "functional_req",
+        "title": "서버 옵션 저장 Apply 플로우",
+        "description": "_apply 는 updateServerOption 호출 후 _checkServerRestart 로 1초 간격 폴링하여 새 옵션 해시 변경을 감지하면 'The server has been restarted' 알림 후 새 adminPort/adminTls 로 location.href 를 재이동.",
+        "source": [
+          "admin/src/layout/ServerSetLayout.svelte:120-173"
+        ],
+        "confidence": 0.96,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "UC-UI-SERVER-OPT-EDIT-001"
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 571,
+        "exactHeading": "##### FR-UI-SERVEROPT-APPLY-001 — 서버 옵션 저장 Apply 플로우",
+        "sidecarId": "FR-UI-SERVEROPT-APPLY-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-UI-SERVEROPT-APPLY-001",
+        "originalDescription": "_apply 는 updateServerOption 호출 후 _checkServerRestart 로 1초 간격 폴링하여 새 옵션 해시 변경을 감지하면 'The server has been restarted' 알림 후 새 adminPort/adminTls 로 location.href 를 재이동.",
+        "clauses": [
+          {
+            "id": "FR-UI-SERVEROPT-APPLY-001::c1",
+            "text": "Apply calls updateServerOption.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-SERVEROPT-APPLY-001::c2",
+            "text": "Poll changed server option hash every1000ms.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-SERVEROPT-APPLY-001::c3",
+            "text": "On changed hash show the server restarted notification.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-SERVEROPT-APPLY-001::c4",
+            "text": "Redirect to the new adminPort/adminTls address.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/ServerSetLayout.svelte",
+            "symbol": "let _checkServerRestart",
+            "line": 146,
+            "rationale": "Current source boundary only; not runtime acceptance."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing original UI requirements remain candidates even when historical behavior is superseded."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-UI-SERVEROPT-APPLY-001::c1",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-SERVEROPT-APPLY-001::c2",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-SERVEROPT-APPLY-001::c3",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-SERVEROPT-APPLY-001::c4",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Changed hash alone is not proof that an admin listener physically restarted. #34 revision admission and #35 pending-restart semantics require disposition against the original restart notification/redirect behavior.",
+        "contextLedger": "docs/plan/verification/epic61-issue-35.md"
+      }
+    },
+    {
+      "originalOrdinal": 258,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-UI-SERVEROPT-RESET-001"
+      },
+      "category": "functional_req",
+      "title": "Reset 버튼으로 미적용 변경 되돌림",
+      "originalRecord": {
+        "id": "FR-UI-SERVEROPT-RESET-001",
+        "type": "functional_req",
+        "title": "Reset 버튼으로 미적용 변경 되돌림",
+        "description": "_reset 는 _lastServerOption/_originalAdminCert 로 상태를 되돌리고, 인증서가 변경되었으면 updateAdminCert 를 재호출.",
+        "source": [
+          "admin/src/layout/ServerSetLayout.svelte:175-182"
+        ],
+        "confidence": 0.9,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-SERVEROPT-FORM-001",
+          "FR-UI-CERT-ADMIN-001"
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 601,
+        "exactHeading": "##### FR-UI-SERVEROPT-RESET-001 — Reset 버튼으로 미적용 변경 되돌림",
+        "sidecarId": "FR-UI-SERVEROPT-RESET-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-UI-SERVEROPT-RESET-001",
+        "originalDescription": "_reset 는 _lastServerOption/_originalAdminCert 로 상태를 되돌리고, 인증서가 변경되었으면 updateAdminCert 를 재호출.",
+        "clauses": [
+          {
+            "id": "FR-UI-SERVEROPT-RESET-001::c1",
+            "text": "Reset restores the last server options.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-SERVEROPT-RESET-001::c2",
+            "text": "Reset restores the original admin certificate state.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-SERVEROPT-RESET-001::c3",
+            "text": "If the certificate changed call updateAdminCert again.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/ServerSetLayout.svelte",
+            "symbol": "let _reset",
+            "line": 178,
+            "rationale": "Current source boundary only; not runtime acceptance."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing original UI requirements remain candidates even when historical behavior is superseded."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-UI-SERVEROPT-RESET-001::c1",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-SERVEROPT-RESET-001::c2",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-SERVEROPT-RESET-001::c3",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Reset can invoke a certificate update, making it more than a purely local undo. No actual reset/browser/backend side-effect candidate mapped."
+      }
+    },
+    {
+      "originalOrdinal": 259,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-UI-SERVEROPT-MINMAX-001"
+      },
+      "category": "functional_req",
+      "title": "입력 min/max 강제 정규화",
+      "originalRecord": {
+        "id": "FR-UI-SERVEROPT-MINMAX-001",
+        "type": "functional_req",
+        "title": "입력 min/max 강제 정규화",
+        "description": "_enforceMinMax(keyup) 는 input.min/max 범위를 벗어난 value 를 자동으로 min/max 값으로 보정. 0~65535 포트, 1~99999 버퍼/keepAlive 등에 적용.",
+        "source": [
+          "admin/src/layout/ServerSetLayout.svelte:63-73",
+          "admin/src/layout/ServerSetLayout.svelte:204-236"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "BR-UI-PORT-RANGE-001"
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 591,
+        "exactHeading": "##### FR-UI-SERVEROPT-MINMAX-001 — 입력 min/max 강제 정규화",
+        "sidecarId": "FR-UI-SERVEROPT-MINMAX-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-UI-SERVEROPT-MINMAX-001",
+        "originalDescription": "_enforceMinMax(keyup) 는 input.min/max 범위를 벗어난 value 를 자동으로 min/max 값으로 보정. 0~65535 포트, 1~99999 버퍼/keepAlive 등에 적용.",
+        "clauses": [
+          {
+            "id": "FR-UI-SERVEROPT-MINMAX-001::c1",
+            "text": "On keyup clamp input below min to min.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-SERVEROPT-MINMAX-001::c2",
+            "text": "On keyup clamp input above max to max.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-SERVEROPT-MINMAX-001::c3",
+            "text": "Apply port bounds0..65535.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-SERVEROPT-MINMAX-001::c4",
+            "text": "Apply buffer/keepAlive bounds1..99999.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/ServerSetLayout.svelte",
+            "symbol": "let _enforceMinMax",
+            "line": 66,
+            "rationale": "Current source boundary only; not runtime acceptance."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing original UI requirements remain candidates even when historical behavior is superseded."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-UI-SERVEROPT-MINMAX-001::c1",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-SERVEROPT-MINMAX-001::c2",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-SERVEROPT-MINMAX-001::c3",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-SERVEROPT-MINMAX-001::c4",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "DOM keyup value assignment does not itself prove Svelte bound state receives the clamped value for all input methods; original port0 validity differs from server validation. No range policy change authorized."
+      }
+    },
+    {
+      "originalOrdinal": 260,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-UI-CERT-ADMIN-001"
+      },
+      "category": "functional_req",
+      "title": "Admin TLS 인증서 관리 UI",
+      "originalRecord": {
+        "id": "FR-UI-CERT-ADMIN-001",
+        "type": "functional_req",
+        "title": "Admin TLS 인증서 관리 UI",
+        "description": "ServerSetLayout 에서 adminTls 체크 시 InputCertFile 컴포넌트를 렌더링하여 key/cert/ca PEM 파일 선택을 받고 update 이벤트로 _updateAdminCert 를 호출(CertificationCtrl.updateAdminCert).",
+        "source": [
+          "admin/src/layout/ServerSetLayout.svelte:75-102",
+          "admin/src/layout/ServerSetLayout.svelte:215-217"
+        ],
+        "confidence": 0.96,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-CERT-INPUT-001"
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 531,
+        "exactHeading": "##### FR-UI-CERT-ADMIN-001 — Admin TLS 인증서 관리 UI",
+        "sidecarId": "FR-UI-CERT-ADMIN-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-UI-CERT-ADMIN-001",
+        "originalDescription": "ServerSetLayout 에서 adminTls 체크 시 InputCertFile 컴포넌트를 렌더링하여 key/cert/ca PEM 파일 선택을 받고 update 이벤트로 _updateAdminCert 를 호출(CertificationCtrl.updateAdminCert).",
+        "clauses": [
+          {
+            "id": "FR-UI-CERT-ADMIN-001::c1",
+            "text": "Render InputCertFile when adminTls is checked.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-CERT-ADMIN-001::c2",
+            "text": "Accept key/cert/ca PEM selection.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-CERT-ADMIN-001::c3",
+            "text": "On update call _updateAdminCert and CertificationCtrl.updateAdminCert.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/ServerSetLayout.svelte",
+            "symbol": "let _onUpdateAdminCert",
+            "line": 78,
+            "rationale": "Current source boundary only; not runtime acceptance."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing original UI requirements remain candidates even when historical behavior is superseded."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-UI-CERT-ADMIN-001::c1",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-CERT-ADMIN-001::c2",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-CERT-ADMIN-001::c3",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current admin certificate update has its own revision/response path. Component update event does not prove native certificate rotation or server listener restart."
+      }
+    },
+    {
+      "originalOrdinal": 261,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-UI-CERT-INPUT-001"
+      },
+      "category": "functional_req",
+      "title": "InputCertFile 컴포넌트 인증서 업로드",
+      "originalRecord": {
+        "id": "FR-UI-CERT-INPUT-001",
+        "type": "functional_req",
+        "title": "InputCertFile 컴포넌트 인증서 업로드",
+        "description": "key/cert/ca 3개의 파일 input (accept=.pem/.crt/.cer) 제공. 파일 선택 시 FileReader 로 텍스트 읽고 PEM 형식 및 키 쌍 검증 후 update 이벤트 디스패치. ca 는 X 버튼으로 제거 가능.",
+        "source": [
+          "admin/src/layout/InputCertFile.svelte:204-277",
+          "admin/src/layout/InputCertFile.svelte:281-305"
+        ],
+        "confidence": 0.96,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "BR-UI-CERT-VALID-001",
+          "BR-UI-KEYPAIR-CHECK-001"
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 541,
+        "exactHeading": "##### FR-UI-CERT-INPUT-001 — InputCertFile 컴포넌트 인증서 업로드",
+        "sidecarId": "FR-UI-CERT-INPUT-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-UI-CERT-INPUT-001",
+        "originalDescription": "key/cert/ca 3개의 파일 input (accept=.pem/.crt/.cer) 제공. 파일 선택 시 FileReader 로 텍스트 읽고 PEM 형식 및 키 쌍 검증 후 update 이벤트 디스패치. ca 는 X 버튼으로 제거 가능.",
+        "clauses": [
+          {
+            "id": "FR-UI-CERT-INPUT-001::c1",
+            "text": "Provide three file inputs for key/cert/ca.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-CERT-INPUT-001::c2",
+            "text": "Accept .pem/.crt/.cer files.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-CERT-INPUT-001::c3",
+            "text": "Read selections using FileReader text.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-CERT-INPUT-001::c4",
+            "text": "Validate PEM before emitting an update.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-CERT-INPUT-001::c5",
+            "text": "Validate the key pair before emitting an update.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-CERT-INPUT-001::c6",
+            "text": "Dispatch update when a valid pair is ready.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-CERT-INPUT-001::c7",
+            "text": "Allow CA removal using X.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/InputCertFile.svelte",
+            "symbol": "let _onInputFile",
+            "line": 236,
+            "rationale": "Current source boundary only; not runtime acceptance."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing original UI requirements remain candidates even when historical behavior is superseded."
+      },
+      "verification": [
+        {
+          "testPath": "test/admin/certificate-lifecycle.test.ts",
+          "caseLine": 9,
+          "exactTitle": "certificate component mounts and unmounts without update-depth errors",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "FR-UI-CERT-INPUT-001::c1"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 14,
+              "text": "expect(await app.page.locator('input[type=\"file\"]').count()).toBe(3);"
+            }
+          ],
+          "technique": "source-read-candidate",
+          "rationale": "Real browser component has three file inputs; count alone does not verify accept filter, PEM validity or CA removal.",
+          "state": "candidate",
+          "evidence": []
+        },
+        {
+          "testPath": "test/admin/certificate-lifecycle.test.ts",
+          "caseLine": 23,
+          "exactTitle": "partial file edits survive component and unrelated parent updates until the pair is complete",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "FR-UI-CERT-INPUT-001::c3",
+            "FR-UI-CERT-INPUT-001::c6"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 39,
+              "text": "await app.page.waitForFunction(() => document.querySelector(\"#updates\")?.textContent === \"1\");"
+            },
+            {
+              "line": 41,
+              "text": "expect(value.key).toEqual({name: \"draft-key.pem\", value: bundle.keyPem});"
+            },
+            {
+              "line": 42,
+              "text": "expect(value.cert).toEqual({name: \"draft-cert.pem\", value: bundle.certPem});"
+            }
+          ],
+          "technique": "source-read-candidate",
+          "rationale": "Real FileReader/upload preserves exact PEM text and emits one update for a valid generated pair. Does not establish complete bad-pair/keysize/CA matrix.",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-UI-CERT-INPUT-001::c1",
+          "explanation": "Concrete candidate only; full clause coverage and exact non-skipped browser/runtime receipt remain absent.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-CERT-INPUT-001::c2",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-CERT-INPUT-001::c3",
+          "explanation": "Concrete candidate only; full clause coverage and exact non-skipped browser/runtime receipt remain absent.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-CERT-INPUT-001::c4",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-CERT-INPUT-001::c5",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-CERT-INPUT-001::c6",
+          "explanation": "Concrete candidate only; full clause coverage and exact non-skipped browser/runtime receipt remain absent.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-CERT-INPUT-001::c7",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 262,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "BR-UI-CERT-VALID-001"
+      },
+      "category": "business_rule",
+      "title": "PEM 인증서 유효성 검증",
+      "originalRecord": {
+        "id": "BR-UI-CERT-VALID-001",
+        "type": "business_rule",
+        "title": "PEM 인증서 유효성 검증",
+        "description": "_isValidCertificate: BEGIN/END CERTIFICATE 헤더 확인 + forge 로 파싱 + RSA 공개키 비트 길이 >= 2048. _isValidPrivateKey: PRIVATE KEY 또는 RSA PRIVATE KEY 헤더 확인 + 비트 길이 >= 2048.",
+        "source": [
+          "admin/src/layout/InputCertFile.svelte:168-202"
+        ],
+        "confidence": 0.97,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "VER-UI-KEYPAIR-001"
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3515,
+        "exactHeading": "#### BR-UI-CERT-VALID-001 — PEM 인증서 유효성 검증",
+        "sidecarId": "BR-UI-CERT-VALID-001"
+      },
+      "acceptance": {
+        "descriptionRef": "BR-UI-CERT-VALID-001",
+        "originalDescription": "_isValidCertificate: BEGIN/END CERTIFICATE 헤더 확인 + forge 로 파싱 + RSA 공개키 비트 길이 >= 2048. _isValidPrivateKey: PRIVATE KEY 또는 RSA PRIVATE KEY 헤더 확인 + 비트 길이 >= 2048.",
+        "clauses": [
+          {
+            "id": "BR-UI-CERT-VALID-001::c1",
+            "text": "Check BEGIN/END CERTIFICATE markers.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-UI-CERT-VALID-001::c2",
+            "text": "Parse certificates with forge.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-UI-CERT-VALID-001::c3",
+            "text": "Require RSA certificate public key length >=2048.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-UI-CERT-VALID-001::c4",
+            "text": "Accept PRIVATE KEY or RSA PRIVATE KEY PEM markers.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-UI-CERT-VALID-001::c5",
+            "text": "Require private key length >=2048.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/InputCertFile.svelte",
+            "symbol": "let _isValidCertificate",
+            "line": 177,
+            "rationale": "Current source boundary only; not runtime acceptance."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing original UI requirements remain candidates even when historical behavior is superseded."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "BR-UI-CERT-VALID-001::c1",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "BR-UI-CERT-VALID-001::c2",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "BR-UI-CERT-VALID-001::c3",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "BR-UI-CERT-VALID-001::c4",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "BR-UI-CERT-VALID-001::c5",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "RSA-specific n.bitLength parsing rejects unsupported public-key types; no live component negative keysize/header matrix mapped."
+      }
+    },
+    {
+      "originalOrdinal": 263,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "BR-UI-KEYPAIR-CHECK-001"
+      },
+      "category": "business_rule",
+      "title": "키-인증서 쌍 검증(RSA-OAEP)",
+      "originalRecord": {
+        "id": "BR-UI-KEYPAIR-CHECK-001",
+        "type": "business_rule",
+        "title": "키-인증서 쌍 검증(RSA-OAEP)",
+        "description": "_validKeyPair 는 평문(SHA-512(Date.now()+'@'))을 인증서 공개키로 RSA-OAEP(SHA-256) 암호화 → 개인키로 복호화 → 일치 여부로 키 쌍 매칭을 확인한다.",
+        "source": [
+          "admin/src/layout/InputCertFile.svelte:143-166",
+          "admin/src/layout/InputCertFile.svelte:244-254"
+        ],
+        "confidence": 0.97,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "BR-UI-CERT-VALID-001"
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3525,
+        "exactHeading": "#### BR-UI-KEYPAIR-CHECK-001 — 키-인증서 쌍 검증(RSA-OAEP)",
+        "sidecarId": "BR-UI-KEYPAIR-CHECK-001"
+      },
+      "acceptance": {
+        "descriptionRef": "BR-UI-KEYPAIR-CHECK-001",
+        "originalDescription": "_validKeyPair 는 평문(SHA-512(Date.now()+'@'))을 인증서 공개키로 RSA-OAEP(SHA-256) 암호화 → 개인키로 복호화 → 일치 여부로 키 쌍 매칭을 확인한다.",
+        "clauses": [
+          {
+            "id": "BR-UI-KEYPAIR-CHECK-001::c1",
+            "text": "Generate original plaintext SHA512(Date.now()+'@').",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-UI-KEYPAIR-CHECK-001::c2",
+            "text": "Encrypt with the certificate public key using RSA-OAEP SHA256.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-UI-KEYPAIR-CHECK-001::c3",
+            "text": "Decrypt with the private key using RSA-OAEP SHA256.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-UI-KEYPAIR-CHECK-001::c4",
+            "text": "Compare decrypted plaintext to determine pair matching.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/InputCertFile.svelte",
+            "symbol": "let _validKeyPair",
+            "line": 152,
+            "rationale": "Current source boundary only; not runtime acceptance."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing original UI requirements remain candidates even when historical behavior is superseded."
+      },
+      "verification": [],
+      "contextTests": [
+        {
+          "testPath": "test/admin/crypto-replacement.test.ts",
+          "caseLine": 7,
+          "exactTitle": "admin removes crypto-js and its certificate challenge uses the shared native random helper",
+          "parameters": [],
+          "assertedClauseRefs": [],
+          "assertionAnchors": [
+            {
+              "line": 14,
+              "text": "expect(component).toContain(\"randomHex(64)\");"
+            }
+          ],
+          "technique": "source-read-candidate",
+          "rationale": "Static new challenge source is context for original Date.now/SHA512 replacement; no encrypt/decrypt implementation assertion.",
+          "state": "candidate",
+          "evidence": [],
+          "disposition": "context-only; original differing behavior not verified"
+        }
+      ],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "BR-UI-KEYPAIR-CHECK-001::c1",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "BR-UI-KEYPAIR-CHECK-001::c2",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "BR-UI-KEYPAIR-CHECK-001::c3",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "BR-UI-KEYPAIR-CHECK-001::c4",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Approved #5 replaces Date.now/SHA512 plaintext with randomHex(64). RSA-OAEP uses SHA256 for md and mgf1, but static source and valid pair event do not fully prove wrong-key rejection.",
+        "contextLedger": "docs/plan/verification/epic61-issue-5.md"
+      }
+    },
+    {
+      "originalOrdinal": 264,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "VER-UI-KEYPAIR-001"
+      },
+      "category": "verification",
+      "title": "잘못된 키 쌍 차단",
+      "originalRecord": {
+        "id": "VER-UI-KEYPAIR-001",
+        "type": "verification",
+        "title": "잘못된 키 쌍 차단",
+        "description": "_checkKeyPair 가 'Fail' 이면 _clearKeyAndCert 로 key/cert/ca 상태와 파일 input value 를 초기화하고 'Invalid Key Pair' 알림을 띄움.",
+        "source": [
+          "admin/src/layout/InputCertFile.svelte:104-117",
+          "admin/src/layout/InputCertFile.svelte:244-254"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "BR-UI-KEYPAIR-CHECK-001"
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2525,
+        "exactHeading": "#### VER-UI-KEYPAIR-001 — 잘못된 키 쌍 차단",
+        "sidecarId": "VER-UI-KEYPAIR-001"
+      },
+      "acceptance": {
+        "descriptionRef": "VER-UI-KEYPAIR-001",
+        "originalDescription": "_checkKeyPair 가 'Fail' 이면 _clearKeyAndCert 로 key/cert/ca 상태와 파일 input value 를 초기화하고 'Invalid Key Pair' 알림을 띄움.",
+        "clauses": [
+          {
+            "id": "VER-UI-KEYPAIR-001::c1",
+            "text": "On failed key pair clear key state.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "VER-UI-KEYPAIR-001::c2",
+            "text": "Clear certificate state.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "VER-UI-KEYPAIR-001::c3",
+            "text": "Clear CA state.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "VER-UI-KEYPAIR-001::c4",
+            "text": "Reset file input values.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "VER-UI-KEYPAIR-001::c5",
+            "text": "Show Invalid Key Pair.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/InputCertFile.svelte",
+            "symbol": "let _checkKeyPair",
+            "line": 253,
+            "rationale": "Current source boundary only; not runtime acceptance."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing original UI requirements remain candidates even when historical behavior is superseded."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "VER-UI-KEYPAIR-001::c1",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "VER-UI-KEYPAIR-001::c2",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "VER-UI-KEYPAIR-001::c3",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "VER-UI-KEYPAIR-001::c4",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "VER-UI-KEYPAIR-001::c5",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Parent-prop clearing tests and generic invalid-certificate input are not an invalid key-pair test; all three state/input resets and exact alert need direct evidence."
+      }
+    },
+    {
+      "originalOrdinal": 265,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-UI-TUNNEL-LOAD-001"
+      },
+      "category": "functional_req",
+      "title": "튜널 설정 목록 로드 및 표시",
+      "originalRecord": {
+        "id": "FR-UI-TUNNEL-LOAD-001",
+        "type": "functional_req",
+        "title": "튜널 설정 목록 로드 및 표시",
+        "description": "TunnelOptionSetLayout onMount 에서 _loadTunnelingOption 호출 → GET /api/tunnelingOption → 각 튜널에 isSync=true, updatable=true, allowedClientNamesQuery 조립. _loadCertInfoAll 로 각 포트별 외부 인증서도 로드.",
+        "source": [
+          "admin/src/layout/TunnelOptionSetLayout.svelte:44-52",
+          "admin/src/layout/TunnelOptionSetLayout.svelte:96-130"
+        ],
+        "confidence": 0.97,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "API-ADMIN-EXT-CERT-GET-002"
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 719,
+        "exactHeading": "##### FR-UI-TUNNEL-LOAD-001 — 튜널 설정 목록 로드 및 표시",
+        "sidecarId": "FR-UI-TUNNEL-LOAD-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-UI-TUNNEL-LOAD-001",
+        "originalDescription": "TunnelOptionSetLayout onMount 에서 _loadTunnelingOption 호출 → GET /api/tunnelingOption → 각 튜널에 isSync=true, updatable=true, allowedClientNamesQuery 조립. _loadCertInfoAll 로 각 포트별 외부 인증서도 로드.",
+        "clauses": [
+          {
+            "id": "FR-UI-TUNNEL-LOAD-001::c1",
+            "text": "On mount load tunneling options via GET.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-LOAD-001::c2",
+            "text": "Set loaded isSync=true.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-LOAD-001::c3",
+            "text": "Set initial updatable=true.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-LOAD-001::c4",
+            "text": "Assemble allowedClientNamesQuery.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-LOAD-001::c5",
+            "text": "Load each port external certificate.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/TunnelOptionSetLayout.svelte",
+            "symbol": "let _loadTunnelingOption",
+            "line": 95,
+            "rationale": "Current source boundary only; not runtime acceptance."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing original UI requirements remain candidates even when historical behavior is superseded."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-UI-TUNNEL-LOAD-001::c1",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-LOAD-001::c2",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-LOAD-001::c3",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-LOAD-001::c4",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-LOAD-001::c5",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current load additionally stores snapshot and certificate revisions then recomputes updatable validation. Getter/setup completion is not proof of every rendered row field."
+      }
+    },
+    {
+      "originalOrdinal": 266,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-UI-TUNNEL-ADD-001"
+      },
+      "category": "functional_req",
+      "title": "튜널 추가(Add tunneling service)",
+      "originalRecord": {
+        "id": "FR-UI-TUNNEL-ADD-001",
+        "type": "functional_req",
+        "title": "튜널 추가(Add tunneling service)",
+        "description": "_addEmptyOption 이 랜덤 forwardPort (10~65544) + 기본 httpOption + destinationAddress='127.0.0.1':8080 으로 빈 옵션을 목록에 추가(isSync=false). Apply 버튼 라벨은 'Start'.",
+        "source": [
+          "admin/src/layout/TunnelOptionSetLayout.svelte:193-221",
+          "admin/src/layout/TunnelOptionSetLayout.svelte:651-662"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "UC-UI-TUNNEL-ADD-001"
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 669,
+        "exactHeading": "##### FR-UI-TUNNEL-ADD-001 — 튜널 추가(Add tunneling service)",
+        "sidecarId": "FR-UI-TUNNEL-ADD-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-UI-TUNNEL-ADD-001",
+        "originalDescription": "_addEmptyOption 이 랜덤 forwardPort (10~65544) + 기본 httpOption + destinationAddress='127.0.0.1':8080 으로 빈 옵션을 목록에 추가(isSync=false). Apply 버튼 라벨은 'Start'.",
+        "clauses": [
+          {
+            "id": "FR-UI-TUNNEL-ADD-001::c1",
+            "text": "Add an empty row with a random forwardPort in original10..65544 range.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-ADD-001::c2",
+            "text": "Supply default httpOption.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-ADD-001::c3",
+            "text": "Use destination127.0.0.1:8080.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-ADD-001::c4",
+            "text": "Set isSync=false.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-ADD-001::c5",
+            "text": "Label Apply as Start for an unsaved row.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/TunnelOptionSetLayout.svelte",
+            "symbol": "let _addEmptyOption",
+            "line": 199,
+            "rationale": "Current source boundary only; not runtime acceptance."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing original UI requirements remain candidates even when historical behavior is superseded."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-UI-TUNNEL-ADD-001::c1",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-ADD-001::c2",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-ADD-001::c3",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-ADD-001::c4",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-ADD-001::c5",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current Math.floor(Math.random()*65534+10) yields10..65543 before reactive port clamp; original upper65544 differs. Effective additions can be clamped to65535. No random-range or policy correction is authorized."
+      }
+    },
+    {
+      "originalOrdinal": 267,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-UI-TUNNEL-APPLY-001"
+      },
+      "category": "functional_req",
+      "title": "튜널 Apply/Start",
+      "originalRecord": {
+        "id": "FR-UI-TUNNEL-APPLY-001",
+        "type": "functional_req",
+        "title": "튜널 Apply/Start",
+        "description": "_onClickApply: allowedClientNamesQuery 를 ';' 로 분리해 allowedClientNames 배열 구성 → _removeOldServerPort 로 과거 포트 정리 → tls 이고 certInfo 있으면 updateExternalServerCert → updateTunnelingOption. 성공 시 타이머 reset 및 _originTunnelOptions 동기화.",
+        "source": [
+          "admin/src/layout/TunnelOptionSetLayout.svelte:290-332"
+        ],
+        "confidence": 0.96,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "API-ADMIN-EXT-CERT-POST-002",
+          "BR-UI-TUNNEL-VALID-001"
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 689,
+        "exactHeading": "##### FR-UI-TUNNEL-APPLY-001 — 튜널 Apply/Start",
+        "sidecarId": "FR-UI-TUNNEL-APPLY-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-UI-TUNNEL-APPLY-001",
+        "originalDescription": "_onClickApply: allowedClientNamesQuery 를 ';' 로 분리해 allowedClientNames 배열 구성 → _removeOldServerPort 로 과거 포트 정리 → tls 이고 certInfo 있으면 updateExternalServerCert → updateTunnelingOption. 성공 시 타이머 reset 및 _originTunnelOptions 동기화.",
+        "clauses": [
+          {
+            "id": "FR-UI-TUNNEL-APPLY-001::c1",
+            "text": "Split allowedClientNamesQuery by semicolon.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-APPLY-001::c2",
+            "text": "Remove old server port before apply as originally stated.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-APPLY-001::c3",
+            "text": "For TLS with certInfo update the external certificate before tunnel update.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-APPLY-001::c4",
+            "text": "Call updateTunnelingOption.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-APPLY-001::c5",
+            "text": "On success reset the timer.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-APPLY-001::c6",
+            "text": "Synchronize original options.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-APPLY-001::c7",
+            "text": "Preserve original sequence names -> old-port removal -> certificate save -> tunnel save -> timer/origin synchronization.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/TunnelOptionSetLayout.svelte",
+            "symbol": "let _onClickApply",
+            "line": 278,
+            "rationale": "Current source boundary only; not runtime acceptance."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing original UI requirements remain candidates even when historical behavior is superseded."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-UI-TUNNEL-APPLY-001::c1",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-APPLY-001::c2",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-APPLY-001::c3",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-APPLY-001::c4",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-APPLY-001::c5",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-APPLY-001::c6",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-APPLY-001::c7",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Approved #71 uses one compound updateTunnelingOption carrying certificate and previous port/revisions; it no longer pre-deletes old ports or separately saves certificate. Preserve historical ordering and resolve against #34/#35/#71 rather than using new compound tests as old-sequence proof.",
+        "contextLedger": "docs/plan/verification/epic61-issue-71.md"
+      }
+    },
+    {
+      "originalOrdinal": 268,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-UI-TUNNEL-REMOVE-001"
+      },
+      "category": "functional_req",
+      "title": "튜널 Remove/Stop",
+      "originalRecord": {
+        "id": "FR-UI-TUNNEL-REMOVE-001",
+        "type": "functional_req",
+        "title": "튜널 Remove/Stop",
+        "description": "_onClickRemove: isSync true 면 DELETE /api/tunnelingOption 호출 후 splice 로 목록 제거 및 'external server has been shut down' 알림. isSync false(신규 미저장)면 클라이언트 배열에서만 제거.",
+        "source": [
+          "admin/src/layout/TunnelOptionSetLayout.svelte:238-270"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": null
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 749,
+        "exactHeading": "##### FR-UI-TUNNEL-REMOVE-001 — 튜널 Remove/Stop",
+        "sidecarId": "FR-UI-TUNNEL-REMOVE-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-UI-TUNNEL-REMOVE-001",
+        "originalDescription": "_onClickRemove: isSync true 면 DELETE /api/tunnelingOption 호출 후 splice 로 목록 제거 및 'external server has been shut down' 알림. isSync false(신규 미저장)면 클라이언트 배열에서만 제거.",
+        "clauses": [
+          {
+            "id": "FR-UI-TUNNEL-REMOVE-001::c1",
+            "text": "For saved rows DELETE tunnelingOption.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-REMOVE-001::c2",
+            "text": "After success remove the row.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-REMOVE-001::c3",
+            "text": "Show external server shutdown notification for saved removal.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-REMOVE-001::c4",
+            "text": "For unsaved rows remove only the local array item.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/TunnelOptionSetLayout.svelte",
+            "symbol": "let _onClickRemove",
+            "line": 244,
+            "rationale": "Current source boundary only; not runtime acceptance."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing original UI requirements remain candidates even when historical behavior is superseded."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-UI-TUNNEL-REMOVE-001::c1",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-REMOVE-001::c2",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-REMOVE-001::c3",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-REMOVE-001::c4",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current successful removal calls _loadTunnelingOption even for unsaved rows; no DELETE is issued for unsaved item but it is not exclusively local work. Failure responses retain the row. Scope distinction pending."
+      }
+    },
+    {
+      "originalOrdinal": 269,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-UI-TUNNEL-CLEANUP-001"
+      },
+      "category": "functional_req",
+      "title": "과거 포트 정리",
+      "originalRecord": {
+        "id": "FR-UI-TUNNEL-CLEANUP-001",
+        "type": "functional_req",
+        "title": "과거 포트 정리",
+        "description": "_removeOldServerPort 는 _originTunnelOptions 와 _tunnelOptions 를 비교해 삭제된 forwardPort 의 외부 인증서(certInfo 있는 경우)와 튜널을 DELETE 로 정리.",
+        "source": [
+          "admin/src/layout/TunnelOptionSetLayout.svelte:272-288"
+        ],
+        "confidence": 0.9,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "API-ADMIN-EXT-CERT-DEL-002"
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 699,
+        "exactHeading": "##### FR-UI-TUNNEL-CLEANUP-001 — 과거 포트 정리",
+        "sidecarId": "FR-UI-TUNNEL-CLEANUP-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-UI-TUNNEL-CLEANUP-001",
+        "originalDescription": "_removeOldServerPort 는 _originTunnelOptions 와 _tunnelOptions 를 비교해 삭제된 forwardPort 의 외부 인증서(certInfo 있는 경우)와 튜널을 DELETE 로 정리.",
+        "clauses": [
+          {
+            "id": "FR-UI-TUNNEL-CLEANUP-001::c1",
+            "text": "Compare original and current forward ports to identify removed ports.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-CLEANUP-001::c2",
+            "text": "DELETE external certificate for a removed port if certificate metadata exists.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-CLEANUP-001::c3",
+            "text": "DELETE the old tunneling option.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/TunnelOptionSetLayout.svelte",
+            "symbol": "let _onClickApply",
+            "line": 278,
+            "rationale": "Current source boundary only; not runtime acceptance."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing original UI requirements remain candidates even when historical behavior is superseded."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-UI-TUNNEL-CLEANUP-001::c1",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-CLEANUP-001::c2",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-CLEANUP-001::c3",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "_removeOldServerPort and _originTunnelOptions comparison are absent in current compound save. #71 previousForwardPort atomic operation replaces that sequence; no legacy cleanup candidate assigned.",
+        "contextLedger": "docs/plan/verification/epic61-issue-71.md"
+      }
+    },
+    {
+      "originalOrdinal": 270,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-UI-TUNNEL-PROTOCOL-001"
+      },
+      "category": "functional_req",
+      "title": "protocol 선택과 TLS 연동",
+      "originalRecord": {
+        "id": "FR-UI-TUNNEL-PROTOCOL-001",
+        "type": "functional_req",
+        "title": "protocol 선택과 TLS 연동",
+        "description": "_onChangeProtocol: protocol='https' 시 tls=true 로 강제, 새로 켜진 경우 _onChangeSecureTunneling(=_loadCertInfo)로 인증서 로드. tcp 이외에서 tls 체크박스 disabled.",
+        "source": [
+          "admin/src/layout/TunnelOptionSetLayout.svelte:226-236",
+          "admin/src/layout/TunnelOptionSetLayout.svelte:363-370",
+          "admin/src/layout/TunnelOptionSetLayout.svelte:545-548"
+        ],
+        "confidence": 0.93,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "FR-UI-CERT-INPUT-001"
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 739,
+        "exactHeading": "##### FR-UI-TUNNEL-PROTOCOL-001 — protocol 선택과 TLS 연동",
+        "sidecarId": "FR-UI-TUNNEL-PROTOCOL-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-UI-TUNNEL-PROTOCOL-001",
+        "originalDescription": "_onChangeProtocol: protocol='https' 시 tls=true 로 강제, 새로 켜진 경우 _onChangeSecureTunneling(=_loadCertInfo)로 인증서 로드. tcp 이외에서 tls 체크박스 disabled.",
+        "clauses": [
+          {
+            "id": "FR-UI-TUNNEL-PROTOCOL-001::c1",
+            "text": "Choosing https forces tls=true.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-PROTOCOL-001::c2",
+            "text": "If TLS newly enabled load certificate info.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-PROTOCOL-001::c3",
+            "text": "Disable TLS checkbox for protocols other than tcp.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/TunnelOptionSetLayout.svelte",
+            "symbol": "let _onChangeProtocol",
+            "line": 232,
+            "rationale": "Current source boundary only; not runtime acceptance."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing original UI requirements remain candidates even when historical behavior is superseded."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-UI-TUNNEL-PROTOCOL-001::c1",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-PROTOCOL-001::c2",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-PROTOCOL-001::c3",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current non-https selection sets tls=false. UI checkbox disabled state is not backend protocol/TLS enforcement proof."
+      }
+    },
+    {
+      "originalOrdinal": 271,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-UI-TUNNEL-HTTPOPT-001"
+      },
+      "category": "functional_req",
+      "title": "HTTP/HTTPS 부가 옵션 UI",
+      "originalRecord": {
+        "id": "FR-UI-TUNNEL-HTTPOPT-001",
+        "type": "functional_req",
+        "title": "HTTP/HTTPS 부가 옵션 UI",
+        "description": "protocol in [http,https] 일 때 'Replace Host in text body', 'Replace Access-Control-Allow-Origin', HeaderAppender(request/response), BodyReplaceAppender 를 표시.",
+        "source": [
+          "admin/src/layout/TunnelOptionSetLayout.svelte:606-642"
+        ],
+        "confidence": 0.9,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "DATA-UI-HTTP-OPT-001"
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 709,
+        "exactHeading": "##### FR-UI-TUNNEL-HTTPOPT-001 — HTTP/HTTPS 부가 옵션 UI",
+        "sidecarId": "FR-UI-TUNNEL-HTTPOPT-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-UI-TUNNEL-HTTPOPT-001",
+        "originalDescription": "protocol in [http,https] 일 때 'Replace Host in text body', 'Replace Access-Control-Allow-Origin', HeaderAppender(request/response), BodyReplaceAppender 를 표시.",
+        "clauses": [
+          {
+            "id": "FR-UI-TUNNEL-HTTPOPT-001::c1",
+            "text": "For http/https show Replace Host in text body.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-HTTPOPT-001::c2",
+            "text": "Show Replace Access-Control-Allow-Origin.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-HTTPOPT-001::c3",
+            "text": "Show request HeaderAppender.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-HTTPOPT-001::c4",
+            "text": "Show response HeaderAppender.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-HTTPOPT-001::c5",
+            "text": "Show BodyReplaceAppender.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/TunnelOptionSetLayout.svelte",
+            "symbol": "<HeaderAppender",
+            "line": 610,
+            "rationale": "Current source boundary only; not runtime acceptance."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing original UI requirements remain candidates even when historical behavior is superseded."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-UI-TUNNEL-HTTPOPT-001::c1",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-HTTPOPT-001::c2",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-HTTPOPT-001::c3",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-HTTPOPT-001::c4",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-HTTPOPT-001::c5",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 272,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-UI-TUNNEL-STATUSCARD-001"
+      },
+      "category": "functional_req",
+      "title": "튜널별 상태 카드 표시",
+      "originalRecord": {
+        "id": "FR-UI-TUNNEL-STATUSCARD-001",
+        "type": "functional_req",
+        "title": "튜널별 상태 카드 표시",
+        "description": "각 튜널에 대해 _externalServerStatuses 에서 online/offline 판단, Uptime, Sessions, RX, TX 값 및 Activation Switch, Timeout Timer 를 렌더링.",
+        "source": [
+          "admin/src/layout/TunnelOptionSetLayout.svelte:478-537"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "IF-UI-SWITCH-001",
+          "IF-UI-TIMER-001"
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 757,
+        "exactHeading": "##### FR-UI-TUNNEL-STATUSCARD-001 — 튜널별 상태 카드 표시",
+        "sidecarId": "FR-UI-TUNNEL-STATUSCARD-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-UI-TUNNEL-STATUSCARD-001",
+        "originalDescription": "각 튜널에 대해 _externalServerStatuses 에서 online/offline 판단, Uptime, Sessions, RX, TX 값 및 Activation Switch, Timeout Timer 를 렌더링.",
+        "clauses": [
+          {
+            "id": "FR-UI-TUNNEL-STATUSCARD-001::c1",
+            "text": "Render online/offline from external server status.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-STATUSCARD-001::c2",
+            "text": "Render uptime.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-STATUSCARD-001::c3",
+            "text": "Render sessions.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-STATUSCARD-001::c4",
+            "text": "Render RX.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-STATUSCARD-001::c5",
+            "text": "Render TX.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-STATUSCARD-001::c6",
+            "text": "Render activation switch.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-STATUSCARD-001::c7",
+            "text": "Render timeout timer.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/TunnelOptionSetLayout.svelte",
+            "symbol": "Uptime:",
+            "line": 484,
+            "rationale": "Current source boundary only; not runtime acceptance."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing original UI requirements remain candidates even when historical behavior is superseded."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-UI-TUNNEL-STATUSCARD-001::c1",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-STATUSCARD-001::c2",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-STATUSCARD-001::c3",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-STATUSCARD-001::c4",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-STATUSCARD-001::c5",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-STATUSCARD-001::c6",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-STATUSCARD-001::c7",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 273,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-UI-TUNNEL-ACTIVATION-001"
+      },
+      "category": "functional_req",
+      "title": "튜널 Activation 토글",
+      "originalRecord": {
+        "id": "FR-UI-TUNNEL-ACTIVATION-001",
+        "type": "functional_req",
+        "title": "튜널 Activation 토글",
+        "description": "_onChangeActive: Switch/Timer 이벤트 시 activeExternalPortServer(active, port, timeout) 호출 후 상태 재로드. 실패 시 oldActive 값으로 복원.",
+        "source": [
+          "admin/src/layout/TunnelOptionSetLayout.svelte:418-462"
+        ],
+        "confidence": 0.94,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "API-ADMIN-TUNNEL-ACTIVE-002"
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 659,
+        "exactHeading": "##### FR-UI-TUNNEL-ACTIVATION-001 — 튜널 Activation 토글",
+        "sidecarId": "FR-UI-TUNNEL-ACTIVATION-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-UI-TUNNEL-ACTIVATION-001",
+        "originalDescription": "_onChangeActive: Switch/Timer 이벤트 시 activeExternalPortServer(active, port, timeout) 호출 후 상태 재로드. 실패 시 oldActive 값으로 복원.",
+        "clauses": [
+          {
+            "id": "FR-UI-TUNNEL-ACTIVATION-001::c1",
+            "text": "On switch/timer change call activeExternalPortServer(active,port,timeout).",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-ACTIVATION-001::c2",
+            "text": "Reload status after the call.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-ACTIVATION-001::c3",
+            "text": "Restore oldActive on failure.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/TunnelOptionSetLayout.svelte",
+            "symbol": "let _onChangeActive",
+            "line": 398,
+            "rationale": "Current source boundary only; not runtime acceptance."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing original UI requirements remain candidates even when historical behavior is superseded."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-UI-TUNNEL-ACTIVATION-001::c1",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-ACTIVATION-001::c2",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-ACTIVATION-001::c3",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "oldActive restoration is explicit for result.success=false; exceptions take a separate connection/session failure path without that assignment. Original broad failure claim requires response-error versus exception distinction."
+      }
+    },
+    {
+      "originalOrdinal": 274,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-UI-TUNNEL-ALLOWEDNAMES-001"
+      },
+      "category": "functional_req",
+      "title": "allowedClientNames 세미콜론 입력 포맷",
+      "originalRecord": {
+        "id": "FR-UI-TUNNEL-ALLOWEDNAMES-001",
+        "type": "functional_req",
+        "title": "allowedClientNames 세미콜론 입력 포맷",
+        "description": "allowedClientNamesQuery 문자열(';'로 구분)을 trim/filter 후 allowedClientNames 배열로 송신. 로드 시 배열을 ';' 구분 문자열로 변환.",
+        "source": [
+          "admin/src/layout/TunnelOptionSetLayout.svelte:100-106",
+          "admin/src/layout/TunnelOptionSetLayout.svelte:293"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "DATA-UI-TUN-OPT-001"
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 679,
+        "exactHeading": "##### FR-UI-TUNNEL-ALLOWEDNAMES-001 — allowedClientNames 세미콜론 입력 포맷",
+        "sidecarId": "FR-UI-TUNNEL-ALLOWEDNAMES-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-UI-TUNNEL-ALLOWEDNAMES-001",
+        "originalDescription": "allowedClientNamesQuery 문자열(';'로 구분)을 trim/filter 후 allowedClientNames 배열로 송신. 로드 시 배열을 ';' 구분 문자열로 변환.",
+        "clauses": [
+          {
+            "id": "FR-UI-TUNNEL-ALLOWEDNAMES-001::c1",
+            "text": "Split names query by semicolon.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-ALLOWEDNAMES-001::c2",
+            "text": "Trim each name.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-ALLOWEDNAMES-001::c3",
+            "text": "Filter empty names.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-ALLOWEDNAMES-001::c4",
+            "text": "Send allowedClientNames array.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-ALLOWEDNAMES-001::c5",
+            "text": "On load join names with semicolons.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/TunnelOptionSetLayout.svelte",
+            "symbol": "tunnelOption.allowedClientNames =",
+            "line": 281,
+            "rationale": "Current source boundary only; not runtime acceptance."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing original UI requirements remain candidates even when historical behavior is superseded."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-UI-TUNNEL-ALLOWEDNAMES-001::c1",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-ALLOWEDNAMES-001::c2",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-ALLOWEDNAMES-001::c3",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-ALLOWEDNAMES-001::c4",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-ALLOWEDNAMES-001::c5",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Load joins with '; ' and adds a trailing semicolon; send splits, trims and removes empties. No actual browser request array assertion mapped."
+      }
+    },
+    {
+      "originalOrdinal": 275,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-UI-TUNNEL-NORMALIZE-001"
+      },
+      "category": "functional_req",
+      "title": "버퍼/포트 값 정규화",
+      "originalRecord": {
+        "id": "FR-UI-TUNNEL-NORMALIZE-001",
+        "type": "functional_req",
+        "title": "버퍼/포트 값 정규화",
+        "description": "reactive $ 블록에서 destinationPort/forwardPort 는 0~65535, bufferLimitOnClient/Server 는 -1~1048576 범위로 클램프.",
+        "source": [
+          "admin/src/layout/TunnelOptionSetLayout.svelte:55-85"
+        ],
+        "confidence": 0.96,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "BR-UI-PORT-RANGE-001",
+          "BR-UI-BUFFER-RANGE-001"
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 729,
+        "exactHeading": "##### FR-UI-TUNNEL-NORMALIZE-001 — 버퍼/포트 값 정규화",
+        "sidecarId": "FR-UI-TUNNEL-NORMALIZE-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-UI-TUNNEL-NORMALIZE-001",
+        "originalDescription": "reactive $ 블록에서 destinationPort/forwardPort 는 0~65535, bufferLimitOnClient/Server 는 -1~1048576 범위로 클램프.",
+        "clauses": [
+          {
+            "id": "FR-UI-TUNNEL-NORMALIZE-001::c1",
+            "text": "Reactively clamp destinationPort to0..65535.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-NORMALIZE-001::c2",
+            "text": "Reactively clamp forwardPort to0..65535.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-NORMALIZE-001::c3",
+            "text": "Clamp bufferLimitOnClient to-1..1048576.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-TUNNEL-NORMALIZE-001::c4",
+            "text": "Clamp bufferLimitOnServer to-1..1048576.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact ordering retained as draft semantic clause.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/layout/TunnelOptionSetLayout.svelte",
+            "symbol": "let _normalizePortNumber",
+            "line": 66,
+            "rationale": "Current source boundary only; not runtime acceptance."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing original UI requirements remain candidates even when historical behavior is superseded."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-UI-TUNNEL-NORMALIZE-001::c1",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-NORMALIZE-001::c2",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-NORMALIZE-001::c3",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-TUNNEL-NORMALIZE-001::c4",
+          "explanation": "No direct assertion linked to this clause. Same module, mount success, getter, related controller or configuration value does not prove original behavior.",
+          "issueOrOwner": "#58 batch-11",
+          "nextGate": "Independent semantic review, original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Comparisons leave NaN/undefined unchanged, while finite numeric outliers clamp. Do not claim all malformed inputs normalize to valid numbers or backend accepts UI extrema."
+      }
+    }
+  ]
+}

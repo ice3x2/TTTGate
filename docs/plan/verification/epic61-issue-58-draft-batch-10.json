@@ -1,0 +1,3184 @@
+{
+  "artifactKind": "noncanonical-semantic-draft",
+  "batch": "10",
+  "status": "candidate-unreviewed; source reading only",
+  "sourceManifest": {
+    "path": "docs/plan/srs/TTTGate.md",
+    "sidecarPath": "docs/plan/srs/TTTGate.items.jsonl",
+    "documentVersion": "1.0",
+    "markdownSha256": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+    "sidecarSha256": "364071a1f67e07501e7277e15ebdac057eb17ae8e6c2e076a3a550d916625657"
+  },
+  "sourceCheckpoint": "58f71969ef2df77bb729e21cb4b709b4c61d8acb",
+  "inventoryPolicy": {
+    "canonicalRequired": 366,
+    "batchSize": 25,
+    "selected": "Original sidecar ordinals 226 through 250 inclusive"
+  },
+  "execution": {
+    "testsRun": false,
+    "validatorRun": false,
+    "buildRun": false,
+    "evidence": []
+  },
+  "rows": [
+    {
+      "originalOrdinal": 226,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-CLI-DATAHANDLER-BUFFER-LIMIT-001"
+      },
+      "category": "functional_req",
+      "title": "데이터 핸들러 버퍼 한도 설정",
+      "originalRecord": {
+        "id": "FR-CLI-DATAHANDLER-BUFFER-LIMIT-001",
+        "type": "functional_req",
+        "title": "데이터 핸들러 버퍼 한도 설정",
+        "description": "connectEndPoint 시 endPointConnectOpt.bufferLimit 를 setBufferSizeLimit 으로 주입. CloseSession 수신 시 setBufferSizeLimit(-1) 로 해제.",
+        "source": [
+          "src/client/TunnelClient.ts:443-458",
+          "src/client/TunnelClient.ts:344-350"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 463,
+        "exactHeading": "##### FR-CLI-DATAHANDLER-BUFFER-LIMIT-001 — 데이터 핸들러 버퍼 한도 설정",
+        "sidecarId": "FR-CLI-DATAHANDLER-BUFFER-LIMIT-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-CLI-DATAHANDLER-BUFFER-LIMIT-001",
+        "originalDescription": "connectEndPoint 시 endPointConnectOpt.bufferLimit 를 setBufferSizeLimit 으로 주입. CloseSession 수신 시 setBufferSizeLimit(-1) 로 해제.",
+        "clauses": [
+          {
+            "id": "FR-CLI-DATAHANDLER-BUFFER-LIMIT-001::c1",
+            "text": "connectEndPoint applies endPointConnectOpt.bufferLimit through setBufferSizeLimit.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-CLI-DATAHANDLER-BUFFER-LIMIT-001::c2",
+            "text": "On received CloseSession release the limit by setting -1.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/TunnelClient.ts",
+            "line": 537,
+            "symbol": "private connectEndPoint",
+            "rationale": "Read source boundary; declaration/location only."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing verification/glossary/interface text is not exempt; instructional sample guidance remains an explicit obligation."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-CLI-DATAHANDLER-BUFFER-LIMIT-001::c1",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-CLI-DATAHANDLER-BUFFER-LIMIT-001::c2",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current CloseSession releases the limit only after successful drain and matching current handler identity. #73 safeguards failed/stale drain callbacks; original immediate-sounding wording must not override those conditions.",
+        "contextLedger": "docs/plan/verification/epic61-issue-73.md"
+      }
+    },
+    {
+      "originalOrdinal": 227,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-CLI-SYSINFO-REPORT-001"
+      },
+      "category": "functional_req",
+      "title": "클라이언트 sysinfo 전송",
+      "originalRecord": {
+        "id": "FR-CLI-SYSINFO-REPORT-001",
+        "type": "functional_req",
+        "title": "클라이언트 sysinfo 전송",
+        "description": "sendAckCtrl 성공 후 SystemInfoProviderRegistry.current().sysInfo() 로 시스템 정보를 수집해 Message(type=sysinfo) 로 서버에 전송.",
+        "source": [
+          "src/client/TunnelClient.ts:510-519"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 511,
+        "exactHeading": "##### FR-CLI-SYSINFO-REPORT-001 — 클라이언트 sysinfo 전송",
+        "sidecarId": "FR-CLI-SYSINFO-REPORT-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-CLI-SYSINFO-REPORT-001",
+        "originalDescription": "sendAckCtrl 성공 후 SystemInfoProviderRegistry.current().sysInfo() 로 시스템 정보를 수집해 Message(type=sysinfo) 로 서버에 전송.",
+        "clauses": [
+          {
+            "id": "FR-CLI-SYSINFO-REPORT-001::c1",
+            "text": "After successful AckCtrl obtain sysInfo from SystemInfoProviderRegistry.current().sysInfo().",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-CLI-SYSINFO-REPORT-001::c2",
+            "text": "Send the collected system info in Message type=sysinfo.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/TunnelClient.ts",
+            "line": 604,
+            "symbol": "private sendClientSysinfo",
+            "rationale": "Read source boundary; declaration/location only."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing verification/glossary/interface text is not exempt; instructional sample guidance remains an explicit obligation."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-CLI-SYSINFO-REPORT-001::c1",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-CLI-SYSINFO-REPORT-001::c2",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current sysInfo promise has no local rejection handler in sendClientSysinfo. Source location does not prove handling of provider rejection or send failure; no runtime defect is confirmed by this draft."
+      }
+    },
+    {
+      "originalOrdinal": 228,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-CLI-SERVER-MESSAGE-LOG-001"
+      },
+      "category": "functional_req",
+      "title": "서버 메시지(type=log) 수신 로그",
+      "originalRecord": {
+        "id": "FR-CLI-SERVER-MESSAGE-LOG-001",
+        "type": "functional_req",
+        "title": "서버 메시지(type=log) 수신 로그",
+        "description": "Ctrl Message 패킷 type=='log' 이면 payload 를 info 레벨로 기록.",
+        "source": [
+          "src/client/TunnelClient.ts:363-368"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 495,
+        "exactHeading": "##### FR-CLI-SERVER-MESSAGE-LOG-001 — 서버 메시지(type=log) 수신 로그",
+        "sidecarId": "FR-CLI-SERVER-MESSAGE-LOG-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-CLI-SERVER-MESSAGE-LOG-001",
+        "originalDescription": "Ctrl Message 패킷 type=='log' 이면 payload 를 info 레벨로 기록.",
+        "clauses": [
+          {
+            "id": "FR-CLI-SERVER-MESSAGE-LOG-001::c1",
+            "text": "On a valid Ctrl Message with type=log log its payload at info level.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/TunnelClient.ts",
+            "line": 416,
+            "symbol": "private processReceiveMessage",
+            "rationale": "Read source boundary; declaration/location only."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing verification/glossary/interface text is not exempt; instructional sample guidance remains an explicit obligation."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-CLI-SERVER-MESSAGE-LOG-001::c1",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current invalid Message metadata emits WARN and returns; only valid type=log emits INFO. A metadata getter or warning assertion would not prove the original info log."
+      }
+    },
+    {
+      "originalOrdinal": 229,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "UC-CLI-BOOTSTRAP-001"
+      },
+      "category": "use_case",
+      "title": "클라이언트 첫 기동",
+      "originalRecord": {
+        "id": "UC-CLI-BOOTSTRAP-001",
+        "type": "use_case",
+        "title": "클라이언트 첫 기동",
+        "description": "1) CLI 파싱 2) client.yaml 로드(있으면) 3) insecure YAML gate 4) CLI 오버라이드 5) 옵션 정규화(범위 검증) 6) --save 시 YAML 기록(insecure 제거) 7) globalMemCacheLimit 적용 8) TTTClient.start → TunnelClient.connect 9) Sync/SyncSync 교환 10) Ack 후 Connected.",
+        "source": [
+          "src/client/ClientApp.ts:111-232",
+          "src/client/TTTClient.ts:32-46",
+          "src/client/TunnelClient.ts:125-156",
+          "src/client/TunnelClient.ts:482-508"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2733,
+        "exactHeading": "#### UC-CLI-BOOTSTRAP-001 — 클라이언트 첫 기동",
+        "sidecarId": "UC-CLI-BOOTSTRAP-001"
+      },
+      "acceptance": {
+        "descriptionRef": "UC-CLI-BOOTSTRAP-001",
+        "originalDescription": "1) CLI 파싱 2) client.yaml 로드(있으면) 3) insecure YAML gate 4) CLI 오버라이드 5) 옵션 정규화(범위 검증) 6) --save 시 YAML 기록(insecure 제거) 7) globalMemCacheLimit 적용 8) TTTClient.start → TunnelClient.connect 9) Sync/SyncSync 교환 10) Ack 후 Connected.",
+        "clauses": [
+          {
+            "id": "UC-CLI-BOOTSTRAP-001::c1",
+            "text": "Parse CLI input.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-CLI-BOOTSTRAP-001::c2",
+            "text": "Load client.yaml if present.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-CLI-BOOTSTRAP-001::c3",
+            "text": "Enforce the insecure YAML gate.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-CLI-BOOTSTRAP-001::c4",
+            "text": "Apply CLI overrides.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-CLI-BOOTSTRAP-001::c5",
+            "text": "Normalize option ranges.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-CLI-BOOTSTRAP-001::c6",
+            "text": "On save write YAML with insecure fields removed.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-CLI-BOOTSTRAP-001::c7",
+            "text": "Apply globalMemCacheLimit.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-CLI-BOOTSTRAP-001::c8",
+            "text": "Start TTTClient and connect TunnelClient.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-CLI-BOOTSTRAP-001::c9",
+            "text": "Exchange Sync/SyncSync messages.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-CLI-BOOTSTRAP-001::c10",
+            "text": "Become Connected after Ack succeeds.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-CLI-BOOTSTRAP-001::c11",
+            "text": "Preserve the complete original ordering of these ten startup stages.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/ClientApp.ts",
+            "line": 111,
+            "symbol": "let _loadClientOption =",
+            "rationale": "Read source boundary; declaration/location only."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing verification/glossary/interface text is not exempt; instructional sample guidance remains an explicit obligation."
+      },
+      "verification": [
+        {
+          "testPath": "test/unit/client/req-02-insecure-tls-yaml.test.ts",
+          "caseLine": 40,
+          "exactTitle": "REQ-02 allowInsecureTls/allowLegacyFallback YAML gate (1) -save 시 insecure 필드가 YAML에 기록되지 않는다",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "UC-CLI-BOOTSTRAP-001::c6"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 54,
+              "text": "expect(parsed.allowInsecureTls).toBeUndefined();"
+            },
+            {
+              "line": 55,
+              "text": "expect(parsed.allowLegacyFallback).toBeUndefined();"
+            }
+          ],
+          "technique": "source-read-candidate",
+          "rationale": "Actual owned YAML save strips both insecure flags; loader call does not execute entire CLI handshake sequence.",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "UC-CLI-BOOTSTRAP-001::c1",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "UC-CLI-BOOTSTRAP-001::c2",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "UC-CLI-BOOTSTRAP-001::c3",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "UC-CLI-BOOTSTRAP-001::c4",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "UC-CLI-BOOTSTRAP-001::c5",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "UC-CLI-BOOTSTRAP-001::c6",
+          "explanation": "Candidate addresses concrete inputs only; full clause and exact non-skipped runtime receipt remain absent.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "UC-CLI-BOOTSTRAP-001::c7",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "UC-CLI-BOOTSTRAP-001::c8",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "UC-CLI-BOOTSTRAP-001::c9",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "UC-CLI-BOOTSTRAP-001::c10",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "UC-CLI-BOOTSTRAP-001::c11",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Full startup sequence requires stage-specific observation; loader/YAML tests do not start TTTClient. Preserve gate-before-overrides and historical Sync/SyncSync wording without assuming handshake spelling/ordering."
+      }
+    },
+    {
+      "originalOrdinal": 230,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "UC-CLI-RECONNECT-001"
+      },
+      "category": "use_case",
+      "title": "재연결 시나리오",
+      "originalRecord": {
+        "id": "UC-CLI-RECONNECT-001",
+        "type": "use_case",
+        "title": "재연결 시나리오",
+        "description": "Ctrl closed 이벤트 수신 시 endPointClientPool.closeAll 후 reconnectIntervalMs 뒤 start() 재호출. stop() 호출 시 재연결 타이머 취소.",
+        "source": [
+          "src/client/TTTClient.ts:48-84"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2741,
+        "exactHeading": "#### UC-CLI-RECONNECT-001 — 재연결 시나리오",
+        "sidecarId": "UC-CLI-RECONNECT-001"
+      },
+      "acceptance": {
+        "descriptionRef": "UC-CLI-RECONNECT-001",
+        "originalDescription": "Ctrl closed 이벤트 수신 시 endPointClientPool.closeAll 후 reconnectIntervalMs 뒤 start() 재호출. stop() 호출 시 재연결 타이머 취소.",
+        "clauses": [
+          {
+            "id": "UC-CLI-RECONNECT-001::c1",
+            "text": "After control closed close the current endpoint pool.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-CLI-RECONNECT-001::c2",
+            "text": "After reconnectIntervalMs invoke start again.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-CLI-RECONNECT-001::c3",
+            "text": "stop cancels the reconnect timer.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/TTTClient.ts",
+            "line": 87,
+            "symbol": "private onCtrlStateCallback",
+            "rationale": "Read source boundary; declaration/location only."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing verification/glossary/interface text is not exempt; instructional sample guidance remains an explicit obligation."
+      },
+      "verification": [
+        {
+          "testPath": "test/component/client/client-owner.test.ts",
+          "caseLine": 54,
+          "exactTitle": "stop cancels the creating scheduler and ignores its saved callback after real deadline",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "UC-CLI-RECONNECT-001::c3"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 67,
+              "text": "expect(clears).toBe(1);"
+            },
+            {
+              "line": 69,
+              "text": "expect(fired).toBe(0);"
+            }
+          ],
+          "technique": "source-read-candidate",
+          "rationale": "Delegating native scheduler uses100ms override, then stop and stale callback replay. Does not prove exact default delay or all resources.",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "UC-CLI-RECONNECT-001::c1",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "UC-CLI-RECONNECT-001::c2",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "UC-CLI-RECONNECT-001::c3",
+          "explanation": "Candidate addresses concrete inputs only; full clause and exact non-skipped runtime receipt remain absent.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current owner retirement uses pool.dispose and client.destroy, guarded by owner identity, rather than literally closeAll. Candidate timer cancellation is narrower than complete reconnect trace; #25 identity evolution needs disposition.",
+        "contextLedger": "docs/plan/verification/epic61-issue-25.md"
+      }
+    },
+    {
+      "originalOrdinal": 231,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "UC-CLI-SESSION-OPEN-001"
+      },
+      "category": "use_case",
+      "title": "세션 오픈",
+      "originalRecord": {
+        "id": "UC-CLI-SESSION-OPEN-001",
+        "type": "use_case",
+        "title": "세션 오픈",
+        "description": "서버가 NewDataHandler → connectDataHandler (waitBuffer 선할당, DataStatePacket 송신) → 서버가 OpenSession → connectEndPoint (onConnectEndPointCallback → EndPointClientPool.open) → EndPoint Connected → syncEndpointSession (resultOfOpenSession(success=true)) → SuccessOfOpenSessionAck → flushWaitBuffer → OnlineSession.",
+        "source": [
+          "src/client/TunnelClient.ts:287-361",
+          "src/client/TunnelClient.ts:173-230",
+          "src/client/EndPointClientPool.ts:66-80"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2757,
+        "exactHeading": "#### UC-CLI-SESSION-OPEN-001 — 세션 오픈",
+        "sidecarId": "UC-CLI-SESSION-OPEN-001"
+      },
+      "acceptance": {
+        "descriptionRef": "UC-CLI-SESSION-OPEN-001",
+        "originalDescription": "서버가 NewDataHandler → connectDataHandler (waitBuffer 선할당, DataStatePacket 송신) → 서버가 OpenSession → connectEndPoint (onConnectEndPointCallback → EndPointClientPool.open) → EndPoint Connected → syncEndpointSession (resultOfOpenSession(success=true)) → SuccessOfOpenSessionAck → flushWaitBuffer → OnlineSession.",
+        "clauses": [
+          {
+            "id": "UC-CLI-SESSION-OPEN-001::c1",
+            "text": "Preserve the complete original session-open sequence: NewDataHandler -> connectDataHandler with preallocated waitBuffer and DataStatePacket -> OpenSession -> connectEndPoint/EndPointClientPool.open -> endpoint Connected -> syncEndpointSession/success -> SuccessOfOpenSessionAck -> flushWaitBuffer -> OnlineSession.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/TunnelClient.ts",
+            "line": 437,
+            "symbol": "private connectDataHandler",
+            "rationale": "Read source boundary; declaration/location only."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing verification/glossary/interface text is not exempt; instructional sample guidance remains an explicit obligation."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "UC-CLI-SESSION-OPEN-001::c1",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current state/queue order must be distinguished: original prose places OnlineSession after flush; inspect current success-ack and synchronous receive order before claiming equivalence. Full packet sequence is not proved by small echo setup."
+      }
+    },
+    {
+      "originalOrdinal": 232,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "UC-CLI-SESSION-CLOSE-001"
+      },
+      "category": "use_case",
+      "title": "세션 종료",
+      "originalRecord": {
+        "id": "UC-CLI-SESSION-CLOSE-001",
+        "type": "use_case",
+        "title": "세션 종료",
+        "description": "서버 CloseSession 수신 시 drain listener 로 bufferSizeLimit=-1 후 콜백 통지, 혹은 클라이언트 측에서 closeEndPointSession → sendCloseSession 으로 서버에 통지.",
+        "source": [
+          "src/client/TunnelClient.ts:338-351",
+          "src/client/TunnelClient.ts:527-586"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2749,
+        "exactHeading": "#### UC-CLI-SESSION-CLOSE-001 — 세션 종료",
+        "sidecarId": "UC-CLI-SESSION-CLOSE-001"
+      },
+      "acceptance": {
+        "descriptionRef": "UC-CLI-SESSION-CLOSE-001",
+        "originalDescription": "서버 CloseSession 수신 시 drain listener 로 bufferSizeLimit=-1 후 콜백 통지, 혹은 클라이언트 측에서 closeEndPointSession → sendCloseSession 으로 서버에 통지.",
+        "clauses": [
+          {
+            "id": "UC-CLI-SESSION-CLOSE-001::c1",
+            "text": "Received server CloseSession registers a drain listener.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-CLI-SESSION-CLOSE-001::c2",
+            "text": "After draining release bufferSizeLimit to -1.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-CLI-SESSION-CLOSE-001::c3",
+            "text": "Notify the endpoint-close callback after successful drain.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-CLI-SESSION-CLOSE-001::c4",
+            "text": "Client-initiated closeEndPointSession notifies the server through sendCloseSession.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/TunnelClient.ts",
+            "line": 621,
+            "symbol": "public closeEndPointSession",
+            "rationale": "Read source boundary; declaration/location only."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing verification/glossary/interface text is not exempt; instructional sample guidance remains an explicit obligation."
+      },
+      "verification": [
+        {
+          "testPath": "test/component/client/endpoint-graceful-drain.test.ts",
+          "caseLine": 155,
+          "exactTitle": "real pending remote-close drain callback cannot close a replacement with the same SID",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "UC-CLI-SESSION-CLOSE-001::c1"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 171,
+              "text": "await wait(()=>old._drainEventList.length>0,'Actual control close did not register pending drain');"
+            }
+          ],
+          "technique": "source-read-candidate",
+          "rationale": "Actual control CloseSession while native socket corked registers pending drain. Same-SID replacement assertions concern stale callback identity, not successful-drain buffer-limit release.",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "UC-CLI-SESSION-CLOSE-001::c1",
+          "explanation": "Candidate addresses concrete inputs only; full clause and exact non-skipped runtime receipt remain absent.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "UC-CLI-SESSION-CLOSE-001::c2",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "UC-CLI-SESSION-CLOSE-001::c3",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "UC-CLI-SESSION-CLOSE-001::c4",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "#73 adds successful-drain/current-handler guards and graceful-versus-abort semantics. Failed or obsolete callbacks intentionally do not release a replacement or emit close notifications; preserve original with explicit disposition.",
+        "contextLedger": "docs/plan/verification/epic61-issue-73.md"
+      }
+    },
+    {
+      "originalOrdinal": 233,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "CONSTR-CTRL-PACKET-STREAM-001"
+      },
+      "category": "constraint",
+      "title": "Ctrl 핸들러는 CtrlPacketStreamer 필수",
+      "originalRecord": {
+        "id": "CONSTR-CTRL-PACKET-STREAM-001",
+        "type": "constraint",
+        "title": "Ctrl 핸들러는 CtrlPacketStreamer 필수",
+        "description": "onReceiveFromCtrlHandler 는 handler.packetStreamer 가 undefined 이면 수신 처리 중단(error 로그). connect() 는 packetStreamer 를 new CtrlPacketStreamer() 로 반드시 주입.",
+        "source": [
+          "src/client/TunnelClient.ts:143-145",
+          "src/client/TunnelClient.ts:287-291"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "constraint_type": "protocol"
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2113,
+        "exactHeading": "#### CONSTR-CTRL-PACKET-STREAM-001 — Ctrl 핸들러는 CtrlPacketStreamer 필수",
+        "sidecarId": "CONSTR-CTRL-PACKET-STREAM-001"
+      },
+      "acceptance": {
+        "descriptionRef": "CONSTR-CTRL-PACKET-STREAM-001",
+        "originalDescription": "onReceiveFromCtrlHandler 는 handler.packetStreamer 가 undefined 이면 수신 처리 중단(error 로그). connect() 는 packetStreamer 를 new CtrlPacketStreamer() 로 반드시 주입.",
+        "clauses": [
+          {
+            "id": "CONSTR-CTRL-PACKET-STREAM-001::c1",
+            "text": "If packetStreamer is undefined stop control receive processing.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-CTRL-PACKET-STREAM-001::c2",
+            "text": "Log that missing-streamer condition at error level.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-CTRL-PACKET-STREAM-001::c3",
+            "text": "connect supplies a new CtrlPacketStreamer.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/TunnelClient.ts",
+            "line": 320,
+            "symbol": "private onReceiveFromCtrlHandler",
+            "rationale": "Read source boundary; declaration/location only."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing verification/glossary/interface text is not exempt; instructional sample guidance remains an explicit obligation."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "CONSTR-CTRL-PACKET-STREAM-001::c1",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "CONSTR-CTRL-PACKET-STREAM-001::c2",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "CONSTR-CTRL-PACKET-STREAM-001::c3",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 234,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "BR-CLI-OPT-PRINT-REDACT-001"
+      },
+      "category": "business_rule",
+      "title": "옵션 로깅 시 redact",
+      "originalRecord": {
+        "id": "BR-CLI-OPT-PRINT-REDACT-001",
+        "type": "business_rule",
+        "title": "옵션 로깅 시 redact",
+        "description": "_printClientOptions 및 TTTClient.start log 는 redactSecrets(clientOption) 을 사용. key/clientSecret/ca/cert 등 노출 금지.",
+        "source": [
+          "src/client/ClientApp.ts:19-26",
+          "src/client/TTTClient.ts:42-67"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "rule_statement": "Client option must be redacted before logging."
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3351,
+        "exactHeading": "#### BR-CLI-OPT-PRINT-REDACT-001 — 옵션 로깅 시 redact",
+        "sidecarId": "BR-CLI-OPT-PRINT-REDACT-001"
+      },
+      "acceptance": {
+        "descriptionRef": "BR-CLI-OPT-PRINT-REDACT-001",
+        "originalDescription": "_printClientOptions 및 TTTClient.start log 는 redactSecrets(clientOption) 을 사용. key/clientSecret/ca/cert 등 노출 금지.",
+        "clauses": [
+          {
+            "id": "BR-CLI-OPT-PRINT-REDACT-001::c1",
+            "text": "Apply redactSecrets before _printClientOptions output.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-CLI-OPT-PRINT-REDACT-001::c2",
+            "text": "Apply redactSecrets before TTTClient start-option logs.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-CLI-OPT-PRINT-REDACT-001::c3",
+            "text": "Do not expose key, clientSecret, CA or certificate values in those outputs.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-CLI-OPT-PRINT-REDACT-001::rule_statement",
+            "text": "Client option must be redacted before logging.",
+            "sourceRef": "rule_statement",
+            "rationale": "Original auxiliary text retained as unverified.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/ClientApp.ts",
+            "line": 19,
+            "symbol": "let _printClientOptions",
+            "rationale": "Read source boundary; declaration/location only."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing verification/glossary/interface text is not exempt; instructional sample guidance remains an explicit obligation."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "BR-CLI-OPT-PRINT-REDACT-001::c1",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "BR-CLI-OPT-PRINT-REDACT-001::c2",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "BR-CLI-OPT-PRINT-REDACT-001::c3",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "BR-CLI-OPT-PRINT-REDACT-001::rule_statement",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 235,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "DATA-TUNNEL-NAMES-001"
+      },
+      "category": "data_model",
+      "title": "TunnelNames",
+      "originalRecord": {
+        "id": "DATA-TUNNEL-NAMES-001",
+        "type": "data_model",
+        "title": "TunnelNames",
+        "description": "약 99개 한국 지명 상수 배열. 클라이언트 name 기본값 무작위 풀.",
+        "source": [
+          "src/client/TunnelNames.ts:1-10"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "fields": [
+          {
+            "name": "TunnelNames",
+            "type": "string[]",
+            "desc": "default-name pool"
+          }
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3143,
+        "exactHeading": "#### DATA-TUNNEL-NAMES-001 — TunnelNames",
+        "sidecarId": "DATA-TUNNEL-NAMES-001"
+      },
+      "acceptance": {
+        "descriptionRef": "DATA-TUNNEL-NAMES-001",
+        "originalDescription": "약 99개 한국 지명 상수 배열. 클라이언트 name 기본값 무작위 풀.",
+        "clauses": [
+          {
+            "id": "DATA-TUNNEL-NAMES-001::c1",
+            "text": "TunnelNames is an approximately 99-entry constant Korean place-name array.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "DATA-TUNNEL-NAMES-001::c2",
+            "text": "Use it as the random default client-name pool.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "DATA-TUNNEL-NAMES-001::field-TunnelNames-type",
+            "text": "TunnelNames: type = \"string[]\"",
+            "sourceRef": "fields[0].type",
+            "rationale": "Independent original field obligation.",
+            "state": "unverified"
+          },
+          {
+            "id": "DATA-TUNNEL-NAMES-001::field-TunnelNames-desc",
+            "text": "TunnelNames: desc = \"default-name pool\"",
+            "sourceRef": "fields[0].desc",
+            "rationale": "Independent original field obligation.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/TunnelNames.ts",
+            "line": 1,
+            "symbol": "const TunnelNames",
+            "rationale": "Read source boundary; declaration/location only."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing verification/glossary/interface text is not exempt; instructional sample guidance remains an explicit obligation."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "DATA-TUNNEL-NAMES-001::c1",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "DATA-TUNNEL-NAMES-001::c2",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "DATA-TUNNEL-NAMES-001::field-TunnelNames-type",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "DATA-TUNNEL-NAMES-001::field-TunnelNames-desc",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 236,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "IF-CLIENT-APP-TEST-001"
+      },
+      "category": "interface",
+      "title": "ClientApp __testInternals",
+      "originalRecord": {
+        "id": "IF-CLIENT-APP-TEST-001",
+        "type": "interface",
+        "title": "ClientApp __testInternals",
+        "description": "테스트 전용 export: loadClientOptionFromFile, loadClientOption, INSECURE_FIELD_NAMES, INSECURE_YAML_EXIT_CODE, CLIENT_OPTION_FILE_NAME. production 경로에서는 사용 금지.",
+        "source": [
+          "src/client/ClientApp.ts:239-245"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1651,
+        "exactHeading": "##### IF-CLIENT-APP-TEST-001 — ClientApp __testInternals",
+        "sidecarId": "IF-CLIENT-APP-TEST-001"
+      },
+      "acceptance": {
+        "descriptionRef": "IF-CLIENT-APP-TEST-001",
+        "originalDescription": "테스트 전용 export: loadClientOptionFromFile, loadClientOption, INSECURE_FIELD_NAMES, INSECURE_YAML_EXIT_CODE, CLIENT_OPTION_FILE_NAME. production 경로에서는 사용 금지.",
+        "clauses": [
+          {
+            "id": "IF-CLIENT-APP-TEST-001::c1",
+            "text": "Expose test-only loadClientOptionFromFile.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-CLIENT-APP-TEST-001::c2",
+            "text": "Expose test-only loadClientOption.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-CLIENT-APP-TEST-001::c3",
+            "text": "Expose INSECURE_FIELD_NAMES.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-CLIENT-APP-TEST-001::c4",
+            "text": "Expose INSECURE_YAML_EXIT_CODE.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-CLIENT-APP-TEST-001::c5",
+            "text": "Expose CLIENT_OPTION_FILE_NAME.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-CLIENT-APP-TEST-001::c6",
+            "text": "Production callers must not use __testInternals.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/ClientApp.ts",
+            "line": 231,
+            "symbol": "export const __testInternals",
+            "rationale": "Read source boundary; declaration/location only."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing verification/glossary/interface text is not exempt; instructional sample guidance remains an explicit obligation."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "IF-CLIENT-APP-TEST-001::c1",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "IF-CLIENT-APP-TEST-001::c2",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "IF-CLIENT-APP-TEST-001::c3",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "IF-CLIENT-APP-TEST-001::c4",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "IF-CLIENT-APP-TEST-001::c5",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "IF-CLIENT-APP-TEST-001::c6",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 237,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "CONSTR-LOG-DEFAULT-DIR-001"
+      },
+      "category": "constraint",
+      "title": "기본 로그 디렉터리",
+      "originalRecord": {
+        "id": "CONSTR-LOG-DEFAULT-DIR-001",
+        "type": "constraint",
+        "title": "기본 로그 디렉터리",
+        "description": "LoggerFactory 초기 _loggerConfig 의 path 는 Path.join(__dirname,'logs'). 실제 경로는 Environment 모듈이 재설정(Agent1 담당).",
+        "source": [
+          "src/util/logger/LoggerFactory.ts:9"
+        ],
+        "confidence": 0.9,
+        "inferred": true,
+        "phase_added": 2,
+        "constraint_type": "runtime"
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2161,
+        "exactHeading": "#### CONSTR-LOG-DEFAULT-DIR-001 — 기본 로그 디렉터리",
+        "sidecarId": "CONSTR-LOG-DEFAULT-DIR-001"
+      },
+      "acceptance": {
+        "descriptionRef": "CONSTR-LOG-DEFAULT-DIR-001",
+        "originalDescription": "LoggerFactory 초기 _loggerConfig 의 path 는 Path.join(__dirname,'logs'). 실제 경로는 Environment 모듈이 재설정(Agent1 담당).",
+        "clauses": [
+          {
+            "id": "CONSTR-LOG-DEFAULT-DIR-001::c1",
+            "text": "The initial LoggerFactory configuration directory is Path.join(__dirname,'logs').",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-LOG-DEFAULT-DIR-001::c2",
+            "text": "The original says Environment resets the actual logging directory.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/logger/LoggerFactory.ts",
+            "line": 9,
+            "symbol": "private static _loggerConfig",
+            "rationale": "Read source boundary; declaration/location only."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing verification/glossary/interface text is not exempt; instructional sample guidance remains an explicit obligation."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "CONSTR-LOG-DEFAULT-DIR-001::c1",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "CONSTR-LOG-DEFAULT-DIR-001::c2",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Environment configures path values; AppCompositionRoot.configureLogger applies Environment.path.logDir to LoggerFactory. Environment.configure alone does not reconfigure existing LogWriters. Historical responsibility wording needs disposition."
+      }
+    },
+    {
+      "originalOrdinal": 238,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "NFR-AVAIL-RESOURCE-STRICT-001"
+      },
+      "category": "nonfunctional_req",
+      "title": "ResourcePolicy strict 모드",
+      "originalRecord": {
+        "id": "NFR-AVAIL-RESOURCE-STRICT-001",
+        "type": "nonfunctional_req",
+        "title": "ResourcePolicy strict 모드",
+        "description": "RESOURCE_POLICY_STRICT=1 env 또는 configureStrict(true) 시 비가역 입력(비유한수/0 이하/비율 0.05~0.95 외)을 RangeError 로 처리. 기본은 WARN+clamp(하위 호환).",
+        "source": [
+          "src/util/ResourcePolicy.ts:23-68",
+          "src/util/ResourcePolicy.ts:118-128"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "category": "reliability",
+        "metric": "strict opt-in via env"
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1203,
+        "exactHeading": "##### NFR-AVAIL-RESOURCE-STRICT-001 — ResourcePolicy strict 모드",
+        "sidecarId": "NFR-AVAIL-RESOURCE-STRICT-001"
+      },
+      "acceptance": {
+        "descriptionRef": "NFR-AVAIL-RESOURCE-STRICT-001",
+        "originalDescription": "RESOURCE_POLICY_STRICT=1 env 또는 configureStrict(true) 시 비가역 입력(비유한수/0 이하/비율 0.05~0.95 외)을 RangeError 로 처리. 기본은 WARN+clamp(하위 호환).",
+        "clauses": [
+          {
+            "id": "NFR-AVAIL-RESOURCE-STRICT-001::c1",
+            "text": "RESOURCE_POLICY_STRICT=1 enables strict mode.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-AVAIL-RESOURCE-STRICT-001::c2",
+            "text": "configureStrict(true) enables strict mode.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-AVAIL-RESOURCE-STRICT-001::c3",
+            "text": "Strict mode rejects nonfinite values with RangeError.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-AVAIL-RESOURCE-STRICT-001::c4",
+            "text": "Strict mode rejects nonpositive byte limits with RangeError.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-AVAIL-RESOURCE-STRICT-001::c5",
+            "text": "Strict mode rejects ratios outside .05 through .95 with RangeError.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-AVAIL-RESOURCE-STRICT-001::c6",
+            "text": "Default non-strict mode warns.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-AVAIL-RESOURCE-STRICT-001::c7",
+            "text": "Default non-strict mode clamps or falls back.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-AVAIL-RESOURCE-STRICT-001::metric",
+            "text": "strict opt-in via env",
+            "sourceRef": "metric",
+            "rationale": "Original auxiliary text retained as unverified.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/ResourcePolicy.ts",
+            "line": 70,
+            "symbol": "const ResourcePolicyRegistry",
+            "rationale": "Read source boundary; declaration/location only."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing verification/glossary/interface text is not exempt; instructional sample guidance remains an explicit obligation."
+      },
+      "verification": [
+        {
+          "testPath": "test/util/r2-req-06-resource-policy-strict.test.ts",
+          "caseLine": 43,
+          "exactTitle": "R2-REQ-06 ResourcePolicy strict mode (b) strict 모드: 잘못된 ratio → RangeError throw",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "NFR-AVAIL-RESOURCE-STRICT-001::c2",
+            "NFR-AVAIL-RESOURCE-STRICT-001::c5"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 46,
+              "text": "expect(() => ResourcePolicyRegistry.current()).toThrow(RangeError);"
+            }
+          ],
+          "technique": "source-read-candidate",
+          "rationale": "Strict current() rejects high1.5; does not assert full ratio matrix or configure-time failure.",
+          "state": "candidate",
+          "evidence": []
+        },
+        {
+          "testPath": "test/util/r2-req-06-resource-policy-strict.test.ts",
+          "caseLine": 49,
+          "exactTitle": "R2-REQ-06 ResourcePolicy strict mode (b-2) strict 모드: 음수 byte limit → RangeError throw",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "NFR-AVAIL-RESOURCE-STRICT-001::c4"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 52,
+              "text": "expect(() => ResourcePolicyRegistry.current()).toThrow(RangeError);"
+            }
+          ],
+          "technique": "source-read-candidate",
+          "rationale": "Negative pool byte limit rejected; zero and every field need separate mapping.",
+          "state": "candidate",
+          "evidence": []
+        },
+        {
+          "testPath": "test/util/r2-req-06-resource-policy-strict.test.ts",
+          "caseLine": 55,
+          "exactTitle": "R2-REQ-06 ResourcePolicy strict mode (b-3) strict 모드: NaN → RangeError throw",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "NFR-AVAIL-RESOURCE-STRICT-001::c3"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 58,
+              "text": "expect(() => ResourcePolicyRegistry.current()).toThrow(RangeError);"
+            }
+          ],
+          "technique": "source-read-candidate",
+          "rationale": "NaN low ratio rejected; not every nonfinite input.",
+          "state": "candidate",
+          "evidence": []
+        },
+        {
+          "testPath": "test/util/r2-req-06-resource-policy-strict.test.ts",
+          "caseLine": 61,
+          "exactTitle": "R2-REQ-06 ResourcePolicy strict mode (c) RESOURCE_POLICY_STRICT=1 env 경로 (jest.isolateModules)",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "NFR-AVAIL-RESOURCE-STRICT-001::c1"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 68,
+              "text": "expect(isolatedRegistry.isStrict()).toBe(true);"
+            }
+          ],
+          "technique": "source-read-candidate",
+          "rationale": "Fresh module under explicit env1; not child-process startup. Environment restored by test.",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "NFR-AVAIL-RESOURCE-STRICT-001::c1",
+          "explanation": "Candidate addresses concrete inputs only; full clause and exact non-skipped runtime receipt remain absent.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-AVAIL-RESOURCE-STRICT-001::c2",
+          "explanation": "Candidate addresses concrete inputs only; full clause and exact non-skipped runtime receipt remain absent.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-AVAIL-RESOURCE-STRICT-001::c3",
+          "explanation": "Candidate addresses concrete inputs only; full clause and exact non-skipped runtime receipt remain absent.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-AVAIL-RESOURCE-STRICT-001::c4",
+          "explanation": "Candidate addresses concrete inputs only; full clause and exact non-skipped runtime receipt remain absent.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-AVAIL-RESOURCE-STRICT-001::c5",
+          "explanation": "Candidate addresses concrete inputs only; full clause and exact non-skipped runtime receipt remain absent.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-AVAIL-RESOURCE-STRICT-001::c6",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-AVAIL-RESOURCE-STRICT-001::c7",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-AVAIL-RESOURCE-STRICT-001::metric",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Invalid overrides are evaluated on current(), not necessarily rejected by configure(). reset clears overrides but does not reset strict flag. WARNING emission is not asserted by clamp getters."
+      }
+    },
+    {
+      "originalOrdinal": 239,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-SOCKET-HANDLER-DRAIN-001"
+      },
+      "category": "functional_req",
+      "title": "Drain/압력해소 리스너",
+      "originalRecord": {
+        "id": "FR-SOCKET-HANDLER-DRAIN-001",
+        "type": "functional_req",
+        "title": "Drain/압력해소 리스너",
+        "description": "addOnceDrainListener: 버퍼 완전 비움 시 1회 호출. addOncePressureReliefListener: 백프레셔 해제 시 1회 호출. end_() 는 버퍼가 남아있으면 _endWaitingState=true 로 전환 후 드레인 완료 시 socket.end().",
+        "source": [
+          "src/util/SocketHandler.ts:160-174",
+          "src/util/SocketHandler.ts:445-465",
+          "src/util/SocketHandler.ts:731-742"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 837,
+        "exactHeading": "##### FR-SOCKET-HANDLER-DRAIN-001 — Drain/압력해소 리스너",
+        "sidecarId": "FR-SOCKET-HANDLER-DRAIN-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-SOCKET-HANDLER-DRAIN-001",
+        "originalDescription": "addOnceDrainListener: 버퍼 완전 비움 시 1회 호출. addOncePressureReliefListener: 백프레셔 해제 시 1회 호출. end_() 는 버퍼가 남아있으면 _endWaitingState=true 로 전환 후 드레인 완료 시 socket.end().",
+        "clauses": [
+          {
+            "id": "FR-SOCKET-HANDLER-DRAIN-001::c1",
+            "text": "addOnceDrainListener invokes its callback once when output is completely drained.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SOCKET-HANDLER-DRAIN-001::c2",
+            "text": "addOncePressureReliefListener invokes its callback once when backpressure is relieved.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SOCKET-HANDLER-DRAIN-001::c3",
+            "text": "end_ sets _endWaitingState=true when output remains buffered.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SOCKET-HANDLER-DRAIN-001::c4",
+            "text": "Call socket.end after that pending output drains.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/SocketHandler.ts",
+            "line": 161,
+            "symbol": "public addOnceDrainListener",
+            "rationale": "Read source boundary; declaration/location only."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing verification/glossary/interface text is not exempt; instructional sample guidance remains an explicit obligation."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-SOCKET-HANDLER-DRAIN-001::c1",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SOCKET-HANDLER-DRAIN-001::c2",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SOCKET-HANDLER-DRAIN-001::c3",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SOCKET-HANDLER-DRAIN-001::c4",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "addOnceDrainListener immediately calls with success=true when already ended, even without independent proof of drained output. Actual failure/terminal callbacks must not be labeled successful drain; buffered end differs from destroy."
+      }
+    },
+    {
+      "originalOrdinal": 240,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-SOCKET-HANDLER-TIMEOUT-001"
+      },
+      "category": "functional_req",
+      "title": "소켓 타임아웃",
+      "originalRecord": {
+        "id": "FR-SOCKET-HANDLER-TIMEOUT-001",
+        "type": "functional_req",
+        "title": "소켓 타임아웃",
+        "description": "setTimeout(ms) 설정 시 socket.on('timeout') 에 end_() 호출. clearTimeout 으로 0(비활성).",
+        "source": [
+          "src/util/SocketHandler.ts:194-229"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 845,
+        "exactHeading": "##### FR-SOCKET-HANDLER-TIMEOUT-001 — 소켓 타임아웃",
+        "sidecarId": "FR-SOCKET-HANDLER-TIMEOUT-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-SOCKET-HANDLER-TIMEOUT-001",
+        "originalDescription": "setTimeout(ms) 설정 시 socket.on('timeout') 에 end_() 호출. clearTimeout 으로 0(비활성).",
+        "clauses": [
+          {
+            "id": "FR-SOCKET-HANDLER-TIMEOUT-001::c1",
+            "text": "setTimeout(ms) configures the native socket timeout.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SOCKET-HANDLER-TIMEOUT-001::c2",
+            "text": "A native timeout invokes end_.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SOCKET-HANDLER-TIMEOUT-001::c3",
+            "text": "clearTimeout sets native timeout to zero, disabling it.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/SocketHandler.ts",
+            "line": 199,
+            "symbol": "public setTimeout(",
+            "rationale": "Read source boundary; declaration/location only."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing verification/glossary/interface text is not exempt; instructional sample guidance remains an explicit obligation."
+      },
+      "verification": [
+        {
+          "testPath": "test/component/socket-log-persistence.test.ts",
+          "caseLine": 6,
+          "exactTitle": "real socket timeout and bind failure persist with production logging and ignored stdio",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "FR-SOCKET-HANDLER-TIMEOUT-001::c1"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 24,
+              "text": ".toEqual({pid: child.pid, timeoutObserved: true, ownerCalls: 1, bindError: \"EADDRINUSE\"});"
+            }
+          ],
+          "technique": "source-read-candidate",
+          "rationale": "Real child/socket80ms timeout and owner terminal observed, with production logging. Does not assert direct end_ invocation or clearTimeout(0) branch.",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-SOCKET-HANDLER-TIMEOUT-001::c1",
+          "explanation": "Candidate addresses concrete inputs only; full clause and exact non-skipped runtime receipt remain absent.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SOCKET-HANDLER-TIMEOUT-001::c2",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SOCKET-HANDLER-TIMEOUT-001::c3",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Native timeout/end behavior is not TCP keepalive packet-loss detection. Avoid promoting the socket-log fixture to clearTimeout proof."
+      }
+    },
+    {
+      "originalOrdinal": 241,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "GLOSS-BACKPRESSURE-001"
+      },
+      "category": "glossary",
+      "title": "Backpressure (SocketHandler)",
+      "originalRecord": {
+        "id": "GLOSS-BACKPRESSURE-001",
+        "type": "glossary",
+        "title": "Backpressure (SocketHandler)",
+        "description": "waitQueueBytes 가 high watermark 이상 → pauseRead, low 이하 → resumeRead. limit<=0 이면 항상 false.",
+        "source": [
+          "src/util/SocketHandler.ts:143-149",
+          "src/util/SocketHandler.ts:744-775"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2547,
+        "exactHeading": "#### GLOSS-BACKPRESSURE-001 — Backpressure (SocketHandler)",
+        "sidecarId": "GLOSS-BACKPRESSURE-001"
+      },
+      "acceptance": {
+        "descriptionRef": "GLOSS-BACKPRESSURE-001",
+        "originalDescription": "waitQueueBytes 가 high watermark 이상 → pauseRead, low 이하 → resumeRead. limit<=0 이면 항상 false.",
+        "clauses": [
+          {
+            "id": "GLOSS-BACKPRESSURE-001::c1",
+            "text": "Queued bytes at or above the high watermark pause reads.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "GLOSS-BACKPRESSURE-001::c2",
+            "text": "Queued bytes at or below the low watermark resume reads.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "GLOSS-BACKPRESSURE-001::c3",
+            "text": "isBackpressured is always false when the effective limit is nonpositive.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/SocketHandler.ts",
+            "line": 144,
+            "symbol": "public get isBackpressured",
+            "rationale": "Read source boundary; declaration/location only."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing verification/glossary/interface text is not exempt; instructional sample guidance remains an explicit obligation."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "GLOSS-BACKPRESSURE-001::c1",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "GLOSS-BACKPRESSURE-001::c2",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "GLOSS-BACKPRESSURE-001::c3",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 242,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "IF-TTTCLIENT-RUNTIME-REG-001"
+      },
+      "category": "interface",
+      "title": "TTTClientRuntimeRegistry",
+      "originalRecord": {
+        "id": "IF-TTTCLIENT-RUNTIME-REG-001",
+        "type": "interface",
+        "title": "TTTClientRuntimeRegistry",
+        "description": "current/configure/reset. reconnectIntervalMs 및 scheduler 를 테스트에서 override.",
+        "source": [
+          "src/client/TTTClientRuntime.ts:16-32"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1827,
+        "exactHeading": "##### IF-TTTCLIENT-RUNTIME-REG-001 — TTTClientRuntimeRegistry",
+        "sidecarId": "IF-TTTCLIENT-RUNTIME-REG-001"
+      },
+      "acceptance": {
+        "descriptionRef": "IF-TTTCLIENT-RUNTIME-REG-001",
+        "originalDescription": "current/configure/reset. reconnectIntervalMs 및 scheduler 를 테스트에서 override.",
+        "clauses": [
+          {
+            "id": "IF-TTTCLIENT-RUNTIME-REG-001::c1",
+            "text": "Expose current runtime settings.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-TTTCLIENT-RUNTIME-REG-001::c2",
+            "text": "configure overrides reconnectIntervalMs.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-TTTCLIENT-RUNTIME-REG-001::c3",
+            "text": "configure overrides scheduler.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-TTTCLIENT-RUNTIME-REG-001::c4",
+            "text": "reset removes runtime overrides.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/TTTClientRuntime.ts",
+            "line": 16,
+            "symbol": "const TTTClientRuntimeRegistry",
+            "rationale": "Read source boundary; declaration/location only."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing verification/glossary/interface text is not exempt; instructional sample guidance remains an explicit obligation."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "IF-TTTCLIENT-RUNTIME-REG-001::c1",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "IF-TTTCLIENT-RUNTIME-REG-001::c2",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "IF-TTTCLIENT-RUNTIME-REG-001::c3",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "IF-TTTCLIENT-RUNTIME-REG-001::c4",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 243,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "CONSTR-INSECURE-YAML-STR-BOOL-001"
+      },
+      "category": "constraint",
+      "title": "insecure 플래그 truthy 판정",
+      "originalRecord": {
+        "id": "CONSTR-INSECURE-YAML-STR-BOOL-001",
+        "type": "constraint",
+        "title": "insecure 플래그 truthy 판정",
+        "description": "true/1/'true'/'1'/'yes'/'on' (case-insensitive) 만 게이트 트리거. false/null/undefined/0/'false'/'0'/'no'/'off' 는 미트리거. 객체/배열은 보수적으로 truthy.",
+        "source": [
+          "src/client/ClientApp.ts:49-59"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "constraint_type": "runtime"
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2153,
+        "exactHeading": "#### CONSTR-INSECURE-YAML-STR-BOOL-001 — insecure 플래그 truthy 판정",
+        "sidecarId": "CONSTR-INSECURE-YAML-STR-BOOL-001"
+      },
+      "acceptance": {
+        "descriptionRef": "CONSTR-INSECURE-YAML-STR-BOOL-001",
+        "originalDescription": "true/1/'true'/'1'/'yes'/'on' (case-insensitive) 만 게이트 트리거. false/null/undefined/0/'false'/'0'/'no'/'off' 는 미트리거. 객체/배열은 보수적으로 truthy.",
+        "clauses": [
+          {
+            "id": "CONSTR-INSECURE-YAML-STR-BOOL-001::c1",
+            "text": "Boolean true and numeric1 trigger the insecure gate.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-INSECURE-YAML-STR-BOOL-001::c2",
+            "text": "Case-insensitive strings true, 1, yes and on trigger the gate.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-INSECURE-YAML-STR-BOOL-001::c3",
+            "text": "False/null/undefined/0 and strings false/0/no/off do not trigger the gate.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-INSECURE-YAML-STR-BOOL-001::c4",
+            "text": "Objects and arrays conservatively trigger the gate.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/ClientApp.ts",
+            "line": 49,
+            "symbol": "const _isTruthyInsecureValue",
+            "rationale": "Read source boundary; declaration/location only."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing verification/glossary/interface text is not exempt; instructional sample guidance remains an explicit obligation."
+      },
+      "verification": [
+        {
+          "testPath": "test/unit/client/req-02-insecure-tls-yaml.test.ts",
+          "caseLine": 58,
+          "exactTitle": "REQ-02 allowInsecureTls/allowLegacyFallback YAML gate (2) insecure 필드를 가진 YAML 로드 시 --yes-insecure 없으면 exit 78",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "CONSTR-INSECURE-YAML-STR-BOOL-001::c1"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 72,
+              "text": "expect(res.status).toBe(__testInternals.INSECURE_YAML_EXIT_CODE);"
+            }
+          ],
+          "technique": "source-read-candidate",
+          "rationale": "Only boolean true for allowInsecureTls; no numeric1/other form matrix, driver does not start tunnel.",
+          "state": "candidate",
+          "evidence": []
+        },
+        {
+          "testPath": "test/unit/client/req-02-insecure-tls-yaml.test.ts",
+          "caseLine": 76,
+          "exactTitle": "REQ-02 allowInsecureTls/allowLegacyFallback YAML gate (2b) allowInsecureTls:false 는 게이트 트리거하지 않음 (--yes-insecure 없이 exit 0)",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "CONSTR-INSECURE-YAML-STR-BOOL-001::c3"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 90,
+              "text": "expect(res.status).toBe(0);"
+            },
+            {
+              "line": 91,
+              "text": "expect(res.stderr + res.stdout).not.toContain(\"REFUSE-INSECURE-YAML\");"
+            }
+          ],
+          "technique": "source-read-candidate",
+          "rationale": "Explicit false booleans only; remaining falsey forms are not asserted by this case.",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "CONSTR-INSECURE-YAML-STR-BOOL-001::c1",
+          "explanation": "Candidate addresses concrete inputs only; full clause and exact non-skipped runtime receipt remain absent.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "CONSTR-INSECURE-YAML-STR-BOOL-001::c2",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "CONSTR-INSECURE-YAML-STR-BOOL-001::c3",
+          "explanation": "Candidate addresses concrete inputs only; full clause and exact non-skipped runtime receipt remain absent.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "CONSTR-INSECURE-YAML-STR-BOOL-001::c4",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current numeric predicate is v!==0, including other nonzero numbers, while prose enumerates only1. String matching is the listed case-insensitive set. Preserve the original inconsistency and request input-matrix disposition."
+      }
+    },
+    {
+      "originalOrdinal": 244,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "VER-JEST-001"
+      },
+      "category": "verification",
+      "title": "Jest 테스트 실행",
+      "originalRecord": {
+        "id": "VER-JEST-001",
+        "type": "verification",
+        "title": "Jest 테스트 실행",
+        "description": "`npm test` = jest --detectOpenHandles --forceExit. coverage 는 `npm run test:coverage`. 테스트 디렉터리는 unit/component/e2e/stress/security/supply-chain/commons.",
+        "source": [
+          "package.json:21-22"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2477,
+        "exactHeading": "#### VER-JEST-001 — Jest 테스트 실행",
+        "sidecarId": "VER-JEST-001"
+      },
+      "acceptance": {
+        "descriptionRef": "VER-JEST-001",
+        "originalDescription": "`npm test` = jest --detectOpenHandles --forceExit. coverage 는 `npm run test:coverage`. 테스트 디렉터리는 unit/component/e2e/stress/security/supply-chain/commons.",
+        "clauses": [
+          {
+            "id": "VER-JEST-001::c1",
+            "text": "The original npm test script is jest --detectOpenHandles --forceExit.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "VER-JEST-001::c2",
+            "text": "Run coverage through npm run test:coverage.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "VER-JEST-001::c3",
+            "text": "Original test directory categories include unit/component/e2e/stress/security/supply-chain/commons.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "package.json",
+            "line": 21,
+            "symbol": "\"test\":",
+            "rationale": "Read source boundary; declaration/location only."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing verification/glossary/interface text is not exempt; instructional sample guidance remains an explicit obligation."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "VER-JEST-001::c1",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "VER-JEST-001::c2",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "VER-JEST-001::c3",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Approved #49 replaced forceExit with natural termination while retaining detectOpenHandles. Current command contract tests assert the changed script, not the original forceExit clause. Preserve immutable original text; no reintroduction authorized.",
+        "contextLedger": "docs/plan/verification/epic61-issue-49.md"
+      }
+    },
+    {
+      "originalOrdinal": 245,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "DATA-WAIT-BUFFER-STATE-001"
+      },
+      "category": "data_model",
+      "title": "WaitBufferState",
+      "originalRecord": {
+        "id": "DATA-WAIT-BUFFER-STATE-001",
+        "type": "data_model",
+        "title": "WaitBufferState",
+        "description": "TunnelClient 에서 사용되는 per-session 대기 큐 상태.",
+        "source": [
+          "src/client/TunnelClient.ts:49-53"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "fields": [
+          {
+            "name": "queue",
+            "type": "Dequeue<Buffer>"
+          },
+          {
+            "name": "bytes",
+            "type": "number"
+          },
+          {
+            "name": "limitBytes",
+            "type": "number"
+          }
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3237,
+        "exactHeading": "#### DATA-WAIT-BUFFER-STATE-001 — WaitBufferState",
+        "sidecarId": "DATA-WAIT-BUFFER-STATE-001"
+      },
+      "acceptance": {
+        "descriptionRef": "DATA-WAIT-BUFFER-STATE-001",
+        "originalDescription": "TunnelClient 에서 사용되는 per-session 대기 큐 상태.",
+        "clauses": [
+          {
+            "id": "DATA-WAIT-BUFFER-STATE-001::c1",
+            "text": "Maintain per-session waiting queue state in TunnelClient.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "DATA-WAIT-BUFFER-STATE-001::field-queue-type",
+            "text": "queue: type = \"Dequeue<Buffer>\"",
+            "sourceRef": "fields[0].type",
+            "rationale": "Independent original field obligation.",
+            "state": "unverified"
+          },
+          {
+            "id": "DATA-WAIT-BUFFER-STATE-001::field-bytes-type",
+            "text": "bytes: type = \"number\"",
+            "sourceRef": "fields[1].type",
+            "rationale": "Independent original field obligation.",
+            "state": "unverified"
+          },
+          {
+            "id": "DATA-WAIT-BUFFER-STATE-001::field-limitBytes-type",
+            "text": "limitBytes: type = \"number\"",
+            "sourceRef": "fields[2].type",
+            "rationale": "Independent original field obligation.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/TunnelClient.ts",
+            "line": 49,
+            "symbol": "type WaitBufferState",
+            "rationale": "Read source boundary; declaration/location only."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing verification/glossary/interface text is not exempt; instructional sample guidance remains an explicit obligation."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "DATA-WAIT-BUFFER-STATE-001::c1",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "DATA-WAIT-BUFFER-STATE-001::field-queue-type",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "DATA-WAIT-BUFFER-STATE-001::field-bytes-type",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "DATA-WAIT-BUFFER-STATE-001::field-limitBytes-type",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 246,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "NFR-SEC-CLIENT-SECRET-HANDLING-001"
+      },
+      "category": "nonfunctional_req",
+      "title": "clientSecret 처리",
+      "originalRecord": {
+        "id": "NFR-SEC-CLIENT-SECRET-HANDLING-001",
+        "type": "nonfunctional_req",
+        "title": "clientSecret 처리",
+        "description": "clientSecret 은 HMAC proof 생성 입력으로만 사용(buildHandshakeProof)하고 직접 전송하지 않는다. 로그/옵션 출력 시 redactSecrets 가 '[REDACTED]' 치환.",
+        "source": [
+          "src/client/TunnelClient.ts:301-309",
+          "src/util/SecretRedactor.ts:1-38"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "category": "security",
+        "metric": "no plaintext clientSecret over wire or log"
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1057,
+        "exactHeading": "##### NFR-SEC-CLIENT-SECRET-HANDLING-001 — clientSecret 처리",
+        "sidecarId": "NFR-SEC-CLIENT-SECRET-HANDLING-001"
+      },
+      "acceptance": {
+        "descriptionRef": "NFR-SEC-CLIENT-SECRET-HANDLING-001",
+        "originalDescription": "clientSecret 은 HMAC proof 생성 입력으로만 사용(buildHandshakeProof)하고 직접 전송하지 않는다. 로그/옵션 출력 시 redactSecrets 가 '[REDACTED]' 치환.",
+        "clauses": [
+          {
+            "id": "NFR-SEC-CLIENT-SECRET-HANDLING-001::c1",
+            "text": "Use clientSecret as input to buildHandshakeProof.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-CLIENT-SECRET-HANDLING-001::c2",
+            "text": "Do not transmit plaintext clientSecret.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-CLIENT-SECRET-HANDLING-001::c3",
+            "text": "Replace clientSecret with [REDACTED] in option/log output.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-CLIENT-SECRET-HANDLING-001::metric",
+            "text": "no plaintext clientSecret over wire or log",
+            "sourceRef": "metric",
+            "rationale": "Original auxiliary text retained as unverified.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/TunnelClient.ts",
+            "line": 350,
+            "symbol": "proof: buildHandshakeProof",
+            "rationale": "Read source boundary; declaration/location only."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing verification/glossary/interface text is not exempt; instructional sample guidance remains an explicit obligation."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "NFR-SEC-CLIENT-SECRET-HANDLING-001::c1",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-SEC-CLIENT-SECRET-HANDLING-001::c2",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-SEC-CLIENT-SECRET-HANDLING-001::c3",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-SEC-CLIENT-SECRET-HANDLING-001::metric",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Source v2 payload includes proof rather than clientSecret, but no captured-wire/full-log absence assertion is mapped. Pure redactor result is insufficient for all actual output paths."
+      }
+    },
+    {
+      "originalOrdinal": 247,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "GLOSS-CLOCKRNG-001"
+      },
+      "category": "glossary",
+      "title": "ClockRng",
+      "originalRecord": {
+        "id": "GLOSS-CLOCKRNG-001",
+        "type": "glossary",
+        "title": "ClockRng",
+        "description": "시간/난수 추상화. now(), random()(지터용 Math.random), secureRandomBytes(n)(토큰/세션용 crypto.randomBytes, n<=1024).",
+        "source": [
+          "src/util/ClockRng.ts:1-85"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2565,
+        "exactHeading": "#### GLOSS-CLOCKRNG-001 — ClockRng",
+        "sidecarId": "GLOSS-CLOCKRNG-001"
+      },
+      "acceptance": {
+        "descriptionRef": "GLOSS-CLOCKRNG-001",
+        "originalDescription": "시간/난수 추상화. now(), random()(지터용 Math.random), secureRandomBytes(n)(토큰/세션용 crypto.randomBytes, n<=1024).",
+        "clauses": [
+          {
+            "id": "GLOSS-CLOCKRNG-001::c1",
+            "text": "Abstract time via now().",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "GLOSS-CLOCKRNG-001::c2",
+            "text": "Abstract jitter randomness via random()/Math.random.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "GLOSS-CLOCKRNG-001::c3",
+            "text": "Use crypto.randomBytes for secure token/session randomness.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "GLOSS-CLOCKRNG-001::c4",
+            "text": "Limit secureRandomBytes requests to at most1024.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/ClockRng.ts",
+            "line": 25,
+            "symbol": "class DefaultClockRngImpl",
+            "rationale": "Read source boundary; declaration/location only."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing verification/glossary/interface text is not exempt; instructional sample guidance remains an explicit obligation."
+      },
+      "verification": [
+        {
+          "testPath": "test/unit/util/req-01-clockrng-secure.test.ts",
+          "caseLine": 31,
+          "exactTitle": "REQ-01 ClockRng.secureRandomBytes 입력 검증: n > 1024 면 RangeError (이벤트 루프 블록 방지)",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "GLOSS-CLOCKRNG-001::c4"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 32,
+              "text": "expect(() => DefaultClockRng.secureRandomBytes(1025)).toThrow(RangeError);"
+            },
+            {
+              "line": 35,
+              "text": "expect(DefaultClockRng.secureRandomBytes(1024).length).toBe(1024);"
+            }
+          ],
+          "technique": "source-read-candidate",
+          "rationale": "Boundary max and max+1 observed by actual API; no distribution/constant-time/event-loop claim.",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "GLOSS-CLOCKRNG-001::c1",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "GLOSS-CLOCKRNG-001::c2",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "GLOSS-CLOCKRNG-001::c3",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "GLOSS-CLOCKRNG-001::c4",
+          "explanation": "Candidate addresses concrete inputs only; full clause and exact non-skipped runtime receipt remain absent.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 248,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "CONSTR-SAMPLE-YAML-001"
+      },
+      "category": "constraint",
+      "title": "샘플 YAML 사용 지침",
+      "originalRecord": {
+        "id": "CONSTR-SAMPLE-YAML-001",
+        "type": "constraint",
+        "title": "샘플 YAML 사용 지침",
+        "description": "config/*.sample.yaml 를 그대로 사용하지 말고 런타임 파일명(server.yaml/client.yaml)으로 복사 후 placeholder 비밀을 교체해야 한다.",
+        "source": [
+          "config/README.md:8-13",
+          "config/client.sample.yaml:1-3",
+          "config/server.sample.yaml:1-3"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "constraint_type": "runtime"
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2193,
+        "exactHeading": "#### CONSTR-SAMPLE-YAML-001 — 샘플 YAML 사용 지침",
+        "sidecarId": "CONSTR-SAMPLE-YAML-001"
+      },
+      "acceptance": {
+        "descriptionRef": "CONSTR-SAMPLE-YAML-001",
+        "originalDescription": "config/*.sample.yaml 를 그대로 사용하지 말고 런타임 파일명(server.yaml/client.yaml)으로 복사 후 placeholder 비밀을 교체해야 한다.",
+        "clauses": [
+          {
+            "id": "CONSTR-SAMPLE-YAML-001::c1",
+            "text": "Copy the selected sample to server.yaml or client.yaml before use.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-SAMPLE-YAML-001::c2",
+            "text": "Replace placeholder secrets before starting.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-SAMPLE-YAML-001::c3",
+            "text": "Do not use sample filenames directly as runtime configuration.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "config/README.md",
+            "line": 13,
+            "symbol": "Copy the sample",
+            "rationale": "Read source boundary; declaration/location only."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing verification/glossary/interface text is not exempt; instructional sample guidance remains an explicit obligation."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "CONSTR-SAMPLE-YAML-001::c1",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "CONSTR-SAMPLE-YAML-001::c2",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "CONSTR-SAMPLE-YAML-001::c3",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 249,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-UI-BOOT-001"
+      },
+      "category": "functional_req",
+      "title": "SPA 부트스트랩 및 세션 유효성 확인",
+      "originalRecord": {
+        "id": "FR-UI-BOOT-001",
+        "type": "functional_req",
+        "title": "SPA 부트스트랩 및 세션 유효성 확인",
+        "description": "App.svelte 가 onMount 시 LoginCtrl.validateSession() 을 호출하여 세션 상태(Checking/Valid/Invalid)에 따라 ServerSetLayout+ServerStatusLayout+TunnelOptionSetLayout 또는 Login 화면을 분기 렌더링한다. 세션 확인 실패(연결 불가) 시 'Offline server...' 표기.",
+        "source": [
+          "admin/src/App.svelte:12-52"
+        ],
+        "confidence": 0.98,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "MODE-UI-SESSION-001"
+        ]
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 521,
+        "exactHeading": "##### FR-UI-BOOT-001 — SPA 부트스트랩 및 세션 유효성 확인",
+        "sidecarId": "FR-UI-BOOT-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-UI-BOOT-001",
+        "originalDescription": "App.svelte 가 onMount 시 LoginCtrl.validateSession() 을 호출하여 세션 상태(Checking/Valid/Invalid)에 따라 ServerSetLayout+ServerStatusLayout+TunnelOptionSetLayout 또는 Login 화면을 분기 렌더링한다. 세션 확인 실패(연결 불가) 시 'Offline server...' 표기.",
+        "clauses": [
+          {
+            "id": "FR-UI-BOOT-001::c1",
+            "text": "On mount invoke LoginCtrl.validateSession.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-BOOT-001::c2",
+            "text": "Track Checking, Valid and Invalid states.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-BOOT-001::c3",
+            "text": "Render ServerSetLayout, ServerStatusLayout and TunnelOptionSetLayout for Valid.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-BOOT-001::c4",
+            "text": "Render Login for Invalid.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-BOOT-001::c5",
+            "text": "Display Offline server... on session-check connection failure as originally described.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/App.svelte",
+            "line": 18,
+            "symbol": "onMount(async",
+            "rationale": "Read source boundary; declaration/location only."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing verification/glossary/interface text is not exempt; instructional sample guidance remains an explicit obligation."
+      },
+      "verification": [],
+      "contextTests": [
+        {
+          "testPath": "test/admin/login-bootstrap.test.ts",
+          "caseLine": 113,
+          "exactTitle": "first-login UI requests the bootstrap token and accepts the existing server password policy",
+          "parameters": [],
+          "assertedClauseRefs": [],
+          "assertionAnchors": [
+            {
+              "line": 124,
+              "text": "expect(session.valid).toBe(true);"
+            }
+          ],
+          "technique": "source-read-candidate",
+          "rationale": "Browser login fixture and explicit session fetch are not assertions that actual App.svelte mounts or renders its three layouts/offline branch.",
+          "state": "candidate",
+          "evidence": [],
+          "disposition": "context-only; does not assert original acceptance"
+        }
+      ],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-UI-BOOT-001::c1",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-BOOT-001::c2",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-BOOT-001::c3",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-BOOT-001::c4",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-BOOT-001::c5",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Checking renders Offline server... even before a request fails. validateSession fetch rejection is not caught by App onMount, leaving Checking; this is not an explicit failure-state transition. Actual application mount/layout/error assertions remain gaps."
+      }
+    },
+    {
+      "originalOrdinal": 250,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-UI-VERSION-001"
+      },
+      "category": "functional_req",
+      "title": "버전 정보 표시",
+      "originalRecord": {
+        "id": "FR-UI-VERSION-001",
+        "type": "functional_req",
+        "title": "버전 정보 표시",
+        "description": "앱 우하단에 서버에서 가져온 버전(name)과 빌드(build)를 표기한다. ServerStatusCtrl.getVersion()이 캐시된 후 재사용.",
+        "source": [
+          "admin/src/App.svelte:16-20",
+          "admin/src/App.svelte:56-62",
+          "admin/src/controller/ServerStatusCtrl.ts:43-53"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": null
+      },
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 767,
+        "exactHeading": "##### FR-UI-VERSION-001 — 버전 정보 표시",
+        "sidecarId": "FR-UI-VERSION-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-UI-VERSION-001",
+        "originalDescription": "앱 우하단에 서버에서 가져온 버전(name)과 빌드(build)를 표기한다. ServerStatusCtrl.getVersion()이 캐시된 후 재사용.",
+        "clauses": [
+          {
+            "id": "FR-UI-VERSION-001::c1",
+            "text": "Display server version name.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-VERSION-001::c2",
+            "text": "Display server build identifier.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-VERSION-001::c3",
+            "text": "Position the version display at the bottom-right.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-VERSION-001::c4",
+            "text": "Cache ServerStatusCtrl.getVersion results.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-UI-VERSION-001::c5",
+            "text": "Reuse the cached version on later calls.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior or intact sequence; no entire-ID acceptance claim.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "admin/src/controller/ServerStatusCtrl.ts",
+            "line": 43,
+            "symbol": "public static async getVersion",
+            "rationale": "Read source boundary; declaration/location only."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing verification/glossary/interface text is not exempt; instructional sample guidance remains an explicit obligation."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-UI-VERSION-001::c1",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-VERSION-001::c2",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-VERSION-001::c3",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-VERSION-001::c4",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        },
+        {
+          "clauseRef": "FR-UI-VERSION-001::c5",
+          "explanation": "No direct assertion mapped. Related helper/getter/fixture/source use is not proof of this clause.",
+          "issueOrOwner": "#58 batch-10",
+          "nextGate": "Independent semantic review, explicit original/current disposition and authentic case receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "getVersion checks _versionInfo but never assigns fetched JSON to it. App calls getVersion both at top level and onMount. Original caching/reuse claim differs from current source; no runtime request-count evidence attached."
+      }
+    }
+  ]
+}
