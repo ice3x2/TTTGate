@@ -89,18 +89,33 @@ test("a fragmented handshake cannot switch to a different authenticated pool obj
 }));
 
 test("incomplete token extension uses the existing deadline without authenticating the socket", async () => withHandshake(true, async h => {
-    // The socket already exists; apply its existing idle-timeout API for this owned control.
-    h.socket.write(h.frame.subarray(0, DataStatePacket.LENGTH + 1));
-    await h.until(() => h.received() === DataStatePacket.LENGTH + 1, 'Truncated extension not observed');
-    const handler = h.observations[0].handler;
-    const policy = TunnelHandshakePolicyRegistry.current();
-    expect(h.tunnel._unauthenticatedHandlerIds.has(handler.id)).toBe(true);
-    handler.setTimeout(150);
-    await h.until(() => h.socket.destroyed, 'Incomplete handshake exceeded its owned deadline');
-    expect(h.tunnel._unauthenticatedHandlerIds.has(handler.id)).toBe(false);
-    expect(TunnelHandshakePolicyRegistry.current()).toEqual(policy);
-    const sibling = await h.peer.open(); await h.peer.complete(sibling);
-    await h.peer.roundtrip(sibling, 'sibling-after-incomplete');
+    const mark = h.tunnel.markHandlerAuthenticated;
+    const marked: any[] = [];
+    h.tunnel.markHandlerAuthenticated = (handler: any) => {
+        marked.push(handler);
+        mark.call(h.tunnel, handler);
+    };
+    try {
+        // The socket already exists; apply its existing idle-timeout API for this owned control.
+        h.socket.write(h.frame.subarray(0, DataStatePacket.LENGTH + 1));
+        await h.until(() => h.received() === DataStatePacket.LENGTH + 1, 'Truncated extension not observed');
+        const handler = h.observations[0].handler;
+        const pending = (h.peer.pool as any)._pendingSessionIDMap.get(h.session.packet.sessionID);
+        const policy = TunnelHandshakePolicyRegistry.current();
+        expect(h.tunnel._unauthenticatedHandlerIds.has(handler.id)).toBe(true);
+        handler.setTimeout(150);
+        await h.until(() => h.socket.destroyed && handler.socket.destroyed && handler.isEnd()
+            && !h.tunnel._unauthenticatedHandlerIds.has(handler.id), 'Incomplete handshake exceeded its owned deadline');
+        expect(handler.socket.destroyed).toBe(true);
+        expect(handler.isEnd()).toBe(true);
+        expect(h.tunnel._unauthenticatedHandlerIds.has(handler.id)).toBe(false);
+        expect(marked.filter(candidate => candidate === handler)).toHaveLength(0);
+        expect((h.peer.pool as any)._pendingSessionIDMap.get(h.session.packet.sessionID)).toBe(pending);
+        expect(TunnelHandshakePolicyRegistry.current()).toEqual(policy);
+        const sibling = await h.peer.open(); await h.peer.complete(sibling);
+        await h.peer.roundtrip(sibling, 'sibling-after-incomplete');
+        expect(marked.filter(candidate => candidate === handler)).toHaveLength(0);
+    } finally { h.tunnel.markHandlerAuthenticated = mark; }
 }));
 
 test("rejected token is not subsequently marked authenticated", async () => withHandshake(true, async h => {
