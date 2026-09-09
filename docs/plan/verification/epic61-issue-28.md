@@ -1,13 +1,16 @@
 # Issue #28 — Negotiated exact close counts
 
-Status: corrected implementation candidate frozen for independent rereview; latest focused2suites24PASS53.658s, related8suites55PASS149.71s and forced build0. Earlier21focused/49regression and design-only/pending clauses below are historical checkpoints unless explicitly marked as a remaining coverage limitation. User approved negotiated safe-integer counts and explicit oversized failure for unsupported peers on 2026-09-09. The original design was approved before test-first work; all actual RED/intermediate failures remain preserved. Worktree `TTTGate-epic61-count`, branch `fix/epic61-large-close-count`, base `02567a3`. No commit/push by this fixer.
+Historical checkpoint convention: lower pending, no-run, no-production and unchecked design/implementation wording is preserved historical evidence, superseded by the later execution and final-review sections; the latest independent rereview/root integration gate remains current.
+
+Status: final independent rereviews completed with C/H/M/L0 and MERGE_READY from two reviewers; source commite8d3bf8 integrated by root as259fff6. Root focused2suites24PASS52.912s naturally exited0 and root forced build exited0. Push and issue closure remain pending. Agent focused24PASS53.658s/regression55PASS149.71s/build0 and earlier21focused/49regression remain separate historical evidence. User approved negotiated safe-integer counts and explicit oversized failure for unsupported peers on2026-09-09. All actual RED/intermediate failures and documented coverage limitations remain preserved. Worktree `TTTGate-epic61-count`, branch `fix/epic61-large-close-count`, base `02567a3`; no commit/push by this ledger updater.
 
 - [x] Read AGENTS, issue28 research, ADR-004/004-1 and current producer/consumer paths. Status: read-only complete.
 - [x] Reuse existing packet JSON suffix, metadata result validation and authenticated capabilities. Status: design below; no duplicate parser or new transport proposed.
-- [ ] Independently approve encoding, negotiation and unsupported-peer teardown scope. Status: pending; connection-abort collateral must be reviewed explicitly.
-- [ ] Author failing contracts before implementation. Status: not started; matrix below.
-- [ ] Implement minimum reviewed change and obtain separate reviews. Status: not started.
-- [ ] Run relevant focused/integration regressions and root integration. Status: not started; no closure claim.
+- [x] Independently approve encoding, negotiation and unsupported-peer teardown scope. Status: completed, including documented same-control sibling interruption; original design and review history retained below.
+- [x] Author failing contracts before implementation. Status: actual RED and separate correction RED preserved below; setup failures are not behavioral RED.
+- [x] Implement minimum reviewed change and obtain separate reviews. Status: two final independent rereviews returned C/H/M/L0 MERGE_READY after fixes.
+- [x] Run relevant focused/integration regressions and root integration. Status: sourcee8d3bf8 -> root259fff6; root24PASS52.912s/native0 and forced build0, separate from agent results.
+- [ ] Push and issue closure. Status: pending root operations; no completion notification claimed.
 
 ## Existing boundaries and reuse
 
@@ -137,4 +140,9 @@ Candidate files: src/commons/ProtocolV2.ts, src/commons/CtrlMetaGuards.ts, src/c
 - [x] Focused corrected GREEN. Status: handle91093/E `C:/Users/beom/AppData/Local/Temp/count28-review-green-cdv2ggol`,2suites24PASS53.658s/native0. Exact direct Jest --runInBand --silent --runTestsByPath test/commons/close-count.test.ts test/component/client/close-count.test.ts. The real unsupported server cases now assert pending/queue/bytes0 plus actual handlerID diagnostic before fixture disposal; client queued cleanup and both valid unnegotiated consumers pass. Root approved adding pool-resource and handler-map lifecycle to the prior six regression files because end() changed.
 - [x] Related regression. Status: handle7652/E `C:/Users/beom/AppData/Local/Temp/count28-review-regression-t_gvvd_p`,8suites55PASS149.71s/native0. Exact direct Jest --runInBand --silent --runTestsByPath paths: test/unit/commons/CtrlPacket.test.ts, test/commons/metadata-result.test.ts, test/component/server/ProtocolV2.test.ts, test/component/client/control-metadata.test.ts, test/component/client/endpoint-graceful-drain.test.ts, test/component/client/data-terminal.test.ts, test/unit/server/ClientHandlerPool.resource.test.ts, test/component/handler-map-lifecycle.test.ts. No helper/test baseline changed to pass this run.
 - [x] Forced build. Status: handle59586/E `C:/Users/beom/AppData/Local/Temp/count28-review-build-8lv4xpsk`,npm run build -- --force,native0/outer8.681s; existing npm always-auth warnings retained. Each new E records exact command/cwd, raw stdout/stderr and native code/outer time. No synthetic raw/PID history is claimed.
-- [ ] Independent correction rereview/root integration. Status: nine-path overall candidate frozen. This fixer changed only ClientHandlerPool.ts, existing component close-count test and this ledger. No #29/#40/shared consumer edits, process termination, commit, push, full-suite or coverage run.
+- [x] Independent correction rereview/root integration. Status: two final rereviews returned C/H/M/L0 MERGE_READY; sourcee8d3bf8 integrated as259fff6. Root focused2suites24PASS52.912s/native0 and forced build0. The correction fixer changed only ClientHandlerPool.ts, existing component close-count test and this ledger within the nine-path candidate. Its no-commit/no-push execution checkpoint remains historical; subsequent root source commit/integration is recorded here. No #29/#40/shared consumer edits, process termination, full-suite or coverage run.
+
+## Root integration checkpoint
+
+- [x] Record root-relayed final facts. Status: source commite8d3bf8, integration259fff6, two independent final MERGE_READY reviews with zero C/H/M/L, root focused2suites24PASS52.912s natural0 and root forced build0. These facts are root-relayed receipts, not new execution by this document updater.
+- [ ] Remote push and closure. Status: pending; preserve all earlier RED/intermediate failures, agent focused24/regression55/build receipts and coverage limitations without combining counts or promoting partial evidence.
