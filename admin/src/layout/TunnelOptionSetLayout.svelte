@@ -59,7 +59,6 @@
             option.destinationPort = _normalizePortNumber(option.destinationPort!);
             option.forwardPort = _normalizePortNumber(option.forwardPort);
             option.bufferLimitOnClient = _normalizeMemBufferSize(option.bufferLimitOnClient!);
-            option.bufferLimitOnServer = _normalizeMemBufferSize(option.bufferLimitOnServer!);
         }
     }
 
@@ -84,9 +83,11 @@
     }
 
 
+    const _validServerBuffer = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 1 && Number.isFinite(value * 1024 * 1024);
+
     let _checkUpdatable = () => {
         for(let tunnelOption of _tunnelOptions) {
-            tunnelOption.updatable = ServerOptionCtrl.checkValidTunnelingOption(tunnelOption);
+            tunnelOption.updatable = ServerOptionCtrl.checkValidTunnelingOption(tunnelOption) && _validServerBuffer(tunnelOption.bufferLimitOnServer);
         }
 
     };
@@ -557,7 +558,10 @@
 
                     <div style="width: calc(50% - 2px); display: inline-block;">
                         <label for="input-buffer-limit-server" class="form-label" style="font-size: 10pt;color: #666666; " >Server</label>
-                        <input type="number" id="input-buffer-limit-server" class="form-control"  bind:value="{option.bufferLimitOnServer}">
+                        <input type="number" id="input-buffer-limit-server" class="form-control" min="1" step="any" bind:value="{option.bufferLimitOnServer}">
+                        {#if !_validServerBuffer(option.bufferLimitOnServer)}
+                            <small role="alert">Server buffer must be a finite number of at least 1 MiB.</small>
+                        {/if}
                     </div>
                     <div style="width: calc(50% - 2px); display: inline-block;">
                         <label for="input-buffer-limit-client" class="form-label" style="font-size: 10pt;color: #666666; ">Client</label>
@@ -565,8 +569,9 @@
                     </div>
                     <div style="color: #666;font-size: 10pt;margin-left: -10px">
                         <ul>
-                            <li><span style="font-weight: 900">0>=n</span> : Unlimited memory buffer.</li>
-                            <li><span style="font-weight: 900">0&lt;n</span> : If the memory buffer limit is exceeded, it is written to the file cache.</li>
+                            <li>Server buffer: finite values of at least 1 MiB; fractions are allowed.</li>
+                            <li>Client buffer: nonpositive values retain the existing unlimited setting.</li>
+                            <li>Positive limits spill excess buffered data to the file cache.</li>
                         </ul>
                     </div>
                 </div>

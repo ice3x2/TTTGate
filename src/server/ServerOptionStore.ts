@@ -337,6 +337,17 @@ class ServerOptionStore {
     }
 
     public verificationServerOption(option: ServerOption) : {success: boolean, message: string, serverOption?: ServerOption} {
+        if(Array.isArray(option.tunnelingOptions)) {
+            const normalizedTunnels = option.tunnelingOptions.map(tunnel =>
+                tunnel && typeof tunnel === 'object' && !Array.isArray(tunnel) ? {...tunnel} : tunnel);
+            for(const tunnel of normalizedTunnels) {
+                if(tunnel && typeof tunnel === 'object' && !Array.isArray(tunnel)) {
+                    const buffer = this.normalizeServerBufferLimit(tunnel);
+                    if(!buffer.success) return buffer;
+                }
+            }
+            option.tunnelingOptions = normalizedTunnels;
+        }
         const ttl = resolveSessionTtlMs(option.sessionTtlMs);
         if(!ttl.success) return ttl;
         option.sessionTtlMs = ttl.ttlMs;
@@ -390,6 +401,16 @@ class ServerOptionStore {
         return {success: true, message: "", serverOption: option};
     }
 
+    private normalizeServerBufferLimit(option: TunnelingOption): {success: boolean; message: string} {
+        const value = option.bufferLimitOnServer;
+        if(value === undefined) {
+            option.bufferLimitOnServer = 8;
+        } else if(typeof value !== 'number' || !Number.isFinite(value) || value < 1 || !Number.isFinite(value * 1024 * 1024)) {
+            return {success: false, message: 'Server buffer must be a finite number of at least 1 MiB.'};
+        }
+        return {success: true, message: ''};
+    }
+
     public verificationTunnelingOption(
         option: TunnelingOption,
         normalizationMode: TunnelingOptionNormalizationMode = "new-config"
@@ -403,9 +424,8 @@ class ServerOptionStore {
         if(option.forwardPort < 0 || option.forwardPort > 65535) {
             return {success: false,forwardPort:option.forwardPort, message: "forwardPort is invalid (0 ~ 65535)"};
         }
-        if(option.bufferLimitOnServer == undefined) {
-            option.bufferLimitOnServer = 8;
-        }
+        const buffer = this.normalizeServerBufferLimit(option);
+        if(!buffer.success) return {...buffer, forwardPort: option.forwardPort};
         if(option.bufferLimitOnClient == undefined) {
             option.bufferLimitOnClient = 8;
         }
