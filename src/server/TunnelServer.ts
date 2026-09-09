@@ -424,6 +424,7 @@ class TunnelServer {
             serverMode: this._serverOption.controlProtocolMode,
             controlID: ctrlHandler.id
         };
+        this.ensurePendingControlHandshake(ctrlHandler.id).capabilities = [...handshakeMeta.capabilities];
         let sendBuffer = CtrlPacket.createSyncCtrlAck(ctrlHandler.id, handshakeMeta).toBuffer();
         ctrlHandler.sendData(sendBuffer, (handler_, success, err) => {
             if(!success) {
@@ -712,7 +713,8 @@ class TunnelServer {
                     clientId: ackV2Meta.clientId,
                     displayName: ackV2Meta.displayName || packet.clientName || trustedClient.displayName || ackV2Meta.clientId,
                     protocolVersion: ackV2Meta.protocolVersion || CONTROL_PROTOCOL_V2,
-                    capabilities: ackV2Meta.capabilities ?? pendingHandshake.capabilities,
+                    capabilities: (ackV2Meta.capabilities ?? pendingHandshake.capabilities).filter(capability =>
+                        capability !== 'close-count-safe' || pendingHandshake.capabilities.includes(capability)),
                     legacy: false
                 });
                 return;

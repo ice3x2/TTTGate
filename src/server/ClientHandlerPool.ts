@@ -359,9 +359,15 @@ class ClientHandlerPool {
             }
             this._pendingSessionIDMap.delete(sessionID);
         } else if(packet.cmd == CtrlCmd.CloseSession) {
+            const count = packet.readCloseSessionCount(!this._legacyMode && this._capabilities.includes('close-count-safe'));
+            if(count.kind === 'invalid') {
+                logger.error(`E_CLOSE_COUNT_INVALID direction=server sessionID=${packet.sessionID} handlerID=${packet.ID}`);
+                this._controlHandler.destroy();
+                return;
+            }
             let handlerID = packet.ID;
             let sessionID = packet.sessionID;
-            let endLength = packet.waitReceiveLength;
+            let endLength = count.value.count;
 
             this.releaseSession_(handlerID,sessionID,endLength);
         }
@@ -469,7 +475,15 @@ class ClientHandlerPool {
      * @param waitForLength
      */
     public sendCloseSession(sessionID: number, waitForLength : number) : void {
-        let handler = this._activatedSessionHandlerMap_.get(sessionID);
+        const handler = this._activatedSessionHandlerMap_.get(sessionID);
+        const allowLargeCount = !this._legacyMode && this._capabilities.includes('close-count-safe');
+        if(!Number.isSafeInteger(waitForLength) || waitForLength < 0 || (waitForLength > 0xffffffff && !allowLargeCount)) {
+            const category = !Number.isSafeInteger(waitForLength) || waitForLength < 0 ? 'E_CLOSE_COUNT_INVALID' : 'E_CLOSE_COUNT_UNSUPPORTED';
+            const handlerID = handler?.handlerID ?? this._pendingSessionIDMap.get(sessionID)?.handlerID ?? 0;
+            logger.error(`${category} direction=server sessionID=${sessionID} handlerID=${handlerID} count=${waitForLength} negotiated=${allowLargeCount}`);
+            this._controlHandler.destroy();
+            return;
+        }
         if(handler == undefined) {
             let pendingState = this._pendingSessionIDMap.get(sessionID);
             if(pendingState) {
@@ -483,7 +497,7 @@ class ClientHandlerPool {
         logger.info(`Sends a session close request - sessionID: ${sessionID}`);
         // noinspection JSUnusedLocalSymbols
         const fullHandlerID = handler == undefined ? 0 : (handler.handlerID ?? 0);
-        this._controlHandler.sendData(CtrlPacket.closeSession(fullHandlerID, sessionID, waitForLength, {handlerID: fullHandlerID}).toBuffer(), (socketHandler, success, err) => {
+        this._controlHandler.sendData(CtrlPacket.closeSession(fullHandlerID, sessionID, waitForLength, {handlerID: fullHandlerID}, allowLargeCount).toBuffer(), (socketHandler, success, err) => {
             if(!success) {
                 return;
             }
@@ -569,6 +583,8 @@ class ClientHandlerPool {
 
 
     public end() : void {
+        for(const sessionID of this._waitingDataBufferQueueMap.keys()) this.burnWaitBuffer(sessionID);
+        this._pendingSessionIDMap.clear();
         // noinspection JSUnusedLocalSymbols
         for(let [key, value] of this._activatedSessionHandlerMap_) {
             value.onSocketEvent = function () {};

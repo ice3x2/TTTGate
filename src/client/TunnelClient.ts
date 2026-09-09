@@ -75,6 +75,7 @@ class TunnelClient {
     private _waitBufferBytesTotal: number = 0;
     private _protocolVersion: number = 1;
     private _legacyMode: boolean = true;
+    private _closeCountSafe = false;
 
 
     //private _ctrlPacketStreamer : CtrlPacketStreamer = new CtrlPacketStreamer();
@@ -132,6 +133,7 @@ class TunnelClient {
             logger.error(`TunnelClient: connect: already connected`);
             return false;
         }
+        this._closeCountSafe = false;
         
         try {
             let connOpt = this.makeConnectOpt();
@@ -169,6 +171,7 @@ class TunnelClient {
 
 
     private failHandshake(err?: Error) : void {
+        this._closeCountSafe = false;
         this._state = CtrlState.None
         this._ctrlHandler?.end_();
         this._onCtrlStateCallback?.(this, 'closed', err);
@@ -287,6 +290,7 @@ class TunnelClient {
 
     private closeControlHandler(handler: SocketHandler, error?: Error): void {
         if(handler !== this._ctrlHandler) return;
+        this._closeCountSafe = false;
         this._state = CtrlState.None;
         this._ctrlHandler = undefined;
         this.destroyAllDataHandler();
@@ -337,10 +341,13 @@ class TunnelClient {
                     continue;
                 }
                 const syncMeta = metadata.kind === 'valid' ? metadata.value : undefined;
+                this._closeCountSafe = false;
                 this._id = syncMeta?.controlID ?? packet.ID;
                 if(syncMeta && this._option.clientId && this._option.clientSecret) {
                     this._protocolVersion = syncMeta.protocolVersion;
                     this._legacyMode = false;
+                    this._closeCountSafe = syncMeta.protocolVersion === CONTROL_PROTOCOL_V2 && syncMeta.capabilities.includes('close-count-safe') &&
+                        DEFAULT_PROTOCOL_V2_CAPABILITIES.includes('close-count-safe');
                     this.sendAckCtrl(handler, this._id, this._option.key, {
                         protocolVersion: CONTROL_PROTOCOL_V2,
                         capabilities: DEFAULT_PROTOCOL_V2_CAPABILITIES,
@@ -384,6 +391,12 @@ class TunnelClient {
                     this.processReceiveMessage(packet);
                 }
                 else if(packet.cmd == CtrlCmd.CloseSession) {
+                    const count = packet.readCloseSessionCount(this._closeCountSafe);
+                    if(count.kind === 'invalid') {
+                        logger.error(`E_CLOSE_COUNT_INVALID direction=client sessionID=${packet.sessionID} handlerID=${packet.ID}`);
+                        this.closeControlHandler(handler);
+                        return;
+                    }
                     let dataHandler = this._activatedSessionDataHandlerMap.get(packet.sessionID);
                     if(!dataHandler) {
                         logger.error(`onReceiveFromCtrlHandler - Fail close session. invalid sessionID: ${packet.sessionID}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
@@ -399,7 +412,7 @@ class TunnelClient {
                                 dataHandler.setBufferSizeLimit(-1);
                                 dataHandler.dataHandlerState = DataHandlerState.Terminated;
                             }
-                            this._onEndPointCloseCallback?.(packet.sessionID, packet.waitReceiveLength);
+                            this._onEndPointCloseCallback?.(packet.sessionID, count.value.count);
                         });
                     }
                 } else {
@@ -657,10 +670,16 @@ class TunnelClient {
 
 
     private sendCloseSession(handlerID: number, sessionID: number, waitReceiveLength: number, dataHandler?: TunnelDataHandler) : void {
+        if(!Number.isSafeInteger(waitReceiveLength) || waitReceiveLength < 0 || (waitReceiveLength > 0xffffffff && !this._closeCountSafe)) {
+            const category = !Number.isSafeInteger(waitReceiveLength) || waitReceiveLength < 0 ? 'E_CLOSE_COUNT_INVALID' : 'E_CLOSE_COUNT_UNSUPPORTED';
+            logger.error(`${category} direction=client sessionID=${sessionID} handlerID=${handlerID} count=${waitReceiveLength} negotiated=${this._closeCountSafe}`);
+            if(this._ctrlHandler) this.closeControlHandler(this._ctrlHandler);
+            return;
+        }
         console.log(`Endpoint client sends a close request - sessionID:${sessionID}`);
         try {
             if (this._ctrlHandler) {
-                this._ctrlHandler.sendData(CtrlPacket.closeSession(handlerID, sessionID, waitReceiveLength, {handlerID}).toBuffer(), (handler, success/*, err*/ ) => {
+                this._ctrlHandler.sendData(CtrlPacket.closeSession(handlerID, sessionID, waitReceiveLength, {handlerID}, this._closeCountSafe).toBuffer(), (handler, success/*, err*/ ) => {
                     if (!success) {
                         if (dataHandler) {
                             this.deleteDataHandler(dataHandler!);
@@ -706,6 +725,7 @@ class TunnelClient {
     }
 
     public destroy(): void {
+        this._closeCountSafe = false;
         this._state = CtrlState.None;
         this._ctrlHandler?.destroy();
         this._ctrlHandler = undefined;

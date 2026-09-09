@@ -2,7 +2,7 @@ import {createHmac} from "crypto";
 import {ClockRngProvider} from "../util/ClockRng";
 
 type ControlProtocolMode = "legacy" | "mixed" | "mtls-strict";
-type ProtocolCapability = "protocol-v2" | "proof-of-possession" | "client-identity" | "data-bind-token" | "wide-id";
+type ProtocolCapability = "protocol-v2" | "proof-of-possession" | "client-identity" | "data-bind-token" | "wide-id" | "close-count-safe";
 
 type SyncCtrlAckMeta = {
     protocolVersion: number;
@@ -30,6 +30,8 @@ type HandlerWideIdMeta = {
     handlerID?: number;
 };
 
+type CloseSessionMeta = HandlerWideIdMeta & {waitReceiveLength?: number};
+
 const CONTROL_PROTOCOL_V2 = 2;
 const CONTROL_PROTOCOL_V1 = 1;
 const DEFAULT_PROTOCOL_V2_CAPABILITIES: Array<ProtocolCapability> = [
@@ -37,7 +39,8 @@ const DEFAULT_PROTOCOL_V2_CAPABILITIES: Array<ProtocolCapability> = [
     "proof-of-possession",
     "client-identity",
     "data-bind-token",
-    "wide-id"
+    "wide-id",
+    "close-count-safe"
 ];
 
 const buildHandshakeProof = (secret: string, clientId: string, handlerId: number, challengeNonce: string): string => {
@@ -62,6 +65,7 @@ const createOpaqueToken = (length: number = 32): string => {
 };
 
 export {
+    CloseSessionMeta,
     AckCtrlV2Meta,
     CONTROL_PROTOCOL_V1,
     CONTROL_PROTOCOL_V2,

@@ -3,7 +3,7 @@ import BufferReader from "../util/BufferReader";
 import ConnectOpt from "../util/ConnectOpt";
 import Dequeue from "../util/Dequeue";
 import LoggerFactory from "../util/logger/LoggerFactory";
-import {AckCtrlV2Meta, HandlerWideIdMeta, NewDataHandlerMeta, SyncCtrlAckMeta} from "./ProtocolV2";
+import {AckCtrlV2Meta, CloseSessionMeta, HandlerWideIdMeta, NewDataHandlerMeta, SyncCtrlAckMeta} from "./ProtocolV2";
 import {
     assertAckCtrlV2Meta,
     assertHandlerWideIdMeta,
@@ -11,7 +11,7 @@ import {
     assertNewDataHandlerMeta,
     assertSyncCtrlAckMeta,
     safeJsonParse, readJsonMeta, MetaResult, MessageMeta,
-    validateMessageMeta, validateSyncCtrlAckMeta, validateNewDataHandlerMeta, validateHandlerWideIdMeta
+    validateMessageMeta, validateSyncCtrlAckMeta, validateNewDataHandlerMeta, validateHandlerWideIdMeta, validateCloseSessionMeta
 } from "./CtrlMetaGuards";
 
 
@@ -138,14 +138,33 @@ class CtrlPacket {
         return packet;
     }
 
-    public static closeSession(handlerID: number, sessionID: number, waitReceiveLength: number, meta?: HandlerWideIdMeta) : CtrlPacket {
+    public static closeSession(handlerID: number, sessionID: number, waitReceiveLength: number, meta?: CloseSessionMeta, allowLargeCount = false) : CtrlPacket {
+        if(!Number.isSafeInteger(waitReceiveLength) || waitReceiveLength < 0 ||
+            (waitReceiveLength > 0xffffffff && !allowLargeCount) ||
+            (meta && Object.prototype.hasOwnProperty.call(meta, 'waitReceiveLength') &&
+                (waitReceiveLength <= 0xffffffff || meta.waitReceiveLength !== waitReceiveLength)))
+            throw new RangeError('Invalid or unsupported CloseSession count');
+        if(waitReceiveLength > 0xffffffff) meta = {...meta, waitReceiveLength};
         let packet = CtrlPacket.createNoDataPacket(CtrlCmd.CloseSession, handlerID, sessionID, meta);
         packet._data = Buffer.alloc(4);
-        packet._data.writeUInt32BE(waitReceiveLength);
+        packet._data.writeUInt32BE(waitReceiveLength > 0xffffffff ? 0xffffffff : waitReceiveLength);
         if(meta) {
             packet._data = Buffer.concat([packet._data, Buffer.from(JSON.stringify(meta), "utf-8")]);
         }
         return packet;
+    }
+
+    public readCloseSessionCount(allowLargeCount: boolean): {kind: 'invalid'; reason: string} | {kind: 'valid'; value: {count: number; handlerID?: number}} {
+        if(this._cmd !== CtrlCmd.CloseSession || this._data.length < 4) return {kind: 'invalid', reason: 'CloseSession prefix missing'};
+        const metadata = this._data.length === 4 ? {kind: 'absent' as const} : readJsonMeta<CloseSessionMeta>(this._data.subarray(4), validateCloseSessionMeta);
+        if(metadata.kind === 'invalid') return metadata;
+        const value = metadata.kind === 'valid' ? metadata.value : undefined;
+        const prefix = this._data.readUInt32BE(0);
+        if(value && Object.prototype.hasOwnProperty.call(value, 'waitReceiveLength')) {
+            if(!allowLargeCount || prefix !== 0xffffffff) return {kind: 'invalid', reason: 'CloseSession extension not negotiated or marker invalid'};
+            return {kind: 'valid', value: {count: value.waitReceiveLength!, handlerID: value.handlerID}};
+        }
+        return {kind: 'valid', value: {count: prefix, handlerID: value?.handlerID}};
     }
 
 

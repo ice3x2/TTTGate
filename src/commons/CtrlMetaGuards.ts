@@ -105,6 +105,15 @@ export function assertHandlerWideIdMeta(obj: unknown): asserts obj is HandlerWid
     if(reason) throw new Error(reason);
 }
 
+export function validateCloseSessionMeta(obj: unknown): string | undefined {
+    const reason = validateHandlerWideIdMeta(obj);
+    if(reason) return reason;
+    const value = obj as Record<string, unknown>;
+    if(Object.prototype.hasOwnProperty.call(value, 'waitReceiveLength') &&
+        (typeof value.waitReceiveLength !== 'number' || !Number.isSafeInteger(value.waitReceiveLength) || value.waitReceiveLength <= 0xffffffff))
+        return 'CloseSession count invalid';
+}
+
 export function assertAckCtrlV2Meta(obj: unknown): asserts obj is AckCtrlV2Meta {
     if(!isPlainObject(obj)) throw new Error("AckCtrlV2Meta: not object");
     if(!isUInt(obj.protocolVersion, 65535)) throw new Error("AckCtrlV2Meta.protocolVersion invalid");
