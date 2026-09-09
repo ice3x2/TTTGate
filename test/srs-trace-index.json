@@ -178,6 +178,59 @@
       ]
     },
     {
+      "testPath": "test/component/client/TlsVerification.test.ts",
+      "exactTitle": "TLS verification defaults rejects untrusted native TLS establishment and leaves the same peer usable",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-SEC-TLS-CLIENT-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-SEC-TLS-CLIENT-001::c1"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/client/client-owner.test.ts",
+      "exactTitle": "stop cancels the creating scheduler and ignores its saved callback after real deadline",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "FR-CLI-START-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "FR-CLI-START-001::c4"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "FR-CLI-RECONNECT-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "FR-CLI-RECONNECT-001::c4"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/client/endpoint-graceful-drain.test.ts",
+      "exactTitle": "endpoint native EOF during explicit unsatisfied close wait remains abort once",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "MODE-ENDPOINT-CLOSE-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "MODE-ENDPOINT-CLOSE-001::c1"
+          ]
+        }
+      ]
+    },
+    {
       "testPath": "test/component/http-directions.test.ts",
       "exactTitle": "upgraded connection forwards binary bytes in both directions without HTTP parsing",
       "parameters": [],
@@ -226,6 +279,46 @@
       ]
     },
     {
+      "testPath": "test/component/invalid-config.test.ts",
+      "exactTitle": "owned child handles reset-start configuration without implicit reset",
+      "parameters": [
+        "reset-start"
+      ],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "FR-SRV-START-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "FR-SRV-START-001::c4",
+            "FR-SRV-START-001::c5",
+            "FR-SRV-START-001::c6",
+            "FR-SRV-START-001::c7"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/invalid-config.test.ts",
+      "exactTitle": "owned child handles valid-start configuration without implicit reset",
+      "parameters": [
+        "valid-start"
+      ],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "FR-SRV-START-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "FR-SRV-START-001::c4",
+            "FR-SRV-START-001::c5",
+            "FR-SRV-START-001::c6",
+            "FR-SRV-START-001::c7"
+          ]
+        }
+      ]
+    },
+    {
       "testPath": "test/component/sentinel-exit.test.ts",
       "exactTitle": "a present application remains monitored for a second real polling interval",
       "parameters": [],
@@ -236,6 +329,29 @@
           "state": "candidate",
           "assertedClauseRefs": [
             "CONSTR-CLI-SRV-DAEMON-001::c2"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/sentinel-exit.test.ts",
+      "exactTitle": "lookup failure exits the sentinel child with status 1 without sending signals",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "IF-SENTINEL-WATCH-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "IF-SENTINEL-WATCH-001::c4"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "ASM-SRV-SENTINEL-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "ASM-SRV-SENTINEL-001::c3"
           ]
         }
       ]
@@ -308,6 +424,17 @@
           "assertedClauseRefs": [
             "BR-AUTH-V2-001::c5"
           ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "IF-CLIENT-STATUS-SRV-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "IF-CLIENT-STATUS-SRV-001::field-clientId",
+            "IF-CLIENT-STATUS-SRV-001::field-name",
+            "IF-CLIENT-STATUS-SRV-001::field-protocolVersion",
+            "IF-CLIENT-STATUS-SRV-001::field-legacy"
+          ]
         }
       ]
     },
@@ -338,6 +465,14 @@
           "state": "candidate",
           "assertedClauseRefs": [
             "BR-AUTH-LEGACY-001::c2"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "GLOSS-LEGACY-FALLBACK-SRV-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "GLOSS-LEGACY-FALLBACK-SRV-001::c2"
           ]
         }
       ]
@@ -390,6 +525,21 @@
     },
     {
       "testPath": "test/component/server/admin/AdminServer.security.test.ts",
+      "exactTitle": "AdminServer security hardening rejects insecure admin option updates without explicit legacy allowances",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "VER-ADMIN-UPDATE-POLICY-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "VER-ADMIN-UPDATE-POLICY-001::c1"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/server/admin/AdminServer.security.test.ts",
       "exactTitle": "AdminServer security hardening rejects traversal requests and does not fall back unknown api paths to static files",
       "parameters": [],
       "links": [
@@ -400,6 +550,45 @@
           "assertedClauseRefs": [
             "API-ADMIN-WEB-ASSET-001::c1",
             "API-ADMIN-WEB-ASSET-001::c2"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-SEC-PATH-TRAVERSAL-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-SEC-PATH-TRAVERSAL-001::c1"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/server/admin/AdminServer.test.ts",
+      "exactTitle": "AdminServer baseline behavior serves index.html from the configured web root",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "FR-SRV-ADMIN-LISTEN-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "FR-SRV-ADMIN-LISTEN-001::c1"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/component/server/admin/certificate-paths.test.ts",
+      "exactTitle": "valid Unicode and dot basenames write exact PEM bytes with an empty optional CA",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "FR-SRV-CERT-COMMIT-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "FR-SRV-CERT-COMMIT-001::c4",
+            "FR-SRV-CERT-COMMIT-001::c5"
           ]
         }
       ]
@@ -528,6 +717,63 @@
       ]
     },
     {
+      "testPath": "test/component/socket-log-persistence.test.ts",
+      "exactTitle": "real socket timeout and bind failure persist with production logging and ignored stdio",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "IF-LOGGER-CFG-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "IF-LOGGER-CFG-001::c1",
+            "IF-LOGGER-CFG-001::c3"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/e2e/tunnel/large-transfer-cache.test.ts",
+      "exactTitle": "32MiB actual tunnel roundtrip spills and reads owned cache in both directions then recovers",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-PERF-MEMBUF-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-PERF-MEMBUF-001::c1",
+            "NFR-PERF-MEMBUF-001::c5"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "FR-FILECACHE-SPILL-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "FR-FILECACHE-SPILL-001::c1"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/security/req-02-tls-settings.test.ts",
+      "exactTitle": "REQ-02 TlsOptionsFactory server TLS hardening (d) secureProtocol 부재 + honorCipherOrder + ECDHE-AEAD ciphers 화이트리스트",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "BR-TLS-SERVER-MIN-VERSION-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "BR-TLS-SERVER-MIN-VERSION-001::c1",
+            "BR-TLS-SERVER-MIN-VERSION-001::c2",
+            "BR-TLS-SERVER-MIN-VERSION-001::c3"
+          ]
+        }
+      ]
+    },
+    {
       "testPath": "test/security/req-03-server-option-hash.test.ts",
       "exactTitle": "REQ-03 /api/serverOptionHash auth + CORS + cloneDeep (++) Origin 포트가 다르면 CORS 허용 아님 (hostname 만 일치하는 우회 차단)",
       "parameters": [],
@@ -615,6 +861,115 @@
             "API-ADMIN-CSRF-TOKEN-001::c1",
             "API-ADMIN-CSRF-TOKEN-001::c2",
             "API-ADMIN-CSRF-TOKEN-001::c3"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/Environment.version.test.ts",
+      "exactTitle": "Environment version metadata uses the package version as the runtime version name",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "CONSTR-ENV-BUILD-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "CONSTR-ENV-BUILD-001::c3"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/client/req-02-insecure-tls-yaml.test.ts",
+      "exactTitle": "REQ-02 allowInsecureTls/allowLegacyFallback YAML gate (1) -save 시 insecure 필드가 YAML에 기록되지 않는다",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "BR-CLI-INSECURE-YAML-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "BR-CLI-INSECURE-YAML-001::c5",
+            "BR-CLI-INSECURE-YAML-001::c6"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-SEC-TLS-CLIENT-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-SEC-TLS-CLIENT-001::c3"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/client/req-02-insecure-tls-yaml.test.ts",
+      "exactTitle": "REQ-02 allowInsecureTls/allowLegacyFallback YAML gate (2) insecure 필드를 가진 YAML 로드 시 --yes-insecure 없으면 exit 78",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "BR-CLI-INSECURE-YAML-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "BR-CLI-INSECURE-YAML-001::c1",
+            "BR-CLI-INSECURE-YAML-001::c3"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "CONSTR-CLI-EXIT78-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "CONSTR-CLI-EXIT78-001::c1"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/client/req-02-insecure-tls-yaml.test.ts",
+      "exactTitle": "REQ-02 allowInsecureTls/allowLegacyFallback YAML gate (3) --yes-insecure 플래그가 있으면 insecure YAML 로드 허용",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "BR-CLI-INSECURE-YAML-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "BR-CLI-INSECURE-YAML-001::c4"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/client/req-15-option-range.test.ts",
+      "exactTitle": "REQ-15 normalizationClientOption range validation (1) port=-1 → 기본값 폴백 + warn",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "CONSTR-CLI-OPT-RANGE-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "CONSTR-CLI-OPT-RANGE-001::c1",
+            "CONSTR-CLI-OPT-RANGE-001::c2"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/client/req-15-option-range.test.ts",
+      "exactTitle": "REQ-15 normalizationClientOption range validation (4) globalMemCacheLimit=8 (<16) → 128 폴백 + warn / -1 sentinel은 허용",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "CONSTR-CLI-OPT-RANGE-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "CONSTR-CLI-OPT-RANGE-001::c7"
           ]
         }
       ]
@@ -766,6 +1121,14 @@
           "assertedClauseRefs": [
             "BR-CONFIG-COMMIT-001::c2"
           ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "GLOSS-PENDING-RESTART-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "GLOSS-PENDING-RESTART-001::c2"
+          ]
         }
       ]
     },
@@ -788,6 +1151,14 @@
             "DATA-CFG-SRV-001::c14",
             "DATA-CFG-SRV-001::c16",
             "DATA-CFG-SRV-001::c18"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "CONSTR-ADMIN-DEFAULTS-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "CONSTR-ADMIN-DEFAULTS-001::c1"
           ]
         }
       ]
@@ -900,6 +1271,16 @@
             "BR-ADMIN-LOGIN-001::c2",
             "BR-ADMIN-LOGIN-001::c3"
           ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "FR-SRV-BOOTSTRAP-GEN-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "FR-SRV-BOOTSTRAP-GEN-001::c1",
+            "FR-SRV-BOOTSTRAP-GEN-001::c3",
+            "FR-SRV-BOOTSTRAP-GEN-001::c5"
+          ]
         }
       ]
     },
@@ -1011,6 +1392,21 @@
       ]
     },
     {
+      "testPath": "test/unit/server/admin/req-19-listen-listeners.test.ts",
+      "exactTitle": "REQ-19 AdminServer listen listener accumulation prevention (1)(2)(3) 반복 listen / close 후에도 error 리스너 <= 1 유지, 영구 핸들러 identity 보존",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-MAINT-LISTENER-PRESERVE-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-MAINT-LISTENER-PRESERVE-001::c1"
+          ]
+        }
+      ]
+    },
+    {
       "testPath": "test/unit/server/req-04-constant-time-compare.test.ts",
       "exactTitle": "REQ-04 상수시간 비교 전환 (b) IdentityRegistry.consumeBindingToken — clientId 상수시간, 의미론 보존",
       "parameters": [],
@@ -1021,6 +1417,15 @@
           "state": "candidate",
           "assertedClauseRefs": [
             "NFR-AVAIL-BINDING-TTL-001::c4"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "FR-SRV-BINDING-TOKEN-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "FR-SRV-BINDING-TOKEN-001::c4",
+            "FR-SRV-BINDING-TOKEN-001::c5"
           ]
         }
       ]
@@ -1051,6 +1456,198 @@
           "state": "candidate",
           "assertedClauseRefs": [
             "CONSTR-CLI-MODE-001::c1"
+          ]
+        },
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "DATA-CLI-PARSED-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "DATA-CLI-PARSED-001::c1",
+            "DATA-CLI-PARSED-001::c2"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/util/QueueLimiter.test.ts",
+      "exactTitle": "QueueLimiter baseline seam can be overridden by tests without touching SocketHandler",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "IF-QUEUE-LIMITER-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "IF-QUEUE-LIMITER-001::c2"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/util/QueueLimiter.test.ts",
+      "exactTitle": "QueueLimiter baseline seam keeps the current spill-to-file decision contract",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "IF-QUEUE-LIMITER-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "IF-QUEUE-LIMITER-001::c1"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/util/log-retention.test.ts",
+      "exactTitle": "history two removes expired logs and preserves recent and unrelated files",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-MAINT-LOG-ROTATION-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-MAINT-LOG-ROTATION-001::c3"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/util/req-01-clockrng-secure.test.ts",
+      "exactTitle": "REQ-01 ClockRng.secureRandomBytes configure: 필수 메서드가 없으면 TypeError",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "FR-CLOCK-RNG-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "FR-CLOCK-RNG-001::c5"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/util/req-01-clockrng-secure.test.ts",
+      "exactTitle": "REQ-01 ClockRng.secureRandomBytes 입력 검증: n > 1024 면 RangeError (이벤트 루프 블록 방지)",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "CONSTR-SECURE-RANDOM-MAX-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "CONSTR-SECURE-RANDOM-MAX-001::c1",
+            "CONSTR-SECURE-RANDOM-MAX-001::c2"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/unit/util/req-04-timing-safe-string-equal.test.ts",
+      "exactTitle": "REQ-04 timingSafeStringEqual case7b — expectedLength 0/음수/비정수는 RangeError (조용한 폴백 금지)",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "FR-TIMING-SAFE-EQ-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "FR-TIMING-SAFE-EQ-001::c5"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/util/r2-req-05-errors-redact.test.ts",
+      "exactTitle": "R2-REQ-05 Errors.toString redactSecrets 통합 authKey=... 원본 미노출",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-SEC-REDACT-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-SEC-REDACT-001::c2"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/util/r2-req-05-errors-redact.test.ts",
+      "exactTitle": "R2-REQ-05 Errors.toString redactSecrets 통합 redactSecretString 함수 단독 동작",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "FR-SECRET-REDACTOR-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "FR-SECRET-REDACTOR-001::c12"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/util/r2-req-05-errors-redact.test.ts",
+      "exactTitle": "R2-REQ-05 Errors.toString redactSecrets 통합 serialize() 전 필드 redact",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-SEC-REDACT-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-SEC-REDACT-001::c3"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/util/r2-req-06-resource-policy-strict.test.ts",
+      "exactTitle": "R2-REQ-06 ResourcePolicy strict mode (a) 기본 모드: 잘못된 ratio 값 WARN + clamp",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "NFR-PERF-WATERMARK-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "NFR-PERF-WATERMARK-001::c3"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/util/r2-req-06-resource-policy-strict.test.ts",
+      "exactTitle": "R2-REQ-06 ResourcePolicy strict mode (b) strict 모드: 잘못된 ratio → RangeError throw",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "IF-RESOURCE-POLICY-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "IF-RESOURCE-POLICY-001::c2",
+            "IF-RESOURCE-POLICY-001::c4"
+          ]
+        }
+      ]
+    },
+    {
+      "testPath": "test/util/r2-req-06-resource-policy-strict.test.ts",
+      "exactTitle": "R2-REQ-06 ResourcePolicy strict mode (c) RESOURCE_POLICY_STRICT=1 env 경로 (jest.isolateModules)",
+      "parameters": [],
+      "links": [
+        {
+          "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+          "originalId": "IF-RESOURCE-POLICY-001",
+          "state": "candidate",
+          "assertedClauseRefs": [
+            "IF-RESOURCE-POLICY-001::c3",
+            "IF-RESOURCE-POLICY-001::c4"
           ]
         }
       ]

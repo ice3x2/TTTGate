@@ -65,6 +65,15 @@ Exact RED command: `node node_modules/jest/bin/jest.js --runInBand --silent --ru
 
 Approved title: docs: 요구사항 추적 구조와 검증 도구 추가. This entry records reviews only; it changes no source requirement, trace status or execution receipt.
 
+## First 200 candidate mappings published
+
+- [x] Normalize and independently review batches 05–08. Status: the reviewed drafts for original ordinals 101–200 were applied without deleting clauses, candidates, context, gaps or dispositions. The remaining 166 rows stayed deep-equal to the prior canonical matrix. Structural corrections for two historical out-of-scope rows and one lint source anchor passed a separate review.
+- [x] Validate in an owned render root before publication. Status: render and read-only validation both exited 0 in `srs58-render05-08-5jhfqt6s`; 366 rows, 118 candidate links, 166 unchanged rows, zero verified rows and zero runtime evidence. Earlier CLI, schema and pre-copy guard failures remain separate evidence.
+- [x] Publish canonical matrix, generated view and bridge. Status: root replaced only the canonical matrix with reviewed staging data, generated both derived files through the single renderer, then passed read-only validation. Final hashes: matrix `6be85f71b2f8c48917b3cfa6b2f2388ad4e341082e28824a66d52440879a7f8b`, Markdown `07a1f94639d401d953db636e77c6fc25475eafdf11dc7404389266b6d41ec59b`, bridge `fb7ecf2a4edbdbc013494ecdef9fb20f69ea4898445c1d744c921fd7cb8e4f3f`. Pre-publication files are preserved under `srs58-first200-publish-749eaa5e973f47afa23238a8baf553cc`.
+- [ ] Complete semantic traceability for the remaining 166 rows and attach authentic execution evidence. Status: later batches remain drafts. All current rows remain unverified/candidate and no issue-completion claim is made by this publication.
+
+Proposed publication title: `docs: 원본 요구사항 200개의 테스트 추적 연결`.
+
 ## Semantic draft batch02: original positions 26 through 50
 
 - [x] Read-only bounded mapping draft. Status: `epic61-issue-58-draft-batch-02.json` preserves exactly the next25 sidecar records, their full original objects, immutable source hashes and exact Markdown headings. Current source symbols and inspected test assertion excerpts are recorded; sentence/schema/field/status clauses remain unverified, including contextual behavior.

@@ -1,0 +1,2754 @@
+{
+  "artifactKind": "noncanonical-semantic-draft",
+  "batch": "06",
+  "status": "reading and draft complete; independent semantic review pending",
+  "sourceManifest": {
+    "path": "docs/plan/srs/TTTGate.md",
+    "sidecarPath": "docs/plan/srs/TTTGate.items.jsonl",
+    "documentVersion": "1.0",
+    "markdownSha256": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+    "sidecarSha256": "364071a1f67e07501e7277e15ebdac057eb17ae8e6c2e076a3a550d916625657"
+  },
+  "sourceCheckpoint": "1e7595b088528deb8d009fc6b66f24f922ef341a",
+  "inventoryPolicy": {
+    "canonicalRequired": 366,
+    "batchSize": 25,
+    "selected": "Original sidecar positions126..150 inclusive only",
+    "remaining": "Other341 records and all other batches remain outside this draft."
+  },
+  "execution": {
+    "testsRun": false,
+    "validatorRun": false,
+    "buildRun": false,
+    "evidence": []
+  },
+  "rows": [
+    {
+      "originalOrdinal": 126,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "GLOSS-PENDING-RESTART-001"
+      },
+      "category": "glossary",
+      "title": "Pending Restart Scopes",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2647,
+        "exactHeading": "#### GLOSS-PENDING-RESTART-001 — Pending Restart Scopes",
+        "sidecarId": "GLOSS-PENDING-RESTART-001"
+      },
+      "originalRecord": {
+        "id": "GLOSS-PENDING-RESTART-001",
+        "type": "glossary",
+        "title": "Pending Restart Scopes",
+        "description": "설정 변경 후 runtime apply가 불가능한 항목들의 스코프 태그(admin-server/admin-cert). RevisionState.pendingRestartScopes 에 기록되며, markLastKnownGood=false 로 LKG 동결.",
+        "source": [
+          "src/server/TTTServer.ts:177-207",
+          "src/server/RevisionState.ts:9-16"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "설정 변경 후 runtime apply가 불가능한 항목들의 스코프 태그(admin-server/admin-cert). RevisionState.pendingRestartScopes 에 기록되며, markLastKnownGood=false 로 LKG 동결.",
+        "clauses": [
+          {
+            "id": "GLOSS-PENDING-RESTART-001::c1",
+            "sourceRef": "description.segment[0]",
+            "originalText": "설정 변경 후 runtime apply가 불가능한 항목들의 스코프 태그(admin-server/admin-cert).",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "GLOSS-PENDING-RESTART-001::c2",
+            "sourceRef": "description.segment[1]",
+            "originalText": "RevisionState.pendingRestartScopes 에 기록되며, markLastKnownGood=false 로 LKG 동결.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          }
+        ],
+        "segmentationNote": "Exact sentence/arrow-delimited spans retained. Each partial candidate is limited to its actual excerpt; remaining behavior stays a gap."
+      },
+      "applicability": {
+        "kind": "runtime",
+        "rationale": "Behavior-bearing glossary, actor, interface and maintenance clauses are not automatically exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/ServerOptionStore.ts",
+            "symbol": "public prepareServerOptionCommit",
+            "line": 122,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          },
+          {
+            "path": "src/server/RevisionState.ts",
+            "symbol": "pendingRestartScopes",
+            "line": 14,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          }
+        ]
+      },
+      "verification": [
+        {
+          "testPath": "test/unit/server/ServerOptionStore.revision.test.ts",
+          "caseLine": 18,
+          "exactTitle": "ServerOptionStore revision metadata tracks pending restart scopes and rollback metadata separately from last-known-good",
+          "parameters": [],
+          "assertionEvidence": {
+            "startLine": 24,
+            "endLine": 36,
+            "exactSource": "        const commitResult = store.commitPreparedServerOption({\n            ...store.serverOption,\n            adminPort: 9301\n        }, {\n            markLastKnownGood: false,\n            pendingRestartScopes: [\"admin-server\"]\n        });\n\n        expect(commitResult.success).toBe(true);\n        expect(store.revisionState.currentRevision).toBe(2);\n        expect(store.revisionState.lastKnownGoodRevision).toBe(1);\n        expect(store.revisionState.pendingRestartScopes).toEqual([\"admin-server\"]);\n        const committedOption = store.serverOption;"
+          },
+          "scopeLimitation": "markLastKnownGood:false/admin-server pending commit advances current2 while keeping LKG1. Not actual restart or every scope.",
+          "technique": "actual-filesystem-store-candidate",
+          "state": "candidate",
+          "evidence": [],
+          "assertedClauseRefs": [
+            "GLOSS-PENDING-RESTART-001::c2"
+          ]
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "legacyAliasGap": "No bare REQ label is joined. A legacy alias needs original document scope and pinned byte/version identity; raw CRLF-sensitive hashes are not silently reused.",
+      "status": "unverified",
+      "evidence": [],
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "gaps": [
+        {
+          "clauseRef": "GLOSS-PENDING-RESTART-001::c1",
+          "reason": "Real store pending/LKG assertions are narrower than every runtime-unappliable scope or actual restart execution. Original glossary is behavior-bearing, not exempt. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "GLOSS-PENDING-RESTART-001::c2",
+          "reason": "Real store pending/LKG assertions are narrower than every runtime-unappliable scope or actual restart execution. Original glossary is behavior-bearing, not exempt. Exact runtime receipts remain absent."
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 127,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "OOS-AGENT1-CLIENT-001"
+      },
+      "category": "out_of_scope",
+      "title": "클라이언트 런타임 (범위 제외)",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3587,
+        "exactHeading": "#### OOS-AGENT1-CLIENT-001 — 클라이언트 런타임 (범위 제외)",
+        "sidecarId": "OOS-AGENT1-CLIENT-001"
+      },
+      "originalRecord": {
+        "id": "OOS-AGENT1-CLIENT-001",
+        "type": "out_of_scope",
+        "title": "클라이언트 런타임 (범위 제외)",
+        "description": "app.ts client 모드의 ClientApp.start, src/client/** 의 TunnelClient/EndPointClientPool 등은 Agent 2 범위. 본 추출은 제외.",
+        "source": [
+          "src/app.ts:35-38"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "app.ts client 모드의 ClientApp.start, src/client/** 의 TunnelClient/EndPointClientPool 등은 Agent 2 범위. 본 추출은 제외.",
+        "clauses": [
+          {
+            "id": "OOS-AGENT1-CLIENT-001::c1",
+            "sourceRef": "description.segment[0]",
+            "originalText": "app.ts client 모드의 ClientApp.start, src/client/** 의 TunnelClient/EndPointClientPool 등은 Agent 2 범위.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "OOS-AGENT1-CLIENT-001::c2",
+            "sourceRef": "description.segment[1]",
+            "originalText": "본 추출은 제외.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          }
+        ],
+        "segmentationNote": "Exact sentence/arrow-delimited spans retained. Each partial candidate is limited to its actual excerpt; remaining behavior stays a gap."
+      },
+      "applicability": {
+        "kind": "contextual",
+        "rationale": "Historical extraction ownership boundary only: excludes ClientApp/src/client from Agent1 extraction, not from the complete366-record SRS or current product tests. The referenced client startup is context, not proof of runtime correctness."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/app.ts",
+            "symbol": "ClientApp.start(parsedCli.options)",
+            "line": 37,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "legacyAliasGap": "No bare REQ label is joined. A legacy alias needs original document scope and pinned byte/version identity; raw CRLF-sensitive hashes are not silently reused.",
+      "status": "unverified",
+      "evidence": [],
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "gaps": [
+        {
+          "clauseRef": "OOS-AGENT1-CLIENT-001::c1",
+          "reason": "Historical extraction ownership boundary only: excludes ClientApp/src/client from Agent1 extraction, not from the complete366-record SRS or current product tests. The referenced client startup is context, not proof of runtime correctness. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "OOS-AGENT1-CLIENT-001::c2",
+          "reason": "Historical extraction ownership boundary only: excludes ClientApp/src/client from Agent1 extraction, not from the complete366-record SRS or current product tests. The referenced client startup is context, not proof of runtime correctness. Exact runtime receipts remain absent."
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 128,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "OOS-AGENT1-SPA-001"
+      },
+      "category": "out_of_scope",
+      "title": "Admin SPA (범위 제외)",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3603,
+        "exactHeading": "#### OOS-AGENT1-SPA-001 — Admin SPA (범위 제외)",
+        "sidecarId": "OOS-AGENT1-SPA-001"
+      },
+      "originalRecord": {
+        "id": "OOS-AGENT1-SPA-001",
+        "type": "out_of_scope",
+        "title": "Admin SPA (범위 제외)",
+        "description": "admin/ 하위 Svelte UI 는 Agent 3 범위. 본 추출은 서버 AdminServer 만 커버.",
+        "source": [
+          "src/server/admin/AdminServer.ts:294-340"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "admin/ 하위 Svelte UI 는 Agent 3 범위. 본 추출은 서버 AdminServer 만 커버.",
+        "clauses": [
+          {
+            "id": "OOS-AGENT1-SPA-001::c1",
+            "sourceRef": "description.segment[0]",
+            "originalText": "admin/ 하위 Svelte UI 는 Agent 3 범위.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "OOS-AGENT1-SPA-001::c2",
+            "sourceRef": "description.segment[1]",
+            "originalText": "본 추출은 서버 AdminServer 만 커버.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          }
+        ],
+        "segmentationNote": "Exact sentence/arrow-delimited spans retained. Each partial candidate is limited to its actual excerpt; remaining behavior stays a gap."
+      },
+      "applicability": {
+        "kind": "contextual",
+        "rationale": "Historical extraction ownership boundary only: Agent3 owns SPA descriptions, while Agent1 covers server AdminServer. It does not remove SPA behavior from the complete SRS; no UI/runtime verification claimed."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/admin/AdminServer.ts",
+            "symbol": "private onGetWebResource",
+            "line": 301,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "legacyAliasGap": "No bare REQ label is joined. A legacy alias needs original document scope and pinned byte/version identity; raw CRLF-sensitive hashes are not silently reused.",
+      "status": "unverified",
+      "evidence": [],
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "gaps": [
+        {
+          "clauseRef": "OOS-AGENT1-SPA-001::c1",
+          "reason": "Historical extraction ownership boundary only: Agent3 owns SPA descriptions, while Agent1 covers server AdminServer. It does not remove SPA behavior from the complete SRS; no UI/runtime verification claimed. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "OOS-AGENT1-SPA-001::c2",
+          "reason": "Historical extraction ownership boundary only: Agent3 owns SPA descriptions, while Agent1 covers server AdminServer. It does not remove SPA behavior from the complete SRS; no UI/runtime verification claimed. Exact runtime receipts remain absent."
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 129,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "UC-SRV-CONFIG-UPDATE-001"
+      },
+      "category": "use_case",
+      "title": "관리자가 서버 옵션을 갱신한다",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2859,
+        "exactHeading": "#### UC-SRV-CONFIG-UPDATE-001 — 관리자가 서버 옵션을 갱신한다",
+        "sidecarId": "UC-SRV-CONFIG-UPDATE-001"
+      },
+      "originalRecord": {
+        "id": "UC-SRV-CONFIG-UPDATE-001",
+        "type": "use_case",
+        "title": "관리자가 서버 옵션을 갱신한다",
+        "description": "1) 관리자 로그인 → 2) GET /api/serverOption 으로 현재 값 조회 → 3) 수정 후 POST /api/serverOption → 4) 서버가 검증/정책평가/포트체크/runtime apply → 5) commit + revision 반환. 실패 시 이전 구성으로 롤백.",
+        "source": [
+          "src/server/admin/AdminServer.ts:406-535",
+          "src/server/TTTServer.ts:177-241"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "BR-CONFIG-COMMIT-001",
+          "BR-CONFIG-ROLLBACK-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "1) 관리자 로그인 → 2) GET /api/serverOption 으로 현재 값 조회 → 3) 수정 후 POST /api/serverOption → 4) 서버가 검증/정책평가/포트체크/runtime apply → 5) commit + revision 반환. 실패 시 이전 구성으로 롤백.",
+        "clauses": [
+          {
+            "id": "UC-SRV-CONFIG-UPDATE-001::c1",
+            "sourceRef": "description.segment[0]",
+            "originalText": "1) 관리자 로그인 →",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-SRV-CONFIG-UPDATE-001::c2",
+            "sourceRef": "description.segment[1]",
+            "originalText": "2) GET /api/serverOption 으로 현재 값 조회 →",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-SRV-CONFIG-UPDATE-001::c3",
+            "sourceRef": "description.segment[2]",
+            "originalText": "3) 수정 후 POST /api/serverOption →",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-SRV-CONFIG-UPDATE-001::c4",
+            "sourceRef": "description.segment[3]",
+            "originalText": "4) 서버가 검증/정책평가/포트체크/runtime apply →",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-SRV-CONFIG-UPDATE-001::c5",
+            "sourceRef": "description.segment[4]",
+            "originalText": "5) commit + revision 반환.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-SRV-CONFIG-UPDATE-001::c6",
+            "sourceRef": "description.segment[5]",
+            "originalText": "실패 시 이전 구성으로 롤백.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          }
+        ],
+        "segmentationNote": "Exact sentence/arrow-delimited spans retained. Each partial candidate is limited to its actual excerpt; remaining behavior stays a gap."
+      },
+      "applicability": {
+        "kind": "runtime",
+        "rationale": "Behavior-bearing glossary, actor, interface and maintenance clauses are not automatically exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/admin/AdminServer.ts",
+            "symbol": "private onUpdateServerOption",
+            "line": 456,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          },
+          {
+            "path": "src/server/admin/AdminServer.ts",
+            "symbol": "private async restoreConfigurationBaseline",
+            "line": 430,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [
+        {
+          "testPath": "test/component/server/admin/configuration-rollback.test.ts",
+          "reason": "Approved35 baseline recovery behavior differs from the original apply-before-commit use case; context only."
+        }
+      ],
+      "legacyAliases": [],
+      "legacyAliasGap": "No bare REQ label is joined. A legacy alias needs original document scope and pinned byte/version identity; raw CRLF-sensitive hashes are not silently reused.",
+      "status": "unverified",
+      "evidence": [],
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "gaps": [
+        {
+          "clauseRef": "UC-SRV-CONFIG-UPDATE-001::c1",
+          "reason": "Historical use case orders runtime apply before commit; approved35 publishes committed files before runtime and restores the failure-before pending-committed/scope-LKG tuple. Snapshot revision admission also follows34. Whole historical sequence is not linked to tests of the changed workflow. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "UC-SRV-CONFIG-UPDATE-001::c2",
+          "reason": "Historical use case orders runtime apply before commit; approved35 publishes committed files before runtime and restores the failure-before pending-committed/scope-LKG tuple. Snapshot revision admission also follows34. Whole historical sequence is not linked to tests of the changed workflow. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "UC-SRV-CONFIG-UPDATE-001::c3",
+          "reason": "Historical use case orders runtime apply before commit; approved35 publishes committed files before runtime and restores the failure-before pending-committed/scope-LKG tuple. Snapshot revision admission also follows34. Whole historical sequence is not linked to tests of the changed workflow. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "UC-SRV-CONFIG-UPDATE-001::c4",
+          "reason": "Historical use case orders runtime apply before commit; approved35 publishes committed files before runtime and restores the failure-before pending-committed/scope-LKG tuple. Snapshot revision admission also follows34. Whole historical sequence is not linked to tests of the changed workflow. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "UC-SRV-CONFIG-UPDATE-001::c5",
+          "reason": "Historical use case orders runtime apply before commit; approved35 publishes committed files before runtime and restores the failure-before pending-committed/scope-LKG tuple. Snapshot revision admission also follows34. Whole historical sequence is not linked to tests of the changed workflow. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "UC-SRV-CONFIG-UPDATE-001::c6",
+          "reason": "Historical use case orders runtime apply before commit; approved35 publishes committed files before runtime and restores the failure-before pending-committed/scope-LKG tuple. Snapshot revision admission also follows34. Whole historical sequence is not linked to tests of the changed workflow. Exact runtime receipts remain absent."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "approvedImplementationDecisions": [
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/34",
+            "ledger": "docs/plan/verification/epic61-issue-34.md"
+          },
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/35",
+            "ledger": "docs/plan/verification/epic61-issue-35.md"
+          }
+        ],
+        "note": "Changed implementation is context, not verification of a differing original clause."
+      }
+    },
+    {
+      "originalOrdinal": 130,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "UC-SRV-CLIENT-HANDSHAKE-001"
+      },
+      "category": "use_case",
+      "title": "클라이언트가 v2 프로토콜로 접속한다",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2849,
+        "exactHeading": "#### UC-SRV-CLIENT-HANDSHAKE-001 — 클라이언트가 v2 프로토콜로 접속한다",
+        "sidecarId": "UC-SRV-CLIENT-HANDSHAKE-001"
+      },
+      "originalRecord": {
+        "id": "UC-SRV-CLIENT-HANDSHAKE-001",
+        "type": "use_case",
+        "title": "클라이언트가 v2 프로토콜로 접속한다",
+        "description": "1) 클라이언트 TCP 연결 → 2) 'C' 디스크리미네이터로 Control 판정 → 3) 클라이언트가 SyncCtrl 송신 → 4) 서버 SyncCtrlAck(nonce, capabilities) 회신 → 5) 클라이언트 AckCtrl(v2 meta, proof) → 6) 서버 trustedClients + HMAC 검증 → 7) promoteToCtrlHandler + ClientHandlerPool 생성.",
+        "source": [
+          "src/server/TunnelServer.ts:418-694"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "BR-AUTH-V2-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "1) 클라이언트 TCP 연결 → 2) 'C' 디스크리미네이터로 Control 판정 → 3) 클라이언트가 SyncCtrl 송신 → 4) 서버 SyncCtrlAck(nonce, capabilities) 회신 → 5) 클라이언트 AckCtrl(v2 meta, proof) → 6) 서버 trustedClients + HMAC 검증 → 7) promoteToCtrlHandler + ClientHandlerPool 생성.",
+        "clauses": [
+          {
+            "id": "UC-SRV-CLIENT-HANDSHAKE-001::c1",
+            "sourceRef": "description.segment[0]",
+            "originalText": "1) 클라이언트 TCP 연결 →",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-SRV-CLIENT-HANDSHAKE-001::c2",
+            "sourceRef": "description.segment[1]",
+            "originalText": "2) 'C' 디스크리미네이터로 Control 판정 →",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-SRV-CLIENT-HANDSHAKE-001::c3",
+            "sourceRef": "description.segment[2]",
+            "originalText": "3) 클라이언트가 SyncCtrl 송신 →",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-SRV-CLIENT-HANDSHAKE-001::c4",
+            "sourceRef": "description.segment[3]",
+            "originalText": "4) 서버 SyncCtrlAck(nonce, capabilities) 회신 →",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-SRV-CLIENT-HANDSHAKE-001::c5",
+            "sourceRef": "description.segment[4]",
+            "originalText": "5) 클라이언트 AckCtrl(v2 meta, proof) →",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-SRV-CLIENT-HANDSHAKE-001::c6",
+            "sourceRef": "description.segment[5]",
+            "originalText": "6) 서버 trustedClients + HMAC 검증 →",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-SRV-CLIENT-HANDSHAKE-001::c7",
+            "sourceRef": "description.segment[6]",
+            "originalText": "7) promoteToCtrlHandler + ClientHandlerPool 생성.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          }
+        ],
+        "segmentationNote": "Exact sentence/arrow-delimited spans retained. Each partial candidate is limited to its actual excerpt; remaining behavior stays a gap."
+      },
+      "applicability": {
+        "kind": "runtime",
+        "rationale": "Behavior-bearing glossary, actor, interface and maintenance clauses are not automatically exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/TunnelServer.ts",
+            "symbol": "private onReceiveAllHandler",
+            "line": 459,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          },
+          {
+            "path": "src/server/TunnelServer.ts",
+            "symbol": "private onReceiveCtrlPacket",
+            "line": 668,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [
+        {
+          "testPath": "test/component/server/ProtocolV2.test.ts",
+          "caseLine": 147,
+          "exactTitle": "protocol v2 control plane registers an authenticated v2 client identity",
+          "reason": "Native authenticated registration is asserted, but not exact promoteToCtrlHandler invocation or pool creation and every packet-order step. Therefore context only for this use-case sequence."
+        }
+      ],
+      "legacyAliases": [],
+      "legacyAliasGap": "No bare REQ label is joined. A legacy alias needs original document scope and pinned byte/version identity; raw CRLF-sensitive hashes are not silently reused.",
+      "status": "unverified",
+      "evidence": [],
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "gaps": [
+        {
+          "clauseRef": "UC-SRV-CLIENT-HANDSHAKE-001::c1",
+          "reason": "Native positive test observes an authenticated v2 registration, not every intermediate C discriminator/state, challenge capability content, HMAC algorithm or pool allocation assertion. Registration is context only for the original internal-step sequence. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "UC-SRV-CLIENT-HANDSHAKE-001::c2",
+          "reason": "Native positive test observes an authenticated v2 registration, not every intermediate C discriminator/state, challenge capability content, HMAC algorithm or pool allocation assertion. Registration is context only for the original internal-step sequence. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "UC-SRV-CLIENT-HANDSHAKE-001::c3",
+          "reason": "Native positive test observes an authenticated v2 registration, not every intermediate C discriminator/state, challenge capability content, HMAC algorithm or pool allocation assertion. Registration is context only for the original internal-step sequence. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "UC-SRV-CLIENT-HANDSHAKE-001::c4",
+          "reason": "Native positive test observes an authenticated v2 registration, not every intermediate C discriminator/state, challenge capability content, HMAC algorithm or pool allocation assertion. Registration is context only for the original internal-step sequence. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "UC-SRV-CLIENT-HANDSHAKE-001::c5",
+          "reason": "Native positive test observes an authenticated v2 registration, not every intermediate C discriminator/state, challenge capability content, HMAC algorithm or pool allocation assertion. Registration is context only for the original internal-step sequence. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "UC-SRV-CLIENT-HANDSHAKE-001::c6",
+          "reason": "Native positive test observes an authenticated v2 registration, not every intermediate C discriminator/state, challenge capability content, HMAC algorithm or pool allocation assertion. Registration is context only for the original internal-step sequence. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "UC-SRV-CLIENT-HANDSHAKE-001::c7",
+          "reason": "Native positive test observes an authenticated v2 registration, not every intermediate C discriminator/state, challenge capability content, HMAC algorithm or pool allocation assertion. Registration is context only for the original internal-step sequence. Exact runtime receipts remain absent."
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 131,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "UC-SRV-EXT-SESSION-OPEN-001"
+      },
+      "category": "use_case",
+      "title": "외부 사용자 세션이 열린다",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2869,
+        "exactHeading": "#### UC-SRV-EXT-SESSION-OPEN-001 — 외부 사용자 세션이 열린다",
+        "sidecarId": "UC-SRV-EXT-SESSION-OPEN-001"
+      },
+      "originalRecord": {
+        "id": "UC-SRV-EXT-SESSION-OPEN-001",
+        "type": "use_case",
+        "title": "외부 사용자 세션이 열린다",
+        "description": "1) 외부 포트에서 TCP 수락 → 2) TTTServer.onNewSession → 3) allowedClientIds/Names 기반 pool 선택 → 4) markSessionActivity + sendConnectEndPoint(OpenSession 패킷) → 5) 클라이언트가 NewDataHandler + DataStatePacket 으로 데이터 채널 연결.",
+        "source": [
+          "src/server/TTTServer.ts:111-121",
+          "src/server/TunnelServer.ts:323-336"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "1) 외부 포트에서 TCP 수락 → 2) TTTServer.onNewSession → 3) allowedClientIds/Names 기반 pool 선택 → 4) markSessionActivity + sendConnectEndPoint(OpenSession 패킷) → 5) 클라이언트가 NewDataHandler + DataStatePacket 으로 데이터 채널 연결.",
+        "clauses": [
+          {
+            "id": "UC-SRV-EXT-SESSION-OPEN-001::c1",
+            "sourceRef": "description.segment[0]",
+            "originalText": "1) 외부 포트에서 TCP 수락 →",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-SRV-EXT-SESSION-OPEN-001::c2",
+            "sourceRef": "description.segment[1]",
+            "originalText": "2) TTTServer.onNewSession →",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-SRV-EXT-SESSION-OPEN-001::c3",
+            "sourceRef": "description.segment[2]",
+            "originalText": "3) allowedClientIds/Names 기반 pool 선택 →",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-SRV-EXT-SESSION-OPEN-001::c4",
+            "sourceRef": "description.segment[3]",
+            "originalText": "4) markSessionActivity + sendConnectEndPoint(OpenSession 패킷) →",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-SRV-EXT-SESSION-OPEN-001::c5",
+            "sourceRef": "description.segment[4]",
+            "originalText": "5) 클라이언트가 NewDataHandler + DataStatePacket 으로 데이터 채널 연결.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          }
+        ],
+        "segmentationNote": "Exact sentence/arrow-delimited spans retained. Each partial candidate is limited to its actual excerpt; remaining behavior stays a gap."
+      },
+      "applicability": {
+        "kind": "runtime",
+        "rationale": "Behavior-bearing glossary, actor, interface and maintenance clauses are not automatically exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/TTTServer.ts",
+            "symbol": "private onNewSession",
+            "line": 123,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          },
+          {
+            "path": "src/server/TunnelServer.ts",
+            "symbol": "handlerPool.sendConnectEndPoint(sessionID, opt)",
+            "line": 331,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "legacyAliasGap": "No bare REQ label is joined. A legacy alias needs original document scope and pinned byte/version identity; raw CRLF-sensitive hashes are not silently reused.",
+      "status": "unverified",
+      "evidence": [],
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "gaps": [
+        {
+          "clauseRef": "UC-SRV-EXT-SESSION-OPEN-001::c1",
+          "reason": "No complete step-specific actual-session assertion linked here. Harness/module presence and setup success are not ACL selection or packet-order proof. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "UC-SRV-EXT-SESSION-OPEN-001::c2",
+          "reason": "No complete step-specific actual-session assertion linked here. Harness/module presence and setup success are not ACL selection or packet-order proof. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "UC-SRV-EXT-SESSION-OPEN-001::c3",
+          "reason": "No complete step-specific actual-session assertion linked here. Harness/module presence and setup success are not ACL selection or packet-order proof. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "UC-SRV-EXT-SESSION-OPEN-001::c4",
+          "reason": "No complete step-specific actual-session assertion linked here. Harness/module presence and setup success are not ACL selection or packet-order proof. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "UC-SRV-EXT-SESSION-OPEN-001::c5",
+          "reason": "No complete step-specific actual-session assertion linked here. Harness/module presence and setup success are not ACL selection or packet-order proof. Exact runtime receipts remain absent."
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 132,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "UC-SRV-SESSION-TTL-001"
+      },
+      "category": "use_case",
+      "title": "비활성 세션이 TTL로 종료된다",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2877,
+        "exactHeading": "#### UC-SRV-SESSION-TTL-001 — 비활성 세션이 TTL로 종료된다",
+        "sidecarId": "UC-SRV-SESSION-TTL-001"
+      },
+      "originalRecord": {
+        "id": "UC-SRV-SESSION-TTL-001",
+        "type": "use_case",
+        "title": "비활성 세션이 TTL로 종료된다",
+        "description": "1) 세션 활동 중 markSessionActivity 로 타임스탬프 갱신 → 2) 5초 간격 enforceSessionTtl 실행 → 3) now-lastActive > TTL 이면 onSessionCloseCallback(0) + pool.sendCloseSession + _sessionIDAndCtrlIDMap 제거.",
+        "source": [
+          "src/server/TunnelServer.ts:181-230"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "1) 세션 활동 중 markSessionActivity 로 타임스탬프 갱신 → 2) 5초 간격 enforceSessionTtl 실행 → 3) now-lastActive > TTL 이면 onSessionCloseCallback(0) + pool.sendCloseSession + _sessionIDAndCtrlIDMap 제거.",
+        "clauses": [
+          {
+            "id": "UC-SRV-SESSION-TTL-001::c1",
+            "sourceRef": "description.segment[0]",
+            "originalText": "1) 세션 활동 중 markSessionActivity 로 타임스탬프 갱신 →",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-SRV-SESSION-TTL-001::c2",
+            "sourceRef": "description.segment[1]",
+            "originalText": "2) 5초 간격 enforceSessionTtl 실행 →",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-SRV-SESSION-TTL-001::c3",
+            "sourceRef": "description.segment[2]",
+            "originalText": "3) now-lastActive > TTL 이면 onSessionCloseCallback(0) + pool.sendCloseSession + _sessionIDAndCtrlIDMap 제거.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          }
+        ],
+        "segmentationNote": "Exact sentence/arrow-delimited spans retained. Each partial candidate is limited to its actual excerpt; remaining behavior stays a gap."
+      },
+      "applicability": {
+        "kind": "runtime",
+        "rationale": "Behavior-bearing glossary, actor, interface and maintenance clauses are not automatically exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/TunnelServer.ts",
+            "symbol": "private markSessionActivity",
+            "line": 229,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          },
+          {
+            "path": "src/server/TunnelServer.ts",
+            "symbol": "private enforceSessionTtl",
+            "line": 196,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          },
+          {
+            "path": "src/server/TunnelServer.ts",
+            "symbol": "private startSessionTtlTimer",
+            "line": 178,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [
+        {
+          "testPath": "test/component/server/session-idle-policy.test.ts",
+          "reason": "Configured short scan/TTL and disable/re-enable are approved18 behavior, not fixed5s-loop verification."
+        }
+      ],
+      "legacyAliases": [],
+      "legacyAliasGap": "No bare REQ label is joined. A legacy alias needs original document scope and pinned byte/version identity; raw CRLF-sensitive hashes are not silently reused.",
+      "status": "unverified",
+      "evidence": [],
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "gaps": [
+        {
+          "clauseRef": "UC-SRV-SESSION-TTL-001::c1",
+          "reason": "Approved18 makes effective scan interval configurable/implicitly adjusted and allows ttl0 disabled; default5s does not imply every runtime uses5s. Tests using1s TTL/short scans are changed-policy context, not proof of original fixed5s sequence. Explicit callback/map/peer-close ordering still needs receipt mapping. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "UC-SRV-SESSION-TTL-001::c2",
+          "reason": "Approved18 makes effective scan interval configurable/implicitly adjusted and allows ttl0 disabled; default5s does not imply every runtime uses5s. Tests using1s TTL/short scans are changed-policy context, not proof of original fixed5s sequence. Explicit callback/map/peer-close ordering still needs receipt mapping. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "UC-SRV-SESSION-TTL-001::c3",
+          "reason": "Approved18 makes effective scan interval configurable/implicitly adjusted and allows ttl0 disabled; default5s does not imply every runtime uses5s. Tests using1s TTL/short scans are changed-policy context, not proof of original fixed5s sequence. Explicit callback/map/peer-close ordering still needs receipt mapping. Exact runtime receipts remain absent."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "approvedImplementationDecisions": [
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/18",
+            "ledger": "docs/plan/verification/epic61-issue-18.md"
+          }
+        ],
+        "note": "Changed implementation is context, not verification of a differing original clause."
+      }
+    },
+    {
+      "originalOrdinal": 133,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "UC-SRV-CERT-ROTATE-001"
+      },
+      "category": "use_case",
+      "title": "Admin 인증서를 롤오버한다",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2839,
+        "exactHeading": "#### UC-SRV-CERT-ROTATE-001 — Admin 인증서를 롤오버한다",
+        "sidecarId": "UC-SRV-CERT-ROTATE-001"
+      },
+      "originalRecord": {
+        "id": "UC-SRV-CERT-ROTATE-001",
+        "type": "use_case",
+        "title": "Admin 인증서를 롤오버한다",
+        "description": "1) POST /api/adminCert {certInfo} → 2) 키페어 검증 → 3) setSecureContext hot-swap 시도 → 4) 성공 시 즉시 적용 + markLastKnownGood, 실패 시 pendingRestartScopes=['admin-cert'] 로 재기동 예약.",
+        "source": [
+          "src/server/admin/AdminServer.ts:342-372"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "related_ids": [
+          "BR-CERT-HOTSWAP-ADMIN-001"
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "1) POST /api/adminCert {certInfo} → 2) 키페어 검증 → 3) setSecureContext hot-swap 시도 → 4) 성공 시 즉시 적용 + markLastKnownGood, 실패 시 pendingRestartScopes=['admin-cert'] 로 재기동 예약.",
+        "clauses": [
+          {
+            "id": "UC-SRV-CERT-ROTATE-001::c1",
+            "sourceRef": "description.segment[0]",
+            "originalText": "1) POST /api/adminCert {certInfo} →",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-SRV-CERT-ROTATE-001::c2",
+            "sourceRef": "description.segment[1]",
+            "originalText": "2) 키페어 검증 →",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-SRV-CERT-ROTATE-001::c3",
+            "sourceRef": "description.segment[2]",
+            "originalText": "3) setSecureContext hot-swap 시도 →",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "UC-SRV-CERT-ROTATE-001::c4",
+            "sourceRef": "description.segment[3]",
+            "originalText": "4) 성공 시 즉시 적용 + markLastKnownGood, 실패 시 pendingRestartScopes=['admin-cert'] 로 재기동 예약.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          }
+        ],
+        "segmentationNote": "Exact sentence/arrow-delimited spans retained. Each partial candidate is limited to its actual excerpt; remaining behavior stays a gap."
+      },
+      "applicability": {
+        "kind": "runtime",
+        "rationale": "Behavior-bearing glossary, actor, interface and maintenance clauses are not automatically exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/admin/AdminServer.ts",
+            "symbol": "private onUpdateAdminCert",
+            "line": 349,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [
+        {
+          "testPath": "test/security/req-08-admin-cert-hotapply.test.ts",
+          "reason": "Direct HTTPS hot-swap fingerprint is not Admin POST restart-on-failure proof."
+        }
+      ],
+      "legacyAliases": [],
+      "legacyAliasGap": "No bare REQ label is joined. A legacy alias needs original document scope and pinned byte/version identity; raw CRLF-sensitive hashes are not silently reused.",
+      "status": "unverified",
+      "evidence": [],
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "gaps": [
+        {
+          "clauseRef": "UC-SRV-CERT-ROTATE-001::c1",
+          "reason": "Historical TLS-on hot-swap failure schedules restart; approved35 current TLS-on failure restores baseline and returns400. TLS-off storage/pending remains separate. No changed rollback case is presented as verification of historical restart-on-failure. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "UC-SRV-CERT-ROTATE-001::c2",
+          "reason": "Historical TLS-on hot-swap failure schedules restart; approved35 current TLS-on failure restores baseline and returns400. TLS-off storage/pending remains separate. No changed rollback case is presented as verification of historical restart-on-failure. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "UC-SRV-CERT-ROTATE-001::c3",
+          "reason": "Historical TLS-on hot-swap failure schedules restart; approved35 current TLS-on failure restores baseline and returns400. TLS-off storage/pending remains separate. No changed rollback case is presented as verification of historical restart-on-failure. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "UC-SRV-CERT-ROTATE-001::c4",
+          "reason": "Historical TLS-on hot-swap failure schedules restart; approved35 current TLS-on failure restores baseline and returns400. TLS-off storage/pending remains separate. No changed rollback case is presented as verification of historical restart-on-failure. Exact runtime receipts remain absent."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "approvedImplementationDecisions": [
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/35",
+            "ledger": "docs/plan/verification/epic61-issue-35.md"
+          }
+        ],
+        "note": "Changed implementation is context, not verification of a differing original clause."
+      }
+    },
+    {
+      "originalOrdinal": 134,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "GLOSS-PACKET-DELIM-001"
+      },
+      "category": "glossary",
+      "title": "PACKET_DELIMITER",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2639,
+        "exactHeading": "#### GLOSS-PACKET-DELIM-001 — PACKET_DELIMITER",
+        "sidecarId": "GLOSS-PACKET-DELIM-001"
+      },
+      "originalRecord": {
+        "id": "GLOSS-PACKET-DELIM-001",
+        "type": "glossary",
+        "title": "PACKET_DELIMITER",
+        "description": "연결 초기 디스크리미네이터: 'C'=CtrlPacket, 'D'=DataStatePacket. 그 외면 handler end_.",
+        "source": [
+          "src/commons/CtrlPacket.ts:59-59",
+          "src/commons/DataStatePacket.ts:6-6"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "연결 초기 디스크리미네이터: 'C'=CtrlPacket, 'D'=DataStatePacket. 그 외면 handler end_.",
+        "clauses": [
+          {
+            "id": "GLOSS-PACKET-DELIM-001::c1",
+            "sourceRef": "description.segment[0]",
+            "originalText": "연결 초기 디스크리미네이터: 'C'=CtrlPacket, 'D'=DataStatePacket.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "GLOSS-PACKET-DELIM-001::c2",
+            "sourceRef": "description.segment[1]",
+            "originalText": "그 외면 handler end_.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          }
+        ],
+        "segmentationNote": "Exact sentence/arrow-delimited spans retained. Each partial candidate is limited to its actual excerpt; remaining behavior stays a gap."
+      },
+      "applicability": {
+        "kind": "runtime",
+        "rationale": "Behavior-bearing glossary, actor, interface and maintenance clauses are not automatically exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/TunnelServer.ts",
+            "symbol": "private onReceiveAllHandler",
+            "line": 459,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "legacyAliasGap": "No bare REQ label is joined. A legacy alias needs original document scope and pinned byte/version identity; raw CRLF-sensitive hashes are not silently reused.",
+      "status": "unverified",
+      "evidence": [],
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "gaps": [
+        {
+          "clauseRef": "GLOSS-PACKET-DELIM-001::c1",
+          "reason": "No exact first-byte C/D/other rejection assertion linked. A malformed DATA_STATE fixed-prefix test retains D and does not exercise the unknown first-byte branch. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "GLOSS-PACKET-DELIM-001::c2",
+          "reason": "No exact first-byte C/D/other rejection assertion linked. A malformed DATA_STATE fixed-prefix test retains D and does not exercise the unknown first-byte branch. Exact runtime receipts remain absent."
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 135,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "NFR-MAINT-LISTENER-PRESERVE-001"
+      },
+      "category": "nonfunctional_req",
+      "title": "영구 error 핸들러 보존 (REQ-19)",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1221,
+        "exactHeading": "##### NFR-MAINT-LISTENER-PRESERVE-001 — 영구 error 핸들러 보존 (REQ-19)",
+        "sidecarId": "NFR-MAINT-LISTENER-PRESERVE-001"
+      },
+      "originalRecord": {
+        "id": "NFR-MAINT-LISTENER-PRESERVE-001",
+        "type": "nonfunctional_req",
+        "title": "영구 error 핸들러 보존 (REQ-19)",
+        "description": "AdminServer._permanentErrorHandler 는 명명 함수 참조로 한 번 등록하고, close 시에도 removeAllListeners 금지. listening/request 리스너만 선별 제거.",
+        "source": [
+          "src/server/admin/AdminServer.ts:69-107",
+          "src/server/admin/AdminServer.ts:1077-1097"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "category": "maintainability"
+      },
+      "acceptance": {
+        "originalDescription": "AdminServer._permanentErrorHandler 는 명명 함수 참조로 한 번 등록하고, close 시에도 removeAllListeners 금지. listening/request 리스너만 선별 제거.",
+        "clauses": [
+          {
+            "id": "NFR-MAINT-LISTENER-PRESERVE-001::c1",
+            "sourceRef": "description.segment[0]",
+            "originalText": "AdminServer._permanentErrorHandler 는 명명 함수 참조로 한 번 등록하고, close 시에도 removeAllListeners 금지.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-MAINT-LISTENER-PRESERVE-001::c2",
+            "sourceRef": "description.segment[1]",
+            "originalText": "listening/request 리스너만 선별 제거.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          }
+        ],
+        "segmentationNote": "Exact sentence/arrow-delimited spans retained. Each partial candidate is limited to its actual excerpt; remaining behavior stays a gap."
+      },
+      "applicability": {
+        "kind": "runtime",
+        "rationale": "Behavior-bearing glossary, actor, interface and maintenance clauses are not automatically exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/admin/AdminServer.ts",
+            "symbol": "private readonly _permanentErrorHandler",
+            "line": 72,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          },
+          {
+            "path": "src/server/admin/AdminServer.ts",
+            "symbol": "this._server.removeAllListeners('listening')",
+            "line": 1278,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          }
+        ]
+      },
+      "verification": [
+        {
+          "testPath": "test/unit/server/admin/req-19-listen-listeners.test.ts",
+          "caseLine": 32,
+          "exactTitle": "REQ-19 AdminServer listen listener accumulation prevention (1)(2)(3) 반복 listen / close 후에도 error 리스너 <= 1 유지, 영구 핸들러 identity 보존",
+          "parameters": [],
+          "assertionEvidence": {
+            "startLine": 33,
+            "endLine": 57,
+            "exactSource": "        const adminServer = new AdminServer({} as any, false);\n        const permanentHandler = (adminServer as any)._permanentErrorHandler as Function;\n        expect(typeof permanentHandler).toBe(\"function\");\n\n        const srv: any = (adminServer as any)._server;\n        // 최초 상태: error listener 1개 (영구 핸들러만).\n        expect(srv.listeners(\"error\").length).toBe(1);\n        expect(srv.listeners(\"error\")[0]).toBe(permanentHandler);\n\n        // 반복 listen → close.\n        for(let i = 0; i < 10; i++) {\n            const port = await adminServer.listen(0, \"127.0.0.1\");\n            expect(port).toBeGreaterThan(0);\n            // listen 직후에도 영구 핸들러는 유지되고, listen 임시 리스너는 제거된 상태 (on 'listening' 콜백에서 removeListener).\n            expect(srv.listeners(\"error\").length).toBeLessThanOrEqual(1);\n            expect(srv.listeners(\"error\").length).toBeGreaterThanOrEqual(1);\n            expect(srv.listeners(\"error\")).toContain(permanentHandler);\n            await adminServer.close();\n            // close 후에도 영구 핸들러는 살아있어야 한다.\n            expect(srv.listeners(\"error\")).toContain(permanentHandler);\n        }\n\n        // 최종 상태 체크.\n        expect(srv.listeners(\"error\").length).toBe(1);\n        expect(srv.listeners(\"error\")[0]).toBe(permanentHandler);"
+          },
+          "scopeLimitation": "Actual ten owned listen/close iterations preserve one identical permanent error function. Not an assertion of all request/listening cleanup paths.",
+          "technique": "actual-admin-listener-candidate",
+          "state": "candidate",
+          "evidence": [],
+          "assertedClauseRefs": [
+            "NFR-MAINT-LISTENER-PRESERVE-001::c1"
+          ]
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "legacyAliasGap": "No bare REQ label is joined. A legacy alias needs original document scope and pinned byte/version identity; raw CRLF-sensitive hashes are not silently reused.",
+      "status": "unverified",
+      "evidence": [],
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "gaps": [
+        {
+          "clauseRef": "NFR-MAINT-LISTENER-PRESERVE-001::c1",
+          "reason": "Real ten-cycle HTTP listen/close test directly asserts permanent error callback identity/count. It does not separately assert every request/listening cleanup branch. Source permits targeted removeAllListeners(listening), not blanket removal of error listeners. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "NFR-MAINT-LISTENER-PRESERVE-001::c2",
+          "reason": "Real ten-cycle HTTP listen/close test directly asserts permanent error callback identity/count. It does not separately assert every request/listening cleanup branch. Source permits targeted removeAllListeners(listening), not blanket removal of error listeners. Exact runtime receipts remain absent."
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 136,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "NFR-MAINT-FOREACH-001"
+      },
+      "category": "nonfunctional_req",
+      "title": "for...of 비동기 안전 반복 (REQ-16)",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1213,
+        "exactHeading": "##### NFR-MAINT-FOREACH-001 — for...of 비동기 안전 반복 (REQ-16)",
+        "sidecarId": "NFR-MAINT-FOREACH-001"
+      },
+      "originalRecord": {
+        "id": "NFR-MAINT-FOREACH-001",
+        "type": "nonfunctional_req",
+        "title": "for...of 비동기 안전 반복 (REQ-16)",
+        "description": "SessionStore.sweepSession/isSessionValid 에서 async-unsafe forEach 대신 for...of 사용. AdminServer cookie 파싱도 indexOf('=')로 첫 분리자만 사용해 값 내 '=' 안전 처리.",
+        "source": [
+          "src/server/admin/SessionStore.ts:87-137",
+          "src/server/admin/AdminServer.ts:385-404"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "category": "maintainability"
+      },
+      "acceptance": {
+        "originalDescription": "SessionStore.sweepSession/isSessionValid 에서 async-unsafe forEach 대신 for...of 사용. AdminServer cookie 파싱도 indexOf('=')로 첫 분리자만 사용해 값 내 '=' 안전 처리.",
+        "clauses": [
+          {
+            "id": "NFR-MAINT-FOREACH-001::c1",
+            "sourceRef": "description.segment[0]",
+            "originalText": "SessionStore.sweepSession/isSessionValid 에서 async-unsafe forEach 대신 for...of 사용.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-MAINT-FOREACH-001::c2",
+            "sourceRef": "description.segment[1]",
+            "originalText": "AdminServer cookie 파싱도 indexOf('=')로 첫 분리자만 사용해 값 내 '=' 안전 처리.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          }
+        ],
+        "segmentationNote": "Exact sentence/arrow-delimited spans retained. Each partial candidate is limited to its actual excerpt; remaining behavior stays a gap."
+      },
+      "applicability": {
+        "kind": "runtime",
+        "rationale": "Behavior-bearing glossary, actor, interface and maintenance clauses are not automatically exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/admin/SessionStore.ts",
+            "symbol": "public async isSessionValid",
+            "line": 99,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          },
+          {
+            "path": "src/server/admin/SessionStore.ts",
+            "symbol": "public sweepSession",
+            "line": 87,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          },
+          {
+            "path": "src/server/admin/AdminServer.ts",
+            "symbol": "private static parseCookies",
+            "line": 400,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [
+        {
+          "testPath": "test/unit/server/admin/req-16-session-cookie.test.ts",
+          "reason": "Explicit fake clock and SessionStore helper; not actual12h passage or AdminServer parser verification."
+        }
+      ],
+      "legacyAliases": [],
+      "legacyAliasGap": "No bare REQ label is joined. A legacy alias needs original document scope and pinned byte/version identity; raw CRLF-sensitive hashes are not silently reused.",
+      "status": "unverified",
+      "evidence": [],
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "gaps": [
+        {
+          "clauseRef": "NFR-MAINT-FOREACH-001::c1",
+          "reason": "SessionStore fake-clock valid/expired tests and its parseCookieHeader tests are context only: they do not directly assert AdminServer.parseCookies or prove loop syntax/sweepSession behavior. Do not rename these as Admin cookie/native12h evidence. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "NFR-MAINT-FOREACH-001::c2",
+          "reason": "SessionStore fake-clock valid/expired tests and its parseCookieHeader tests are context only: they do not directly assert AdminServer.parseCookies or prove loop syntax/sweepSession behavior. Do not rename these as Admin cookie/native12h evidence. Exact runtime receipts remain absent."
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 137,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "NFR-SEC-PATH-TRAVERSAL-001"
+      },
+      "category": "nonfunctional_req",
+      "title": "웹 자산 path traversal 차단",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1121,
+        "exactHeading": "##### NFR-SEC-PATH-TRAVERSAL-001 — 웹 자산 path traversal 차단",
+        "sidecarId": "NFR-SEC-PATH-TRAVERSAL-001"
+      },
+      "originalRecord": {
+        "id": "NFR-SEC-PATH-TRAVERSAL-001",
+        "type": "nonfunctional_req",
+        "title": "웹 자산 path traversal 차단",
+        "description": "onGetWebResource: Path.resolve 후 relativePath.startsWith('..') 또는 Path.isAbsolute 시 404. 확장자 화이트리스트(.html/.js/.css/.png/.jpg/.gif/.svg/.ico/.json/.ttf) 외 + non-index.html 은 404. Windows 대소문자 무시 대응(basenameLower=='index.html').",
+        "source": [
+          "src/server/admin/AdminServer.ts:294-340",
+          "src/server/admin/AdminServer.ts:1099-1123"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "category": "security"
+      },
+      "acceptance": {
+        "originalDescription": "onGetWebResource: Path.resolve 후 relativePath.startsWith('..') 또는 Path.isAbsolute 시 404. 확장자 화이트리스트(.html/.js/.css/.png/.jpg/.gif/.svg/.ico/.json/.ttf) 외 + non-index.html 은 404. Windows 대소문자 무시 대응(basenameLower=='index.html').",
+        "clauses": [
+          {
+            "id": "NFR-SEC-PATH-TRAVERSAL-001::c1",
+            "sourceRef": "description.segment[0]",
+            "originalText": "onGetWebResource: Path.resolve 후 relativePath.startsWith('..') 또는 Path.isAbsolute 시 404.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-PATH-TRAVERSAL-001::c2",
+            "sourceRef": "description.segment[1]",
+            "originalText": "확장자 화이트리스트(.html/.js/.css/.png/.jpg/.gif/.svg/.ico/.json/.ttf) 외 + non-index.html 은 404.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-PATH-TRAVERSAL-001::c3",
+            "sourceRef": "description.segment[2]",
+            "originalText": "Windows 대소문자 무시 대응(basenameLower=='index.html').",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          }
+        ],
+        "segmentationNote": "Exact sentence/arrow-delimited spans retained. Each partial candidate is limited to its actual excerpt; remaining behavior stays a gap."
+      },
+      "applicability": {
+        "kind": "runtime",
+        "rationale": "Behavior-bearing glossary, actor, interface and maintenance clauses are not automatically exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/admin/AdminServer.ts",
+            "symbol": "private onGetWebResource",
+            "line": 301,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          },
+          {
+            "path": "src/server/admin/AdminServer.ts",
+            "symbol": "private contentTypeFromExt",
+            "line": 1291,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          }
+        ]
+      },
+      "verification": [
+        {
+          "testPath": "test/component/server/admin/AdminServer.security.test.ts",
+          "caseLine": 34,
+          "exactTitle": "AdminServer security hardening rejects traversal requests and does not fall back unknown api paths to static files",
+          "parameters": [],
+          "assertionEvidence": {
+            "startLine": 35,
+            "endLine": 43,
+            "exactSource": "        await fs.writeFile(Path.join(testRoot.rootDir, \"config\", \".key\"), \"should-not-leak\", {encoding: \"utf-8\"});\n\n        const traversalResponse = await httpRequest({port, path: \"/../config/.key\"});\n        const apiFallbackResponse = await httpRequest({port, path: \"/api/does-not-exist\"});\n\n        expect(traversalResponse.statusCode).toBe(404);\n        expect(traversalResponse.body).not.toContain(\"should-not-leak\");\n        expect(apiFallbackResponse.statusCode).toBe(404);\n        expect(apiFallbackResponse.body).not.toContain(\"baseline admin index\");"
+          },
+          "scopeLimitation": "Actual traversal request404 and no key bytes; does not cover Windows casing/MIME variants.",
+          "technique": "actual-admin-http-candidate",
+          "state": "candidate",
+          "evidence": [],
+          "assertedClauseRefs": [
+            "NFR-SEC-PATH-TRAVERSAL-001::c1"
+          ]
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "legacyAliasGap": "No bare REQ label is joined. A legacy alias needs original document scope and pinned byte/version identity; raw CRLF-sensitive hashes are not silently reused.",
+      "status": "unverified",
+      "evidence": [],
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "gaps": [
+        {
+          "clauseRef": "NFR-SEC-PATH-TRAVERSAL-001::c1",
+          "reason": "Native traversal404 case is partial. MIME whitelist and Windows uppercase-index boundary remain unmapped; current contentTypeFromExt additionally accepts .jpeg, absent from original explicit whitelist. No approved policy reconciliation identified; retain pending disposition. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "NFR-SEC-PATH-TRAVERSAL-001::c2",
+          "reason": "Native traversal404 case is partial. MIME whitelist and Windows uppercase-index boundary remain unmapped; current contentTypeFromExt additionally accepts .jpeg, absent from original explicit whitelist. No approved policy reconciliation identified; retain pending disposition. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "NFR-SEC-PATH-TRAVERSAL-001::c3",
+          "reason": "Native traversal404 case is partial. MIME whitelist and Windows uppercase-index boundary remain unmapped; current contentTypeFromExt additionally accepts .jpeg, absent from original explicit whitelist. No approved policy reconciliation identified; retain pending disposition. Exact runtime receipts remain absent."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "approvedImplementationDecisions": [],
+        "note": "No approved decision identified reconciling the stated discrepancy; no new policy or scope waiver inferred."
+      }
+    },
+    {
+      "originalOrdinal": 138,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "IF-API-ADMIN-ENVELOPE-001"
+      },
+      "category": "interface",
+      "title": "Admin API 응답 봉투",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1619,
+        "exactHeading": "##### IF-API-ADMIN-ENVELOPE-001 — Admin API 응답 봉투",
+        "sidecarId": "IF-API-ADMIN-ENVELOPE-001"
+      },
+      "originalRecord": {
+        "id": "IF-API-ADMIN-ENVELOPE-001",
+        "type": "interface",
+        "title": "Admin API 응답 봉투",
+        "description": "모든 응답은 {success, partial, failedScopes[], warnings[], message, ...payload} 표준 envelope 사용. sendApiSuccess/sendApiFailure/sendApiEnvelope 헬퍼.",
+        "source": [
+          "src/server/admin/AdminServer.ts:1125-1144"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "모든 응답은 {success, partial, failedScopes[], warnings[], message, ...payload} 표준 envelope 사용. sendApiSuccess/sendApiFailure/sendApiEnvelope 헬퍼.",
+        "clauses": [
+          {
+            "id": "IF-API-ADMIN-ENVELOPE-001::c1",
+            "sourceRef": "description.segment[0]",
+            "originalText": "모든 응답은 {success, partial, failedScopes[], warnings[], message, ...payload} 표준 envelope 사용.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-API-ADMIN-ENVELOPE-001::c2",
+            "sourceRef": "description.segment[1]",
+            "originalText": "sendApiSuccess/sendApiFailure/sendApiEnvelope 헬퍼.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          }
+        ],
+        "segmentationNote": "Exact sentence/arrow-delimited spans retained. Each partial candidate is limited to its actual excerpt; remaining behavior stays a gap."
+      },
+      "applicability": {
+        "kind": "runtime",
+        "rationale": "Behavior-bearing glossary, actor, interface and maintenance clauses are not automatically exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/admin/AdminServer.ts",
+            "symbol": "private sendApiEnvelope",
+            "line": 1317,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "legacyAliasGap": "No bare REQ label is joined. A legacy alias needs original document scope and pinned byte/version identity; raw CRLF-sensitive hashes are not silently reused.",
+      "status": "unverified",
+      "evidence": [],
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "gaps": [
+        {
+          "clauseRef": "IF-API-ADMIN-ENVELOPE-001::c1",
+          "reason": "Envelope helper defaults are located, but the original all-responses scope needs clarification: static assets and raw routing errors are not universally JSON envelopes. No all-route/schema assertion linked; no silent scope narrowing or approved waiver inferred. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "IF-API-ADMIN-ENVELOPE-001::c2",
+          "reason": "Envelope helper defaults are located, but the original all-responses scope needs clarification: static assets and raw routing errors are not universally JSON envelopes. No all-route/schema assertion linked; no silent scope narrowing or approved waiver inferred. Exact runtime receipts remain absent."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "approvedImplementationDecisions": [],
+        "note": "No approved decision identified reconciling the stated discrepancy; no new policy or scope waiver inferred."
+      }
+    },
+    {
+      "originalOrdinal": 139,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "IF-CLIENT-STATUS-SRV-001"
+      },
+      "category": "interface",
+      "title": "ClientStatus",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1659,
+        "exactHeading": "##### IF-CLIENT-STATUS-SRV-001 — ClientStatus",
+        "sidecarId": "IF-CLIENT-STATUS-SRV-001"
+      },
+      "originalRecord": {
+        "id": "IF-CLIENT-STATUS-SRV-001",
+        "type": "interface",
+        "title": "ClientStatus",
+        "description": "TunnelServer.clientStatuses() 반환 구조. {id,name,clientId,protocolVersion,controlProtocolMode,legacy,uptime,address,activeSessionCount}.",
+        "source": [
+          "src/server/TunnelServer.ts:43-53",
+          "src/server/TunnelServer.ts:241-258"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "TunnelServer.clientStatuses() 반환 구조. {id,name,clientId,protocolVersion,controlProtocolMode,legacy,uptime,address,activeSessionCount}.",
+        "clauses": [
+          {
+            "id": "IF-CLIENT-STATUS-SRV-001::c1",
+            "sourceRef": "description.segment[0]",
+            "originalText": "TunnelServer.clientStatuses() 반환 구조.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-CLIENT-STATUS-SRV-001::field-id",
+            "sourceRef": "description.statusFields.id",
+            "originalText": "id",
+            "rationale": "One field of the original returned status object; no other field is implied.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-CLIENT-STATUS-SRV-001::field-name",
+            "sourceRef": "description.statusFields.name",
+            "originalText": "name",
+            "rationale": "One field of the original returned status object; no other field is implied.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-CLIENT-STATUS-SRV-001::field-clientId",
+            "sourceRef": "description.statusFields.clientId",
+            "originalText": "clientId",
+            "rationale": "One field of the original returned status object; no other field is implied.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-CLIENT-STATUS-SRV-001::field-protocolVersion",
+            "sourceRef": "description.statusFields.protocolVersion",
+            "originalText": "protocolVersion",
+            "rationale": "One field of the original returned status object; no other field is implied.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-CLIENT-STATUS-SRV-001::field-controlProtocolMode",
+            "sourceRef": "description.statusFields.controlProtocolMode",
+            "originalText": "controlProtocolMode",
+            "rationale": "One field of the original returned status object; no other field is implied.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-CLIENT-STATUS-SRV-001::field-legacy",
+            "sourceRef": "description.statusFields.legacy",
+            "originalText": "legacy",
+            "rationale": "One field of the original returned status object; no other field is implied.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-CLIENT-STATUS-SRV-001::field-uptime",
+            "sourceRef": "description.statusFields.uptime",
+            "originalText": "uptime",
+            "rationale": "One field of the original returned status object; no other field is implied.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-CLIENT-STATUS-SRV-001::field-address",
+            "sourceRef": "description.statusFields.address",
+            "originalText": "address",
+            "rationale": "One field of the original returned status object; no other field is implied.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-CLIENT-STATUS-SRV-001::field-activeSessionCount",
+            "sourceRef": "description.statusFields.activeSessionCount",
+            "originalText": "activeSessionCount",
+            "rationale": "One field of the original returned status object; no other field is implied.",
+            "state": "unverified"
+          }
+        ],
+        "segmentationNote": "Original return-object fields are separate obligations; candidate assertions reference only the four explicitly asserted fields."
+      },
+      "applicability": {
+        "kind": "runtime",
+        "rationale": "Behavior-bearing glossary, actor, interface and maintenance clauses are not automatically exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/TunnelServer.ts",
+            "symbol": "public clientStatuses()",
+            "line": 238,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          }
+        ]
+      },
+      "verification": [
+        {
+          "testPath": "test/component/server/ProtocolV2.test.ts",
+          "caseLine": 147,
+          "exactTitle": "protocol v2 control plane registers an authenticated v2 client identity",
+          "parameters": [],
+          "assertionEvidence": {
+            "startLine": 163,
+            "endLine": 168,
+            "exactSource": "            expect(statuses[0]).toMatchObject({\n                clientId: \"client-a\",\n                name: \"Client A\",\n                protocolVersion: CONTROL_PROTOCOL_V2,\n                legacy: false\n            });"
+          },
+          "scopeLimitation": "Exact subset clientId/name/protocolVersion/legacy only; all other status fields remain gaps.",
+          "technique": "actual-control-channel-candidate",
+          "state": "candidate",
+          "evidence": [],
+          "assertedClauseRefs": [
+            "IF-CLIENT-STATUS-SRV-001::field-clientId",
+            "IF-CLIENT-STATUS-SRV-001::field-name",
+            "IF-CLIENT-STATUS-SRV-001::field-protocolVersion",
+            "IF-CLIENT-STATUS-SRV-001::field-legacy"
+          ]
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "legacyAliasGap": "No bare REQ label is joined. A legacy alias needs original document scope and pinned byte/version identity; raw CRLF-sensitive hashes are not silently reused.",
+      "status": "unverified",
+      "evidence": [],
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "gaps": [
+        {
+          "clauseRef": "IF-CLIENT-STATUS-SRV-001::c1",
+          "reason": "Native v2 registration test asserts clientId/name/protocolVersion/legacy only. Full id/uptime/address/activeSessionCount/controlProtocolMode schema and values remain unverified. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "IF-CLIENT-STATUS-SRV-001::field-id",
+          "reason": "Native v2 registration test asserts clientId/name/protocolVersion/legacy only. Full id/uptime/address/activeSessionCount/controlProtocolMode schema and values remain unverified. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "IF-CLIENT-STATUS-SRV-001::field-name",
+          "reason": "Native v2 registration test asserts clientId/name/protocolVersion/legacy only. Full id/uptime/address/activeSessionCount/controlProtocolMode schema and values remain unverified. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "IF-CLIENT-STATUS-SRV-001::field-clientId",
+          "reason": "Native v2 registration test asserts clientId/name/protocolVersion/legacy only. Full id/uptime/address/activeSessionCount/controlProtocolMode schema and values remain unverified. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "IF-CLIENT-STATUS-SRV-001::field-protocolVersion",
+          "reason": "Native v2 registration test asserts clientId/name/protocolVersion/legacy only. Full id/uptime/address/activeSessionCount/controlProtocolMode schema and values remain unverified. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "IF-CLIENT-STATUS-SRV-001::field-controlProtocolMode",
+          "reason": "Native v2 registration test asserts clientId/name/protocolVersion/legacy only. Full id/uptime/address/activeSessionCount/controlProtocolMode schema and values remain unverified. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "IF-CLIENT-STATUS-SRV-001::field-legacy",
+          "reason": "Native v2 registration test asserts clientId/name/protocolVersion/legacy only. Full id/uptime/address/activeSessionCount/controlProtocolMode schema and values remain unverified. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "IF-CLIENT-STATUS-SRV-001::field-uptime",
+          "reason": "Native v2 registration test asserts clientId/name/protocolVersion/legacy only. Full id/uptime/address/activeSessionCount/controlProtocolMode schema and values remain unverified. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "IF-CLIENT-STATUS-SRV-001::field-address",
+          "reason": "Native v2 registration test asserts clientId/name/protocolVersion/legacy only. Full id/uptime/address/activeSessionCount/controlProtocolMode schema and values remain unverified. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "IF-CLIENT-STATUS-SRV-001::field-activeSessionCount",
+          "reason": "Native v2 registration test asserts clientId/name/protocolVersion/legacy only. Full id/uptime/address/activeSessionCount/controlProtocolMode schema and values remain unverified. Exact runtime receipts remain absent."
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 140,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "IF-EXT-STATUS-SRV-001"
+      },
+      "category": "interface",
+      "title": "ExternalPortServerStatus",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1699,
+        "exactHeading": "##### IF-EXT-STATUS-SRV-001 — ExternalPortServerStatus",
+        "sidecarId": "IF-EXT-STATUS-SRV-001"
+      },
+      "originalRecord": {
+        "id": "IF-EXT-STATUS-SRV-001",
+        "type": "interface",
+        "title": "ExternalPortServerStatus",
+        "description": "외부 리스너 상태. {port,online,sessions,uptime,active,activeStart,activeTimeout,rx,tx}. 10초 주기 SESSION_CLEANUP 로 close-wait 정리. 표기 정규화: 10초(10,000ms) 주기로 SESSION_CLEANUP 이 실행된다.",
+        "source": [
+          "src/server/ExternalPortServerPool.ts:31-106"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "외부 리스너 상태. {port,online,sessions,uptime,active,activeStart,activeTimeout,rx,tx}. 10초 주기 SESSION_CLEANUP 로 close-wait 정리. 표기 정규화: 10초(10,000ms) 주기로 SESSION_CLEANUP 이 실행된다.",
+        "clauses": [
+          {
+            "id": "IF-EXT-STATUS-SRV-001::c1",
+            "sourceRef": "description.segment[0]",
+            "originalText": "외부 리스너 상태.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-EXT-STATUS-SRV-001::c2",
+            "sourceRef": "description.segment[1]",
+            "originalText": "{port,online,sessions,uptime,active,activeStart,activeTimeout,rx,tx}. 10초 주기 SESSION_CLEANUP 로 close-wait 정리.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-EXT-STATUS-SRV-001::c3",
+            "sourceRef": "description.segment[2]",
+            "originalText": "표기 정규화: 10초(10,000ms) 주기로 SESSION_CLEANUP 이 실행된다.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          }
+        ],
+        "segmentationNote": "Exact sentence/arrow-delimited spans retained. Each partial candidate is limited to its actual excerpt; remaining behavior stays a gap."
+      },
+      "applicability": {
+        "kind": "runtime",
+        "rationale": "Behavior-bearing glossary, actor, interface and maintenance clauses are not automatically exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/ExternalPortServerPool.ts",
+            "symbol": "type ExternalPortServerStatus",
+            "line": 31,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          },
+          {
+            "path": "src/server/ExternalPortServerPool.ts",
+            "symbol": "const SESSION_CLEANUP_INTERVAL",
+            "line": 45,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "legacyAliasGap": "No bare REQ label is joined. A legacy alias needs original document scope and pinned byte/version identity; raw CRLF-sensitive hashes are not silently reused.",
+      "status": "unverified",
+      "evidence": [],
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "gaps": [
+        {
+          "clauseRef": "IF-EXT-STATUS-SRV-001::c1",
+          "reason": "Source retains10000ms cleanup interval and status object. No actual ten-second cleanup timing or complete counter/activation/status-schema case is mapped. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "IF-EXT-STATUS-SRV-001::c2",
+          "reason": "Source retains10000ms cleanup interval and status object. No actual ten-second cleanup timing or complete counter/activation/status-schema case is mapped. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "IF-EXT-STATUS-SRV-001::c3",
+          "reason": "Source retains10000ms cleanup interval and status object. No actual ten-second cleanup timing or complete counter/activation/status-schema case is mapped. Exact runtime receipts remain absent."
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 141,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "CONSTR-ADMIN-DEFAULTS-001"
+      },
+      "category": "constraint",
+      "title": "기본 포트/호스트",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1961,
+        "exactHeading": "#### CONSTR-ADMIN-DEFAULTS-001 — 기본 포트/호스트",
+        "sidecarId": "CONSTR-ADMIN-DEFAULTS-001"
+      },
+      "originalRecord": {
+        "id": "CONSTR-ADMIN-DEFAULTS-001",
+        "type": "constraint",
+        "title": "기본 포트/호스트",
+        "description": "adminPort=9300, adminBindHost='127.0.0.1', adminTls=true, port=9126, tls=false, controlProtocolMode='mixed', allowLegacyControlAuth=false.",
+        "source": [
+          "src/server/ServerOptionStore.ts:411-425"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "adminPort=9300, adminBindHost='127.0.0.1', adminTls=true, port=9126, tls=false, controlProtocolMode='mixed', allowLegacyControlAuth=false.",
+        "clauses": [
+          {
+            "id": "CONSTR-ADMIN-DEFAULTS-001::c1",
+            "sourceRef": "description.segment[0]",
+            "originalText": "adminPort=9300, adminBindHost='127.0.0.1', adminTls=true, port=9126, tls=false, controlProtocolMode='mixed', allowLegacyControlAuth=false.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          }
+        ],
+        "segmentationNote": "Exact sentence/arrow-delimited spans retained. Each partial candidate is limited to its actual excerpt; remaining behavior stays a gap."
+      },
+      "applicability": {
+        "kind": "runtime",
+        "rationale": "Behavior-bearing glossary, actor, interface and maintenance clauses are not automatically exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/ServerOptionStore.ts",
+            "symbol": "adminPort: 9300",
+            "line": 508,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          }
+        ]
+      },
+      "verification": [
+        {
+          "testPath": "test/unit/server/ServerOptionStore.test.ts",
+          "caseLine": 21,
+          "exactTitle": "ServerOptionStore baseline behavior creates the default server option file when config is missing",
+          "parameters": [],
+          "assertionEvidence": {
+            "startLine": 25,
+            "endLine": 36,
+            "exactSource": "        expect(configFile.isFile()).toBe(true);\n        expect(store.serverOption.key).not.toBe(DEFAULT_KEY);\n        expect(store.serverOption).toMatchObject({\n            adminPort: 9300,\n            adminBindHost: \"127.0.0.1\",\n            adminTls: true,\n            port: 9126,\n            tls: false,\n            controlProtocolMode: \"mixed\",\n            allowLegacyControlAuth: false,\n            tunnelingOptions: []\n        });"
+          },
+          "scopeLimitation": "Exact stated seven defaults are compared in store configuration; no native listener/security claim.",
+          "technique": "actual-filesystem-store-candidate",
+          "state": "candidate",
+          "evidence": [],
+          "assertedClauseRefs": [
+            "CONSTR-ADMIN-DEFAULTS-001::c1"
+          ]
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "legacyAliasGap": "No bare REQ label is joined. A legacy alias needs original document scope and pinned byte/version identity; raw CRLF-sensitive hashes are not silently reused.",
+      "status": "unverified",
+      "evidence": [],
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "gaps": [
+        {
+          "clauseRef": "CONSTR-ADMIN-DEFAULTS-001::c1",
+          "reason": "Store default object values are directly asserted; this is configuration evidence, not actual bind/listen/TLS or shared-key admission proof. Exact runtime receipts remain absent."
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 142,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "BR-HTTP-REWRITE-RULE-001"
+      },
+      "category": "business_rule",
+      "title": "HTTP body rewrite 규칙 해석",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3447,
+        "exactHeading": "#### BR-HTTP-REWRITE-RULE-001 — HTTP body rewrite 규칙 해석",
+        "sidecarId": "BR-HTTP-REWRITE-RULE-001"
+      },
+      "originalRecord": {
+        "id": "BR-HTTP-REWRITE-RULE-001",
+        "type": "business_rule",
+        "title": "HTTP body rewrite 규칙 해석",
+        "description": "bodyRewriteRules.from 이 `/.../flags` 패턴이면 RegExp 생성, 그 외 문자열 치환. 잘못된 정규식이면 원본 문자열 사용.",
+        "source": [
+          "src/server/http/HttpHandler.ts:531-564"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "rule_statement": "If rule.from matches /^\\/(.+)\\/([gim]*)$/ Then compile RegExp else treat as literal string"
+      },
+      "acceptance": {
+        "originalDescription": "bodyRewriteRules.from 이 `/.../flags` 패턴이면 RegExp 생성, 그 외 문자열 치환. 잘못된 정규식이면 원본 문자열 사용.",
+        "clauses": [
+          {
+            "id": "BR-HTTP-REWRITE-RULE-001::c1",
+            "sourceRef": "description.segment[0]",
+            "originalText": "bodyRewriteRules.from 이 `/.../flags` 패턴이면 RegExp 생성, 그 외 문자열 치환.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-HTTP-REWRITE-RULE-001::c2",
+            "sourceRef": "description.segment[1]",
+            "originalText": "잘못된 정규식이면 원본 문자열 사용.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-HTTP-REWRITE-RULE-001::c3",
+            "sourceRef": "rule_statement",
+            "originalText": "If rule.from matches /^\\/(.+)\\/([gim]*)$/ Then compile RegExp else treat as literal string",
+            "rationale": "Original auxiliary acceptance text retained.",
+            "state": "unverified"
+          }
+        ],
+        "segmentationNote": "Exact sentence/arrow-delimited spans retained. Each partial candidate is limited to its actual excerpt; remaining behavior stays a gap."
+      },
+      "applicability": {
+        "kind": "runtime",
+        "rationale": "Behavior-bearing glossary, actor, interface and maintenance clauses are not automatically exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/http/HttpHandler.ts",
+            "symbol": "private modifyBodyByRule",
+            "line": 572,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          },
+          {
+            "path": "src/server/http/HttpHandler.ts",
+            "symbol": "private createRegExp",
+            "line": 590,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "legacyAliasGap": "No bare REQ label is joined. A legacy alias needs original document scope and pinned byte/version identity; raw CRLF-sensitive hashes are not silently reused.",
+      "status": "unverified",
+      "evidence": [],
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "gaps": [
+        {
+          "clauseRef": "BR-HTTP-REWRITE-RULE-001::c1",
+          "reason": "Source parses only g/i/m flag syntax and falls back to original pattern string on invalid RegExp. No exact literal/valid-regex/invalid-regex output assertion linked. Runtime exception fallback does not prove all rule behavior. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "BR-HTTP-REWRITE-RULE-001::c2",
+          "reason": "Source parses only g/i/m flag syntax and falls back to original pattern string on invalid RegExp. No exact literal/valid-regex/invalid-regex output assertion linked. Runtime exception fallback does not prove all rule behavior. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "BR-HTTP-REWRITE-RULE-001::c3",
+          "reason": "Source parses only g/i/m flag syntax and falls back to original pattern string on invalid RegExp. No exact literal/valid-regex/invalid-regex output assertion linked. Runtime exception fallback does not prove all rule behavior. Exact runtime receipts remain absent."
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 143,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "BR-HTTP-COMPRESS-LEVEL-001"
+      },
+      "category": "business_rule",
+      "title": "HTTP 재압축 저품질 기본",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3399,
+        "exactHeading": "#### BR-HTTP-COMPRESS-LEVEL-001 — HTTP 재압축 저품질 기본",
+        "sidecarId": "BR-HTTP-COMPRESS-LEVEL-001"
+      },
+      "originalRecord": {
+        "id": "BR-HTTP-COMPRESS-LEVEL-001",
+        "type": "business_rule",
+        "title": "HTTP 재압축 저품질 기본",
+        "description": "재압축 시 gzip/deflate Z_BEST_SPEED, Brotli BROTLI_PARAM_QUALITY=3. 지연 최소화 우선.",
+        "source": [
+          "src/server/http/HttpUtil.ts:201-222"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "rule_statement": "When body rewrite Then recompress with low quality for latency"
+      },
+      "acceptance": {
+        "originalDescription": "재압축 시 gzip/deflate Z_BEST_SPEED, Brotli BROTLI_PARAM_QUALITY=3. 지연 최소화 우선.",
+        "clauses": [
+          {
+            "id": "BR-HTTP-COMPRESS-LEVEL-001::c1",
+            "sourceRef": "description.segment[0]",
+            "originalText": "재압축 시 gzip/deflate Z_BEST_SPEED, Brotli BROTLI_PARAM_QUALITY=3.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-HTTP-COMPRESS-LEVEL-001::c2",
+            "sourceRef": "description.segment[1]",
+            "originalText": "지연 최소화 우선.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-HTTP-COMPRESS-LEVEL-001::c3",
+            "sourceRef": "rule_statement",
+            "originalText": "When body rewrite Then recompress with low quality for latency",
+            "rationale": "Original auxiliary acceptance text retained.",
+            "state": "unverified"
+          }
+        ],
+        "segmentationNote": "Exact sentence/arrow-delimited spans retained. Each partial candidate is limited to its actual excerpt; remaining behavior stays a gap."
+      },
+      "applicability": {
+        "kind": "runtime",
+        "rationale": "Behavior-bearing glossary, actor, interface and maintenance clauses are not automatically exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/http/HttpUtil.ts",
+            "symbol": "public static gzip",
+            "line": 223,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          },
+          {
+            "path": "src/server/http/HttpUtil.ts",
+            "symbol": "public static deflate",
+            "line": 230,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          },
+          {
+            "path": "src/server/http/HttpUtil.ts",
+            "symbol": "public static brotliCompress",
+            "line": 237,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "legacyAliasGap": "No bare REQ label is joined. A legacy alias needs original document scope and pinned byte/version identity; raw CRLF-sensitive hashes are not silently reused.",
+      "status": "unverified",
+      "evidence": [],
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "gaps": [
+        {
+          "clauseRef": "BR-HTTP-COMPRESS-LEVEL-001::c1",
+          "reason": "Source compression options are explicit; no delegated native call argument or output-property assertion establishes exact levels. Roundtrip/decompression success alone cannot identify compression level or prove lower latency. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "BR-HTTP-COMPRESS-LEVEL-001::c2",
+          "reason": "Source compression options are explicit; no delegated native call argument or output-property assertion establishes exact levels. Roundtrip/decompression success alone cannot identify compression level or prove lower latency. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "BR-HTTP-COMPRESS-LEVEL-001::c3",
+          "reason": "Source compression options are explicit; no delegated native call argument or output-property assertion establishes exact levels. Roundtrip/decompression success alone cannot identify compression level or prove lower latency. Exact runtime receipts remain absent."
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 144,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "IF-HTTP-PIPE-STATES-001"
+      },
+      "category": "interface",
+      "title": "HttpPipe ParseState",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1707,
+        "exactHeading": "##### IF-HTTP-PIPE-STATES-001 — HttpPipe ParseState",
+        "sidecarId": "IF-HTTP-PIPE-STATES-001"
+      },
+      "originalRecord": {
+        "id": "IF-HTTP-PIPE-STATES-001",
+        "type": "interface",
+        "title": "HttpPipe ParseState",
+        "description": "SEARCHING_FOR_HEADER→HEADER→(UPGRADE|CONTENT_LENGTH_BODY|CHUNKED_SIZE→CHUNKED_DATA→CHUNKED_TRAILER|UNKNOWN_LENGTH_BODY)→END. 헤더 최대 8MiB, 재귀 호출 1000회 제한.",
+        "source": [
+          "src/server/http/HttpPipe.ts:14-77"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "SEARCHING_FOR_HEADER→HEADER→(UPGRADE|CONTENT_LENGTH_BODY|CHUNKED_SIZE→CHUNKED_DATA→CHUNKED_TRAILER|UNKNOWN_LENGTH_BODY)→END. 헤더 최대 8MiB, 재귀 호출 1000회 제한.",
+        "clauses": [
+          {
+            "id": "IF-HTTP-PIPE-STATES-001::topology",
+            "sourceRef": "description.transitionTopology",
+            "originalText": "SEARCHING_FOR_HEADER→HEADER→(UPGRADE|CONTENT_LENGTH_BODY|CHUNKED_SIZE→CHUNKED_DATA→CHUNKED_TRAILER|UNKNOWN_LENGTH_BODY)→END.",
+            "rationale": "Preserve the entire branching transition graph as one evaluable topology.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-HTTP-PIPE-STATES-001::header-limit",
+            "sourceRef": "description.headerMaximum",
+            "originalText": "8MiB",
+            "rationale": "Independent original maximum; the full unchanged description defines the unit and affected operation.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-HTTP-PIPE-STATES-001::recursion-limit",
+            "sourceRef": "description.recursiveCallMaximum",
+            "originalText": "1000",
+            "rationale": "Independent original maximum; the full unchanged description defines the unit and affected operation.",
+            "state": "unverified"
+          }
+        ],
+        "segmentationNote": "Branching topology is preserved intact; header size and recursion count are independently evaluable limits."
+      },
+      "applicability": {
+        "kind": "runtime",
+        "rationale": "Behavior-bearing glossary, actor, interface and maintenance clauses are not automatically exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/http/HttpPipe.ts",
+            "symbol": "enum ParseState",
+            "line": 15,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          },
+          {
+            "path": "src/server/http/HttpPipe.ts",
+            "symbol": "const MAX_RECURSIVE_CALL_LEVEL",
+            "line": 77,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          },
+          {
+            "path": "src/server/http/HttpPipe.ts",
+            "symbol": "const MAX_HEADER_SIZE",
+            "line": 78,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [
+        {
+          "testPath": "test/component/http-chunk-boundary.test.ts",
+          "reason": "Specific chunk byte/Node completion checks are narrower than full original enum topology/8MiB/1000 limit."
+        }
+      ],
+      "legacyAliases": [],
+      "legacyAliasGap": "No bare REQ label is joined. A legacy alias needs original document scope and pinned byte/version identity; raw CRLF-sensitive hashes are not silently reused.",
+      "status": "unverified",
+      "evidence": [],
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "gaps": [
+        {
+          "clauseRef": "IF-HTTP-PIPE-STATES-001::topology",
+          "reason": "State declarations/8MiB/1000 constants are located. No full transition/topology/limit assertion linked. Approved11/12 parser direction and chunk-boundary evolution must not be collapsed to historical enum sequence; unknown-length EOF29 remains held. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "IF-HTTP-PIPE-STATES-001::header-limit",
+          "reason": "State declarations/8MiB/1000 constants are located. No full transition/topology/limit assertion linked. Approved11/12 parser direction and chunk-boundary evolution must not be collapsed to historical enum sequence; unknown-length EOF29 remains held. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "IF-HTTP-PIPE-STATES-001::recursion-limit",
+          "reason": "State declarations/8MiB/1000 constants are located. No full transition/topology/limit assertion linked. Approved11/12 parser direction and chunk-boundary evolution must not be collapsed to historical enum sequence; unknown-length EOF29 remains held. Exact runtime receipts remain absent."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "approvedImplementationDecisions": [
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/11",
+            "ledger": "docs/plan/verification/epic61-issue-11.md"
+          },
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/12",
+            "ledger": "docs/plan/verification/epic61-issue-12.md"
+          }
+        ],
+        "note": "Changed implementation is context, not verification of a differing original clause."
+      }
+    },
+    {
+      "originalOrdinal": 145,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "VER-ADMIN-UPDATE-POLICY-001"
+      },
+      "category": "verification",
+      "title": "Admin 정책 위반 시 설정 거부",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2429,
+        "exactHeading": "#### VER-ADMIN-UPDATE-POLICY-001 — Admin 정책 위반 시 설정 거부",
+        "sidecarId": "VER-ADMIN-UPDATE-POLICY-001"
+      },
+      "originalRecord": {
+        "id": "VER-ADMIN-UPDATE-POLICY-001",
+        "type": "verification",
+        "title": "Admin 정책 위반 시 설정 거부",
+        "description": "POST /api/serverOption 에서 evaluateAdminSecurityPolicy 가 !allowed 이면 400 + legacyFlagsRequired 반환. HTTP/비-loopback 전환을 런타임에 강제할 수 없도록 차단.",
+        "source": [
+          "src/server/admin/AdminServer.ts:452-460"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "POST /api/serverOption 에서 evaluateAdminSecurityPolicy 가 !allowed 이면 400 + legacyFlagsRequired 반환. HTTP/비-loopback 전환을 런타임에 강제할 수 없도록 차단.",
+        "clauses": [
+          {
+            "id": "VER-ADMIN-UPDATE-POLICY-001::c1",
+            "sourceRef": "description.segment[0]",
+            "originalText": "POST /api/serverOption 에서 evaluateAdminSecurityPolicy 가 !allowed 이면 400 + legacyFlagsRequired 반환.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "VER-ADMIN-UPDATE-POLICY-001::c2",
+            "sourceRef": "description.segment[1]",
+            "originalText": "HTTP/비-loopback 전환을 런타임에 강제할 수 없도록 차단.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          }
+        ],
+        "segmentationNote": "Exact sentence/arrow-delimited spans retained. Each partial candidate is limited to its actual excerpt; remaining behavior stays a gap."
+      },
+      "applicability": {
+        "kind": "runtime",
+        "rationale": "Behavior-bearing glossary, actor, interface and maintenance clauses are not automatically exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/admin/AdminServer.ts",
+            "symbol": "legacyFlagsRequired: policyDecision.missingFlags",
+            "line": 507,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          }
+        ]
+      },
+      "verification": [
+        {
+          "testPath": "test/component/server/admin/AdminServer.security.test.ts",
+          "caseLine": 127,
+          "exactTitle": "AdminServer security hardening rejects insecure admin option updates without explicit legacy allowances",
+          "parameters": [],
+          "assertionEvidence": {
+            "startLine": 146,
+            "endLine": 167,
+            "exactSource": "        const read = JSON.parse((await httpRequest({port, path: \"/api/serverOption\", headers: {cookie}})).body);\n        const insecureOption = read.serverOption;\n        insecureOption.adminTls = false;\n        insecureOption.adminBindHost = \"0.0.0.0\";\n\n        const response = await httpRequest({\n            port,\n            path: \"/api/serverOption\",\n            method: \"POST\",\n            headers: {\n                \"Content-Type\": \"application/json\",\n                cookie,\n                \"x-csrf-token\": csrfToken\n            },\n            body: JSON.stringify({...insecureOption, expectedRevision: read.revisionState.currentRevision})\n        });\n\n        expect(response.statusCode).toBe(400);\n        expect(JSON.parse(response.body)).toMatchObject({\n            success: false,\n            legacyFlagsRequired: [LEGACY_ADMIN_HTTP_FLAG, LEGACY_ADMIN_REMOTE_FLAG]\n        });"
+          },
+          "scopeLimitation": "Authenticated snapshot POST changing TLSfalse+0.0.0.0 returns400 and both required allowance flags. Does not isolate each violation or every side effect.",
+          "technique": "actual-admin-http-candidate",
+          "state": "candidate",
+          "evidence": [],
+          "assertedClauseRefs": [
+            "VER-ADMIN-UPDATE-POLICY-001::c1"
+          ]
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "legacyAliasGap": "No bare REQ label is joined. A legacy alias needs original document scope and pinned byte/version identity; raw CRLF-sensitive hashes are not silently reused.",
+      "status": "unverified",
+      "evidence": [],
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "gaps": [
+        {
+          "clauseRef": "VER-ADMIN-UPDATE-POLICY-001::c1",
+          "reason": "Actual authenticated API case rejects simultaneous HTTP/nonloopback change with both required flags. Independent each-policy branch and all runtime nonmutation assertions remain unmapped. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "VER-ADMIN-UPDATE-POLICY-001::c2",
+          "reason": "Actual authenticated API case rejects simultaneous HTTP/nonloopback change with both required flags. Independent each-policy branch and all runtime nonmutation assertions remain unmapped. Exact runtime receipts remain absent."
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 146,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "NFR-SEC-HSTS-001"
+      },
+      "category": "nonfunctional_req",
+      "title": "HSTS max-age 2년",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1081,
+        "exactHeading": "##### NFR-SEC-HSTS-001 — HSTS max-age 2년",
+        "sidecarId": "NFR-SEC-HSTS-001"
+      },
+      "originalRecord": {
+        "id": "NFR-SEC-HSTS-001",
+        "type": "nonfunctional_req",
+        "title": "HSTS max-age 2년",
+        "description": "TLS 활성 시 모든 응답에 `Strict-Transport-Security: max-age=63072000; includeSubDomains` 헤더 설정.",
+        "source": [
+          "src/server/admin/AdminServer.ts:148-150"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "category": "security",
+        "metric": "max-age=63072000 (2y)"
+      },
+      "acceptance": {
+        "originalDescription": "TLS 활성 시 모든 응답에 `Strict-Transport-Security: max-age=63072000; includeSubDomains` 헤더 설정.",
+        "clauses": [
+          {
+            "id": "NFR-SEC-HSTS-001::c1",
+            "sourceRef": "description.segment[0]",
+            "originalText": "TLS 활성 시 모든 응답에 `Strict-Transport-Security: max-age=63072000; includeSubDomains` 헤더 설정.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-HSTS-001::c2",
+            "sourceRef": "metric",
+            "originalText": "max-age=63072000 (2y)",
+            "rationale": "Original auxiliary acceptance text retained.",
+            "state": "unverified"
+          }
+        ],
+        "segmentationNote": "Exact sentence/arrow-delimited spans retained. Each partial candidate is limited to its actual excerpt; remaining behavior stays a gap."
+      },
+      "applicability": {
+        "kind": "runtime",
+        "rationale": "Behavior-bearing glossary, actor, interface and maintenance clauses are not automatically exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/admin/AdminServer.ts",
+            "symbol": "res.setHeader(\"Strict-Transport-Security\"",
+            "line": 151,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "legacyAliasGap": "No bare REQ label is joined. A legacy alias needs original document scope and pinned byte/version identity; raw CRLF-sensitive hashes are not silently reused.",
+      "status": "unverified",
+      "evidence": [],
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "gaps": [
+        {
+          "clauseRef": "NFR-SEC-HSTS-001::c1",
+          "reason": "No actual native HTTPS response header assertion linked. TLS fixture success/isSecure flag alone is not HSTS evidence; all-response/error-path coverage remains gap. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "NFR-SEC-HSTS-001::c2",
+          "reason": "No actual native HTTPS response header assertion linked. TLS fixture success/isSecure flag alone is not HSTS evidence; all-response/error-path coverage remains gap. Exact runtime receipts remain absent."
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 147,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "NFR-SEC-NO-CACHE-001"
+      },
+      "category": "nonfunctional_req",
+      "title": "GET 응답 no-cache",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1105,
+        "exactHeading": "##### NFR-SEC-NO-CACHE-001 — GET 응답 no-cache",
+        "sidecarId": "NFR-SEC-NO-CACHE-001"
+      },
+      "originalRecord": {
+        "id": "NFR-SEC-NO-CACHE-001",
+        "type": "nonfunctional_req",
+        "title": "GET 응답 no-cache",
+        "description": "GET 라우팅 초입에 `Cache-Control: no-cache, no-store, must-revalidate` 설정. 민감 정보 캐싱 방지.",
+        "source": [
+          "src/server/admin/AdminServer.ts:240-243"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "category": "security"
+      },
+      "acceptance": {
+        "originalDescription": "GET 라우팅 초입에 `Cache-Control: no-cache, no-store, must-revalidate` 설정. 민감 정보 캐싱 방지.",
+        "clauses": [
+          {
+            "id": "NFR-SEC-NO-CACHE-001::c1",
+            "sourceRef": "description.segment[0]",
+            "originalText": "GET 라우팅 초입에 `Cache-Control: no-cache, no-store, must-revalidate` 설정.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-NO-CACHE-001::c2",
+            "sourceRef": "description.segment[1]",
+            "originalText": "민감 정보 캐싱 방지.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          }
+        ],
+        "segmentationNote": "Exact sentence/arrow-delimited spans retained. Each partial candidate is limited to its actual excerpt; remaining behavior stays a gap."
+      },
+      "applicability": {
+        "kind": "runtime",
+        "rationale": "Behavior-bearing glossary, actor, interface and maintenance clauses are not automatically exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/admin/AdminServer.ts",
+            "symbol": "res.setHeader('Cache-Control'",
+            "line": 249,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "legacyAliasGap": "No bare REQ label is joined. A legacy alias needs original document scope and pinned byte/version identity; raw CRLF-sensitive hashes are not silently reused.",
+      "status": "unverified",
+      "evidence": [],
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "gaps": [
+        {
+          "clauseRef": "NFR-SEC-NO-CACHE-001::c1",
+          "reason": "No exact actual GET Cache-Control header assertion linked. GET200 or body schema does not prove cache policy. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "NFR-SEC-NO-CACHE-001::c2",
+          "reason": "No exact actual GET Cache-Control header assertion linked. GET200 or body schema does not prove cache policy. Exact runtime receipts remain absent."
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 148,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "ACT-CLI-OPERATOR-001"
+      },
+      "category": "actor",
+      "title": "클라이언트 운영자",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 86,
+        "exactHeading": "#### ACT-CLI-OPERATOR-001 — 클라이언트 운영자",
+        "sidecarId": "ACT-CLI-OPERATOR-001"
+      },
+      "originalRecord": {
+        "id": "ACT-CLI-OPERATOR-001",
+        "type": "actor",
+        "title": "클라이언트 운영자",
+        "description": "내부 NAT 뒤에서 TTTGate 클라이언트 프로세스를 CLI/YAML 로 기동/관리하는 운영자. config/client.yaml 과 CLI 옵션을 통해 서버 접속/인증/TLS/버퍼 한도를 구성한다.",
+        "source": [
+          "src/client/ClientApp.ts:111-220",
+          "config/client.sample.yaml:1-18"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "내부 NAT 뒤에서 TTTGate 클라이언트 프로세스를 CLI/YAML 로 기동/관리하는 운영자. config/client.yaml 과 CLI 옵션을 통해 서버 접속/인증/TLS/버퍼 한도를 구성한다.",
+        "clauses": [
+          {
+            "id": "ACT-CLI-OPERATOR-001::c1",
+            "sourceRef": "description.segment[0]",
+            "originalText": "내부 NAT 뒤에서 TTTGate 클라이언트 프로세스를 CLI/YAML 로 기동/관리하는 운영자.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "ACT-CLI-OPERATOR-001::c2",
+            "sourceRef": "description.segment[1]",
+            "originalText": "config/client.yaml 과 CLI 옵션을 통해 서버 접속/인증/TLS/버퍼 한도를 구성한다.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          }
+        ],
+        "segmentationNote": "Exact sentence/arrow-delimited spans retained. Each partial candidate is limited to its actual excerpt; remaining behavior stays a gap."
+      },
+      "applicability": {
+        "kind": "runtime",
+        "rationale": "Actor identity/NAT placement is context, but CLI/YAML configuration of auth/TLS/buffer has behavior and stays an explicit gap. No unit option getter is labeled native startup/verification."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/ClientApp.ts",
+            "symbol": "let _loadClientOption =",
+            "line": 111,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          },
+          {
+            "path": "src/client/ClientApp.ts",
+            "symbol": "let ClientApp",
+            "line": 215,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "legacyAliasGap": "No bare REQ label is joined. A legacy alias needs original document scope and pinned byte/version identity; raw CRLF-sensitive hashes are not silently reused.",
+      "status": "unverified",
+      "evidence": [],
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "gaps": [
+        {
+          "clauseRef": "ACT-CLI-OPERATOR-001::c1",
+          "reason": "Actor identity/NAT placement is context, but CLI/YAML configuration of auth/TLS/buffer has behavior and stays an explicit gap. No unit option getter is labeled native startup/verification. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "ACT-CLI-OPERATOR-001::c2",
+          "reason": "Actor identity/NAT placement is context, but CLI/YAML configuration of auth/TLS/buffer has behavior and stays an explicit gap. No unit option getter is labeled native startup/verification. Exact runtime receipts remain absent."
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 149,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-CLI-PARSE-001"
+      },
+      "category": "functional_req",
+      "title": "CLI 모드/옵션 파싱",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 479,
+        "exactHeading": "##### FR-CLI-PARSE-001 — CLI 모드/옵션 파싱",
+        "sidecarId": "FR-CLI-PARSE-001"
+      },
+      "originalRecord": {
+        "id": "FR-CLI-PARSE-001",
+        "type": "functional_req",
+        "title": "CLI 모드/옵션 파싱",
+        "description": "CLI 는 `server|client|stop|none` 모드와 `-key value` 또는 `-key=value` 형태의 단순 옵션을 파싱한다. mode 는 첫 번째 비-옵션 인자로 지정된다. 인자 없이 실행하거나 첫 번째 비-옵션 인자가 server|client|stop 중 어느 것과도 매칭되지 않을 경우 mode=none 이 반환되며, 상위 엔트리포인트는 usage 를 출력한다.",
+        "source": [
+          "src/util/CLI.ts:10-56"
+        ],
+        "confidence": 0.98,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "CLI 는 `server|client|stop|none` 모드와 `-key value` 또는 `-key=value` 형태의 단순 옵션을 파싱한다. mode 는 첫 번째 비-옵션 인자로 지정된다. 인자 없이 실행하거나 첫 번째 비-옵션 인자가 server|client|stop 중 어느 것과도 매칭되지 않을 경우 mode=none 이 반환되며, 상위 엔트리포인트는 usage 를 출력한다.",
+        "clauses": [
+          {
+            "id": "FR-CLI-PARSE-001::c1",
+            "sourceRef": "description.segment[0]",
+            "originalText": "CLI 는 `server|client|stop|none` 모드와 `-key value` 또는 `-key=value` 형태의 단순 옵션을 파싱한다.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-CLI-PARSE-001::c2",
+            "sourceRef": "description.segment[1]",
+            "originalText": "mode 는 첫 번째 비-옵션 인자로 지정된다.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-CLI-PARSE-001::c3",
+            "sourceRef": "description.segment[2]",
+            "originalText": "인자 없이 실행하거나 첫 번째 비-옵션 인자가 server|client|stop 중 어느 것과도 매칭되지 않을 경우 mode=none 이 반환되며, 상위 엔트리포인트는 usage 를 출력한다.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          }
+        ],
+        "segmentationNote": "Exact sentence/arrow-delimited spans retained. Each partial candidate is limited to its actual excerpt; remaining behavior stays a gap."
+      },
+      "applicability": {
+        "kind": "runtime",
+        "rationale": "Behavior-bearing glossary, actor, interface and maintenance clauses are not automatically exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/CLI.ts",
+            "symbol": "public static parseCommandLine",
+            "line": 40,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          },
+          {
+            "path": "src/util/CLI.ts",
+            "symbol": "public static readSimpleOptions",
+            "line": 15,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          },
+          {
+            "path": "src/app.ts",
+            "symbol": "console.log('Usage",
+            "line": 40,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [
+        {
+          "testPath": "test/unit/util/CLI.test.ts",
+          "reason": "Known mode after options tests do not resolve original first-nonoption/unknown rule; no candidate attached to disputed ordering."
+        }
+      ],
+      "legacyAliases": [],
+      "legacyAliasGap": "No bare REQ label is joined. A legacy alias needs original document scope and pinned byte/version identity; raw CRLF-sensitive hashes are not silently reused.",
+      "status": "unverified",
+      "evidence": [],
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "gaps": [
+        {
+          "clauseRef": "FR-CLI-PARSE-001::c1",
+          "reason": "Current parser scans until a recognized mode while mode remains none; first non-option unknown followed by recognized mode can select that later mode. Original says first non-option decides none on mismatch. Existing option-order tests do not reconcile this difference; no approved decision located. No existing case is linked to the disputed original sequence. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "FR-CLI-PARSE-001::c2",
+          "reason": "Current parser scans until a recognized mode while mode remains none; first non-option unknown followed by recognized mode can select that later mode. Original says first non-option decides none on mismatch. Existing option-order tests do not reconcile this difference; no approved decision located. No existing case is linked to the disputed original sequence. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "FR-CLI-PARSE-001::c3",
+          "reason": "Current parser scans until a recognized mode while mode remains none; first non-option unknown followed by recognized mode can select that later mode. Original says first non-option decides none on mismatch. Existing option-order tests do not reconcile this difference; no approved decision located. No existing case is linked to the disputed original sequence. Exact runtime receipts remain absent."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "approvedImplementationDecisions": [],
+        "note": "No approved decision identified reconciling the stated discrepancy; no new policy or scope waiver inferred."
+      }
+    },
+    {
+      "originalOrdinal": 150,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-CLI-CLIENT-OPTS-001"
+      },
+      "category": "functional_req",
+      "title": "클라이언트 CLI 옵션 집합",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 455,
+        "exactHeading": "##### FR-CLI-CLIENT-OPTS-001 — 클라이언트 CLI 옵션 집합",
+        "sidecarId": "FR-CLI-CLIENT-OPTS-001"
+      },
+      "originalRecord": {
+        "id": "FR-CLI-CLIENT-OPTS-001",
+        "type": "functional_req",
+        "title": "클라이언트 CLI 옵션 집합",
+        "description": "ClientApp._loadClientOption 는 다음 CLI 플래그를 수용한다: -key, -addr(host[:port]), -keepAlive, -tls, -name, -clientId, -clientSecret, -displayName, -serverName, -ca, -cert, -privateKey, -allowLegacyFallback, -allowInsecureTls, -bufferLimit, -save, -yes-insecure. YAML 저장된 값과 병합되며 CLI 가 우선한다.",
+        "source": [
+          "src/client/ClientApp.ts:124-220"
+        ],
+        "confidence": 0.97,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "ClientApp._loadClientOption 는 다음 CLI 플래그를 수용한다: -key, -addr(host[:port]), -keepAlive, -tls, -name, -clientId, -clientSecret, -displayName, -serverName, -ca, -cert, -privateKey, -allowLegacyFallback, -allowInsecureTls, -bufferLimit, -save, -yes-insecure. YAML 저장된 값과 병합되며 CLI 가 우선한다.",
+        "clauses": [
+          {
+            "id": "FR-CLI-CLIENT-OPTS-001::c1",
+            "sourceRef": "description.segment[0]",
+            "originalText": "ClientApp._loadClientOption 는 다음 CLI 플래그를 수용한다: -key, -addr(host[:port]), -keepAlive, -tls, -name, -clientId, -clientSecret, -displayName, -serverName, -ca, -cert, -privateKey, -allowLegacyFallback, -allowInsecureTls, -bufferLimit, -save, -yes-insecure.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-CLI-CLIENT-OPTS-001::c2",
+            "sourceRef": "description.segment[1]",
+            "originalText": "YAML 저장된 값과 병합되며 CLI 가 우선한다.",
+            "rationale": "Exact original behavior-bearing or contextual span retained; no runtime verification inferred.",
+            "state": "unverified"
+          }
+        ],
+        "segmentationNote": "Exact sentence/arrow-delimited spans retained. Each partial candidate is limited to its actual excerpt; remaining behavior stays a gap."
+      },
+      "applicability": {
+        "kind": "runtime",
+        "rationale": "Behavior-bearing glossary, actor, interface and maintenance clauses are not automatically exempt."
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/ClientApp.ts",
+            "symbol": "let _loadClientOption =",
+            "line": 111,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          },
+          {
+            "path": "src/client/ClientApp.ts",
+            "symbol": "let _loadClientOptionFromFile",
+            "line": 61,
+            "rationale": "Current source anchor only; names/types/options are not native runtime proof."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [
+        {
+          "testPath": "test/component/client/keepalive-options.test.ts",
+          "reason": "Selected keepAlive factory options do not assert the complete CLI flag set or YAML precedence for every field."
+        }
+      ],
+      "legacyAliases": [],
+      "legacyAliasGap": "No bare REQ label is joined. A legacy alias needs original document scope and pinned byte/version identity; raw CRLF-sensitive hashes are not silently reused.",
+      "status": "unverified",
+      "evidence": [],
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "gaps": [
+        {
+          "clauseRef": "FR-CLI-CLIENT-OPTS-001::c1",
+          "reason": "Flag branches and YAML-before-CLI order are located. No per-flag actual CLI-over-saved-value matrix is mapped. Truthiness handling and runtime-only insecure flags/yes-insecure loading policy mean broad unconditional CLI precedence requires case-level review; default/keepAlive-only tests are not full option-set evidence. Exact runtime receipts remain absent."
+        },
+        {
+          "clauseRef": "FR-CLI-CLIENT-OPTS-001::c2",
+          "reason": "Flag branches and YAML-before-CLI order are located. No per-flag actual CLI-over-saved-value matrix is mapped. Truthiness handling and runtime-only insecure flags/yes-insecure loading policy mean broad unconditional CLI precedence requires case-level review; default/keepAlive-only tests are not full option-set evidence. Exact runtime receipts remain absent."
+        }
+      ]
+    }
+  ]
+}

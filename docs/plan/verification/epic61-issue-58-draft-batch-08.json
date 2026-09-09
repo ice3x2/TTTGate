@@ -1,0 +1,3791 @@
+{
+  "artifactKind": "noncanonical-semantic-draft",
+  "batch": "08",
+  "status": "candidate-unreviewed; source reading only",
+  "sourceManifest": {
+    "path": "docs/plan/srs/TTTGate.md",
+    "sidecarPath": "docs/plan/srs/TTTGate.items.jsonl",
+    "documentVersion": "1.0",
+    "markdownSha256": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+    "sidecarSha256": "364071a1f67e07501e7277e15ebdac057eb17ae8e6c2e076a3a550d916625657"
+  },
+  "sourceCheckpoint": "58f71969ef2df77bb729e21cb4b709b4c61d8acb",
+  "inventoryPolicy": {
+    "canonicalRequired": 366,
+    "batchSize": 25,
+    "selected": "Original sidecar ordinals 176 through 200 inclusive"
+  },
+  "execution": {
+    "testsRun": false,
+    "validatorRun": false,
+    "buildRun": false,
+    "evidence": []
+  },
+  "rows": [
+    {
+      "originalOrdinal": 176,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "NFR-PERF-FILECACHE-001"
+      },
+      "originalRecord": {
+        "id": "NFR-PERF-FILECACHE-001",
+        "type": "nonfunctional_req",
+        "title": "파일 캐시 per-handler/global 한도",
+        "description": "fileCachePerHandlerLimitBytes=32MiB, fileCacheGlobalLimitBytes=256MiB 기본. 초과 시 write 실패 + 소켓 destroy.",
+        "source": [
+          "src/util/ResourcePolicy.ts:14-21",
+          "src/util/SocketHandler.ts:522-544",
+          "src/util/SocketHandler.ts:759-764"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "category": "performance",
+        "metric": "per=32MiB global=256MiB"
+      },
+      "category": "nonfunctional_req",
+      "title": "파일 캐시 per-handler/global 한도",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 927,
+        "exactHeading": "##### NFR-PERF-FILECACHE-001 — 파일 캐시 per-handler/global 한도",
+        "sidecarId": "NFR-PERF-FILECACHE-001"
+      },
+      "acceptance": {
+        "descriptionRef": "NFR-PERF-FILECACHE-001",
+        "originalDescription": "fileCachePerHandlerLimitBytes=32MiB, fileCacheGlobalLimitBytes=256MiB 기본. 초과 시 write 실패 + 소켓 destroy.",
+        "clauses": [
+          {
+            "id": "NFR-PERF-FILECACHE-001::c1",
+            "text": "The default per-handler file-cache policy is 32 MiB.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-PERF-FILECACHE-001::c2",
+            "text": "The default global file-cache policy is 256 MiB.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-PERF-FILECACHE-001::c3",
+            "text": "Exceeding the effective quota fails the write.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-PERF-FILECACHE-001::c4",
+            "text": "Quota overflow destroys the socket.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-PERF-FILECACHE-001::metric",
+            "text": "per=32MiB global=256MiB",
+            "sourceRef": "metric",
+            "rationale": "Original auxiliary obligation retained, not exempted.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/SocketHandler.ts",
+            "line": 782,
+            "symbol": "private canWriteToFileCache",
+            "rationale": "Read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing interfaces/constraints are not automatically exempt."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "NFR-PERF-FILECACHE-001::c1",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-PERF-FILECACHE-001::c2",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-PERF-FILECACHE-001::c3",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-PERF-FILECACHE-001::c4",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-PERF-FILECACHE-001::metric",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Policy32MiB is a baseline: effectiveFileCacheLimitBytes returns max(policy, positive memory limit*4), so not every handler has effective32MiB. Synthetic resource socket tests cannot alone prove native destruction. #40 policy remains separate."
+      }
+    },
+    {
+      "originalOrdinal": 177,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "NFR-PERF-WATERMARK-001"
+      },
+      "originalRecord": {
+        "id": "NFR-PERF-WATERMARK-001",
+        "type": "nonfunctional_req",
+        "title": "백프레셔 워터마크",
+        "description": "highWatermarkRatio=0.75, lowWatermarkRatio=0.5 (0.05~0.95 로 clamp). waitQueueBytes>=high 에서 pauseRead, <=low 에서 resumeRead. computeWatermarkBytes 제공.",
+        "source": [
+          "src/util/ResourcePolicy.ts:14-21",
+          "src/util/ResourcePolicy.ts:130-141",
+          "src/util/SocketHandler.ts:143-149",
+          "src/util/SocketHandler.ts:766-775"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "category": "performance",
+        "metric": "high=0.75 low=0.5"
+      },
+      "category": "nonfunctional_req",
+      "title": "백프레셔 워터마크",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 983,
+        "exactHeading": "##### NFR-PERF-WATERMARK-001 — 백프레셔 워터마크",
+        "sidecarId": "NFR-PERF-WATERMARK-001"
+      },
+      "acceptance": {
+        "descriptionRef": "NFR-PERF-WATERMARK-001",
+        "originalDescription": "highWatermarkRatio=0.75, lowWatermarkRatio=0.5 (0.05~0.95 로 clamp). waitQueueBytes>=high 에서 pauseRead, <=low 에서 resumeRead. computeWatermarkBytes 제공.",
+        "clauses": [
+          {
+            "id": "NFR-PERF-WATERMARK-001::c1",
+            "text": "The default high watermark ratio is 0.75.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-PERF-WATERMARK-001::c2",
+            "text": "The default low watermark ratio is 0.5.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-PERF-WATERMARK-001::c3",
+            "text": "Clamp ratios to 0.05 through 0.95.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-PERF-WATERMARK-001::c4",
+            "text": "Pause reads when queued bytes reach the high watermark.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-PERF-WATERMARK-001::c5",
+            "text": "Resume reads when queued bytes fall to or below the low watermark.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-PERF-WATERMARK-001::c6",
+            "text": "Expose computeWatermarkBytes.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-PERF-WATERMARK-001::metric",
+            "text": "high=0.75 low=0.5",
+            "sourceRef": "metric",
+            "rationale": "Original auxiliary obligation retained, not exempted.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/ResourcePolicy.ts",
+            "line": 130,
+            "symbol": "const computeWatermarkBytes",
+            "rationale": "Read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing interfaces/constraints are not automatically exempt."
+      },
+      "verification": [
+        {
+          "testPath": "test/util/r2-req-06-resource-policy-strict.test.ts",
+          "caseLine": 18,
+          "exactTitle": "R2-REQ-06 ResourcePolicy strict mode (a) 기본 모드: 잘못된 ratio 값 WARN + clamp",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "NFR-PERF-WATERMARK-001::c3"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 23,
+              "text": "expect(cur.highWatermarkRatio).toBe(0.95);"
+            }
+          ],
+          "rationale": "Upper clamp at 1.5 -> .95 only. Console warn is mocked and not asserted; no read pause/resume or lower-bound/default ratio proof.",
+          "technique": "source-read-candidate",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "NFR-PERF-WATERMARK-001::c1",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-PERF-WATERMARK-001::c2",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-PERF-WATERMARK-001::c3",
+          "explanation": "Concrete assertion candidate only; full clause coverage and exact non-skipped receipt remain absent.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-PERF-WATERMARK-001::c4",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-PERF-WATERMARK-001::c5",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-PERF-WATERMARK-001::c6",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-PERF-WATERMARK-001::metric",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "ResourcePolicy clamps only in non-strict mode; strict invalid values throw. Runtime limit<=0 suppresses ordinary low watermark behavior. Do not conflate formula/getter with native pause/resume."
+      }
+    },
+    {
+      "originalOrdinal": 178,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "NFR-PERF-POOL-QUEUE-001"
+      },
+      "originalRecord": {
+        "id": "NFR-PERF-POOL-QUEUE-001",
+        "type": "nonfunctional_req",
+        "title": "세션/풀 큐 상한(WaitBuffer)",
+        "description": "TunnelClient waitBufferQueueMap 은 per-session limitBytes(=handler.bufferSizeLimit) 와 글로벌 defaultPoolQueueLimitBytes(64MiB 기본)에 의해 양방향 제한. 초과 시 해당 세션을 강제 close.",
+        "source": [
+          "src/client/TunnelClient.ts:601-635",
+          "src/util/ResourcePolicy.ts:14-21"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "category": "performance",
+        "metric": "default pool queue limit=64MiB"
+      },
+      "category": "nonfunctional_req",
+      "title": "세션/풀 큐 상한(WaitBuffer)",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 967,
+        "exactHeading": "##### NFR-PERF-POOL-QUEUE-001 — 세션/풀 큐 상한(WaitBuffer)",
+        "sidecarId": "NFR-PERF-POOL-QUEUE-001"
+      },
+      "acceptance": {
+        "descriptionRef": "NFR-PERF-POOL-QUEUE-001",
+        "originalDescription": "TunnelClient waitBufferQueueMap 은 per-session limitBytes(=handler.bufferSizeLimit) 와 글로벌 defaultPoolQueueLimitBytes(64MiB 기본)에 의해 양방향 제한. 초과 시 해당 세션을 강제 close.",
+        "clauses": [
+          {
+            "id": "NFR-PERF-POOL-QUEUE-001::c1",
+            "text": "Limit each waiting session by its handler bufferSizeLimit.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-PERF-POOL-QUEUE-001::c2",
+            "text": "Limit aggregate waiting bytes by defaultPoolQueueLimitBytes.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-PERF-POOL-QUEUE-001::c3",
+            "text": "The default pool limit is 64 MiB.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-PERF-POOL-QUEUE-001::c4",
+            "text": "Close only the overflowing session when either limit is exceeded.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-PERF-POOL-QUEUE-001::metric",
+            "text": "default pool queue limit=64MiB",
+            "sourceRef": "metric",
+            "rationale": "Original auxiliary obligation retained, not exempted.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/TunnelClient.ts",
+            "line": 717,
+            "symbol": "private reserveWaitBufferBytes",
+            "rationale": "Read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing interfaces/constraints are not automatically exempt."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "NFR-PERF-POOL-QUEUE-001::c1",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-PERF-POOL-QUEUE-001::c2",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-PERF-POOL-QUEUE-001::c3",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-PERF-POOL-QUEUE-001::c4",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-PERF-POOL-QUEUE-001::metric",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "The phrase global describes aggregate _waitBufferBytesTotal of this TunnelClient instance, not a process-global counter. Overflows invoke closeEndPointSession; original force-close timing needs exact case mapping."
+      }
+    },
+    {
+      "originalOrdinal": 179,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "NFR-PERF-HTTP-DECOMPRESS-001"
+      },
+      "originalRecord": {
+        "id": "NFR-PERF-HTTP-DECOMPRESS-001",
+        "type": "nonfunctional_req",
+        "title": "HTTP rewrite 압축해제 상한",
+        "description": "httpRewriteDecompressLimitBytes=8MiB. 재작성 시 압축해제 후 데이터 크기 상한.",
+        "source": [
+          "src/util/ResourcePolicy.ts:14-21"
+        ],
+        "confidence": 0.9,
+        "inferred": false,
+        "phase_added": 2,
+        "category": "performance",
+        "metric": "8MiB"
+      },
+      "category": "nonfunctional_req",
+      "title": "HTTP rewrite 압축해제 상한",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 935,
+        "exactHeading": "##### NFR-PERF-HTTP-DECOMPRESS-001 — HTTP rewrite 압축해제 상한",
+        "sidecarId": "NFR-PERF-HTTP-DECOMPRESS-001"
+      },
+      "acceptance": {
+        "descriptionRef": "NFR-PERF-HTTP-DECOMPRESS-001",
+        "originalDescription": "httpRewriteDecompressLimitBytes=8MiB. 재작성 시 압축해제 후 데이터 크기 상한.",
+        "clauses": [
+          {
+            "id": "NFR-PERF-HTTP-DECOMPRESS-001::c1",
+            "text": "The default rewrite decompression limit is 8 MiB.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-PERF-HTTP-DECOMPRESS-001::c2",
+            "text": "Enforce the limit on decompressed data during rewrite.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-PERF-HTTP-DECOMPRESS-001::metric",
+            "text": "8MiB",
+            "sourceRef": "metric",
+            "rationale": "Original auxiliary obligation retained, not exempted.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/server/http/HttpHandler.ts",
+            "line": 509,
+            "symbol": "ResourcePolicyRegistry.current().httpRewriteDecompressLimitBytes",
+            "rationale": "Read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing interfaces/constraints are not automatically exempt."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "NFR-PERF-HTTP-DECOMPRESS-001::c1",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-PERF-HTTP-DECOMPRESS-001::c2",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-PERF-HTTP-DECOMPRESS-001::metric",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Read HttpHandler rewrite call using the configured bound; no output-size/decoder-failure candidate here proves all compression formats or absence of transient allocations."
+      }
+    },
+    {
+      "originalOrdinal": 180,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "IF-QUEUE-LIMITER-001"
+      },
+      "originalRecord": {
+        "id": "IF-QUEUE-LIMITER-001",
+        "type": "interface",
+        "title": "QueueLimiter",
+        "description": "shouldSpillToFile(input) 으로 메모리→파일 전환 결정. Registry 로 테스트 대체 가능.",
+        "source": [
+          "src/util/QueueLimiter.ts:1-35"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "category": "interface",
+      "title": "QueueLimiter",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1763,
+        "exactHeading": "##### IF-QUEUE-LIMITER-001 — QueueLimiter",
+        "sidecarId": "IF-QUEUE-LIMITER-001"
+      },
+      "acceptance": {
+        "descriptionRef": "IF-QUEUE-LIMITER-001",
+        "originalDescription": "shouldSpillToFile(input) 으로 메모리→파일 전환 결정. Registry 로 테스트 대체 가능.",
+        "clauses": [
+          {
+            "id": "IF-QUEUE-LIMITER-001::c1",
+            "text": "shouldSpillToFile decides memory-to-file transition.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-QUEUE-LIMITER-001::c2",
+            "text": "The registry allows replacing the limiter for tests.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/QueueLimiter.ts",
+            "line": 23,
+            "symbol": "const QueueLimiterRegistry",
+            "rationale": "Read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing interfaces/constraints are not automatically exempt."
+      },
+      "verification": [
+        {
+          "testPath": "test/unit/util/QueueLimiter.test.ts",
+          "caseLine": 8,
+          "exactTitle": "QueueLimiter baseline seam keeps the current spill-to-file decision contract",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "IF-QUEUE-LIMITER-001::c1"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 17,
+              "text": "expect(shouldSpill).toBe(true);"
+            }
+          ],
+          "rationale": "Pure decision with incoming32/local96/limit100; does not perform native file spill.",
+          "technique": "source-read-candidate",
+          "state": "candidate",
+          "evidence": []
+        },
+        {
+          "testPath": "test/unit/util/QueueLimiter.test.ts",
+          "caseLine": 32,
+          "exactTitle": "QueueLimiter baseline seam can be overridden by tests without touching SocketHandler",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "IF-QUEUE-LIMITER-001::c2"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 45,
+              "text": "})).toBe(false);"
+            }
+          ],
+          "rationale": "Explicit injected limiter returns false through registry; only DI interface candidate, never actual production limiter behavior.",
+          "technique": "source-read-candidate",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "IF-QUEUE-LIMITER-001::c1",
+          "explanation": "Concrete assertion candidate only; full clause coverage and exact non-skipped receipt remain absent.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "IF-QUEUE-LIMITER-001::c2",
+          "explanation": "Concrete assertion candidate only; full clause coverage and exact non-skipped receipt remain absent.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 181,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "IF-RESOURCE-POLICY-001"
+      },
+      "originalRecord": {
+        "id": "IF-RESOURCE-POLICY-001",
+        "type": "interface",
+        "title": "ResourcePolicyRegistry",
+        "description": "configure/current/reset + configureStrict. RESOURCE_POLICY_STRICT=1 환경변수로 strict 자동 활성(잘못된 입력 RangeError).",
+        "source": [
+          "src/util/ResourcePolicy.ts:1-128"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "category": "interface",
+      "title": "ResourcePolicyRegistry",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1771,
+        "exactHeading": "##### IF-RESOURCE-POLICY-001 — ResourcePolicyRegistry",
+        "sidecarId": "IF-RESOURCE-POLICY-001"
+      },
+      "acceptance": {
+        "descriptionRef": "IF-RESOURCE-POLICY-001",
+        "originalDescription": "configure/current/reset + configureStrict. RESOURCE_POLICY_STRICT=1 환경변수로 strict 자동 활성(잘못된 입력 RangeError).",
+        "clauses": [
+          {
+            "id": "IF-RESOURCE-POLICY-001::c1",
+            "text": "Expose configure/current/reset.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-RESOURCE-POLICY-001::c2",
+            "text": "Expose configureStrict.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-RESOURCE-POLICY-001::c3",
+            "text": "RESOURCE_POLICY_STRICT=1 activates strict mode.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-RESOURCE-POLICY-001::c4",
+            "text": "Strict mode rejects invalid input with RangeError.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/ResourcePolicy.ts",
+            "line": 70,
+            "symbol": "const ResourcePolicyRegistry",
+            "rationale": "Read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing interfaces/constraints are not automatically exempt."
+      },
+      "verification": [
+        {
+          "testPath": "test/util/r2-req-06-resource-policy-strict.test.ts",
+          "caseLine": 43,
+          "exactTitle": "R2-REQ-06 ResourcePolicy strict mode (b) strict 모드: 잘못된 ratio → RangeError throw",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "IF-RESOURCE-POLICY-001::c2",
+            "IF-RESOURCE-POLICY-001::c4"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 46,
+              "text": "expect(() => ResourcePolicyRegistry.current()).toThrow(RangeError);"
+            }
+          ],
+          "rationale": "Real strict registry rejects high ratio1.5 at current() evaluation, not configure-time validation.",
+          "technique": "source-read-candidate",
+          "state": "candidate",
+          "evidence": []
+        },
+        {
+          "testPath": "test/util/r2-req-06-resource-policy-strict.test.ts",
+          "caseLine": 61,
+          "exactTitle": "R2-REQ-06 ResourcePolicy strict mode (c) RESOURCE_POLICY_STRICT=1 env 경로 (jest.isolateModules)",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "IF-RESOURCE-POLICY-001::c3",
+            "IF-RESOURCE-POLICY-001::c4"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 68,
+              "text": "expect(isolatedRegistry.isStrict()).toBe(true);"
+            },
+            {
+              "line": 70,
+              "text": "expect(() => isolatedRegistry.current()).toThrow(RangeError);"
+            }
+          ],
+          "rationale": "Module isolation with environment1 exercises initialization and invalid ratio. Not a standalone process/runtime pipeline.",
+          "technique": "source-read-candidate",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "IF-RESOURCE-POLICY-001::c1",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "IF-RESOURCE-POLICY-001::c2",
+          "explanation": "Concrete assertion candidate only; full clause coverage and exact non-skipped receipt remain absent.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "IF-RESOURCE-POLICY-001::c3",
+          "explanation": "Concrete assertion candidate only; full clause coverage and exact non-skipped receipt remain absent.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "IF-RESOURCE-POLICY-001::c4",
+          "explanation": "Concrete assertion candidate only; full clause coverage and exact non-skipped receipt remain absent.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 182,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "BR-TLS-SERVER-MIN-VERSION-001"
+      },
+      "originalRecord": {
+        "id": "BR-TLS-SERVER-MIN-VERSION-001",
+        "type": "business_rule",
+        "title": "서버 TLS 최소 버전/cipher 화이트리스트",
+        "description": "createServerTlsOptions 는 minVersion=TLSv1.2, maxVersion=TLSv1.3, honorCipherOrder=true, ciphers 는 ECDHE-AEAD 화이트리스트(6종). TLS1.3 ciphersuites 는 Node 기본.",
+        "source": [
+          "src/util/TlsOptionsFactory.ts:48-89"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "rule_statement": "Server TLS MUST reject TLS<1.2 and MUST use ECDHE-AEAD ciphers only on TLS1.2."
+      },
+      "category": "business_rule",
+      "title": "서버 TLS 최소 버전/cipher 화이트리스트",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3471,
+        "exactHeading": "#### BR-TLS-SERVER-MIN-VERSION-001 — 서버 TLS 최소 버전/cipher 화이트리스트",
+        "sidecarId": "BR-TLS-SERVER-MIN-VERSION-001"
+      },
+      "acceptance": {
+        "descriptionRef": "BR-TLS-SERVER-MIN-VERSION-001",
+        "originalDescription": "createServerTlsOptions 는 minVersion=TLSv1.2, maxVersion=TLSv1.3, honorCipherOrder=true, ciphers 는 ECDHE-AEAD 화이트리스트(6종). TLS1.3 ciphersuites 는 Node 기본.",
+        "clauses": [
+          {
+            "id": "BR-TLS-SERVER-MIN-VERSION-001::c1",
+            "text": "Server minVersion is TLSv1.2.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-TLS-SERVER-MIN-VERSION-001::c2",
+            "text": "Server maxVersion is TLSv1.3.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-TLS-SERVER-MIN-VERSION-001::c3",
+            "text": "Set honorCipherOrder=true.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-TLS-SERVER-MIN-VERSION-001::c4",
+            "text": "TLS1.2 ciphers are the six ECDHE-AEAD whitelist entries.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-TLS-SERVER-MIN-VERSION-001::c5",
+            "text": "TLS1.3 uses Node default ciphersuites.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-TLS-SERVER-MIN-VERSION-001::c6",
+            "text": "Reject protocol versions below TLS1.2.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-TLS-SERVER-MIN-VERSION-001::rule_statement",
+            "text": "Server TLS MUST reject TLS<1.2 and MUST use ECDHE-AEAD ciphers only on TLS1.2.",
+            "sourceRef": "rule_statement",
+            "rationale": "Original auxiliary obligation retained, not exempted.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/TlsOptionsFactory.ts",
+            "line": 16,
+            "symbol": "createServerTlsOptions(options: ServerTlsConfig)",
+            "rationale": "Read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing interfaces/constraints are not automatically exempt."
+      },
+      "verification": [
+        {
+          "testPath": "test/security/req-02-tls-settings.test.ts",
+          "caseLine": 48,
+          "exactTitle": "REQ-02 TlsOptionsFactory server TLS hardening (d) secureProtocol 부재 + honorCipherOrder + ECDHE-AEAD ciphers 화이트리스트",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "BR-TLS-SERVER-MIN-VERSION-001::c1",
+            "BR-TLS-SERVER-MIN-VERSION-001::c2",
+            "BR-TLS-SERVER-MIN-VERSION-001::c3"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 56,
+              "text": "expect(opt.minVersion).toBe(\"TLSv1.2\");"
+            },
+            {
+              "line": 57,
+              "text": "expect(opt.maxVersion).toBe(\"TLSv1.3\");"
+            },
+            {
+              "line": 58,
+              "text": "expect(opt.honorCipherOrder).toBe(true);"
+            }
+          ],
+          "rationale": "Factory option values only; these clauses concern returned options. Regex checks do not enumerate all six ciphers or prove negotiated profile.",
+          "technique": "source-read-candidate",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "BR-TLS-SERVER-MIN-VERSION-001::c1",
+          "explanation": "Concrete assertion candidate only; full clause coverage and exact non-skipped receipt remain absent.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "BR-TLS-SERVER-MIN-VERSION-001::c2",
+          "explanation": "Concrete assertion candidate only; full clause coverage and exact non-skipped receipt remain absent.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "BR-TLS-SERVER-MIN-VERSION-001::c3",
+          "explanation": "Concrete assertion candidate only; full clause coverage and exact non-skipped receipt remain absent.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "BR-TLS-SERVER-MIN-VERSION-001::c4",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "BR-TLS-SERVER-MIN-VERSION-001::c5",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "BR-TLS-SERVER-MIN-VERSION-001::c6",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "BR-TLS-SERVER-MIN-VERSION-001::rule_statement",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "TLS1.2 option regex checks are not exact six-cipher enumeration. Native TLS1.2/1.3 success tests disable peer authorization; protocol-version success is not certificate or full cipher whitelist verification."
+      }
+    },
+    {
+      "originalOrdinal": 183,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "NFR-SEC-TLS-SERVER-001"
+      },
+      "originalRecord": {
+        "id": "NFR-SEC-TLS-SERVER-001",
+        "type": "nonfunctional_req",
+        "title": "서버 TLS 보안 프로파일",
+        "description": "취약 cipher(RC4/3DES/CBC-legacy/DSS/anon/NULL/EXPORT) 배제. TLS1.0/1.1 거부.",
+        "source": [
+          "src/util/TlsOptionsFactory.ts:66-82"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "category": "security",
+        "metric": "minVersion=TLSv1.2"
+      },
+      "category": "nonfunctional_req",
+      "title": "서버 TLS 보안 프로파일",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1169,
+        "exactHeading": "##### NFR-SEC-TLS-SERVER-001 — 서버 TLS 보안 프로파일",
+        "sidecarId": "NFR-SEC-TLS-SERVER-001"
+      },
+      "acceptance": {
+        "descriptionRef": "NFR-SEC-TLS-SERVER-001",
+        "originalDescription": "취약 cipher(RC4/3DES/CBC-legacy/DSS/anon/NULL/EXPORT) 배제. TLS1.0/1.1 거부.",
+        "clauses": [
+          {
+            "id": "NFR-SEC-TLS-SERVER-001::c1",
+            "text": "Exclude RC4 ciphers.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-TLS-SERVER-001::c2",
+            "text": "Exclude 3DES ciphers.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-TLS-SERVER-001::c3",
+            "text": "Exclude legacy CBC ciphers.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-TLS-SERVER-001::c4",
+            "text": "Exclude DSS ciphers.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-TLS-SERVER-001::c5",
+            "text": "Exclude anonymous ciphers.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-TLS-SERVER-001::c6",
+            "text": "Exclude NULL ciphers.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-TLS-SERVER-001::c7",
+            "text": "Exclude EXPORT ciphers.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-TLS-SERVER-001::c8",
+            "text": "Reject TLS1.0.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-TLS-SERVER-001::c9",
+            "text": "Reject TLS1.1.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-TLS-SERVER-001::metric",
+            "text": "minVersion=TLSv1.2",
+            "sourceRef": "metric",
+            "rationale": "Original auxiliary obligation retained, not exempted.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/TlsOptionsFactory.ts",
+            "line": 74,
+            "symbol": "ciphers: [",
+            "rationale": "Read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing interfaces/constraints are not automatically exempt."
+      },
+      "verification": [],
+      "contextTests": [
+        {
+          "testPath": "test/security/req-02-tls-settings.test.ts",
+          "caseLine": 118,
+          "exactTitle": "REQ-02 TlsOptionsFactory server TLS hardening (c) TLS 1.1 강제 클라이언트는 handshake 거부",
+          "parameters": [],
+          "assertedClauseRefs": [],
+          "assertionAnchors": [
+            {
+              "line": 140,
+              "text": "})).rejects.toBeDefined();"
+            }
+          ],
+          "rationale": "Accepts any rejection including local OpenSSL throw; not definitive server-side TLS1.1 rejection. Peer verification is disabled in fixture.",
+          "technique": "source-read-candidate",
+          "state": "candidate",
+          "evidence": [],
+          "disposition": "context-only; not an acceptance link"
+        }
+      ],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "NFR-SEC-TLS-SERVER-001::c1",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-SEC-TLS-SERVER-001::c2",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-SEC-TLS-SERVER-001::c3",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-SEC-TLS-SERVER-001::c4",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-SEC-TLS-SERVER-001::c5",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-SEC-TLS-SERVER-001::c6",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-SEC-TLS-SERVER-001::c7",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-SEC-TLS-SERVER-001::c8",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-SEC-TLS-SERVER-001::c9",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-SEC-TLS-SERVER-001::metric",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "TLS1.1 rejection test permits local OpenSSL rejection before traffic reaches the server. No TLS1.0/native forbidden-cipher matrix is established; retain source profile and gaps."
+      }
+    },
+    {
+      "originalOrdinal": 184,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "BR-TLS-CLIENT-KEEPALIVE-001"
+      },
+      "originalRecord": {
+        "id": "BR-TLS-CLIENT-KEEPALIVE-001",
+        "type": "business_rule",
+        "title": "클라이언트 소켓 keepAlive 기본",
+        "description": "createClientSocketOptions keepalive 미지정 시 60000ms. MIN_KEEP_ALIVE=500ms 로 clamp.",
+        "source": [
+          "src/util/TlsOptionsFactory.ts:19-32"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "rule_statement": "keepAliveInitialDelay = max(keepalive??60000, 500)."
+      },
+      "category": "business_rule",
+      "title": "클라이언트 소켓 keepAlive 기본",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3463,
+        "exactHeading": "#### BR-TLS-CLIENT-KEEPALIVE-001 — 클라이언트 소켓 keepAlive 기본",
+        "sidecarId": "BR-TLS-CLIENT-KEEPALIVE-001"
+      },
+      "acceptance": {
+        "descriptionRef": "BR-TLS-CLIENT-KEEPALIVE-001",
+        "originalDescription": "createClientSocketOptions keepalive 미지정 시 60000ms. MIN_KEEP_ALIVE=500ms 로 clamp.",
+        "clauses": [
+          {
+            "id": "BR-TLS-CLIENT-KEEPALIVE-001::c1",
+            "text": "The generic client socket keepalive default is 60000 ms.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-TLS-CLIENT-KEEPALIVE-001::c2",
+            "text": "Clamp keepAliveInitialDelay to at least 500 ms.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-TLS-CLIENT-KEEPALIVE-001::rule_statement",
+            "text": "keepAliveInitialDelay = max(keepalive??60000, 500).",
+            "sourceRef": "rule_statement",
+            "rationale": "Original auxiliary obligation retained, not exempted.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/TlsOptionsFactory.ts",
+            "line": 28,
+            "symbol": "keepAliveInitialDelay:",
+            "rationale": "Read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing interfaces/constraints are not automatically exempt."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "BR-TLS-CLIENT-KEEPALIVE-001::c1",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "BR-TLS-CLIENT-KEEPALIVE-001::c2",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "BR-TLS-CLIENT-KEEPALIVE-001::rule_statement",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Generic factory unspecified60000/min500 is distinct from ClientApp/TunnelClient shared10000 defaults described in lifecycle research. No timing/outage detection claim.",
+        "contextLedger": "docs/plan/verification/epic61-lifecycle-research.md"
+      }
+    },
+    {
+      "originalOrdinal": 185,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-TLS-HOTSWAP-001"
+      },
+      "originalRecord": {
+        "id": "FR-TLS-HOTSWAP-001",
+        "type": "functional_req",
+        "title": "TLS 인증서 핫스왑",
+        "description": "TCPServer.applyTlsCertificateHotSwap 이 tls.Server.setSecureContext 로 cert/key/ca 를 교체. net.Server/종료된 서버/비-TLS 는 false.",
+        "source": [
+          "src/util/TCPServer.ts:132-158"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "category": "functional_req",
+      "title": "TLS 인증서 핫스왑",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 869,
+        "exactHeading": "##### FR-TLS-HOTSWAP-001 — TLS 인증서 핫스왑",
+        "sidecarId": "FR-TLS-HOTSWAP-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-TLS-HOTSWAP-001",
+        "originalDescription": "TCPServer.applyTlsCertificateHotSwap 이 tls.Server.setSecureContext 로 cert/key/ca 를 교체. net.Server/종료된 서버/비-TLS 는 false.",
+        "clauses": [
+          {
+            "id": "FR-TLS-HOTSWAP-001::c1",
+            "text": "Hot swap a live TLS server through setSecureContext.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-TLS-HOTSWAP-001::c2",
+            "text": "Replace certificate bytes.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-TLS-HOTSWAP-001::c3",
+            "text": "Replace private-key bytes.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-TLS-HOTSWAP-001::c4",
+            "text": "Replace CA bytes.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-TLS-HOTSWAP-001::c5",
+            "text": "Return false for net.Server.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-TLS-HOTSWAP-001::c6",
+            "text": "Return false for an ended server.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-TLS-HOTSWAP-001::c7",
+            "text": "Return false for a non-TLS server.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/TCPServer.ts",
+            "line": 136,
+            "symbol": "public applyTlsCertificateHotSwap",
+            "rationale": "Read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing interfaces/constraints are not automatically exempt."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-TLS-HOTSWAP-001::c1",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-TLS-HOTSWAP-001::c2",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-TLS-HOTSWAP-001::c3",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-TLS-HOTSWAP-001::c4",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-TLS-HOTSWAP-001::c5",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-TLS-HOTSWAP-001::c6",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-TLS-HOTSWAP-001::c7",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "setSecureContext succeeds or returns false through live server checks; certificates/keys/CA setter arguments alone do not prove new-peer certificate rotation. Context must keep TLS verification separate."
+      }
+    },
+    {
+      "originalOrdinal": 186,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "IF-TLS-FACTORY-001"
+      },
+      "originalRecord": {
+        "id": "IF-TLS-FACTORY-001",
+        "type": "interface",
+        "title": "TlsOptionsFactoryRegistry",
+        "description": "TLS 옵션 생성을 DI 로 교체 가능. createClientSocketOptions/createServerTlsOptions.",
+        "source": [
+          "src/util/TlsOptionsFactory.ts:1-106"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "category": "interface",
+      "title": "TlsOptionsFactoryRegistry",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1819,
+        "exactHeading": "##### IF-TLS-FACTORY-001 — TlsOptionsFactoryRegistry",
+        "sidecarId": "IF-TLS-FACTORY-001"
+      },
+      "acceptance": {
+        "descriptionRef": "IF-TLS-FACTORY-001",
+        "originalDescription": "TLS 옵션 생성을 DI 로 교체 가능. createClientSocketOptions/createServerTlsOptions.",
+        "clauses": [
+          {
+            "id": "IF-TLS-FACTORY-001::c1",
+            "text": "Allow replacing client TLS option creation through DI.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-TLS-FACTORY-001::c2",
+            "text": "Allow replacing server TLS option creation through DI.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/TlsOptionsFactory.ts",
+            "line": 94,
+            "symbol": "const TlsOptionsFactoryRegistry",
+            "rationale": "Read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing interfaces/constraints are not automatically exempt."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "IF-TLS-FACTORY-001::c1",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "IF-TLS-FACTORY-001::c2",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 187,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-SECRET-REDACTOR-001"
+      },
+      "originalRecord": {
+        "id": "FR-SECRET-REDACTOR-001",
+        "type": "functional_req",
+        "title": "민감 필드/문자열 redact",
+        "description": "redactSecrets 는 객체 키가 key/clientSecret/cert/ca/password/sessionKey/bootstrapToken 또는 *secret/*token/*password/*privateKey 이면 '[REDACTED]' 치환. redactSecretString 은 PEM 블록, Authorization 헤더, key|token|secret|password|authkey=... , bcrypt 해시($2a|2b|2y), hex 64자 이상을 치환.",
+        "source": [
+          "src/util/SecretRedactor.ts:1-66"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "category": "functional_req",
+      "title": "민감 필드/문자열 redact",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 821,
+        "exactHeading": "##### FR-SECRET-REDACTOR-001 — 민감 필드/문자열 redact",
+        "sidecarId": "FR-SECRET-REDACTOR-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-SECRET-REDACTOR-001",
+        "originalDescription": "redactSecrets 는 객체 키가 key/clientSecret/cert/ca/password/sessionKey/bootstrapToken 또는 *secret/*token/*password/*privateKey 이면 '[REDACTED]' 치환. redactSecretString 은 PEM 블록, Authorization 헤더, key|token|secret|password|authkey=... , bcrypt 해시($2a|2b|2y), hex 64자 이상을 치환.",
+        "clauses": [
+          {
+            "id": "FR-SECRET-REDACTOR-001::c1",
+            "text": "Redact object fields named key.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SECRET-REDACTOR-001::c2",
+            "text": "Redact object fields named clientSecret.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SECRET-REDACTOR-001::c3",
+            "text": "Redact object fields named cert.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SECRET-REDACTOR-001::c4",
+            "text": "Redact object fields named ca.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SECRET-REDACTOR-001::c5",
+            "text": "Redact object fields named password.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SECRET-REDACTOR-001::c6",
+            "text": "Redact object fields named sessionKey.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SECRET-REDACTOR-001::c7",
+            "text": "Redact object fields named bootstrapToken.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SECRET-REDACTOR-001::c8",
+            "text": "Redact object fields whose names end in secret, token, password or privateKey.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SECRET-REDACTOR-001::c9",
+            "text": "Use [REDACTED] as the replacement.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SECRET-REDACTOR-001::c10",
+            "text": "Redact PEM blocks in strings.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SECRET-REDACTOR-001::c11",
+            "text": "Redact Authorization header secrets in strings.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SECRET-REDACTOR-001::c12",
+            "text": "Redact key/token/secret/password/authkey assignments in strings.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SECRET-REDACTOR-001::c13",
+            "text": "Redact bcrypt hashes with 2a/2b/2y prefixes.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SECRET-REDACTOR-001::c14",
+            "text": "Redact hexadecimal strings of at least 64 characters.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/SecretRedactor.ts",
+            "line": 18,
+            "symbol": "const redactSecrets",
+            "rationale": "Read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing interfaces/constraints are not automatically exempt."
+      },
+      "verification": [
+        {
+          "testPath": "test/util/r2-req-05-errors-redact.test.ts",
+          "caseLine": 57,
+          "exactTitle": "R2-REQ-05 Errors.toString redactSecrets 통합 redactSecretString 함수 단독 동작",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "FR-SECRET-REDACTOR-001::c12"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 58,
+              "text": "expect(redactSecretString(\"password=hunter2\")).toContain(REDACTED_VALUE);"
+            }
+          ],
+          "rationale": "Password assignment only; other assignment keys, PEM, Authorization and bcrypt remain separate gaps.",
+          "technique": "source-read-candidate",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-SECRET-REDACTOR-001::c1",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SECRET-REDACTOR-001::c2",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SECRET-REDACTOR-001::c3",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SECRET-REDACTOR-001::c4",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SECRET-REDACTOR-001::c5",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SECRET-REDACTOR-001::c6",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SECRET-REDACTOR-001::c7",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SECRET-REDACTOR-001::c8",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SECRET-REDACTOR-001::c9",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SECRET-REDACTOR-001::c10",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SECRET-REDACTOR-001::c11",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SECRET-REDACTOR-001::c12",
+          "explanation": "Concrete assertion candidate only; full clause coverage and exact non-skipped receipt remain absent.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SECRET-REDACTOR-001::c13",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SECRET-REDACTOR-001::c14",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current object redaction leaves empty or null/undefined values unmodified; original blanket wording needs disposition. Authorization regex matches only one nonspace token after the colon; matching a Bearer scheme is not proof that the following credential is removed."
+      }
+    },
+    {
+      "originalOrdinal": 188,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "NFR-SEC-REDACT-001"
+      },
+      "originalRecord": {
+        "id": "NFR-SEC-REDACT-001",
+        "type": "nonfunctional_req",
+        "title": "로그/에러 출력 시 민감정보 보호",
+        "description": "LogWriter.makeLogLine 및 Errors.toString/serialize/printError/printStackTrace 가 redactSecretString 으로 post-processing.",
+        "source": [
+          "src/util/logger/LogWriter.ts:152-160",
+          "src/util/Errors.ts:1-92"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "category": "security",
+        "metric": "redact on every log/error output"
+      },
+      "category": "nonfunctional_req",
+      "title": "로그/에러 출력 시 민감정보 보호",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1129,
+        "exactHeading": "##### NFR-SEC-REDACT-001 — 로그/에러 출력 시 민감정보 보호",
+        "sidecarId": "NFR-SEC-REDACT-001"
+      },
+      "acceptance": {
+        "descriptionRef": "NFR-SEC-REDACT-001",
+        "originalDescription": "LogWriter.makeLogLine 및 Errors.toString/serialize/printError/printStackTrace 가 redactSecretString 으로 post-processing.",
+        "clauses": [
+          {
+            "id": "NFR-SEC-REDACT-001::c1",
+            "text": "Post-process LogWriter.makeLogLine with redactSecretString.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-REDACT-001::c2",
+            "text": "Post-process Errors.toString.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-REDACT-001::c3",
+            "text": "Post-process Errors.serialize.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-REDACT-001::c4",
+            "text": "Post-process Errors.printError.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-REDACT-001::c5",
+            "text": "Post-process Errors.printStackTrace.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-REDACT-001::metric",
+            "text": "redact on every log/error output",
+            "sourceRef": "metric",
+            "rationale": "Original auxiliary obligation retained, not exempted.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/Errors.ts",
+            "line": 3,
+            "symbol": "class Errors",
+            "rationale": "Read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing interfaces/constraints are not automatically exempt."
+      },
+      "verification": [
+        {
+          "testPath": "test/util/r2-req-05-errors-redact.test.ts",
+          "caseLine": 12,
+          "exactTitle": "R2-REQ-05 Errors.toString redactSecrets 통합 authKey=... 원본 미노출",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "NFR-SEC-REDACT-001::c2"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 15,
+              "text": "expect(out).not.toContain(\"abcdef123456\");"
+            },
+            {
+              "line": 16,
+              "text": "expect(out).toContain(REDACTED_VALUE);"
+            }
+          ],
+          "rationale": "Real Error/toString hides this authKey and includes replacement. Not all error output/cause/stack paths.",
+          "technique": "source-read-candidate",
+          "state": "candidate",
+          "evidence": []
+        },
+        {
+          "testPath": "test/util/r2-req-05-errors-redact.test.ts",
+          "caseLine": 50,
+          "exactTitle": "R2-REQ-05 Errors.toString redactSecrets 통합 serialize() 전 필드 redact",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "NFR-SEC-REDACT-001::c3"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 53,
+              "text": "expect(ser.message).not.toContain(\"deadbeef-secret-value\");"
+            }
+          ],
+          "rationale": "Asserts serialized message only, despite broader test title; stack/cause assertions absent.",
+          "technique": "source-read-candidate",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "NFR-SEC-REDACT-001::c1",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-SEC-REDACT-001::c2",
+          "explanation": "Concrete assertion candidate only; full clause coverage and exact non-skipped receipt remain absent.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-SEC-REDACT-001::c3",
+          "explanation": "Concrete assertion candidate only; full clause coverage and exact non-skipped receipt remain absent.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-SEC-REDACT-001::c4",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-SEC-REDACT-001::c5",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-SEC-REDACT-001::metric",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Existing logger test reads source regex rather than writing and checking output. Errors.serialize test asserts message only. Stream-error direct console.error paths also need evaluation before treating every output as post-processed."
+      }
+    },
+    {
+      "originalOrdinal": 189,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-TIMING-SAFE-EQ-001"
+      },
+      "originalRecord": {
+        "id": "FR-TIMING-SAFE-EQ-001",
+        "type": "functional_req",
+        "title": "상수시간 문자열 비교",
+        "description": "timingSafeStringEqual(a,b,encoding='hex',expectedLength?) 는 길이 불일치/hex format 불일치에도 dummy timingSafeEqual 을 수행해 분기 없는 경로를 유지. expectedLength 비정수/0 이하는 RangeError.",
+        "source": [
+          "src/util/timingSafeStringEqual.ts:41-89"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "category": "functional_req",
+      "title": "상수시간 문자열 비교",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 861,
+        "exactHeading": "##### FR-TIMING-SAFE-EQ-001 — 상수시간 문자열 비교",
+        "sidecarId": "FR-TIMING-SAFE-EQ-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-TIMING-SAFE-EQ-001",
+        "originalDescription": "timingSafeStringEqual(a,b,encoding='hex',expectedLength?) 는 길이 불일치/hex format 불일치에도 dummy timingSafeEqual 을 수행해 분기 없는 경로를 유지. expectedLength 비정수/0 이하는 RangeError.",
+        "clauses": [
+          {
+            "id": "FR-TIMING-SAFE-EQ-001::c1",
+            "text": "timingSafeStringEqual defaults to hex encoding.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-TIMING-SAFE-EQ-001::c2",
+            "text": "Perform a timingSafeEqual dummy/equal-length comparison even for length mismatch.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-TIMING-SAFE-EQ-001::c3",
+            "text": "Perform that comparison even for invalid hex format.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-TIMING-SAFE-EQ-001::c4",
+            "text": "Preserve the original claim of a branch-free path.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-TIMING-SAFE-EQ-001::c5",
+            "text": "Reject noninteger or nonpositive expectedLength with RangeError.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/timingSafeStringEqual.ts",
+            "line": 41,
+            "symbol": "export function timingSafeStringEqual",
+            "rationale": "Read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing interfaces/constraints are not automatically exempt."
+      },
+      "verification": [
+        {
+          "testPath": "test/unit/util/req-04-timing-safe-string-equal.test.ts",
+          "caseLine": 65,
+          "exactTitle": "REQ-04 timingSafeStringEqual case7b — expectedLength 0/음수/비정수는 RangeError (조용한 폴백 금지)",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "FR-TIMING-SAFE-EQ-001::c5"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 67,
+              "text": "expect(() => timingSafeStringEqual(hex, hex, \"hex\", 0)).toThrow(RangeError);"
+            },
+            {
+              "line": 69,
+              "text": "expect(() => timingSafeStringEqual(hex, hex, \"hex\", 1.5)).toThrow(RangeError);"
+            }
+          ],
+          "rationale": "Concrete invalid expectedLength values; no wall-clock/branch-free claim.",
+          "technique": "source-read-candidate",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-TIMING-SAFE-EQ-001::c1",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-TIMING-SAFE-EQ-001::c2",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-TIMING-SAFE-EQ-001::c3",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-TIMING-SAFE-EQ-001::c4",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-TIMING-SAFE-EQ-001::c5",
+          "explanation": "Concrete assertion candidate only; full clause coverage and exact non-skipped receipt remain absent.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current helper contains type/format/length branches and input-length-dependent allocation. Equal-length crypto.timingSafeEqual invocation is narrower than the original branch-free claim. Approved timing work #64 must not be treated as arbitrary branch-free/whole-auth proof.",
+        "contextLedger": "docs/plan/verification/epic61-issue-64.md"
+      }
+    },
+    {
+      "originalOrdinal": 190,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "NFR-SEC-TIMING-002"
+      },
+      "originalRecord": {
+        "id": "NFR-SEC-TIMING-002",
+        "type": "nonfunctional_req",
+        "title": "인증 비교 상수시간",
+        "description": "authKey/proof/token/secret/hmac 비교는 ===/!= 금지 → timingSafeStringEqual 사용 유도. lint-auth-compare.mjs 가 보조 린트.",
+        "source": [
+          "src/util/timingSafeStringEqual.ts:1-40",
+          "scripts/lint-auth-compare.mjs:1-231"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "category": "security",
+        "metric": "lint violations must be 0 (strict)"
+      },
+      "category": "nonfunctional_req",
+      "title": "인증 비교 상수시간",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1145,
+        "exactHeading": "##### NFR-SEC-TIMING-002 — 인증 비교 상수시간",
+        "sidecarId": "NFR-SEC-TIMING-002"
+      },
+      "acceptance": {
+        "descriptionRef": "NFR-SEC-TIMING-002",
+        "originalDescription": "authKey/proof/token/secret/hmac 비교는 ===/!= 금지 → timingSafeStringEqual 사용 유도. lint-auth-compare.mjs 가 보조 린트.",
+        "clauses": [
+          {
+            "id": "NFR-SEC-TIMING-002::c1",
+            "text": "Use timingSafeStringEqual instead of direct authKey/proof/token/secret/hmac equality comparisons.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-TIMING-002::c2",
+            "text": "lint-auth-compare assists enforcement.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-SEC-TIMING-002::metric",
+            "text": "lint violations must be 0 (strict)",
+            "sourceRef": "metric",
+            "rationale": "Original auxiliary obligation retained, not exempted.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "scripts/lint-auth-compare.mjs",
+            "line": 1,
+            "symbol": "module entry",
+            "rationale": "Read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing interfaces/constraints are not automatically exempt."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "NFR-SEC-TIMING-002::c1",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-SEC-TIMING-002::c2",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-SEC-TIMING-002::metric",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Lint is heuristic supplementary analysis with explicit scope/allowances; no static lint zero claim or native constant-time claim is made without a corresponding receipt."
+      }
+    },
+    {
+      "originalOrdinal": 191,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-CLOCK-RNG-001"
+      },
+      "originalRecord": {
+        "id": "FR-CLOCK-RNG-001",
+        "type": "functional_req",
+        "title": "ClockRng 추상화",
+        "description": "DefaultClockRng 는 Date.now/Math.random 과 crypto.randomBytes 기반 secureRandomBytes(n). n<=1024 만 허용. ClockRngProvider.configure 는 shape 검증.",
+        "source": [
+          "src/util/ClockRng.ts:1-85"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "category": "functional_req",
+      "title": "ClockRng 추상화",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 797,
+        "exactHeading": "##### FR-CLOCK-RNG-001 — ClockRng 추상화",
+        "sidecarId": "FR-CLOCK-RNG-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-CLOCK-RNG-001",
+        "originalDescription": "DefaultClockRng 는 Date.now/Math.random 과 crypto.randomBytes 기반 secureRandomBytes(n). n<=1024 만 허용. ClockRngProvider.configure 는 shape 검증.",
+        "clauses": [
+          {
+            "id": "FR-CLOCK-RNG-001::c1",
+            "text": "DefaultClockRng.now uses Date.now.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-CLOCK-RNG-001::c2",
+            "text": "DefaultClockRng.random uses Math.random.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-CLOCK-RNG-001::c3",
+            "text": "secureRandomBytes uses crypto.randomBytes.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-CLOCK-RNG-001::c4",
+            "text": "Only permit secureRandomBytes requests up to 1024 bytes.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-CLOCK-RNG-001::c5",
+            "text": "ClockRngProvider.configure validates the provider shape.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/ClockRng.ts",
+            "line": 25,
+            "symbol": "class DefaultClockRngImpl",
+            "rationale": "Read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing interfaces/constraints are not automatically exempt."
+      },
+      "verification": [
+        {
+          "testPath": "test/unit/util/req-01-clockrng-secure.test.ts",
+          "caseLine": 39,
+          "exactTitle": "REQ-01 ClockRng.secureRandomBytes configure: 필수 메서드가 없으면 TypeError",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "FR-CLOCK-RNG-001::c5"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 43,
+              "text": "expect(() => ClockRngProvider.configure(null)).toThrow(TypeError);"
+            }
+          ],
+          "rationale": "Null and missing-method input branches are asserted, valid synthetic provider accepted then restored; not RNG entropy/delegation proof.",
+          "technique": "source-read-candidate",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-CLOCK-RNG-001::c1",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-CLOCK-RNG-001::c2",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-CLOCK-RNG-001::c3",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-CLOCK-RNG-001::c4",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-CLOCK-RNG-001::c5",
+          "explanation": "Concrete assertion candidate only; full clause coverage and exact non-skipped receipt remain absent.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 192,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "CONSTR-SECURE-RANDOM-MAX-001"
+      },
+      "originalRecord": {
+        "id": "CONSTR-SECURE-RANDOM-MAX-001",
+        "type": "constraint",
+        "title": "secureRandomBytes n<=1024",
+        "description": "SECURE_RANDOM_BYTES_MAX=1024 초과 시 RangeError. 이벤트 루프 블록 방지.",
+        "source": [
+          "src/util/ClockRng.ts:23-44"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "constraint_type": "runtime"
+      },
+      "category": "constraint",
+      "title": "secureRandomBytes n<=1024",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2209,
+        "exactHeading": "#### CONSTR-SECURE-RANDOM-MAX-001 — secureRandomBytes n<=1024",
+        "sidecarId": "CONSTR-SECURE-RANDOM-MAX-001"
+      },
+      "acceptance": {
+        "descriptionRef": "CONSTR-SECURE-RANDOM-MAX-001",
+        "originalDescription": "SECURE_RANDOM_BYTES_MAX=1024 초과 시 RangeError. 이벤트 루프 블록 방지.",
+        "clauses": [
+          {
+            "id": "CONSTR-SECURE-RANDOM-MAX-001::c1",
+            "text": "SECURE_RANDOM_BYTES_MAX is 1024.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-SECURE-RANDOM-MAX-001::c2",
+            "text": "Requests above 1024 throw RangeError.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-SECURE-RANDOM-MAX-001::c3",
+            "text": "The cap aims to avoid event-loop blocking.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/ClockRng.ts",
+            "line": 23,
+            "symbol": "const SECURE_RANDOM_BYTES_MAX",
+            "rationale": "Read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing interfaces/constraints are not automatically exempt."
+      },
+      "verification": [
+        {
+          "testPath": "test/unit/util/req-01-clockrng-secure.test.ts",
+          "caseLine": 31,
+          "exactTitle": "REQ-01 ClockRng.secureRandomBytes 입력 검증: n > 1024 면 RangeError (이벤트 루프 블록 방지)",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "CONSTR-SECURE-RANDOM-MAX-001::c1",
+            "CONSTR-SECURE-RANDOM-MAX-001::c2"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 32,
+              "text": "expect(() => DefaultClockRng.secureRandomBytes(1025)).toThrow(RangeError);"
+            },
+            {
+              "line": 35,
+              "text": "expect(DefaultClockRng.secureRandomBytes(1024).length).toBe(1024);"
+            }
+          ],
+          "rationale": "Actual max+1 rejection and max boundary length. Does not measure event-loop blocking.",
+          "technique": "source-read-candidate",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "CONSTR-SECURE-RANDOM-MAX-001::c1",
+          "explanation": "Concrete assertion candidate only; full clause coverage and exact non-skipped receipt remain absent.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "CONSTR-SECURE-RANDOM-MAX-001::c2",
+          "explanation": "Concrete assertion candidate only; full clause coverage and exact non-skipped receipt remain absent.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "CONSTR-SECURE-RANDOM-MAX-001::c3",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 193,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "IF-SCHEDULER-001"
+      },
+      "originalRecord": {
+        "id": "IF-SCHEDULER-001",
+        "type": "interface",
+        "title": "SchedulerRegistry",
+        "description": "setTimeout/setInterval/setImmediate wrapper. TTTClient 재연결/ EndPointClientPool cleanup 테스트에서 DI 로 대체.",
+        "source": [
+          "src/util/Scheduler.ts:1-49"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "category": "interface",
+      "title": "SchedulerRegistry",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1779,
+        "exactHeading": "##### IF-SCHEDULER-001 — SchedulerRegistry",
+        "sidecarId": "IF-SCHEDULER-001"
+      },
+      "acceptance": {
+        "descriptionRef": "IF-SCHEDULER-001",
+        "originalDescription": "setTimeout/setInterval/setImmediate wrapper. TTTClient 재연결/ EndPointClientPool cleanup 테스트에서 DI 로 대체.",
+        "clauses": [
+          {
+            "id": "IF-SCHEDULER-001::c1",
+            "text": "Wrap setTimeout.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-SCHEDULER-001::c2",
+            "text": "Wrap setInterval.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-SCHEDULER-001::c3",
+            "text": "Wrap setImmediate.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-SCHEDULER-001::c4",
+            "text": "Allow DI for TTTClient reconnect scheduling.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-SCHEDULER-001::c5",
+            "text": "The original states DI also replaces EndPointClientPool cleanup scheduling.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/Scheduler.ts",
+            "line": 37,
+            "symbol": "const SchedulerRegistry",
+            "rationale": "Read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing interfaces/constraints are not automatically exempt."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "IF-SCHEDULER-001::c1",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "IF-SCHEDULER-001::c2",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "IF-SCHEDULER-001::c3",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "IF-SCHEDULER-001::c4",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "IF-SCHEDULER-001::c5",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current EndPointClientPool uses native setInterval/clearInterval and does not import SchedulerRegistry. The original DI cleanup wording differs from source; TTTClient injected reconnect scheduler is not evidence for endpoint cleanup DI."
+      }
+    },
+    {
+      "originalOrdinal": 194,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "IF-LOGGER-001"
+      },
+      "originalRecord": {
+        "id": "IF-LOGGER-001",
+        "type": "interface",
+        "title": "LoggerFactory / Logger API",
+        "description": "LoggerFactory.getLogger(name, module) 로 Logger 취득. debug/info/warn/error. name 기준으로 LogWriter 매핑. 기본 defaultWriteConfig 는 console only, level='debug'.",
+        "source": [
+          "src/util/logger/LoggerFactory.ts:1-82",
+          "src/util/logger/Logger.ts:1-59",
+          "src/util/logger/LoggerConfig.ts:17-113"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "category": "interface",
+      "title": "LoggerFactory / Logger API",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1723,
+        "exactHeading": "##### IF-LOGGER-001 — LoggerFactory / Logger API",
+        "sidecarId": "IF-LOGGER-001"
+      },
+      "acceptance": {
+        "descriptionRef": "IF-LOGGER-001",
+        "originalDescription": "LoggerFactory.getLogger(name, module) 로 Logger 취득. debug/info/warn/error. name 기준으로 LogWriter 매핑. 기본 defaultWriteConfig 는 console only, level='debug'.",
+        "clauses": [
+          {
+            "id": "IF-LOGGER-001::c1",
+            "text": "getLogger(name,module) returns a Logger.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-LOGGER-001::c2",
+            "text": "Expose debug/info/warn/error methods.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-LOGGER-001::c3",
+            "text": "Map LogWriter by logger name.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-LOGGER-001::c4",
+            "text": "The default writer configuration is console-only.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-LOGGER-001::c5",
+            "text": "The default writer level is debug.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/logger/LoggerFactory.ts",
+            "line": 50,
+            "symbol": "public static getLogger",
+            "rationale": "Read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing interfaces/constraints are not automatically exempt."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "IF-LOGGER-001::c1",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "IF-LOGGER-001::c2",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "IF-LOGGER-001::c3",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "IF-LOGGER-001::c4",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "IF-LOGGER-001::c5",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        }
+      ]
+    },
+    {
+      "originalOrdinal": 195,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "NFR-MAINT-LOG-ROTATION-001"
+      },
+      "originalRecord": {
+        "id": "NFR-MAINT-LOG-ROTATION-001",
+        "type": "nonfunctional_req",
+        "title": "로그 파일 로테이션/보존",
+        "description": "LoggerConfig.appendWriteConfig history 기본 30일, 파일명 패턴 `<name>-yyyy.MM.dd.log`. daysSince > history 파일 삭제. 파일 스트림 오류 시 isUnwritable=true 로 파일 기록 비활성, console 로 전환.",
+        "source": [
+          "src/util/logger/LoggerConfig.ts:71-88",
+          "src/util/logger/LogWriter.ts:62-127",
+          "src/util/logger/LogWriter.ts:162-204"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2,
+        "category": "maintainability",
+        "metric": "history default=30 days"
+      },
+      "category": "nonfunctional_req",
+      "title": "로그 파일 로테이션/보존",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1237,
+        "exactHeading": "##### NFR-MAINT-LOG-ROTATION-001 — 로그 파일 로테이션/보존",
+        "sidecarId": "NFR-MAINT-LOG-ROTATION-001"
+      },
+      "acceptance": {
+        "descriptionRef": "NFR-MAINT-LOG-ROTATION-001",
+        "originalDescription": "LoggerConfig.appendWriteConfig history 기본 30일, 파일명 패턴 `<name>-yyyy.MM.dd.log`. daysSince > history 파일 삭제. 파일 스트림 오류 시 isUnwritable=true 로 파일 기록 비활성, console 로 전환.",
+        "clauses": [
+          {
+            "id": "NFR-MAINT-LOG-ROTATION-001::c1",
+            "text": "Default history is 30 days.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-MAINT-LOG-ROTATION-001::c2",
+            "text": "Name log files <name>-yyyy.MM.dd.log.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-MAINT-LOG-ROTATION-001::c3",
+            "text": "Delete logs when daysSince exceeds history.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-MAINT-LOG-ROTATION-001::c4",
+            "text": "A stream error sets isUnwritable.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-MAINT-LOG-ROTATION-001::c5",
+            "text": "Disable file writes after that error.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-MAINT-LOG-ROTATION-001::c6",
+            "text": "Fall back to console after that error.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-MAINT-LOG-ROTATION-001::metric",
+            "text": "history default=30 days",
+            "sourceRef": "metric",
+            "rationale": "Original auxiliary obligation retained, not exempted.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/logger/LogWriter.ts",
+            "line": 65,
+            "symbol": "private sweepOldFiles",
+            "rationale": "Read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing interfaces/constraints are not automatically exempt."
+      },
+      "verification": [
+        {
+          "testPath": "test/unit/util/log-retention.test.ts",
+          "caseLine": 31,
+          "exactTitle": "history two removes expired logs and preserves recent and unrelated files",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "NFR-MAINT-LOG-ROTATION-001::c3"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 36,
+              "text": "expect(fs.existsSync(path.join(directory, expired))).toBe(false);"
+            }
+          ],
+          "rationale": "Real owned files/history2 delete age5 while keeping recent/unrelated files; not midnight/error behavior or precise equality boundary.",
+          "technique": "source-read-candidate",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "contextTests": [
+        {
+          "testPath": "test/unit/util/log-retention.test.ts",
+          "caseLine": 52,
+          "exactTitle": "default history retains twenty-day logs and removes forty-day logs",
+          "parameters": [],
+          "assertedClauseRefs": [],
+          "assertionAnchors": [
+            {
+              "line": 56,
+              "text": "expect(fs.existsSync(path.join(directory, expired))).toBe(false);"
+            },
+            {
+              "line": 57,
+              "text": "expect(fs.existsSync(path.join(directory, recent))).toBe(true);"
+            }
+          ],
+          "rationale": "Age20/40 endpoints are consistent with default30 but cannot uniquely establish exactly30; context only for original default.",
+          "technique": "source-read-candidate",
+          "state": "candidate",
+          "evidence": [],
+          "disposition": "context-only; not an acceptance link"
+        }
+      ],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "NFR-MAINT-LOG-ROTATION-001::c1",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-MAINT-LOG-ROTATION-001::c2",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-MAINT-LOG-ROTATION-001::c3",
+          "explanation": "Concrete assertion candidate only; full clause coverage and exact non-skipped receipt remain absent.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-MAINT-LOG-ROTATION-001::c4",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-MAINT-LOG-ROTATION-001::c5",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-MAINT-LOG-ROTATION-001::c6",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-MAINT-LOG-ROTATION-001::metric",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Unwritable-file fallback prints only when _consoleWrite is enabled. Original unconditional console-switch wording requires disposition. Existing retention fixes do not establish stream-error behavior."
+      }
+    },
+    {
+      "originalOrdinal": 196,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "NFR-MAINT-LOG-DAILY-ROLL-001"
+      },
+      "originalRecord": {
+        "id": "NFR-MAINT-LOG-DAILY-ROLL-001",
+        "type": "nonfunctional_req",
+        "title": "로그 자정 롤오버",
+        "description": "pushMessage 시 day 비교로 다음 파일(nextLogFile) 전환. 각 파일별 재-sweepOldFiles.",
+        "source": [
+          "src/util/logger/LogWriter.ts:132-211"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "category": "maintainability",
+        "metric": "midnight rollover"
+      },
+      "category": "nonfunctional_req",
+      "title": "로그 자정 롤오버",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1229,
+        "exactHeading": "##### NFR-MAINT-LOG-DAILY-ROLL-001 — 로그 자정 롤오버",
+        "sidecarId": "NFR-MAINT-LOG-DAILY-ROLL-001"
+      },
+      "acceptance": {
+        "descriptionRef": "NFR-MAINT-LOG-DAILY-ROLL-001",
+        "originalDescription": "pushMessage 시 day 비교로 다음 파일(nextLogFile) 전환. 각 파일별 재-sweepOldFiles.",
+        "clauses": [
+          {
+            "id": "NFR-MAINT-LOG-DAILY-ROLL-001::c1",
+            "text": "On a later log day switch to nextLogFile.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-MAINT-LOG-DAILY-ROLL-001::c2",
+            "text": "Sweep old files for each new log file.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "NFR-MAINT-LOG-DAILY-ROLL-001::metric",
+            "text": "midnight rollover",
+            "sourceRef": "metric",
+            "rationale": "Original auxiliary obligation retained, not exempted.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/logger/LogWriter.ts",
+            "line": 159,
+            "symbol": "private nextLogFile",
+            "rationale": "Read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing interfaces/constraints are not automatically exempt."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "NFR-MAINT-LOG-DAILY-ROLL-001::c1",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-MAINT-LOG-DAILY-ROLL-001::c2",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "NFR-MAINT-LOG-DAILY-ROLL-001::metric",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current rollover compares day-of-month in printLogMessage, not a full calendar date; month-separated same day can evade that comparison. No clock rollover test is mapped; preserve original and record pending review."
+      }
+    },
+    {
+      "originalOrdinal": 197,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "IF-LOG-WRITER-001"
+      },
+      "originalRecord": {
+        "id": "IF-LOG-WRITER-001",
+        "type": "interface",
+        "title": "LogWriter",
+        "description": "WriteConfig 기반 파일+콘솔 동시 쓰기. end()/close() 수명주기. pattern 기본 '%d{yyyy-MM-dd hh:mm:ss.SSS} [%p] %c - %m%n'.",
+        "source": [
+          "src/util/logger/LogWriter.ts:15-236",
+          "src/util/logger/LoggerConfig.ts:76"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "category": "interface",
+      "title": "LogWriter",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1715,
+        "exactHeading": "##### IF-LOG-WRITER-001 — LogWriter",
+        "sidecarId": "IF-LOG-WRITER-001"
+      },
+      "acceptance": {
+        "descriptionRef": "IF-LOG-WRITER-001",
+        "originalDescription": "WriteConfig 기반 파일+콘솔 동시 쓰기. end()/close() 수명주기. pattern 기본 '%d{yyyy-MM-dd hh:mm:ss.SSS} [%p] %c - %m%n'.",
+        "clauses": [
+          {
+            "id": "IF-LOG-WRITER-001::c1",
+            "text": "Support simultaneous file and console writing as configured.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-LOG-WRITER-001::c2",
+            "text": "end terminates the writer lifecycle.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-LOG-WRITER-001::c3",
+            "text": "close terminates the writer lifecycle.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-LOG-WRITER-001::c4",
+            "text": "The default pattern is %d{yyyy-MM-dd hh:mm:ss.SSS} [%p] %c - %m%n.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/logger/LogWriter.ts",
+            "line": 212,
+            "symbol": "public end()",
+            "rationale": "Read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing interfaces/constraints are not automatically exempt."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "IF-LOG-WRITER-001::c1",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "IF-LOG-WRITER-001::c2",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "IF-LOG-WRITER-001::c3",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "IF-LOG-WRITER-001::c4",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Configured pattern exists in LoggerConfig but makeLogLine formats its own ISO timestamp output; do not claim the pattern is actually rendered. close() is private and reached through end()."
+      }
+    },
+    {
+      "originalOrdinal": 198,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-SOCKET-HANDLER-001"
+      },
+      "originalRecord": {
+        "id": "FR-SOCKET-HANDLER-001",
+        "type": "functional_req",
+        "title": "SocketHandler 단일화",
+        "description": "net/tls 소켓을 통일 API 로 감싸 connect/bound 양방향 지원. sendData, end_, endImmediate, destroy, setTimeout, pauseRead/resumeRead, addOnceDrainListener, addOncePressureReliefListener.",
+        "source": [
+          "src/util/SocketHandler.ts:232-790"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "category": "functional_req",
+      "title": "SocketHandler 단일화",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 829,
+        "exactHeading": "##### FR-SOCKET-HANDLER-001 — SocketHandler 단일화",
+        "sidecarId": "FR-SOCKET-HANDLER-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-SOCKET-HANDLER-001",
+        "originalDescription": "net/tls 소켓을 통일 API 로 감싸 connect/bound 양방향 지원. sendData, end_, endImmediate, destroy, setTimeout, pauseRead/resumeRead, addOnceDrainListener, addOncePressureReliefListener.",
+        "clauses": [
+          {
+            "id": "FR-SOCKET-HANDLER-001::c1",
+            "text": "Wrap net and tls sockets through a unified API.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SOCKET-HANDLER-001::c2",
+            "text": "Support outgoing connect.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SOCKET-HANDLER-001::c3",
+            "text": "Support accepted-socket bound.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SOCKET-HANDLER-001::c4",
+            "text": "Expose sendData.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SOCKET-HANDLER-001::c5",
+            "text": "Expose end_.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SOCKET-HANDLER-001::c6",
+            "text": "Expose endImmediate.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SOCKET-HANDLER-001::c7",
+            "text": "Expose destroy.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SOCKET-HANDLER-001::c8",
+            "text": "Expose setTimeout.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SOCKET-HANDLER-001::c9",
+            "text": "Expose pauseRead/resumeRead.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SOCKET-HANDLER-001::c10",
+            "text": "Expose addOnceDrainListener.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-SOCKET-HANDLER-001::c11",
+            "text": "Expose addOncePressureReliefListener.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/SocketHandler.ts",
+            "line": 35,
+            "symbol": "class SocketHandler",
+            "rationale": "Read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing interfaces/constraints are not automatically exempt."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-SOCKET-HANDLER-001::c1",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SOCKET-HANDLER-001::c2",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SOCKET-HANDLER-001::c3",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SOCKET-HANDLER-001::c4",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SOCKET-HANDLER-001::c5",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SOCKET-HANDLER-001::c6",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SOCKET-HANDLER-001::c7",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SOCKET-HANDLER-001::c8",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SOCKET-HANDLER-001::c9",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SOCKET-HANDLER-001::c10",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-SOCKET-HANDLER-001::c11",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Unified API surface is located, but individual native end/drain/pressure/lifecycle behavior must be matched separately. #73 and #49 are narrower reviewed changes, not complete SocketHandler acceptance."
+      }
+    },
+    {
+      "originalOrdinal": 199,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-FILECACHE-SPILL-001"
+      },
+      "originalRecord": {
+        "id": "FR-FILECACHE-SPILL-001",
+        "type": "functional_req",
+        "title": "버퍼 파일 스필",
+        "description": "QueueLimiter 가 shouldSpillToFile 를 true 로 판정하면 FileCache.writeSync 로 디스크에 적재. writeCapacity/global 초과 시 destroy.",
+        "source": [
+          "src/util/SocketHandler.ts:503-555",
+          "src/util/QueueLimiter.ts:1-35",
+          "src/util/FileCache.ts:1-80"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "category": "functional_req",
+      "title": "버퍼 파일 스필",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 805,
+        "exactHeading": "##### FR-FILECACHE-SPILL-001 — 버퍼 파일 스필",
+        "sidecarId": "FR-FILECACHE-SPILL-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-FILECACHE-SPILL-001",
+        "originalDescription": "QueueLimiter 가 shouldSpillToFile 를 true 로 판정하면 FileCache.writeSync 로 디스크에 적재. writeCapacity/global 초과 시 destroy.",
+        "clauses": [
+          {
+            "id": "FR-FILECACHE-SPILL-001::c1",
+            "text": "When shouldSpillToFile returns true, write actual payload through FileCache.writeSync.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-FILECACHE-SPILL-001::c2",
+            "text": "Destroy the socket when local write capacity is exceeded.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-FILECACHE-SPILL-001::c3",
+            "text": "Destroy the socket when global cache capacity is exceeded.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/SocketHandler.ts",
+            "line": 516,
+            "symbol": "public sendData(",
+            "rationale": "Read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing interfaces/constraints are not automatically exempt."
+      },
+      "verification": [
+        {
+          "testPath": "test/e2e/tunnel/large-transfer-cache.test.ts",
+          "caseLine": 49,
+          "exactTitle": "32MiB actual tunnel roundtrip spills and reads owned cache in both directions then recovers",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "FR-FILECACHE-SPILL-001::c1"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 284,
+              "text": "assertCacheRecordReads(writes, reads);"
+            }
+          ],
+          "rationale": "Real global-triggered cache writes/reads with same instance/id/length and full payload length/SHA/FIN. No quota-exceed failure induced; #53 execution receipts are not automatically attached here.",
+          "technique": "source-read-candidate",
+          "state": "candidate",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-FILECACHE-SPILL-001::c1",
+          "explanation": "Concrete assertion candidate only; full clause coverage and exact non-skipped receipt remain absent.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-FILECACHE-SPILL-001::c2",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-FILECACHE-SPILL-001::c3",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "#53 actual spill case does not reach per-handler/global file quota overflow. Quota destruction still requires native failure-path evidence rather than setter/getter or fake socket claims.",
+        "contextLedger": "docs/plan/verification/epic61-issue-53.md"
+      }
+    },
+    {
+      "originalOrdinal": 200,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-TCPSERVER-001"
+      },
+      "originalRecord": {
+        "id": "FR-TCPSERVER-001",
+        "type": "functional_req",
+        "title": "TCPServer 리스너",
+        "description": "options.tls 에 따라 net/tls 서버 생성. applyTlsCertificateHotSwap 지원. start/stop + 상태 콜백(Bound/Listen/Closed).",
+        "source": [
+          "src/util/TCPServer.ts:23-208"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "category": "functional_req",
+      "title": "TCPServer 리스너",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 853,
+        "exactHeading": "##### FR-TCPSERVER-001 — TCPServer 리스너",
+        "sidecarId": "FR-TCPSERVER-001"
+      },
+      "acceptance": {
+        "descriptionRef": "FR-TCPSERVER-001",
+        "originalDescription": "options.tls 에 따라 net/tls 서버 생성. applyTlsCertificateHotSwap 지원. start/stop + 상태 콜백(Bound/Listen/Closed).",
+        "clauses": [
+          {
+            "id": "FR-TCPSERVER-001::c1",
+            "text": "Create a net.Server when TLS is disabled.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-TCPSERVER-001::c2",
+            "text": "Create a tls.Server when TLS is enabled.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-TCPSERVER-001::c3",
+            "text": "Support applyTlsCertificateHotSwap.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-TCPSERVER-001::c4",
+            "text": "Support start.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-TCPSERVER-001::c5",
+            "text": "Support stop.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-TCPSERVER-001::c6",
+            "text": "Emit Bound callbacks.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-TCPSERVER-001::c7",
+            "text": "Emit Listen callbacks.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-TCPSERVER-001::c8",
+            "text": "Emit Closed callbacks.",
+            "sourceRef": "description",
+            "rationale": "Independent original behavior candidate; not entire-ID verification.",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/TCPServer.ts",
+            "line": 83,
+            "symbol": "private createServer",
+            "rationale": "Read source boundary; not runtime proof."
+          }
+        ]
+      },
+      "applicability": {
+        "kind": "runtime",
+        "modes": [],
+        "rationale": "Behavior-bearing interfaces/constraints are not automatically exempt."
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null,
+        "decision": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-TCPSERVER-001::c1",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-TCPSERVER-001::c2",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-TCPSERVER-001::c3",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-TCPSERVER-001::c4",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-TCPSERVER-001::c5",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-TCPSERVER-001::c6",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-TCPSERVER-001::c7",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        },
+        {
+          "clauseRef": "FR-TCPSERVER-001::c8",
+          "explanation": "No direct candidate mapped for this clause; source/type/getter/related fixture is not native acceptance proof.",
+          "issueOrOwner": "#58 batch-08",
+          "nextGate": "Independent semantic review, original/current disposition, exact assertion/receipt mapping"
+        }
+      ]
+    }
+  ]
+}
