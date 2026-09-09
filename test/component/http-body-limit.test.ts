@@ -15,8 +15,35 @@ function observeHttp(f: any, method = 'GET') {
         res.on('aborted', () => { state.aborted = true; state.complete = res.complete; });
         res.on('error', () => {}); res.on('end', () => { state.end = true; state.complete = res.complete; });
     }); req.on('error', () => {}); req.end();
-    return {state, close: () => agent.destroy()};
+    return {state, request: req, close: () => agent.destroy()};
 }
+function responseCompletion(req: http.ClientRequest, deadline: number) {
+    let response: http.IncomingMessage | undefined, ended = false;
+    let timer: NodeJS.Timeout | undefined;
+    let fail: (error: Error) => void;
+    let finish: () => void;
+    const closed = () => { if (!ended) fail(new Error('Response closed before end')); };
+    const aborted = () => fail(new Error('Response aborted before end'));
+    const onResponse = (res: http.IncomingMessage) => {
+        response = res;
+        res.once('error', fail); res.once('aborted', aborted);
+        res.once('close', closed); res.once('end', finish);
+    };
+    const dispose = () => {
+        clearTimeout(timer);
+        req.off('error', fail!); req.off('close', closed); req.off('response', onResponse);
+        response?.off('error', fail!); response?.off('aborted', aborted);
+        response?.off('close', closed); response?.off('end', finish!);
+    };
+    const done = new Promise<void>((resolve, reject) => {
+        fail = error => { dispose(); reject(error); };
+        finish = () => { ended = true; dispose(); resolve(); };
+        req.once('error', fail); req.once('close', closed); req.once('response', onResponse);
+        timer = setTimeout(() => fail(new Error('Response completion deadline exceeded')), Math.max(0, deadline - Date.now()));
+    });
+    return {done, dispose};
+}
+
 test('known oversized eligible length produces completed Node502 before original header/body with upstream still open', async () => withHttpDuplex(async f => {
     const client = observeHttp(f);
     try {
@@ -45,17 +72,51 @@ test('committed chunked limit+1 aborts Node response without another upstream wr
     } finally { client.close(); }
 }, true));
 
-test.each([false, true])('exact encoded limit completes finite Node response chunked=%s', async chunked => withHttpDuplex(async f => {
-    const client = observeHttp(f);
-    try {
-        await f.until(() => f.requests().length > 0);
-        const body = Buffer.alloc(limit, 65);
-        f.upstream.write(chunked ? 'HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\n\r\n' : header(limit));
-        f.upstream.write(chunked ? Buffer.concat([chunk(body), Buffer.from('0\r\n\r\n')]) : body);
-        await f.until(() => client.state.end);
-        expect(client.state).toEqual({status: 200, end: true, complete: true, aborted: false, bytes: limit});
-    } finally { client.close(); }
-}, true));
+test.each([false, true])('exact encoded limit completes finite Node response chunked=%s', async chunked => {
+    const deadline = Date.now() + 4500;
+    return withHttpDuplex(async f => {
+        const client = observeHttp(f);
+        try {
+            await f.until(() => f.requests().length > 0);
+            const completion = responseCompletion(client.request, deadline);
+            try {
+                const body = Buffer.alloc(limit, 65);
+                f.upstream.write(chunked ? 'HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\n\r\n' : header(limit));
+                f.upstream.write(chunked ? Buffer.concat([chunk(body), Buffer.from('0\r\n\r\n')]) : body);
+                await completion.done;
+                expect(client.state).toEqual({status: 200, end: true, complete: true, aborted: false, bytes: limit});
+            } finally {
+                completion.dispose();
+            }
+        } finally { client.close(); }
+    }, true);
+});
+
+test('stalled finite response rejects and cleans up before the existing case budget', async () => {
+    const started = Date.now();
+    let ownedClient: any;
+    await withHttpDuplex(async f => {
+        ownedClient = f.client;
+        const client = observeHttp(f);
+        let completion: ReturnType<typeof responseCompletion> | undefined;
+        let guard: NodeJS.Timeout | undefined;
+        try {
+            await f.until(() => f.requests().length > 0);
+            const errorsBefore = client.request.listenerCount('error');
+            completion = responseCompletion(client.request, started + 4500);
+            const result = completion.done.then(() => 'unexpected success', error => error.message);
+            f.upstream.write(header(2) + 'A'); // Real peer keeps the final body byte pending.
+            const outcome = await Promise.race([result, new Promise<string>(resolve => {
+                guard = setTimeout(() => resolve('external cleanup guard'), Math.max(0, started + 4700 - Date.now()));
+            })]);
+            expect(outcome).toBe('Response completion deadline exceeded');
+            expect(client.request.listenerCount('error')).toBe(errorsBefore);
+        } finally {
+            clearTimeout(guard); completion?.dispose(); client.close();
+        }
+    });
+    expect(ownedClient.destroyed).toBe(true);
+});
 
 test.each([false, true])('body limit cancels pending400 and coalesced later response postcommit=%s', async committed => withHttpDuplex(async f => {
     f.client.write(request + request + bad);
