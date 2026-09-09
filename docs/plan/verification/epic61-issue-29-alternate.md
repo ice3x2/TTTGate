@@ -2,13 +2,13 @@
 
 ## Current implementation audit
 
-Status: resumed on e5c0056. Root and independent audit established that the earlier permanent file prohibition was an unsupported extrapolation from a historical content flag; no current file restriction exists. The disclosed consumer changes are authorized ordinary HTTP correctness work. Any new actual safeguard will be respected.
+Status: implementation and final full verification complete; push/closure pending. Source9e79a3e integrated as1fa8c5e with final independent code reviews C/H/M/L0. Ordinary971PASS/4skip and coverage970PASS/5skip naturally exited0 on11cabaf; see [final verification](epic61-final-verification.md). Earlier permanent file prohibition was an unsupported extrapolation from a historical content flag; no current file restriction was found. No actual safeguard bypass is authorized.
 
 - [x] Read current parser, handler, pool and SocketHandler drain facility. Status: complete; reuse existing output drain notifications and parser message completion.
 - [x] Restore actual consumer tests and add EOF/abort coverage before implementation. Status: RED observed, then GREEN; receipts below.
 - [x] Implement explicit input EOF, exact target checks and guarded output drain. Status: implemented in three disclosed source files; no type extension.
 - [x] Run focused HTTP regressions. Status: 141 PASS across13 suites; follow-up parser-budget correction41 PASS across4 affected suites.
-- [ ] Freeze for two independent reviews and root integration. Status: candidate frozen; final build PASS/natural exit0; no commit/push by implementation agent.
+- [x] Freeze for two independent reviews and root integration. Status: final independent code reviews C/H/M/L0, source9e79a3e->integration1fa8c5e, buildPASS; final ordinary/coverage passed on11cabaf. Push/closure pending.
 
 ### Evidence chronology
 

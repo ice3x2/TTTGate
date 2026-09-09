@@ -2,7 +2,7 @@
 
 Historical checkpoint convention: lower pending, no-run, no-production and unchecked design/implementation wording is preserved historical evidence, superseded by the later execution and final-review sections; the latest independent rereview/root integration gate remains current.
 
-Status: final independent rereviews completed with C/H/M/L0 and MERGE_READY from two reviewers; source commite8d3bf8 integrated by root as259fff6. Root focused2suites24PASS52.912s naturally exited0 and root forced build exited0. Push and issue closure remain pending. Agent focused24PASS53.658s/regression55PASS149.71s/build0 and earlier21focused/49regression remain separate historical evidence. User approved negotiated safe-integer counts and explicit oversized failure for unsupported peers on2026-09-09. All actual RED/intermediate failures and documented coverage limitations remain preserved. Worktree `TTTGate-epic61-count`, branch `fix/epic61-large-close-count`, base `02567a3`; no commit/push by this ledger updater.
+Status: final independent rereviews completed with C/H/M/L0 and MERGE_READY from two reviewers; source commite8d3bf8 integrated by root as259fff6. Root focused2suites24PASS52.912s naturally exited0 and root forced build exited0. Implementation259fff6 and verificationc11716b were pushed; issue28 closed2026-09-09T05:45:18Z with comment5596449843 and Telegram4007(68/67). Agent focused24PASS53.658s/regression55PASS149.71s/build0 and earlier21focused/49regression remain separate historical evidence. User approved negotiated safe-integer counts and explicit oversized failure for unsupported peers on2026-09-09. All actual RED/intermediate failures and documented coverage limitations remain preserved. Worktree `TTTGate-epic61-count`, branch `fix/epic61-large-close-count`, base `02567a3`; no commit/push by this ledger updater.
 
 - [x] Read AGENTS, issue28 research, ADR-004/004-1 and current producer/consumer paths. Status: read-only complete.
 - [x] Reuse existing packet JSON suffix, metadata result validation and authenticated capabilities. Status: design below; no duplicate parser or new transport proposed.
@@ -10,7 +10,7 @@ Status: final independent rereviews completed with C/H/M/L0 and MERGE_READY from
 - [x] Author failing contracts before implementation. Status: actual RED and separate correction RED preserved below; setup failures are not behavioral RED.
 - [x] Implement minimum reviewed change and obtain separate reviews. Status: two final independent rereviews returned C/H/M/L0 MERGE_READY after fixes.
 - [x] Run relevant focused/integration regressions and root integration. Status: sourcee8d3bf8 -> root259fff6; root24PASS52.912s/native0 and forced build0, separate from agent results.
-- [ ] Push and issue closure. Status: pending root operations; no completion notification claimed.
+- [x] Push and issue closure. Status: implementation259fff6 and verificationc11716b pushed; CLOSED2026-09-09T05:45:18Z/comment5596449843/Telegram4007(68/67).
 
 ## Existing boundaries and reuse
 

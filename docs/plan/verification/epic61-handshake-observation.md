@@ -1,11 +1,11 @@
 # Incomplete data-handshake terminal observation research
 
-Status: test-only observation correction implemented after the original full ordinary run terminated. Selected case and focused regression pass; independent review pending. Root owns discovered-issue registration and closure.
+Status: #74 implemented and final full verification complete; push/closure pending. Sourced983302 integrated asd5a321f, final independent code reviews C/H/M/L0. Ordinary971PASS/4skip and coverage970PASS/5skip naturally exited0 on11cabaf; [final verification](epic61-final-verification.md) records actual receipts and skipped scope.
 
 - [x] Inspect existing fixture and production lifecycle. Status: source evidence below supports an observation-order gap; it does not prove the full runtime correction yet.
 - [x] Register the discovered issue and retain the full-run failure receipt. Status: [issue #74](https://github.com/ice3x2/TTTGate/issues/74) created and registered in parent #61 by root; RED receipt retained below.
 - [x] Observe the existing case after root releases runtime ownership. Status: original failure inspected; selected corrected case passed with the150ms timeout and existing h.until deadline unchanged.
-- [ ] Apply the minimal test-only observation correction, run focused regression and obtain independent review. Status: correction applied; selected case and3-suite regression passed; independent review pending.
+- [x] Apply the minimal test-only observation correction, run focused regression and obtain independent review. Status: selected1PASS/focused24PASS, final independent code reviews C/H/M/L0, sourced983302->integrationd5a321f; final ordinary and coverage passed on11cabaf. Push and closure remain pending.
 
 ## Evidence and scope
 
