@@ -1,11 +1,24 @@
-# Epic61 final verification before closure
+# Epic61 final verification and closure
 
-Status: final full verification complete on local integration `11cabaf5c5f37df075140f9f5f72efe1c9289ddb`;70tracked/67closed. #29/#74/#75 are integrated and verified, but push, remote-hash confirmation, closures and notifications remain pending. No remote hash or delivery receipt is asserted here.
+Status: complete; all70tracked children CLOSED and independently verified; Epic61 CLOSED. Final full verification passed on integration11cabaf5c5f37df075140f9f5f72efe1c9289ddb; remotea3c9902 was verified before closures. Exact publication and notification receipts appear below. This post-closure documentation update has no assigned commit hash yet.
 
 - [x] Integrate final reviewed changes. Status:29 source9e79a3e->1fa8c5e;74 sourced983302->d5a321f;75 source71c7be6->11cabaf. All final independent code reviews C/H/M/L0; forced integration build exit0. Production source remains unchanged after29;74/75 correct test observation.
 - [x] Complete ordinary suite with natural exit. Status:152suites(151PASS/1skip),975tests(971PASS/4skip),exit0/signalnull,1412.301s.
 - [x] Complete whole-source coverage with natural exit. Status:975tests(970PASS/5skip),exit0/signalnull,1523.897s; four existing floors pass.
-- [ ] Publish and close. Status: independently reviewed final documents, commit/push, actual remote equality, child/epic closure and notification evidence remain later gates.
+- [x] Publish and close. Status: remotea3c9902 verified before closures; #74/#75/#29 and Epic61 CLOSED, all70child states independently verified, parent29/74/75 and child74/75 checkboxes updated. Notifications4019-4022 delivered; receipts below.
+
+## Publication and closure receipts
+
+Remote `a3c9902` was verified before these closures. All timestamps below are UTC on2026-09-09; all70child CLOSED states were independently verified. Parent #29/#74/#75 and child #74/#75 checkboxes were updated.
+
+| Issue | CLOSED at | Evidence | Telegram |
+|---|---|---|---|
+| #74 |11:10:41Z|[comment5600877823](https://github.com/ice3x2/TTTGate/issues/74#issuecomment-5600877823)|4019(70/68)|
+| #75 |11:10:58Z|[comment5600881055](https://github.com/ice3x2/TTTGate/issues/75#issuecomment-5600881055)|4020(70/69)|
+| #29 |11:11:15Z|[comment5600884507](https://github.com/ice3x2/TTTGate/issues/29#issuecomment-5600884507)|4021(70/70)|
+| Epic #61 |11:13:19Z|[comment5600908105](https://github.com/ice3x2/TTTGate/issues/61#issuecomment-5600908105)|4022(70/70)|
+
+The epic notification does not add another child to the70count. Final post-closure documentation publication remains root-owned; no future commit hash is fabricated.
 
 ## Commands and authoritative receipts
 

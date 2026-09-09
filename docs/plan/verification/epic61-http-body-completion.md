@@ -1,12 +1,12 @@
 # HTTP exact-limit body completion observation
 
-Status: [#75](https://github.com/ice3x2/TTTGate/issues/75) registered, implemented and final full verification complete; push/closure pending. Source71c7be6 integrated as11cabaf; final independent code reviews C/H/M/L0 and forced build0. Ordinary971PASS/4skip and coverage970PASS/5skip naturally exited0 on11cabaf; [final verification](epic61-final-verification.md) records full receipts and skipped scope. No production or configured Jest timeout changes.
+Status: complete; #75 CLOSED2026-09-09T11:10:58Z; [closure evidence](https://github.com/ice3x2/TTTGate/issues/75#issuecomment-5600881055); Telegram4020(70/69). Remotea3c9902 was verified before closure. Final independent reviews C/H/M/L0 and final ordinary/coverage naturally exited0 on11cabaf; [final verification](epic61-final-verification.md) retains commands, metrics, skips and historical failures.
 
 - [x] Preserve original full-run failure and inspect observation scope. Status: root reported exact-limit chunked response timeout at the fixture's2000ms polling deadline; no full-run PASS inferred.
 - [x] Run one approved diagnostic pair before correction. Status:2FAIL/8skip,5.115s,native exit1; exact raw receipts retained below.
 - [x] Replace exact-pair body polling with explicit completion. Status: request readiness remains the existing2s f.until; completion listeners attach before upstream write and accept only actual response end, rejecting request/response error, abort or premature close. Original exact status/end/complete/aborted/16MiB assertions remain.
 - [x] Complete focused regression and independent review. Status: after cancellation review correction, selected3PASS/8skip and13-file HTTP143PASS,natural0; final independent code reviews C/H/M/L0. Earlier candidate receipts remain historical.
-- [ ] Integrate, verify, push, close and notify. Status: source71c7be6->integration11cabaf and final ordinary/coverage verification complete; push, closure and notification remain pending.
+- [x] Integrate, verify, push, close and notify. Status: CLOSED2026-09-09T11:10:58Z; [closure evidence](https://github.com/ice3x2/TTTGate/issues/75#issuecomment-5600881055); Telegram4020(70/69). Remotea3c9902 was verified before closure.
 
 ## Scope and deadline disclosure
 
