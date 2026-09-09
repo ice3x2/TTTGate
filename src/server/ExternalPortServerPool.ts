@@ -223,10 +223,17 @@ class ExternalPortServerPool {
     public send(id: number, data: Buffer) : boolean {
         let handler = this._handlerMap.get(id);
         if(handler) {
+            if(handler.closeInitiated) return false;
+            if(handler instanceof HttpHandler && handler.closeWait &&
+                handler.responseInputLength + data.length > handler.endLength!) {
+                this.closeIfSatisfiedLength(handler, true);
+                return false;
+            }
             handler.lastSendTime = Date.now();
             handler.sendData(data, (handler: SocketHandler, success: boolean) => {
                 this.onSendDataCallback(handler, success);
             });
+            if(handler instanceof HttpHandler) this.closeIfSatisfiedLength(handler);
             let portNumber : number = handler.getBundle(PORT_BUNDLE_KEY);
             let status = this._statusMap.get(portNumber);
             if(status) {
@@ -246,6 +253,12 @@ class ExternalPortServerPool {
     public closeSession(id: number, endLength: number) : void {
         let handler = this._handlerMap.get(id);
         if(handler) {
+            if(handler.closeInitiated) return;
+            if(handler instanceof HttpHandler && (!Number.isSafeInteger(endLength) || endLength < 0 ||
+                endLength < handler.responseInputLength || (handler.closeWait && handler.endLength !== endLength))) {
+                this.closeIfSatisfiedLength(handler, true);
+                return;
+            }
             handler.endLength = endLength;
             handler.closeWait = true;
             this.closeIfSatisfiedLength(handler);
@@ -253,6 +266,12 @@ class ExternalPortServerPool {
     }
 
     private closeIfSatisfiedLength(endPointClient: EndpointHandler | EndpointHttpHandler, force: boolean = false) {
+        if(this._handlerMap.get(endPointClient.sessionID!) !== endPointClient || endPointClient.closeInitiated) return;
+        if(!force && endPointClient instanceof HttpHandler && endPointClient.closeWait) {
+            if(endPointClient.responseInputLength !== endPointClient.endLength) return;
+            if(!endPointClient.responseInputEnded) endPointClient.endResponseInput();
+            if(this._handlerMap.get(endPointClient.sessionID!) !== endPointClient || endPointClient.closeInitiated) return;
+        }
         const ready = endPointClient.closeWait && (endPointClient.endLength ?? 0) <= endPointClient.sendLength && endPointClient.isOutputDrained;
         if((ready || force) && !endPointClient.closeInitiated) {
             endPointClient.closeInitiated = true;
@@ -269,7 +288,7 @@ class ExternalPortServerPool {
 
     private onHandlerEvent = (handler: EndpointHandler | EndpointHttpHandler, state: SocketState, data?: any) : void => {
         let sessionID = handler.getBundle(SESSION_ID_BUNDLE_KEY)!;
-        if(!this._handlerMap.has(sessionID)) return;
+        if(this._handlerMap.get(sessionID) !== handler) return;
 
             if (SocketState.Receive == state) {
                 let portNumber: number = handler.getBundle(PORT_BUNDLE_KEY);
@@ -350,6 +369,9 @@ class ExternalPortServerPool {
                 httpHandler.onSocketEvent = this.onHandlerEvent;
                 this.initEndPointInfo(httpHandler as EndpointHttpHandler, sessionID, 'http');
                 this._handlerMap.set(sessionID, httpHandler);
+                httpHandler.onOutputProgress = () => {
+                    if(this._handlerMap.get(sessionID) === httpHandler) this.closeIfSatisfiedLength(httpHandler);
+                };
             } else {
                 logger.info(`Bound SocketHandler - id:${sessionID}, port: ${server.port}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
                 this.initEndPointInfo(handler as EndpointHandler, sessionID, 'tcp');

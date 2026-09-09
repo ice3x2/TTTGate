@@ -1,5 +1,43 @@
 # Issue29: explicit HTTP input completion and output drain contract
 
+## Current implementation audit
+
+Status: resumed on e5c0056. Root and independent audit established that the earlier permanent file prohibition was an unsupported extrapolation from a historical content flag; no current file restriction exists. The disclosed consumer changes are authorized ordinary HTTP correctness work. Any new actual safeguard will be respected.
+
+- [x] Read current parser, handler, pool and SocketHandler drain facility. Status: complete; reuse existing output drain notifications and parser message completion.
+- [x] Restore actual consumer tests and add EOF/abort coverage before implementation. Status: RED observed, then GREEN; receipts below.
+- [x] Implement explicit input EOF, exact target checks and guarded output drain. Status: implemented in three disclosed source files; no type extension.
+- [x] Run focused HTTP regressions. Status: 141 PASS across13 suites; follow-up parser-budget correction41 PASS across4 affected suites.
+- [ ] Freeze for two independent reviews and root integration. Status: candidate frozen; final build PASS/natural exit0; no commit/push by implementation agent.
+
+### Evidence chronology
+
+Logs are owned files under `C:/Users/beom/AppData/Local/Temp/`; failed receipts are retained.
+
+1. `issue29-red.log`: original consumer plus explicit parser EOF tests,11 FAIL/1 PASS,4.595s, before production edits. Both original actual Node HTTP consumer orderings failed.
+2. `issue29-target-red.log`: invalid/conflicting/overshoot targets, input/output boundary and native drain tests,10 FAIL,18.936s, before production edits.
+3. `issue29-green1.log`:22 PASS,4.657s after initial implementation.
+4. `issue29-account-red.log`:1 FAIL/1 PASS,3.362s. Header callback reported48 bytes when3 of those remained buffered; submission-time consumed-input snapshots corrected the accounting. Pressure abort/captured callback control passed.
+5. `issue29-regression.log`:124 PASS/1 FAIL,19.207s. The old HttpUtil branch fixture expected an unframed HTTP/1.0 POST to have a close-delimited request body. Root approved moving that UNKNOWN_LENGTH_BODY fixture to an HTTP/1.0 response. Explicit bodyless POST controls remain.
+6. For the HTTP/1.0 request behavior, the prematurely changed request branch was removed before `issue29-request-red.log`:1 FAIL/1 PASS,4.339s, then the bodyless request branch was reimplemented test-first.
+7. `issue29-regression-final.log`:141 PASS/13 suites,26.233s, natural exit0. Includes all component HTTP files, unit/server/http, req-05-smuggling and handler-map-lifecycle.
+8. `issue29-deferred-red.log`:1 FAIL,2.032s.1500 complete chunks hit the parser recursion budget and immediate EOF misreported incomplete input. EOF now consumes already accepted deferred bytes through existing write parsing before finalization.
+9. `issue29-final.log`:41 PASS/4 suites,5.383s, natural exit0 (input EOF, actual consumer, target/native drain and chunk boundary).
+10. `issue29-build.log`: build PASS. Final build receipt is `issue29-build-final.log`.
+
+### Acceptance mapping and final scope
+
+- Actual before-data/after-data CloseSession orderings: `test/component/http-eof-consumer.test.ts`, preserved2-second observation/10-second case budgets and native HTTP complete/body assertions.
+- Exact target, equal duplicate, invalid counts, overshoot/conflict, zero and safe-integer pending boundary, partial input, native pressure, forced abort before EOF, abort under pressure and captured stale progress: `test/component/http-eof-target.test.ts`. Pressure uses an actual paused local socket and8MiB output; captured callback invocation is explicit test fault input, not an OS failure claim.
+- HTTP/1.0 and1.1 close-delimited bytes, parser EOF/incomplete states, status exclusions, bodyless requests,16MiB bound and recursion budget: `test/component/http-input-eof.test.ts`.
+- HEAD/1xx FIFO, accepted upgrade and tails: existing `http-directions.test.ts`; encoding/decompression, body limits, rejection precedence, chunk boundaries and request smuggling remain covered by the listed regression suites.
+- Source paths: `src/server/http/HttpPipe.ts`, `src/server/http/HttpHandler.ts`, `src/server/ExternalPortServerPool.ts`. Existing SocketHandler.addOnceDrainListener is reused; one explicit handler EOF latch, release latch, side-effect-free input getter and guarded progress callback. No new timer, payload queue or wire format.
+- Test paths: the three new files above plus the corrected single fixture in `test/unit/server/http/HttpUtil.branches.test.ts`. Documentation: this ledger. No held-worktree mutations.
+
+## Historical design snapshot (superseded status)
+
+Everything below records the earlier design checkpoint. Its pending/blocked wording is historical and is superseded by the current audit and implementation evidence above; it is not a current file restriction or implementation status.
+
 Status: design only at02567a3, branch fix/epic61-http-eof-lifecycle. No production/test edits or execution. Original HTTP-only work at494d72f and both consumer RED cases remain preserved. Independent design and safety review are pending; this document does not authorize retrying the rejected pool implementation.
 
 - [x] Read current ownership boundaries. Status: ExternalPortServerPool.send/closeSession/closeIfSatisfiedLength at223/246/255 own delivery and final session termination. HttpHandler.sendData accepts response input, while sendLength records completed output progress. Its underlying socket faces the external HTTP client, so that socket's FIN is not the upstream response EOF.

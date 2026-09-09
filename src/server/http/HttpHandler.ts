@@ -41,6 +41,24 @@ class HttpHandler {
     private _receiveLength: number = 0;
     private _bufLength: number = 0;
     private _sendLength: number = 0;
+    private _responseInputEnded = false;
+    private _released = false;
+    public onOutputProgress?: () => void;
+
+    public get responseInputLength(): number { return this._bufLength; }
+    public get responseInputEnded(): boolean { return this._responseInputEnded; }
+
+    public endResponseInput(): void {
+        if(this._responseInputEnded || this._released) return;
+        this._responseInputEnded = true;
+        this._responsePipe.endInput();
+        if(this._released) return;
+        this._socketHandler.addOnceDrainListener((_handler, success) => {
+            if(!success || this._released || this._socketHandler.isEnd()) return;
+            this._sendLength = this._bufLength;
+            setImmediate(() => { if(!this._released) this.onOutputProgress?.(); });
+        });
+    }
 
     private _leftBufferStateInEnd: boolean = false;
     private _isWebSocket: boolean = false;
@@ -307,7 +325,7 @@ class HttpHandler {
         
         this._isReplaceHostInBody = this._responseHasBody && this._option.rewriteHostInTextBody == true &&
                                    HttpUtil.isTextContentType(header) && HttpUtil.canRewriteTextEncoding(header) &&
-                                   (header.contentLength > 0 || header.chunked);
+                                   (header.contentLength !== 0 || header.chunked);
 
         if(this._isReplaceHostInBody && header.contentLength > MAX_BUFFER_SIZE) {
             this._inputRejected = false;
@@ -335,9 +353,10 @@ class HttpHandler {
         }
         
         let headerBuffer = HttpUtil.convertHttpHeaderToBuffer(header);
+        const inputLength = this._bufLength - this._responsePipe.bufferSize;
         this._socketHandler.sendData(headerBuffer, (client, success) => {
             if (success) {
-                this._sendLength = this._bufLength;
+                this._sendLength = inputLength;
             }
         });
     }
@@ -416,9 +435,10 @@ class HttpHandler {
             this._bodyBuffer = Buffer.concat([this._bodyBuffer, data]);
         }
         else {
+            const inputLength = this._bufLength - this._responsePipe.bufferSize;
             this._socketHandler.sendData(data, (client, success) => {
                 if (success) {
-                    this._sendLength = this._bufLength;
+                    this._sendLength = inputLength;
                 }
             });
         }
@@ -453,16 +473,20 @@ class HttpHandler {
     }
 
     public sendData(data: Buffer): void {
+        if(this._responseInputEnded || this._released) {
+            if(!this._released && data.length > 0) this.destroy();
+            return;
+        }
         if (this._rejectionSent || this._socketHandler.isEnd()) {
             return;
         }
         
         if (this._isUpgrade) {
             this._bufLength += data.length;
-
+            const inputLength = this._bufLength;
             this._socketHandler.sendData(data, (client, success) => {
                 if (success) {
-                    this._sendLength = this._bufLength;
+                    this._sendLength = inputLength;
                 } else {
                     logger.warn(`Failed to send WebSocket data: ${data.length} bytes`);
                 }
@@ -485,6 +509,8 @@ class HttpHandler {
     }
 
     private release(): void {
+        this._released = true;
+        this.onOutputProgress = undefined;
         this._inputRejected = false;
         this._rejectionSent = false;
         this._requestPipe.reset(MessageType.Request);
@@ -562,9 +588,10 @@ class HttpHandler {
         }
         
         // 청크 종료 표시 (0 길이 청크)
+        const inputLength = this._bufLength - this._responsePipe.bufferSize;
         this._socketHandler.sendData(Buffer.from("0\r\n\r\n"), (client, success) => {
             if (success) {
-                this._sendLength = this._bufLength;
+                this._sendLength = inputLength;
             }
         });
     }

@@ -97,6 +97,7 @@ class HttpPipe {
     private _onEndCallback?: OnEnd;
     private _onHeaderCallback?: OnHeader;
     private _requestRejected = false;
+    private _inputEnded = false;
     private _onRequestRejected?: (reason: 'duplicate-host') => void;
 
     public set onRequestRejected(callback: (reason: 'duplicate-host') => void) {
@@ -156,11 +157,6 @@ class HttpPipe {
         this._header = null;
     }
 
-    private isNoneBodyMethod(method: HttpMethod): boolean {
-        return method == HttpMethod.GET || method == HttpMethod.HEAD || method == HttpMethod.OPTIONS || 
-               method == HttpMethod.TRACE || method == HttpMethod.CONNECT || method == HttpMethod.DELETE;
-    }
-
     private rewriteBufferIfNeed(): void {
         if(this._buffer.length > 0) {
             this.write(EMPTY_BUFFER);
@@ -168,7 +164,7 @@ class HttpPipe {
     }
 
     public write(buffer: Buffer): void {
-        if(this._requestRejected) return;
+        if(this._requestRejected || this._inputEnded) return;
         try {
             this._buffer = Buffer.concat([this._buffer, buffer]);
             if(this._state === ParseState.END) return;
@@ -208,17 +204,12 @@ class HttpPipe {
                 } else if(this._header.contentLength == 0) {
                     this.setEnd();
                 }
-                else if(this._header.type == MessageType.Request && this.isNoneBodyMethod(this._header.method)) {
+                else if(this._header.type == MessageType.Request) {
                     this.setEnd();
                 }
                 else {
-                    // HTTP/1.0은 Content-Length가 없으면 연결 종료 시점까지가 본문임
-                    // HTTP/1.1은 Content-Length가 없고 Chunked가 아니면 원칙적으로 본문이 없음
-                    if (this._header.version === "HTTP/1.0") {
-                        this._state = ParseState.UNKNOWN_LENGTH_BODY;
-                    } else {
-                        this.setEnd();
-                    }
+                    // Unframed responses end at transport EOF in both HTTP/1.0 and HTTP/1.1.
+                    this._state = ParseState.UNKNOWN_LENGTH_BODY;
                 }
             } else if (this._state == ParseState.CHUNKED_SIZE) {
                 let result = this.readChunkedSize();
@@ -842,6 +833,24 @@ class HttpPipe {
         }
 
         return nameValueList;
+    }
+
+    public endInput(): void {
+        if(this._inputEnded) return;
+        // Finish already accepted bytes that write() deferred at its recursion budget.
+        let previousSize = -1;
+        while(this._buffer.length > 0 && this._buffer.length !== previousSize) {
+            previousSize = this._buffer.length;
+            this._recursiveCallLevel = 0;
+            this.write(EMPTY_BUFFER);
+        }
+        this._inputEnded = true;
+        if(this._state === ParseState.UNKNOWN_LENGTH_BODY) {
+            this.setEnd();
+        } else if(this._state !== ParseState.UPGRADE && this._state !== ParseState.END &&
+            !(this._state === ParseState.SEARCHING_FOR_HEADER && this._buffer.length === 0)) {
+            this._onErrorCallback?.(new Error('Incomplete HTTP message at input EOF'));
+        }
     }
 
     private setEnd() {

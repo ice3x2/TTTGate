@@ -194,7 +194,8 @@ describe("HttpPipe branch coverage", () => {
 
     it("HTTP/1.0 no-CL → UNKNOWN_LENGTH_BODY 경로", () => {
         const { pipe, state } = makePipe();
-        pipe.write(Buffer.from("POST /x HTTP/1.0\r\nHost: a\r\n\r\npartial-body"));
+        pipe.reset(MessageType.Response);
+        pipe.write(Buffer.from("HTTP/1.0 200 OK\r\n\r\npartial-body"));
         expect(state.errors.length).toBe(0);
         // UNKNOWN_LENGTH_BODY 경로에서는 end 되지 않고 데이터 전달.
         expect(Buffer.concat(state.data).toString()).toContain("partial-body");
