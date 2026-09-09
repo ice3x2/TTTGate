@@ -1,5 +1,7 @@
-import {createServer, preview} from 'vite';
 import {fileURLToPath} from 'node:url';
+process.send?.({stage: 'import-vite'});
+const {createServer, preview} = await import('vite');
+process.send?.({stage: 'create'});
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const isPreview = process.env.ADMIN_TEST_PREVIEW === '1';
@@ -15,7 +17,9 @@ const proxyOverride = process.env.ADMIN_TEST_PROXY_TARGET
 const server = isPreview
     ? await preview({root, server: proxyOverride, preview: options, logLevel: 'error'})
     : await createServer({root, server: {...options, ...proxyOverride}, logLevel: 'error'});
+process.send?.({stage: 'listen'});
 if(!isPreview) await server.listen();
+process.send?.({stage: 'ipc-ready'});
 process.send({url: server.resolvedUrls.local[0].replace(/\/$/, '')});
 process.on('message', async (message) => {
     if(message === 'close') {

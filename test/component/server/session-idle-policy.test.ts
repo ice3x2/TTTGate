@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import YAML from 'yaml';
 import {createTestRoot, applyTestRoot, cleanupTestRoot} from '../../helpers/runtime';
 import path from 'node:path';
+import {tmpdir} from 'node:os';
 import {setTimeout as delay} from 'node:timers/promises';
 import * as options from '../../../src/types/TunnelingOption';
 import ServerOptionStore from '../../../src/server/ServerOptionStore';
@@ -23,23 +24,73 @@ test('running idle policy disables and re-enables real expiry without restarting
     const runtime = f.server.tunnelServer as any;
     expect(ServerOptionStore.instance.serverOption.sessionTtlMs).toBe(3600000);
     expect(runtime.sessionTtlPolicy.ttlMs).toBe(3600000);
-    const peer = await f.peer(); const session = await peer.open(); await peer.complete(session);
+    const peer = await f.peer(); const session = await peer.open(); const data = await peer.complete(session);
+    const sid = session.packet.sessionID;
+    const evidenceRoot = fs.mkdtempSync(path.join(tmpdir(), 'ttl52-observation-'));
+    const observations: any[] = [];
+    const state = (socket: any) => ({localAddress: socket.localAddress, localPort: socket.localPort,
+        remoteAddress: socket.remoteAddress, remotePort: socket.remotePort, destroyed: socket.destroyed,
+        readableEnded: socket.readableEnded, writableEnded: socket.writableEnded, bytesRead: socket.bytesRead, bytesWritten: socket.bytesWritten});
+    const snapshot = (event: string) => observations.push({event, now: Date.now(), sid,
+        lastActivity: runtime._sessionLastActivityMs.get(sid), ttl: runtime.sessionTtlPolicy.ttlMs,
+        external: state(session.socket), peerData: state(data), receivedLength: Buffer.concat(session.received).length});
+    const mark = runtime.markSessionActivity, enforce = runtime.enforceSessionTtl;
+    runtime.markSessionActivity = function(...args: any[]) {
+        const before = this._sessionLastActivityMs.get(args[0]), now = Date.now();
+        const result = mark.apply(this, args);
+        if(args[0] === sid) observations.push({event: 'activity', now, sid, before, after: this._sessionLastActivityMs.get(sid)});
+        return result;
+    };
+    runtime.enforceSessionTtl = function(...args: any[]) {
+        const before = this._sessionLastActivityMs.get(sid), now = Date.now(), ttl = this.sessionTtlPolicy.ttlMs;
+        const result = enforce.apply(this, args);
+        observations.push({event: 'scan', now, sid, before, after: this._sessionLastActivityMs.get(sid), ttl,
+            age: before === undefined ? null : now - before, removed: before !== undefined && !this._sessionLastActivityMs.has(sid),
+            mapped: this._sessionIDAndCtrlIDMap.has(sid)});
+        return result;
+    };
+    try {
+    snapshot('connected');
     const nativeControl = (peer.pool as any)._controlHandler;
-    runtime.configureSessionTtl(1000, 200);
+    runtime.configureSessionTtl(5000, 200);
     runtime.configureSessionTtl(0);
     expect(runtime.sessionTtlPolicy).toEqual({ttlMs: 0, checkIntervalMs: 200});
     expect(runtime._sessionTtlTimer).toBeUndefined();
-    await delay(1250);
+    snapshot('disabled-delay-start'); await delay(5250); snapshot('disabled-delay-end');
+    snapshot('disabled-live-send');
     await peer.roundtrip(session, 'disabled-live');
+    snapshot('disabled-live-received');
     const before = ServerOptionStore.instance.serverOption;
-    expect((await f.server.applyServerOption({...before, sessionTtlMs: 1000}, before)).success).toBe(true);
+    expect((await f.server.applyServerOption({...before, sessionTtlMs: 5000}, before)).success).toBe(true);
+    expect(runtime.sessionTtlPolicy).toEqual({ttlMs: 5000, checkIntervalMs: 200});
     expect(f.server.tunnelServer).toBe(runtime); expect((peer.pool as any)._controlHandler).toBe(nativeControl);
     expect(runtime._sessionTtlTimer).toBeDefined();
-    await delay(600); await peer.roundtrip(session, 'refresh-live');
-    await delay(600); await peer.roundtrip(session, 'refresh-again');
+    const beforeFirstActivity = runtime._sessionLastActivityMs.get(sid);
+    snapshot('refresh-live-delay-start'); await delay(500); snapshot('refresh-live-send');
+    await peer.roundtrip(session, 'refresh-live'); snapshot('refresh-live-received');
+    const firstActivity = runtime._sessionLastActivityMs.get(sid);
+    expect(firstActivity).toBeGreaterThan(beforeFirstActivity);
+    snapshot('refresh-again-delay-start'); await delay(500); snapshot('refresh-again-send');
+    await peer.roundtrip(session, 'refresh-again'); snapshot('refresh-again-received');
+    expect(runtime._sessionLastActivityMs.get(sid)).toBeGreaterThan(firstActivity);
+    const finalActivity = runtime._sessionLastActivityMs.get(sid);
+    await delay(Math.max(0, finalActivity + 5000 + 200 - Date.now()));
     await until(() => session.socket.destroyed, 'Explicit idle policy did not expire actual session');
+    snapshot('expired');
+    expect(runtime._sessionIDAndCtrlIDMap.has(sid)).toBe(false);
+    expect(runtime._sessionLastActivityMs.has(sid)).toBe(false);
+    expect(observations.find(entry => entry.event === 'scan' && entry.removed).mapped).toBe(false);
     await runtime.close(); runtime.configureSessionTtl(0); runtime.configureSessionTtl(1000);
     expect(runtime._sessionTtlTimer).toBeUndefined();
+    expect(observations.some(entry => entry.event === 'activity')).toBe(true);
+    expect(observations.some(entry => entry.event === 'scan' && entry.removed)).toBe(true);
+    expect(observations.find(entry => entry.event === 'scan' && entry.removed).age).toBeGreaterThan(5000);
+    } finally {
+        runtime.markSessionActivity = mark; runtime.enforceSessionTtl = enforce;
+        snapshot('finally');
+        fs.writeFileSync(path.join(evidenceRoot, 'facts.json'), JSON.stringify(observations, null, 2));
+        process.stdout.write(`TTL observation evidence: ${evidenceRoot}\n`);
+    }
 }));
 
 test('effective interval result is detached and invalid explicit changes are atomic', async () => withLegacyIds(async f => {

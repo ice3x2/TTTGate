@@ -216,6 +216,20 @@ test('online terminal and repeated old same-session callback preserve a real rep
     const control = h.tunnel._ctrlHandler;
     const handler = [...h.tunnel._activatedSessionDataHandlerMap.values()][0] as any;
     const sid = handler.sessionID, hid = handler.handlerID, token = handler.bindingToken;
+    const endpointPool = h.client._endPointClientPool;
+    const oldEndpoint = endpointPool._endPointClientMap.get(sid);
+    expect(oldEndpoint).toBeDefined();
+    const nativeTerminal: string[] = [];
+    oldEndpoint.socket.once('end', () => nativeTerminal.push('end'));
+    oldEndpoint.socket.once('close', () => nativeTerminal.push('close'));
+    const terminate = endpointPool._onEndPointTerminateCallback;
+    let terminateSettled = false;
+    const facts: any = {sid, oldEndpointId: oldEndpoint.id};
+    endpointPool._onEndPointTerminateCallback = (...args: any[]) => {
+        const result = terminate?.(...args);
+        if(args[0] === sid) terminateSettled = true;
+        return result;
+    };
     const event = handler._event, serverSend = h.pool._controlHandler.sendData, send = control.sendData;
     const packets: any[] = []; let local = 0;
     const close = h.tunnel._onEndPointCloseCallback;
@@ -226,6 +240,14 @@ test('online terminal and repeated old same-session callback preserve a real rep
         handler.socket.destroy(); await until(() => handler.socket.destroyed && handler.isEnd(), 'Online terminal not observed');
         expect(local).toBe(1); expect(h.tunnel._activatedSessionDataHandlerMap.has(sid)).toBe(false);
         expect(packets.filter(p => p.cmd === CtrlCmd.CloseSession && p.sessionID === sid)).toHaveLength(1);
+        facts.beforeReplacement = {native: [...nativeTerminal], terminateSettled,
+            endpointMapped: endpointPool._endPointClientMap.has(sid),
+            dataMapped: h.tunnel._activatedSessionDataHandlerMap.has(sid)};
+        await until(() => nativeTerminal.length > 0 && terminateSettled && !endpointPool._endPointClientMap.has(sid),
+            'Old endpoint native terminal and posted termination not settled');
+        expect(nativeTerminal.length > 0 && terminateSettled && !endpointPool._endPointClientMap.has(sid)).toBe(true);
+        facts.afterEndpointSettlement = {native: [...nativeTerminal], terminateSettled,
+            endpointMapped: endpointPool._endPointClientMap.has(sid)};
         // Real replacement socket under same local identity; stop remote admission through owned connect routing below.
         const acceptSockets: net.Socket[] = [];
         const accept = net.createServer(socket => { acceptSockets.push(socket); socket.on('error', () => {}); });
@@ -234,8 +256,11 @@ test('online terminal and repeated old same-session callback preserve a real rep
         try {
             h.tunnel.makeConnectOpt = () => ({host: '127.0.0.1', port: (accept.address() as net.AddressInfo).port, tls: false});
             h.tunnel.connectDataHandler(hid, sid, token);
+            facts.replacementPending = {dataMapped: h.tunnel._activatedSessionDataHandlerMap.has(sid),
+                queueAllocated: h.tunnel._waitBufferQueueMap.has(sid)};
             await until(() => h.tunnel._activatedSessionDataHandlerMap.has(sid), 'Real replacement not connected');
             const replacement = h.tunnel._activatedSessionDataHandlerMap.get(sid);
+            facts.replacementActive = {id: replacement.id, sameOld: replacement === handler, sid: replacement.sessionID};
             const queue = h.tunnel._waitBufferQueueMap.get(sid);
             event(handler, SocketState.Closed);
             expect(h.tunnel._activatedSessionDataHandlerMap.get(sid)).toBe(replacement);
@@ -245,7 +270,11 @@ test('online terminal and repeated old same-session callback preserve a real rep
             expect(packets.length).toBe(before);
         } finally { h.tunnel.makeConnectOpt = make; acceptSockets.forEach(socket => socket.destroy()); await new Promise<void>(resolve => accept.close(() => resolve())); }
         expect(h.tunnel._ctrlHandler).toBe(control);
-    } finally { control.sendData = send; h.pool._controlHandler.sendData = serverSend; h.tunnel._onEndPointCloseCallback = close; }
+    } finally {
+        evidence('online-replacement', facts);
+        endpointPool._onEndPointTerminateCallback = terminate;
+        control.sendData = send; h.pool._controlHandler.sendData = serverSend; h.tunnel._onEndPointCloseCallback = close;
+    }
 }));
 
 test('real server-issued attempt refused before Connected consumes one failed open without reconnect', async () => withClient(async h => {

@@ -11,9 +11,12 @@ export const startAdminBrowser = async (options: {apiOrigin?: string, proxyTarge
             ADMIN_TEST_HTTP_ALIAS: options.httpAlias ? "1" : "0",
             ADMIN_TEST_PREVIEW: options.preview ? "1" : "0"},
     });
-    let output = "";
-    server.stdout!.on("data", (chunk) => { output += chunk; });
-    server.stderr!.on("data", (chunk) => { output += chunk; });
+    let stdout = "", stderr = "", stage = "fork-created";
+    let closeCode: number | null | undefined, closeSignal: string | null | undefined;
+    server.stdout!.on("data", (chunk) => { stdout += chunk; });
+    server.stderr!.on("data", (chunk) => { stderr += chunk; });
+    server.on("close", (code, signal) => { closeCode = code; closeSignal = signal; });
+    const diagnostic = () => `pid=${server.pid} ipc=${server.connected} stage=${stage} exitCode=${server.exitCode} exitSignal=${server.signalCode} closeCode=${closeCode} closeSignal=${closeSignal} stdout=${stdout} stderr=${stderr}`;
     let browser: Browser | undefined;
     const close = async () => {
         await browser?.close();
@@ -21,7 +24,7 @@ export const startAdminBrowser = async (options: {apiOrigin?: string, proxyTarge
         await new Promise<void>((resolve, reject) => {
             const timeout = setTimeout(() => {
                 server.kill();
-                reject(new Error(`Admin test server did not stop: ${output}`));
+                reject(new Error(`Admin test server did not stop: ${diagnostic()}`));
             }, 5000);
             server.once("exit", () => { clearTimeout(timeout); resolve(); });
             if(server.connected) server.send("close");
@@ -30,18 +33,19 @@ export const startAdminBrowser = async (options: {apiOrigin?: string, proxyTarge
     };
     try {
         const url = await new Promise<string>((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error(`Admin test server did not start: ${output}`));
-            }, 15_000);
-            server.once("message", (message: {url: string}) => {
+            const finish = (error?: Error, url?: string) => {
                 clearTimeout(timeout);
-                resolve(message.url);
-            });
-            server.once("error", (error) => { clearTimeout(timeout); reject(error); });
-            server.once("exit", (code) => {
-                clearTimeout(timeout);
-                reject(new Error(`Admin test server exited ${code}: ${output}`));
-            });
+                server.off("message", message); server.off("error", failed); server.off("close", closed);
+                if(error) reject(error); else resolve(url!);
+            };
+            const message = (value: any) => {
+                if(value && typeof value.stage === "string") stage = value.stage;
+                if(value && typeof value.url === "string") { stage = "ipc-ready"; finish(undefined, value.url); }
+            };
+            const failed = (error: Error) => finish(new Error(`Admin test server error: ${error.message}; ${diagnostic()}`, {cause: error}));
+            const closed = () => finish(new Error(`Admin test server closed before ready: ${diagnostic()}`));
+            const timeout = setTimeout(() => finish(new Error(`Admin test server did not start within 15000ms: ${diagnostic()}`)), 15_000);
+            server.on("message", message); server.once("error", failed); server.once("close", closed);
         });
         browser = await chromium.launch(options.httpAlias ? {
             args: ["--host-resolver-rules=MAP admin.test 127.0.0.1", "--no-proxy-server"],
@@ -51,7 +55,10 @@ export const startAdminBrowser = async (options: {apiOrigin?: string, proxyTarge
         page.on("pageerror", (error) => errors.push(error.message));
         return {page, url, errors, close};
     } catch(error) {
-        await close();
-        throw error;
+        try { await close(); }
+        catch(cleanupError) {
+            throw new AggregateError([error, cleanupError], `Admin startup failed: ${String(error)}; cleanup failed: ${String(cleanupError)}; ${diagnostic()}`);
+        }
+        throw new Error(`Admin startup failed: ${String(error)}; after cleanup: ${diagnostic()}`, {cause: error});
     }
 };
