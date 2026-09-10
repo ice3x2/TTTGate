@@ -1,0 +1,2270 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TTTGATE · Signal Ops — Admin Design System v0.1</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@300;400;500;600;700;900&family=Noto+Sans+KR:wght@300;400;500;700;900&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+<style>
+/* ------------------------------------------------------------------
+   TTTGATE · SIGNAL OPS — Admin Design System v0.1
+   Aesthetic: Low-light NOC console. Phosphor amber on blue-black.
+   Commit: 2026-04-25 / Author: frontend-design
+-------------------------------------------------------------------*/
+
+:root {
+  /* ── Surfaces · cool white (B&W family) ───────────────────── */
+  --bg-0: #FFFFFF;     /* page · pure white */
+  --bg-1: #FAFBFC;     /* panel · whisper cool */
+  --bg-2: #FFFFFF;     /* card · pure */
+  --bg-3: #F3F5F9;     /* raised / alt surface */
+  --bg-mute: #EEF0F5;  /* inset · inputs */
+
+  --line-0: #ECEEF3;   /* hairline · blue-tinted gray */
+  --line-1: #D7DBE4;   /* border */
+  --line-2: #8A94A3;   /* emphasis */
+
+  /* ── Ink · cool graphite (blue undertone) ─────────────────── */
+  --ink-0: #0E1218;    /* near-black · slight blue */
+  --ink-1: #363D47;
+  --ink-2: #6A7381;
+  --ink-3: #A8B0BD;
+
+  /* ── Signal palette · red-ink doctrine (light-tuned) ──────── */
+  --signal:      #A53424;              /* brick red · brand · text · stroke */
+  --signal-fill: #C24A36;              /* brighter vermillion · button / LED */
+  --signal-glow: rgba(165,52,36,.14);
+  --signal-dim:  #E3B6AE;
+
+  --pulse:       #1A7F5E;              /* pine green · active / healthy */
+  --pulse-fill:  #27A584;
+  --pulse-glow:  rgba(26,127,94,.14);
+  --pulse-dim:   #9AD2BE;
+
+  --alarm:       #7A0D04;              /* deep blood red · destructive */
+  --alarm-fill:  #B21208;
+  --alarm-glow:  rgba(122,13,4,.18);
+  --alarm-dim:   #D8A69F;
+
+  --trace:       #1E4F8A;              /* ink navy · info / link */
+  --trace-glow:  rgba(30,79,138,.14);
+  --trace-dim:   #A0B6D2;
+
+  --warn:        #B5580E;              /* burnt orange · degraded */
+
+  /* ── Type ─────────────────────────────────────────────────── */
+  --ff-display: 'Noto Serif KR', 'Times New Roman', serif;
+  --ff-ui:      'Noto Sans KR', 'Helvetica Neue', sans-serif;
+  --ff-mono:    'JetBrains Mono', 'Noto Sans KR', ui-monospace, 'SFMono-Regular', monospace;
+  --ff-kr-display: var(--ff-display);
+  --ff-kr-ui:      var(--ff-ui);
+
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+  --fs-2xl: 28px;
+  --fs-3xl: 40px;
+  --fs-4xl: 64px;
+  --fs-hero: 104px;
+
+  --lh-tight: 1.12;
+  --lh-snug:  1.32;
+  --lh-body:  1.55;
+
+  /* ── Space ────────────────────────────────────────────────── */
+  --s-1: 4px;   --s-2: 8px;   --s-3: 12px;  --s-4: 16px;
+  --s-5: 20px;  --s-6: 24px;  --s-7: 32px;  --s-8: 40px;
+  --s-9: 48px;  --s-10: 64px; --s-11: 96px; --s-12: 128px;
+
+  /* ── Radii ────────────────────────────────────────────────── */
+  --r-0: 0;   --r-1: 2px;  --r-2: 4px;  --r-3: 8px;
+
+  /* ── Motion ───────────────────────────────────────────────── */
+  --ease-out: cubic-bezier(.2,.8,.2,1);
+  --ease-in:  cubic-bezier(.6,0,.8,.2);
+  --dur-1: 120ms;
+  --dur-2: 220ms;
+  --dur-3: 420ms;
+  --dur-4: 680ms;
+}
+
+/* ── Reset ──────────────────────────────────────────────────── */
+*,*::before,*::after{ box-sizing:border-box; }
+html,body{ margin:0; padding:0; }
+body{
+  background: var(--bg-0);
+  color: var(--ink-0);
+  font-family: var(--ff-ui);
+  font-size: var(--fs-md);
+  line-height: var(--lh-body);
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+
+  /* 32px grid on pure white · no tinted washes */
+  background-image:
+    linear-gradient(var(--line-0) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line-0) 1px, transparent 1px);
+  background-size: 32px 32px, 32px 32px;
+  background-attachment: fixed;
+}
+
+::selection{ background: var(--signal-fill); color: var(--ink-0); }
+
+/* ── Classification / section stripe ────────────────────────── */
+.strip{
+  font-family: var(--ff-mono);
+  font-size: 10px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) 0;
+  border-top: 1px solid var(--line-0);
+  border-bottom: 1px solid var(--line-0);
+  margin: var(--s-9) 0 var(--s-6);
+}
+.strip::before{
+  content: '';
+  width: 6px; height: 6px;
+  background: var(--signal);
+  display: inline-block;
+  box-shadow: 0 0 8px var(--signal-glow);
+}
+.strip .sep{ color: var(--ink-3); }
+.strip .emph{ color: var(--ink-0); }
+
+/* ── Layout ─────────────────────────────────────────────────── */
+.shell{
+  max-width: 1360px;
+  margin: 0 auto;
+  padding: 0 var(--s-7);
+}
+
+/* ── Top bar (mocked status rail) ───────────────────────────── */
+.railtop{
+  position: sticky; top: 0; z-index: 40;
+  background: rgba(255,255,255,.86);
+  backdrop-filter: blur(14px) saturate(120%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border-bottom: 1px solid var(--line-1);
+  font-family: var(--ff-mono);
+  font-size: 11px;
+  letter-spacing: .06em;
+}
+.railtop-inner{
+  max-width: 1360px; margin:0 auto;
+  padding: var(--s-3) var(--s-7);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--s-5);
+  color: var(--ink-1);
+}
+.wordmark{
+  display:inline-flex; align-items:center; gap: var(--s-2);
+  color: var(--ink-0); letter-spacing: .22em; font-weight: 500;
+}
+.wordmark .bracket{ color: var(--signal); }
+.wordmark .subtle{ color: var(--ink-2); }
+.railtop .segs{
+  display:flex; gap: var(--s-5); justify-content:center;
+}
+.seg{
+  display:inline-flex; align-items:center; gap: var(--s-2);
+  color: var(--ink-2);
+}
+.seg .dot{
+  width:6px; height:6px; border-radius:50%;
+  background: var(--pulse); box-shadow: 0 0 0 3px var(--pulse-glow);
+}
+.seg .dot.warn{ background: var(--warn); box-shadow: 0 0 0 3px rgba(240,160,75,.22); }
+.seg .dot.off { background: var(--ink-3); box-shadow: none; }
+.railtop .clock{ color: var(--ink-0); letter-spacing: .12em; }
+
+/* ── Hero ───────────────────────────────────────────────────── */
+.hero{
+  padding: var(--s-12) 0 var(--s-10);
+  position: relative;
+}
+.hero h1{
+  font-family: var(--ff-display);
+  font-variation-settings: "opsz" 144, "wght" 360, "SOFT" 50;
+  font-size: clamp(52px, 10vw, var(--fs-hero));
+  line-height: .94;
+  letter-spacing: -.03em;
+  margin: 0;
+  color: var(--ink-0);
+}
+.hero h1 em{
+  font-style: italic;
+  font-variation-settings: "opsz" 144, "wght" 320, "SOFT" 100;
+  color: var(--signal);
+}
+.hero .kicker{
+  font-family: var(--ff-mono);
+  font-size: 11px;
+  letter-spacing: .28em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin-bottom: var(--s-5);
+  display:flex; gap: var(--s-4); align-items:center;
+}
+.hero .kicker::before{
+  content:''; width: 36px; height: 1px; background: var(--signal);
+}
+.hero .lede{
+  max-width: 680px;
+  margin-top: var(--s-6);
+  color: var(--ink-1);
+  font-size: var(--fs-lg);
+  line-height: 1.55;
+}
+.hero .lede b{ color: var(--ink-0); font-weight: 500; }
+
+.hero-kr{
+  margin: var(--s-6) 0 0;
+  font-family: var(--ff-kr-display);
+  font-weight: 400;
+  font-size: clamp(28px, 4.4vw, 48px);
+  line-height: 1.28;
+  letter-spacing: -.01em;
+  color: var(--ink-0);
+  padding-top: var(--s-5);
+  border-top: 1px solid var(--line-0);
+  max-width: 640px;
+}
+.hero-kr em{
+  font-style: normal;
+  color: var(--signal);
+  font-weight: 500;
+}
+
+.hero-meta{
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  margin-top: var(--s-10);
+  border-top: 1px solid var(--line-1);
+  border-bottom: 1px solid var(--line-1);
+}
+.hero-meta .cell{
+  padding: var(--s-5) var(--s-5) var(--s-5) 0;
+  border-left: 1px solid var(--line-1);
+  padding-left: var(--s-5);
+}
+.hero-meta .cell:first-child{ border-left: 0; padding-left: 0; }
+.hero-meta .k{
+  font-family: var(--ff-mono); font-size: 10px; letter-spacing:.2em;
+  text-transform: uppercase; color: var(--ink-2);
+}
+.hero-meta .v{
+  font-family: var(--ff-display);
+  font-variation-settings: "opsz" 72, "wght" 420;
+  font-size: var(--fs-xl);
+  color: var(--ink-0);
+  margin-top: 4px;
+}
+.hero-meta .v.mono{
+  font-family: var(--ff-mono);
+  font-size: 15px; font-weight: 500;
+  letter-spacing: 0;
+}
+
+/* ── Section heading ────────────────────────────────────────── */
+.section-head{
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: var(--s-5);
+  margin: var(--s-7) 0 var(--s-6);
+}
+.section-head h2{
+  margin: 0;
+  font-family: var(--ff-display);
+  font-variation-settings: "opsz" 96, "wght" 380;
+  font-size: var(--fs-3xl);
+  letter-spacing: -.018em;
+  line-height: 1.05;
+  color: var(--ink-0);
+}
+.section-head h2 .ital{
+  font-style: italic;
+  font-variation-settings: "opsz" 96, "wght" 300;
+  color: var(--signal);
+}
+.section-head .meta{
+  font-family: var(--ff-mono);
+  font-size: 11px;
+  letter-spacing: .14em;
+  color: var(--ink-2);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* ── Grid helpers ───────────────────────────────────────────── */
+.grid{ display:grid; gap: var(--s-4); }
+.grid.g-12{ grid-template-columns: repeat(12, 1fr); }
+.grid.g-6 { grid-template-columns: repeat(6, 1fr); }
+.grid.g-4 { grid-template-columns: repeat(4, 1fr); }
+.grid.g-3 { grid-template-columns: repeat(3, 1fr); }
+.grid.g-2 { grid-template-columns: repeat(2, 1fr); }
+
+@media (max-width: 1000px){
+  .grid.g-4{ grid-template-columns: repeat(2,1fr); }
+  .grid.g-6{ grid-template-columns: repeat(3,1fr); }
+  .hero-meta{ grid-template-columns: repeat(2,1fr); }
+}
+@media (max-width: 620px){
+  .grid.g-3, .grid.g-6{ grid-template-columns: repeat(2,1fr); }
+  .grid.g-4{ grid-template-columns: 1fr; }
+}
+
+/* ── Card primitive ─────────────────────────────────────────── */
+.card{
+  position: relative;
+  background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-2);
+  padding: var(--s-5);
+  box-shadow: 0 1px 0 rgba(16,24,40,.02);
+  transition: border-color var(--dur-2) var(--ease-out),
+              box-shadow var(--dur-2) var(--ease-out),
+              transform var(--dur-2) var(--ease-out);
+}
+.card:hover{ border-color: var(--line-2); }
+.card.lift:hover{ transform: translateY(-2px); }
+
+.card .card-label{
+  font-family: var(--ff-mono);
+  font-size: 10px; letter-spacing: .22em; text-transform: uppercase;
+  color: var(--ink-2);
+  margin-bottom: var(--s-3);
+  display:flex; align-items:center; gap: var(--s-2);
+}
+.card .card-title{
+  font-family: var(--ff-display);
+  font-variation-settings: "opsz" 48, "wght" 420;
+  font-size: var(--fs-xl);
+  line-height: 1.15;
+  color: var(--ink-0);
+  margin: 0 0 var(--s-2);
+}
+.card .card-body{
+  color: var(--ink-1);
+  font-size: var(--fs-md);
+}
+
+/* ── HUD Corner ticks ───────────────────────────────────────── */
+.card.ticked{ overflow: visible; }
+.card.ticked::before,
+.card.ticked::after,
+.card.ticked > .tickwrap::before,
+.card.ticked > .tickwrap::after{
+  content:'';
+  position:absolute; width:10px; height:10px;
+  border: 1px solid var(--signal);
+  pointer-events:none;
+}
+.card.ticked::before         { top:-1px; left:-1px;  border-right:0; border-bottom:0; }
+.card.ticked::after          { top:-1px; right:-1px; border-left:0;  border-bottom:0; }
+.card.ticked > .tickwrap::before{ bottom:-1px; left:-1px;  border-right:0; border-top:0; }
+.card.ticked > .tickwrap::after { bottom:-1px; right:-1px; border-left:0;  border-top:0; }
+
+.card.ticked.pulse::before,
+.card.ticked.pulse::after,
+.card.ticked.pulse > .tickwrap::before,
+.card.ticked.pulse > .tickwrap::after{ border-color: var(--pulse); }
+
+.card.ticked.alarm::before,
+.card.ticked.alarm::after,
+.card.ticked.alarm > .tickwrap::before,
+.card.ticked.alarm > .tickwrap::after{ border-color: var(--alarm); }
+
+/* ── Palette swatches ───────────────────────────────────────── */
+.pal{
+  display:flex; flex-direction:column; gap:0;
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-2);
+  overflow: hidden;
+}
+.pal .row{
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-3) var(--s-4);
+  border-top: 1px solid var(--line-1);
+}
+.pal .row:first-child{ border-top:0; }
+.pal .chip{
+  height: 40px; border-radius: var(--r-1);
+  border: 1px solid rgba(255,255,255,.06);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+}
+.pal .name{
+  display:flex; flex-direction:column; gap:2px;
+  font-family: var(--ff-ui);
+}
+.pal .name b{
+  font-weight: 500; font-size: var(--fs-md); color: var(--ink-0);
+}
+.pal .name small{
+  font-family: var(--ff-mono); font-size: 11px;
+  color: var(--ink-2); letter-spacing: .02em;
+}
+.pal .hex{
+  font-family: var(--ff-mono); font-size: 11px;
+  color: var(--ink-1); letter-spacing: .08em; text-transform: uppercase;
+}
+
+/* ── Type specimen ──────────────────────────────────────────── */
+.type-spec{
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-2);
+  padding: var(--s-7);
+  background: linear-gradient(180deg, var(--bg-1), var(--bg-0));
+}
+.spec-row{
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: var(--s-6);
+  padding: var(--s-5) 0;
+  border-top: 1px solid var(--line-0);
+  align-items: baseline;
+}
+.spec-row:first-child{ border-top:0; padding-top:0; }
+.spec-row:last-child { padding-bottom:0; }
+.spec-row .l{
+  font-family: var(--ff-mono); font-size: 10px;
+  letter-spacing: .2em; text-transform: uppercase;
+  color: var(--ink-2);
+}
+.spec-row .l small{
+  display:block; color: var(--ink-3); margin-top: 4px;
+  letter-spacing: .02em; text-transform: none;
+}
+.spec-row .r{ color: var(--ink-0); }
+
+.t-display-xl{
+  font-family: var(--ff-display);
+  font-variation-settings: "opsz" 144, "wght" 340;
+  font-size: 72px; line-height: .94; letter-spacing: -.028em;
+}
+.t-display-xl em{
+  font-style: italic;
+  font-variation-settings: "opsz" 144, "wght" 300;
+  color: var(--signal);
+}
+.t-display{
+  font-family: var(--ff-display);
+  font-variation-settings: "opsz" 96, "wght" 380;
+  font-size: 40px; line-height: 1.05; letter-spacing: -.018em;
+}
+.t-h2{
+  font-family: var(--ff-display);
+  font-variation-settings: "opsz" 48, "wght" 420;
+  font-size: 24px; line-height: 1.2;
+}
+.t-body{
+  font-family: var(--ff-ui); font-weight: 400;
+  font-size: 14px; line-height: 1.55; color: var(--ink-1);
+}
+.t-label{
+  font-family: var(--ff-ui); font-weight: 500;
+  font-size: 12px; letter-spacing: .04em; color: var(--ink-0);
+}
+.t-mono{
+  font-family: var(--ff-mono); font-weight: 400;
+  font-size: 13px; letter-spacing: .01em; color: var(--ink-0);
+}
+.t-tag{
+  font-family: var(--ff-mono); font-weight: 500;
+  font-size: 10px; letter-spacing: .22em; text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+/* ── Spacing ladder ─────────────────────────────────────────── */
+.ladder{ display:flex; flex-direction:column; gap: var(--s-3); }
+.ladder .rung{
+  display:grid; grid-template-columns: 80px 1fr auto;
+  align-items:center; gap: var(--s-4);
+  font-family: var(--ff-mono); font-size: 12px; color: var(--ink-1);
+}
+.ladder .bar{
+  height: 12px; background: var(--signal);
+  box-shadow: 0 0 12px var(--signal-glow);
+  border-radius: 1px;
+}
+.ladder .bar.alt{ background: var(--trace); box-shadow: 0 0 12px var(--trace-glow); }
+.ladder .label{ color: var(--ink-2); }
+.ladder .hex{ color: var(--ink-1); text-align:right; }
+
+.radii-row{
+  display:flex; gap: var(--s-4); align-items:flex-end; flex-wrap:wrap;
+}
+.radii-row .box{
+  width: 80px; height: 80px;
+  background: linear-gradient(180deg, var(--bg-3), var(--bg-2));
+  border: 1px solid var(--line-1);
+  display:flex; align-items:flex-end; justify-content:center;
+  padding: 6px;
+  font-family: var(--ff-mono); font-size: 10px;
+  letter-spacing: .14em; color: var(--ink-2);
+}
+.radii-row .box.r0{ border-radius: 0; }
+.radii-row .box.r1{ border-radius: 2px; }
+.radii-row .box.r2{ border-radius: 4px; }
+.radii-row .box.r3{ border-radius: 8px; }
+
+/* ── Buttons ────────────────────────────────────────────────── */
+.btn{
+  display: inline-flex; align-items: center; gap: var(--s-2);
+  font-family: var(--ff-ui);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .02em;
+  color: var(--ink-0);
+  background: transparent;
+  border: 1px solid var(--line-2);
+  padding: 9px 16px;
+  border-radius: var(--r-2);
+  cursor: pointer;
+  transition: background var(--dur-2) var(--ease-out),
+              border-color var(--dur-2) var(--ease-out),
+              color var(--dur-2) var(--ease-out),
+              transform var(--dur-1) var(--ease-out);
+  user-select: none;
+}
+.btn:hover{ border-color: var(--ink-2); background: rgba(255,255,255,.02); }
+.btn:active{ transform: translateY(1px); }
+.btn .kbd{
+  font-family: var(--ff-mono); font-size: 10px;
+  color: var(--ink-2); letter-spacing: .12em;
+  padding: 2px 6px;
+  border: 1px solid var(--line-1);
+  border-radius: 2px;
+  margin-left: var(--s-2);
+}
+.btn.primary{
+  background: var(--signal);
+  color: #FFF5F0;
+  border-color: var(--signal);
+  box-shadow: 0 0 0 0 var(--signal-glow);
+}
+.btn.primary:hover{
+  background: var(--signal-fill);
+  border-color: var(--signal-fill);
+  color: #FFF5F0;
+  box-shadow: 0 0 0 4px var(--signal-glow);
+}
+.btn.primary .kbd{ border-color: rgba(255,245,240,.35); color: rgba(255,245,240,.82); }
+
+.btn.ghost{ border-color: transparent; color: var(--ink-1); }
+.btn.ghost:hover{ color: var(--ink-0); background: rgba(255,255,255,.03); }
+
+.btn.danger{
+  color: var(--alarm);
+  border-color: var(--alarm-dim);
+}
+.btn.danger:hover{
+  background: rgba(255,107,91,.08);
+  border-color: var(--alarm);
+}
+
+.btn.sm{ padding: 5px 10px; font-size: 12px; }
+.btn.lg{ padding: 13px 22px; font-size: 14px; }
+
+.btn[disabled],
+.btn.disabled{
+  opacity: .42; cursor: not-allowed; transform: none !important;
+}
+
+.btn.icon{ padding: 9px; }
+.btn .ic{
+  width: 14px; height: 14px; display:inline-block; flex-shrink:0;
+}
+
+/* ── Switch (industrial) ────────────────────────────────────── */
+.switch{
+  --w: 38px; --h: 20px;
+  position: relative; display:inline-block;
+  width: var(--w); height: var(--h);
+  background: var(--bg-mute);
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background var(--dur-2) var(--ease-out),
+              border-color var(--dur-2) var(--ease-out);
+}
+.switch::after{
+  content:'';
+  position:absolute; top: 2px; left: 2px;
+  width: calc(var(--h) - 6px); height: calc(var(--h) - 6px);
+  border-radius: 50%;
+  background: var(--ink-2);
+  box-shadow: 0 0 0 0 transparent;
+  transition: transform var(--dur-2) var(--ease-out),
+              background var(--dur-2) var(--ease-out),
+              box-shadow var(--dur-2) var(--ease-out);
+}
+.switch.on{ background: rgba(110,207,181,.14); border-color: var(--pulse-dim); }
+.switch.on::after{
+  transform: translateX(calc(var(--w) - var(--h)));
+  background: var(--pulse);
+  box-shadow: 0 0 10px var(--pulse-glow);
+}
+
+/* ── Inputs ─────────────────────────────────────────────────── */
+.field{ display:flex; flex-direction: column; gap: var(--s-2); }
+.field > label{
+  font-family: var(--ff-mono);
+  font-size: 10px; letter-spacing: .22em; text-transform: uppercase;
+  color: var(--ink-2);
+}
+.input,
+.select,
+.textarea{
+  font-family: var(--ff-mono);
+  font-size: 13px;
+  color: var(--ink-0);
+  background: var(--bg-mute);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-1);
+  padding: 10px 12px;
+  outline: none;
+  transition: border-color var(--dur-2) var(--ease-out),
+              box-shadow var(--dur-2) var(--ease-out);
+  width: 100%;
+}
+.input::placeholder, .textarea::placeholder{ color: var(--ink-3); }
+.input:hover, .select:hover, .textarea:hover{ border-color: var(--line-2); }
+.input:focus, .select:focus, .textarea:focus{
+  border-color: var(--signal);
+  box-shadow: 0 0 0 3px var(--signal-glow);
+}
+.input.err{ border-color: var(--alarm-dim); }
+.input.err:focus{ border-color: var(--alarm); box-shadow: 0 0 0 3px var(--alarm-glow); }
+
+.field .hint{
+  font-family: var(--ff-mono); font-size: 11px; color: var(--ink-2);
+}
+.field .err-msg{
+  font-family: var(--ff-mono); font-size: 11px; color: var(--alarm);
+  display:flex; align-items:center; gap: 6px;
+}
+.field .err-msg::before{
+  content:'!'; display:inline-flex; justify-content:center; align-items:center;
+  width: 14px; height: 14px; border: 1px solid var(--alarm); border-radius: 50%;
+  font-size: 10px;
+}
+.select{
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ink-1) 50%),
+    linear-gradient(135deg, var(--ink-1) 50%, transparent 50%);
+  background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 32px;
+}
+.textarea{ min-height: 88px; resize: vertical; }
+
+/* Checkbox */
+.check{
+  display:inline-flex; align-items:center; gap: var(--s-2);
+  font-family: var(--ff-ui); font-size: 13px; color: var(--ink-0);
+  cursor: pointer; user-select:none;
+}
+.check .box{
+  width: 16px; height: 16px;
+  border: 1px solid var(--line-2);
+  background: var(--bg-mute);
+  border-radius: var(--r-1);
+  display:inline-flex; align-items:center; justify-content:center;
+  transition: all var(--dur-2) var(--ease-out);
+}
+.check.on .box{
+  background: var(--signal);
+  border-color: var(--signal);
+}
+.check.on .box::after{
+  content:''; width: 8px; height: 4px;
+  border-left: 2px solid #FFF5F0;
+  border-bottom: 2px solid #FFF5F0;
+  transform: rotate(-45deg) translate(1px, -1px);
+}
+
+/* ── Status LED ─────────────────────────────────────────────── */
+.led{
+  display: inline-flex; align-items:center; gap: var(--s-2);
+  font-family: var(--ff-mono);
+  font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--ink-1);
+}
+.led .bulb{
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--ink-3);
+  box-shadow: none;
+}
+.led.online  .bulb{ background: var(--pulse); box-shadow: 0 0 0 3px var(--pulse-glow); animation: breathe 2.6s var(--ease-out) infinite; }
+.led.active  .bulb{ background: var(--signal); box-shadow: 0 0 0 3px var(--signal-glow); animation: breathe 1.8s var(--ease-out) infinite; }
+.led.warn    .bulb{ background: var(--warn); box-shadow: 0 0 0 3px rgba(240,160,75,.24); }
+.led.alarm   .bulb{ background: var(--alarm); box-shadow: 0 0 0 3px var(--alarm-glow); animation: blink 1.2s steps(2, end) infinite; }
+.led.offline .bulb{ background: var(--ink-3); }
+.led.online strong  { color: var(--pulse); }
+.led.active strong  { color: var(--signal); }
+.led.warn strong    { color: var(--warn); }
+.led.alarm strong   { color: var(--alarm); }
+.led.offline strong { color: var(--ink-2); }
+
+@keyframes breathe{
+  0%, 100%{ box-shadow: 0 0 0 3px transparent; }
+  50%     { box-shadow: 0 0 0 6px var(--pulse-glow); }
+}
+@keyframes blink{
+  50%{ opacity: .35; }
+}
+
+/* ── Badge / pill ───────────────────────────────────────────── */
+.badge{
+  display:inline-flex; align-items:center; gap: 6px;
+  font-family: var(--ff-mono);
+  font-size: 10px; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--ink-1);
+  padding: 3px 8px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-1);
+  background: var(--bg-mute);
+}
+.badge.signal{ color: var(--signal); border-color: var(--signal-dim); background: rgba(232,184,75,.06); }
+.badge.pulse{  color: var(--pulse);  border-color: var(--pulse-dim);  background: rgba(110,207,181,.06); }
+.badge.alarm{  color: var(--alarm);  border-color: var(--alarm-dim);  background: rgba(255,107,91,.06); }
+.badge.trace{  color: var(--trace);  border-color: var(--trace-dim);  background: rgba(122,183,255,.06); }
+
+/* ── Tabs ───────────────────────────────────────────────────── */
+.tabs{
+  display:flex; gap: var(--s-6);
+  border-bottom: 1px solid var(--line-1);
+  margin-bottom: var(--s-5);
+}
+.tabs .tab{
+  font-family: var(--ff-ui);
+  font-size: 13px; font-weight: 500;
+  padding: var(--s-3) 0;
+  color: var(--ink-2);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  transition: color var(--dur-2) var(--ease-out),
+              border-color var(--dur-2) var(--ease-out);
+  display:inline-flex; align-items:center; gap: var(--s-2);
+}
+.tabs .tab:hover{ color: var(--ink-0); }
+.tabs .tab.active{
+  color: var(--ink-0);
+  border-bottom-color: var(--signal);
+}
+.tabs .tab .count{
+  font-family: var(--ff-mono);
+  font-size: 10px; color: var(--ink-3);
+  letter-spacing: .1em;
+}
+
+/* ── Table ──────────────────────────────────────────────────── */
+.tbl{
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-family: var(--ff-ui);
+  font-size: 13px;
+}
+.tbl thead th{
+  font-family: var(--ff-mono);
+  font-size: 10px; letter-spacing: .2em; text-transform: uppercase;
+  color: var(--ink-2);
+  text-align: left; font-weight: 500;
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--line-1);
+  background: var(--bg-1);
+}
+.tbl tbody td{
+  padding: var(--s-4);
+  border-bottom: 1px solid var(--line-0);
+  color: var(--ink-0);
+  vertical-align: middle;
+  position: relative;
+}
+.tbl tbody tr{
+  transition: background var(--dur-2) var(--ease-out);
+}
+.tbl tbody tr:hover td{ background: rgba(232,184,75,.03); }
+.tbl tbody tr:hover td:first-child::before{
+  content:''; position:absolute; left:0; top:0; bottom:0;
+  width: 2px; background: var(--signal);
+  box-shadow: 0 0 8px var(--signal-glow);
+}
+.tbl td.mono{ font-family: var(--ff-mono); font-size: 12px; color: var(--ink-1); }
+.tbl td.right{ text-align: right; }
+.tbl td.num{
+  font-family: var(--ff-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-0);
+}
+
+/* Scan line on hover row */
+.tbl tbody tr{ overflow: hidden; }
+.tbl tbody tr::after{
+  content:''; position:absolute; left: -100%; top:0;
+  width: 100%; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--signal), transparent);
+  opacity: 0; transition: opacity var(--dur-2);
+}
+
+/* ── KPI ────────────────────────────────────────────────────── */
+.kpi{
+  padding: var(--s-5);
+  background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-2);
+  position: relative;
+}
+.kpi .k{
+  font-family: var(--ff-mono);
+  font-size: 10px; letter-spacing: .2em; text-transform: uppercase;
+  color: var(--ink-2);
+}
+.kpi .v{
+  font-family: var(--ff-display);
+  font-variation-settings: "opsz" 144, "wght" 380;
+  font-size: 56px; line-height: 1; letter-spacing: -.02em;
+  color: var(--ink-0);
+  margin-top: var(--s-2);
+  display: flex; align-items: baseline; gap: var(--s-2);
+}
+.kpi .v .unit{
+  font-family: var(--ff-mono);
+  font-size: 13px; letter-spacing: .12em;
+  color: var(--ink-2);
+  font-variation-settings: initial;
+}
+.kpi .sub{
+  margin-top: var(--s-3);
+  display: flex; align-items: center; gap: var(--s-2);
+  font-family: var(--ff-mono);
+  font-size: 11px; color: var(--ink-2);
+  letter-spacing: .04em;
+}
+.kpi .delta{
+  display: inline-flex; align-items: center; gap: 4px;
+  color: var(--pulse);
+}
+.kpi .delta.down{ color: var(--alarm); }
+.kpi .delta::before{
+  content:'▲'; font-size: 9px;
+}
+.kpi .delta.down::before{ content:'▼'; }
+
+.kpi.accent{
+  border-color: var(--signal);
+  border-left-width: 2px;
+  background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
+}
+.kpi.accent .v{ color: var(--signal); }
+
+/* ── Gauge (radial) ─────────────────────────────────────────── */
+.gauge{
+  position: relative;
+  width: 160px; height: 100px;
+  margin: 0 auto;
+}
+.gauge svg{ width: 100%; height: 100%; overflow: visible; }
+.gauge .arc-bg{ stroke: var(--line-1); }
+.gauge .arc-fg{
+  stroke: var(--signal);
+  filter: drop-shadow(0 0 6px var(--signal-glow));
+  transition: stroke-dashoffset var(--dur-4) var(--ease-out);
+}
+.gauge .needle-dot{
+  fill: var(--signal); filter: drop-shadow(0 0 6px var(--signal-glow));
+}
+.gauge .tick{ stroke: var(--line-2); }
+.gauge .tick.major{ stroke: var(--ink-2); }
+.gauge-val{
+  position: absolute; inset: 0;
+  display:flex; flex-direction:column; align-items:center; justify-content: flex-end;
+  padding-bottom: 4px;
+}
+.gauge-val .n{
+  font-family: var(--ff-display);
+  font-variation-settings: "opsz" 96, "wght" 400;
+  font-size: 34px; line-height: 1; color: var(--ink-0);
+  letter-spacing: -.02em;
+}
+.gauge-val .u{
+  font-family: var(--ff-mono); font-size: 10px;
+  color: var(--ink-2); letter-spacing: .18em; text-transform: uppercase;
+  margin-top: 4px;
+}
+
+/* ── Progress bar (linear, segmented) ───────────────────────── */
+.progress{
+  height: 8px;
+  background: var(--bg-mute);
+  border: 1px solid var(--line-1);
+  border-radius: 2px;
+  position: relative; overflow: hidden;
+}
+.progress .fill{
+  position: absolute; inset: 0 auto 0 0;
+  background:
+    repeating-linear-gradient(90deg,
+      var(--signal) 0 6px,
+      rgba(194,74,54,.75) 6px 7px);
+  box-shadow: 0 0 10px var(--signal-glow);
+}
+.progress.pulse .fill{
+  background: repeating-linear-gradient(90deg,
+    var(--pulse) 0 6px,
+    rgba(39,165,132,.7) 6px 7px);
+  box-shadow: 0 0 10px var(--pulse-glow);
+}
+.progress.alarm .fill{
+  background: repeating-linear-gradient(90deg,
+    var(--alarm) 0 6px,
+    rgba(178,18,8,.75) 6px 7px);
+  box-shadow: 0 0 10px var(--alarm-glow);
+}
+
+/* ── Toast banner ───────────────────────────────────────────── */
+.toast{
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--s-4); align-items: center;
+  padding: var(--s-4) var(--s-5);
+  border: 1px solid var(--line-1);
+  border-left: 2px solid var(--signal);
+  background: linear-gradient(90deg, rgba(232,184,75,.06), transparent 60%), var(--bg-1);
+  border-radius: var(--r-2);
+}
+.toast.pulse{ border-left-color: var(--pulse); background: linear-gradient(90deg, rgba(110,207,181,.06), transparent 60%), var(--bg-1); }
+.toast.alarm{ border-left-color: var(--alarm); background: linear-gradient(90deg, rgba(255,107,91,.08), transparent 60%), var(--bg-1); }
+.toast.trace{ border-left-color: var(--trace); background: linear-gradient(90deg, rgba(122,183,255,.06), transparent 60%), var(--bg-1); }
+
+.toast .glyph{
+  width: 28px; height: 28px;
+  border: 1px solid var(--line-2);
+  border-radius: 50%;
+  display:flex; align-items:center; justify-content:center;
+  font-family: var(--ff-mono); font-size: 13px;
+  color: var(--ink-0);
+}
+.toast.pulse .glyph{ border-color: var(--pulse-dim); color: var(--pulse); }
+.toast.alarm .glyph{ border-color: var(--alarm-dim); color: var(--alarm); }
+.toast.trace .glyph{ border-color: var(--trace-dim); color: var(--trace); }
+.toast.signal .glyph{ border-color: var(--signal-dim); color: var(--signal); }
+
+.toast .msg{ color: var(--ink-0); }
+.toast .msg b{ font-weight: 500; color: var(--ink-0); }
+.toast .msg small{
+  display:block; font-family: var(--ff-mono); color: var(--ink-2);
+  font-size: 11px; margin-top: 2px;
+}
+
+/* ── Modal frame preview ────────────────────────────────────── */
+.modal{
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-2);
+  background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
+  box-shadow:
+    0 24px 60px rgba(16,24,40,.14),
+    0 2px 4px rgba(16,24,40,.05);
+  overflow: hidden;
+  position: relative;
+}
+.modal-head{
+  padding: var(--s-4) var(--s-5);
+  border-bottom: 1px solid var(--line-1);
+  display:flex; align-items:center; justify-content: space-between;
+}
+.modal-head .ttl{
+  font-family: var(--ff-display);
+  font-variation-settings: "opsz" 48, "wght" 420;
+  font-size: 18px;
+}
+.modal-head .tag{
+  font-family: var(--ff-mono); font-size: 10px; letter-spacing:.2em;
+  text-transform:uppercase; color: var(--ink-2);
+}
+.modal-body{ padding: var(--s-6); color: var(--ink-1); }
+.modal-foot{
+  padding: var(--s-4) var(--s-5);
+  border-top: 1px solid var(--line-1);
+  display: flex; justify-content: flex-end; gap: var(--s-3);
+  background: var(--bg-mute);
+}
+
+/* ── Live preview composition ───────────────────────────────── */
+.preview-shell{
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-2);
+  padding: var(--s-1);
+  background: var(--bg-0);
+  position: relative;
+  overflow: hidden;
+}
+.preview-shell::before{
+  content: 'LIVE PREVIEW / Admin / Server Status';
+  position: absolute; top: -1px; left: 24px; padding: 0 10px;
+  font-family: var(--ff-mono);
+  font-size: 10px; letter-spacing: .22em;
+  background: var(--bg-0); color: var(--ink-2); text-transform: uppercase;
+  transform: translateY(-50%);
+  z-index: 2;
+}
+.preview-inner{
+  padding: var(--s-8) var(--s-6) var(--s-6);
+}
+
+.preview-nav{
+  display:flex; align-items:center; justify-content: space-between;
+  padding-bottom: var(--s-5);
+  border-bottom: 1px solid var(--line-1);
+  margin-bottom: var(--s-6);
+}
+.preview-nav .left{ display:flex; align-items:center; gap: var(--s-5); }
+.preview-nav .right{ display:flex; gap: var(--s-3); align-items:center; }
+
+.brand-block{
+  display:flex; align-items:center; gap: var(--s-3);
+}
+.brand-block .mark{
+  font-family: var(--ff-display);
+  font-variation-settings: "opsz" 144, "wght" 400, "SOFT" 50;
+  font-size: 22px;
+  letter-spacing: -.02em;
+  color: var(--ink-0);
+}
+.brand-block .mark em{ font-style: italic; color: var(--signal); font-variation-settings: "opsz" 144, "wght" 300; }
+.brand-block .mark-sub{
+  font-family: var(--ff-mono); font-size: 10px; letter-spacing: .22em;
+  color: var(--ink-2); text-transform: uppercase;
+  border-left: 1px solid var(--line-1); padding-left: var(--s-3); margin-left: var(--s-2);
+}
+
+.nav-links{
+  display:flex; gap: var(--s-5);
+  font-family: var(--ff-ui); font-size: 13px;
+}
+.nav-links a{
+  color: var(--ink-2); text-decoration: none;
+  padding: 4px 0; border-bottom: 1px solid transparent;
+  letter-spacing: .02em;
+}
+.nav-links a.active{ color: var(--ink-0); border-color: var(--signal); }
+.nav-links a:hover{ color: var(--ink-0); }
+
+/* User/version area */
+.user-ident{
+  display:inline-flex; align-items:center; gap: var(--s-2);
+  font-family: var(--ff-mono); font-size: 11px; color: var(--ink-1);
+  padding: 6px 10px;
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-1);
+}
+.user-ident .avatar{
+  width: 18px; height: 18px;
+  background:
+    radial-gradient(circle at 30% 30%, #D9584A, #6F1A12);
+  border-radius: 50%;
+}
+.user-ident .pipe{ color: var(--ink-3); }
+
+/* Preview KPI row */
+.preview-kpis{
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--s-4);
+  margin-bottom: var(--s-5);
+}
+
+/* Preview gauges */
+.gauge-row{
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s-4);
+  margin-bottom: var(--s-5);
+}
+
+/* Preview table zone */
+.zone{ display:grid; grid-template-columns: 2.2fr 1fr; gap: var(--s-4); }
+@media (max-width: 1000px){ .zone{ grid-template-columns: 1fr; } }
+
+.log-feed{
+  padding: 0;
+  background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-2);
+  overflow: hidden;
+}
+.log-feed .head{
+  padding: var(--s-4);
+  border-bottom: 1px solid var(--line-1);
+  display:flex; align-items:center; justify-content: space-between;
+}
+.log-feed .head .t{
+  font-family: var(--ff-display);
+  font-variation-settings: "opsz" 48, "wght" 420;
+  font-size: 16px;
+}
+.log-feed .list{
+  max-height: 260px;
+  overflow: auto;
+  font-family: var(--ff-mono);
+  font-size: 12px;
+}
+.log-line{
+  padding: 8px var(--s-4);
+  border-bottom: 1px dashed var(--line-0);
+  display: grid;
+  grid-template-columns: 96px 80px 1fr;
+  gap: var(--s-3);
+  align-items: center;
+  color: var(--ink-1);
+}
+.log-line:last-child{ border-bottom: 0; }
+.log-line .ts{ color: var(--ink-3); font-size: 11px; }
+.log-line .lvl{
+  font-size: 10px; letter-spacing: .18em; text-transform: uppercase;
+  padding: 2px 6px; border: 1px solid var(--line-1); border-radius: 2px;
+  text-align: center;
+  color: var(--ink-2);
+}
+.log-line.info  .lvl{ color: var(--trace); border-color: var(--trace-dim); }
+.log-line.warn  .lvl{ color: var(--warn);  border-color: rgba(240,160,75,.4); }
+.log-line.error .lvl{ color: var(--alarm); border-color: var(--alarm-dim); }
+.log-line.ok    .lvl{ color: var(--pulse); border-color: var(--pulse-dim); }
+.log-line .msg{ color: var(--ink-0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── Token reference table ──────────────────────────────────── */
+.tok{
+  width: 100%; border-collapse: separate; border-spacing: 0;
+  font-family: var(--ff-mono); font-size: 12px;
+}
+.tok th, .tok td{
+  text-align: left;
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--line-0);
+}
+.tok th{
+  font-size: 10px; letter-spacing: .2em; text-transform: uppercase;
+  color: var(--ink-2); font-weight: 500;
+  border-bottom: 1px solid var(--line-1);
+}
+.tok td.var{ color: var(--signal); }
+.tok td.val{ color: var(--ink-0); }
+.tok td.note{ color: var(--ink-2); }
+
+/* ── Stagger on load ────────────────────────────────────────── */
+.reveal{
+  opacity: 0;
+  transform: translateY(14px);
+  animation: reveal var(--dur-4) var(--ease-out) forwards;
+}
+.reveal.d1{ animation-delay: 80ms; }
+.reveal.d2{ animation-delay: 160ms; }
+.reveal.d3{ animation-delay: 240ms; }
+.reveal.d4{ animation-delay: 320ms; }
+.reveal.d5{ animation-delay: 400ms; }
+.reveal.d6{ animation-delay: 480ms; }
+@keyframes reveal{
+  to{ opacity: 1; transform: translateY(0); }
+}
+
+/* ── Footer ─────────────────────────────────────────────────── */
+footer.doc-foot{
+  margin-top: var(--s-12);
+  padding: var(--s-9) 0 var(--s-10);
+  border-top: 1px solid var(--line-1);
+  color: var(--ink-2);
+  font-family: var(--ff-mono);
+  font-size: 11px;
+  letter-spacing: .06em;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--s-5);
+}
+footer.doc-foot .signoff{
+  font-family: var(--ff-display);
+  font-variation-settings: "opsz" 72, "wght" 320;
+  font-style: italic;
+  font-size: 20px; color: var(--ink-0);
+  letter-spacing: -.01em;
+}
+
+/* ── Utility ────────────────────────────────────────────────── */
+.row{ display:flex; gap: var(--s-3); flex-wrap: wrap; align-items: center; }
+.col{ display:flex; flex-direction: column; gap: var(--s-3); }
+.sep{ height: 1px; background: var(--line-1); margin: var(--s-6) 0; }
+.muted{ color: var(--ink-2); }
+.mono{ font-family: var(--ff-mono); }
+.nowrap{ white-space: nowrap; }
+.hr-dashed{
+  border: 0; border-top: 1px dashed var(--line-1);
+  margin: var(--s-6) 0;
+}
+
+/* ── Unified font · italic → color+weight emphasis ──────────
+   Noto Serif KR has no true italic; avoid synthesized slant
+   and express emphasis via signal color + weight instead.
+------------------------------------------------------------*/
+.hero h1 em,
+.hero h1 i,
+.t-display-xl em,
+.section-head h2 .ital,
+.brand-block .mark em,
+.hero-kr em,
+.modal-head .ttl em{
+  font-style: normal !important;
+  font-weight: 500;
+  color: var(--signal);
+}
+
+/* Discrete weight fallbacks when variable wght axis is absent */
+.hero h1          { font-weight: 400; }
+.hero h1 em       { font-weight: 500; }
+.t-display-xl     { font-weight: 400; }
+.t-display-xl em  { font-weight: 500; }
+.t-display        { font-weight: 500; }
+.t-h2             { font-weight: 500; }
+.section-head h2  { font-weight: 500; }
+.card .card-title { font-weight: 500; }
+.kpi .v           { font-weight: 500; }
+.gauge-val .n     { font-weight: 500; }
+.hero-meta .v     { font-weight: 500; }
+.modal-head .ttl  { font-weight: 500; }
+.log-feed .head .t{ font-weight: 500; }
+.brand-block .mark{ font-weight: 500; }
+footer.doc-foot .signoff{ font-weight: 400; }
+</style>
+</head>
+<body>
+
+<!-- ============== Top rail ============== -->
+<header class="railtop">
+  <div class="railtop-inner">
+    <div class="wordmark">
+      <span class="bracket">[</span>
+      <span>TTTGATE</span>
+      <span class="bracket">]</span>
+      <span class="subtle">· SIGNAL OPS</span>
+    </div>
+    <div class="segs">
+      <span class="seg"><span class="dot"></span> CORE · ONLINE</span>
+      <span class="seg"><span class="dot"></span> TUNNELS 12/24</span>
+      <span class="seg"><span class="dot warn"></span> CERT · 19D LEFT</span>
+      <span class="seg"><span class="dot off"></span> MFA · NOT ENROLLED</span>
+    </div>
+    <div class="clock">
+      <span>UTC 14:07:22</span>
+      <span class="muted"> · </span>
+      <span>build <b style="color:var(--signal)">1.2.0</b></span>
+    </div>
+  </div>
+</header>
+
+<div class="shell">
+
+<!-- ============== HERO ============== -->
+<section class="hero reveal">
+  <div class="kicker">§00 / Design System · v0.1 · 2026-04-25 · Light Edition</div>
+  <h1>
+    An <em>operator</em>’s<br>
+    console —<br>
+    built for signal,<br>
+    not decoration.
+  </h1>
+
+  <h2 class="hero-kr" lang="ko">
+    운영자를 위한 <em>콘솔.</em><br>
+    장식이 아닌, <em>신호를 위해.</em>
+  </h2>
+
+  <p class="lede">
+    <b>Signal Ops</b> is the visual doctrine for the TTTGate admin surface.
+    Background is strictly <b>black &amp; white</b> on a pure white page;
+    grays carry a <b>faint blue undertone</b> to read cool, not muddy.
+    Color is reserved for meaning: <b lang="ko">붉은 브릭</b> red as the signal,
+    pine green for active states, blood red for destructive actions,
+    ink navy for info — plotted on a 32&thinsp;px grid.
+    Typography unifies Latin and Korean on
+    <b lang="ko">Noto&thinsp;Serif&thinsp;KR</b> (display) and <b lang="ko">Noto&thinsp;Sans&thinsp;KR</b> (UI),
+    with <b>JetBrains&thinsp;Mono</b> reserved for data.
+    Emphasis is <b style="color: var(--signal)">signal color</b> plus weight — never synthetic italic.
+  </p>
+
+  <div class="hero-meta">
+    <div class="cell">
+      <div class="k">Base grid</div>
+      <div class="v mono">32 PX · 4 TRACK</div>
+    </div>
+    <div class="cell">
+      <div class="k">Primary signal</div>
+      <div class="v" style="color:var(--signal)">#A53424</div>
+    </div>
+    <div class="cell">
+      <div class="k">Type stack</div>
+      <div class="v mono">Noto Serif · Sans · JBMono</div>
+    </div>
+    <div class="cell">
+      <div class="k">Mode</div>
+      <div class="v">Dark only · phase 1</div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============== §01 COLOR ============== -->
+<div class="strip reveal d1">
+  <span>§01</span><span class="sep">/</span>
+  <span class="emph">FOUNDATIONS</span><span class="sep">/</span>
+  <span>COLOR — 4-SIGNAL DOCTRINE</span>
+</div>
+
+<section class="reveal d1">
+  <div class="section-head">
+    <h2>A palette that <span class="ital">means something.</span></h2>
+    <div class="meta">10 surface · 4 signal · 4 ink</div>
+  </div>
+
+  <div class="grid g-2">
+    <div class="pal">
+      <div class="row">
+        <div class="pal" style="border:0">
+          <div class="row"><div class="chip" style="background:var(--bg-0); border: 1px solid var(--line-0)"></div><div class="name"><b>bg-0</b><small>page · pure white</small></div><div class="hex">#FFFFFF</div></div>
+          <div class="row"><div class="chip" style="background:var(--bg-1); border: 1px solid var(--line-0)"></div><div class="name"><b>bg-1</b><small>panel · whisper</small></div><div class="hex">#FAFBFC</div></div>
+          <div class="row"><div class="chip" style="background:var(--bg-2); border: 1px solid var(--line-0)"></div><div class="name"><b>bg-2</b><small>card</small></div><div class="hex">#FFFFFF</div></div>
+          <div class="row"><div class="chip" style="background:var(--bg-3); border: 1px solid var(--line-0)"></div><div class="name"><b>bg-3</b><small>raised / alt</small></div><div class="hex">#F3F5F9</div></div>
+          <div class="row"><div class="chip" style="background:var(--bg-mute); border: 1px solid var(--line-0)"></div><div class="name"><b>bg-mute</b><small>inset · inputs</small></div><div class="hex">#EEF0F5</div></div>
+          <div class="row"><div class="chip" style="background:var(--line-1)"></div><div class="name"><b>line-1</b><small>border · blue-tinted gray</small></div><div class="hex">#D7DBE4</div></div>
+          <div class="row"><div class="chip" style="background:var(--line-2)"></div><div class="name"><b>line-2</b><small>emphasis border</small></div><div class="hex">#8A94A3</div></div>
+          <div class="row"><div class="chip" style="background:var(--ink-0)"></div><div class="name"><b>ink-0</b><small>primary text · cool near-black</small></div><div class="hex">#0E1218</div></div>
+          <div class="row"><div class="chip" style="background:var(--ink-1)"></div><div class="name"><b>ink-1</b><small>secondary</small></div><div class="hex">#363D47</div></div>
+          <div class="row"><div class="chip" style="background:var(--ink-2)"></div><div class="name"><b>ink-2</b><small>tertiary · labels</small></div><div class="hex">#6A7381</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="pal">
+        <div class="row"><div class="chip" style="background:var(--signal); box-shadow: 0 0 14px var(--signal-glow)"></div><div class="name"><b>signal — brick red</b><small>primary · brand · critical CTA</small></div><div class="hex" style="color:var(--signal)">#A53424</div></div>
+        <div class="row"><div class="chip" style="background:var(--signal-fill); box-shadow: 0 0 14px var(--signal-glow)"></div><div class="name"><b>signal-fill — vermillion</b><small>button hover · LED bulb</small></div><div class="hex" style="color:var(--signal-fill)">#C24A36</div></div>
+        <div class="row"><div class="chip" style="background:var(--pulse); box-shadow: 0 0 14px var(--pulse-glow)"></div><div class="name"><b>pulse — pine green</b><small>active / healthy / online</small></div><div class="hex" style="color:var(--pulse)">#1A7F5E</div></div>
+        <div class="row"><div class="chip" style="background:var(--alarm); box-shadow: 0 0 14px var(--alarm-glow)"></div><div class="name"><b>alarm — blood red</b><small>error · destructive · alert</small></div><div class="hex" style="color:var(--alarm)">#7A0D04</div></div>
+        <div class="row"><div class="chip" style="background:var(--trace); box-shadow: 0 0 14px var(--trace-glow)"></div><div class="name"><b>trace — ink navy</b><small>info · hyperlink · neutral state</small></div><div class="hex" style="color:var(--trace)">#1E4F8A</div></div>
+        <div class="row"><div class="chip" style="background:var(--warn)"></div><div class="name"><b>warn — burnt orange</b><small>degraded · expiring · approaching limit</small></div><div class="hex" style="color:var(--warn)">#B5580E</div></div>
+      </div>
+
+      <div class="card ticked" style="margin-top: 20px">
+        <span class="tickwrap"></span>
+        <div class="card-label">Doctrine</div>
+        <p class="card-body" style="margin:0">
+          Every color carries exactly one meaning. A button is <b style="color:var(--signal)">brick red</b>
+          only when the next click is the one the operator came here for.
+          A row glows <b style="color:var(--pulse)">pine green</b> only while something is <span style="color:var(--signal)">actually</span> alive.
+          If everything is highlighted, nothing is.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============== §02 TYPE ============== -->
+<div class="strip reveal d2">
+  <span>§02</span><span class="sep">/</span>
+  <span class="emph">FOUNDATIONS</span><span class="sep">/</span>
+  <span>TYPE — FRAUNCES × ARCHIVO × JBMONO</span>
+</div>
+
+<section class="reveal d2">
+  <div class="section-head">
+    <h2>Serif for <span class="ital">intention.</span> Mono for data. Sans for everything between.</h2>
+    <div class="meta">3 families · 9 roles</div>
+  </div>
+
+  <div class="type-spec">
+    <div class="spec-row">
+      <div class="l">Display XL<small>Noto Serif KR · 400 · 72</small></div>
+      <div class="r t-display-xl">Sessions <em>active.</em></div>
+    </div>
+    <div class="spec-row">
+      <div class="l">Display<small>Noto Serif KR · 500 · 40</small></div>
+      <div class="r t-display">Tunnel throughput · <em>last 60s</em></div>
+    </div>
+    <div class="spec-row">
+      <div class="l">H2 · card title<small>Noto Serif KR · 500 · 24</small></div>
+      <div class="r t-h2">Trusted Client registry</div>
+    </div>
+    <div class="spec-row">
+      <div class="l">Body<small>Noto Sans KR · 400 · 14/22</small></div>
+      <div class="r t-body">Operators work under pressure. Copy is short, declarative, and places the action before the explanation. Labels never shout; they anchor.</div>
+    </div>
+    <div class="spec-row">
+      <div class="l">Label<small>Noto Sans KR · 500 · 12</small></div>
+      <div class="r t-label">CLIENT NAME</div>
+    </div>
+    <div class="spec-row">
+      <div class="l">Data · Mono<small>JetBrains Mono · 400 · 13</small></div>
+      <div class="r t-mono">tun-a14f · 10.0.12.4 : 7443 → 127.0.0.1 : 5432</div>
+    </div>
+    <div class="spec-row">
+      <div class="l">Tag / strip<small>JetBrains Mono · 500 · 10 · 0.22em</small></div>
+      <div class="r t-tag">§01 / FOUNDATIONS / COLOR</div>
+    </div>
+
+    <div class="spec-row" lang="ko">
+      <div class="l">Korean Display<small>Noto Serif KR · 400 · 48</small></div>
+      <div class="r" style="font-family: var(--ff-kr-display); font-size: 48px; line-height: 1.22; letter-spacing: -.015em; color: var(--ink-0)">
+        터널 상태 — <span style="color: var(--signal); font-weight: 500">실시간 확인.</span>
+      </div>
+    </div>
+    <div class="spec-row" lang="ko">
+      <div class="l">Korean H2<small>Noto Serif KR · 500 · 22</small></div>
+      <div class="r" style="font-family: var(--ff-kr-display); font-size: 22px; font-weight: 500; letter-spacing: -.01em; color: var(--ink-0)">
+        신뢰할 수 있는 클라이언트 · 등록 목록
+      </div>
+    </div>
+    <div class="spec-row" lang="ko">
+      <div class="l">Korean Body<small>Noto Sans KR · 400 · 14/24</small></div>
+      <div class="r" style="font-family: var(--ff-kr-ui); font-size: 14px; line-height: 1.72; color: var(--ink-1); max-width: 560px">
+        운영자는 압박 속에서 작업한다. 본문은 짧고 선언적이며, 설명보다 행동을 앞세운다.
+        라벨은 소리치지 않고 자리잡는다. 데이터 포인트 하나하나는 의미를 가진 신호다.
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============== §03 SPACING ============== -->
+<div class="strip reveal d3">
+  <span>§03</span><span class="sep">/</span>
+  <span class="emph">FOUNDATIONS</span><span class="sep">/</span>
+  <span>SPACE · RADII · ELEVATION</span>
+</div>
+
+<section class="reveal d3">
+  <div class="section-head">
+    <h2>Fewer steps, <span class="ital">stricter rhythm.</span></h2>
+    <div class="meta">12-step · 4px base</div>
+  </div>
+
+  <div class="grid g-2">
+    <div class="card">
+      <div class="card-label">Spacing scale</div>
+      <div class="ladder">
+        <div class="rung"><span class="label">s-1</span><div class="bar" style="width:4px"></div><span class="hex">4 px</span></div>
+        <div class="rung"><span class="label">s-2</span><div class="bar" style="width:8px"></div><span class="hex">8 px</span></div>
+        <div class="rung"><span class="label">s-3</span><div class="bar" style="width:12px"></div><span class="hex">12 px</span></div>
+        <div class="rung"><span class="label">s-4</span><div class="bar" style="width:16px"></div><span class="hex">16 px</span></div>
+        <div class="rung"><span class="label">s-5</span><div class="bar" style="width:20px"></div><span class="hex">20 px</span></div>
+        <div class="rung"><span class="label">s-6</span><div class="bar" style="width:24px"></div><span class="hex">24 px</span></div>
+        <div class="rung"><span class="label">s-7</span><div class="bar" style="width:32px"></div><span class="hex">32 px</span></div>
+        <div class="rung"><span class="label">s-8</span><div class="bar" style="width:40px"></div><span class="hex">40 px</span></div>
+        <div class="rung"><span class="label">s-9</span><div class="bar" style="width:48px"></div><span class="hex">48 px</span></div>
+        <div class="rung"><span class="label">s-10</span><div class="bar alt" style="width:64px"></div><span class="hex">64 px</span></div>
+        <div class="rung"><span class="label">s-11</span><div class="bar alt" style="width:96px"></div><span class="hex">96 px</span></div>
+        <div class="rung"><span class="label">s-12</span><div class="bar alt" style="width:128px"></div><span class="hex">128 px</span></div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="card">
+        <div class="card-label">Radii</div>
+        <div class="radii-row">
+          <div class="box r0">r-0</div>
+          <div class="box r1">r-1</div>
+          <div class="box r2">r-2</div>
+          <div class="box r3">r-3</div>
+        </div>
+        <p class="muted mono" style="font-size:11px; margin-top: 16px; letter-spacing:.04em">
+          Prefer r-1 / r-2. Instruments don’t have pill shapes. r-3 reserved for modal overlays.
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="card-label">Elevation</div>
+        <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 8px">
+          <div style="height: 80px; background: var(--bg-2); border: 1px solid var(--line-1); border-radius: 4px; box-shadow: 0 1px 2px rgba(16,24,40,.04);
+                display:flex; align-items:flex-end; padding: 8px; font-family: var(--ff-mono); font-size: 10px; letter-spacing:.14em; color: var(--ink-2)">e-1 · card</div>
+          <div style="height: 80px; background: var(--bg-2); border: 1px solid var(--line-1); border-radius: 4px; box-shadow: 0 4px 14px rgba(16,24,40,.08), 0 1px 2px rgba(16,24,40,.04);
+                display:flex; align-items:flex-end; padding: 8px; font-family: var(--ff-mono); font-size: 10px; letter-spacing:.14em; color: var(--ink-2)">e-2 · popover</div>
+          <div style="height: 80px; background: var(--bg-2); border: 1px solid var(--line-1); border-radius: 8px; box-shadow: 0 24px 60px rgba(16,24,40,.14), 0 2px 4px rgba(16,24,40,.05);
+                display:flex; align-items:flex-end; padding: 8px; font-family: var(--ff-mono); font-size: 10px; letter-spacing:.14em; color: var(--ink-2)">e-3 · modal</div>
+        </div>
+      </div>
+
+      <div class="card ticked">
+        <span class="tickwrap"></span>
+        <div class="card-label">Signature · HUD Corner Ticks</div>
+        <p class="card-body" style="margin:0">
+          Applied to <b>primary narrative cards only</b>. Never on form fields, list rows, or inline components.
+          Color flips to <b style="color:var(--pulse)">pulse</b> on active/live zones and <b style="color:var(--alarm)">alarm</b> during fault conditions.
+          A restraint rule: never more than three ticked cards visible at the same time.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============== §04 ACTIONS ============== -->
+<div class="strip reveal d4">
+  <span>§04</span><span class="sep">/</span>
+  <span class="emph">COMPONENTS</span><span class="sep">/</span>
+  <span>ACTION — BUTTON · SWITCH · CHECK</span>
+</div>
+
+<section class="reveal d4">
+  <div class="section-head">
+    <h2>One <span class="ital">primary</span> per screen. Everything else recedes.</h2>
+    <div class="meta">3 intents · 3 sizes</div>
+  </div>
+
+  <div class="grid g-2">
+    <div class="card">
+      <div class="card-label">Buttons · intent</div>
+      <div class="col" style="gap: 18px">
+        <div class="row">
+          <button class="btn primary">Save Configuration <span class="kbd">⌘ S</span></button>
+          <button class="btn">Cancel</button>
+          <button class="btn ghost">Reset</button>
+          <button class="btn danger">Revoke Session</button>
+        </div>
+        <div class="row">
+          <button class="btn primary sm">Apply</button>
+          <button class="btn sm">Test</button>
+          <button class="btn ghost sm">Defer</button>
+          <button class="btn danger sm">Delete</button>
+        </div>
+        <div class="row">
+          <button class="btn primary lg">Register Trusted Client</button>
+          <button class="btn lg">Import YAML</button>
+        </div>
+        <div class="row">
+          <button class="btn primary" disabled>Apply</button>
+          <button class="btn" disabled>Run Diagnostics</button>
+        </div>
+        <div class="row">
+          <button class="btn icon" aria-label="refresh">
+            <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+              <path d="M13 3v4h-4M3 13v-4h4"/>
+              <path d="M13 7a5 5 0 0 0-9-2M3 9a5 5 0 0 0 9 2"/>
+            </svg>
+          </button>
+          <button class="btn"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 8h12M8 2v12"/></svg> Add tunnel</button>
+          <button class="btn primary"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 8l4 4 6-8"/></svg> Approve</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Toggles · Checks · LEDs</div>
+      <div class="col" style="gap: 20px">
+        <div class="row" style="gap: 28px">
+          <label class="row" style="gap:10px"><span class="switch on"></span><span class="t-label">TLS enabled</span></label>
+          <label class="row" style="gap:10px"><span class="switch"></span>    <span class="t-label">Allow self-signed</span></label>
+          <label class="row" style="gap:10px"><span class="switch on"></span><span class="t-label">Keep alive</span></label>
+        </div>
+        <div class="row" style="gap: 24px">
+          <label class="check on"><span class="box"></span> Require MFA</label>
+          <label class="check"><span class="box"></span> Rotate cert on save</label>
+          <label class="check on"><span class="box"></span> Log admin events</label>
+        </div>
+        <div class="row" style="gap: 22px">
+          <span class="led online">Signal · <strong>ONLINE</strong></span>
+          <span class="led active">Link · <strong>HANDSHAKE</strong></span>
+          <span class="led warn">Cert · <strong>EXPIRING</strong></span>
+          <span class="led alarm">Auth · <strong>REJECTED</strong></span>
+          <span class="led offline">Port 443 · <strong>IDLE</strong></span>
+        </div>
+        <div class="row">
+          <span class="badge">DEFAULT</span>
+          <span class="badge signal">TCP</span>
+          <span class="badge pulse">HTTP</span>
+          <span class="badge trace">HTTPS</span>
+          <span class="badge alarm">LOCKED</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============== §05 FORM ============== -->
+<div class="strip reveal d5">
+  <span>§05</span><span class="sep">/</span>
+  <span class="emph">COMPONENTS</span><span class="sep">/</span>
+  <span>FORM — INPUT · SELECT · TEXTAREA</span>
+</div>
+
+<section class="reveal d5">
+  <div class="section-head">
+    <h2>Fields read like <span class="ital">coordinates.</span></h2>
+    <div class="meta">mono values · upper-tracked labels</div>
+  </div>
+
+  <div class="grid g-3">
+    <div class="card">
+      <div class="card-label">Text input — states</div>
+      <div class="col" style="gap: 14px">
+        <div class="field">
+          <label>Client name</label>
+          <input class="input" placeholder="e.g. field-ops-kiosk-03" />
+          <div class="hint">Lowercase, hyphen-separated. Max 32 chars.</div>
+        </div>
+        <div class="field">
+          <label>Server host</label>
+          <input class="input" value="gate.internal.example.com" />
+        </div>
+        <div class="field">
+          <label>Shared key</label>
+          <input class="input err" value="6f3c...f9" />
+          <div class="err-msg">Key must be at least 32 hex characters.</div>
+        </div>
+        <div class="field">
+          <label>Legacy port</label>
+          <input class="input" value="7443" disabled />
+          <div class="hint muted">Locked by server policy.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Select & textarea</div>
+      <div class="col" style="gap: 14px">
+        <div class="field">
+          <label>Protocol</label>
+          <select class="select">
+            <option>TCP</option><option>HTTP</option><option>HTTPS · self-signed</option><option>HTTPS · CA</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Rate limit preset</label>
+          <select class="select">
+            <option>unlimited</option><option>1 MB/s</option><option>10 MB/s</option><option>100 MB/s</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Header rewrite rules</label>
+          <textarea class="textarea" placeholder="X-Forwarded-Host: ${host}&#10;X-Trace: ${trace-id}"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Cluster — port range</div>
+      <div class="col" style="gap: 14px">
+        <div class="field">
+          <label>Range · min</label>
+          <input class="input" value="20000" />
+        </div>
+        <div class="field">
+          <label>Range · max</label>
+          <input class="input" value="20999" />
+        </div>
+        <div class="field">
+          <label>Concurrent links</label>
+          <input class="input" value="256" />
+        </div>
+        <div class="row" style="margin-top: 6px; justify-content:flex-end">
+          <button class="btn ghost sm">Reset</button>
+          <button class="btn primary sm">Apply</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============== §06 DATA — KPI + GAUGE + PROGRESS ============== -->
+<div class="strip reveal d6">
+  <span>§06</span><span class="sep">/</span>
+  <span class="emph">COMPONENTS</span><span class="sep">/</span>
+  <span>DATA — KPI · GAUGE · PROGRESS · TABLE</span>
+</div>
+
+<section class="reveal d6">
+  <div class="section-head">
+    <h2>Numbers should feel <span class="ital">weighed.</span></h2>
+    <div class="meta">tabular-nums · optical 144</div>
+  </div>
+
+  <div class="grid g-4" style="margin-bottom: 24px">
+    <div class="kpi accent">
+      <div class="k">Active tunnels</div>
+      <div class="v">12 <span class="unit">/ 24</span></div>
+      <div class="sub"><span class="delta">+2</span> <span>vs. 1h ago</span></div>
+    </div>
+    <div class="kpi">
+      <div class="k">Throughput · tx</div>
+      <div class="v">84.3 <span class="unit">Mb/s</span></div>
+      <div class="sub"><span class="delta">+6.1%</span> <span>15m rolling</span></div>
+    </div>
+    <div class="kpi">
+      <div class="k">Session uptime</div>
+      <div class="v">18:42 <span class="unit">H:M</span></div>
+      <div class="sub"><span>since 2026-04-24 19:25 UTC</span></div>
+    </div>
+    <div class="kpi">
+      <div class="k">Failed auth · 24h</div>
+      <div class="v">7</div>
+      <div class="sub"><span class="delta down">−3</span> <span>vs. prev. 24h</span></div>
+    </div>
+  </div>
+
+  <div class="grid g-3" style="margin-bottom: 24px">
+    <!-- Gauge 1 -->
+    <div class="card">
+      <div class="card-label">CPU</div>
+      <div class="gauge">
+        <svg viewBox="0 0 160 100">
+          <path class="arc-bg" d="M 12 92 A 68 68 0 0 1 148 92" fill="none" stroke-width="8" stroke-linecap="butt"/>
+          <!-- 42% arc length = 213 of ~213 total path -->
+          <path class="arc-fg" d="M 12 92 A 68 68 0 0 1 148 92" fill="none" stroke-width="8" stroke-linecap="butt"
+                stroke-dasharray="213" stroke-dashoffset="124"/>
+          <g class="tick" stroke-width="1">
+            <line x1="12" y1="92" x2="18" y2="92"/>
+            <line x1="148" y1="92" x2="142" y2="92"/>
+          </g>
+          <g class="tick major" stroke-width="1">
+            <line x1="80" y1="24" x2="80" y2="32"/>
+            <line x1="37.8" y1="41.4" x2="42.6" y2="47.6"/>
+            <line x1="117.4" y1="47.6" x2="122.2" y2="41.4"/>
+          </g>
+          <circle class="needle-dot" cx="80" cy="92" r="3"/>
+        </svg>
+      </div>
+      <div class="gauge-val" style="position:relative; padding-bottom:0; margin-top:-6px">
+        <div class="n">42</div>
+        <div class="u">%  · 16 Cores</div>
+      </div>
+    </div>
+
+    <!-- Gauge 2 -->
+    <div class="card">
+      <div class="card-label">Memory</div>
+      <div class="gauge">
+        <svg viewBox="0 0 160 100">
+          <path class="arc-bg" d="M 12 92 A 68 68 0 0 1 148 92" fill="none" stroke-width="8"/>
+          <path class="arc-fg" d="M 12 92 A 68 68 0 0 1 148 92" fill="none" stroke-width="8"
+                stroke-dasharray="213" stroke-dashoffset="56" style="stroke: var(--pulse); filter: drop-shadow(0 0 6px var(--pulse-glow))"/>
+          <circle class="needle-dot" cx="80" cy="92" r="3" style="fill: var(--pulse); filter: drop-shadow(0 0 6px var(--pulse-glow))"/>
+        </svg>
+      </div>
+      <div class="gauge-val" style="position:relative; padding-bottom:0; margin-top:-6px">
+        <div class="n" style="color: var(--pulse)">74</div>
+        <div class="u">%  · 24 / 32 GiB</div>
+      </div>
+    </div>
+
+    <!-- Gauge 3 -->
+    <div class="card">
+      <div class="card-label">Network · in</div>
+      <div class="gauge">
+        <svg viewBox="0 0 160 100">
+          <path class="arc-bg" d="M 12 92 A 68 68 0 0 1 148 92" fill="none" stroke-width="8"/>
+          <path class="arc-fg" d="M 12 92 A 68 68 0 0 1 148 92" fill="none" stroke-width="8"
+                stroke-dasharray="213" stroke-dashoffset="34" style="stroke: var(--alarm); filter: drop-shadow(0 0 6px var(--alarm-glow))"/>
+          <circle class="needle-dot" cx="80" cy="92" r="3" style="fill: var(--alarm); filter: drop-shadow(0 0 6px var(--alarm-glow))"/>
+        </svg>
+      </div>
+      <div class="gauge-val" style="position:relative; padding-bottom:0; margin-top:-6px">
+        <div class="n" style="color: var(--alarm)">86</div>
+        <div class="u">%  · THROTTLING</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid g-2" style="margin-bottom: 24px">
+    <div class="card">
+      <div class="card-label">Rate limits · current utilization</div>
+      <div class="col" style="gap: 14px; margin-top: 8px">
+        <div>
+          <div class="row" style="justify-content: space-between"><span class="t-label">tun-a14f · 10 MB/s preset</span><span class="mono muted">7.2 / 10 MB/s</span></div>
+          <div class="progress" style="margin-top:6px"><div class="fill" style="width: 72%"></div></div>
+        </div>
+        <div>
+          <div class="row" style="justify-content: space-between"><span class="t-label">tun-3c91 · 1 MB/s preset</span><span class="mono muted">0.3 / 1 MB/s</span></div>
+          <div class="progress pulse" style="margin-top:6px"><div class="fill" style="width: 30%"></div></div>
+        </div>
+        <div>
+          <div class="row" style="justify-content: space-between"><span class="t-label">tun-77ba · 100 MB/s preset</span><span class="mono" style="color:var(--alarm)">96 / 100 MB/s</span></div>
+          <div class="progress alarm" style="margin-top:6px"><div class="fill" style="width: 96%"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card ticked">
+      <span class="tickwrap"></span>
+      <div class="card-label">Toasts · inline alerts</div>
+      <div class="col" style="gap: 12px; margin-top: 6px">
+        <div class="toast signal">
+          <div class="glyph">!</div>
+          <div class="msg"><b>Configuration saved.</b> <small>YAML written atomically at 14:07:03 UTC · audit-id 0x91f2</small></div>
+          <button class="btn ghost sm">Dismiss</button>
+        </div>
+        <div class="toast pulse">
+          <div class="glyph">✓</div>
+          <div class="msg"><b>Client handshake complete.</b> <small>tun-a14f · v2 identity verified</small></div>
+          <button class="btn ghost sm">Dismiss</button>
+        </div>
+        <div class="toast trace">
+          <div class="glyph">i</div>
+          <div class="msg"><b>Certificate rotates in 19 days.</b> <small>admin-server.crt · renew from the Certificates pane</small></div>
+          <button class="btn ghost sm">Open</button>
+        </div>
+        <div class="toast alarm">
+          <div class="glyph">×</div>
+          <div class="msg"><b>3 login attempts rejected.</b> <small>source 10.18.22.5 · back-off 64 s</small></div>
+          <button class="btn danger sm">Block IP</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+<!-- ============== §07 TABLE + TABS ============== -->
+  <div class="tabs">
+    <div class="tab active">Tunnels <span class="count">12/24</span></div>
+    <div class="tab">Trusted Clients <span class="count">6</span></div>
+    <div class="tab">Server Options</div>
+    <div class="tab">Certificates <span class="count" style="color:var(--warn)">1 · 19d</span></div>
+    <div class="tab">Audit Log</div>
+  </div>
+
+  <div class="card" style="padding: 0; overflow: hidden">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th style="width: 28px"></th>
+          <th>Tunnel</th>
+          <th>Route</th>
+          <th>Protocol</th>
+          <th>Owner</th>
+          <th class="right">Tx/s</th>
+          <th class="right">Links</th>
+          <th style="width:120px">Uptime</th>
+          <th style="width:80px"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="led online" style="gap:0"><span class="bulb"></span></span></td>
+          <td><b>field-ops-kiosk-03</b><div class="mono muted" style="font-size:11px">tun-a14f9c · 2026-04-24</div></td>
+          <td class="mono">10.0.12.4:<b style="color:var(--signal)">7443</b> → 127.0.0.1:5432</td>
+          <td><span class="badge signal">TCP</span></td>
+          <td class="mono">ops@kiosk</td>
+          <td class="num right">7.21 MB</td>
+          <td class="num right">14</td>
+          <td class="mono">18:42:05</td>
+          <td><button class="btn ghost sm">···</button></td>
+        </tr>
+        <tr>
+          <td><span class="led active" style="gap:0"><span class="bulb"></span></span></td>
+          <td><b>postgres-replica-a</b><div class="mono muted" style="font-size:11px">tun-3c9172 · 2026-04-20</div></td>
+          <td class="mono">10.0.11.2:<b style="color:var(--signal)">7500</b> → 127.0.0.1:5432</td>
+          <td><span class="badge signal">TCP</span></td>
+          <td class="mono">dba@core</td>
+          <td class="num right">0.32 MB</td>
+          <td class="num right">3</td>
+          <td class="mono">74:21:08</td>
+          <td><button class="btn ghost sm">···</button></td>
+        </tr>
+        <tr>
+          <td><span class="led warn" style="gap:0"><span class="bulb"></span></span></td>
+          <td><b>admin-bridge</b><div class="mono muted" style="font-size:11px">tun-77bafe · 2026-02-10</div></td>
+          <td class="mono">10.0.14.1:<b style="color:var(--signal)">443</b> → admin:9300</td>
+          <td><span class="badge trace">HTTPS</span></td>
+          <td class="mono">root</td>
+          <td class="num right"><b style="color:var(--alarm)">96.0 MB</b></td>
+          <td class="num right">31</td>
+          <td class="mono">212:04:30</td>
+          <td><button class="btn ghost sm">···</button></td>
+        </tr>
+        <tr>
+          <td><span class="led alarm" style="gap:0"><span class="bulb"></span></span></td>
+          <td><b>legacy-http-sink</b><div class="mono muted" style="font-size:11px">tun-2d0f45 · 2026-01-03</div></td>
+          <td class="mono">10.0.17.9:<b style="color:var(--signal)">8080</b> → 10.0.21.4:80</td>
+          <td><span class="badge pulse">HTTP</span></td>
+          <td class="mono">ext@vendor-b</td>
+          <td class="num right" style="color: var(--ink-3)">—</td>
+          <td class="num right">0</td>
+          <td class="mono" style="color:var(--alarm)">— TIMEOUT</td>
+          <td><button class="btn danger sm">Terminate</button></td>
+        </tr>
+        <tr>
+          <td><span class="led offline" style="gap:0"><span class="bulb"></span></span></td>
+          <td><b>backup-rsync-nightly</b><div class="mono muted" style="font-size:11px">tun-5f1c82 · 2026-03-18</div></td>
+          <td class="mono">10.0.19.2:<b style="color:var(--signal)">22022</b> → 10.0.30.5:22</td>
+          <td><span class="badge signal">TCP</span></td>
+          <td class="mono">backup@infra</td>
+          <td class="num right" style="color: var(--ink-3)">idle</td>
+          <td class="num right">0</td>
+          <td class="mono muted">scheduled 03:00</td>
+          <td><button class="btn ghost sm">···</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+
+<!-- ============== §08 MODAL ============== -->
+<div class="strip">
+  <span>§08</span><span class="sep">/</span>
+  <span class="emph">COMPONENTS</span><span class="sep">/</span>
+  <span>SURFACE — MODAL</span>
+</div>
+
+<section>
+  <div class="section-head">
+    <h2>Overlays explain, <span class="ital">then commit.</span></h2>
+    <div class="meta">e-3 · 80px drop · backdrop 72%</div>
+  </div>
+
+  <div class="grid g-2">
+    <div class="modal">
+      <div class="modal-head">
+        <div class="ttl">Terminate tunnel · <em style="color:var(--alarm); font-style: normal; font-variation-settings: 'opsz' 48, 'wght' 380">legacy-http-sink</em></div>
+        <div class="tag">DESTRUCTIVE · CONFIRMATION</div>
+      </div>
+      <div class="modal-body">
+        <p style="margin: 0 0 14px; color: var(--ink-1)">
+          This will drop <b style="color:var(--ink-0)">0 active links</b> and write a <span class="mono" style="color:var(--signal)">TUN-TERM</span>
+          entry to the audit log. The configuration remains on disk — you can restart from the Tunnels tab.
+        </p>
+        <div class="field">
+          <label>Type the tunnel ID to confirm</label>
+          <input class="input" placeholder="tun-2d0f45" />
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn ghost">Cancel</button>
+        <button class="btn danger">Terminate tunnel</button>
+      </div>
+    </div>
+
+    <div class="modal">
+      <div class="modal-head">
+        <div class="ttl">Rotate admin certificate</div>
+        <div class="tag">GUIDED · 3 STEPS</div>
+      </div>
+      <div class="modal-body">
+        <div class="row" style="gap: 8px; margin-bottom: 14px">
+          <span class="badge signal">01 · UPLOAD</span>
+          <span class="badge">02 · VERIFY</span>
+          <span class="badge">03 · SWAP</span>
+        </div>
+        <p class="muted" style="margin: 0 0 14px">
+          Drop a PEM-encoded bundle. The verify step runs a chain check against the configured CA pool
+          and shows the new SHA-256 fingerprint before any swap.
+        </p>
+        <div class="field">
+          <label>Bundle (.pem)</label>
+          <input class="input" type="file" />
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn ghost">Back</button>
+        <button class="btn primary">Verify bundle</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============== §09 APPLIED PREVIEW ============== -->
+<div class="strip">
+  <span>§09</span><span class="sep">/</span>
+  <span class="emph">APPLIED</span><span class="sep">/</span>
+  <span>ADMIN · SERVER STATUS — COMPOSITION</span>
+</div>
+
+<section>
+  <div class="section-head">
+    <h2>Everything above, <span class="ital">assembled.</span></h2>
+    <div class="meta">the target UI</div>
+  </div>
+
+  <div class="preview-shell">
+    <div class="preview-inner">
+
+      <div class="preview-nav">
+        <div class="left">
+          <div class="brand-block">
+            <div class="mark">TTT<em>Gate</em></div>
+            <div class="mark-sub">Admin · v1.2.0</div>
+          </div>
+          <nav class="nav-links">
+            <a>Overview</a>
+            <a class="active">Server Status</a>
+            <a>Tunnels</a>
+            <a>Trusted Clients</a>
+            <a>Certificates</a>
+            <a>Audit Log</a>
+          </nav>
+        </div>
+        <div class="right">
+          <button class="btn sm"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5"/><path d="M8 3v5l3 2"/></svg> 12s ago</button>
+          <div class="user-ident">
+            <span class="avatar"></span> <b>admin</b> <span class="pipe">·</span> <span style="color:var(--signal)">SUPERUSER</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="preview-kpis">
+        <div class="kpi accent">
+          <div class="k">Active tunnels</div>
+          <div class="v">12 <span class="unit">/ 24</span></div>
+          <div class="sub"><span class="delta">+2</span> <span>vs 1h ago</span></div>
+        </div>
+        <div class="kpi">
+          <div class="k">Admins online</div>
+          <div class="v">3</div>
+          <div class="sub"><span>of 5 enrolled</span></div>
+        </div>
+        <div class="kpi">
+          <div class="k">Throughput · agg</div>
+          <div class="v">118 <span class="unit">Mb/s</span></div>
+          <div class="sub"><span class="delta">+9%</span> <span>15m</span></div>
+        </div>
+        <div class="kpi">
+          <div class="k">Cert · days left</div>
+          <div class="v" style="color: var(--warn)">19</div>
+          <div class="sub"><span>admin-server.crt</span></div>
+        </div>
+      </div>
+
+      <div class="gauge-row">
+        <div class="card">
+          <div class="card-label">CPU · 16 cores</div>
+          <div class="gauge">
+            <svg viewBox="0 0 160 100">
+              <path class="arc-bg" d="M 12 92 A 68 68 0 0 1 148 92" fill="none" stroke-width="8"/>
+              <path class="arc-fg" d="M 12 92 A 68 68 0 0 1 148 92" fill="none" stroke-width="8"
+                    stroke-dasharray="213" stroke-dashoffset="124"/>
+              <circle class="needle-dot" cx="80" cy="92" r="3"/>
+            </svg>
+          </div>
+          <div class="gauge-val" style="position:relative; padding-bottom:0; margin-top:-6px">
+            <div class="n">42<span class="u" style="margin-left:6px">%</span></div>
+            <div class="u">avg 28% · peak 73% (1h)</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-label">Memory · 32 GiB</div>
+          <div class="gauge">
+            <svg viewBox="0 0 160 100">
+              <path class="arc-bg" d="M 12 92 A 68 68 0 0 1 148 92" fill="none" stroke-width="8"/>
+              <path class="arc-fg" d="M 12 92 A 68 68 0 0 1 148 92" fill="none" stroke-width="8"
+                    stroke-dasharray="213" stroke-dashoffset="56"
+                    style="stroke: var(--pulse); filter: drop-shadow(0 0 6px var(--pulse-glow))"/>
+              <circle class="needle-dot" cx="80" cy="92" r="3"
+                    style="fill: var(--pulse); filter: drop-shadow(0 0 6px var(--pulse-glow))"/>
+            </svg>
+          </div>
+          <div class="gauge-val" style="position:relative; padding-bottom:0; margin-top:-6px">
+            <div class="n" style="color:var(--pulse)">74<span class="u" style="margin-left:6px">%</span></div>
+            <div class="u">24.2 / 32 GiB</div>
+          </div>
+        </div>
+
+        <div class="card ticked alarm">
+          <span class="tickwrap"></span>
+          <div class="card-label" style="color: var(--alarm)">Net · in  · throttling</div>
+          <div class="gauge">
+            <svg viewBox="0 0 160 100">
+              <path class="arc-bg" d="M 12 92 A 68 68 0 0 1 148 92" fill="none" stroke-width="8"/>
+              <path class="arc-fg" d="M 12 92 A 68 68 0 0 1 148 92" fill="none" stroke-width="8"
+                    stroke-dasharray="213" stroke-dashoffset="34"
+                    style="stroke: var(--alarm); filter: drop-shadow(0 0 6px var(--alarm-glow))"/>
+              <circle class="needle-dot" cx="80" cy="92" r="3"
+                    style="fill: var(--alarm); filter: drop-shadow(0 0 6px var(--alarm-glow))"/>
+            </svg>
+          </div>
+          <div class="gauge-val" style="position:relative; padding-bottom:0; margin-top:-6px">
+            <div class="n" style="color:var(--alarm)">86<span class="u" style="margin-left:6px">%</span></div>
+            <div class="u">limit 96 Mb/s · breach 14s</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="zone">
+        <div class="card" style="padding:0; overflow:hidden">
+          <div style="padding: 16px 20px; border-bottom: 1px solid var(--line-1); display:flex; justify-content:space-between; align-items:center">
+            <div>
+              <div class="card-label" style="margin:0">Live tunnels · <span lang="ko" style="font-family: var(--ff-kr-ui); letter-spacing:0">활성 터널</span></div>
+              <div class="t-h2" style="margin-top:2px">12 active <span style="color: var(--ink-2); font-style: italic">· <span lang="ko" style="font-family: var(--ff-kr-display); font-weight: 500; font-style: normal">경고 3건</span></span></div>
+            </div>
+            <div class="row" style="gap: 8px">
+              <button class="btn sm" lang="ko" style="font-family: var(--ff-kr-ui)">필터</button>
+              <button class="btn primary sm" lang="ko" style="font-family: var(--ff-kr-ui)">+ 터널 추가</button>
+            </div>
+          </div>
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th style="width:28px"></th>
+                <th>Tunnel</th>
+                <th>Route</th>
+                <th>Proto</th>
+                <th class="right">Tx/s</th>
+                <th class="right">Links</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="led online" style="gap:0"><span class="bulb"></span></span></td>
+                <td><b>field-ops-kiosk-03</b></td>
+                <td class="mono">10.0.12.4:7443</td>
+                <td><span class="badge signal">TCP</span></td>
+                <td class="num right">7.21 MB</td>
+                <td class="num right">14</td>
+              </tr>
+              <tr>
+                <td><span class="led active" style="gap:0"><span class="bulb"></span></span></td>
+                <td><b>postgres-replica-a</b></td>
+                <td class="mono">10.0.11.2:7500</td>
+                <td><span class="badge signal">TCP</span></td>
+                <td class="num right">0.32 MB</td>
+                <td class="num right">3</td>
+              </tr>
+              <tr>
+                <td><span class="led warn" style="gap:0"><span class="bulb"></span></span></td>
+                <td><b>admin-bridge</b></td>
+                <td class="mono">10.0.14.1:443</td>
+                <td><span class="badge trace">HTTPS</span></td>
+                <td class="num right" style="color: var(--alarm)">96.0 MB</td>
+                <td class="num right">31</td>
+              </tr>
+              <tr>
+                <td><span class="led alarm" style="gap:0"><span class="bulb"></span></span></td>
+                <td><b>legacy-http-sink</b></td>
+                <td class="mono">10.0.17.9:8080</td>
+                <td><span class="badge pulse">HTTP</span></td>
+                <td class="num right" style="color: var(--ink-3)">—</td>
+                <td class="num right">0</td>
+              </tr>
+              <tr>
+                <td><span class="led offline" style="gap:0"><span class="bulb"></span></span></td>
+                <td><b>backup-rsync-nightly</b></td>
+                <td class="mono">10.0.19.2:22022</td>
+                <td><span class="badge signal">TCP</span></td>
+                <td class="num right" style="color: var(--ink-3)">idle</td>
+                <td class="num right">0</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="log-feed">
+          <div class="head">
+            <div class="t">Audit feed</div>
+            <button class="btn ghost sm">Filter</button>
+          </div>
+          <div class="list">
+            <div class="log-line ok"><span class="ts">14:07:22</span><span class="lvl">OK</span><span class="msg">admin · yaml-save · atomic OK</span></div>
+            <div class="log-line info"><span class="ts">14:07:03</span><span class="lvl">INFO</span><span class="msg">client handshake · tun-a14f</span></div>
+            <div class="log-line warn"><span class="ts">14:04:41</span><span class="lvl">WARN</span><span class="msg">rate approaching limit · tun-77ba</span></div>
+            <div class="log-line info"><span class="ts">14:02:10</span><span class="lvl">INFO</span><span class="msg">session · admin from 10.1.4.22</span></div>
+            <div class="log-line error"><span class="ts">13:59:08</span><span class="lvl">ERR</span><span class="msg">auth-reject · 10.18.22.5 · back-off 64s</span></div>
+            <div class="log-line warn"><span class="ts">13:42:11</span><span class="lvl">WARN</span><span class="msg">cert rotation · 19 days left</span></div>
+            <div class="log-line ok"><span class="ts">13:30:00</span><span class="lvl">OK</span><span class="msg">backup-rsync-nightly · scheduled</span></div>
+            <div class="log-line info"><span class="ts">13:28:47</span><span class="lvl">INFO</span><span class="msg">trusted-client · register · kiosk-04</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ============== §10 TOKEN REFERENCE ============== -->
+<div class="strip">
+  <span>§10</span><span class="sep">/</span>
+  <span class="emph">REFERENCE</span><span class="sep">/</span>
+  <span>CSS CUSTOM PROPERTY INDEX</span>
+</div>
+
+<section>
+  <div class="section-head">
+    <h2>The <span class="ital">contract.</span></h2>
+    <div class="meta">copy these into app.css</div>
+  </div>
+
+  <div class="card" style="padding:0">
+    <table class="tok">
+      <thead>
+        <tr><th style="width: 220px">Token</th><th style="width: 160px">Value</th><th>Usage</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="var">--bg-0</td><td class="val">#FFFFFF</td><td class="note">page background · pure white</td></tr>
+        <tr><td class="var">--bg-1</td><td class="val">#FAFBFC</td><td class="note">panels, nav rails, footer strip</td></tr>
+        <tr><td class="var">--bg-2</td><td class="val">#FFFFFF</td><td class="note">cards, KPI surfaces</td></tr>
+        <tr><td class="var">--bg-3</td><td class="val">#F3F5F9</td><td class="note">raised / alt element zones</td></tr>
+        <tr><td class="var">--bg-mute</td><td class="val">#EEF0F5</td><td class="note">input wells, inset areas</td></tr>
+        <tr><td class="var">--line-0</td><td class="val">#ECEEF3</td><td class="note">hairline · grid · dashed dividers</td></tr>
+        <tr><td class="var">--line-1</td><td class="val">#D7DBE4</td><td class="note">default border · blue-tinted</td></tr>
+        <tr><td class="var">--line-2</td><td class="val">#8A94A3</td><td class="note">emphasis border (buttons, hover)</td></tr>
+        <tr><td class="var">--ink-0</td><td class="val">#0E1218</td><td class="note">primary · cool near-black</td></tr>
+        <tr><td class="var">--ink-1</td><td class="val">#363D47</td><td class="note">body, secondary text</td></tr>
+        <tr><td class="var">--ink-2</td><td class="val">#6A7381</td><td class="note">labels, captions, meta</td></tr>
+        <tr><td class="var">--ink-3</td><td class="val">#A8B0BD</td><td class="note">disabled, placeholder</td></tr>
+        <tr><td class="var">--signal</td><td class="val" style="color:var(--signal)">#A53424</td><td class="note">brand · brick red · primary action</td></tr>
+        <tr><td class="var">--signal-fill</td><td class="val" style="color:var(--signal-fill)">#C24A36</td><td class="note">brighter vermillion · LED / hover</td></tr>
+        <tr><td class="var">--pulse</td><td class="val" style="color:var(--pulse)">#1A7F5E</td><td class="note">healthy / online / success</td></tr>
+        <tr><td class="var">--alarm</td><td class="val" style="color:var(--alarm)">#7A0D04</td><td class="note">error / destructive / breach</td></tr>
+        <tr><td class="var">--trace</td><td class="val" style="color:var(--trace)">#1E4F8A</td><td class="note">info / link / neutral emphasis</td></tr>
+        <tr><td class="var">--warn</td><td class="val" style="color:var(--warn)">#B5580E</td><td class="note">expiring / degraded</td></tr>
+        <tr><td class="var">--ff-display</td><td class="val">Noto Serif KR</td><td class="note">headings · unified Latin + Korean</td></tr>
+        <tr><td class="var">--ff-ui</td><td class="val">Noto Sans KR</td><td class="note">body · buttons · labels · unified</td></tr>
+        <tr><td class="var">--ff-mono</td><td class="val">JetBrains Mono</td><td class="note">all data · tags · timestamps · IDs</td></tr>
+        <tr><td class="var">--ff-kr-display</td><td class="val">= --ff-display</td><td class="note">alias · kept for clarity in KR contexts</td></tr>
+        <tr><td class="var">--ff-kr-ui</td><td class="val">= --ff-ui</td><td class="note">alias · kept for clarity in KR contexts</td></tr>
+        <tr><td class="var">--r-1 / --r-2 / --r-3</td><td class="val">2 / 4 / 8 px</td><td class="note">prefer r-1·r-2 · r-3 only for modals</td></tr>
+        <tr><td class="var">--dur-1 / 2 / 3 / 4</td><td class="val">120 / 220 / 420 / 680</td><td class="note">ms · ease-out = cubic-bezier(.2,.8,.2,1)</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+
+<!-- ============== FOOTER ============== -->
+<footer class="doc-foot">
+  <div>
+    <span>TTTGATE · SIGNAL OPS · v0.1</span>
+    <span class="sep">·</span>
+    <span>prepared 2026-04-25</span>
+    <span class="sep">·</span>
+    <span>owner: admin/RBAC refactor branch</span>
+  </div>
+  <div class="signoff">— read twice, ship once.</div>
+</footer>
+
+</div><!-- /.shell -->
+
+</body>
+</html>
