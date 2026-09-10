@@ -144,3 +144,59 @@
 - 커버리지 기준선이 U0-07 에서 올린 값 이상이다.
 - E2E 브라우저 테스트(단위 0·2·5)가 CI `browser-e2e` 잡에서 통과한다.
 - PRD K2(레거시 admin 로그인 100%)·K3(감사 커버리지)·K4(대역폭 프리셋 ±5%)가 자동 테스트로 고정되어 있다. K1(다운타임 0초)은 `docs/guide/MIGRATION.md` 의 수동 리허설 절차로 대신한다.
+
+## 5. 등록된 이슈 번호 대응표
+
+에픽: #125. 아래 표는 이 문서와 단위 문서가 쓰는 초안 ID 와 GitHub 이슈 번호의 대응이다.
+
+| 초안 ID | 이슈 | 제목 |
+|---|---|---|
+| U0-01 | #76 | test(e2e): 자체 대상 서비스와 프로세스 터널 하네스 추가 |
+| U0-02 | #77 | test(e2e): HTTP 리라이트·WebSocket·대용량 전송 브라우저 E2E 추가 |
+| U0-03 | #78 | test(e2e): TLS·keep-alive·다중 클라이언트·서버 재시작 브라우저 E2E 추가 |
+| U0-04 | #79 | test(util): 유틸리티 모듈 8종 동작 고정 테스트 추가 |
+| U0-05 | #80 | test(component): 프로세스 수명주기·조립 루트 모듈 테스트 추가 |
+| U0-06 | #81 | test(ci): 테스트 계층별 npm 스크립트와 CI 잡 분리 |
+| U0-07 | #82 | test(ci): 커버리지 기준선을 실측값 기준으로 상향 |
+| U1-01 | #83 | feat(admin): 디자인 토큰·서체·리셋을 app.css 로 이식 |
+| U1-02 | #84 | feat(admin): ui/ 1차 부품(Button·Field·입력·Card·Chip·Badge) 추가 |
+| U1-03 | #85 | feat(admin): ui/ 2차 부품(Modal·Toast·Gauge·Timer 외 4종) 추가 |
+| U1-04 | #86 | feat(admin): 해시 라우터와 헤더·드로어 골격 추가 |
+| U1-05 | #87 | feat(admin): 관리자 백엔드 테스트 드라이버 일반화와 LoginScreen 이식 |
+| U1-06 | #88 | feat(admin): StatusScreen 과 SysinfoPopup 을 디자인 시스템으로 이식 |
+| U1-07 | #89 | feat(admin): ServerSettingsScreen 과 InputCertFile 을 디자인 시스템으로 이식 |
+| U1-08 | #90 | feat(admin): TunnelsScreen 카드 목록·활성 스위치·타이머 이식 |
+| U1-09 | #91 | feat(admin): TunnelEditScreen 과 HTTP 옵션 부품 이식, 옛 터널 레이아웃 제거 |
+| U1-10 | #92 | chore(admin): 부트스트랩·옛 부품·빌드 부산물 제거와 배포 산출물 확인 |
+| U2-01 | #93 | feat(admin): 관리자 신원 타입·저장소·기동 시 승격 마이그레이션 추가 |
+| U2-02 | #94 | feat(admin): 세션 저장소를 사용자 기반으로 바꾸고 로그아웃 API 추가 |
+| U2-03 | #95 | refactor(admin): AdminServer 의 if/else 라우팅을 routes.ts 라우트 표로 전환 |
+| U2-04 | #96 | feat(admin): 권한 결정기와 비밀번호 변경 게이트를 도입하고 /api/me 추가 |
+| U2-05 | #97 | feat(admin): 감사 싱크 삽입점과 CUD 라우트 감사 래핑 추가 |
+| U2-06 | #98 | feat(admin): 사용자·그룹 관리 API 와 임시 비밀번호 발급 추가 |
+| U2-07 | #99 | feat(admin): 그룹 속성 집행기와 터널 권한 컨텍스트 모듈 추가 |
+| U2-08 | #100 | feat(admin): 터널 소유권을 저장하고 관리 API 에 소유·가시성·속성 집행 적용 |
+| U2-09 | #101 | test(admin): 레거시 admin 승격 E2E 와 롤백 백업·마이그레이션 문서 추가 |
+| U2-10 | #102 | feat(admin): 로그인 화면 username 입력, 세션 스토어, Sign out 추가 |
+| U3-01 | #103 | feat(admin): RBAC 테스트 fixture 와 섹션 기반 내비게이션·라우트 가드 |
+| U3-02 | #104 | feat(admin): 강제 비밀번호 변경 화면과 마이그레이션 안내 배너 |
+| U3-03 | #105 | feat(admin): 사용자 목록·편집 화면과 임시 비밀번호 1회 노출 모달 |
+| U3-04 | #106 | feat(admin): 그룹 목록·편집 화면과 속성 11종 입력 |
+| U3-05 | #107 | feat(admin): 내 계정 화면 |
+| U3-06 | #108 | feat(admin): 터널 화면에 소유권 표시와 그룹 속성 제한 반영 |
+| U4-01 | #109 | feat(admin): 파일 기반 감사 저장소와 보존 정책, 이벤트 타입 상수 추가 |
+| U4-02 | #110 | feat(admin): 감사 로그 조회 API 와 커서 페이지 추가 |
+| U4-03 | #111 | feat(admin): RFC 6238 TOTP 와 복구 코드를 Node crypto 만으로 구현 |
+| U4-04 | #112 | feat(admin): MFA 등록·해제 API 와 2단계 로그인 흐름 추가 |
+| U4-05 | #113 | feat(admin): 세션 목록·강제 종료·다른 기기 로그아웃 API 추가 |
+| U4-06 | #114 | feat(admin): 감사 로그 화면과 세션 관리 화면 추가 |
+| U4-07 | #115 | feat(admin): MFA 등록·해제 화면과 2단계 로그인, 세션 카드, Security 설정 추가 |
+| U5-01 | #116 | feat(server): 시계를 주입받는 터널별 접속 레이트 리미터와 수락 판정기 추가 |
+| U5-02 | #117 | feat(server): 외부 포트 수락 경로에 판정을 삽입하고 터널 레이트 리밋 옵션을 추가 |
+| U5-03 | #118 | feat(server): geoip-lite 국가 필터를 외부 포트와 관리자 포트 수락에 적용 |
+| U5-04 | #119 | feat(server): 접속 거절을 1분 단위로 집계해 로그와 통계 API 로 노출 |
+| U5-05 | #120 | feat(server): 보안 관리 API 에 security:manage 권한·감사 이벤트 적용, geo·countries 추가 |
+| U5-06 | #121 | feat(admin): 보안 화면과 터널 편집의 Rate limit 카드, 터널 카드 Blocked 표시 |
+| U5-07 | #122 | feat(server): 그룹 최대 터널 수명으로 활성 타임아웃을 제한하고 자동 만료를 감사 |
+| U5-08 | #123 | feat(server): 그룹 동시 연결 상한을 수락 판정에 넣고 HTTP 터널은 503 으로 거절 |
+| U5-09 | #124 | feat(server): 그룹 대역폭 프리셋을 토큰 버킷으로 양방향 전송에 적용 |
