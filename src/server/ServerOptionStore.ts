@@ -1,6 +1,6 @@
 import Environment from "../Environment";
 import File from "../util/File";
-import {ControlProtocolMode, DEFAULT_KEY, DEFAULT_SESSION_TTL_MS, resolveSessionTtlMs, HttpOption, ServerOption, TunnelingOption} from "../types/TunnelingOption";
+import {ControlProtocolMode, DEFAULT_KEY, DEFAULT_SESSION_TTL_MS, resolveSessionTtlMs, HttpOption, ServerOption, TunnelingOption, normalizeRateLimit} from "../types/TunnelingOption";
 import YAML from "yaml";
 import Files from "../util/Files";
 import ObjectUtil from "../util/ObjectUtil";
@@ -344,6 +344,9 @@ class ServerOptionStore {
                 if(tunnel && typeof tunnel === 'object' && !Array.isArray(tunnel)) {
                     const buffer = this.normalizeServerBufferLimit(tunnel);
                     if(!buffer.success) return buffer;
+                    const rateLimit = normalizeRateLimit(tunnel.protocol, tunnel.rateLimit);
+                    if(!rateLimit.success) return rateLimit;
+                    tunnel.rateLimit = rateLimit.rateLimit;
                 }
             }
             option.tunnelingOptions = normalizedTunnels;
@@ -426,6 +429,9 @@ class ServerOptionStore {
         }
         const buffer = this.normalizeServerBufferLimit(option);
         if(!buffer.success) return {...buffer, forwardPort: option.forwardPort};
+        const rateLimit = normalizeRateLimit(option.protocol, option.rateLimit);
+        if(!rateLimit.success) return {success: false, forwardPort: option.forwardPort, message: rateLimit.message};
+        option.rateLimit = rateLimit.rateLimit;
         if(option.bufferLimitOnClient == undefined) {
             option.bufferLimitOnClient = 8;
         }

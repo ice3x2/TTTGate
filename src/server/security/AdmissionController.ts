@@ -50,6 +50,11 @@ export class AdmissionController implements AdmissionPolicy {
         this._concurrencyProvider = provider;
     }
 
+    // #123 (U5-08)의 ConcurrencyLimiter가 이 메서드로 포트별 세션 수를 읽는다.
+    public sessionCount(port: number): number {
+        return this._concurrencyProvider?.(port) ?? 0;
+    }
+
     public releaseTunnel(port: number): void {
         this.rateLimiter.configurePort(port, undefined);
         this._geoDenials.delete(port);
