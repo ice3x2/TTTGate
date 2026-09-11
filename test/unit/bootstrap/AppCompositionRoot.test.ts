@@ -45,6 +45,13 @@ describe("AppCompositionRoot", () => {
     // SocketHandler.maxGlobalMemoryBufferSize. fileCacheDirPath has no such getter,
     // so the underlying private static field is read directly to observe the effect.
     test("useServerCacheDir()/useClientCacheDir() point SocketHandler at the server/client cache directories", () => {
+        // beforeAll's applyTestRoot() already points fileCacheDirPath at
+        // serverCacheDir, so calling useServerCacheDir() first would pass even if it
+        // were a no-op. Start from useClientCacheDir() instead so each call below is
+        // asserted to actually change the value away from what preceded it.
+        AppCompositionRoot.useClientCacheDir();
+        expect((SocketHandler as any).FileCacheDirPath).toBe(Environment.path.clientCacheDir);
+
         AppCompositionRoot.useServerCacheDir();
         expect((SocketHandler as any).FileCacheDirPath).toBe(Environment.path.serverCacheDir);
 
