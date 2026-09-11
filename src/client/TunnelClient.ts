@@ -712,6 +712,19 @@ class TunnelClient {
         return true;
     }
 
+    // 이슈 #129 대응 누락분: 터널 데이터 소켓(서버로 나가는 방향)이 배압 상태면
+    // EndPointClientPool이 목적지 소켓 읽기를 멈출 수 있도록 상태를 노출한다.
+    public isSessionBackpressured(sessionID: number) : boolean {
+        return this._activatedSessionDataHandlerMap.get(sessionID)?.isBackpressured ?? false;
+    }
+
+    public addSessionPressureReliefListener(sessionID: number, listener: () => void) : void {
+        const handler = this._activatedSessionDataHandlerMap.get(sessionID);
+        if(handler) {
+            handler.addOncePressureReliefListener(() => listener());
+        }
+    }
+
     private writeWaitBuffer(sessionID: number, data: Buffer) : boolean {
         let waitState = this._waitBufferQueueMap.get(sessionID);
         if(waitState) {
