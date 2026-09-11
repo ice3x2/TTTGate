@@ -18,6 +18,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import {createTunnelHarness, TunnelHarness} from "../helpers/tunnelHarness";
+import {defaultRateLimit} from "../../src/types/TunnelingOption";
 import {sleep, waitFor} from "../helpers/network";
 import {createArtifactRoot} from "../helpers/artifactRoot";
 
@@ -76,7 +77,11 @@ describe("REQ-09 Pool swap / zombie sessions", () => {
     });
 
     it("(2) echo 50건 바이트 무손실 (1000→50 축소, 사유 코드에 기록)", async () => {
-        harness = await createTunnelHarness({ reconnectIntervalMs: 50, clientName: "echo-first" });
+        // #117이 모든 터널에 기본 활성화한 레이트 리밋(TCP 60초/30회)에 50건 순차 연결이 걸려
+        // 좀비 세션/무손실 검증이라는 이 테스트의 목적과 무관하게 실패하므로, 이 터널에 한해
+        // 명시적으로 끈다(레이트 리밋 자체의 동작은 별도 테스트가 검증한다).
+        harness = await createTunnelHarness({ reconnectIntervalMs: 50, clientName: "echo-first",
+            tunnelingOptionOverride: {rateLimit: {...defaultRateLimit("tcp"), enabled: false}} });
         await harness.start();
 
         // 50건은 축소 버전. 1000건 시 Jest 예산 초과. 패턴 동일성 확보.
