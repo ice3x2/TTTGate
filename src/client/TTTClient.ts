@@ -161,6 +161,13 @@ class TTTClient {
                 return;
             }
             this._tunnelClient.sendData(sessionID, bundle.data);
+            // 이슈 #129 대응 누락분: 터널 데이터 소켓이 배압 상태가 되면 목적지 소켓 읽기를 멈춰
+            // EndPointClientPool이 무제한으로 데이터를 밀어넣다 파일 캐시 한도 초과로 destroy()
+            // 되는 것을 막는다(서버 쪽 TTTServer.onSessionDataReceived와 대칭 구조).
+            if(this._tunnelClient.isSessionBackpressured(sessionID)) {
+                this._endPointClientPool.pauseSessionRead(sessionID);
+                this._tunnelClient.addSessionPressureReliefListener(sessionID, () => this._endPointClientPool.resumeSessionRead(sessionID));
+            }
         }
     }
 

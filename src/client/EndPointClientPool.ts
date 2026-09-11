@@ -91,6 +91,14 @@ class EndPointClientPool {
         this._endPointClientMap.set(sessionID, endPointClient);
     }
 
+    public pauseSessionRead(sessionID: number) : void {
+        this._endPointClientMap.get(sessionID)?.pauseRead();
+    }
+
+    public resumeSessionRead(sessionID: number) : void {
+        this._endPointClientMap.get(sessionID)?.resumeRead();
+    }
+
     public close(id: number, endLength: number) : boolean {
         let endPointClient = this._endPointClientMap.get(id);
         if(endPointClient) {
