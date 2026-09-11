@@ -1,0 +1,91 @@
+import * as fs from "fs";
+import * as path from "path";
+
+const root = path.resolve(__dirname, "../..");
+const appCssPath = path.join(root, "admin/src/app.css");
+const appCss = fs.readFileSync(appCssPath, "utf8");
+
+const TOKENS = ['--bg-0','--bg-1','--bg-2','--bg-3','--bg-mute','--line-0','--line-1','--line-2','--ink-0','--ink-1','--ink-2','--ink-3',
+    '--signal','--signal-fill','--signal-dim','--signal-glow','--pulse','--pulse-fill','--pulse-dim','--pulse-glow','--alarm','--alarm-fill','--alarm-dim','--alarm-glow',
+    '--trace','--trace-dim','--trace-glow','--warn','--ff-display','--ff-ui','--ff-mono','--fs-xs','--fs-sm','--fs-md','--fs-lg','--fs-xl','--fs-2xl','--fs-3xl','--fs-4xl','--fs-hero',
+    '--lh-tight','--lh-snug','--lh-body','--s-1','--s-2','--s-3','--s-4','--s-5','--s-6','--s-7','--s-8','--s-9','--s-10','--s-11','--s-12','--r-0','--r-1','--r-2','--r-3',
+    '--dur-1','--dur-2','--dur-3','--dur-4','--ease-out','--ease-in'];
+
+// R3: :root 블록 안에 TOKENS 전부가 정의되어 있고, --ff-kr-* 별칭은 없다.
+describe("R3: app.css :root 토큰 계약", () => {
+    const rootBlockMatch = appCss.match(/:root\s*\{([\s\S]*?)\n\}/);
+    const rootBlock = rootBlockMatch ? rootBlockMatch[1] : "";
+
+    test(":root 블록이 존재한다", () => {
+        expect(rootBlockMatch).not.toBeNull();
+    });
+
+    test.each(TOKENS)("토큰 %s 가 :root 블록 안에 정의되어 있다", (token) => {
+        const re = new RegExp(`(^|[^-\\w])${token.replace(/[-]/g, "\\-")}\\s*:`);
+        expect(re.test(rootBlock)).toBe(true);
+    });
+
+    test("--ff-kr-display 별칭은 정의되어 있지 않다", () => {
+        expect(rootBlock.includes("--ff-kr-display")).toBe(false);
+    });
+
+    test("--ff-kr-ui 별칭은 정의되어 있지 않다", () => {
+        expect(rootBlock.includes("--ff-kr-ui")).toBe(false);
+    });
+});
+
+// R5: admin/src 와 admin/index.html 의 텍스트 파일에 외부 URL(http/https)이 없다.
+describe("R5: 외부 요청 URL 부재", () => {
+    const excludedDirs = [
+        path.join(root, "admin/src/css"),
+        path.join(root, "admin/src/layout"),
+        path.join(root, "admin/src/component"),
+    ];
+    const excludedFiles = [
+        path.join(root, "admin/src/assets/svelte.svg"),
+        path.join(root, "admin/src/assets/fonts/LICENSE.md"),
+    ];
+    const textExtensions = new Set([".svelte", ".ts", ".js", ".css", ".html", ".md", ".json", ".svg", ".map"]);
+
+    const collectTextFiles = (dir: string): string[] => {
+        const entries = fs.readdirSync(dir, {withFileTypes: true});
+        let files: string[] = [];
+        for(const entry of entries) {
+            const full = path.join(dir, entry.name);
+            if(excludedDirs.some((excluded) => full === excluded || full.startsWith(excluded + path.sep))) continue;
+            if(entry.isDirectory()) { files = files.concat(collectTextFiles(full)); continue; }
+            if(excludedFiles.includes(full)) continue;
+            if(textExtensions.has(path.extname(entry.name))) files.push(full);
+        }
+        return files;
+    };
+
+    const targets = [...collectTextFiles(path.join(root, "admin/src")), path.join(root, "admin/index.html")];
+
+    test.each(targets.map((file) => [path.relative(root, file), file] as const))("%s 에 http(s):// 요청이 없다", (_label, file) => {
+        const content = fs.readFileSync(file, "utf8");
+        expect(/https?:\/\//.test(content)).toBe(false);
+    });
+});
+
+// R7: admin/src/assets/fonts 에 woff2 7개 + LICENSE.md 가 있고, 각 woff2 는 1KB 초과 64KB 이하.
+describe("R7: 번들 서체 파일", () => {
+    const fontsDir = path.join(root, "admin/src/assets/fonts");
+    const expectedFiles = [
+        "noto-serif-latin-400.woff2", "noto-serif-latin-600.woff2",
+        "noto-sans-latin-400.woff2", "noto-sans-latin-500.woff2", "noto-sans-latin-700.woff2",
+        "jetbrains-mono-latin-400.woff2", "jetbrains-mono-latin-500.woff2",
+    ];
+
+    test.each(expectedFiles)("%s 가 존재하고 1KB 초과 64KB 이하다", (fileName) => {
+        const filePath = path.join(fontsDir, fileName);
+        expect(fs.existsSync(filePath)).toBe(true);
+        const size = fs.statSync(filePath).size;
+        expect(size).toBeGreaterThan(1024);
+        expect(size).toBeLessThanOrEqual(64 * 1024);
+    });
+
+    test("LICENSE.md 가 존재한다", () => {
+        expect(fs.existsSync(path.join(fontsDir, "LICENSE.md"))).toBe(true);
+    });
+});
