@@ -8,7 +8,11 @@ import ObjectUtil from "../util/ObjectUtil";
 import {EndpointHandler, EndpointHttpHandler, EndPointInfo} from "../types/EndpointHandler";
 import {clearInterval} from "timers";
 import LoggerFactory  from "../util/logger/LoggerFactory";
+import {AdmissionController} from "./security/AdmissionController";
 const logger = LoggerFactory.getLogger('server', 'ExternalPortServerPool');
+
+// U5-02 / #117 — concurrency-limit 거절을 http/https에서만 명시 응답으로 되돌려준다(#123 (U5-08) 전까지는 발생하지 않는다).
+const HTTP_503 = Buffer.from('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
 
 
 
@@ -38,6 +42,8 @@ type ExternalPortServerStatus = {
     activeTimeout: number,
     rx: number,
     tx: number,
+    rejected: {geo: number, rateLimit: number},
+    bannedIps: number,
 }
 
 
@@ -82,7 +88,7 @@ class ExternalPortServerPool {
 
         this.startSessionCleanup();
 
-
+        AdmissionController.instance.configureConcurrency((port) => this._statusMap.get(port)?.sessions ?? 0);
     }
 
 
@@ -128,19 +134,30 @@ class ExternalPortServerPool {
                 key: certInfo?.key.value,
                 cert: certInfo?.cert.value,
                 ca: certInfo?.ca.value == '' ? undefined : certInfo?.ca.value,
-                keepAlive: option.keepAlive
+                keepAlive: option.keepAlive,
+                admit: (addr: string | undefined) => {
+                    const protocol = option.protocol ?? 'tcp';
+                    const decision = AdmissionController.instance.admit({kind: 'tunnel', port: option.forwardPort, protocol}, addr);
+                    if(!decision.allowed && decision.reason === 'concurrency-limit' && (protocol === 'http' || protocol === 'https')) {
+                        return {...decision, rejectResponse: HTTP_503};
+                    }
+                    return decision;
+                }
             }
             let portServer : TCPServer = TCPServer.create(options);
+            AdmissionController.instance.configureTunnel(option);
 
             portServer.setOnServerEvent(this.onServerEvent);
             portServer.setOnHandlerEvent(this.onHandlerEvent);
             portServer.setBundle(OPTION_BUNDLE_KEY, option);
             if(!option.inactiveOnStartup) option.inactiveOnStartup = false;
             this._statusMap.set(option.forwardPort, {port: option.forwardPort, online: false, sessions: 0, rx: 0, tx: 0, uptime: 0,
-                active: !option.inactiveOnStartup, activeTimeout: 0, activeStart: option.inactiveOnStartup? Date.now() : 0});
+                active: !option.inactiveOnStartup, activeTimeout: 0, activeStart: option.inactiveOnStartup? Date.now() : 0,
+                rejected: {geo: 0, rateLimit: 0}, bannedIps: 0});
             portServer.start((err?: Error) => {
                 if(err) {
                     logger.error(`startServer - port: ${option.forwardPort}`, err);
+                    AdmissionController.instance.releaseTunnel(option.forwardPort);
                     reject(err);
                     return;
                 }
@@ -213,8 +230,13 @@ class ExternalPortServerPool {
     public getServerStatus(port: number) : ExternalPortServerStatus  {
         let status = this._statusMap.get(port);
         if(!status) {
-            return {port: port, online: false, sessions: 0, rx: 0, tx: 0, uptime: 0, active: false, activeTimeout : 0, activeStart: 0};
+            return {port: port, online: false, sessions: 0, rx: 0, tx: 0, uptime: 0, active: false, activeTimeout : 0, activeStart: 0,
+                rejected: {geo: 0, rateLimit: 0}, bannedIps: 0};
         }
+        const denials = AdmissionController.instance.denials(port);
+        status.rejected.geo = denials.geo;
+        status.rejected.rateLimit = denials.rateLimit;
+        status.bannedIps = AdmissionController.instance.rateLimiter.stats(port).bannedIps;
         return status;
 
     }
@@ -414,6 +436,7 @@ class ExternalPortServerPool {
                     status.online = false;
                     status.sessions = 0;
                 }
+                AdmissionController.instance.releaseTunnel(port);
                 resolve(err == undefined);
             });
         })
@@ -508,6 +531,7 @@ class ExternalPortServerPool {
                         status.online = false;
                         status.sessions = 0;
                     }
+                    AdmissionController.instance.releaseTunnel(port);
                     callbackCount--;
                     logger.info(`close - port: ${port}, left count: ${callbackCount}`);
                     if(callbackCount == 0) {

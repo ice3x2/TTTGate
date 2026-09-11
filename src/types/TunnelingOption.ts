@@ -80,10 +80,72 @@ type TunnelingOption = {
     tls?: boolean,
     bufferLimitOnServer?: number,
     bufferLimitOnClient?: number,
-    keepAlive: number
+    keepAlive: number,
+    rateLimit?: RateLimitOption
 }
 
 const DEFAULT_KEY = "hello-TTTGate";
+
+/**
+ * U5-02 / #117 — 터널 레이트 리밋 옵션.
+ *
+ * D9: 모든 터널은 프로토콜별 기본값으로 레이트 리밋을 켠 채 기동한다.
+ * TCP는 60초/30회/10분 차단, HTTP·HTTPS는 60초/300회/10분 차단.
+ */
+type RateLimitOption = {enabled: boolean; windowMs: number; maxConnections: number; banMs: number; customized: boolean};
+
+const RATE_LIMIT_RANGE = {
+    windowMs: [1000, 3_600_000],
+    maxConnections: [1, 100_000],
+    banMs: [1000, 86_400_000]
+} as const;
+
+const RATE_LIMIT_DEFAULTS_BY_PROTOCOL: {tcp: {windowMs: number; maxConnections: number; banMs: number}, http: {windowMs: number; maxConnections: number; banMs: number}} = {
+    tcp: {windowMs: 60000, maxConnections: 30, banMs: 600000},
+    http: {windowMs: 60000, maxConnections: 300, banMs: 600000}
+};
+
+const defaultRateLimit = (protocol: Protocol | undefined): RateLimitOption => {
+    const base = protocol === 'http' || protocol === 'https' ? RATE_LIMIT_DEFAULTS_BY_PROTOCOL.http : RATE_LIMIT_DEFAULTS_BY_PROTOCOL.tcp;
+    return {enabled: true, ...base, customized: false};
+};
+
+const normalizeRateLimit = (protocol: Protocol | undefined, input: unknown):
+    {success: true; rateLimit: RateLimitOption} | {success: false; message: string} => {
+    const fallback = defaultRateLimit(protocol);
+    if(input === undefined) {
+        return {success: true, rateLimit: fallback};
+    }
+    if(typeof input !== 'object' || input === null || Array.isArray(input)) {
+        return {success: false, message: 'rateLimit must be an object'};
+    }
+    const source = input as Record<string, unknown>;
+
+    let enabled = fallback.enabled;
+    if(source.enabled !== undefined) {
+        if(typeof source.enabled !== 'boolean') return {success: false, message: 'rateLimit.enabled must be boolean'};
+        enabled = source.enabled;
+    }
+
+    const numbers = {windowMs: fallback.windowMs, maxConnections: fallback.maxConnections, banMs: fallback.banMs};
+    for(const field of ['windowMs', 'maxConnections', 'banMs'] as const) {
+        const value = source[field];
+        if(value === undefined) continue;
+        const [min, max] = RATE_LIMIT_RANGE[field];
+        if(typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) {
+            return {success: false, message: `rateLimit.${field} must be an integer within ${min}..${max}`};
+        }
+        numbers[field] = value;
+    }
+
+    let customized = fallback.customized;
+    if(source.customized !== undefined) {
+        if(typeof source.customized !== 'boolean') return {success: false, message: 'rateLimit.customized must be boolean'};
+        customized = source.customized;
+    }
+
+    return {success: true, rateLimit: {enabled, ...numbers, customized}};
+};
 
 /**
  * P6-T3 / REQ-15 — 클라이언트 옵션 범위 검증 공통화.
@@ -201,5 +263,9 @@ export {
     DEFAULT_CLIENT_PORT,
     DEFAULT_CLIENT_KEEP_ALIVE,
     DEFAULT_CLIENT_MEM_LIMIT_MIB,
-    MIN_CLIENT_MEM_LIMIT_MIB
+    MIN_CLIENT_MEM_LIMIT_MIB,
+    RateLimitOption,
+    RATE_LIMIT_RANGE,
+    defaultRateLimit,
+    normalizeRateLimit
 };

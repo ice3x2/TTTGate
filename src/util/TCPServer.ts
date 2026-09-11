@@ -18,7 +18,11 @@ interface OnSocketEvent {
     (handler: SocketHandler, state: SocketState, data?: any) : void;
 }
 
-interface ServerOption {port: number, tls?: boolean, ca?: string, cert?: string, key?: string, keepAlive?: number};
+// U5-02 / #117 — 수락 직후, 자원 할당 전 판정. AdmissionDecision과 구조적으로 호환되는 지역 타입
+// (util/ 은 server/security를 import하지 않는다).
+type AdmitVerdict = {allowed: true} | {allowed: false; reason: string; retryAfterMs?: number; rejectResponse?: Buffer};
+
+interface ServerOption {port: number, tls?: boolean, ca?: string, cert?: string, key?: string, keepAlive?: number, admit?: (remoteAddress: string | undefined) => AdmitVerdict};
 
 class TCPServer {
 
@@ -67,6 +71,10 @@ class TCPServer {
         return this._options.port;
     }
 
+    public get handlerCount() : number {
+        return this._idHandlerMap.size;
+    }
+
 
 
     public setOnHandlerEvent(event: OnSocketEvent) {
@@ -112,6 +120,13 @@ class TCPServer {
     }
 
     private onBind = (socket: net.Socket) : void => {
+        if(this._options.admit) {
+            const verdict = this._options.admit(socket.remoteAddress);
+            if(!verdict.allowed) {
+                if(verdict.rejectResponse) socket.end(verdict.rejectResponse); else socket.destroy();
+                return;
+            }
+        }
         let option = {socket:socket, port: this._options.port, addr: "127.0.0.1", tls: this._options.tls ?? false , keepAlive: this._options.keepAlive ?? DEFAULT_KEEP_ALIVE};
         let handler = SocketHandler.bound(option,(handler, state, data) => {
             this._onHandlerEvent?.(handler, state, data);
@@ -200,4 +215,4 @@ class TCPServer {
 
 }
 
-export {TCPServer, OnServerEvent, OnSocketEvent, ServerOption}
+export {TCPServer, OnServerEvent, OnSocketEvent, ServerOption, AdmitVerdict}

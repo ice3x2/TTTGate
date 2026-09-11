@@ -21,6 +21,7 @@ import {timingSafeStringEqual} from "../../util/timingSafeStringEqual";
 import {computeBackoffMs} from "./loginBackoff";
 import crypto from "crypto";
 import {TunnelingOption} from "../../types/TunnelingOption";
+import {AdmissionController} from "../security/AdmissionController";
 
 const logger = LoggerFactory.getLogger('server', 'AdminServer');
 
@@ -217,6 +218,9 @@ class AdminServer {
         } else if (url.startsWith("/api/externalCert/")) {
             await this.onDeleteExternalServerCert(req, res);
             return;
+        } else if (url.startsWith("/api/security/bans/")) {
+            await this.onDeleteSecurityBan(req, res);
+            return;
         }
         this.sendApiFailure(res, 404, {message: `Not Found ${url}`});
     }
@@ -265,6 +269,9 @@ class AdminServer {
             return;
         } else if (url == "/api/externalServerStatuses") {
             await this.onGetExternalServerStatuses(req, res);
+            return;
+        } else if (url == "/api/security/bans") {
+            await this.onGetSecurityBans(req, res);
             return;
         } else if(url == "/api/serverOptionHash") {
             await this.onGetServerOptionHash(req, res);
@@ -1209,6 +1216,35 @@ class AdminServer {
         }
         let statuses = this._tttServer?.externalServerStatuses();
         this.sendApiSuccess(res, {serverTime: Date.now(), statuses: statuses ?? []});
+    }
+
+    // U5-02 / #117 — 임시 차단 목록 조회·해제 API. 세션 검사만 한다.
+    // 권한·감사는 #118 (U5-03)·#120 (U5-05) 이 더한다.
+    private onGetSecurityBans = async (req: IncomingMessage, res: ServerResponse) => {
+        if(!await this.checkSession(req, res)) {
+            return;
+        }
+        const now = Date.now();
+        this.sendApiSuccess(res, {serverTime: now, bans: AdmissionController.instance.rateLimiter.bans(now)});
+    }
+
+    private onDeleteSecurityBan = async (req: IncomingMessage, res: ServerResponse) => {
+        if(!await this.checkSession(req, res)) {
+            return;
+        }
+        const rest = this.pathname(req.url).substring("/api/security/bans/".length);
+        const segments = rest.split("/");
+        const port = segments.length === 2 ? Number(segments[0]) : NaN;
+        if(!Number.isInteger(port) || port < 1 || port > 65535) {
+            this.sendApiFailure(res, 400, {message: 'invalid port'});
+            return;
+        }
+        const ip = segments.length === 2 && segments[1].length > 0 ? decodeURIComponent(segments[1]) : '';
+        if(ip.length === 0) {
+            this.sendApiFailure(res, 400, {message: 'invalid ip'});
+            return;
+        }
+        this.sendApiSuccess(res, {removed: AdmissionController.instance.rateLimiter.unban(port, ip)});
     }
 
 
