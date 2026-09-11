@@ -11,6 +11,7 @@ import LoggerFactory  from "../util/logger/LoggerFactory";
 import AppCompositionRoot from "../bootstrap/AppCompositionRoot";
 import {shouldResetServerState} from "./ServerCliOptions";
 import {redactSecrets} from "../util/SecretRedactor";
+import {IdentityMigration} from "./rbac/IdentityMigration";
 import {
     AdminSecurityPolicyRegistry,
     buildAdminSecurityAllowancesFromCliOptions,
@@ -24,6 +25,10 @@ let adminServer : AdminServer;
 let tttServer : TTTServer;
 
 const startService = async (serverOption: ServerOption, adminCertInfo: CertInfo) => {
+    const identity = await IdentityMigration.runAtStartup();
+    if(identity.kind === 'legacy-fallback') {
+        logger.error(`identity store unavailable (${identity.reason}); continuing with legacy admin key only`);
+    }
     AppCompositionRoot.applyGlobalMemLimitMiB(serverOption.globalMemCacheLimit ?? 128);
     logger.info("Start service with option: " + JSON.stringify(redactSecrets(serverOption), null, 2));
     tttServer = TTTServer.create(serverOption);

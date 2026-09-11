@@ -15,6 +15,8 @@ import {TlsOptionsFactoryRegistry} from "../../src/util/TlsOptionsFactory";
 import SessionStore from "../../src/server/admin/SessionStore";
 import ServerOptionStore from "../../src/server/ServerOptionStore";
 import {CertificationStore} from "../../src/server/CertificationStore";
+import {IdentityStore} from "../../src/server/rbac/IdentityStore";
+import {IdentityMigration} from "../../src/server/rbac/IdentityMigration";
 
 type TestRoot = {
     rootDir: string;
@@ -55,6 +57,8 @@ const resetRuntimeState = (): void => {
     SessionStore.resetForTest();
     ServerOptionStore.resetForTest();
     CertificationStore.resetForTest();
+    IdentityStore.resetForTest();
+    IdentityMigration.resetForTest();
 };
 
 const applyTestRoot = (rootDir: string): void => {
