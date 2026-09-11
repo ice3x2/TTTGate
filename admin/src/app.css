@@ -72,6 +72,7 @@
   --dur-2: 220ms;
   --dur-3: 420ms;
   --dur-4: 680ms;
+  --ink-on-signal: #FFF5F0;
 }
 
 @font-face { font-family: "Noto Serif"; font-style: normal; font-weight: 400; font-display: swap;
