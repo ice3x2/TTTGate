@@ -2,7 +2,7 @@ import http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
 import AdminServer from "../../../../src/server/admin/AdminServer";
-import SessionStore, {BOOTSTRAP_TOKEN_FILE_NAME} from "../../../../src/server/admin/SessionStore";
+import {BOOTSTRAP_TOKEN_FILE_NAME, IdentityMigration} from "../../../../src/server/rbac/IdentityMigration";
 import {CertificationStore} from "../../../../src/server/CertificationStore";
 import {AdmissionController} from "../../../../src/server/security/AdmissionController";
 import {createTestRoot, applyTestRoot, cleanupTestRoot} from "../../../helpers/runtime";
@@ -16,7 +16,7 @@ const withBansServer = async (check: (fixture: any) => Promise<void>) => {
         applyTestRoot(root.rootDir);
         AdmissionController.resetForTest();
         await CertificationStore.instance.load();
-        SessionStore.instance;
+        await IdentityMigration.runAtStartup();
         const token = (await fs.readFile(path.join(root.rootDir, "config", BOOTSTRAP_TOKEN_FILE_NAME), "utf8")).trim();
         // security/bans 라우트는 세션 검사만 하고 터널 런타임을 쓰지 않는다.
         api = new AdminServer(undefined as any, false);
