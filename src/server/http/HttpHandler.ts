@@ -88,6 +88,14 @@ class HttpHandler {
         return this._socketHandler.isOutputDrained;
     }
 
+    public get isBackpressured(): boolean {
+        return this._socketHandler.isBackpressured;
+    }
+
+    public addOncePressureReliefListener(listener: () => void): void {
+        this._socketHandler.addOncePressureReliefListener(() => listener());
+    }
+
     public static create(socketHandler: SocketHandler, tunnelOption: TunnelingOption): HttpHandler {
         let handler = new HttpHandler(socketHandler);
         handler._option = !tunnelOption.httpOption ? handler._option : tunnelOption.httpOption!;

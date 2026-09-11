@@ -209,6 +209,14 @@ class ClientHandlerPool {
         this._waitingDataBufferQueueMap.delete(sessionID);
     }
 
+    public pauseSessionRead(sessionID: number) : void {
+        this._activatedSessionHandlerMap_.get(sessionID)?.pauseRead();
+    }
+
+    public resumeSessionRead(sessionID: number) : void {
+        this._activatedSessionHandlerMap_.get(sessionID)?.resumeRead();
+    }
+
     public pushReceiveBuffer(sessionID: number, data: Buffer) : boolean {
         let handler = this._activatedSessionHandlerMap_.get(sessionID);
         if(handler != undefined && handler.dataHandlerState == DataHandlerState.OnlineSession) {
