@@ -59,7 +59,7 @@ export type ProcessTunnelOptions = {
     clientCount?: number;                    // 기본 1. 2 이상이면 trustedClients 를 그 수만큼 만든다
     startClient?: boolean;                   // 기본 true
     identityFixture?: unknown;               // [U2-09 가 추가] config/identity.yaml 로 직렬화(YAML). 2 단위(U2-09)가 형식을 정한다. 사용자 항목은 평문 `password` 필드를 받고 하네스가 bcrypt cost 12 로 `passwordHash` 를 채운다(같은 평문은 모듈 수준 캐시로 한 번만 해시). 지정하면 `.key` 는 쓰지 않는다
-    adminAccess?: boolean;                   // [U5-03 이 추가] 기본 true. false 면 준비 판정을 서버 stdout 의 `Listen - port: <forwardPort>` 로 하고, 클라이언트 온라인 판정은 외부 포트 요청이 200 을 돌려줄 때까지 20초 재시도로 대신하며, adminRequest 를 제공하지 않는다(관리자 포트가 막히는 시나리오용)
+    adminAccess?: boolean;                   // [U5-03 이 추가] 기본 true. false 면 준비 판정을 서버 stdout 의 `Listen - port: <forwardPort>` 하나로만 하고 adminRequest·waitForClientOnline·waitForTunnelOnline 을 제공하지 않는다(관리자 포트와 외부 포트가 모두 막히는 국가 필터 시나리오용)
     adminLogin?: {username: string; password: string};   // [U2-09 가 추가] adminRequest 가 로그인할 계정. 기본 {username:'admin', password:'e2e-password-1234'}. identityFixture 를 쓰면 그 안에 이 계정(슈퍼유저)이 있어야 한다
 };
 export type ProcessTunnelHarness = {
@@ -89,7 +89,7 @@ export function createProcessTunnelHarness(options: ProcessTunnelOptions): Promi
 - `server.yaml` 최소 내용(`scripts/smoke.mjs:243-256` 기준): `key`(임의 32자), `adminPort`, `adminBindHost: "127.0.0.1"`, `adminTls: true`, `port`, `tls: false`, `controlProtocolMode: "mixed"`, `allowLegacyControlAuth: false`, `trustedClients: [{clientId, clientSecret}]`, `tunnelingOptions: [...]`, `keepAlive: 0`, `globalMemCacheLimit: 128`. `ServerOptionStore.verificationServerOption` 이 받아들이는 형태여야 한다.
 - 관리자 접근을 위해 `.key` 에 비밀번호 `e2e-password-1234` 의 bcrypt 해시(cost 12)를 미리 둔다. `adminRequest` 는 최초 호출 때 `/api/login` 으로 세션과 CSRF 쿠키를 얻는다.
 - 서버 CLI: `app.js server` (adminPort 는 yaml). 클라이언트 CLI: `app.js client -addr 127.0.0.1:<tunnelPort> -clientId <id> -clientSecret <secret> -name e2e-client-<n>`.
-- 준비 완료 판정(`adminAccess: true`): 서버는 `https://127.0.0.1:<adminPort>/api/version` 200, 터널은 `/api/externalServerStatuses` 에서 `online: true`, 클라이언트는 `/api/clientStatus` 길이. `adminAccess: false` 면 서버 stdout 에 `Listen - port: <forwardPort>` 가 각 터널마다 나타날 때까지 기다린다(`ExternalPortServerPool.onServerEvent` 의 Listen 로그).
+- 준비 완료 판정(`adminAccess: true`): 서버는 `https://127.0.0.1:<adminPort>/api/version` 200, 터널은 `/api/externalServerStatuses` 에서 `online: true`, 클라이언트는 `/api/clientStatus` 길이. `adminAccess: false` 면 서버 stdout 에 `Listen - port: <forwardPort>` 가 각 터널마다 나타날 때까지 기다리는 것이 **유일한** 판정이다(`ExternalPortServerPool.onServerEvent` 의 Listen 로그). 이 옵션을 쓰는 시나리오는 외부 포트도 막아 두므로 HTTP 요청으로는 준비를 판정할 수 없다.
 
 ### 3.3 대상 서비스 — `test/e2e/target/targetService.ts`
 

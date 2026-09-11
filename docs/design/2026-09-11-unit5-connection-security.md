@@ -66,7 +66,7 @@ src/server/security/
   ConnectionRateLimiter.ts  포트·IP 별 창 카운터와 차단 목록
   GeoFilter.ts              geoip-lite 조회와 허용·차단 판정
   AdmissionController.ts    차단 맵 → GeoFilter → 창 카운트 → 동시 연결 순으로 묶는 단일 진입점 (싱글턴, resetForTest)
-  countries.ts              ISO_ALPHA2: ReadonlySet<string>, countryName(code): string (Intl.DisplayNames)
+  countries.ts              ISO_ALPHA2: ReadonlySet<string>, countryName(code): string — ISO_ALPHA2 에 없는 코드는 즉시 code 를 돌려주고, 있는 코드만 Intl.DisplayNames 로 변환한다(Node 24 의 of('ZZ') 는 'Unknown Region' 이라 ?? 폴백이 발동하지 않는다)
 ```
 
 ### 4.1 타입
@@ -200,7 +200,7 @@ HTTP 터널에서 `concurrency-limit` 거절만은 소켓을 바로 닫지 않�
 - `ConnectionRateLimiter.test.ts`: 창 안 N 회까지 허용, N+1 회에 `rate-limit-exceeded` 와 `retryAfterMs`, 차단 중 `rate-limit-ban`, `banMs` 경과 후 허용, 창 슬라이딩(오래된 타임스탬프 제거), 포트가 다르면 독립, `unban`, `prune` 이 만료 항목 제거, `MAX_TRACKED_IPS_PER_PORT` 초과 시 오래된 IP 제거, 100만 회 `admit` 이 차단 상태에서 500ms 안(O(1) 근거. CI 러너 편차를 고려한 값).
 - `GeoFilter.test.ts`: `off` 허용, 사설·루프백은 `unknownPolicy`, `allow`/`deny` 판정(알려진 공인 IP 2개: `8.8.8.8`→US, `1.1.1.1`→AU 는 geoip-lite 동봉 DB 기준 — DB 갱신으로 바뀔 수 있으므로 테스트는 `lookupCountry` 결과를 먼저 읽고 그 값으로 목록을 구성), `applyToAdmin: false` 면 admin 스코프 허용, 지연 로드(`off` 상태에서 `isDatabaseLoaded() === false`, `allow` 설정 후 `true`).
 - `address.test.ts`: `::ffff:` 정규화, 사설 범위 표.
-- `countries.test.ts`: 249 개, `countryName('KR')` 이 비어 있지 않음.
+- `countries.test.ts`: 249 개, `countryName('KR')` 이 비어 있지 않음, `countryName('ZZ') === 'ZZ'`(집합 선검사), `countryName('')`·`countryName('KOR')` 도 입력을 그대로 돌려줌.
 - `TunnelingOption.rateLimit.test.ts`: `defaultRateLimit`, 정규화(필드 없음 → 프로토콜 기본값), 검증 범위.
 
 ### 8.2 컴포넌트 (`test/component/server/`)
@@ -220,7 +220,8 @@ HTTP 터널에서 `concurrency-limit` 거절만은 소켓을 바로 닫지 않�
 |---|---|---|---|---|
 | U5-01 | 접속 레이트 리미터 | `security/{AdmissionPolicy,ConnectionRateLimiter,AdmissionController,address}.ts`(순수 로직, 시계 주입) | 8.1 의 RateLimiter·address 테스트(성능 케이스 포함) | — |
 | U5-02 | 수락 판정 삽입과 터널 옵션 | `TCPServer.admit`, `ExternalPortServerPool` 연결(`configureTunnel/releaseTunnel`, `configureConcurrency` 주입), `RateLimitOption` 타입·기본값·정규화·검증, 상태 필드 `rejected/bannedIps`, `GET /api/security/bans`·`DELETE /api/security/bans/:port/:ip` 를 **세션 검사만으로 임시 제공**(U5-05 가 권한을 얹는다) | 8.1 rateLimit 옵션 테스트, 8.2 `admission-tcp`, 8.3 `rate-limit.test.ts` | U5-01, U0-01 |
-| U5-03 | 국가 필터 | `geoip-lite` 의존성(+`package-lock.json`), `GeoFilter`, `countries.ts`, `connectionSecurity` 설정·검증, `AdminServer` connection 훅, `ServerApp`·`applyServerOption` 연결, pkg assets(country DB 두 파일만), `scripts/geoip-update.mjs`, 릴리스 문서 | 8.1 Geo·countries(city 파일 부재 시 country 폴백 포함), 8.2 `admission-admin`, 8.3 `geo-filter.test.ts`, deploy-gates 단언, `npm test -- test/supply-chain` 통과(`npm audit --omit=dev --audit-level=moderate` 0건 게이트. 실패하면 구현을 멈추고 이슈에 코멘트) | U5-02 |
+| U5-03 | 국가 필터 | `geoip-lite` 의존성(+`package-lock.json`), `GeoFilter`, `countries.ts`, `connectionSecurity` 설정·검증, `AdminServer` connection 훅, `ServerApp`·`applyConnectionSecurity` 연결, 하네스의 `adminAccess` 옵션 | 8.1 Geo·countries(city 파일 부재 시 country 폴백 포함), 8.2 `admission-admin`, 8.3 `geo-filter.test.ts`, deploy-gates 단언, `npm test -- test/supply-chain` 통과(`npm audit --omit=dev --audit-level=moderate` 0건 게이트. 실패하면 구현을 멈추고 이슈에 코멘트) | U5-02 |
+| U5-10 | GeoIP 패키징과 갱신 절차 | `package.json` 의 `pkg.assets`(country DB 두 파일), `scripts/geoip-update.mjs`, `docs/guide/release-checklist.md`, `deploy-gates.test.ts` 단언, `geoip-country-fallback.test.ts` | 위 테스트 통과, `npm test -- test/supply-chain` 통과 | U5-03 |
 | U5-04 | 거절 통계와 집계 로그 | 1분 집계 로그, `snapshot()`, `/api/security/stats` 의 데이터 부분(세션 검사만) | 단위 테스트: 집계 로그가 60초에 1줄 | U5-02 |
 | U5-05 | 보안 관리 API | `/api/security/geo|countries|bans|stats` 전부에 `security:manage` 권한, 감사 이벤트 2종 | `test/component/server/admin/security-api.test.ts`(실제 AdminServer, 슈퍼유저·일반 유저 403), CSRF 적용 확인 | U5-03, U5-04, U2-08 |
 | U5-06 | 보안 화면과 터널 편집의 레이트 리밋 카드 | `SecurityScreen`, NAV 항목(슈퍼유저), TunnelEdit 카드, 카드 목록 `Blocked` | `screen-security.test.ts`, `screen-tunnels.test.ts` 추가 케이스(프로토콜 변경 시 기본값 전환, customized 유지) | U5-05, U3-06 |

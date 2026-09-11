@@ -4,12 +4,14 @@
 
 ## 단위 3 공통 참고 (설계 문서와 다른 점)
 
-- 단위 1·2 이슈 ID 는 각 단위 설계 문서의 "이슈 분할" 표(단위 2 는 §9, U2-01~U2-10, UI 로그인이 U2-10)를 따랐다. `issues/unit1.md`·`issues/unit2.md` 의 번호가 이와 다르면 등록 전에 이 파일의 선행 ID 를 그쪽에 맞춘다.
+- 단위 1·2 이슈 ID 는 각 단위 설계 문서의 "이슈 분할" 표(단위 2 는 §9, U2-01~U2-10, UI 로그인이 U2-10)를 따랐다.
 - 단위 1 설계 §6 의 `Banner` 는 §9 의 분할 표에 없지만 `issues/unit1.md` 의 U1-03 이 만든다. U3-02 는 그것을 쓴다.
-- `startAdminApp` 은 설계 §5 의 `loginAs` 대신 U2-10 가 이미 만든 `login: {username, password}` 옵션을 그대로 쓴다(진입점 하나). 비밀번호는 `RBAC_PASSWORDS` 에서 가져온다. 로그인 완료 판정은 `#/status` 대기에서 Shell 제목 대기로 바뀐다.
+- `startAdminApp` 은 설계 §5 의 `loginAs` 대신 U2-10 가 이미 만든 `login?: boolean | {username, password}` 옵션을 그대로 쓴다(진입점 하나). 비밀번호는 `RBAC_PASSWORDS` 에서 가져온다. 로그인 완료 판정은 `#/status` 대기에서 "`#login-password` 소멸 + Shell 제목 또는 강제 변경 안내" 대기로 바뀐다(U3-01 §변경할 것).
+- `startAdminApp` 의 로그인 진입점은 `login: boolean | {username, password}` 하나다. `issues/unit4.md`·`issues/unit5.md` 도 같은 이름으로 맞춰져 있다. `extraLogins`(같은 사용자로 세션을 더 만드는 옵션)는 U4-06 이 새로 정의하는 확장이다.
 - 설계 §6 U3-01 의 "터널 4개" 는 §5 가 나열한 20001·20002·20003 세 개로 확정했다.
 - 화면별 title/back 은 설계 §3 표대로지만, `App.svelte` 가 아니라 U1-04 의 `nav.ts` `chrome()` 표를 확장해 둔다.
-- `defaultHash` 는 "NAV 순서로 첫 허용 항목" 이다. 4 단위가 Audit log 항목을 NAV 에 넣으면 `sections` 가 `['audit','me']` 인 유저의 기본 화면은 `#/audit` 가 된다(설계 §3 은 "`tunnels` 가 없으면 `me`").
+- 설계 §2 는 `reassignOwner(port, ownerId)` 를 2 인자로 적었지만, U2-08 의 `PUT /api/tunnelingOption/:port/owner` 가 `expectedRevision` 을 필수로 요구하므로 U3-06 은 `reassignOwner(port, ownerId, expectedRevision)` 3 인자로 확정했다.
+- `defaultHash` 는 "NAV 순서로 첫 허용 항목" 이다. 4 단위가 Audit log 항목을 NAV 에 넣으면 `sections` 가 `['audit','me']` 인 유저의 기본 화면은 `#/audit` 가 된다(설계 §3 은 "`tunnels` 가 없으면 `me`"). 그때 U4-06 은 `Screen` 에 `'audit'`·`'sessions'` 를 더하면서 U3-01 이 만든 `SECTION_OF_SCREEN`(`Record<Screen, Section | null>`)에 두 행을 채워야 하고, `test/admin/nav.test.ts` 의 `defaultHash(['audit','me'])` 기대값을 `'#/me'` 에서 `'#/audit'` 로 바꿔야 한다. U5-06 이 Security 항목을 넣을 때도 같다(Sessions 는 U4-06 이 넣는다). 이 두 항목을 U4-06·U5-06 §변경할 것에 넣는다.
 - 그룹 편집의 422 표시는 카드별 `Field error` 대신 "Tunnel permissions" 카드 상단의 `#group-form-error` 하나로 정했다.
 - 일반 유저의 터널 편집 화면은 인증서 업로드를 숨길 뿐 아니라 `/api/externalCert/:port` 조회 자체를 건너뛰고, 저장 전에 그룹이 허용하지 않은 리라이트 플래그를 false 로 정규화한다(설계 §4.7 에는 없는 규칙. U1-09 의 `loadCertInfo()`·`emptyOption()` 기본값과 U2-04·U2-08 의 서버 규칙이 만나면 필요하다).
 - `#/users`·`#/groups`·`#/me`·`#/me/password` 는 U3-01 시점에 화면이 없으므로 `#screen-placeholder` 를 두고 U3-02~05 가 교체한다.
@@ -31,25 +33,27 @@
 
 | 출처 | 경로 | 이 이슈가 쓰는 계약 |
 |---|---|---|
-| U1-04 | `admin/src/router.ts` | `type Screen`, `type Route = {screen: Screen; param?: string}`, `route: Readable<Route>`, `navigate(hash: string): void`, `parseHash(hash: string): Route` |
+| U1-04 | `admin/src/router.ts` | `type Screen`, `type Route = {screen: Screen; param?: string}`, `route: {subscribe(run: (value: Route) => void): () => void}`(Svelte 스토어 계약만 맞춘 자체 구현. `router.ts` 는 아무것도 import 하지 않는 순수 모듈이다), `navigate(hash: string): void`, `parseHash(hash: string): Route` |
 | U1-04 | `admin/src/shell/nav.ts` | `NAV: ReadonlyArray<{hash; title; screen}>`, `chrome(route: Route): {title: string; back?: string}`(화면별 title/back 표), `navScreen(route: Route): Screen`(`'tunnel-edit' → 'tunnels'`, 드로어의 현재 항목 판정) |
 | U1-04 | `admin/src/shell/Drawer.svelte` | `role="dialog" aria-modal="true" aria-label="Navigation"`, `NAV` 순회, `aria-current={navScreen($route) === item.screen ? 'page' : undefined}` |
 | U1-04 | `admin/src/shell/session.ts` | `type SessionContext = {invalidate(): void}`, `provideSession(ctx)`, `useSession(): SessionContext`(컴포넌트 초기화 중에만 호출. 컨텍스트가 없으면 no-op) |
-| U1-04 | `admin/src/App.svelte` | 세션 상태 `'Checking' \| 'Valid' \| 'Invalid'`, `provideSession({invalidate() { state = 'Invalid'; }})`, `const current = $derived(chrome($route))` 로 `Shell` 의 `title`/`back` 계산 |
+| U1-04 | `admin/src/App.svelte` | 세션 상태 `'Checking' \| 'Valid' \| 'Invalid' \| 'Offline'`(`validateSession` 이 예외를 던지면 `'Offline'` 이고 "Offline server..." 를 그린다), `provideSession({invalidate() { state = 'Invalid'; }})`, `const current = $derived(chrome($route))` 로 `Shell` 의 `title`/`back` 계산 |
 | U1-04 | `test/admin/router.test.ts` | `parseHash` 표 테스트 |
 | U1-02 | `admin/src/ui/Button.svelte` | `variant`, `size`, `disabled`, `type`, `onclick`, children |
-| U1-05 | `test/admin/admin-backend-driver.ts` | argv `[rootDir, fixtureName?]`. fixture `'with-tunnels'` 가 `rootDir/config/server.yaml` 을 쓴다. 스텁 `TTTServer` 와 IPC `{type:'calls'}` |
+| U2-01 | `src/server/rbac/IdentityMigration.ts` | `runAtStartup()` 은 `config/identity.yaml` 이 이미 있으면 그 파일을 읽기만 하고(`loaded`) 덮어쓰지 않는다. 그래서 `rbac` fixture 는 `.key` 없이 `identity.yaml` 만 두면 된다 |
+| U2-01 | `src/server/rbac/IdentityStore.ts` | `static bcryptCost: number`(기본 12). 이 값은 런타임 해시(`createUser`·`setPassword`)에만 쓰이고, 검증(`bcrypt.compare`)은 해시에 든 cost 를 따른다 |
+| U1-05 | `test/admin/admin-backend-driver.ts` | argv `[rootDir, fixtureName?]`. fixture `'with-tunnels'` 가 `rootDir/config/server.yaml` 을 쓴다. 스텁 `TTTServer` 와 IPC `{type:'calls'}`. 스텁의 `externalServerStatuses()` 는 `ServerOptionStore` 의 `tunnelingOptions` 를 그대로 따라 `statusOf(port)` 를 돌려주므로 fixture 의 터널이 바뀌면 자동으로 따라온다 |
 | U1-05 | `test/helpers/adminApp.ts` | 로그인 완료 판정이 `page.waitForFunction(() => location.hash === '#/status')` + `h1` 텍스트 "Status" 대기다(이 이슈가 바꾼다) |
 | U2-10 | `admin/src/shell/nav.ts` | `NAV` 항목에 `section: 'status' \| 'tunnels' \| 'server'` 추가. `Drawer` 는 `$me?.sections.includes(item.section)` 인 항목만 그린다 |
 | U2-10 | `admin/src/shell/Drawer.svelte` | 드로어 하단에 사용자명(`$me.user.username`, `class="mono"`)과 `Button` "Sign out"(`id="nav-sign-out"`) → `LoginCtrl.logout()` → `clearMe()` → `useSession().invalidate()` |
 | U2-10 | `admin/src/me.ts` | `type Me = {user: {…, mustChangePassword, migratedFromLegacyAdmin, …}; group: {id; name; attributes}; sections: string[]; migrationBanner: boolean}`, `me: Writable<Me \| undefined>`, `loadMe(): Promise<Me>`(`GET /api/me` → `me.set`), `clearMe()` |
 | U2-10 | `admin/src/App.svelte` | `'Valid'` 직후 `loadMe()`. `$me.user.mustChangePassword` 이면 `Shell` 대신 `<p role="alert" id="password-change-required">` 와 `#password-change-sign-out` 만 표시(U3-02 가 대체한다. 이 이슈는 손대지 않는다) |
 | U2-10 | `admin/src/screens/LoginScreen.svelte` | `#login-username`, `#login-password`, 버튼 "OK", `#login-message` |
-| U2-10 | `test/helpers/adminApp.ts` | `startAdminApp({fixture, login?: {username, password}}) → Promise<{page, url, errors, calls(), close}>`. 뷰포트 400×800, 로그인까지 수행. `login` 생략 시 `admin` / `test-password-1234` |
-| U2-10 | `test/admin/admin-backend-driver.ts` fixture `'regular-user'` | 드라이버 프로세스 안에서 `IdentityMigration.runAtStartup()`(`.key` 승격으로 `admin`) 뒤 `IdentityStore.instance.createUser(...)` 로 `alice`·`temp` 를 만든다. `serializeIdentityFixture` 를 쓰지 않는다. 이 이슈의 `'rbac'` 은 그와 달리 `identity.yaml` 을 파일로 쓴다(아래) |
+| U2-10 | `test/helpers/adminApp.ts` | `startAdminApp({fixture, login?: boolean \| {username, password}}) → Promise<{page, url, errors, calls(), close}>`. 뷰포트 400×800, 로그인까지 수행. `login` 생략 또는 `true` 면 `admin` / `test-password-1234`, `false` 면 로그인하지 않는다 |
+| U2-10 | `test/admin/admin-backend-driver.ts` fixture `'regular-user'` | 드라이버 프로세스 안에서 `IdentityStore.bcryptCost = 4` 로 둔 뒤 `IdentityMigration.runAtStartup()`(`.key` 승격으로 `admin`) 하고 `IdentityStore.instance.createUser(...)` 로 `alice`·`temp` 를 만든다. `serializeIdentityFixture` 를 쓰지 않는다. 이 이슈의 `'rbac'` 은 그와 달리 `identity.yaml` 을 파일로 쓴다(아래) |
 | U2-10 | `test/admin/screen-login.test.ts` | `regular-user` fixture 의 `alice` 로그인 → `#/status` 도착 케이스(이 이슈가 `#/tunnels` 로 바꾼다) |
 | U2-10 | `test/admin/shell.test.ts` | 드로어 항목 순서 케이스(status, tunnels, server) |
-| U2-09 | `test/helpers/identityFixture.ts` | `type IdentityFixture = {users: Array<{username; password; role; groupId?; displayName?; mustChangePassword?}>; groups?: Array<{id; name; attributes?: Partial<GroupAttributes>}>}`, `serializeIdentityFixture(fixture): Promise<string>`(`identity.yaml` 텍스트, `id` 는 `newUserId()`, 시스템 그룹 2개 자동) |
+| U2-09 | `test/helpers/identityFixture.ts` | `type IdentityFixture = {users: Array<{username; password; role; groupId?; displayName?; mustChangePassword?}>; groups?: Array<{id; name; attributes?: Partial<GroupAttributes>}>}`, `serializeIdentityFixture(fixture): Promise<string>`(`identity.yaml` 텍스트, `id` 는 `newUserId()`, 시스템 그룹 2개 자동). **해시 cost 를 고정 12 로 쓰고 `IdentityStore.bcryptCost` 를 읽지 않는다.** 같은 평문은 모듈 수준 `Map` 캐시로 한 번만 해시한다 |
 | U2-04 | `GET /api/me` | `{success: true, user: UserView, group: {id, name, attributes: GroupAttributes}, sections: string[], migrationBanner: boolean}` |
 | U2-04 | `PUT /api/me/password` | 요청 `{currentPassword, newPassword}`. 성공 `{success: true}`. 실패 422 `password_too_short`, 422 `current_password_mismatch` |
 | U2-04 | `POST /api/me/acknowledge-migration` | `{success: true}` |
@@ -164,7 +168,7 @@ Security·Audit log·Sessions 항목은 화면이 없으므로 이 이슈에서 
 
 ### `admin/src/screens/DeniedScreen.svelte` (신규)
 
-`<p id="denied-message">` "You don't have access to this page." + `Button variant="primary"` "Go to my tunnels" → `navigate(defaultHash($me.sections))`. 버튼 문구는 기본 화면이 무엇이든 고정이다.
+`<p id="denied-message">` "You don't have access to this page." + `Button variant="primary"` "Go to my tunnels" → `navigate(defaultHash($me.sections))`. 버튼 문구는 기본 화면이 무엇이든 고정이다. `$me` 가 아직 없으면 버튼을 `disabled` 로 둔다(`$me` 가 채워지면 저절로 풀린다).
 
 ### `admin/src/App.svelte` 라우트 가드 (변경)
 
@@ -230,8 +234,15 @@ export const RBAC_TRUSTED_CLIENTS: Array<{clientId: string; clientSecret: string
 ## 변경할 것
 
 - `test/helpers/identityFixture.ts`: `IdentityFixture.users[]` 항목에 `id?: string` 과 `migratedFromLegacyAdmin?: boolean` 을 추가한다. `id` 가 있으면 `newUserId()` 대신 그 값을 쓰되 `/^u_[0-9a-f]{16}$/` 에 맞지 않으면 `Error` 를 던진다. `migratedFromLegacyAdmin` 기본값은 `false`, `migrationAcknowledged` 는 항상 `false` 로 쓴다. 기존 호출부(U2-09·U2-10)는 두 필드를 생략하므로 동작이 바뀌지 않는다.
-- `test/admin/admin-backend-driver.ts`: fixture `'rbac'` 추가. `'regular-user'` 와 같은 방식으로 `rootDir/config/identity.yaml` 에 `await serializeIdentityFixture(RBAC_IDENTITY_FIXTURE)` 를 쓰고 `.key` 는 쓰지 않는다. `rootDir/config/server.yaml` 은 `'with-tunnels'` 가 쓰는 내용에서 `tunnelingOptions` 를 `RBAC_TUNNELS` 로, `trustedClients` 를 `RBAC_TRUSTED_CLIENTS` 로 바꾼 것이다. 스텁 `TTTServer` 의 `externalServerStatuses` 는 기존과 같이 fixture 의 터널마다 `{port, online: true, active: true, sessions: 0, rx: 0, tx: 0, uptime: 1000, activeStart: Date.now(), activeTimeout: 3600}` 을 돌려준다.
-- `test/helpers/adminApp.ts`: `fixture` 유니온에 `'rbac'` 을 추가한다. `login` 옵션은 그대로 쓴다(테스트는 `startAdminApp({fixture: 'rbac', login: {username: 'alice', password: RBAC_PASSWORDS.alice}})` 로 부른다). 새 진입점을 만들지 않는다. 로그인 완료 판정을 "`location.hash === '#/status'` + `h1` 'Status'" 대기에서 "`#login-password` 가 DOM 에서 사라지고 헤더의 `h1`(Shell 제목)이 보일 때까지" 로 바꾼다(일반 유저는 `#/tunnels` 에, 강제 변경 사용자는 U3-02 이후 `#/me/password` 에 도착하므로). 기존 호출부의 기대는 바뀌지 않는다(admin 은 여전히 `#/status` 에 도착한다).
+- `test/admin/admin-backend-driver.ts`: fixture `'rbac'` 추가. `'regular-user'` 와 같은 방식으로 `rootDir/config/identity.yaml` 에 `await serializeIdentityFixture(RBAC_IDENTITY_FIXTURE)` 를 쓰고 `.key` 는 쓰지 않는다. `serializeIdentityFixture` 를 부르기 전에 `'regular-user'` 와 똑같이 `IdentityStore.bcryptCost = 4` 로 둔다. **다만 `serializeIdentityFixture` 자체는 U2-09 계약대로 cost 12 로 해시하며 이 값을 읽지 않는다**(소스 확인 결과. 그래서 fixture 의 초기 해시는 cost 12 이고, 평문이 `test-password-1234`·`user-password-1234`·`temp-password-1234` 세 가지뿐이라 모듈 캐시 덕에 드라이버 프로세스당 cost 12 해시 3회로 끝난다). `bcryptCost = 4` 는 서버가 런타임에 만드는 해시, 즉 U3-03 의 사용자 생성·비밀번호 초기화에 적용된다. 로그인 검증은 해시에 든 cost 를 따르므로 두 경로 모두 그대로 동작한다. `rootDir/config/server.yaml` 은 `'with-tunnels'` 가 쓰는 내용에서 `tunnelingOptions` 를 `RBAC_TUNNELS` 로, `trustedClients` 를 `RBAC_TRUSTED_CLIENTS` 로 바꾼 것이다. 스텁 `TTTServer` 의 `externalServerStatuses()` 는 설정의 터널을 그대로 따르므로(U1-05 의 `statusOf`) 스텁을 고치지 않는다.
+- `test/helpers/adminApp.ts`: `fixture` 유니온에 `'rbac'` 을 추가한다. `login` 옵션은 그대로 쓴다(테스트는 `startAdminApp({fixture: 'rbac', login: {username: 'alice', password: RBAC_PASSWORDS.alice}})` 로 부른다). 새 진입점을 만들지 않는다. 로그인 완료 판정을 "`location.hash === '#/status'` + `h1` 'Status'" 대기에서 아래로 바꾼다.
+
+  ```ts
+  await page.waitForFunction(() => !document.querySelector('#login-password')
+      && (document.querySelector('header h1') || document.querySelector('#password-change-required')));
+  ```
+
+  일반 유저는 `#/tunnels` 에, 강제 변경 사용자는 U3-02 이후 `#/me/password` 에 도착하므로 해시를 고정할 수 없다. `#password-change-required` 조건절은 U2-10 이 만든 임시 안내를 위한 것이다(그 사용자는 `Shell` 도 `h1` 도 그리지 않으므로 이 절이 없으면 `screen-login.test.ts` 의 `temp` 케이스가 영원히 대기한다). **`#password-change-required` 는 U3-02 가 제거하며 그때 이 조건절도 지운다.** 기존 호출부의 기대는 바뀌지 않는다(admin 은 여전히 `#/status` 에 도착한다).
 - `admin/src/router.ts`: `Screen` 에 `'users' | 'user-edit' | 'groups' | 'group-edit' | 'me' | 'me-password' | 'denied'` 를 추가하고 `parseHash` 표를 확장한다. 기존 행은 그대로.
 
   | 해시 | Route |
@@ -272,7 +283,9 @@ export const RBAC_TRUSTED_CLIENTS: Array<{clientId: string; clientSecret: string
 
 ## 수용 기준
 
-먼저 쓰고 붉은 상태를 확인할 테스트. 브라우저 테스트는 전부 `startAdminApp({fixture: 'rbac', login: {username, password: RBAC_PASSWORDS[username]}})` 로 시작하고(`admin` 은 `login` 생략), `finally` 에서 `close()` 하며, `expect(errors).toEqual([])` 로 끝난다. 각 `test()` 는 독립적으로 앱을 띄운다.
+먼저 쓰고 붉은 상태를 확인할 테스트. 브라우저 테스트는 전부 `startAdminApp({fixture: 'rbac', login: {username, password: RBAC_PASSWORDS[username]}})` 로 시작하고(`admin` 은 `login` 생략), `finally` 에서 `close()` 하며, `expect(errors).toEqual([])` 로 끝난다. 각 `test()` 는 독립적으로 앱을 띄운다(fixture 가 초기화되므로 앞 케이스의 변경이 뒤 케이스로 새지 않는다).
+
+**브라우저 테스트 파일 맨 위에 `jest.setTimeout(120_000)` 을 둔다.** `jest.config.ts` 에 `testTimeout` 이 없어 기본값이 5 초인데, 앱 기동과 bcrypt 해시만으로 그 시간을 넘긴다.
 
 - `test/admin/router.test.ts` (추가)
   - 위 `parseHash` 표의 각 행에 대해 `parseHash(해시)` 가 오른쪽 Route 와 `toEqual` 이다.
@@ -284,11 +297,14 @@ export const RBAC_TRUSTED_CLIENTS: Array<{clientId: string; clientSecret: string
   - `defaultHash(슈퍼유저 sections)` 가 `'#/status'` 이다.
   - `defaultHash(['tunnels','audit','me','sessions'])` 가 `'#/tunnels'` 이다.
   - `defaultHash(['audit','me'])` 와 `defaultHash([])` 가 `'#/me'` 이다.
-- `test/unit/helpers/identityFixture.test.ts` (신규)
+- `test/admin/identityFixture.test.ts` (신규, 순수 함수. `npm run test:admin` 이 `test/admin` 만 돌리므로 `test/unit/` 이 아니라 이 경로에 둔다)
   - `users[0].id` 를 `u_0000000000000009` 로 주면 직렬화된 YAML 에 `id: u_0000000000000009` 가 있다.
   - `users[0].id` 를 `bad` 로 주면 `Error` 를 던진다.
   - `migratedFromLegacyAdmin: true` 를 주면 YAML 에 `migratedFromLegacyAdmin: true` 와 `migrationAcknowledged: false` 가 있고, 생략하면 `migratedFromLegacyAdmin: false` 이다.
 - `test/admin/screen-access.test.ts` (신규)
+
+  가드가 해시를 고쳐 쓰기 때문에, 같은 케이스 안에서 여러 해시를 잇달아 확인할 때는 **목표 해시로 가기 전에 `page.goto(url + '#/me')` 로 중립 해시에 들르고**, 이동 뒤에는 `page.waitForFunction(() => location.hash === 기대값)` 으로 전이를 확인한다(중립 해시를 거치지 않으면 앞 단언이 이미 만든 `#/denied` 를 그대로 읽어 공허하게 통과한다).
+
   - alice 로 로그인하면 해시가 `#/tunnels` 이다.
   - alice 가 메뉴 버튼을 누르면 드로어(`[role=dialog][aria-label="Navigation"]`)에 "Tunnels" 와 "My account" 만 있고 "Status", "Server settings", "Users", "Groups" 는 없다. `#drawer-username` 의 텍스트가 `alice` 이다.
   - alice 가 `#/users` 로 이동하면(`page.goto(url + '#/users')`) 해시가 `#/denied` 가 되고 `#denied-message` 가 "You don't have access to this page." 이며, 버튼 "Go to my tunnels" 를 누르면 해시가 `#/tunnels` 이다.
@@ -350,6 +366,7 @@ git log -1 --format=%B   # Co-Authored-By, Generated, 🤖 등 서명 0건, 제�
 | U3-01 | `test/helpers/rbacFixture.ts` | `RBAC_PASSWORDS`, fixture `rbac`(admin 은 `migratedFromLegacyAdmin: true`, dave 는 `mustChangePassword: true`) |
 | U2-10 | `admin/src/App.svelte` | `$me.user.mustChangePassword` 이면 `Shell` 대신 `<p role="alert" id="password-change-required">…</p>` 와 `#password-change-sign-out` 을 표시(이 이슈가 제거) |
 | U2-10 | `admin/src/controller/LoginCtrl.ts` | `static logout(): Promise<void>` |
+| U2-10 | `admin/src/screens/LoginScreen.svelte` | `#login-username`, `#login-password`, 버튼 "OK", `<p id="login-message" role="alert">`. 비밀번호가 틀리면 `#login-message` 가 `result.message \|\| 'The password is incorrect.'` 이며, 401 공통 문구가 "The password is incorrect." 다 |
 | U2-10 | `admin/src/shell/Drawer.svelte` | "Sign out"(`#nav-sign-out`) → `LoginCtrl.logout()` → `clearMe()` → `useSession().invalidate()` |
 | U2-10 | `test/admin/screen-login.test.ts` | `regular-user` fixture 의 `temp` 로그인 → `#password-change-required` 케이스(이 이슈가 바꾼다) |
 | U1-04 | `admin/src/shell/Shell.svelte` | props `title: string`, `back?: string`, children. `Header` 와 `<main>` 을 감싼다 |
@@ -405,14 +422,17 @@ git log -1 --format=%B   # Co-Authored-By, Generated, 🤖 등 서명 0건, 제�
 - U2-10 의 `#password-change-required`·`#password-change-sign-out` 블록을 삭제한다. `mustChangePassword` 여도 `Shell` 을 그린다.
 - 라우트 가드 맨 앞에 한 단계를 넣는다: `$me.user.mustChangePassword` 이면 `location.hash !== '#/me/password'` 일 때 `navigate('#/me/password')` 하고 끝낸다(다음 단계로 가지 않는다).
 - `me-password` 분기의 placeholder 를 `<PasswordChangeScreen/>` 으로 바꾼다. `forced` 이면 `back` 을 `undefined` 로, `Shell` 에 `hideMenu={true}` 를 넘긴다.
-- 마이그레이션 배너: `Shell` 의 `banner` 스니펫으로 넘긴다.
+- 마이그레이션 배너: `Shell` 의 `banner` 스니펫으로 넘긴다. 스니펫은 `<Shell …>` 여는 태그와 닫는 태그 사이에 선언하면 이름이 같은 `banner` prop 으로 전달된다(별도 `banner={…}` 표기가 필요 없다).
 
 ```svelte
-{#snippet banner()}
-  {#if $me?.migrationBanner}
-    <Banner tone="trace" dismissible ondismiss={dismissMigration}>Your account was promoted to superuser during the upgrade.</Banner>
-  {/if}
-{/snippet}
+<Shell title={current.title} back={current.back} hideMenu={forced}>
+  {#snippet banner()}
+    {#if $me?.migrationBanner}
+      <Banner tone="trace" dismissible ondismiss={dismissMigration}>Your account was promoted to superuser during the upgrade.</Banner>
+    {/if}
+  {/snippet}
+  …화면 분기…
+</Shell>
 ```
 
 `dismissMigration` 은 `MeCtrl.instance.acknowledgeMigration()` 을 부르고 `success: true` 면 `loadMe()` 를 다시 부른다(`migrationBanner` 가 false 가 되어 배너가 사라진다). 실패하면 `toast.push({tone: 'alarm', message})`.
@@ -422,6 +442,7 @@ git log -1 --format=%B   # Co-Authored-By, Generated, 🤖 등 서명 0건, 제�
 - `admin/src/shell/Shell.svelte`: props 에 `hideMenu?: boolean`(기본 false)과 `banner?: Snippet` 을 추가한다. `hideMenu` 는 `Header` 로 전달하고, `banner` 는 `Header` 와 `<main>` 사이에 `{@render banner?.()}` 로 그린다(전체 폭, `max-width` 밖).
 - `admin/src/shell/Header.svelte`: `hideMenu` 가 true 면 메뉴 버튼도 뒤로 버튼도 그리지 않는다(빈 44×44 자리만 유지해 제목 위치가 흔들리지 않게 한다).
 - `admin/src/App.svelte`: 위 "만들 것".
+- `test/helpers/adminApp.ts`: 로그인 완료 판정에서 `#password-change-required` 조건절을 지운다. U3-01 이 넣은 `page.waitForFunction(() => !document.querySelector('#login-password') && (document.querySelector('header h1') || document.querySelector('#password-change-required')))` 를 `page.waitForFunction(() => !document.querySelector('#login-password') && document.querySelector('header h1'))` 로 바꾼다(이 이슈가 그 요소를 없애고, 강제 변경 사용자도 `Shell` 과 `h1` 을 그리게 되므로).
 - `test/admin/screen-login.test.ts`: `regular-user` fixture 의 `temp` 케이스를 "로그인 → 해시 `#/me/password`, `#pw-forced-note` 가 보이고 `[aria-label="Open menu"]` 가 없으며, 버튼 "Sign out" 을 누르면 `#login-password` 가 보인다" 로 바꾼다.
 - `test/admin/screen-access.test.ts`: U3-01 의 "`#/me/password` 로 이동하면 `#screen-placeholder`" 단언을 "`#pw-current` 가 보인다" 로 바꾼다.
 
@@ -435,7 +456,9 @@ git log -1 --format=%B   # Co-Authored-By, Generated, 🤖 등 서명 0건, 제�
 
 ## 수용 기준
 
-브라우저 테스트는 `startAdminApp({fixture: 'rbac', login: {username, password: RBAC_PASSWORDS[username]}})`, `finally close()`, `expect(errors).toEqual([])`.
+브라우저 테스트는 `startAdminApp({fixture: 'rbac', login: {username, password: RBAC_PASSWORDS[username]}})`, `finally close()`, `expect(errors).toEqual([])`. **각 `test()` 는 앱을 새로 띄운다**(fixture 가 초기화되므로 앞 케이스가 바꾼 비밀번호가 뒤 케이스로 새지 않는다).
+
+**브라우저 테스트 파일 맨 위에 `jest.setTimeout(120_000)` 을 둔다.** `jest.config.ts` 에 `testTimeout` 이 없어 기본값이 5 초다.
 
 - `test/admin/screen-me.test.ts` (신규. 계정 카드 케이스는 U3-05 가 추가한다)
   - alice 가 `#/me/password` 로 가면 `#pw-current` 의 라벨이 "Current password" 이고 `#pw-forced-note` 와 버튼 "Sign out" 이 없으며 헤더에 `[aria-label="Back"]` 이 있다.
@@ -444,13 +467,13 @@ git log -1 --format=%B   # Co-Authored-By, Generated, 🤖 등 서명 0건, 제�
   - alice 가 `#pw-current` 와 `#pw-new` 에 같은 값 `user-password-1234` 를 넣고 제출하면 "Choose a password different from the current one." 이 보인다.
   - alice 가 `#pw-current` 를 비우고 제출하면 "Enter your current password." 가 보인다.
   - alice 가 `#pw-current` 에 `wrong-password-1` 을, 새 비밀번호·확인에 `new-password-5678` 을 넣고 제출하면 `#pw-message[role=alert]` 에 비어 있지 않은 문구가 보이고 해시는 `#/me/password` 이며 `#login-username` 이 나타나지 않는다(세션 유지).
-  - alice 가 `user-password-1234` → `new-password-5678` 로 바꾸면 토스트 "Password changed." 가 보이고 해시가 `#/me` 이다. 이어서 메뉴 → `#nav-sign-out` 으로 로그아웃하고 `#login-username` 에 `alice`, `#login-password` 에 `user-password-1234` 를 넣고 "OK" 를 누르면 `#login-message` 에 "The password is incorrect." 가 보이며, `#login-password` 를 `new-password-5678` 로 바꿔 "OK" 를 누르면 해시가 `#/tunnels` 이다.
+  - alice 가 `user-password-1234` → `new-password-5678` 로 바꾸면 토스트 "Password changed." 가 보이고 해시가 `#/me` 이다. 이어서 `[aria-label="Open menu"]` 를 눌러 드로어를 연 뒤 `#nav-sign-out` 으로 로그아웃하고 `#login-username` 에 `alice`, `#login-password` 에 `user-password-1234` 를 넣고 "OK" 를 누르면 `#login-message` 에 "The password is incorrect." 가 보이며, `#login-password` 를 `new-password-5678` 로 바꿔 "OK" 를 누르면 해시가 `#/tunnels` 이다.
   - dave 로 로그인하면 해시가 `#/me/password` 이고, `#pw-forced-note` 가 "Set a new password before continuing." 이며, `#pw-current` 의 라벨이 "Temporary password" 이고, `[aria-label="Open menu"]` 와 `[aria-label="Back"]` 이 모두 없으며, 버튼 "Sign out" 이 있다.
   - dave 가 `#/tunnels` 로 이동하면 해시가 다시 `#/me/password` 가 된다.
   - dave 가 `temp-password-1234` → `dave-new-password-1` 로 바꾸면 해시가 `#/tunnels` 이고 `[aria-label="Open menu"]` 가 있다.
   - dave 가 버튼 "Sign out" 을 누르면 `#login-password` 가 보인다.
 - `test/admin/screen-access.test.ts` (추가)
-  - admin 의 화면에 "Your account was promoted to superuser during the upgrade." 가 있고, `[aria-label="Dismiss"]` 를 누르면 사라지며, `page.reload()` 뒤에도 없다.
+  - admin 의 화면에 "Your account was promoted to superuser during the upgrade." 가 있고, `.banner [aria-label="Dismiss"]` 를 누르면 사라지며, `page.reload()` 뒤에도 없다. (`Toast` 의 닫기 버튼도 `aria-label="Dismiss"` 라서 `.banner` 로 한정하지 않으면 Playwright strict mode 위반이다.)
   - alice 의 화면에 "Your account was promoted to superuser during the upgrade." 가 없다.
 
 기존 `test/admin/*.test.ts` 전부(위에서 갱신한 `screen-login` 의 `temp` 케이스 포함)가 통과한다.
@@ -503,14 +526,15 @@ git log -1 --format=%B   # Co-Authored-By, Generated, 🤖 등 서명 0건, 제�
 | U3-01 | `admin/src/controller/MeCtrl.ts` | 싱글턴·`adminRequest` 패턴의 본보기 |
 | U3-01 | `test/helpers/adminApp.ts`, `test/helpers/rbacFixture.ts` | `startAdminApp({fixture: 'rbac', login?})`, `RBAC_PASSWORDS`, `RBAC_USER_IDS`, `RBAC_GROUP_FIELD_ID` |
 | U3-01 | fixture `rbac` | 사용자 5명(admin·alice·bob·carol·dave), 그룹 3개(`system:superuser` "Superusers", `default` "Default", `g_0000000000000001` "Field team"), alice 가 20001·bob 이 20002 소유 |
-| U1-02 | `admin/src/ui/{Button,Field,TextInput,Select,Checkbox,Card,Chip,Badge}.svelte` | 단위 1 §6 표. `Select`: `value`(bindable), `id`, `options: Array<{value, label}>`, `disabled`. `Checkbox`: `checked`(bindable), `id`, `label`, `disabled`. `Chip`: `tone`, `mono?`. `Badge`: `tone` |
-| U1-03 | `admin/src/ui/Modal.svelte`, `admin/src/ui/toast.ts` | `Modal`: `open`(bindable), `title`, `closeOnOverlay = true`, children, `footer` 스니펫. `toast.push({tone, message})` |
-| U1-08 | `admin/src/screens/TunnelsScreen.svelte` | 카드마다 `Card` 에 `data-port` 를 다는 방식(같은 방식으로 `data-user-id` 를 단다) |
+| U1-02 | `admin/src/ui/{Button,Field,TextInput,Select,Checkbox,Card,Chip,Badge}.svelte` | 단위 1 §6 표. `Select`: `value`(bindable), `id`, `options: Array<{value, label}>`, `disabled`. `Checkbox`: `checked`(bindable), `id`, `label`, `disabled`. `Card`: `label?`, `ticked?`, `compact?`, `class` 뿐이고 **임의 속성을 루트로 스프레드하지 않는다**(루트는 `<section class="card …">`). `Chip`: `tone`, `mono?`. `Badge`: `tone`. `Chip`·`Badge` 의 `tone` 허용값은 `'signal' \| 'pulse' \| 'alarm' \| 'trace' \| 'warn' \| 'neutral'` |
+| U1-03 | `admin/src/ui/Modal.svelte`, `admin/src/ui/toast.ts` | `Modal`: `open`(bindable), `title`, `closeOnOverlay = true`, children, `footer` 스니펫. `open` 일 때 `Escape` 를 누르면 `Modal` 이 스스로 `open = false` 로 바꾼다. `toast.push({tone, message})` |
+| U1-08 | `admin/src/screens/TunnelsScreen.svelte` | 목록 항목의 구조 `<li data-port={option.forwardPort}><Card><a class="tunnel-link" href={…}>…</a></Card></li>` — 데이터 속성은 `Card` 가 아니라 **바깥 `<li>`** 에 달고, 이동은 `<a href>` 로 한다(U1-08 §하지 말 것: "카드 클릭 처리를 JS 로 만들지 않는다"). 사용자 목록도 같은 구조로 `data-user-id` 를 단다 |
 | U2-06 | `GET /api/users` | `{success: true, users: UserView[]}` |
 | U2-06 | `GET /api/users/:id` | `{success: true, user: UserView}`. 없으면 404 |
 | U2-06 | `POST /api/users` | 요청 `{username, displayName?, role, groupId?, temporaryPassword?}`. `temporaryPassword` 생략 시 서버가 16자(`[A-Za-z0-9]`) 생성. 응답 201 `{success: true, user: UserView, temporaryPassword: string}`(평문은 이 응답에만). 409 `username_taken`, 422 `role_invalid`·`password_too_short`·형식 |
 | U2-06 | `PUT /api/users/:id` | 요청 `{displayName?, role?, status?, groupId?}`. 응답 `{success: true, user}`. 409 `last_superuser`, 422 |
-| U2-06 | `DELETE /api/users/:id` | `{success: true}`. 409 `user_owns_tunnels` |
+| U2-06 | `DELETE /api/users/:id` | `{success: true}`. 없으면 404 |
+| U2-08 | `DELETE /api/users/:id` 의 소유 터널 가드 | 소유한 터널이 있으면 409 `user_owns_tunnels`(`message` 에 포트 목록). U2-06 이 아니라 `ownerId` 가 생기는 U2-08 이 추가한다 |
 | U2-06 | `POST /api/users/:id/password-reset` | 요청 `{temporaryPassword?}`. 응답 `{success: true, temporaryPassword}` |
 | U2-06 | `GET /api/groups` | `{success: true, groups: Array<Group & {memberCount: number}>}` |
 
@@ -569,7 +593,8 @@ U3-04 가 나머지 메서드를 같은 파일에 추가한다. 두 이슈가 �
 |---|---|
 | 상단 `Button variant="primary"` "Add user" | `navigate('#/users/new')` |
 | `TextInput id="users-filter" placeholder="Filter by name or group"` | 클라이언트 필터. 입력값을 소문자로 바꿔 `username`, `displayName`, `groupName` 의 소문자에 부분 일치하는 사용자만 남긴다. 빈 입력은 전부 |
-| 사용자마다 `Card compact` + `data-user-id={user.id}` | 1행: `{displayName}` + `Chip tone={role === 'superuser' ? 'signal' : 'neutral'}` 문구 `{role}`(`superuser` / `regular` 그대로) + `Badge tone={status === 'active' ? 'pulse' : 'alarm'}` 문구 `{status}`(`active` / `disabled`). `mustChangePassword` 면 `Chip tone="warn"` "temp password". 2행(`.mono`): `@{username} · {groupName}`. 카드 클릭 → `navigate('#/users/' + id)` |
+| 사용자마다 `<li data-user-id={user.id}>` 안에 `Card compact` | `Card` 는 임의 속성을 받지 않으므로 데이터 속성은 바깥 `<li>` 에 단다(U1-08 과 같은 구조). `Card` 안은 `<a href={'#/users/' + user.id}>` 하나로 감싸고, 그 안에 1행: `{displayName}` + `Chip tone={role === 'superuser' ? 'signal' : 'neutral'}` 문구 `{role}`(`superuser` / `regular` 그대로) + `Badge tone={status === 'active' ? 'pulse' : 'alarm'}` 문구 `{status}`(`active` / `disabled`). `mustChangePassword` 면 `Chip tone="warn"` "temp password". 2행(`.mono`): `@{username} · {groupName}`. 이동은 `<a href>` 의 기본 동작이며 `onclick`·`navigate()` 를 쓰지 않는다 |
+| 목록 전체 | `<ul>` 하나로 감싼다. U1-08 의 `.tunnel-list`·`.tunnel-link` 와 같은 역할의 클래스가 필요하지만 `ui/` 밖에서 새 스타일 클래스를 만들 수 없으므로, `<ul>` 과 `<a>` 에는 인라인 `style` 로 `list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-3);` 과 `display: block; color: inherit; text-decoration: none;` 를 준다 |
 | 목록이 비면 | `<p>` "No users match." (`--ink-2`) |
 
 정렬은 서버가 준 순서 그대로.
@@ -582,8 +607,8 @@ props: `open: $bindable<boolean>`, `username: string`, `password: string`, `ondo
 - `<p id="temp-password-username" class="mono">@{username}</p>`
 - `<p id="temp-password-value" class="mono" style="font-size: var(--fs-2xl)">{password}</p>`
 - `<p>` "This password is shown only once. Send it to the user through a channel you trust."
-- footer: `Button` "Copy" → `navigator.clipboard.writeText(password)` 를 `await` 하되 거부(reject)되면 무시한다(`.catch(() => {})`). 성공·실패 모두 화면 변화 없음. `Button variant="primary"` "Done" → `open = false`.
-- `open` 이 true 에서 false 로 바뀌는 모든 경로("Done", `Modal` 의 Escape)에서 한 번 `ondone()` 을 부른다(`$effect` 로 감시). 부모는 `ondone` 에서 `password = ''` 로 지운다.
+- footer: `Button` "Copy" → `navigator.clipboard?.writeText(password)?.catch(() => {})`. 보안 컨텍스트가 아니면 `navigator.clipboard` 가 `undefined` 라 그냥 아무 일도 일어나지 않고, 거부(reject)되어도 무시한다. 성공·실패 모두 화면 변화 없음. `Button variant="primary"` "Done" → `open = false`.
+- `open` 이 true 에서 false 로 바뀌는 **모든 경로**(`Modal` 이 스스로 `open` 을 false 로 바꾸는 경우를 포함한다)에서 한 번 `ondone()` 을 부른다(`$effect` 로 감시). 부모는 `ondone` 에서 `password = ''` 로 지운다.
 
 ### `admin/src/screens/UserEditScreen.svelte` (신규, `#/users/new`, `#/users/:id`)
 
@@ -600,7 +625,7 @@ props: `open: $bindable<boolean>`, `username: string`, `password: string`, `ondo
 | `Field label="Status" for="user-status"` + `Select id="user-status" options=[{value:'active',label:'Active'},{value:'disabled',label:'Disabled'}]` | `isNew` 가 아닐 때만 |
 | 생성 시 `Card label="Temporary password"` | `Checkbox id="user-temp-auto" label="Generate automatically"`(기본 checked). 해제하면 `Field label="Temporary password" hint="At least 8 characters." for="user-temp-password"` + `TextInput type="password" id="user-temp-password" autocomplete="new-password"` 가 나타난다 |
 | `<p id="user-form-error" role="alert">` | 저장 오류 문구. 비어 있으면 그리지 않는다 |
-| 하단 고정 바(`TunnelEditScreen` 과 같은 배치) | 생성: `Button variant="primary"` "Create user". 수정: `Button variant="primary"` "Save"(`dirty` 가 아니면 `disabled`), `Button` "Reset password", `Button variant="danger"` "Delete". 요청 중에는 전부 `disabled` |
+| 하단 고정 바(`TunnelEditScreen` 과 같은 배치) | 생성: `Button variant="primary"` "Create user". 수정: `Button variant="primary"` "Save"(`dirty` 가 아니면 `disabled`), `Button` "Reset password", `Button variant="danger"` "Delete". 요청 중에는 전부 `disabled`. 400×800 에서 바가 마지막 입력을 덮지 않도록, 폼 맨 아래에 바 높이만큼 여백을 둔다(U1-09 의 `TunnelEditScreen` 과 같은 방식) |
 
 클라이언트 검증(제출 시, 첫 오류만 해당 `Field` 의 `error` 로):
 
@@ -636,7 +661,7 @@ props: `open: $bindable<boolean>`, `username: string`, `password: string`, `ondo
 ## 변경할 것
 
 - `admin/src/App.svelte`: `users` 분기의 placeholder 를 `<UsersScreen/>` 으로, `user-edit` 분기를 `<UserEditScreen param={$route.param}/>` 으로 바꾼다. title/back 표는 U3-01 그대로.
-- `test/admin/screen-access.test.ts`: admin 의 `#/users` placeholder 단언을 "`[data-user-id]` 카드가 5개" 로 바꾼다.
+- `test/admin/screen-access.test.ts`: admin 의 `#/users` placeholder 단언을 "`li[data-user-id]` 카드가 5개" 로 바꾼다.
 
 ## 하지 말 것
 
@@ -652,11 +677,15 @@ props: `open: $bindable<boolean>`, `username: string`, `password: string`, `ondo
 
 `test/admin/screen-users.test.ts` (신규). 모든 케이스는 `startAdminApp({fixture: 'rbac'})`(admin)로 시작해 `page.goto(url + '#/users')` 로 들어가고, `finally` 에서 `close()` 하며, `expect(errors).toEqual([])` 로 끝난다. 각 `test()` 는 앱을 새로 띄운다(fixture 가 초기화된다). 버튼은 `getByRole('button', {name, exact: true})` 로 찾는다("Delete" 와 "Delete user" 를 구분하기 위해).
 
-- `#/users` 에 `[data-user-id]` 카드가 5개이면 통과한다. `[data-user-id="u_0000000000000001"]` 의 텍스트에 `Admin`, `superuser`, `active`, `@admin · Superusers` 가 있고, `[data-user-id="u_0000000000000005"]` 에 "temp password" 가 있으며 `[data-user-id="u_0000000000000002"]` 에는 없다.
+**파일 맨 위에 `jest.setTimeout(120_000)` 을 둔다.** `jest.config.ts` 에 `testTimeout` 이 없어 기본값이 5 초다.
+
+카드 선택자는 전부 `li[data-user-id="…"]` 이다(데이터 속성이 `Card` 가 아니라 바깥 `<li>` 에 있다). 카드를 여는 것은 그 안의 `a` 를 누르는 것이다.
+
+- `#/users` 에 `li[data-user-id]` 카드가 5개이면 통과한다. `li[data-user-id="u_0000000000000001"]` 의 텍스트에 `Admin`, `superuser`, `active`, `@admin · Superusers` 가 있고, `li[data-user-id="u_0000000000000005"]` 에 "temp password" 가 있으며 `li[data-user-id="u_0000000000000002"]` 에는 없다.
 - `#users-filter` 에 `field` 를 넣으면 카드가 3개(alice·bob·dave)이고, `zzz` 를 넣으면 0개에 "No users match." 가 보이며, 비우면 5개이다.
-- `[data-user-id="u_0000000000000002"]` 를 클릭하면 해시가 `#/users/u_0000000000000002` 이고, `#user-username` 의 값이 `alice` 이며 `disabled` 이고, `#user-display-name` 이 `Alice`, `#user-role` 이 `regular`, `#user-group` 이 `g_0000000000000001`, `#user-status` 가 `active` 이다. 버튼 "Save" 는 `disabled` 이다. `[aria-label="Back"]` 을 누르면 `#/users` 이다.
+- `li[data-user-id="u_0000000000000002"] a` 를 클릭하면 해시가 `#/users/u_0000000000000002` 이고, `#user-username` 의 값이 `alice` 이며 `disabled` 이고, `#user-display-name` 이 `Alice`, `#user-role` 이 `regular`, `#user-group` 이 `g_0000000000000001`, `#user-status` 가 `active` 이다. 버튼 "Save" 는 `disabled` 이다. `[aria-label="Back"]` 을 누르면 `#/users` 이다.
 - "Add user" 를 누르면 해시가 `#/users/new` 이고 `#user-username` 이 편집 가능하며 `#user-status` 가 없고 `#user-temp-auto` 가 checked 이며 `#user-temp-password` 가 없다.
-- 새 사용자 `erin`(`#user-display-name` `Erin`, role `regular`, group `g_0000000000000001`)을 "Create user" 로 만들면 `#temp-password-username` 이 `@erin` 이고 `#temp-password-value` 가 `/^[A-Za-z0-9]{16}$/` 에 맞으며, "Done" 을 누르면 해시가 `/^#\/users\/u_[0-9a-f]{16}$/` 에 맞고 `#user-username` 값이 `erin` 이며 `disabled` 이다. `#/users` 로 돌아가면 카드가 6개이고 erin 카드에 "temp password" 와 `@erin · Field team` 이 있다.
+- 새 사용자 `erin`(`#user-display-name` `Erin`, role `regular`, group `g_0000000000000001`)을 "Create user" 로 만들면 `#temp-password-username` 이 `@erin` 이고 `#temp-password-value` 가 `/^[A-Za-z0-9]{16}$/` 에 맞으며, "Done" 을 누르면 해시가 `/^#\/users\/u_[0-9a-f]{16}$/` 에 맞고 `#user-username` 값이 `erin` 이며 `disabled` 이다. `[aria-label="Back"]` 을 눌러 `#/users` 로 돌아가면 카드가 6개이고 erin 카드에 "temp password" 와 `@erin · Field team` 이 있다.
 - 새 사용자 화면에서 `#user-username` 에 `frank` 를 넣고 `#user-temp-auto` 를 해제하면 `#user-temp-password` 가 나타나고, `short` 를 넣고 "Create user" 를 누르면 "Use at least 8 characters." 가 보이며, `manual-pass-1234` 로 바꿔 누르면 `#temp-password-username` 이 `@frank` 이고 `#temp-password-value` 가 `manual-pass-1234` 이다.
 - 새 사용자 이름 `AB` 로 "Create user" 를 누르면 "Username must be 3–32 chars, lowercase letters, digits, . _ -" 가 보이고 해시는 `#/users/new` 이다.
 - 새 사용자 이름 `alice` 로 "Create user" 를 누르면 `#user-form-error` 가 "That username is already in use." 이고 해시는 `#/users/new` 이다.
@@ -685,6 +714,7 @@ git log -1 --format=%B   # Co-Authored-By, Generated, 🤖 등 서명 0건, 제�
 ## 선행 · 후행
 
 - 선행: U3-01. (U3-02·U3-04 와 병렬 가능.)
+- 병렬 충돌 주의: U3-04 도 `admin/src/controller/GroupsCtrl.ts` 와 `test/admin/screen-access.test.ts` 를 고친다. 두 파일 모두 나중에 병합되는 쪽이 먼저 병합된 내용 위에 자기 변경을 얹는다(`GroupsCtrl` 은 `list()` 중복 정리, `screen-access` 는 placeholder 단언 두 곳을 각각 `li[data-user-id]`·`li[data-group-id]` 로 바꾸는 것이라 서로 다른 줄이다).
 - 후행: U3-06(터널 편집의 "Owner" 목록이 `UsersCtrl.list()` 를 쓴다).
 
 ## 근거 문서
@@ -718,11 +748,11 @@ git log -1 --format=%B   # Co-Authored-By, Generated, 🤖 등 서명 0건, 제�
 | U3-03 | `admin/src/controller/GroupsCtrl.ts` | `list()` 가 이미 있으면 그 파일에 추가한다. 없으면 이 이슈가 파일을 만든다 |
 | U1-02 | `admin/src/ui/{Button,Field,TextInput,NumberInput,Select,Checkbox,Card,Chip}.svelte` | 단위 1 §6 표. `NumberInput`: `value: $bindable<number \| null>`(빈 입력은 `null`), `id`, `min`, `max`, `step`, `disabled`, `invalid?` |
 | U1-03 | `admin/src/ui/Modal.svelte`, `admin/src/ui/toast.ts` | `Modal`: `open`(bindable), `title`, `closeOnOverlay`, `footer` 스니펫 |
-| U1-08 | `admin/src/screens/TunnelsScreen.svelte` | `Card` 에 `data-port` 를 다는 방식(같은 방식으로 `data-group-id`) |
+| U1-08 | `admin/src/screens/TunnelsScreen.svelte` | 목록 항목의 구조 `<li data-port={…}><Card><a href={…}>…</a></Card></li>` — 데이터 속성은 `Card` 가 아니라 **바깥 `<li>`** 에 달고 이동은 `<a href>` 로 한다(`ui/Card.svelte` 는 임의 속성을 스프레드하지 않는다). 그룹 목록도 같은 구조로 `data-group-id` 를 단다 |
 | 기존 | `admin/src/controller/Types.ts` `ServerOption` | 관리자 UI 의 서버 옵션 타입. 이 이슈가 `trustedClients` 를 추가한다 |
-| 기존 | `admin/src/controller/ServerOptionCtrl.ts:43-55` `getServerOption()` | `{value: ServerOption, revision}`. 직접 `fetch` 이며 401 이면 `InvalidSession` 을 던진다. 서버 응답 `serverOption` 에 `trustedClients` 가 그대로 담겨 온다(`src/server/admin/AdminServer.ts:1149-1164`) |
+| 기존 | `admin/src/controller/ServerOptionCtrl.ts:43-55` `getServerOption()` | `{value: ServerOption, revision}`. 직접 `fetch` 이며 401 이면 `InvalidSession` 을 던진다. 서버 응답 `serverOption` 에 `trustedClients` 가 그대로 담겨 온다(`src/server/admin/AdminServer.ts:1149-1164`). 응답 본문에는 `clientSecret` 도 담겨 오지만 이 화면은 읽지 않으며 타입에도 넣지 않는다 |
 | U2-06 | `GET /api/groups` | `{success: true, groups: Array<Group & {memberCount: number}>}` |
-| U2-06 | `GET /api/groups/:id` | `{success: true, group: Group, members: UserView[]}`. `system:superuser` 의 `attributes` 는 `{}` 이거나 기본값 전체다(단위 2 §3 예시는 `{}`, U2-01 의 `createSystemGroups()` 는 기본값). 어느 쪽이든 기본값으로 표시한다 |
+| U2-06 | `GET /api/groups/:id` | `{success: true, group: Group & {memberCount: number}, members: UserView[]}`. 없으면 404 `group_not_found`. `system:superuser` 의 `attributes` 는 `{}` 이거나 기본값 전체다(단위 2 §3 예시는 `{}`, U2-01 의 `createSystemGroups()` 는 기본값). 어느 쪽이든 기본값으로 표시한다 |
 | U2-06 | `POST /api/groups` | 요청 `{name, attributes?}`(미지정 속성은 기본값). 응답 `{success: true, group}`. 422 |
 | U2-06 | `PUT /api/groups/:id` | 요청 `{name?, attributes?}`. 응답 `{success: true, group}`. 422(정합성·시스템 그룹) |
 | U2-06 | `DELETE /api/groups/:id` | `{success: true}`. 409 `group_not_empty`, 422(시스템 그룹) |
@@ -749,7 +779,7 @@ git log -1 --format=%B   # Co-Authored-By, Generated, 🤖 등 서명 0건, 제�
 class GroupsCtrl {
     static get instance(): GroupsCtrl;
     list(): Promise<ApiResult<{groups: Array<Group & {memberCount: number}>}>>;        // GET    /api/groups
-    get(id: string): Promise<ApiResult<{group: Group; members: UserView[]}>>;          // GET    /api/groups/:id
+    get(id: string): Promise<ApiResult<{group: Group & {memberCount: number}; members: UserView[]}>>;   // GET /api/groups/:id
     create(input: {name: string; attributes: GroupAttributes}): Promise<ApiResult<{group: Group}>>;   // POST /api/groups
     update(id: string, patch: {name?: string; attributes?: GroupAttributes}): Promise<ApiResult<{group: Group}>>;   // PUT /api/groups/:id
     remove(id: string): Promise<ApiResult<{}>>;                                        // DELETE /api/groups/:id
@@ -776,7 +806,8 @@ export function summarizeAttributes(a: GroupAttributes): string;
 | 요소 | 규칙 |
 |---|---|
 | 상단 `Button variant="primary"` "Add group" | `navigate('#/groups/new')` |
-| 그룹마다 `Card compact` + `data-group-id={group.id}` | 1행: `{name}` + (`system` 이면 `Chip` "system") + `<span class="mono">Members: {memberCount}</span>`. 2행(`.mono`, `--ink-2`): `id === 'system:superuser'` 면 "Superusers are not limited by attributes.", 아니면 `summarizeAttributes(attributes)`. 카드 클릭 → `navigate('#/groups/' + id)` |
+| 그룹마다 `<li data-group-id={group.id}>` 안에 `Card compact` | `Card` 는 임의 속성을 받지 않으므로 데이터 속성은 바깥 `<li>` 에 단다(U1-08 과 같은 구조). `Card` 안은 `<a href={'#/groups/' + group.id}>` 하나로 감싸고, 그 안에 1행: `{name}` + (`system` 이면 `Chip` "system") + `<span class="mono">Members: {memberCount}</span>`. 2행(`.mono`, `--ink-2`): `id === 'system:superuser'` 면 "Superusers are not limited by attributes.", 아니면 `summarizeAttributes(attributes)`. 이동은 `<a href>` 의 기본 동작이며 `onclick`·`navigate()` 를 쓰지 않는다 |
+| 목록 전체 | `<ul>` 하나로 감싼다. `<ul>` 과 `<a>` 의 배치는 U3-03 의 `UsersScreen` 과 똑같이 인라인 `style` 로 준다(`ui/` 밖에서 새 스타일 클래스를 만들 수 없다) |
 
 ### `admin/src/screens/GroupEditScreen.svelte` (신규, `#/groups/new`, `#/groups/:id`)
 
@@ -806,7 +837,9 @@ export function summarizeAttributes(a: GroupAttributes): string;
 
 "Tunnel permissions" 카드 맨 위에 `<p id="group-form-error" role="alert">`(비어 있으면 그리지 않음). 저장 실패의 `message` 를 여기에 표시한다(코드 무관).
 
-하단 고정 바: 생성 `Button variant="primary"` "Create group"; 수정 `Button variant="primary"` "Save"(변경 없으면 `disabled`) + `Button variant="danger"` "Delete"(`group.system` 이면 그리지 않음). 요청 중 전부 `disabled`.
+하단 고정 바: 생성 `Button variant="primary"` "Create group"; 수정 `Button variant="primary"` "Save"(변경 없으면 `disabled`) + `Button variant="danger"` "Delete"(`group.system` 이면 그리지 않음). 요청 중 전부 `disabled`. 400×800 에서 바가 마지막 입력을 덮지 않도록 폼 맨 아래에 바 높이만큼 여백을 둔다(U1-09 의 `TunnelEditScreen` 과 같은 방식).
+
+변경 판정("변경 없으면 `disabled`")은 `JSON.stringify({name, attrs}) !== JSON.stringify(로드 시점의 {name, attrs})` 로 한다. `attrs` 가 중첩 객체·배열이라 얕은 비교로는 판정할 수 없고, 키 순서는 `DEFAULT_GROUP_ATTRIBUTES` 를 펼쳐 만들기 때문에 양쪽이 같다.
 
 클라이언트 검증: `name.trim()` 이 비어 있으면 `Field` error "Enter a group name." 만. 포트 범위·정합성은 서버에 맡긴다(422 → `#group-form-error`).
 
@@ -820,11 +853,13 @@ export function summarizeAttributes(a: GroupAttributes): string;
 | `code === 'group_not_empty'` | `toast.push({tone: 'alarm', message: 'Move the members to another group first.'})` |
 | 그 외 실패 | `toast.push({tone: 'alarm', message})` |
 
+규모: 컨트롤러·타입 60줄, `groupSummary.ts` 40줄 + 단위 테스트 30줄, `GroupsScreen` 80줄, `GroupEditScreen` 450줄, 브라우저 테스트 500줄로 약 1,160줄이다. 구현 중 1,500줄을 넘으면 "Limits"·"Visibility" 두 카드와 그 두 카드를 검증하는 수용 기준 2건(새 그룹 전체 입력 왕복 케이스의 동시 연결·대역폭·섹션·가시성 부분, `default` 그룹 저장 케이스)을 후속 이슈로 분리하고 이슈에 코멘트로 알린다.
+
 ## 변경할 것
 
 - `admin/src/App.svelte`: `groups` 분기의 placeholder 를 `<GroupsScreen/>` 으로, `group-edit` 분기를 `<GroupEditScreen param={$route.param}/>` 으로 바꾼다.
 - `admin/src/controller/Types.ts`: 위 두 항목 추가.
-- `test/admin/screen-access.test.ts`: admin 의 `#/groups` placeholder 단언을 "`[data-group-id]` 카드가 3개" 로 바꾼다.
+- `test/admin/screen-access.test.ts`: admin 의 `#/groups` placeholder 단언을 "`li[data-group-id]` 카드가 3개" 로 바꾼다.
 
 ## 하지 말 것
 
@@ -842,17 +877,17 @@ export function summarizeAttributes(a: GroupAttributes): string;
   - Field team 속성이면 `crud=full · tunnels≤2 · ports 20000-20099 · TCP,HTTP,HTTP_REWRITE` 이다.
   - `DEFAULT_GROUP_ATTRIBUTES` 이면 `crud=full · tunnels≤10 · ports none · none` 이다.
   - 범위가 두 개(`20000-20099`, `30000-30010`)이면 `ports 20000-20099, 30000-30010` 을 포함한다.
-- `test/admin/screen-groups.test.ts` (신규). 모든 케이스는 `startAdminApp({fixture: 'rbac'})`(admin)로 시작해 `#/groups` 로 들어가고, `finally` 에서 `close()` 하며, `expect(errors).toEqual([])` 로 끝난다. 버튼은 `getByRole('button', {name, exact: true})` 로 찾는다.
-  - `[data-group-id]` 카드가 3개이면 통과한다. `[data-group-id="system:superuser"]` 에 `Superusers`, "system", `Members: 1`, "Superusers are not limited by attributes." 가 있다. `[data-group-id="g_0000000000000001"]` 에 `Field team`, `Members: 3`, `crud=full · tunnels≤2 · ports 20000-20099 · TCP,HTTP,HTTP_REWRITE` 가 있다. `[data-group-id="default"]` 에 `Members: 1` 과 `ports none` 이 있다.
+- `test/admin/screen-groups.test.ts` (신규). 모든 케이스는 `startAdminApp({fixture: 'rbac'})`(admin)로 시작해 `#/groups` 로 들어가고, `finally` 에서 `close()` 하며, `expect(errors).toEqual([])` 로 끝난다. 각 `test()` 는 앱을 새로 띄운다(fixture 가 초기화된다). 버튼은 `getByRole('button', {name, exact: true})` 로 찾는다. **파일 맨 위에 `jest.setTimeout(120_000)` 을 둔다**(`jest.config.ts` 에 `testTimeout` 이 없어 기본값이 5 초다).
+  - `li[data-group-id]` 카드가 3개이면 통과한다. `li[data-group-id="system:superuser"]` 에 `Superusers`, "system", `Members: 1`, "Superusers are not limited by attributes." 가 있다. `li[data-group-id="g_0000000000000001"]` 에 `Field team`, `Members: 3`, `crud=full · tunnels≤2 · ports 20000-20099 · TCP,HTTP,HTTP_REWRITE` 가 있다. `li[data-group-id="default"]` 에 `Members: 1` 과 `ports none` 이 있다.
   - "Add group" 을 누르면 해시가 `#/groups/new` 이고 `#group-attr-max_tunnel_count` 가 `10`, `#group-attr-tunnel_crud` 가 `full`, `#group-attr-allowed_protocols-TCP` 가 unchecked, `#group-attr-http_tunnel_rewrite_permissions-cors` 가 `disabled`, `#group-attr-allowed_trusted_clients-client-a` 와 `-client-b` 가 있으며 라벨이 "Client A", "Client B" 이다.
   - 새 그룹에 `#group-name` `Lab`, `tunnel_crud` `read_only`, `max_tunnel_count` `5`, duration `12`, "Add range" 후 `#group-attr-allowed_port_range-0-from` `30000`·`-0-to` `30010`, 프로토콜 HTTP·HTTPS·HTTP rewrite, 리라이트 CORS·Body, 트러스티드 `client-b`, 동시 연결 `50`, 대역폭 `10MB/s`, 섹션 Tunnels·My profile 만, 가시성 `group_read` 를 넣고 "Create group" 을 누르면 해시가 `/^#\/groups\/g_[0-9a-f]{16}$/` 에 맞고, `page.reload()` 뒤에 위 값이 전부 그대로이다(`#group-attr-max_tunnel_duration_ms` 는 `12`, `#group-attr-allowed_protocols-TCP` unchecked, `-my_audit` unchecked, `-client-a` unchecked). `#/groups` 로 돌아가면 카드가 4개이고 Lab 카드에 `crud=read_only · tunnels≤5 · ports 30000-30010 · HTTP,HTTPS,HTTP_REWRITE` 가 있다.
   - 새 그룹에 이름 `Bad` 와 프로토콜 HTTP rewrite 만 체크하고 "Create group" 을 누르면 `#group-form-error[role=alert]` 에 비어 있지 않은 문구가 보이고 해시는 `#/groups/new` 이다.
   - 새 그룹에 이름 `Bad2`, 범위 `40000`–`30000`(from > to) 을 넣고 "Create group" 을 누르면 `#group-form-error` 가 보이고 해시는 `#/groups/new` 이다.
   - 이름을 비우고 "Create group" 을 누르면 "Enter a group name." 이 보인다.
   - 새 그룹에서 HTTP rewrite 를 체크하면 `#group-attr-http_tunnel_rewrite_permissions-cors` 가 enabled 이고, CORS 를 체크한 뒤 HTTP rewrite 를 해제하면 CORS 가 `disabled` 이고 unchecked 이다.
-  - `[data-group-id="system:superuser"]` 를 클릭하면 해시가 `#/groups/system:superuser` 이고 `#group-readonly-note` 가 보이며 `#group-name`·`#group-attr-tunnel_crud`·`#group-attr-max_tunnel_count` 가 모두 `disabled` 이고 `#group-attr-max_tunnel_count` 의 값이 `10` 이며 버튼 "Save"·"Delete" 가 없다.
-  - `[data-group-id="default"]` 를 클릭하면 `#group-name` 이 `disabled` 이고 `#group-attr-max_tunnel_count` 는 enabled 이며 "Delete" 가 없다. `max_tunnel_count` 를 `7` 로 바꿔 "Save" 하면 토스트 "Group saved." 가 보이고, `page.reload()` 뒤 값이 `7` 이다.
-  - `[data-group-id="g_0000000000000001"]` 에서 "Delete" → "Delete group" 을 누르면 토스트 "Move the members to another group first." 가 보이고 해시는 `#/groups/g_0000000000000001` 이다.
+  - `li[data-group-id="system:superuser"] a` 를 클릭하면 해시가 `#/groups/system:superuser` 이고 `#group-readonly-note` 가 보이며 `#group-name`·`#group-attr-tunnel_crud`·`#group-attr-max_tunnel_count` 가 모두 `disabled` 이고 `#group-attr-max_tunnel_count` 의 값이 `10` 이며 버튼 "Save"·"Delete" 가 없다.
+  - `li[data-group-id="default"] a` 를 클릭하면 `#group-name` 이 `disabled` 이고 `#group-attr-max_tunnel_count` 는 enabled 이며 "Delete" 가 없다. `max_tunnel_count` 를 `7` 로 바꿔 "Save" 하면 토스트 "Group saved." 가 보이고, `page.reload()` 뒤 값이 `7` 이다.
+  - `li[data-group-id="g_0000000000000001"] a` 로 들어가 "Delete" → "Delete group" 을 누르면 토스트 "Move the members to another group first." 가 보이고 해시는 `#/groups/g_0000000000000001` 이다.
   - 새 그룹 `Temp` 를 만든 뒤 그 화면에서 "Delete" → "Delete group" 을 누르면 토스트 "Group deleted." 가 보이고 해시가 `#/groups` 이며 카드가 3개이다.
 
 기존 `test/admin/*.test.ts` 와 U3-01~03 의 테스트가 통과한다(`screen-access` 의 갱신 포함).
@@ -872,7 +907,8 @@ git log -1 --format=%B   # Co-Authored-By, Generated, 🤖 등 서명 0건, 제�
 
 ## 선행 · 후행
 
-- 선행: U3-01. (U3-02·U3-03 과 병렬 가능. `GroupsCtrl.ts` 를 U3-03 과 둘 다 만지므로 나중에 병합하는 쪽이 `list()` 중복을 정리한다.)
+- 선행: U3-01. (U3-02·U3-03 과 병렬 가능.)
+- 병렬 충돌 주의: `admin/src/controller/GroupsCtrl.ts` 와 `test/admin/screen-access.test.ts` 를 U3-03 과 둘 다 만진다. 나중에 병합하는 쪽이 `GroupsCtrl` 의 `list()` 중복을 정리하고, `screen-access` 에서는 자기 몫의 placeholder 단언(이 이슈는 `#/groups` 를 `li[data-group-id]` 카드 3개로)만 고친다. 두 이슈가 고치는 줄은 서로 다르다.
 - 후행: U3-06.
 
 ## 근거 문서
@@ -946,11 +982,11 @@ git log -1 --format=%B   # Co-Authored-By, Generated, 🤖 등 서명 0건, 제�
 
 ## 수용 기준
 
-`test/admin/screen-me.test.ts` (U3-02 파일에 추가). `startAdminApp({fixture: 'rbac', login?})`, `finally close()`, `expect(errors).toEqual([])`.
+`test/admin/screen-me.test.ts` (U3-02 파일에 추가). `startAdminApp({fixture: 'rbac', login?})`, `finally close()`, `expect(errors).toEqual([])`. 파일 맨 위의 `jest.setTimeout(120_000)` 은 U3-02 가 이미 두었으므로 그대로 쓴다.
 
 - alice 가 `#/me` 로 가면 `#me-username` 이 `@alice`, `#me-display-name` 이 `Alice`, `#me-role` 이 `regular`, `#me-group` 이 `Field team` 이고 `#screen-placeholder` 가 없다.
 - alice 가 "Change password" 를 누르면 해시가 `#/me/password` 이고, `[aria-label="Back"]` 을 누르면 `#/me` 이다.
-- alice 가 드로어에서 "My account" 를 고르면 해시가 `#/me` 이다.
+- alice 가 `[aria-label="Open menu"]` 를 눌러 드로어를 연 뒤 "My account" 를 고르면 해시가 `#/me` 이다.
 - admin 이 `#/me` 로 가면 `#me-role` 이 `superuser`, `#me-group` 이 `Superusers` 이다.
 - U3-02 의 "올바른 현재 비밀번호로 바꾸면 해시가 `#/me`" 케이스에서, 도착한 화면에 `#me-username` 이 `@alice` 로 보인다(해당 케이스에 단언 한 줄 추가).
 
@@ -997,18 +1033,20 @@ git log -1 --format=%B   # Co-Authored-By, Generated, 🤖 등 서명 0건, 제�
 
 | 출처 | 경로 | 이 이슈가 쓰는 계약 |
 |---|---|---|
-| U1-08 | `admin/src/screens/TunnelsScreen.svelte` | 카드 `Card` + `data-port`, 1행 `{forwardPort} ⬌ {destinationAddress}:{destinationPort}` + 프로토콜 `Chip`, 2행 `Badge` 상태, 3행 "Activation" `Switch` + "Timeout" `Timer`. 상단 `Button variant="primary"` "Add tunneling service". 빈 목록 "No tunnels yet." |
+| U1-08 | `admin/src/screens/TunnelsScreen.svelte` | 목록 항목이 `<li data-port={option.forwardPort}><Card>…</Card></li>` 다 — `data-port` 는 `Card` 가 아니라 **바깥 `<li>`** 에 있다(`ui/Card.svelte` 는 임의 속성을 스프레드하지 않는다). `Card` 안은 1·2행이 `<a class="tunnel-link" href={…}>` 안에 들어 있고(1행 `{forwardPort} ⬌ {destinationAddress}:{destinationPort}` + 프로토콜 `Chip`, 2행 `Badge` 상태), 3행 "Activation" `Switch` + "Timeout" `Timer` 는 링크 **밖**에 있다. 상단 `Button variant="primary"` "Add tunneling service". 빈 목록 "No tunnels yet." |
 | U1-09 | `admin/src/screens/TunnelEditScreen.svelte` | `param`(`'new'` 또는 포트). `load()`: `getTunnelingOption()` → `snapshotRevision`; `'new'` 면 `emptyOption()`(`httpOption.rewriteHostInTextBody: true` 가 기본값), 아니면 옵션을 찾은 뒤 **`loadCertInfo(forwardPort)`** 를 부른다. `onChangeSecureTunneling()` 도 `loadCertInfo()` 를 부른다. 저장 `apply()` 는 `compound` 에 `certInfo`·`expectedCertificateRevision` 을 담는다. 필드 id `input-external-port`, TLS `Checkbox id="input-tls"`(`disabled={protocol !== 'tcp'}`, 켜면 `InputCertFile`), `input-destination-host`, `input-destination-port`, `input-allow-client-names`, `input-active-timeout`, `input-buffer-limit-server`, `input-buffer-limit-client`, `select-protocol`(`PROTOCOLS = [{value:'tcp',label:'TCP'},{value:'http',label:'HTTP (http/1.1)'},{value:'https',label:'HTTPS (http/1.1)'}]`), http/https 일 때 "HTTP options" 절(`select-change-host-in-body`, `select-change-acao`, "Inject request header" `HeaderAppender`, "Inject response header" `HeaderAppender`, "Replace text in body" `BodyReplaceAppender`), "Inactive on startup". 하단 고정 바: 저장(`isSync ? 'Apply and Restart' : 'Start'`), 삭제(`isSync ? 'Stop and Remove' : 'Remove'`). 저장 실패는 `toast`, 접속 실패는 `connectionFail()` 모달("Unable to connect to the server.") |
 | 기존 | `admin/src/controller/CertificationCtrl.ts:41-51` `loadExternalServerCert(port)` | `GET /api/externalCert/:port` 를 직접 `fetch`. 401 이면 `InvalidSession`, 그 밖의 실패 응답은 `json.revisionState.currentRevision` 접근에서 `TypeError` 를 던진다 → 화면의 `connectionFail()` 모달로 이어진다 |
 | U2-04 | `GET /api/externalCert/:port` | action `tunnel:cert` → 일반 유저는 403. 따라서 일반 유저 화면은 이 요청을 보내면 안 된다 |
-| U1-09 | `admin/src/screens/parts/{InputCertFile,HeaderAppender,BodyReplaceAppender}.svelte` | `bind:options` 계약 |
+| U1-07 | `admin/src/screens/parts/InputCertFile.svelte` | props `certInfo`, `hideMessage`, 콜백 `onupdate(value)`. U1-09 가 아니라 U1-07 의 산출물이다 |
+| U1-09 | `admin/src/screens/parts/{HeaderAppender,BodyReplaceAppender}.svelte` | `bind:options` 계약 |
 | U1-02/03 | `admin/src/ui/{Button,Field,NumberInput,Select,Checkbox,Chip,Modal}.svelte`, `ui/toast.ts` | 단위 1 §6 표 |
 | U3-01 | `admin/src/me.ts` | `$me.user.id`, `$me.user.role`, `$me.group.attributes: GroupAttributes` |
 | U3-01 | `admin/src/controller/Types.ts` | `GroupAttributes`, `TunnelProtocolName`, `MeResponse`, `ApiResult` |
 | U3-01 | `test/helpers/rbacFixture.ts`, fixture `rbac` | `RBAC_PASSWORDS`, `RBAC_USER_IDS`. alice(Field team: 포트 20000–20099, TCP·HTTP·HTTP_REWRITE, cors·host, `max_tunnel_count 2`, trusted `client-a`, `group_read`) 20001 소유, bob 20002 소유, carol(Default: 포트 범위 없음, 프로토콜 없음, max 10), 20003 은 `system:migrated` |
 | U3-03 | `admin/src/controller/UsersCtrl.ts` | `list()` → `{users: UserView[]}` (슈퍼유저의 "Owner" 목록) |
 | U2-08 | `GET /api/tunnelingOption` | 각 항목에 `owner: {id: string; username: string} \| {id: 'system:migrated'}`, `editable: boolean` 이 추가된다. 일반 유저에게는 소유·그룹 공유 터널만 온다 |
-| U2-08 | `POST /api/tunnelingOption` | 일반 유저는 `AttributeEnforcer` 검사. 실패 `{success: false, status: 409 \| 422, code, message}`. 코드: `tunnel_count_exceeded`(409), `port_not_allowed`, `protocol_not_allowed`, `rewrite_not_allowed`, `trusted_client_not_allowed`, `legacy_client_names_not_allowed`. 타인 소유의 기존 포트는 404 |
+| U2-08 | `POST /api/tunnelingOption` | 일반 유저는 `AttributeEnforcer` 검사. 실패 `{success: false, status: 409 \| 422, code, message}`. 타인 소유의 기존 포트는 404 |
+| U2-07 | `AttributeEnforcer.enforce()` 의 검사 순서 | 첫 실패에서 멈춘다: ① 생성이고 `ownedCount >= max_tunnel_count` → 409 `tunnel_count_exceeded` ② 포트가 `allowed_port_range` 밖 → 422 `port_not_allowed` ③ `requiredProtocols(next)` 중 `allowed_protocols` 에 없는 것 → 422 `protocol_not_allowed` ④ `allowedClientNames` 가 비어 있지 않음 → 422 `legacy_client_names_not_allowed` ⑤ `allowedClientIds` 중 허용·등록 양쪽에 있지 않은 것 → 422 `trusted_client_not_allowed` ⑥ 리라이트 플래그가 권한을 넘음 → 422 `rewrite_not_allowed`. 여러 위반이 겹쳐도 나오는 코드는 이 순서로 정해진다 |
 | U2-08 | `PUT /api/tunnelingOption/:port/owner` | 요청 `{ownerId, expectedRevision}`(`ownerId` 는 사용자 id 또는 `'system:migrated'`; `expectedRevision` 필수, 기존 `mutateConfiguration` 커밋 경로). 응답 `{success: true, forwardPort, owner: {id, username?}, revisionState: {currentRevision}}`. 404 `not_found`, 422 `owner_not_found`. 슈퍼유저 전용 |
 | U2-08 | `TunnelingOption.allowedClientIds?: string[]` | 일반 유저는 `allowedClientNames` 대신 이것만 쓴다 |
 
@@ -1053,25 +1091,38 @@ reassignOwner(port: number, ownerId: string, expectedRevision: number)
 ### `admin/src/screens/parts/tunnelPolicy.ts` (신규, 순수 함수)
 
 ```ts
+export type HttpOptionLike = {
+    replaceAccessControlAllowOrigin?: boolean;
+    rewriteHostInTextBody?: boolean;
+    customRequestHeaders?: Array<{name: string; value: string}>;
+    customResponseHeaders?: Array<{name: string; value: string}>;
+    bodyRewriteRules?: Array<{from: string; to: string}>;
+};
+export const PROTOCOLS: Array<{value: string; label: string}>;       // tcp/"TCP", http/"HTTP (http/1.1)", https/"HTTPS (http/1.1)"
 export type TunnelPolicy = {
     restricted: boolean;                                            // 일반 유저면 true
     canCreate(ownedCount: number): boolean;                         // !restricted || (crud === 'full' && max > 0 && ownedCount < max)
     limitReached(ownedCount: number): boolean;                      // restricted && crud === 'full' && max > 0 && ownedCount >= max
     maxTunnelCount: number;
     portHint(): string;                                             // 아래 형식
+    initialPort(): number | null;                                   // 새 터널의 초기 포트. 아래 규칙
     isPortAllowed(port: number): boolean;                           // !restricted || 어느 범위에든 포함
     protocolOptions(current: 'tcp' | 'http' | 'https'): Array<{value: string; label: string}>;
     showHttpOptions: boolean;                                       // !restricted || allowed_protocols 에 HTTP_REWRITE 포함
     rewrite: {cors: boolean; host: boolean; header: boolean; body: boolean};   // 슈퍼유저는 전부 true
     trustedClients: string[];                                       // 일반 유저: allowed_trusted_clients. 슈퍼유저: []
+    normalizeHttpOption(option: {protocol?: string; httpOption?: HttpOptionLike}): void;   // 반환값 없음. 아래 규칙
 };
 export function tunnelPolicy(me: MeResponse): TunnelPolicy;
 export function tunnelErrorMessage(code: string | undefined, fallback: string): string;
 ```
 
 - `portHint()`: 슈퍼유저는 `''`. 범위가 비어 있으면 "No ports are allowed for your group.". 아니면 `Allowed ranges: ` + 각 범위를 `{from}–{to}`(엔 대시 U+2013)로 만들어 `, ` 로 이은 것. 예: `Allowed ranges: 20000–20099, 30000–30010`.
-- `protocolOptions(current)`: 전체 목록은 U1-09 의 `PROTOCOLS`(`tcp`/"TCP", `http`/"HTTP (http/1.1)", `https`/"HTTPS (http/1.1)"). 슈퍼유저는 전체. 일반 유저는 `allowed_protocols` 에 사상값이 있는 것만 남기되, `current` 가 목록에 없으면 맨 앞에 넣는다(기존 터널의 실제 값을 보이기 위해).
-- `normalizeHttpOption(option)`(같은 파일, `TunnelPolicy` 의 메서드): `restricted` 일 때 저장 직전의 `httpOption` 을 정규화한다 — `rewrite.cors` 가 false 면 `replaceAccessControlAllowOrigin = false`, `rewrite.host` 가 false 면 `rewriteHostInTextBody = false`, `rewrite.header` 가 false 면 `customRequestHeaders = []`·`customResponseHeaders = []`, `rewrite.body` 가 false 면 `bodyRewriteRules = []`. 프로토콜이 `tcp` 면 넷 다 그렇게 한다(서버의 `requiredProtocols` 는 프로토콜과 무관하게 리라이트 플래그로 `HTTP_REWRITE` 를 요구하므로, `emptyOption()` 의 `rewriteHostInTextBody: true` 가 그대로 가면 TCP 터널도 거부된다). 슈퍼유저는 손대지 않는다.
+- `initialPort()`: 슈퍼유저는 `null`(화면이 `emptyOption()` 의 기본값을 그대로 쓴다). 일반 유저는 첫 허용 범위의 `from`, 범위가 비어 있으면 `null`. 일반 유저의 새 터널이 `emptyOption()` 의 난수 포트를 그대로 들고 있으면 `Field` 가 힌트 대신 오류를 그려(`Field` 는 `{#if error}…{:else if hint}` 로 배타적이다) 허용 범위 안내가 보이지 않기 때문이다.
+- `protocolOptions(current)`: 전체 목록은 `PROTOCOLS`. 슈퍼유저는 전체. 일반 유저는 `allowed_protocols` 에 사상값이 있는 것만 남기되, `current` 가 목록에 없으면 맨 앞에 넣는다(기존 터널의 실제 값을 보이기 위해).
+- `normalizeHttpOption(option)`: **인자 객체의 `httpOption` 을 제자리에서 수정하며 아무것도 돌려주지 않는다**(`void`). `restricted` 일 때 저장 직전의 `httpOption` 을 정규화한다 — `rewrite.cors` 가 false 면 `replaceAccessControlAllowOrigin = false`, `rewrite.host` 가 false 면 `rewriteHostInTextBody = false`, `rewrite.header` 가 false 면 `customRequestHeaders = []`·`customResponseHeaders = []`, `rewrite.body` 가 false 면 `bodyRewriteRules = []`. `option.protocol` 이 `tcp` 면 넷 다 그렇게 한다(서버의 `requiredProtocols` 는 프로토콜과 무관하게 리라이트 플래그로 `HTTP_REWRITE` 를 요구하므로, `emptyOption()` 의 `rewriteHostInTextBody: true` 가 그대로 가면 TCP 터널도 거부된다). `option.httpOption` 이 없으면 아무것도 하지 않는다. 슈퍼유저는 손대지 않는다.
+
+`PROTOCOLS` 는 지금 `TunnelEditScreen.svelte` 안의 모듈 상수인데, 이 파일로 옮기고 `TunnelEditScreen` 이 import 하게 한다. `tunnelPolicy.ts` 는 `test/admin/tunnelPolicy.test.ts` 가 ts-jest 로 직접 부르는 순수 모듈이라 `.svelte` 를 import 할 수 없기 때문이다(U1-04 가 `router.ts` 를 순수 모듈로 만든 것과 같은 이유). 이 모듈은 `.svelte` 도 `svelte` 패키지도 import 하지 않는다.
 - `tunnelErrorMessage`:
 
 | `code` | 문구 |
@@ -1097,7 +1148,7 @@ export function tunnelErrorMessage(code: string | undefined, fallback: string): 
 | 항목 | 규칙 |
 |---|---|
 | 인증서 로드 | `policy.restricted` 면 `load()` 와 `onChangeSecureTunneling()` 에서 `loadCertInfo()` 를 부르지 않고, `apply()` 의 `compound` 에 `certInfo`·`expectedCertificateRevision` 을 넣지 않는다(`/api/externalCert/:port` 요청 0건) |
-| 새 터널 기본값 | `policy.restricted` 면 `emptyOption()` 뒤 `policy.normalizeHttpOption(option)` 을 적용한다. 저장(`apply()`) 직전에도 한 번 더 적용한다 |
+| 새 터널 기본값 | `policy.restricted` 면 `emptyOption()` 뒤 `policy.normalizeHttpOption(option)` 을 적용하고, `policy.initialPort()` 가 `null` 이 아니면 `option.forwardPort` 를 그 값으로, `null` 이면 `forwardPort` 를 비운다(`NumberInput` 은 빈 입력을 `null` 로 다룬다). 저장(`apply()`) 직전에도 `normalizeHttpOption` 을 한 번 더 적용한다 |
 | `readOnly` | 모든 입력(`TextInput`·`NumberInput`·`Select`·`Checkbox`·appender)이 `disabled`. 하단 고정 바를 그리지 않는다. 상단에 `<p id="tunnel-readonly-note">` "This tunnel is shared with you as read only." |
 | 포트 힌트 | `policy.restricted` 면 `input-external-port` 의 `Field` 에 `hint={policy.portHint()}`. 값이 있고 `!policy.isPortAllowed(value)` 이면 `Field error` "Port is outside the allowed ranges." (저장 버튼은 막지 않는다. 서버가 최종 판정한다) |
 | 프로토콜 | `select-protocol` 의 options 를 `policy.protocolOptions(현재값)` 로 |
@@ -1105,15 +1156,16 @@ export function tunnelErrorMessage(code: string | undefined, fallback: string): 
 | 클라이언트 제한 | `policy.restricted` 면 `input-allow-client-names` 를 그리지 않고 대신 `Field label="Trusted clients"` 아래 `policy.trustedClients` 마다 `Checkbox id="tunnel-trusted-{clientId}" label={clientId}`. 체크된 것이 `allowedClientIds` 가 되고 `allowedClientNames` 는 요청에서 뺀다. 목록이 비면 `<p>` "No trusted clients are allowed for your group." 슈퍼유저는 기존 `input-allow-client-names` 그대로 |
 | 인증서 | 기존 `InputCertFile` 을 `<div id="tunnel-cert">` 로 감싼다. `policy.restricted` 면 `#input-tls` 를 켜도 `#tunnel-cert` 를 그리지 않고 `<p id="tunnel-cert-note">` "A generated certificate will be used." 를 그린다 |
 | 소유자 (슈퍼유저, `!isNew`) | `Field label="Owner" for="tunnel-owner"` + `Select id="tunnel-owner"` options = `UsersCtrl.instance.list()` 의 사용자를 `username` 오름차순으로 `{value: id, label: '@' + username}` + 마지막에 `{value: 'system:migrated', label: 'system:migrated'}`. 초기값 `option.owner.id`. 옆에 `Button` "Change owner"(선택값이 현재 소유자와 같으면 `disabled`) → `Modal title="Change owner"` 본문 `Move tunnel {port} to {선택 label}?` footer "Cancel", `Button variant="primary"` "Move" → 확인 모달을 닫고 `reassignOwner(port, ownerId, revision)`(`revision` 은 이 화면이 `getTunnelingOption()` 에서 받아 저장에 쓰는 값). 성공 → `revision = revisionState.currentRevision`, 현재 소유자 갱신, `toast.push({tone: 'pulse', message: 'Owner changed.'})`. 실패 → `toast.push({tone: 'alarm', message})`. 저장 버튼과 무관하게 즉시 반영된다 |
-| 저장 실패 | 기존 토스트 경로에서 문구를 `tunnelErrorMessage(result.code, result.message)` 로 바꾼다 |
+| 저장 실패 | 기존 토스트 경로에서 문구를 `'Fail to apply tunneling option: ' + tunnelErrorMessage(result.code, result.message)` 로 바꾼다. **접두어 `'Fail to apply tunneling option: '` 를 유지해야 한다** — `test/admin/configuration-editor.test.ts:77` 이 `getByText(stale ? /Fail/ : /Success to apply/)` 로 기다리는데, stale 경로의 서버 메시지 "Configuration changed. Reload before saving." 에는 "Fail" 이 없어 접두어를 빼면 그 테스트가 멈춘다 |
 
 ## 변경할 것
 
 - `admin/src/controller/Options.ts`, `admin/src/controller/ServerOptionCtrl.ts`: 위 "만들 것".
 - `admin/src/screens/TunnelsScreen.svelte`, `admin/src/screens/TunnelEditScreen.svelte`: 위 "만들 것". 그 밖의 필드 순서·id·저장 흐름은 U1-08·09 그대로.
+- `admin/src/screens/TunnelEditScreen.svelte`: 모듈 상수 `PROTOCOLS` 정의를 지우고 `screens/parts/tunnelPolicy.ts` 에서 import 한다. 값과 순서는 그대로이므로 `#select-protocol` 의 option 은 슈퍼유저 화면에서 바뀌지 않는다.
 - `test/admin/screen-tunnels.test.ts`: 수정하지 않는다. `with-tunnels` fixture 의 터널은 `system:migrated` 소유이고 admin 은 슈퍼유저이므로 카드에 `migrated` 칩과 편집 화면에 `#tunnel-owner` 가 더 보일 뿐 기존 단언은 그대로 성립해야 한다. 성립하지 않으면 이 이슈의 구현이 잘못된 것이다.
 
-규모: 컨트롤러·타입 40줄, `tunnelPolicy.ts` 100줄 + 단위 테스트 80줄, 두 화면 변경 300줄, 브라우저 테스트 400줄로 약 900줄이다. 구현 중 1,500줄을 넘으면 "소유자" 행(`#tunnel-owner`·"Change owner"·`reassignOwner`)과 admin 의 재할당 케이스 2건을 별도 후속 이슈로 분리해 코멘트로 알리고 파일 끝 "번호 변경" 절에 알린다.
+규모: 컨트롤러·타입 40줄, `tunnelPolicy.ts` 100줄 + 단위 테스트 80줄, 두 화면 변경 300줄, 브라우저 테스트 400줄로 약 900줄이다. 구현 중 1,500줄을 넘으면 "소유자" 행(`#tunnel-owner`·"Change owner"·`reassignOwner`)과 admin 의 재할당 케이스 2건을 별도 후속 이슈로 분리하고 이 이슈에 코멘트로 알린다.
 
 ## 하지 말 것
 
@@ -1129,24 +1181,26 @@ export function tunnelErrorMessage(code: string | undefined, fallback: string): 
 
 ## 수용 기준
 
-- `test/admin/tunnelPolicy.test.ts` (신규, 순수 함수. `MeResponse` 를 fixture 값으로 직접 만든다)
-  - alice 의 `MeResponse` 이면 `restricted` 가 true, `portHint()` 가 `Allowed ranges: 20000–20099`, `isPortAllowed(20050)` 이 true, `isPortAllowed(30000)` 이 false, `protocolOptions('tcp')` 의 value 가 `['tcp','http']` 이고 label 이 `['TCP','HTTP (http/1.1)']`, `protocolOptions('https')` 의 value 가 `['https','tcp','http']`, `showHttpOptions` 가 true, `rewrite` 가 `{cors: true, host: true, header: false, body: false}`, `trustedClients` 가 `['client-a']`, `canCreate(1)` 이 true, `canCreate(2)` 가 false, `limitReached(2)` 가 true 이다.
-  - alice 의 정책으로 `normalizeHttpOption({protocol: 'tcp', httpOption: {rewriteHostInTextBody: true, replaceAccessControlAllowOrigin: true, customRequestHeaders: [{name: 'a', value: 'b'}], customResponseHeaders: [], bodyRewriteRules: [{from: 'x', to: 'y'}]}})` 이면 `httpOption` 이 `{rewriteHostInTextBody: false, replaceAccessControlAllowOrigin: false, customRequestHeaders: [], customResponseHeaders: [], bodyRewriteRules: []}` 이다. 같은 입력에 `protocol: 'http'` 이면 `rewriteHostInTextBody`·`replaceAccessControlAllowOrigin` 은 true 로 남고 두 배열은 `[]` 이다.
-  - carol 의 `MeResponse` 이면 `portHint()` 가 "No ports are allowed for your group.", `isPortAllowed(25000)` 이 false, `protocolOptions('tcp')` 의 value 가 `['tcp']`, `showHttpOptions` 가 false, `canCreate(0)` 이 true 이다.
+- `test/admin/tunnelPolicy.test.ts` (신규, 순수 함수. `MeResponse` 를 fixture 값으로 직접 만든다. `user` 는 `UserView` 전체 필드를 요구하므로 이 테스트에서 읽지 않는 필드(`displayName`·`groupName`·`createdAt`·`updatedAt` 등)는 문자열이면 `''`, 숫자면 `0`, 불리언이면 `false` 로 채운 리터럴을 쓴다. `tunnelPolicy` 가 읽는 것은 `user.role` 과 `group.attributes` 뿐이다)
+  - alice 의 `MeResponse` 이면 `restricted` 가 true, `portHint()` 가 `Allowed ranges: 20000–20099`, `initialPort()` 가 `20000`, `isPortAllowed(20050)` 이 true, `isPortAllowed(30000)` 이 false, `protocolOptions('tcp')` 의 value 가 `['tcp','http']` 이고 label 이 `['TCP','HTTP (http/1.1)']`, `protocolOptions('https')` 의 value 가 `['https','tcp','http']`, `showHttpOptions` 가 true, `rewrite` 가 `{cors: true, host: true, header: false, body: false}`, `trustedClients` 가 `['client-a']`, `canCreate(1)` 이 true, `canCreate(2)` 가 false, `limitReached(2)` 가 true 이다.
+  - 인자를 변수 `input` 에 담아 alice 의 정책으로 `normalizeHttpOption(input)` 을 부른다(반환값은 `undefined` 이고 단언은 `input.httpOption` 에 대해 한다). `input` 이 `{protocol: 'tcp', httpOption: {rewriteHostInTextBody: true, replaceAccessControlAllowOrigin: true, customRequestHeaders: [{name: 'a', value: 'b'}], customResponseHeaders: [], bodyRewriteRules: [{from: 'x', to: 'y'}]}}` 이면 호출 뒤 `input.httpOption` 이 `{rewriteHostInTextBody: false, replaceAccessControlAllowOrigin: false, customRequestHeaders: [], customResponseHeaders: [], bodyRewriteRules: []}` 이다. 같은 입력에 `protocol: 'http'` 이면 `rewriteHostInTextBody`·`replaceAccessControlAllowOrigin` 은 true 로 남고 두 배열은 `[]` 이다.
+  - carol 의 `MeResponse` 이면 `portHint()` 가 "No ports are allowed for your group.", `initialPort()` 가 `null`, `isPortAllowed(25000)` 이 false, `protocolOptions('tcp')` 의 value 가 `['tcp']`, `showHttpOptions` 가 false, `canCreate(0)` 이 true 이다.
   - `tunnel_crud` 가 `read_only` 이면 `canCreate(0)` 이 false 이고 `limitReached(0)` 이 false 이다.
-  - admin 의 `MeResponse` 이면 `restricted` 가 false, `portHint()` 가 `''`, `isPortAllowed(1)` 이 true, `protocolOptions('tcp')` 가 3개, `rewrite` 가 전부 true, `canCreate(1000)` 이 true 이다.
+  - admin 의 `MeResponse` 이면 `restricted` 가 false, `portHint()` 가 `''`, `initialPort()` 가 `null`, `isPortAllowed(1)` 이 true, `protocolOptions('tcp')` 가 3개, `rewrite` 가 전부 true, `canCreate(1000)` 이 true 이다. `normalizeHttpOption({protocol: 'tcp', httpOption: {rewriteHostInTextBody: true}})` 은 `httpOption` 을 바꾸지 않는다.
   - `tunnelErrorMessage('port_not_allowed', 'x')` 가 "This port is outside your group's allowed ranges." 이고 `tunnelErrorMessage('unknown_code', 'server says')` 가 `server says` 이다.
-- `test/admin/screen-tunnels-rbac.test.ts` (신규). `startAdminApp({fixture: 'rbac', login: {username, password: RBAC_PASSWORDS[username]}})`(admin 은 `login` 생략), `#/tunnels` 로 진입, `finally close()`, `expect(errors).toEqual([])`. 버튼은 `getByRole('button', {name, exact: true})`.
+- `test/admin/screen-tunnels-rbac.test.ts` (신규). `startAdminApp({fixture: 'rbac', login: {username, password: RBAC_PASSWORDS[username]}})`(admin 은 `login` 생략), `#/tunnels` 로 진입, `finally close()`, `expect(errors).toEqual([])`. 각 `test()` 는 앱을 새로 띄운다(fixture 가 초기화된다). 버튼은 `getByRole('button', {name, exact: true})`. **파일 맨 위에 `jest.setTimeout(120_000)` 을 둔다**(`jest.config.ts` 에 `testTimeout` 이 없어 기본값이 5 초다).
+
+  카드를 여는 클릭은 항상 `[data-port="…"] a.tunnel-link` 를 누른다. `<li data-port>` 자체를 누르면 좌표가 링크 밖 3행(Activation 스위치·타이머)에 떨어질 수 있다.
   - alice: `[data-port]` 카드가 2개이고 `[data-port="20003"]` 이 없다. `[data-port="20001"] [data-owner]` 가 `@alice` 이고 `[data-port="20001"] [data-readonly]` 가 없으며 카드에 "Activation" 이 있다. `[data-port="20002"] [data-owner]` 가 `@bob` 이고 `[data-port="20002"] [data-readonly]` 가 "read only" 이며 카드에 "Activation" 이 없다. 버튼 "Add tunneling service" 가 있고 `#tunnel-limit-note` 가 없다.
-  - alice 가 `[data-port="20001"]` 을 클릭하면 해시가 `#/tunnels/20001` 이고, `page.on('request')` 로 모은 URL 중 `/api/externalCert/` 를 포함한 것이 0건이며, "Unable to connect to the server." 가 없고, `#input-external-port` 의 힌트 "Allowed ranges: 20000–20099" 가 보이며, `#select-protocol` 의 `<option>` value 가 정확히 `['tcp','http']` 이고, `#input-allow-client-names` 가 없고 `#tunnel-trusted-client-a` 가 있으며 `#tunnel-trusted-client-b` 가 없고, `#tunnel-owner` 가 없으며, `#input-external-port` 에 `30000` 을 넣으면 "Port is outside the allowed ranges." 가 보이고 버튼 "Apply and Restart" 는 여전히 enabled 이다.
+  - alice 가 `[data-port="20001"] a.tunnel-link` 를 클릭하면 해시가 `#/tunnels/20001` 이고, `page.on('request')` 로 모은 URL 중 `/api/externalCert/` 를 포함한 것이 0건이며, "Unable to connect to the server." 가 없고, `#input-external-port` 의 힌트 "Allowed ranges: 20000–20099" 가 보이며, `#select-protocol` 의 `<option>` value 가 정확히 `['tcp','http']` 이고, `#input-allow-client-names` 가 없고 `#tunnel-trusted-client-a` 가 있으며 `#tunnel-trusted-client-b` 가 없고, `#tunnel-owner` 가 없으며, `#input-external-port` 에 `30000` 을 넣으면 "Port is outside the allowed ranges." 가 보이고 버튼 "Apply and Restart" 는 여전히 enabled 이다.
   - alice 가 20001 에서 `#select-protocol` 을 `http` 로 바꾸면 `#select-change-acao` 와 `#select-change-host-in-body` 가 있고 `#http-request-headers`, `#http-response-headers`, `#http-body-rewrite` 가 없다.
   - alice 가 20001 에서 `#input-tls` 를 켜면 `#tunnel-cert` 가 없고 `#tunnel-cert-note` 가 "A generated certificate will be used." 이며 `/api/externalCert/` 요청은 여전히 0건이다.
-  - alice 가 `[data-port="20002"]` 를 클릭하면 `#tunnel-readonly-note` 가 보이고 `#input-destination-host` 가 `disabled` 이며 버튼 "Apply and Restart" 와 "Stop and Remove" 가 없다.
+  - alice 가 `[data-port="20002"] a.tunnel-link` 를 클릭하면 `#tunnel-readonly-note` 가 보이고 `#input-destination-host` 가 `disabled` 이며 버튼 "Apply and Restart" 와 "Stop and Remove" 가 없다.
   - alice 가 "Add tunneling service" → `#input-external-port` `20050`, `#input-destination-host` `127.0.0.1`, `#input-destination-port` `9000` 으로 저장하면 `#/tunnels` 에 카드가 3개이고, "Add tunneling service" 가 없으며 `#tunnel-limit-note` 가 `Tunnel limit reached (2/2).` 이다.
-  - carol: 카드가 0개이고 "No tunnels yet." 과 "Add tunneling service" 가 보인다. "Add tunneling service" 를 누르면 힌트 "No ports are allowed for your group." 이 보이고 `#select-protocol` 의 option 이 `['tcp']` 하나이며, `#input-external-port` 에 `25000` 을 넣으면 "Port is outside the allowed ranges." 가 보이고, `#input-destination-host` `127.0.0.1`·`#input-destination-port` `9000` 으로 저장하면 토스트 "This port is outside your group's allowed ranges." 가 보이고 해시는 `#/tunnels/new` 이다.
+  - carol: 카드가 0개이고 "No tunnels yet." 과 "Add tunneling service" 가 보인다. "Add tunneling service" 를 누르면 `#input-external-port` 가 비어 있고(`policy.initialPort()` 가 `null`) 힌트 "No ports are allowed for your group." 이 보이며 `#select-protocol` 의 option 이 `['tcp']` 하나이다. 이어서 `#input-external-port` 에 `25000` 을 넣으면 힌트 자리에 오류 "Port is outside the allowed ranges." 가 보이고(`Field` 는 오류와 힌트를 동시에 그리지 않는다), `#input-destination-host` `127.0.0.1`·`#input-destination-port` `9000` 으로 저장하면 토스트가 "Fail to apply tunneling option: This port is outside your group's allowed ranges." 이고 해시는 `#/tunnels/new` 이다. carol 의 `default` 그룹은 포트 범위와 프로토콜이 둘 다 비어 두 검사에 모두 걸리지만, `AttributeEnforcer` 의 검사 순서가 포트를 프로토콜보다 먼저 보므로 코드는 `port_not_allowed` 로 정해진다.
   - admin: 카드가 3개이고 `[data-port="20003"] [data-owner]` 가 `migrated` 이며 `[data-port="20001"] [data-owner]` 가 `@alice` 이고 어느 카드에도 `[data-readonly]` 가 없다.
-  - admin 이 `[data-port="20003"]` 을 클릭하면 `#tunnel-owner` 의 값이 `system:migrated` 이고 버튼 "Change owner" 가 `disabled` 이며, `#input-allow-client-names` 가 있고, `#input-tls` 를 켜면 `#tunnel-cert` 가 있다. `#tunnel-owner` 를 `u_0000000000000002` 로 바꾸면 "Change owner" 가 enabled 이고, 누르면 모달 본문에 `Move tunnel 20003 to @alice?` 가 보이며, "Move" 를 누르면 토스트 "Owner changed." 가 보이고 `#/tunnels` 로 돌아가면 `[data-port="20003"] [data-owner]` 가 `@alice` 이다.
-  - 위 재할당 뒤 `#nav-sign-out` 으로 로그아웃하고 `#login-username` `alice`·`#login-password` `user-password-1234` 로 "OK" 를 누르면 카드가 3개이고 `[data-port="20003"]` 에 `[data-readonly]` 가 없다.
+  - admin 이 `[data-port="20003"] a.tunnel-link` 를 클릭하면 `#tunnel-owner` 의 값이 `system:migrated` 이고 버튼 "Change owner" 가 `disabled` 이며, `#input-allow-client-names` 가 있고, `#input-tls` 를 켜면 `#tunnel-cert` 가 있다. `#tunnel-owner` 를 `u_0000000000000002` 로 바꾸면 "Change owner" 가 enabled 이고, 누르면 모달 본문에 `Move tunnel 20003 to @alice?` 가 보이며, "Move" 를 누르면 토스트 "Owner changed." 가 보이고 `#/tunnels` 로 돌아가면 `[data-port="20003"] [data-owner]` 가 `@alice` 이다.
+  - 위 재할당 뒤 alice 로 다시 들어와 본다. **이 단언은 앞 항목과 같은 `test()` 안에서 이어서 수행한다**(재할당한 서버 상태를 물려받아야 하는데 각 `test()` 가 fixture 를 새로 만들기 때문이다). `[aria-label="Open menu"]` 를 눌러 드로어를 연 뒤 `#nav-sign-out` 으로 로그아웃하고, `#login-username` `alice`·`#login-password` `user-password-1234` 로 "OK" 를 누르면 카드가 3개이고 `[data-port="20003"]` 에 `[data-readonly]` 가 없다.
 
 기존 `test/admin/screen-tunnels.test.ts` 와 `test/admin/*.test.ts` 전부, U3-01~05 의 테스트가 그대로 통과한다.
 

@@ -25,7 +25,7 @@ PRD §12 미결 질문은 현재 가정대로 간다: Q1 MFA 강제 기본 off, 
 - 경로 `Environment.path.logDir/audit/audit-YYYY-MM-DD.jsonl`(UTC 날짜). 한 줄에 `AuditEvent` 하나(JSON, 개행 없음). 파일은 `fs.createWriteStream(path, {flags: 'a'})` 로 열고 날짜가 바뀌면 교체.
 - 쓰기 큐: 메모리 배열, 상한 `auditQueueSize`(서버 옵션, 기본 1000). `AuditSink.reserve(): boolean`(2 단위가 인터페이스에 정의, `audited()` 가 핸들러 실행 전에 호출)을 `FileAuditSink` 가 구현한다: 큐에 여유가 있으면 1칸을 선점하고 true, 가득 차면 false(→ `audited()` 가 실행 없이 503 `audit_unavailable`). `record()` 는 선점한 칸에 넣는다. 드롭 금지(NFR-PERF-AUDIT-WRITE-001). `audited()` 자체는 이 단위에서 바꾸지 않는다. 드레인은 `setImmediate` 루프에서 스트림 `write` 의 배압(`false` 반환 시 `drain` 대기)을 존중한다.
 - 파일 권한 `0o600`(Windows 는 무시). 디렉터리 `0o700`.
-- 보존: `FileAuditSink.pruneRetention(now = Date.now()): string[]`(삭제한 파일명 반환)을 public 으로 두고, 하루 1회(기동 직후 + 24시간 간격, `unref`) 인터벌이 그것을 부른다. `auditRetentionDays` 보다 오래된 파일을 삭제하고 삭제 자체를 `audit_retention_pruned` 이벤트로 남긴다. 테스트는 `now` 를 주입한다.
+- 보존: `FileAuditSink.pruneRetention(now = Date.now()): string[]`(삭제한 파일명 반환)을 public 으로 두고, 하루 1회(기동 직후 + 24시간 간격, `unref`) 인터벌이 그것을 부른다. 삭제 판정은 **파일 날짜의 다음날 00:00(UTC) ≤ now − auditRetentionDays × 86,400,000** 이다(날짜 경계로 자르지 않으면 하루치가 일찍 지워진다). 삭제 자체를 `audit_retention_pruned` 이벤트로 남긴다. 테스트는 `now` 를 주입한다.
 - 무결성: API 로는 읽기만 제공한다(NFR-SEC-AUDIT-INTEGRITY-001). 수정·삭제 엔드포인트 없음. `SecretRedactor`(`src/util/SecretRedactor.ts` 의 `redactSecrets(obj)`, 리터럴 `[REDACTED]`, 기존 규칙이 `password`·`*secret`·`*token` 키를 덮는다)를 `detail` 에 적용하고 키 `totp`, `code`, `recoveryCode` 를 추가 규칙으로 등록한다(U4-01 범위).
 
 ### 2.2 이벤트 타입 (NFR-VISI-LOGIN-EVENTS-001 포함)
@@ -177,9 +177,12 @@ POST /api/login/mfa {mfaTicket, code} | {mfaTicket, recoveryCode}
 | U4-01 | 파일 감사 저장소와 보존 | `FileAuditSink`(`reserve`/`record`/큐/배압/날짜 교체/보존 삭제), 서버 옵션 2개(`auditRetentionDays`, `auditQueueSize`), `ServerApp` 에서 `AuditSinkRegistry.set`, `audit/AuditEventTypes.ts`(단위 5 가 먼저 문자열 리터럴로 쓴 `conn_limit_hit`·`tunnel_autoexpire` 를 상수로 치환), redaction 키 추가, 2.2 표대로 기존 CUD 헬퍼 호출부의 type 지정 | 6.1 FileAuditSink, `audit-sink.test.ts` 확장(2.2 전수) | U2-08 |
 | U4-02 | 감사 조회 API | `AuditQuery`, `/api/audit`, `/api/audit/types` | 6.1 AuditQuery, 6.2 audit-api | U4-01 |
 | U4-03 | TOTP 구현 | `mfa/Totp.ts`(generate/verify/secret/base32/otpauth URI), 복구 코드 생성·해시·검증 | 6.1 Totp | — |
-| U4-04 | 로그인 2단계와 MFA API | 사용자 레코드 확장, `/api/login` 분기, `/api/login/mfa`(티켓·백오프·CSRF 예외), `/api/me/mfa/*`, `/api/users/:id/mfa/reset`, `mfaRequiredForSuperusers` 옵션과 게이트 | 6.2 mfa-login | U4-03, U2-08 |
+| U4-04 | MFA 등록·해제 API | `MfaTickets`(티켓 저장소 2종), `IdentityStore` MFA 확장, `/api/me/mfa/*` 네 개(enroll·confirm·disable·recovery-codes) | 6.2 mfa-login 의 등록·해제 부분 | U4-03, U4-01 |
+| U4-08 | 2단계 로그인과 강제 게이트 | `/api/login` 분기, `POST /api/login/mfa`(티켓·백오프·CSRF 예외), `mustEnrollMfa` 게이트, `POST /api/users/:id/mfa/reset`, `mfaRequiredForSuperusers` 옵션 | 6.2 mfa-login 의 로그인 부분 | U4-04 |
 | U4-05 | 세션 관리 API | `SessionStore` 확장, `/api/sessions*`, `/api/me/sessions*` | 6.2 sessions-api | U2-08 |
 | U4-06 | 감사 로그·세션 화면 | `AuditScreen`, `SessionsScreen`, `UserEditScreen` 확장(세션 행), NAV 항목, 컨트롤러 | `screen-audit`, `screen-sessions` | U4-02, U4-05, U3-06 |
-| U4-07 | MFA 화면 | `qrcode` 의존성(admin `dependencies`, `@types/qrcode` 는 `devDependencies`; `import QRCode from 'qrcode'` 후 `QRCode.toCanvas(canvasEl, otpauthUri)`), `MeScreen` MFA 카드·세션 카드, `LoginScreen` 2단계, `UserEditScreen` MFA 리셋, `ServerSettingsScreen` Security 카드 | `screen-me-mfa`, `screen-login-mfa`, server-settings 추가 케이스 | U4-04, U4-05, U4-06(공유 `MeCtrl.sessions()`·`logoutOthers()`·`util/relativeTime.ts` 는 U4-06 이 만든다), U3-06 |
+| U4-07 | 2단계 로그인 화면 | `LoginScreen` 2단계, `LoginCtrl.loginMfa`, 드라이버 IPC(`mfaSecret`·`mfaRecoveryCodes`·`advanceClock`), `'rbac-mfa'` fixture | `screen-login-mfa` | U4-08, U4-06, U3-06 |
+| U4-09 | MFA 계정 화면 | `qrcode` 의존성(admin `dependencies`, `@types/qrcode` 는 `devDependencies`; `QRCode.toCanvas(canvasEl, otpauthUri)`), `MeScreen` MFA 카드·모달 3종·`QrCanvas`·세션 카드, `UserEditScreen` MFA 리셋, `ServerSettingsScreen` Security 카드 | `screen-me-mfa`, server-settings 추가 케이스 | U4-07, U4-06(공유 `MeCtrl.sessions()`·`logoutOthers()`·`util/relativeTime.ts` 는 U4-06 이 만든다) |
 
-U4-01→02 직렬. U4-03 은 선행이 없어 언제든 시작할 수 있고, U4-04·U4-05 는 U2-08 이후 U4-01 과 병렬 가능. U4-06·07 은 3 단위 이후.
+U4-01→02 직렬. U4-03 은 선행이 없어 언제든 시작할 수 있고, U4-04→U4-08 은 직렬이다. U4-05 는 U4-01 이후 병렬 가능. 화면은 U4-06 → U4-07 → U4-09 순서다(3 단위 이후).
+

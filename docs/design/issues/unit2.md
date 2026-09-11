@@ -109,6 +109,14 @@ export function isBcryptHash(hash: string): boolean;    // /^\$2[aby]\$\d{2}\$/
 
 배열 원소 중복은 제거하지 않고 그대로 저장한다. 포트 범위는 서로 겹쳐도 된다.
 
+### `src/server/rbac/legacyPasswordHash.ts`
+
+```ts
+export function hashLegacyPassword(password: string): string;   // SessionStore.ts:178-185 의 hashPassword 를 그대로 옮긴 것
+```
+
+`IdentityStore` 와 `IdentityMigration` 이 둘 다 이 함수를 쓰므로 두 모듈의 순환 import 를 피하려고 별도 파일에 둔다. 구현은 기존 `SessionStore.hashPassword` 와 바이트 단위로 같아야 한다(비밀번호 + `'@'`, 문자코드/2 를 16진수로 이은 salt, sha512 hex). `IdentityMigration` 은 이 함수를 그대로 재export 한다(기존 테스트 `login-bootstrap.test.ts:155` 가 `IdentityMigration.hashLegacyPassword` 로 부른다).
+
 ### `src/server/rbac/IdentityStore.ts`
 
 ```ts
@@ -125,7 +133,7 @@ class IdentityStore {
     enterLegacyFallback(reason: string): void;         // IdentityMigration 이 저장·로드 실패 시 호출. 로그 warn
     get filePath(): string;                            // Environment.path.configDir + '/identity.yaml'
     load(): LoadResult;                                // 파일 없으면 {source:'empty'} 이고 메모리는 사용자 0 + createSystemGroups()
-    save(): {success: true} | {success: false; message: string};   // Files.writeAtomicSync + chmod 0o600. 예외는 여기서 잡아 실패로 바꾼다
+    save(): {success: true} | {success: false; message: string};   // Files.writeAtomicBatchSync([{file, data, mode: 0o600}]). 예외는 여기서 잡아 실패로 바꾼다
     users(): User[]; user(id: string): User | undefined; userByUsername(name: string): User | undefined;   // 반환은 복사본
     groups(): Group[]; group(id: string): Group | undefined;
     createUser(input: CreateUserInput): Promise<Result<User>>;     // password 면 validatePassword 후 bcrypt.hash(password, bcryptCost)
@@ -145,15 +153,17 @@ class IdentityStore {
 동작 규칙:
 
 - 상태는 `IdentityFile` 하나를 불변 값으로 들고 모든 변경은 새 객체를 만들어 참조를 바꾼 뒤 `save()` 한다. `save()` 가 실패하면 메모리 참조를 되돌리고 그 실패를 `Result` 로 돌려준다(`status: 422`, code `identity_save_failed`). 잠금·뮤텍스를 두지 않는다.
+- `save()` 는 `Files.writeAtomicBatchSync([{file: filePath, data: yamlString, mode: 0o600}])` 한 번으로 쓴다. `writeAtomicSync` + 별도 `fs.chmodSync` 조합은 rename 직후 파일이 0644 로 노출되는 구간을 만들므로 쓰지 않는다(`Files.writeAtomicBatchSync` 는 `mode` 를 rename 전에 임시 파일에 적용한다).
+- `save()` 는 `system:superuser` 그룹의 `attributes` 만 빈 객체 `{}` 로 직렬화한다(설계 §3 의 파일 예시). 슈퍼유저는 속성을 무시하므로 파일에 기본값을 적어 둘 이유가 없고, 값이 적혀 있으면 운영자가 수정해도 효과가 없다는 오해를 부른다. `load()` 는 `system:superuser` 의 `attributes` 를 `DEFAULT_GROUP_ATTRIBUTES` 의 깊은 복사본으로 채워, 메모리의 `Group` 은 항상 11종 키를 모두 갖는다. 나머지 그룹은 11종을 그대로 저장한다.
 - `load()`: YAML 파싱 실패 → `parse`. `version !== 1` 이거나 `users`/`groups` 가 배열이 아니거나 시스템 그룹 2개가 없거나 사용자의 `groupId` 가 존재하지 않는 그룹이면 `validation`. 이 경우 메모리는 비운 채 두고 호출자(IdentityMigration)가 폴백을 결정한다. `version` 이 1 보다 크면 `validation`(하위 호환 없음). 스키마 상향 시 `identity.yaml.bak.<version>` 을 먼저 쓰는 규칙은 version 2 가 생길 때 구현하며, 이 이슈에서는 주석으로만 남긴다.
-- `createUser`: `validateUsername` → 유일성(409 `username_taken`) → `displayName` 생략 시 username → `password` 와 `passwordHash` 가 둘 다 있거나 둘 다 없으면 422 `credential_invalid` → `role === 'superuser'` 면 `groupId` 는 무조건 `system:superuser`; `role === 'regular'` 면 `groupId` 생략 시 `default`, 지정 시 존재하는 비시스템 그룹 또는 `default` 여야 하고 `system:superuser` 를 지정하면 422 `superuser_group_reserved`. 존재하지 않는 그룹은 422 `group_not_found`. `status: 'active'`, `migrationAcknowledged: false`. bcrypt 해시는 `save()` 전에 끝내고, 해시 중 다른 호출이 끼어들어도 각 호출이 자기 스냅샷에서 새 파일 객체를 만들므로 마지막 `save()` 가 이긴다 — 이를 막기 위해 해시가 끝난 뒤의 동기 구간(검증 → 참조 교체 → save)을 한 틱 안에서 끝낸다(`await` 를 두지 않는다).
-- `updateUser`: 존재하지 않으면 404 `user_not_found`. `role` 이 바뀌면 그룹 자동 이동(superuser→`system:superuser`, regular→`default`). `role === 'superuser'` 인 사용자에게 `groupId` 를 명시해 다른 그룹으로 옮기려 하거나, `regular` 사용자에게 `groupId: 'system:superuser'` 를 주면 422 `superuser_group_reserved`. 마지막 활성 슈퍼유저(`role === 'superuser' && status === 'active'` 인 사용자가 이 사용자 하나뿐)를 `regular` 로 강등하거나 `disabled` 로 바꾸면 409 `last_superuser`. `updatedAt` 갱신.
+- `createUser`: `validateUsername` → 유일성(409 `username_taken`) → `displayName` 생략 시 username → `password` 와 `passwordHash` 가 둘 다 있거나 둘 다 없으면 422 `credential_invalid` → `role === 'superuser'` 면 `groupId` 는 무조건 `system:superuser`; `role === 'regular'` 면 `groupId` 생략 시 `default`, 지정 시 존재하는 비시스템 그룹 또는 `default` 여야 하고 `system:superuser` 를 지정하면 422 `superuser_group_reserved`. 존재하지 않는 그룹은 422 `group_not_found`. `status: 'active'`, `migrationAcknowledged: false`. bcrypt 해시는 `save()` 전에 끝내고, 해시 중 다른 호출이 끼어들어도 각 호출이 자기 스냅샷에서 새 파일 객체를 만들므로 마지막 `save()` 가 이긴다 — 이를 막기 위해 `await bcrypt.hash` 가 끝난 직후 정규화된 username 으로 **유일성을 다시 검사해** 그 사이에 같은 이름이 등록되었으면 409 `username_taken` 을 돌려주고, 재검사부터 참조 교체·`save()` 까지의 동기 구간을 한 틱 안에서 끝낸다(그 사이에 `await` 를 두지 않는다).
+- `updateUser`: 존재하지 않으면 404 `user_not_found`. `role` 이 바뀌면 그룹 자동 이동(superuser→`system:superuser`, regular→`default`). 설계 §4.1 의 불변식 문장은 이 방향을 "superuser→`default`, regular→`system:superuser`" 로 뒤집어 적었는데, 같은 문장 앞부분의 "`role === 'superuser'` ⇔ `groupId === 'system:superuser'`" 와 모순되는 설계 문서의 오기다. 여기 적은 방향이 맞으며, 설계와의 충돌로 오인하지 않는다. `role === 'superuser'` 인 사용자에게 `groupId` 를 명시해 다른 그룹으로 옮기려 하거나, `regular` 사용자에게 `groupId: 'system:superuser'` 를 주면 422 `superuser_group_reserved`. 마지막 활성 슈퍼유저(`role === 'superuser' && status === 'active'` 인 사용자가 이 사용자 하나뿐)를 `regular` 로 강등하거나 `disabled` 로 바꾸면 409 `last_superuser`. `updatedAt` 갱신.
 - `deleteUser`: 마지막 활성 슈퍼유저면 409 `last_superuser`. 없는 id 는 404.
 - `createGroup`: `name` 1..64 자(422 `group_name_invalid`), `attributes` 는 `validateGroupAttributes(patch, DEFAULT_GROUP_ATTRIBUTES)`, `system: false`.
 - `updateGroup`: `system:superuser` 는 어떤 수정도 422 `system_group_readonly`. `default` 는 `attributes` 만 수정 가능하고 `name` 이 오면 422 `system_group_readonly`. 없는 id 404 `group_not_found`.
 - `deleteGroup`: 시스템 그룹 2개는 422 `system_group_readonly`. `membersOf(id).length > 0` 이면 409 `group_not_empty`.
 - `setPassword`: `validatePassword` → `bcrypt.hash(password, IdentityStore.bcryptCost)` → `clearMustChange` 면 `mustChangePassword = false` → `save()`.
-- `verifyPassword`: `userByUsername(validateUsername 정규화)` 없으면 `not-found`, `status === 'disabled'` 면 `disabled`. 빈 비밀번호는 즉시 `mismatch`. `passwordHash` 가 bcrypt 면 `bcrypt.compare`. bcrypt 가 아니면 `IdentityMigration.hashLegacyPassword(password)` 와 `timingSafeStringEqual` 로 비교하고, 일치하면 bcrypt 로 재해시해 저장한 뒤 `rehashed: true`.
+- `verifyPassword`: `userByUsername(validateUsername 정규화)` 없으면 `not-found`, `status === 'disabled'` 면 `disabled`. 빈 비밀번호는 즉시 `mismatch`. `passwordHash` 가 bcrypt 면 `bcrypt.compare`. bcrypt 가 아니면 `hashLegacyPassword(password)`(`rbac/legacyPasswordHash.ts` 에서 직접 import. `IdentityMigration` 을 거치지 않아야 순환 import 가 생기지 않는다)와 `timingSafeStringEqual` 로 비교하고, 일치하면 bcrypt 로 재해시해 저장한 뒤 `rehashed: true`.
 - 마지막 슈퍼유저 가드가 409 를 낼 때 `last_superuser_guard_hit` 감사 이벤트를 남기는 규칙은 `AuditSink` 가 생기는 U2-05 에서 추가한다. 이 이슈에서는 가드가 409 를 돌려주는 것까지만 구현한다.
 - 비활성화 시 `SessionStore.removeSessionsOfUser(id)` 호출은 U2-02 가 그 메서드를 만든 뒤 U2-02 에서 연결한다.
 
@@ -171,12 +181,12 @@ export type BootstrapResult =
     | {success: false; bootstrapRequired: false};   // 부트스트랩 상태가 아닐 때
 
 export const IdentityMigration = {
-    runAtStartup(): MigrationOutcome,            // 프로세스당 1회. 두 번 부르면 첫 결과를 그대로 돌려준다
+    runAtStartup(): Promise<MigrationOutcome>,   // 프로세스당 1회. 두 번 부르면 첫 결과를 그대로 돌려준다. 승격 분기가 `createUser`(Promise) 의 성공 여부로 `migrated` / `legacy-fallback` 을 가르므로 비동기다
     outcome(): MigrationOutcome | undefined,
     bootstrapRequired(): boolean,
     completeBootstrap(input: {username: string; password: string; bootstrapToken?: string}): Promise<BootstrapResult>,
     verifyLegacyKey(password: string): Promise<boolean>,   // legacy-fallback 모드 전용: .key 해시로만 검증(bcrypt 또는 레거시)
-    hashLegacyPassword(password: string): string,          // SessionStore.ts:178-185 의 hashPassword 를 그대로 옮긴 것. 구현은 `src/server/rbac/legacyPasswordHash.ts` 에 두고 IdentityStore·IdentityMigration 이 그것을 import 한다(두 모듈의 순환 import 방지). 여기서는 재export. 기존 테스트(login-bootstrap.test.ts:155)가 부른다
+    hashLegacyPassword(password: string): string,          // `rbac/legacyPasswordHash.ts` 의 같은 이름 함수를 재export 한 것(위 소절). 기존 테스트(login-bootstrap.test.ts:155)가 이 이름으로 부른다
     resetForTest(): void
 };
 ```
@@ -207,7 +217,7 @@ bcrypt cost 12 는 한 번에 200~400ms 걸린다. 세 파일 모두 `beforeAll`
 
 ## 변경할 것
 
-- `src/server/ServerApp.ts:26` `startService` 첫 줄(`applyGlobalMemLimitMiB` 앞)에 `const identity = IdentityMigration.runAtStartup();` 을 넣고 `identity.kind === 'legacy-fallback'` 이면 `logger.error` 로 사유를 남긴다. 서버는 계속 기동한다. `new AdminServer(...)`(`:30`)보다 앞이어야 한다.
+- `src/server/ServerApp.ts:26` `startService` 첫 줄(`applyGlobalMemLimitMiB` 앞)에 `const identity = await IdentityMigration.runAtStartup();` 을 넣고 `identity.kind === 'legacy-fallback'` 이면 `logger.error` 로 사유를 남긴다. 서버는 계속 기동한다. `new AdminServer(...)`(`:30`)보다 앞이어야 한다. `startService` 는 이미 `async` 이므로(`ServerApp.ts:26` `const startService = async (...)`) 시그니처를 바꾸지 않는다.
 - `test/helpers/runtime.ts:55` `resetRuntimeState` 에 `IdentityStore.resetForTest(); IdentityMigration.resetForTest();` 를 추가한다.
 - `SessionStore.ts` 는 이 이슈에서 건드리지 않는다(부트스트랩 토큰 로직이 잠시 두 곳에 있게 되지만 U2-02 가 `SessionStore` 쪽을 제거한다. 그 사이 서버 기동 시 두 모듈이 같은 `.bootstrap-token` 파일을 읽으므로 값은 하나다: `IdentityMigration` 이 먼저 만들고 `SessionStore` 는 있는 파일을 읽는다).
 
@@ -217,7 +227,8 @@ bcrypt cost 12 는 한 번에 200~400ms 걸린다. 세 파일 모두 `beforeAll`
 - 사용자·그룹 API, 권한 검사, 터널 소유권을 만들지 않는다(U2-04~08).
 - `.key` 를 삭제·수정하지 않는다. 승격 후에도 파일은 남는다.
 - 토큰·해시를 `===` 로 비교하지 않는다(`npm run lint` 실패). `timingSafeStringEqual` 만 쓴다.
-- 예외를 제어 흐름으로 쓰지 않는다: 검증 실패·중복·없음은 `Result` 로 돌려준다. `throw` 는 `Files.writeAtomicSync` 같은 I/O 경계 안에서만 발생하고 `save()` 가 즉시 `Result` 로 바꾼다.
+- 예외를 제어 흐름으로 쓰지 않는다: 검증 실패·중복·없음은 `Result` 로 돌려준다. `throw` 는 `Files.writeAtomicBatchSync` 같은 I/O 경계 안에서만 발생하고 `save()` 가 즉시 `Result` 로 바꾼다.
+- 파일을 쓴 뒤 `fs.chmodSync` 로 권한을 고치지 않는다. 권한은 `writeAtomicBatchSync` 의 `mode` 로만 준다.
 - 잠금·세마포어·`Promise` 체인 뮤텍스를 만들지 않는다. 불변 객체 + 참조 교체로 충분하다.
 - `GroupAttributes` 에 PRD §7 의 11종 외 키를 추가하지 않는다. `allowed_trusted_clients` 에 `'*'` 를 허용하지 않는다.
 - `identity.yaml` 에 평문 비밀번호·임시 비밀번호를 쓰지 않는다.
@@ -252,16 +263,18 @@ bcrypt cost 12 는 한 번에 200~400ms 걸린다. 세 파일 모두 `beforeAll`
   - `updateGroup(gid,{attributes:{allowed_protocols:['HTTP_REWRITE']}})` 이면 422 `http_rewrite_requires_http` 이다.
   - `setPassword(id,'short',{clearMustChange:true})` 이면 422 `password_too_short`. `setPassword(id,'new-password-1234',{clearMustChange:true})` 뒤 `verifyPassword(username,'new-password-1234')` 이면 `success:true, rehashed:false` 이고 `mustChangePassword` 가 false 이다.
   - `verifyPassword('nobody','x')` 이면 `not-found`, disabled 사용자면 `disabled`, 틀린 비밀번호면 `mismatch` 이다.
-  - `passwordHash: IdentityMigration.hashLegacyPassword('legacy-pass-1')` 로 만든 사용자에 `verifyPassword` 가 맞으면 `rehashed: true` 이고 저장된 해시가 bcrypt 다.
-  - `Files.writeAtomicSync` 를 던지도록 `jest.spyOn` 한 상태에서 `createUser` 하면 `status 422`, code `identity_save_failed` 이고 `users()` 길이가 호출 전과 같다(파일시스템 경계 스텁 허용).
-- `test/unit/server/rbac/IdentityMigration.test.ts` (임시 루트)
+  - `passwordHash: hashLegacyPassword('legacy-pass-1')` 로 만든 사용자에 `verifyPassword` 가 맞으면 `rehashed: true` 이고 저장된 해시가 bcrypt 다.
+  - 저장 후 `identity.yaml` 을 `YAML.parse` 하면 `system:superuser` 그룹의 `attributes` 가 `{}` 이고 `default` 그룹의 `attributes` 는 11종 키를 모두 가진다. 같은 파일을 `load()` 한 메모리의 `group('system:superuser')!.attributes` 는 `DEFAULT_GROUP_ATTRIBUTES` 와 깊은 동등이면서 다른 객체다.
+  - `Files.writeAtomicBatchSync` 를 던지도록 `jest.spyOn` 한 상태에서 `createUser` 하면 `status 422`, code `identity_save_failed` 이고 `users()` 길이가 호출 전과 같다(파일시스템 경계 스텁 허용).
+- `test/unit/server/rbac/IdentityMigration.test.ts` (임시 루트. `runAtStartup()` 은 `Promise<MigrationOutcome>` 이므로 아래 모든 호출을 `await` 한다)
   - `config/.key` 에 bcrypt 해시만 있는 루트에서 `runAtStartup()` 이면 `migrated` 이고, `identity.yaml` 이 생기며 사용자 `admin`(`role superuser`, `migratedFromLegacyAdmin true`, `passwordHash` 가 `.key` 내용과 같음)이 있고 `.key` 파일이 그대로 남아 있으며 `.bootstrap-token` 은 없다.
   - 같은 루트에서 다시 `resetForTest()` 후 `runAtStartup()` 이면 `loaded` 이고 `identity.yaml` 의 mtime 이 바뀌지 않는다.
   - `.key` 에 `hashLegacyPassword('old-pass-1234')` 를 두면 `migrated` 후 `IdentityStore.instance.verifyPassword('admin','old-pass-1234')` 가 `rehashed: true` 이고 파일의 해시가 bcrypt 로 바뀌며 `.key` 는 레거시 값 그대로다.
   - `.key` 도 `identity.yaml` 도 없으면(또는 `.key` 가 빈 파일이면) `bootstrap-required` 이고 `config/.bootstrap-token` 이 64자 hex 로 생기며 `bootstrapRequired()` 가 true 이다.
   - `completeBootstrap({username:'root', password:'short', bootstrapToken})` 이면 `weakPassword true`; 잘못된 토큰이면 `invalidBootstrapToken true`; `username:'A B'` 이면 `invalidUsername true`; 올바르면 `success true`, `identity.yaml` 에 슈퍼유저 `root` 가 있고 `.bootstrap-token` 이 삭제되고 `bootstrapRequired()` 가 false 이며 다시 부르면 `{bootstrapRequired:false}` 이다.
   - `identity.yaml` 에 잘못된 YAML(`{{`) 을 두면 `legacy-fallback` 이고 `IdentityStore.instance.mode === 'legacy-fallback'` 이며 `verifyLegacyKey(원문)` 이 `.key` 해시에 대해 true, 틀린 값에 false 이다.
-  - `.key` 만 있고 `Files.writeAtomicSync` 가 던지면 `legacy-fallback` 이고 `identity.yaml` 이 없다.
+  - `.key` 만 있고 `Files.writeAtomicBatchSync` 가 던지면 `legacy-fallback` 이고 `identity.yaml` 이 없다.
+  - `hashLegacyPassword('legacy-pass-1')` 이 64바이트 sha512 hex(128자)이고, 같은 입력에 같은 값이며, `IdentityMigration.hashLegacyPassword` 재export 가 `rbac/legacyPasswordHash.ts` 의 함수와 같은 값을 돌려준다.
 
 기존 테스트 전부 통과: `test/unit/server/admin/*.test.ts` 7개, `test/component/server/admin/*.test.ts` 15개(설계 문서는 18개라 적었으나 실제 `.test.ts` 는 15개이고 나머지 3개는 `*-fixture.ts` 다), `test/admin/*.test.ts` 13개, `test/unit/server/ServerOptionStore*.test.ts`.
 
@@ -312,7 +325,11 @@ git log -1 --format=%B   # Co-Authored-By, Generated, 로봇 이모지 등 서�
   - `:1360` `getClientAddress(req): string`(`trustXForwardedFor` 정책), `:1317` `sendApiEnvelope(res, status, payload)`.
 - 테스트가 `SessionStore.instance` 의 생성자 부수효과(부트스트랩 토큰 파일 생성)에 기대고 있다. `SessionStore.instance;` 한 줄로 토큰을 만들고 `BOOTSTRAP_TOKEN_FILE_NAME` 을 `SessionStore` 에서 import 하는 파일(`grep -rl "SessionStore" test`): `test/admin/csrf-requests.test.ts`, `test/admin/dev-proxy-origin.test.ts`, `test/admin/login-backend-driver.ts`(U1-05 가 `admin-backend-driver.ts` 로 대체하므로 이 이슈 시점에 존재하는 쪽을 고친다), `test/component/server/admin/AdminServer.apply.test.ts`, `AdminServer.security.test.ts`, `AdminServer.test.ts`, `admin-routes.test.ts`, `configuration-revision-fixture.ts`, `test/security/req-03-server-option-hash.test.ts`, `req-12-csrf.test.ts`, `test/unit/server/admin/req-07-rate-limit.test.ts`, `req-11-body-limit.test.ts`, `req-19-listen-listeners.test.ts`, `test/unit/server/req-04-constant-time-compare.test.ts`, `req-18-path-normalization.test.ts`.
 - 제거되는 메서드를 직접 부르는 기존 테스트(삭제 금지, 같은 시나리오를 새 API 로 다시 쓴다): `test/unit/server/admin/SessionStore.test.ts:24` "persists the first login key and validates issued sessions"(`loginWithDetails` + `newSession` + `isSessionValid`), `:40` "expires sessions…"; `SessionStore.security.test.ts:36` "creates a bootstrap token file and requires it for first login", `:58` "upgrades legacy password hashes to bcrypt on successful login"; `test/admin/login-bootstrap.test.ts:155` `(SessionStore.prototype as any).hashPassword(password)`. `login-bootstrap.test.ts:106` 의 `postDataJSON()` 단언 `{key: password, bootstrapToken}` 은 이 이슈에서 그대로 통과해야 한다(별칭).
-- `req-16-session-cookie.test.ts` 는 `isSessionValid`·`parseCookieHeader` 를 쓰므로 수정 없이 유지된다.
+- `test/admin/login-bootstrap.test.ts` 의 `.key` 파일 단언 3곳은 새 설계에서 반드시 실패한다. 비밀번호의 진실 원천이 `config/.key` 에서 `config/identity.yaml` 의 `passwordHash` 로 옮겨 가고, `.key` 는 승격 뒤 **변경되지 않기** 때문이다.
+  - `:108-109` `fs.readFile(config/.key)` + `bcrypt.compare(password.trim(), key)` — 부트스트랩 경로라 이제 `.key` 자체가 만들어지지 않는다(읽기가 ENOENT).
+  - `:160-162` `const persisted = fs.readFile(config/.key)` + `expect(persisted).toMatch(/^\$2/)` + `bcrypt.compare` — `legacy` 케이스에서 `.key` 는 레거시 해시 그대로 남으므로 `/^\$2/` 가 깨진다.
+  - `:167` 재기동 뒤 `.key` 가 `persisted` 와 같은지 — `.key` 불변은 새 설계에서도 참이지만 `:160` 의 `persisted` 정의가 바뀌므로 함께 고친다.
+- `req-16-session-cookie.test.ts:34,35,43` 의 `store.newSession()` 은 인자가 없어 새 시그니처 `newSession(userId, meta)` 에서 컴파일되지 않는다. `parseCookieHeader`·`isSessionValid` 는 그대로다.
 
 먼저 열어 볼 파일: `src/server/admin/SessionStore.ts`, `src/server/admin/AdminServer.ts`(`:1032-1080`, `:1139-1146`, `:814-850`, `:226-245`), `src/server/rbac/IdentityMigration.ts`, `src/server/rbac/IdentityStore.ts`, `test/unit/server/admin/SessionStore.test.ts`, `test/unit/server/admin/SessionStore.security.test.ts`, `test/admin/login-bootstrap.test.ts`, `test/component/server/admin/admin-routes.test.ts`(`login` 헬퍼 `:35-41`).
 
@@ -351,9 +368,9 @@ export default SessionStore;
 
 요청 `{username?: string, password?: string, key?: string, bootstrapToken?: string}`.
 
-1. `password = typeof json.password == 'string' ? json.password : (typeof json.key == 'string' ? json.key : '')`, trim. **별칭**: `password` 가 없으면 `key`.
-2. `username = validateUsername(json.username)` 성공값; `json.username` 이 없으면 `'admin'`(**별칭**). 있는데 형식이 틀리면 401(부트스트랩 상태에서는 `invalidUsername`).
-3. `isLoginBlocked(req)` 이면 429 `Too many login attempts`(기존).
+1. `isLoginBlocked(req)` 이면 429 `Too many login attempts`(기존). **본문 검증보다 먼저** 판정한다 — 차단된 IP 가 형식 오류로 401 을 받아 백오프를 우회하거나, 차단 상태를 401/429 로 구분당하지 않게 한다.
+2. `password = typeof json.password == 'string' ? json.password : (typeof json.key == 'string' ? json.key : '')`, trim. **별칭**: `password` 가 없으면 `key`.
+3. `username = validateUsername(json.username)` 성공값; `json.username` 이 없으면 `'admin'`(**별칭**). 있는데 형식이 틀리면 `recordLoginFailure(req)` + `delayFailedLogin` 후, 부트스트랩 상태면 403 `{bootstrapRequired:true, invalidBootstrapToken:false, weakPassword:false, invalidUsername:true}`, 아니면 401. 형식 실패도 실패 횟수에 넣는다(비밀번호 오류와 같은 비용을 치르게 해 username 열거·탐색을 막는다).
 4. 분기:
    - `IdentityMigration.bootstrapRequired()` 이면 `completeBootstrap({username, password, bootstrapToken})`. 실패면 `recordLoginFailure` + `delayFailedLogin` 후 `sendApiFailure(res, weakPassword ? 400 : 403, {bootstrapRequired: true, invalidBootstrapToken, weakPassword, invalidUsername})`. 성공이면 5 로.
    - `IdentityStore.instance.mode === 'legacy-fallback'` 이면 `IdentityMigration.verifyLegacyKey(password)`. 실패 401(백오프 포함). 성공이면 `userId = 'legacy-admin'` 으로 5 로.
@@ -380,7 +397,7 @@ U2-01 에서 미뤄 둔 규칙: `updateUser` 가 `status` 를 `disabled` 로 바
 
 ### 테스트
 
-- `test/component/server/admin/rbac-login.test.ts`(신규, 실제 `AdminServer` + 임시 루트, `admin-routes.test.ts` 의 `withRoutes` 패턴을 따르되 `IdentityMigration.runAtStartup()` 으로 준비, `IdentityStore.bcryptCost = 4`). 이 이슈에서는 로그인·로그아웃·validateSession 케이스만 쓰고 U2-04 가 `mustChangePassword`·`/api/me/password` 케이스를 덧붙인다.
+- `test/component/server/admin/rbac-login.test.ts`(신규, 실제 `AdminServer` + 임시 루트, `admin-routes.test.ts` 의 `withRoutes` 패턴을 따르되 `await IdentityMigration.runAtStartup()` 으로 준비, `IdentityStore.bcryptCost = 4`). 이 이슈에서는 로그인·로그아웃·validateSession 케이스만 쓰고 U2-04 가 `mustChangePassword`·`/api/me/password` 케이스를 덧붙인다.
 - `test/unit/server/admin/SessionStore.test.ts`, `SessionStore.security.test.ts` 재작성(아래).
 
 ## 변경할 것
@@ -389,10 +406,15 @@ U2-01 에서 미뤄 둔 규칙: `updateUser` 가 `status` 를 `disabled` 로 바
 - `src/server/admin/AdminServer.ts`: `onLogin`, `onGetValidateSession`, `validateSession`, `routePost`(`/api/logout` 추가). `import SessionStore from "./SessionStore"` 는 유지하고 `IdentityStore`, `IdentityMigration`, `validateUsername` import 추가.
 - `src/server/rbac/IdentityStore.ts`: `updateUser`/`deleteUser` 에서 `SessionStore.removeSessionsOfUser` 호출.
 - 테스트 갱신(동작이 아니라 준비 코드만):
-  - `SessionStore.instance;`(토큰 생성 목적) → `IdentityMigration.runAtStartup();`
+  - `SessionStore.instance;`(토큰 생성 목적) → `await IdentityMigration.runAtStartup();`(`runAtStartup` 이 `Promise` 를 돌려주므로 준비 코드가 동기 함수였다면 `async` 로 바꾼다)
   - `import SessionStore, {BOOTSTRAP_TOKEN_FILE_NAME} from ".../SessionStore"` → `import {BOOTSTRAP_TOKEN_FILE_NAME, IdentityMigration} from ".../rbac/IdentityMigration"`
   - 로그인 본문 `{key, bootstrapToken}` 은 그대로 둔다(별칭 검증을 겸한다).
   - `test/admin/login-bootstrap.test.ts:155` `(SessionStore.prototype as any).hashPassword(password)` → `IdentityMigration.hashLegacyPassword(password)`.
+  - `test/admin/login-bootstrap.test.ts` 의 `.key` 단언 3곳을 `config/identity.yaml` 기준으로 바꾼다. 세 곳 모두 `YAML.parse(await fs.readFile(path.join(root, "config", "identity.yaml"), "utf8"))` 로 읽고 `users.find(u => u.username === 'admin')!.passwordHash` 를 본다.
+    - `:108-109` → `expect(await bcrypt.compare(password.trim(), passwordHash)).toBe(true)`. `.key` 를 읽지 않는다(부트스트랩 경로에는 `.key` 가 없다).
+    - `:160-162` → `const persisted = passwordHash; expect(persisted).toMatch(/^\$2/); expect(await bcrypt.compare(password.trim(), persisted)).toBe(true);`. `bcrypt`·`legacy` 두 케이스 모두 로그인 성공 뒤 `identity.yaml` 의 해시는 bcrypt 다(레거시는 `verifyPassword` 가 재해시한다).
+    - `:167` → 재기동 뒤 `identity.yaml` 의 `passwordHash` 가 `persisted` 와 같다. 여기에 `config/.key` 파일이 여전히 존재하고 내용이 기동 전 `storedKey` 와 **같다**(승격이 `.key` 를 고치지 않는다)는 단언을 한 줄 더한다.
+  - `test/unit/server/admin/req-16-session-cookie.test.ts:34,35,43` 의 `store.newSession()` → `store.newSession('u_test', {ip: '127.0.0.1'})`. 세 곳 모두 같은 인자를 쓰며 그 외 단언(`isSessionValid`, 만료, `parseCookieHeader`)은 바꾸지 않는다.
 - `test/unit/server/admin/SessionStore.test.ts`: 기존 두 시나리오를 새 API 로 다시 쓴다 — "첫 로그인 키를 저장하고 발급된 세션을 검증한다" 는 `IdentityMigration.runAtStartup()`(bootstrap-required) → `completeBootstrap` → `IdentityStore.verifyPassword` 성공 → `newSession(user.id, …)` → `isSessionValid([key])` true 로; "시계를 넘기면 만료" 는 `resolveSession` 으로. 그 위에 아래 신규 케이스를 더한다.
 - `test/unit/server/admin/SessionStore.security.test.ts`: "부트스트랩 토큰 파일이 생기고 첫 로그인에 필요하다" 는 `IdentityMigration.runAtStartup()` + `completeBootstrap` 의 `invalidBootstrapToken` 분기로, "레거시 해시가 로그인 성공 시 bcrypt 로 승격된다" 는 `.key` 에 `hashLegacyPassword` 값 → `runAtStartup()` → `verifyPassword` 의 `rehashed` 로 다시 쓴다(U2-01 의 `IdentityMigration.test.ts` 와 겹치더라도 파일은 남긴다). 여기에 "disabled 사용자의 세션이 `removeSessionsOfUser` 로 사라진다" 를 더한다.
 
@@ -410,7 +432,7 @@ U2-01 에서 미뤄 둔 규칙: `updateUser` 가 `status` 를 `disabled` 로 바
 
 ## 수용 기준
 
-먼저 쓰고 붉은 상태를 확인할 테스트:
+먼저 쓰고 붉은 상태를 확인할 테스트(`IdentityMigration.runAtStartup()` 은 `Promise` 를 돌려주므로 아래 모든 호출을 `await` 한다):
 
 - `test/unit/server/admin/SessionStore.test.ts`
   - (재작성) 부트스트랩 루트에서 `completeBootstrap` 성공 후 `newSession(user.id, {ip:'127.0.0.1'})` 키로 `isSessionValid([key])` 가 true 이다.
@@ -425,7 +447,7 @@ U2-01 에서 미뤄 둔 규칙: `updateUser` 가 `status` 를 `disabled` 로 바
   - (재작성) `.key` 에 `hashLegacyPassword('legacy-pw-1234')` 를 두고 `runAtStartup()` 후 `verifyPassword('admin','legacy-pw-1234')` 이면 `rehashed true` 이고 `identity.yaml` 의 해시가 bcrypt 다.
   - `IdentityStore` 에 일반 유저를 만들고 세션 2개를 연 뒤 `updateUser(id,{status:'disabled'})` 이면 `listSessions()` 에 그 사용자 세션이 0개다.
   - `deleteUser(id)`(슈퍼유저가 따로 있는 상태) 이면 그 사용자 세션이 0개다.
-- `test/unit/server/admin/req-16-session-cookie.test.ts`: 수정 없이 통과한다(`isSessionValid` 시그니처 유지).
+- `test/unit/server/admin/req-16-session-cookie.test.ts`: `:34,35,43` 의 `newSession()` 을 `newSession('u_test', {ip:'127.0.0.1'})` 로 바꾼 뒤 나머지 단언이 그대로 통과한다(`isSessionValid`·`parseCookieHeader` 시그니처 유지).
 - `test/component/server/admin/rbac-login.test.ts`
   - `.key`(bcrypt, 비밀번호 `routes-password`) 루트에서 `runAtStartup()` 후 `POST /api/login {username:'admin', password:'routes-password'}` 이면 200, `Set-Cookie` 에 `sessionKey=`·`csrfToken=` 이 있고 본문 `user.username === 'admin'`, `user.role === 'superuser'`, `mustChangePassword === false` 이다.
   - 본문 `{key:'routes-password'}`(username 없음) 이면 200 이다(별칭 두 개 동시).
@@ -435,10 +457,11 @@ U2-01 에서 미뤄 둔 규칙: `updateUser` 가 `status` 를 `disabled` 로 바
   - `POST /api/logout`(세션 + CSRF 헤더) 이면 200 이고 `Set-Cookie` 두 개에 `Max-Age=0` 이 있으며, 같은 쿠키로 `GET /api/validateSession` 이면 401 이다. CSRF 헤더 없이 `POST /api/logout` 이면 403 이다.
   - 부트스트랩 루트(`.key` 없음)에서 `{username:'root', password:'root-password-1', bootstrapToken}` 이면 200 `user.username 'root'`; 토큰이 틀리면 403 `{bootstrapRequired:true, invalidBootstrapToken:true}`; 비밀번호 `short` 면 400 `{weakPassword:true}`; `username:'no spaces allowed'` 면 403 `{invalidUsername:true}`; `{key:'root-password-1', bootstrapToken}`(별칭) 이면 200 `user.username 'admin'`.
   - `identity.yaml` 을 깨뜨린 루트(legacy-fallback)에서 `.key` 비밀번호로 로그인하면 200 `user.id === 'legacy-admin'` 이고 틀리면 401 이다.
-  - 틀린 비밀번호 5회 뒤 6회째는 429 이다(`req-07` 과 같은 IP 버킷).
+  - 틀린 비밀번호 5회 뒤 6회째는 429 이다(`req-07` 과 같은 IP 버킷). 차단된 상태에서 `{username:'no spaces', password:'x'}`(형식 오류) 를 보내도 401 이 아니라 429 다.
+  - `{username:'no spaces', password:'x'}` 를 5회 보낸 뒤 올바른 자격 증명을 보내면 429 다(형식 실패도 실패 횟수에 들어간다).
   - disabled 로 바꾼 사용자는 로그인이 401 이다.
 
-기존 테스트 전부 통과: `test/admin/*.test.ts` 13개(`login-bootstrap.test.ts` 의 `:106` 단언·`:152` 레거시 재시작 케이스 포함), `test/unit/server/admin/*.test.ts` 7개(위 재작성 반영), `test/component/server/admin/*.test.ts` 15개, `test/security/req-03-server-option-hash.test.ts`, `test/security/req-12-csrf.test.ts`, `test/unit/server/req-04-constant-time-compare.test.ts`, `test/unit/server/req-18-path-normalization.test.ts`, `test/unit/server/rbac/*.test.ts` 3개.
+기존 테스트 전부 통과: `test/admin/*.test.ts` 13개(`login-bootstrap.test.ts` 는 `:106` 별칭 단언을 그대로 두고 `.key` 단언 3곳을 위 "변경할 것" 대로 `identity.yaml` 기준으로 고친 뒤 `:152` 레거시 재시작 케이스가 통과한다), `test/unit/server/admin/*.test.ts` 7개(위 재작성 반영), `test/component/server/admin/*.test.ts` 15개, `test/security/req-03-server-option-hash.test.ts`, `test/security/req-12-csrf.test.ts`, `test/unit/server/req-04-constant-time-compare.test.ts`, `test/unit/server/req-18-path-normalization.test.ts`, `test/unit/server/rbac/*.test.ts` 3개.
 
 ## 검증 명령
 
@@ -473,7 +496,7 @@ git log -1 --format=%B   # Co-Authored-By, Generated, 로봇 이모지 등 서�
 **body**:
 ## 목적
 
-`AdminServer` 의 `if/else` 라우팅을 선언적 라우트 표 `ADMIN_ROUTES` 로 바꾼다. 이 이슈가 끝나면 모든 엔드포인트가 `src/server/admin/routes.ts` 한 곳에 메서드·패턴·핸들러로 나열되고, `route()` 가 매칭과 세션 해석을 한 번에 하며, 핸들러는 `checkSession` 을 부르지 않는다. **동작은 바뀌지 않는다**: 같은 요청에 같은 상태 코드·본문. 권한 검사(`authorize`)는 U2-04 가 이 표 위에 얹는다.
+`AdminServer` 의 `if/else` 라우팅을 선언적 라우트 표 `ADMIN_ROUTES` 로 바꾼다. 이 이슈가 끝나면 모든 엔드포인트가 `src/server/admin/routes.ts` 한 곳에 메서드·패턴·핸들러로 나열되고, `route()` 가 매칭과 세션 해석을 한 번에 하며, 핸들러는 `checkSession` 을 부르지 않는다. **동작은 바뀌지 않는다**: 같은 요청에 같은 상태 코드·본문. 예외는 아래 "배경" 이 적은 다중 세그먼트 경로(`/api/externalCert/12/34`) 한 가지뿐이며 200 에서 404 로 바뀐다. 권한 검사(`authorize`)는 U2-04 가 이 표 위에 얹는다.
 
 ## 배경
 
@@ -483,7 +506,8 @@ git log -1 --format=%B   # Co-Authored-By, Generated, 로봇 이모지 등 서�
   - 핸들러 20개가 각자 `checkSession(req,res)`(`:843`) 를 첫 줄에서 부른다: `onUpdateAdminCert :349`, `onUpdateServerOption :456`, `onUpdateTunnelingOption :601`, `onRemoveTunnelingOption :756`, `onGetCsrfToken :828`, `onGetAdminCert :852`, `getNumberInPath :863`(→ `onActiveTunneling :878`, `onDeleteExternalServerCert :898`, `onUpdateExternalServerCert :911`, `onGetExternalServerCert :979`, `onGetClientSysInfo :994`), `onGetServerOption :1149`, `onGetSysInfo :1167`, `onGetSysUsage :1175`, `onGetClientStatus :1183`, `onGetTunnelingOption :1192`, `onGetExternalServerStatuses :1206`, `onGetServerOptionHash :1215`. `onGetVersion :973` 과 `onLogin :1032` 은 세션 없이 동작. `onGetValidateSession :814` 과 U2-02 의 `/api/logout` 은 세션만 필요.
   - POST/PUT/DELETE 핸들러는 각자 `AdminServer.readJson(req)`(`:1088`) 를 부른다.
   - `:1338` `pathname(url)` = `url.split('?')[0]`.
-- `test/component/server/admin/admin-routes.test.ts` 가 라우팅 세부를 고정한다: 알 수 없는 POST/PUT/DELETE 는 보안 검사 뒤 404 JSON(`:48`), `/api/login?query` 도 CSRF 예외(`:55`), `/api/externalCert/12suffix` 는 400(`:79`), `GET /api/version?value=` 200. 라우트 표는 이 테스트를 그대로 통과해야 한다.
+- `test/component/server/admin/admin-routes.test.ts` 가 라우팅 세부를 고정한다: 알 수 없는 POST/PUT/DELETE 는 보안 검사 뒤 404 JSON(`:48`), `POST /api/absent` + 악성 Origin 은 매칭 실패보다 CSRF/Origin 검사가 먼저라 403(`:73`), `/api/login?query` 도 CSRF 예외(`:55`), `/api/externalCert/12suffix?value=3` 은 **200** 이고 인증서 이름이 `external.12.cert.pem`(`:79-84`, `parseInt('12suffix') === 12`), `/api/externalCert/?value=12` 는 400(`:85`), `GET /api/version?value=` 200. 라우트 표는 이 테스트를 그대로 통과해야 한다.
+- 다중 세그먼트 경로는 동작이 한 군데 바뀐다. 현재 `getNumberInPath`(`:863`) 는 `pathname.substring('/api/externalCert/'.length)` 를 `parseInt` 하므로 `/api/externalCert/12/34` 가 12 로 해석되어 200 이다. 표의 `^/api/externalCert/(?<port>[^/]*)$` 는 이 경로를 매칭하지 못해 404 JSON 이 된다. 이 경로를 고정하는 기존 테스트는 없고(테스트가 보는 것은 `/12`·`/12suffix`·`/`), 남는 세그먼트를 포트로 해석하던 기존 동작은 의도된 계약이 아니므로 404 를 받아들인다. `clientSysInfo/:id`·`tunneling/active/:port` 도 같다. 이것이 이 이슈에서 허용하는 **유일한** 동작 차이이며, 아래 "하지 말 것" 의 "응답을 바꾸지 않는다" 는 나머지 전부에 적용된다.
 - U2-03 시작 시점의 API 경로(이 이슈의 `routes.test.ts` 가 표와 대조한다): `/api/login`, `/api/logout`(U2-02), `/api/version`, `/api/validateSession`, `/api/csrfToken`, `/api/serverOption`, `/api/serverOptionHash`, `/api/adminCert`, `/api/sysInfo`, `/api/sysUsage`, `/api/clientStatus`, `/api/clientSysInfo/:id`, `/api/tunnelingOption`, `/api/tunneling/active/:port`, `/api/externalServerStatuses`, `/api/externalCert/:port` — 16개(설계 §9 의 "15개" 는 `/api/logout` 이전 수). 단위 5 의 U5-02 가 먼저 끝나 있으면 `GET /api/security/bans`, `DELETE /api/security/bans/:port/:ip` 2개가 더 있으며(세션 검사만), 그 경우 표에 함께 옮긴다.
 
 먼저 열어 볼 파일: `src/server/admin/AdminServer.ts` 전체, `test/component/server/admin/admin-routes.test.ts`, `test/component/server/admin/AdminServer.security.test.ts`, `test/unit/server/req-18-path-normalization.test.ts`.
@@ -521,7 +545,7 @@ export function buildAdminRoutes(handlers: RouteHandlers): readonly Route[];   /
 export const ADMIN_ROUTES: ReadonlyArray<{method: Route['method']; pattern: RegExp; action: RouteAction; handler: string}>;   // 핸들러 이름만 든 정적 표. 테스트가 인스턴스 없이 순회
 ```
 
-정적 표 `ADMIN_ROUTES` 는 핸들러를 이름(문자열)으로 가리켜 인스턴스 없이 순회할 수 있다. `AdminServer` 인스턴스는 `buildAdminRoutes(this.handlers)` 로 만든 `Route[]` 를 `public readonly routes` 로 노출한다. `ADMIN_ROUTES`·`RouteHandlers` 라는 이름은 쓰지 않는다.
+정적 표 `ADMIN_ROUTES` 는 핸들러를 이름(문자열)으로 가리켜 인스턴스 없이 순회할 수 있다. `AdminServer` 인스턴스는 `buildAdminRoutes(this.handlers)` 로 만든 `Route[]` 를 `public readonly routes` 로 노출한다. 표의 진입점은 `ADMIN_ROUTES` 하나이며, 같은 목록을 다른 이름으로 한 번 더 내보내지 않는다.
 
 표(순서 = 매칭 우선순위. 이 이슈의 `action` 은 `'public'` 또는 `'session'` 두 값뿐이며 U2-04 가 `Action` 으로 바꾼다):
 
@@ -551,11 +575,19 @@ export const ADMIN_ROUTES: ReadonlyArray<{method: Route['method']; pattern: RegE
 | DELETE | `^/api/externalCert/(?<port>[^/]*)$` | session | `onDeleteExternalServerCert` |
 | (U5-02 가 있으면) GET `^/api/security/bans$`, DELETE `^/api/security/bans/(?<port>[^/]+)/(?<ip>[^/]+)$` | session | 해당 핸들러 |
 
-POST 와 PUT 은 표에 두 행으로 적는다(메서드 배열 금지 — 순회 테스트가 단순해진다). 숫자 파라미터(`externalCert`·`clientSysInfo`·`tunneling/active`)는 `[^/]*`(빈 세그먼트 허용)로 잡는다: 핸들러의 `getNumberInPath` 가 `parseInt` 로 받으므로 `12suffix` 는 12 로 **200**(`admin-routes.test.ts:79`, cert name `external.12.cert.pem`), 빈 세그먼트(`/api/externalCert/?value=12`)와 `abc` 는 NaN 으로 **400**(`:85`) 이다. `[^/]+` 로 잡으면 빈 세그먼트가 404 로 떨어져 `:85` 가 깨진다. `security/bans` 의 `(?<port>[^/]+)/(?<ip>[^/]+)` 는 그대로 둔다.
+POST 와 PUT 은 표에 두 행으로 적는다(메서드 배열 금지 — 순회 테스트가 단순해진다). 숫자 파라미터(`externalCert`·`clientSysInfo`·`tunneling/active`)는 `[^/]*`(빈 세그먼트 허용)로 잡는다: 핸들러의 `getNumberInPath` 가 `parseInt` 로 받으므로 `12suffix` 는 12 로 **200**(`admin-routes.test.ts:79-84`, cert name `external.12.cert.pem`), 빈 세그먼트(`/api/externalCert/?value=12`)와 `abc` 는 NaN 으로 **400**(`:85`) 이다. `[^/]+` 로 잡으면 빈 세그먼트가 404 로 떨어져 `:85` 가 깨진다. 세그먼트를 더 붙인 `/api/externalCert/12/34` 는 매칭되지 않아 404 가 되며(배경의 유일한 동작 차이), 이를 되살리려고 `(?<port>.*)` 같은 패턴으로 넓히지 않는다. `security/bans` 의 `(?<port>[^/]+)/(?<ip>[^/]+)` 는 그대로 둔다.
 
 ### `route()` 재작성
 
-순서: idle timeout → HSTS → `Vary` → `pathname` 으로 표 매칭(메서드 + pattern) → 매칭 없음: `/api/` 로 시작하면 404 JSON(`{message: 'Not Found <url>'}`, 기존 `:221`·`:243`·`:292` 와 같은 본문), GET 이고 `/api/` 밖이면 `onGetWebResource`, 그 외 메서드는 기존처럼 `verifyCsrfGuard` 를 먼저 통과시킨 뒤 404 JSON(`admin-routes.test.ts:48` "unmatched … completes with 404 after valid security admission") → POST/PUT/DELETE 면 `verifyCsrfGuard(req, res, route.action === 'public')`(즉 `/api/login` 만 예외; 쿼리스트링은 pathname 기준, 기존 동작) → GET 이면 `Cache-Control` 헤더 → POST/PUT/DELETE 면 `ctx.body = await readJson(req)` → `action !== 'public'` 이면 `resolveSession(req)` → 없으면 401 `{message: 'Invalid session'}`(기존 메시지) → `ctx.session` → 핸들러. 예외 처리 `:182-208` 는 그대로.
+순서(설계 §5.1 을 그대로 따른다):
+
+1. idle timeout → HSTS → `Vary: Origin`.
+2. **CSRF/Origin 검사를 라우트 매칭보다 먼저** 한 번만 한다: POST/PUT/DELETE 면 `verifyCsrfGuard(req, res, pathname == '/api/login')`(기존 `:157-164` 와 같은 호출. 쿼리스트링을 뗀 pathname 기준). 매칭 결과를 보지 않으므로 알 수 없는 경로도 보안 검사를 먼저 받는다 — `admin-routes.test.ts:73` 이 `POST /api/absent` + 악성 Origin 에 403 을, `:48` 이 정상 Origin·CSRF 에 404 를 기대한다. 라우트의 `action` 으로 예외를 판정하면 매칭 실패 시 `action` 이 없어 이 두 케이스가 갈라지므로, 예외 판정은 `pathname == '/api/login'` 한 곳에만 둔다.
+3. `pathname` 으로 표 매칭(메서드 + pattern). 매칭 없음: `/api/` 로 시작하면 404 JSON(`{message: 'Not Found <url>'}`, 기존 `:221`·`:243`·`:292` 와 같은 본문), GET 이고 `/api/` 밖이면 `onGetWebResource`, 그 외는 404 JSON.
+4. GET 이면 `Cache-Control: no-cache` 헤더(기존 `:249`).
+5. `action !== 'public'` 이면 `resolveSession(req)` → 없으면 401 `{message: 'Invalid session'}`(기존 메시지) → `ctx.session`.
+6. **그다음** POST/PUT/DELETE 면 `ctx.body = await readJson(req)`. 세션 해석보다 뒤여야 세션 없는 POST 가 413/408/400 대신 401 을 받는 기존 동작(핸들러가 `checkSession` 을 첫 줄에서 부르던 순서)이 유지된다.
+7. 핸들러. 예외 처리 `:182-208` 는 그대로.
 
 기존 핸들러는 시그니처만 `(ctx: RouteContext)` 로 바꾸고 본문 첫 줄에 `const {req, res} = ctx;` 를 두어 나머지 줄을 그대로 둔다. `checkSession` 첫 줄은 제거한다. `readJson` 을 부르던 줄은 `const payload = ctx.body;` 로 바꾼다(스트림은 `route()` 가 이미 소비했다). `getNumberInPath`(`:863`) 는 세션 검사를 빼고 `ctx.params.port`/`ctx.params.id` 를 파싱한다. `checkSession`(`:843`)·`routeGet/routePost/routeDelete` 는 삭제.
 
@@ -573,7 +605,9 @@ POST 와 PUT 은 표에 두 행으로 적는다(메서드 배열 금지 — 순�
 
 - 핸들러 본문 로직(리비전·롤백·인증서·CORS 헤더)을 손보지 않는다. 옮기기만 한다. `:254-257` 의 중복 `sysInfo` 분기는 표에서 한 행이 되지만 그 외 정리는 하지 않는다.
 - `authorize`·`Principal`·`/api/me` 를 만들지 않는다(U2-04). 이 이슈의 `action` 값은 `'public'`·`'session'` 뿐이다.
-- 응답 본문·상태 코드·헤더를 바꾸지 않는다. 404 본문 문자열(`Not Found <url>`)도 그대로.
+- 응답 본문·상태 코드·헤더를 바꾸지 않는다(배경이 적은 다중 세그먼트 경로 하나만 예외). 404 본문 문자열(`Not Found <url>`)도 그대로.
+- CSRF/Origin 예외 판정을 `route.action` 으로 바꾸지 않는다. `pathname == '/api/login'` 한 곳에 둔다.
+- `readJson` 을 세션 해석보다 앞에 두지 않는다.
 - 정적 파일 경로 처리(`normalizeAssetUrl`, `req-18`)를 바꾸지 않는다.
 - 예외를 제어 흐름으로 쓰지 않는다: 매칭 실패는 `undefined` 반환 후 분기.
 
@@ -586,7 +620,10 @@ POST 와 PUT 은 표에 두 행으로 적는다(메서드 배열 금지 — 순�
   - `ADMIN_ROUTES` 의 모든 `pattern.source` 가 `^` 로 시작하고 `$` 로 끝난다.
   - 실제 `AdminServer` 로 표의 모든 GET 경로를 세션 없이 호출하면 `public` 두 개(`/api/version`, 그리고 POST 인 `/api/login` 은 제외)만 200 이고 나머지는 401 `{message:'Invalid session'}` 이다.
   - 알 수 없는 `GET /api/nothing` 은 404 JSON, `GET /nothing.txt` 는 정적 파일 404(텍스트) 이다.
+  - 매칭 실패보다 CSRF/Origin 검사가 먼저다: 세션·CSRF 헤더를 갖춘 `POST /api/absent` 는 404, 악성 `Origin` 을 붙인 같은 요청은 403 이다.
+  - 세션 쿠키 없이 본문 제한(`req-11`)을 넘기는 크기로 `POST /api/serverOption` 을 보내면 413 이 아니라 401 `{message:'Invalid session'}` 이다(`readJson` 이 세션 해석보다 뒤).
   - `POST /api/tunneling/active/abc`(세션 + CSRF) 는 400 `Invalid port` 이다(표가 아니라 핸들러가 판정).
+  - `GET /api/externalCert/12/34`(세션) 는 404 JSON 이다(배경이 적은 유일한 동작 차이. 200 이던 경로).
   - 표에서 `handler` 이름이 `AdminServer` 의 실제 메서드로 모두 존재한다(`typeof (api as any)[name] === 'function'`).
 - `test/component/server/admin/admin-routes.test.ts`: 수정 없이 통과한다.
 
@@ -984,7 +1021,7 @@ git log -1 --format=%B   # Co-Authored-By, Generated, 로봇 이모지 등 서�
 - `UserView`·`toUserView(user, groups)`(U2-04 `src/server/rbac/UserView.ts`).
 - `SessionStore.removeSessionsOfUser`(U2-02).
 - 무작위: `crypto.randomInt(0, 62)` 를 16회.
-- `AdminServer.ts` 는 U2-05 뒤 약 1,700줄이다. 이 이슈의 핸들러 11개를 같은 파일에 두면 2,000줄을 넘으므로 분리한다(아래).
+- `AdminServer.ts` 는 현재 1,569줄(`wc -l src/server/admin/AdminServer.ts`)이고 U2-02~U2-05 가 `onLogin` 재작성·`/api/logout`·`/api/me` 3개·`audited()` 를 더해 U2-05 뒤에는 1,700줄 안팎이 된다. 이 이슈의 핸들러 11개를 같은 파일에 두면 설계 §5.1 이 정한 상한 2,000줄을 넘으므로 분리한다(아래).
 
 먼저 열어 볼 파일: `src/server/admin/routes.ts`, `src/server/admin/AdminServer.ts`(`/api/me` 핸들러, `sendApiSuccess/sendApiFailure`), `src/server/rbac/IdentityStore.ts`, `src/server/rbac/UserView.ts`, `test/component/server/admin/rbac-login.test.ts`(세션·CSRF 헬퍼 재사용).
 
@@ -997,7 +1034,19 @@ git log -1 --format=%B   # Co-Authored-By, Generated, 로봇 이모지 등 서�
 
 ### `src/server/admin/rbacRoutes.ts` (핸들러 분리)
 
-`RouteContext` 에 응답 메서드를 두어 두 파일이 같은 진입점을 쓴다: `ctx.ok(payload?, status = 200)`, `ctx.fail(status, payload)` — 구현은 기존 `sendApiSuccess/sendApiFailure` 를 감싼 클로저로 `route()` 가 `ctx` 를 만들 때 넣는다. `rbacRoutes.ts` 는 `export function rbacRouteTable(): Route[]` 로 아래 11행을 돌려주고 `routes.ts` 의 표가 이를 펼쳐 넣는다. `replyResult(ctx, result: Result<T>, onSuccess: (value: T) => object, successStatus = 200)` 헬퍼 하나가 `Result` 를 HTTP 로 바꾼다(실패면 `ctx.fail(result.status, {code, message})`).
+`RouteContext` 에 설계 §5.1 의 헬퍼 세 개를 두어 두 파일이 같은 진입점을 쓴다.
+
+```ts
+ok(data: object, status = 200): void;                  // sendApiSuccess 를 감싼 클로저
+fail(status: number, code: string, message: string): void;   // sendApiFailure 를 감싼 클로저
+auditDetail(patch: Record<string, unknown>): void;     // audited() 가 record 직전에 읽는 누적 객체에 얕게 병합
+```
+
+구현은 `route()` 가 `ctx` 를 만들 때 넣는 클로저다. `ok` 의 `status` 기본 인자는 설계 §5.1 의 `ok(data)` 에 더한 것으로, `POST /api/users`·`POST /api/groups` 가 201 을 내야 하기 때문이며 생략하면 설계와 같은 200 이다. `fail` 은 설계 시그니처 `fail(status, code, message)` 를 그대로 쓴다(`{code, message}` 객체를 받는 변형을 따로 두지 않는다). `auditDetail` 은 필드가 아니라 함수이며, 호출이 없으면 `detail` 은 `audit` 메타가 준 값 그대로다.
+
+`rbacRoutes.ts` 는 `export function rbacRouteTable(): Route[]` 로 아래 11행을 돌려주고 `routes.ts` 의 표가 이를 펼쳐 넣는다. `replyResult(ctx, result: Result<T>, onSuccess: (value: T) => object, successStatus = 200)` 헬퍼 하나가 `Result` 를 HTTP 로 바꾼다(실패면 `ctx.fail(result.status, result.code, result.message)`).
+
+`rbacRoutes.ts` 는 단위 4 가 `/api/me/mfa/*` 와 `/api/me/sessions*` 핸들러를 더할 확장 지점이다. 그 이슈들은 `rbacRouteTable()` 에 행을 더하고 같은 `ctx.ok/fail/auditDetail` 을 쓰며, `AdminServer.ts` 에 핸들러를 새로 두지 않는다.
 
 ### 라우트 표 추가 (모두 `audit` 메타 포함)
 
@@ -1015,7 +1064,7 @@ git log -1 --format=%B   # Co-Authored-By, Generated, 로봇 이모지 등 서�
 | PUT | `^/api/groups/(?<id>[^/]+)$` | group:manage | body 에 `attributes` 가 있으면 `group_attributes_changed`, 아니면 `group_updated` / group(id) |
 | DELETE | `^/api/groups/(?<id>[^/]+)$` | group:manage | `group_deleted` / group |
 
-`audit` 메타는 요청 전에 계산되므로 `detail` 에 뒤늦게 알게 되는 값(새 사용자 id, `changedKeys`)은 핸들러가 `ctx.auditDetail = {...}` 에 넣고 `audited()` 가 `record` 직전에 합친다(`RouteContext.auditDetail?: Record<string, unknown>` 추가). `POST /api/users` 성공 시 `temp_password_issued`(`detail.generated: boolean`) 는 핸들러 안에서 `AuditSinkRegistry.current().record(...)` 로 하나 더 흘린다. `group_attributes_changed` 의 `detail.changedKeys` 는 값이 실제로 바뀐 키 목록(깊은 비교).
+`audit` 메타는 요청 전에 계산되므로 `detail` 에 뒤늦게 알게 되는 값(새 사용자 id, `changedKeys`)은 핸들러가 `ctx.auditDetail({...})` 로 넣고 `audited()` 가 `record` 직전에 합친다(위 헬퍼). `POST /api/users` 성공 시 `temp_password_issued`(`detail.generated: boolean`) 는 핸들러 안에서 `AuditSinkRegistry.current().record(...)` 로 하나 더 흘린다. `group_attributes_changed` 의 `detail.changedKeys` 는 값이 실제로 바뀐 키 목록(깊은 비교).
 
 ### 요청·응답
 
@@ -1064,8 +1113,8 @@ legacy-fallback 모드(`IdentityStore.instance.mode === 'legacy-fallback'`)에�
 
 ## 변경할 것
 
-- `src/server/admin/routes.ts`: `RouteContext.ok/fail/auditDetail`, `rbacRouteTable()` 병합.
-- `src/server/admin/AdminServer.ts`: `ctx.ok/fail` 주입, `audited()` 가 `ctx.auditDetail` 병합, legacy-fallback 503 분기.
+- `src/server/admin/routes.ts`: `RouteContext` 에 `ok(data, status)`·`fail(status, code, message)`·`auditDetail(patch)` 추가, `rbacRouteTable()` 병합.
+- `src/server/admin/AdminServer.ts`: 세 헬퍼 주입, `audited()` 가 `auditDetail` 누적값을 `record` 직전에 병합, legacy-fallback 503 분기.
 - `src/server/admin/rbacRoutes.ts`: 신규.
 - `test/component/server/admin/routes.test.ts`: 기대 목록에 11행 추가.
 
@@ -1177,8 +1226,10 @@ export function requiredProtocols(option: TunnelingOption): AllowedProtocol[];  
 | `next.forwardPort` 가 `allowed_port_range` 어느 구간에도 없음(`from <= port <= to`) | 422 `port_not_allowed` |
 | `requiredProtocols(next)` 중 하나라도 `allowed_protocols` 에 없음 | 422 `protocol_not_allowed` |
 | `next.allowedClientNames` 가 비어 있지 않음 | 422 `legacy_client_names_not_allowed` |
-| `next.allowedClientIds` 의 각 id 가 `allowed_trusted_clients` 와 `context.trustedClientIds` 양쪽 모두에 없음 | 422 `trusted_client_not_allowed` |
+| `next.allowedClientIds` 의 각 id 가 `allowed_trusted_clients` 와 `context.trustedClientIds` 양쪽 모두에 있지는 않음(어느 한쪽에라도 없으면 실패) | 422 `trusted_client_not_allowed` |
 | `httpOption.replaceAccessControlAllowOrigin` 이고 `!permissions.cors` / `rewriteHostInTextBody` 이고 `!host` / `customRequestHeaders`·`customResponseHeaders` 중 비어 있지 않은 것이 있고 `!header` / `bodyRewriteRules` 비어 있지 않고 `!body` | 422 `rewrite_not_allowed`(message 에 어느 플래그인지) |
+
+`allowed_trusted_clients` 검사에 `context.trustedClientIds` 를 함께 보는 이유: 설계 §4.5 는 `allowed_trusted_clients` 만 적었지만, 그 목록은 그룹 속성이라 서버에 실제로 등록되지 않은 clientId 도 담을 수 있다(운영자가 오타를 냈거나 `ServerOption.trustedClients` 에서 지운 뒤 그룹 속성을 정리하지 않은 경우). 등록되지 않은 id 를 터널에 붙이면 그 터널은 아무 클라이언트도 붙지 못하는 상태로 저장되므로, 그룹이 허용했는지(`allowed_trusted_clients`)와 서버에 실재하는지(`context.trustedClientIds`)를 모두 요구한다. 두 조건 중 하나만 어긋나도 같은 422 `trusted_client_not_allowed` 를 내고 응답으로 어느 쪽인지 구분하지 않는다(등록된 clientId 목록이 새지 않게 한다).
 
 `requiredProtocols`: `protocol` `tcp→['TCP']`, `http→['HTTP']`, `https→['HTTPS']`; `httpOption` 에 `replaceAccessControlAllowOrigin === true`, `rewriteHostInTextBody === true`, `customRequestHeaders`/`customResponseHeaders`/`bodyRewriteRules` 중 길이 > 0 인 것이 하나라도 있으면 `'HTTP_REWRITE'` 추가. `keepAliveTimeout` 은 리라이트가 아니다.
 
@@ -1282,7 +1333,12 @@ git log -1 --format=%B   # Co-Authored-By, Generated, 로봇 이모지 등 서�
 - U2-04 라우트 표의 `tunnel:*` 항목은 `target` 에 `{port}` 만 넣는다. `authorize(principal, action, {port, owner?})` 는 `owner` 로 판정한다(U2-04 규칙 표). `AuthorizationContext.targetOf/ownedCount`, `enforce`(U2-07).
 - `AdminServer.onUpdateTunnelingOption`(U2-03 뒤 `ctx.body` 사용): 본문에서 `certInfo`, `expectedCertificateRevision`, `previousForwardPort` 를 떼고 나머지를 `tunnelingOption` 으로 쓴다(`:606-607`). `previousForwardPort` 가 있으면 포트 변경(rename) 경로 `applyCompoundTunnelingOption`(`:686`).
 - `onGetTunnelingOption`(`:1192`) 은 `store.serverOption.tunnelingOptions` 를 그대로 싣는다. `onGetExternalServerStatuses`(`:1206`) 는 `tttServer.externalServerStatuses()` 전부.
-- `/api/tunnelingOption` 응답에 `owner`·`editable`·`ownerId` 가 더해지므로 응답 객체를 깊은 동등으로 단언하는 기존 테스트가 깨진다. `grep -rn "tunnelingOptions" test --include=*.ts | grep -n "toEqual\|toStrictEqual"` 로 뽑는다(예: `test/admin/configuration-editor.test.ts:81` 처럼 `forwardPort` 만 뽑는 단언은 그대로 통과하고, 항목 전체를 비교하는 단언만 기대값에 세 필드를 더한다).
+- `/api/tunnelingOption` 응답에 `owner`·`editable` 이 더해지고 저장된 터널 옵션에 `ownerId` 가 생기므로, 항목 객체를 깊은 동등으로 단언하는 기존 테스트가 있으면 깨진다. `grep -rn "tunnelingOptions\|getTunnelingOption" test --include=*.ts | grep -E "toEqual|toStrictEqual|toMatchObject"` 를 실행한 결과 후보는 아래 7곳이고, **기대값을 고쳐야 하는 곳은 0곳**이다.
+  - `test/admin/configuration-editor.test.ts:82` — `final.tunnelingOptions.map(o => o.forwardPort)` 에 `toEqual`. 단일 필드만 뽑으므로 통과.
+  - `test/component/invalid-config.test.ts:42` — `toEqual([])`(빈 목록). 통과.
+  - `test/component/multi-client-harness.test.ts:36` — `map(o => o.allowedClientIds)` 에 `toEqual`. 통과.
+  - `test/admin/compound-stale-rename.test.ts:45`, `test/admin/server-buffer-minimum.test.ts:27`, `test/component/server/admin/AdminServer.apply.test.ts:111`, `test/component/server/admin/normalized-tunnel-apply.test.ts:64` — 모두 `store.getTunnelingOption(port)` 에 `toMatchObject`(부분 일치)이거나 단일 필드 비교. `ownerId` 가 더 붙어도 통과.
+  - 따라서 이 이슈에서 기존 테스트의 **기대값을 바꾸지 않는다**. 구현 중 새로 깨지는 단언이 나오면 위 grep 을 다시 돌려 해당 줄을 이슈 코멘트에 적고 기대값에 필드를 더한다(느슨하게 바꾸지 않는다).
 - U2-06 `DELETE /api/users/:id`, `rbacRoutes.ts`.
 
 먼저 열어 볼 파일: `src/types/TunnelingOption.ts`, `src/server/admin/routes.ts`, `src/server/admin/AdminServer.ts`(터널 핸들러 5개), `src/server/admin/rbacRoutes.ts`, `src/server/rbac/AuthorizationContext.ts`, `src/server/rbac/AttributeEnforcer.ts`, `test/component/server/admin/normalized-tunnel-apply.test.ts`(터널 본문 형태).
@@ -1306,15 +1362,14 @@ git log -1 --format=%B   # Co-Authored-By, Generated, 로봇 이모지 등 서�
 - `POST/PUT /api/tunnelingOption`: action 함수형(기존 포트면 `tunnel:update`, 아니면 `tunnel:create`) 은 U2-04 그대로. 핸들러 앞에:
   - 슈퍼유저: 본문 `ownerId` 가 있으면 사용자 id 또는 `'system:migrated'` 여야 하고(아니면 422 `owner_not_found`), 없으면 생성 시 `principal.userId`, 수정 시 기존 값 유지. `principal.legacy` 면 `ownerId` 는 항상 `'system:migrated'`(`legacy-admin` 은 사용자 id 가 아니다).
   - 일반 유저: 본문 `ownerId` 는 무시하고 `principal.userId` 로 고정. `previousForwardPort`(rename) 가 있으면 그 포트도 `tunnel:update` 로 `authorize`(실패 시 404). `enforce(principal, option, previousOption ? 'update' : 'create', {ownedCount: ownedCount(userId), trustedClientIds: serverOption.trustedClients.map(c => c.clientId)})` 실패면 그 status·code. `certInfo` 가 있으면(외부 인증서 업로드) 403 `forbidden`(인증서는 `tunnel:cert`, 슈퍼유저 전용).
-  - `ctx.auditDetail.ownerId`.
+  - `ctx.auditDetail({ownerId})`.
 - `DELETE /api/tunnelingOption`, `POST /api/tunneling/active/:port`: `target` 만 붙이면 `authorize` 가 404/403 을 낸다. 핸들러 변경 없음.
-- `PUT ^/api/tunnelingOption/(?<port>[^/]*)/owner$`(신규, tunnel:reassign, audit `tunnel_reassigned` / tunnel, `auditDetail.from`·`to`): 요청 `{"ownerId":"u_…","expectedRevision":7}` 또는 `{"ownerId":"system:migrated","expectedRevision":7}` → 존재하지 않는 포트 404 `not_found`, 사용자 없음 422 `owner_not_found` → `composeServerOptionWithTunnelingOption({...option, ownerId})` 후 기존 `mutateConfiguration` 커밋 경로(`expectedRevision` 필수) → 200 `{"forwardPort":20001,"owner":{"id":"u_…","username":"alice"},"revisionState":{…}}`.
+- `PUT ^/api/tunnelingOption/(?<port>[^/]*)/owner$`(신규, tunnel:reassign, audit `tunnel_reassigned` / tunnel, 핸들러가 `ctx.auditDetail({from, to})`): 요청 `{"ownerId":"u_…","expectedRevision":7}` 또는 `{"ownerId":"system:migrated","expectedRevision":7}` → 존재하지 않는 포트 404 `not_found`, 사용자 없음 422 `owner_not_found` → `composeServerOptionWithTunnelingOption({...option, ownerId})` 후 기존 `mutateConfiguration` 커밋 경로(`expectedRevision` 필수) → 200 `{"forwardPort":20001,"owner":{"id":"u_…","username":"alice"},"revisionState":{…}}`.
 - `DELETE /api/users/:id`(U2-06, `rbacRoutes.ts`): `AuthorizationContext.ownedCount(id) > 0` 이면 409 `user_owns_tunnels`(`message` 에 포트 목록).
 
 ### 테스트
 
 - `test/component/server/admin/rbac-tunnel-ownership.test.ts`(신규)
-- 기존 깊은 동등 단언 갱신(위 배경의 grep 결과)
 
 ## 변경할 것
 
@@ -1323,7 +1378,7 @@ git log -1 --format=%B   # Co-Authored-By, Generated, 로봇 이모지 등 서�
 - `src/server/rbac/AuthorizationContext.ts`: 캐스트 제거.
 - `src/server/ServerOptionStore.ts`: 변경 없음(`ownerId` 통과 확인됨). 만약 `normalizationOfHttpOption` 등이 객체를 재구성해 `ownerId` 가 떨어지면 그 함수만 `ownerId` 를 보존하도록 고친다.
 - `test/component/server/admin/routes.test.ts`: `PUT /api/tunnelingOption/:port/owner` 행 추가.
-- 기존 테스트: `/api/tunnelingOption` 항목 전체를 깊은 동등으로 단언하는 곳의 기대값에 `owner`·`editable`·`ownerId` 추가.
+- 기존 테스트: 기대값 변경 없음(위 배경의 grep 결과 7곳 전부 부분 일치·단일 필드 비교라 `owner`·`editable`·`ownerId` 추가에 영향받지 않는다).
 
 ## 하지 말 것
 
@@ -1398,7 +1453,7 @@ git log -1 --format=%B   # Co-Authored-By, Generated, 로봇 이모지 등 서�
 
 - `src/server/ServerOptionStore.ts`
   - `:122` `prepareServerOptionCommit(serverOption, options)` 가 `prepared.files: AtomicFileValue[]`(`server.yaml` + `.server.state.json`) 를 만들고 `:110` `commitPreparedServerOption` 이 `Files.writeAtomicBatchSync(result.prepared.files)`(`:117`) 로 쓴다. 관리 API 의 저장은 모두 이 경로다.
-  - `:274` `save()` 는 `Files.writeAtomicSync(this._configFile, yamlString)` + `saveRevisionState()`(`:517`). `updateServerOption`(`:192`)·`updateTunnelingOption`(`:211`)·`removeTunnelingOption`(`:203`) 과 `ServerApp.applyStartupOptions`(`ServerApp.ts:37-63`, CLI `-adminPort` 등) 가 쓴다.
+  - `:274` `save()` 는 `Files.writeAtomicSync(this._configFile, yamlString)` + `fs.chmodSync` + `saveRevisionState()`(`:517`) 인 별도 경로지만, **`src/` 안에서 이것을 부르는 코드는 없다**(`grep -rn "\.save()" src` 0건). `updateServerOption`(`:192`)·`updateTunnelingOption`(`:211`)·`removeTunnelingOption`(`:203`) 은 모두 `commitPreparedServerOption` 을 거치고, `ServerApp.applyStartupOptions`(`ServerApp.ts:37-63`, CLI `-adminPort` 등)도 `updateServerOption` 을 부르므로 같은 경로다. `save()` 의 유일한 호출자는 `test/unit/server/invalid-config-admission.test.ts:48`(`expect(store.save()).toBe(false)` — 로드 실패 상태에서 저장이 거부되는지만 본다) 이다. 설계 §9 가 적은 대로 **저장 경로의 삽입점은 `prepareServerOptionCommit` 하나**다.
   - `:339-360` `verificationServerOption` 은 키 허용 목록이 없어 알 수 없는 필드를 그대로 통과·보존한다(설계 §3.1 확정). 이전 바이너리(`5f772fc`)도 같은 함수이므로 `ownerId` 등 새 필드가 든 `server.yaml` 을 읽는다. `.bak` 은 그래도 남긴다(수기 편집 손실 방지). `5f772fc` 빌드로 새 yaml 을 읽는 확인은 수동 절차.
 - `src/util/Files.ts:19` `writeAtomicBatchSync(changes)` 는 실패 시 이전 내용을 되돌린다(`:38-53`).
 - 프로세스 하네스 `test/helpers/processTunnelHarness.ts`(U0-01, 단위 0 §3.2): `ProcessTunnelOptions.identityFixture?: unknown` — "사용자 항목은 평문 `password` 필드를 받고 하네스가 bcrypt cost 12 로 `passwordHash` 를 채운다(같은 평문은 모듈 수준 캐시로 한 번만 해시). 지정하면 `.key` 는 쓰지 않는다"; `adminLogin?: {username; password}` — `adminRequest` 가 로그인할 계정, 기본 `{username:'admin', password:'e2e-password-1234'}`. 하네스는 `.key` 에 그 비밀번호의 bcrypt 해시를 두고 `adminRequest` 가 `/api/login` 으로 세션을 얻는다(이 이슈 시점에는 별칭 `{key}` 로 보낼 수 있다. U2-10 가 `{username, password}` 로 바꾼다). 브라우저 E2E 는 `test/e2e/browser/*.test.ts`, 실행 `npm run test:e2e:browser`(빌드 선행), CI 잡 `browser-e2e`(U0-06).
@@ -1423,10 +1478,10 @@ const ROLLBACK_SENSITIVE_TUNNEL_FIELDS = ['ownerId', 'rateLimit'] as const;   //
 private rollbackBackupFiles(next: ServerOption): AtomicFileValue[];
 ```
 
-판정: 디스크의 `server.yaml` 텍스트를 `YAML.parse` 해서 최상위에 위 5개 키가 하나도 없고 `tunnelingOptions[*]` 어디에도 `ownerId` 가 없으며, `next` 에는 그중 하나라도 있으면 → `[{file: server.yaml.bak, data: 디스크 원문 그대로, mode: 0o600}, {file: .server.state.json.bak, data: 디스크 원문, mode: 0o600}]`. 이미 `server.yaml.bak` 이 있으면 빈 배열(덮어쓰지 않는다). `.server.state.json` 이 없으면 그 항목은 뺀다. 디스크 파일이 없거나 파싱이 안 되면 빈 배열.
+판정: 디스크의 `server.yaml` 텍스트를 `YAML.parse` 해서 **최상위 4개 키(`connectionSecurity`·`mfaRequiredForSuperusers`·`auditRetentionDays`·`auditQueueSize`)가 하나도 없고 `tunnelingOptions[*]` 어디에도 `ownerId`·`rateLimit` 이 없으며**, `next` 에는 그 6개 중 하나라도 있으면 → `[{file: server.yaml.bak, data: 디스크 원문 그대로, mode: 0o600}, {file: .server.state.json.bak, data: 디스크 원문, mode: 0o600}]`. 즉 판정에 쓰는 키 집합은 `ROLLBACK_SENSITIVE_TOP_FIELDS`(4개) ∪ `ROLLBACK_SENSITIVE_TUNNEL_FIELDS`(2개) 이고, 두 상수 모두 판정식에 쓰인다. 이미 `server.yaml.bak` 이 있으면 빈 배열(덮어쓰지 않는다). `.server.state.json` 이 없으면 그 항목은 뺀다. 디스크 파일이 없거나 파싱이 안 되면 빈 배열.
 
-- `prepareServerOptionCommit` 의 `files` 앞에 `rollbackBackupFiles(serverOption)` 결과를 붙인다(같은 배치).
-- `save()` 는 `writeAtomicBatchSync([...rollbackBackupFiles(this._serverOption), {file: configFile, data: yaml, mode: 0o600}, {file: stateFile, data: JSON, mode: 0o600}])` 로 바꾼다(`saveRevisionState` 호출은 이 배치가 대신한다. `chmod` 도 `mode` 로 대체).
+- 삽입점은 `prepareServerOptionCommit` 하나다: `files` 앞에 `rollbackBackupFiles(serverOption)` 결과를 붙인다(같은 배치). 관리 API 저장과 `ServerApp.applyStartupOptions` 가 모두 이 경로를 거치므로 이 한 곳으로 충분하다.
+- `save()`(`:274`) 는 바꾸지 않는다. `src/` 안에 호출자가 없고(배경 참조) 설계 §9 도 삽입점을 `prepareServerOptionCommit` 하나로 정했다. 호출자 없는 경로를 함께 고치면 같은 책임이 두 곳으로 갈라진다.
 - 서버는 `.bak` 과 `.key` 를 어떤 경로에서도 지우지 않는다. `ServerOptionStore.reset()`(`:285`) 은 `server.yaml`·`.server.state.json` 만 지우는 현재 동작을 유지한다(`.bak` 은 남긴다).
 
 ### `test/helpers/identityFixture.ts`
@@ -1451,14 +1506,14 @@ export const E2E_ADMIN_PASSWORD = 'e2e-password-1234';
 3. `adminRequest('/api/tunnelingOption')` 의 항목 `owner.id === 'system:migrated'`.
 4. `adminRequest('/api/me')` 의 `migrationBanner === true`.
 5. `identity.yaml` 의 mtime 을 기록 → `harness.restartServer()` → mtime 동일, `.key` 존재, 같은 비밀번호로 `adminRequest` 재로그인 200.
-6. 서버 stdout 에 `identity migrated from legacy admin key` 가 첫 기동에 1회, 재기동에 0회.
+6. 서버 stdout 에 `identity migrated from legacy admin key` 가 첫 기동에 1회, 재기동에 0회. 읽는 수단은 `harness.server.readChannel().stdout` 이며, `restartServer()` 가 새 자식 프로세스를 띄워 `harness.server` 를 교체하므로 **5 의 `restartServer()` 를 부르기 전에** 첫 기동 stdout 을 지역 변수에 담아 1회를 단언하고, 재기동 뒤에는 교체된 `harness.server.readChannel().stdout` 에서 0회를 단언한다.
 
 ### `test/e2e/browser/regular-user-login.test.ts`
 
 `identityFixture: {users: [{username:'admin', password:'e2e-password-1234', role:'superuser'}, {username:'alice', password:'alice-pass-1234', role:'regular', groupId:'g_field'}], groups: [{id:'g_field', name:'Field', attributes:{allowed_port_range:[{from:20000,to:20099}], allowed_protocols:['TCP']}}]}`.
 
 1. `.key` 가 없다. `identity.yaml` 이 픽스처 내용이다(`alice` 의 `passwordHash` 가 bcrypt).
-2. `adminLogin: {username:'alice', password:'alice-pass-1234'}` 로 만든 두 번째 하네스 요청 함수(또는 같은 하네스에 `adminRequest` 계정 전환 옵션 — 하네스에 `adminRequestAs(login)` 을 추가한다)로 `/api/me` 의 `user.username 'alice'`, `sections` 에 `server` 없음.
+2. 하네스에 `adminRequestAs(login: {username: string; password: string})` 를 추가하고(계정별로 세션·CSRF 쿠키를 따로 들고 있는 요청 함수를 돌려준다. 같은 `login` 으로 다시 부르면 같은 함수를 돌려준다), `adminRequestAs({username:'alice', password:'alice-pass-1234'})` 로 `/api/me` 를 호출하면 `user.username` 이 `'alice'` 이고 `sections` 에 `server` 가 없다. 서버 프로세스를 하나 더 띄우지 않는다.
 3. alice 의 `/api/tunnelingOption` 은 빈 배열(하네스 터널은 `system:migrated`), admin 의 목록은 1개.
 4. 브라우저: `#login-username` 이 있으면 `alice` 로 로그인 성공까지 확인하고, 없으면(U2-10 전) 이 단계는 건너뛴다(U2-10 가 항상 수행하도록 바꾼다).
 
@@ -1479,7 +1534,7 @@ export const E2E_ADMIN_PASSWORD = 'e2e-password-1234';
 
 ## 변경할 것
 
-- `src/server/ServerOptionStore.ts`: `rollbackBackupFiles`, `prepareServerOptionCommit`, `save()`.
+- `src/server/ServerOptionStore.ts`: `rollbackBackupFiles` 신규, `prepareServerOptionCommit` 에 삽입. `save()` 는 건드리지 않는다.
 - `test/helpers/processTunnelHarness.ts`: `identityFixture` 직렬화·`.key` 생략·`adminLogin`·`adminRequestAs`.
 - `docs/guide/test-evidence-policy.md`: E2E 목록에 두 파일 추가(한 줄씩).
 
@@ -1488,6 +1543,7 @@ export const E2E_ADMIN_PASSWORD = 'e2e-password-1234';
 - `.bak` 자동 삭제·회전을 만들지 않는다.
 - `identity.yaml.bak` 을 만들지 않는다(스키마 version 이 1 이라 상향이 없다).
 - 롤백을 서버 코드로 자동화하지 않는다(문서 절차).
+- `ServerOptionStore.save()` 에 백업을 붙이지 않는다. 삽입점은 `prepareServerOptionCommit` 하나다.
 - 하네스에 고정 포트·고정 경로를 넣지 않는다.
 - E2E 에서 외부 사이트를 열지 않는다(D13).
 - 하네스의 `adminRequest` 로그인 본문을 이 이슈에서 바꾸지 않는다(U2-10).
@@ -1501,7 +1557,9 @@ export const E2E_ADMIN_PASSWORD = 'e2e-password-1234';
   - 이전 형식 yaml 에서 `commitPreparedServerOption({...option, tunnelingOptions:[{...t, ownerId:'u_1'}]})` 이면 `server.yaml.bak` 이 원문과 바이트 동일, `.server.state.json.bak` 이 원문과 동일, mode 0o600(win32 제외) 이다.
   - 같은 저장을 한 번 더(다른 `ownerId`) 하면 `.bak` 내용이 바뀌지 않는다.
   - `.bak` 이 없는 상태에서 신필드 없는 옵션을 저장하면 `.bak` 이 생기지 않는다.
-  - `save()` 경로(`updateTunnelingOption` 에 `ownerId` 든 옵션) 도 `.bak` 2개를 만든다.
+  - `.bak` 이 없는 상태에서 `updateTunnelingOption({...t, ownerId:'u_1'})`(→ `commitPreparedServerOption`) 도 `.bak` 2개를 만든다. `updateServerOption({...option, auditQueueSize: 1000})`(최상위 신필드) 도 마찬가지다.
+  - `rollbackBackupFiles` 가 `ROLLBACK_SENSITIVE_TUNNEL_FIELDS` 의 두 필드를 모두 본다: 이전 형식 yaml 에서 `tunnelingOptions[0].rateLimit` 만 든 옵션을 저장해도 `.bak` 2개가 생긴다.
+  - `save()` 는 이 이슈에서 바뀌지 않는다: `test/unit/server/invalid-config-admission.test.ts:48` 의 `expect(store.save()).toBe(false)` 가 그대로 통과한다.
   - `reset()` 뒤에도 `.bak` 2개가 남아 있다.
   - `server.yaml` 을 `verificationServerOption` 에 `ownerId`·`rateLimit` 이 든 채로 넘기면 `success true` 이고 두 필드가 보존된다(이전 바이너리 호환의 근거).
 - `test/e2e/browser/legacy-admin-migration.test.ts`: 위 1~6 각각 단언. `errors` 빈 배열.
@@ -1551,11 +1609,11 @@ git log -1 --format=%B   # Co-Authored-By, Generated, 로봇 이모지 등 서�
 ## 배경
 
 - `admin/src/controller/LoginCtrl.ts:26` `static async login(key: string, bootstrapToken?: string): Promise<LoginResult>` 가 `POST /api/login` 에 `{key, bootstrapToken}` 을 보낸다. `:16` `validateSession(): Promise<boolean>`. `LoginResult = {success, status, bootstrapRequired?, invalidBootstrapToken?, weakPassword?, message?}`.
-- U1-05·U1-10 뒤의 구조(단위 1 설계 §5.2, §5.5, §7.1): `admin/src/screens/LoginScreen.svelte`(단독 `Card`, "Sign in", `Field label="Password"` + `TextInput type="password" id="login-password"`, 부트스트랩 시 `id="bootstrap-token"`, `<p id="login-message" role="alert">`, `Button variant="primary"` "OK", 성공 시 `onsuccess`), `admin/src/App.svelte`(`'Checking' | 'Invalid' | 'Valid'`, `LoginCtrl.validateSession()`), `admin/src/shell/Drawer.svelte`(`nav.ts` 의 `NAV: Array<{hash; title; screen}>` 순회, "로그아웃 항목 없음(2 단위가 추가)"), `admin/src/shell/Shell.svelte`, `test/helpers/adminApp.ts` `startAdminApp({fixture})`(드라이버 포크 + 로그인), `test/admin/admin-backend-driver.ts`(`.key` 에 `test-password-1234` 해시; 드라이버는 `src/` 를 직접 import 하는 프로세스). `layout/`·`component/` 는 U1-10 이 지웠다.
+- U1-05·U1-10 뒤의 구조(단위 1 설계 §5.2, §5.5, §7.1): `admin/src/screens/LoginScreen.svelte`(단독 `Card`, "Sign in", `Field label="Password"` + `TextInput type="password" id="login-password"`, 부트스트랩 시 `id="bootstrap-token"`, `<p id="login-message" role="alert">`, `Button variant="primary"` "OK", 성공 시 `onsuccess`), `admin/src/App.svelte`(세션 상태 4종 `type SessionState = 'Checking' | 'Valid' | 'Invalid' | 'Offline'` — U1-04 계약. `'Offline'` 은 `validateSession()` 이 네트워크 오류로 실패한 경우다. `LoginCtrl.validateSession()`), `admin/src/shell/Drawer.svelte`(`nav.ts` 의 `NAV: Array<{hash; title; screen}>` 순회, "로그아웃 항목 없음(2 단위가 추가)"), `admin/src/shell/Shell.svelte`, `test/helpers/adminApp.ts` `startAdminApp({fixture})`(드라이버 포크 + 로그인), `test/admin/admin-backend-driver.ts`(`.key` 에 `test-password-1234` 해시; 드라이버는 `src/` 를 직접 import 하는 프로세스). `layout/`·`component/` 는 U1-10 이 지웠다.
 - 서버(U2-02·04): `/api/login` `{username, password, bootstrapToken?}` → `{csrfToken, user, mustChangePassword}`; 별칭 `password` 없으면 `key`, `username` 없으면 `'admin'`(`AdminServer.onLogin` 1·2 단계); `/api/logout`; `/api/me` → `{user, group, sections, migrationBanner}`; `/api/validateSession` → `{valid, user, mustChangePassword}`.
 - 별칭 `{key}` 로 `/api/login` 을 부르는 호출부(`grep -rn "key:" test | grep -i login` 으로 다시 뽑는다. 설계 §9 는 "test/admin 8개, admin-routes·AdminServer.apply, login-bootstrap:106" 이라 적었으나 실제 목록은 아래가 전부다):
   - `test/admin/`(8): `compound-stale-rename.test.ts:23`, `configuration-certificate-conflict.discovery.test.ts:24`, `configuration-editor.test.ts:17,61`, `configuration-snapshot.test.ts:16`, `csrf-requests.test.ts:78`, `dev-proxy-origin.test.ts:34`, `login-bootstrap.test.ts:106`(단언), `server-buffer-minimum.test.ts:16`
-  - `test/component/server/admin/`(5): `AdminServer.apply.test.ts:27`, `AdminServer.security.test.ts:70,97,108,121,140,187`, `AdminServer.test.ts:59`, `admin-routes.test.ts:36,57`, `configuration-revision-fixture.ts:35`
+  - `test/component/server/admin/`(5): `AdminServer.apply.test.ts:27`, `AdminServer.security.test.ts:55,70,97,108,121,140,187`(7곳), `AdminServer.test.ts:59`, `admin-routes.test.ts:36,57`, `configuration-revision-fixture.ts:35`
   - `test/security/`(2): `req-03-server-option-hash.test.ts:51`, `req-12-csrf.test.ts:51`
   - `test/unit/server/admin/`(2): `req-07-rate-limit.test.ts`(`login({key: …})` 다수), `req-11-body-limit.test.ts`
   - `test/helpers/processTunnelHarness.ts` 의 `adminRequest` 로그인(U0-01·U2-09), `test/component/server/admin/rbac-login.test.ts` 의 별칭 케이스(U2-02)
@@ -1608,7 +1666,7 @@ export function clearMe(): void;                  // me.set(undefined)
 
 ### `App.svelte`
 
-- `'Valid'` 진입 직후 `loadMe()`. 완료 전에는 `<Loading/>`. `loadMe` 가 `InvalidSession` 이면 `'Invalid'`.
+- `'Valid'` 진입 직후 `loadMe()`. 완료 전에는 `<Loading/>`. `loadMe` 가 `InvalidSession` 이면 `'Invalid'`, 네트워크 오류로 실패하면 `'Offline'`(`validateSession` 실패와 같은 상태로 모은다).
 - `$me.mustChangePassword` 이면 `Shell` 대신 `<p role="alert" id="password-change-required">Password change required. Use the API or wait for the account screen.</p>` 와 "Sign out" 버튼(`id="password-change-sign-out"`) 만 표시(U3-01 이 `#/me/password` 화면으로 대체).
 - 로그인 화면의 `onsuccess` 뒤 상태 `'Valid'` → `loadMe()`.
 
@@ -1624,7 +1682,7 @@ export function clearMe(): void;                  // me.set(undefined)
 
 ### 테스트 드라이버
 
-- `test/admin/admin-backend-driver.ts`: 픽스처 `'regular-user'` 추가 — 드라이버 프로세스 안에서 `IdentityStore.bcryptCost = 4` 로 두고 `IdentityMigration.runAtStartup()` 뒤 `IdentityStore.instance.createUser(...)` 로 일반 유저 `alice`(`alice-pass-1234`, `default` 그룹; `updateGroup('default', {attributes:{admin_ui_section_access:['tunnels']}})`) 와 `mustChangePassword: true` 인 `temp`(`temp-pass-1234`) 를 만든다(슈퍼유저 `admin`/`test-password-1234` 는 `.key` 승격). U2-09 의 `serializeIdentityFixture` 에 의존하지 않는다.
+- `test/admin/admin-backend-driver.ts`: 픽스처 `'regular-user'` 추가 — 드라이버 프로세스 안에서 `IdentityStore.bcryptCost = 4` 로 두고 `await IdentityMigration.runAtStartup()` 뒤 `IdentityStore.instance.createUser(...)` 로 일반 유저 `alice`(`alice-pass-1234`, `default` 그룹; `updateGroup('default', {attributes:{admin_ui_section_access:['tunnels']}})`) 와 `mustChangePassword: true` 인 `temp`(`temp-pass-1234`) 를 만든다(슈퍼유저 `admin`/`test-password-1234` 는 `.key` 승격). U2-09 의 `serializeIdentityFixture` 에 의존하지 않는다.
 - `test/helpers/adminApp.ts` `startAdminApp({fixture, login?: boolean | {username, password}})`: U1-05 의 `login?: boolean` 을 넓힌다. `true`(기본)는 `admin`/`test-password-1234`, 객체면 그 계정. 별도 `loginAs` 옵션은 만들지 않는다. 로그인 시 `#login-username` 에 username 입력.
 
 ### 테스트

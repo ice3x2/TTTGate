@@ -124,7 +124,7 @@ type Result<T> = {success: true; value: T} | {success: false; status: 404 | 409 
 ```
 
 불변식(모두 테스트로 고정):
-- 사용자는 정확히 한 그룹. `role === 'superuser'` ⇔ `groupId === 'system:superuser'`. 역할 변경 시 그룹 자동 이동(superuser→`default`, regular→`system:superuser`). `groupId` 를 명시해 `system:superuser` 로 넣는 요청은 422.
+- 사용자는 정확히 한 그룹. `role === 'superuser'` ⇔ `groupId === 'system:superuser'`. 역할 변경 시 그룹 자동 이동(`regular` → `superuser` 이면 `system:superuser` 로, `superuser` → `regular` 이면 `default` 로). `groupId` 를 명시해 `system:superuser` 로 넣는 요청은 422.
 - 마지막 활성 슈퍼유저의 삭제·강등·비활성화는 409 `last_superuser`. 이때 `AuditSinkRegistry.current().record` 로 `last_superuser_guard_hit` 이벤트를 남긴다(PRD K6 집계 근거. `audited()` 가 남기는 `user_updated` failure 와 별개로 하나 더).
 - `username` 유일(409 `username_taken`), 형식 422.
 - 시스템 그룹 수정(이름·속성)은 `default` 만 속성 수정 가능, `system:superuser` 는 어떤 수정도 422. 두 시스템 그룹 삭제 422. 소속 사용자 > 0 인 그룹 삭제 409 `group_not_empty`.
