@@ -159,6 +159,13 @@ class TTTServer {
             // P6-T1 / REQ-09: 외부 송신 실패 시 "좀비 세션" 방지 위해 터널 세션을 닫는다.
             // (기존에는 주석 처리되어 있었으나, Pool swap/재통보 시 active하지 않은 세션이 남는 원인이었음.)
             this._tunnelServer.closeSession(id, 0);
+            return;
+        }
+        // 이슈 #129: 다운스트림(외부 포트 핸들러)이 배압 상태면 터널 소스를 멈춰
+        // 무제한으로 쌓이다 파일 캐시 한도 초과로 destroy() 되는 것을 막는다.
+        if(this._externalPortServerPool.isSessionBackpressured(id)) {
+            this._tunnelServer.pauseSessionSource(id);
+            this._externalPortServerPool.addSessionPressureReliefListener(id, () => this._tunnelServer.resumeSessionSource(id));
         }
     }
 

@@ -220,6 +220,17 @@ class ExternalPortServerPool {
     }
 
 
+    public isSessionBackpressured(id: number) : boolean {
+        return this._handlerMap.get(id)?.isBackpressured ?? false;
+    }
+
+    public addSessionPressureReliefListener(id: number, listener: () => void) : void {
+        const handler = this._handlerMap.get(id);
+        if(handler) {
+            handler.addOncePressureReliefListener(() => listener());
+        }
+    }
+
     public send(id: number, data: Buffer) : boolean {
         let handler = this._handlerMap.get(id);
         if(handler) {

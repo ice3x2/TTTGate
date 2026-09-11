@@ -558,6 +558,14 @@ class TunnelServer {
         }
     }
 
+    public pauseSessionSource(sessionID: number) : void {
+        this.findClientHandlerPool(sessionID)?.pauseSessionRead(sessionID);
+    }
+
+    public resumeSessionSource(sessionID: number) : void {
+        this.findClientHandlerPool(sessionID)?.resumeSessionRead(sessionID);
+    }
+
     private receiveSessionPayload(handler: TunnelDataHandler, data: Buffer): void {
         if (!handler.sessionID) {
             logger.error('onReceiveDataHandler: sessionID is undefined');
