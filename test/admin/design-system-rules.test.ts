@@ -11,6 +11,64 @@ const TOKENS = ['--bg-0','--bg-1','--bg-2','--bg-3','--bg-mute','--line-0','--li
     '--lh-tight','--lh-snug','--lh-body','--s-1','--s-2','--s-3','--s-4','--s-5','--s-6','--s-7','--s-8','--s-9','--s-10','--s-11','--s-12','--r-0','--r-1','--r-2','--r-3',
     '--dur-1','--dur-2','--dur-3','--dur-4','--ease-out','--ease-in'];
 
+// R1: admin/src/ui/ 의 부품은 fetch·adminRequest·컨트롤러 import 를 쓰지 않는다.
+describe("R1: ui 부품의 네트워크·컨트롤러 호출 부재", () => {
+    const uiDir = path.join(root, "admin/src/ui");
+    const FORBIDDEN = /fetch\(|adminRequest|from ["']\.\.\/controller/;
+
+    const collectFiles = (dir: string): string[] => {
+        if(!fs.existsSync(dir)) return [];
+        const entries = fs.readdirSync(dir, {withFileTypes: true});
+        let files: string[] = [];
+        for(const entry of entries) {
+            const full = path.join(dir, entry.name);
+            if(entry.isDirectory()) { files = files.concat(collectFiles(full)); continue; }
+            if(entry.name.endsWith(".svelte") || entry.name.endsWith(".ts")) files.push(full);
+        }
+        return files;
+    };
+
+    test("admin/src/ui 디렉터리가 존재한다", () => {
+        expect(fs.existsSync(uiDir)).toBe(true);
+    });
+
+    const targets = collectFiles(uiDir);
+
+    test.each(targets.map((file) => [path.relative(root, file), file] as const))("%s 에 fetch·adminRequest·컨트롤러 import 가 없다", (_label, file) => {
+        const content = fs.readFileSync(file, "utf8");
+        expect(FORBIDDEN.test(content)).toBe(false);
+    });
+});
+
+// R2: ui/·shell/·screens/ 아래 .svelte 파일에 hex 색상 리터럴이 없다(존재하는 디렉터리만 검사).
+describe("R2: 신규 디렉터리의 hex 색상 리터럴 부재", () => {
+    const NEW_DIRS = ["ui", "shell", "screens"];
+    const HEX_PATTERN = /(?<![\w-])#[0-9a-fA-F]{3,8}(?![\w-])/;
+
+    const collectSvelteFiles = (dir: string): string[] => {
+        if(!fs.existsSync(dir)) return [];
+        const entries = fs.readdirSync(dir, {withFileTypes: true});
+        let files: string[] = [];
+        for(const entry of entries) {
+            const full = path.join(dir, entry.name);
+            if(entry.isDirectory()) { files = files.concat(collectSvelteFiles(full)); continue; }
+            if(entry.name.endsWith(".svelte")) files.push(full);
+        }
+        return files;
+    };
+
+    test("검사 대상 디렉터리 중 하나 이상 존재한다", () => {
+        expect(NEW_DIRS.some((name) => fs.existsSync(path.join(root, "admin/src", name)))).toBe(true);
+    });
+
+    const targets = NEW_DIRS.flatMap((name) => collectSvelteFiles(path.join(root, "admin/src", name)));
+
+    test.each(targets.map((file) => [path.relative(root, file), file] as const))("%s 에 hex 색상 리터럴이 없다", (_label, file) => {
+        const content = fs.readFileSync(file, "utf8");
+        expect(HEX_PATTERN.test(content)).toBe(false);
+    });
+});
+
 // R3: :root 블록 안에 TOKENS 전부가 정의되어 있고, --ff-kr-* 별칭은 없다.
 describe("R3: app.css :root 토큰 계약", () => {
     const rootBlockMatch = appCss.match(/:root\s*\{([\s\S]*?)\n\}/);
