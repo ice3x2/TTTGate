@@ -4,7 +4,7 @@ import http from "http";
 import net from "net";
 import {once} from "events";
 import AdminServer from "../../src/server/admin/AdminServer";
-import SessionStore, {BOOTSTRAP_TOKEN_FILE_NAME} from "../../src/server/admin/SessionStore";
+import {BOOTSTRAP_TOKEN_FILE_NAME, IdentityMigration} from "../../src/server/rbac/IdentityMigration";
 import ServerOptionStore from "../../src/server/ServerOptionStore";
 import {CertificationStore} from "../../src/server/CertificationStore";
 import TTTServer from "../../src/server/TTTServer";
@@ -71,7 +71,7 @@ const setup = async (observe?: (resources: SetupResources) => void) => {
         await writeWebFixture(root.rootDir, "invalid-envelope.json", "{}");
         await app.page.goto(`http://127.0.0.1:${port}`);
         await app.page.waitForFunction(() => typeof (window as any).adminControllers !== "undefined");
-        SessionStore.instance;
+        await IdentityMigration.runAtStartup();
         const bootstrapToken = (await fs.readFile(path.join(root.rootDir, "config", BOOTSTRAP_TOKEN_FILE_NAME), "utf8")).trim();
         const login = await app.page.evaluate(async (token: string) => {
             const response = await fetch("/api/login", {method: "POST", credentials: "same-origin",

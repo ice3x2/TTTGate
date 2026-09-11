@@ -1,7 +1,7 @@
 import fs from "fs/promises";
 import Path from "path";
 import AdminServer from "../../../../src/server/admin/AdminServer";
-import SessionStore, {BOOTSTRAP_TOKEN_FILE_NAME} from "../../../../src/server/admin/SessionStore";
+import {BOOTSTRAP_TOKEN_FILE_NAME, IdentityMigration} from "../../../../src/server/rbac/IdentityMigration";
 import {AdminSecurityPolicyRegistry, LEGACY_ADMIN_HTTP_FLAG, LEGACY_ADMIN_REMOTE_FLAG} from "../../../../src/server/AdminSecurityPolicy";
 import ServerOptionStore from "../../../../src/server/ServerOptionStore";
 import {httpRequest} from "../../../helpers/http";
@@ -44,7 +44,7 @@ describe("AdminServer security hardening", () => {
     });
 
     it("requires a bootstrap token for first-login initialization and removes emptyKey discovery", async () => {
-        SessionStore.instance;
+        await IdentityMigration.runAtStartup();
         const deniedLogin = await httpRequest({
             port,
             path: "/api/login",
@@ -81,7 +81,7 @@ describe("AdminServer security hardening", () => {
     });
 
     it("rate limits repeated failed login attempts", async () => {
-        SessionStore.instance;
+        await IdentityMigration.runAtStartup();
         const bootstrapToken = (await fs.readFile(
             Path.join(testRoot.rootDir, "config", BOOTSTRAP_TOKEN_FILE_NAME),
             {encoding: "utf-8"}
@@ -125,7 +125,7 @@ describe("AdminServer security hardening", () => {
     });
 
     it("rejects insecure admin option updates without explicit legacy allowances", async () => {
-        SessionStore.instance;
+        await IdentityMigration.runAtStartup();
         const bootstrapToken = (await fs.readFile(
             Path.join(testRoot.rootDir, "config", BOOTSTRAP_TOKEN_FILE_NAME),
             {encoding: "utf-8"}
@@ -172,7 +172,7 @@ describe("AdminServer security hardening", () => {
             allowLegacyAdminHttp: true,
             allowLegacyAdminRemote: true
         });
-        SessionStore.instance;
+        await IdentityMigration.runAtStartup();
         const bootstrapToken = (await fs.readFile(
             Path.join(testRoot.rootDir, "config", BOOTSTRAP_TOKEN_FILE_NAME),
             {encoding: "utf-8"}

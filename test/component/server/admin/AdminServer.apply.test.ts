@@ -2,7 +2,7 @@ import fs from "fs/promises";
 import Path from "path";
 import AdminServer from "../../../../src/server/admin/AdminServer";
 import ServerOptionStore from "../../../../src/server/ServerOptionStore";
-import SessionStore, {BOOTSTRAP_TOKEN_FILE_NAME} from "../../../../src/server/admin/SessionStore";
+import {BOOTSTRAP_TOKEN_FILE_NAME, IdentityMigration} from "../../../../src/server/rbac/IdentityMigration";
 import {httpRequest} from "../../../helpers/http";
 import {applyTestRoot, cleanupTestRoot, createTestRoot, TestRoot} from "../../../helpers/runtime";
 
@@ -12,7 +12,7 @@ const loginAndGetCookie = async (port: number, testRoot: TestRoot): Promise<stri
 };
 
 const loginAndGetAuth = async (port: number, testRoot: TestRoot): Promise<{cookie: string, csrfToken: string}> => {
-    SessionStore.instance;
+    await IdentityMigration.runAtStartup();
     const bootstrapToken = (await fs.readFile(
         Path.join(testRoot.rootDir, "config", BOOTSTRAP_TOKEN_FILE_NAME),
         {encoding: "utf-8"}

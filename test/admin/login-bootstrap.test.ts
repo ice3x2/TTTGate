@@ -2,10 +2,17 @@ import fs from "fs/promises";
 import path from "path";
 import {fork, ChildProcess} from "child_process";
 import bcrypt from "bcryptjs";
-import SessionStore from "../../src/server/admin/SessionStore";
+import YAML from "yaml";
+import {IdentityMigration} from "../../src/server/rbac/IdentityMigration";
 import {createTestRoot, cleanupTestRoot, writeWebFixture} from "../helpers/runtime";
 import {startAdminBrowser} from "../helpers/adminBrowser";
 import {httpRequest} from "../helpers/http";
+
+const readIdentityPasswordHash = async (root: string, username: string): Promise<string> => {
+    const raw = await fs.readFile(path.join(root, "config", "identity.yaml"), "utf8");
+    const parsed = YAML.parse(raw) as {users: {username: string; passwordHash: string}[]};
+    return parsed.users.find((u) => u.username === username)!.passwordHash;
+};
 
 const withLogin = async (check: (fixture: any) => Promise<void>, storedKey?: string) => {
     const root = await createTestRoot("browser-login-8");
@@ -105,8 +112,9 @@ test("controller sends the actual raw key and bootstrap token accepted by the se
         const result = await app.page.evaluate((data: any) => (window as any).loginFixture.login(data.password, data.bootstrapToken), {password, bootstrapToken});
         expect((await pending).postDataJSON()).toEqual({key: password, bootstrapToken});
         expect(result).toMatchObject({success: true, status: 200});
-        const key = await fs.readFile(path.join(root, "config", ".key"), "utf8");
-        expect(await bcrypt.compare(password.trim(), key)).toBe(true);
+        // 부트스트랩 경로에는 .key가 만들어지지 않는다 — 진실 원천은 identity.yaml의 passwordHash.
+        const passwordHash = await readIdentityPasswordHash(root, "admin");
+        expect(await bcrypt.compare(password.trim(), passwordHash)).toBe(true);
     });
 }, 45_000);
 
@@ -152,19 +160,22 @@ test("weak-password response is preserved instead of hashing short input into a 
 test.each(["bcrypt", "legacy"])("existing %s account works after a real backend process restart", async (kind) => {
     const password = "  기존-암호🙂-password  ";
     const storedKey = kind === "bcrypt" ? await bcrypt.hash(password.trim(), 12)
-        : (SessionStore.prototype as any).hashPassword(password);
+        : IdentityMigration.hashLegacyPassword(password);
     await withLogin(async ({app, submit, restart, root, origin}) => {
         await app.page.getByLabel("Password", {exact: true}).fill(password);
         expect((await submit()).status()).toBe(200);
         await app.page.waitForURL(`${origin()}/`);
-        const persisted = await fs.readFile(path.join(root, "config", ".key"), "utf8");
+        // bcrypt·legacy 두 경로 모두 로그인 성공 뒤 identity.yaml의 해시는 bcrypt다(레거시는 재해시된다).
+        const persisted = await readIdentityPasswordHash(root, "admin");
         expect(persisted).toMatch(/^\$2/);
         expect(await bcrypt.compare(password.trim(), persisted)).toBe(true);
         await restart();
         await app.page.getByLabel("Password", {exact: true}).fill(password);
         expect((await submit()).status()).toBe(200);
         await app.page.waitForURL(`${origin()}/`);
-        expect(await fs.readFile(path.join(root, "config", ".key"), "utf8")).toBe(persisted);
+        expect(await readIdentityPasswordHash(root, "admin")).toBe(persisted);
+        // 승격은 .key를 고치지 않는다 — 기동 전 storedKey 그대로 남아 있어야 한다.
+        expect(await fs.readFile(path.join(root, "config", ".key"), "utf8")).toBe(storedKey);
     }, storedKey);
 }, 60_000);
 

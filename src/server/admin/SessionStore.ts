@@ -1,43 +1,23 @@
-import bcrypt from 'bcryptjs';
-import Environment from "../../Environment";
-import File from "../../util/File"
-import Files from "../../util/Files";
 import {ClockRngProvider} from "../../util/ClockRng";
 import crypto, {createHash} from "crypto";
-import fs from "fs";
-import fsp from "fs/promises";
-import {timingSafeStringEqual} from "../../util/timingSafeStringEqual";
 
-import LoggerFactory  from "../../util/logger/LoggerFactory";
-const logger = LoggerFactory.getLogger('server', 'SessionStore');
-
-type Session = {
+export type Session = {
     key: string;
+    userId: string;
+    createdAt: number;
+    lastSeenAt: number;
     timeout: number;
+    ip: string;
+    userAgent?: string;
 }
 
 const DEFAULT_TIMEOUT = 1000 * 60 * 60 * 12; // 12 hours
-const KEY_FILE_NAME = '.key';
-const BOOTSTRAP_TOKEN_FILE_NAME = ".bootstrap-token";
-const MIN_PASSWORD_LENGTH = 8;
-
-type LoginResult = {
-    success: boolean;
-    bootstrapRequired: boolean;
-    invalidBootstrapToken: boolean;
-    weakPassword: boolean;
-    migratedLegacyHash: boolean;
-}
 
 class SessionStore {
     private static _instance: SessionStore;
     private _sessions: Map<string, Session> = new Map<string, Session>();
-    private _key : string = '';
-    private _bootstrapToken: string = "";
 
     private constructor() {
-        this.loadKey();
-        this.ensureBootstrapState();
     }
 
     public static get instance(): SessionStore {
@@ -55,33 +35,78 @@ class SessionStore {
         return ClockRngProvider.current().now();
     }
 
-    private random(): number {
-        return ClockRngProvider.current().random();
+    /**
+     * 세션 키를 감사 로그·4 단위 세션 API에 노출할 수 있는 짧은 식별자로 축약한다.
+     * 세션 키 원문은 절대 노출하지 않으므로, 이 해시가 유일한 노출 표면이다.
+     */
+    public static sessionIdOf(key: string): string {
+        return createHash('sha256').update(key).digest('hex').slice(0, 16);
     }
 
-    private  loadKey() {
-        let keyFile = new File(Environment.path.configDir, KEY_FILE_NAME);
-        if(keyFile.exists()) {
-            let key = Files.toStringSync(keyFile);
-            if(key) {
-                this._key = key.trim();
-            }
-        }
-    }
-
-    public async isEmptyKey() {
-        return this._key == '';
-    }
-
-    public async newSession() : Promise<string>  {
-        let now = this.now();
-        let sessionKey = crypto.randomBytes(64).toString("hex");
-        this._sessions.set(sessionKey, {key: sessionKey, timeout: now + DEFAULT_TIMEOUT});
+    public async newSession(userId: string, meta: {ip: string; userAgent?: string}): Promise<string> {
+        const now = this.now();
+        const sessionKey = crypto.randomBytes(64).toString("hex");
+        this._sessions.set(sessionKey, {
+            key: sessionKey,
+            userId,
+            createdAt: now,
+            lastSeenAt: now,
+            timeout: now + DEFAULT_TIMEOUT,
+            ip: meta.ip,
+            userAgent: meta.userAgent
+        });
         return sessionKey;
     }
 
-    public async removeSession(sessionKey: string) : Promise<void> {
+    /**
+     * 주어진 키 목록 중 첫 번째 유효한 세션을 돌려준다. 유효한 세션은 조회 시점에
+     * lastSeenAt·timeout이 갱신된 새 객체로 교체되어 Map에 set된다(불변 객체 + 참조 교체).
+     * 만료된 키는 Map에서 삭제한다. 유효한 세션이 없으면 undefined.
+     */
+    public resolveSession(sessionKeys: string[]): Session | undefined {
+        const now = this.now();
+        for(const sessionKey of sessionKeys) {
+            const session = this._sessions.get(sessionKey);
+            if(!session) continue;
+            if(session.timeout <= now) {
+                this._sessions.delete(sessionKey);
+                continue;
+            }
+            const renewed: Session = {...session, lastSeenAt: now, timeout: now + DEFAULT_TIMEOUT};
+            this._sessions.set(sessionKey, renewed);
+            return {...renewed};
+        }
+        return undefined;
+    }
+
+    public async isSessionValid(sessionKeys: string[]): Promise<boolean> {
+        return this.resolveSession(sessionKeys) !== undefined;
+    }
+
+    public async removeSession(sessionKey: string): Promise<void> {
         this._sessions.delete(sessionKey);
+    }
+
+    /**
+     * userId 소유의 세션을 모두 제거한다. options.except로 지정한 키는 남긴다
+     * (#96 (U2-04)의 /api/me/password가 현재 세션을 남기는 데 쓴다). 반환값은 제거한 개수.
+     */
+    public removeSessionsOfUser(userId: string, options?: {except?: string}): number {
+        const exceptKey = options?.except;
+        const keysToRemove: string[] = [];
+        for(const [key, session] of this._sessions) {
+            if(session.userId !== userId) continue;
+            if(exceptKey !== undefined && key === exceptKey) continue;
+            keysToRemove.push(key);
+        }
+        for(const key of keysToRemove) {
+            this._sessions.delete(key);
+        }
+        return keysToRemove.length;
+    }
+
+    public listSessions(): Session[] {
+        return Array.from(this._sessions.values()).map((session) => ({...session}));
     }
 
     public sweepSession() : void {
@@ -93,24 +118,6 @@ class SessionStore {
                 this._sessions.delete(key);
             }
         }
-    }
-
-
-    public async isSessionValid(sessionKeyList: Array<string>) : Promise<boolean> {
-        // P5-T5 / REQ-16: forEach → for...of 전환으로 비동기 컨트롤 흐름 안전 확보.
-        let valid = false;
-        for(const sessionKey of sessionKeyList) {
-            const session = this._sessions.get(sessionKey);
-            if(!session) continue;
-            const now = this.now();
-            if(session.timeout > now) {
-                session.timeout = now + DEFAULT_TIMEOUT;
-                valid = true;
-            } else {
-                this._sessions.delete(sessionKey);
-            }
-        }
-        return valid;
     }
 
     /**
@@ -136,169 +143,7 @@ class SessionStore {
         }
         return result;
     }
-
-
-    public async login(key : string, bootstrapToken?: string): Promise<boolean> {
-        return (await this.loginWithDetails(key, bootstrapToken)).success;
-    }
-
-    public async loginWithDetails(key: string, bootstrapToken?: string): Promise<LoginResult> {
-        const password = typeof key == "string" ? key.trim() : "";
-        if(this._key == "") {
-            if(!this.isStrongPassword(password)) {
-                return {success: false, bootstrapRequired: true, invalidBootstrapToken: false, weakPassword: true, migratedLegacyHash: false};
-            }
-            if(!this.isBootstrapTokenValid(bootstrapToken)) {
-                return {success: false, bootstrapRequired: true, invalidBootstrapToken: true, weakPassword: false, migratedLegacyHash: false};
-            }
-            const hashedPassword = await bcrypt.hash(password, 12);
-            const persisted = await this.persistPasswordHash(hashedPassword);
-            if(!persisted) {
-                return {success: false, bootstrapRequired: true, invalidBootstrapToken: false, weakPassword: false, migratedLegacyHash: false};
-            }
-            await this.clearBootstrapToken();
-            return {success: true, bootstrapRequired: false, invalidBootstrapToken: false, weakPassword: false, migratedLegacyHash: false};
-        }
-
-        const verifyResult = await this.verifyPassword(password);
-        if(!verifyResult.success) {
-            return {success: false, bootstrapRequired: false, invalidBootstrapToken: false, weakPassword: false, migratedLegacyHash: false};
-        }
-        if(verifyResult.migrateToBcrypt) {
-            const migrated = await this.persistPasswordHash(await bcrypt.hash(password, 12));
-            if(!migrated) {
-                return {success: false, bootstrapRequired: false, invalidBootstrapToken: false, weakPassword: false, migratedLegacyHash: false};
-            }
-            return {success: true, bootstrapRequired: false, invalidBootstrapToken: false, weakPassword: false, migratedLegacyHash: true};
-        }
-        return {success: true, bootstrapRequired: false, invalidBootstrapToken: false, weakPassword: false, migratedLegacyHash: false};
-    }
-
-    // noinspection DuplicatedCode
-    private hashPassword(password: string) : string {
-        password = password.trim() + '@';
-        let salt : string = '';
-        for(let i =0; i < password.length; i++) {
-            salt += Math.round(password.charCodeAt(i) / 2).toString(16);
-        }
-        return createHash('sha512').update(password + salt).digest('hex');
-    }
-
-    private ensureBootstrapState(): void {
-        if(this._key.length > 0) {
-            this.removeBootstrapTokenFile();
-            this._bootstrapToken = "";
-            return;
-        }
-
-        const tokenFile = new File(Environment.path.configDir, BOOTSTRAP_TOKEN_FILE_NAME);
-        if(tokenFile.isFile()) {
-            const token = Files.toStringSync(tokenFile)?.trim();
-            if(token && token.length > 0) {
-                this._bootstrapToken = token;
-                this.secureFile(tokenFile);
-                return;
-            }
-        }
-
-        this._bootstrapToken = crypto.randomBytes(32).toString("hex");
-        this.writeSecureFileSync(tokenFile, this._bootstrapToken);
-        logger.warn(`Bootstrap token created at ${tokenFile.toString()}`);
-    }
-
-    private isStrongPassword(password: string): boolean {
-        return password.trim().length >= MIN_PASSWORD_LENGTH;
-    }
-
-    private isBootstrapTokenValid(token?: string): boolean {
-        if(this._bootstrapToken.length == 0) {
-            return false;
-        }
-        if(typeof token != "string") {
-            return false;
-        }
-        // P3-T4 / REQ-04: 부트스트랩 토큰 비교를 timingSafeStringEqual로 일원화.
-        return timingSafeStringEqual(this._bootstrapToken, token.trim(), "utf8");
-    }
-
-    private async verifyPassword(password: string): Promise<{success: boolean, migrateToBcrypt: boolean}> {
-        if(password.length == 0) {
-            return {success: false, migrateToBcrypt: false};
-        }
-        if(this.isBcryptHash(this._key)) {
-            return {success: await bcrypt.compare(password, this._key), migrateToBcrypt: false};
-        }
-        // P3-T4 / REQ-04: 레거시 SHA512 해시 비교를 상수시간으로 수행.
-        // 이 경로는 bcrypt 마이그레이션 전용이지만, 해시 일치 여부 검증은
-        // 길이-고정 hex 문자열 비교이므로 상수시간이 필요하다.
-        return {success: timingSafeStringEqual(this._key, this.hashPassword(password), "utf8"), migrateToBcrypt: true};
-    }
-
-    private isBcryptHash(hash: string): boolean {
-        return /^\$2[aby]\$\d{2}\$/.test(hash);
-    }
-
-    private async persistPasswordHash(passwordHash: string): Promise<boolean> {
-        const keyFile = new File(Environment.path.configDir, KEY_FILE_NAME);
-        try {
-            await this.writeSecureFile(keyFile, passwordHash);
-            this._key = passwordHash;
-            logger.info(`A new password has been set.`)
-            logger.info(`Write key file : ${keyFile.toString()}`);
-            return true;
-        } catch (e) {
-            logger.error(`Can not write file : ${keyFile.toString()}`, e);
-            return false;
-        }
-    }
-
-    private async clearBootstrapToken(): Promise<void> {
-        const tokenFile = new File(Environment.path.configDir, BOOTSTRAP_TOKEN_FILE_NAME);
-        this._bootstrapToken = "";
-        if(tokenFile.exists()) {
-            try {
-                await fsp.rm(tokenFile.toString(), {force: true});
-            } catch {}
-        }
-    }
-
-    private removeBootstrapTokenFile(): void {
-        const tokenFile = new File(Environment.path.configDir, BOOTSTRAP_TOKEN_FILE_NAME);
-        if(tokenFile.exists()) {
-            tokenFile.delete();
-        }
-    }
-
-    private async writeSecureFile(file: File, value: string): Promise<void> {
-        const parent = file.getParentFile();
-        if(!parent.isDirectory()) {
-            parent.mkdirs();
-        }
-        await fsp.writeFile(file.toString(), value, {encoding: "utf-8", mode: 0o600});
-        this.secureFile(file);
-    }
-
-    private writeSecureFileSync(file: File, value: string): void {
-        const parent = file.getParentFile();
-        if(!parent.isDirectory()) {
-            parent.mkdirs();
-        }
-        fs.writeFileSync(file.toString(), value, {encoding: "utf-8", mode: 0o600});
-        this.secureFile(file);
-    }
-
-    private secureFile(file: File): void {
-        try {
-            fs.chmodSync(file.toString(), 0o600);
-        } catch {}
-    }
-
-
-
-
-
-
 }
 
 export default SessionStore;
-export { BOOTSTRAP_TOKEN_FILE_NAME, DEFAULT_TIMEOUT, LoginResult };
+export { DEFAULT_TIMEOUT };

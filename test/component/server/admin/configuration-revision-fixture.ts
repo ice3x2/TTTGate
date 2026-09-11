@@ -1,7 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
 import AdminServer from "../../../../src/server/admin/AdminServer";
-import SessionStore, {BOOTSTRAP_TOKEN_FILE_NAME} from "../../../../src/server/admin/SessionStore";
+import {BOOTSTRAP_TOKEN_FILE_NAME, IdentityMigration} from "../../../../src/server/rbac/IdentityMigration";
 import ServerOptionStore from "../../../../src/server/ServerOptionStore";
 import {CertificationStore} from "../../../../src/server/CertificationStore";
 import TTTServer from "../../../../src/server/TTTServer";
@@ -29,7 +29,7 @@ export const withConfigurationServer = async (check: (fixture: any) => Promise<v
             await api.listen(0, "127.0.0.1");
         }
         const ports = apis.map((api) => ((api as any)._server.address() as {port: number}).port);
-        SessionStore.instance;
+        await IdentityMigration.runAtStartup();
         const bootstrapToken = (await fs.readFile(path.join(root.rootDir, "config", BOOTSTRAP_TOKEN_FILE_NAME), "utf8")).trim();
         const login = await httpRequest({port: ports[0], path: "/api/login", method: "POST",
             headers: {"Content-Type": "application/json"}, body: JSON.stringify({key: "revision-password", bootstrapToken})});

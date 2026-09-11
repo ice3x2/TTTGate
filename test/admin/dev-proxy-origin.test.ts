@@ -2,7 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import {spawnSync} from "child_process";
 import AdminServer from "../../src/server/admin/AdminServer";
-import SessionStore, {BOOTSTRAP_TOKEN_FILE_NAME} from "../../src/server/admin/SessionStore";
+import {BOOTSTRAP_TOKEN_FILE_NAME, IdentityMigration} from "../../src/server/rbac/IdentityMigration";
 import ServerOptionStore from "../../src/server/ServerOptionStore";
 import {CertificationStore} from "../../src/server/CertificationStore";
 import {applyTestRoot, cleanupTestRoot, createTestRoot} from "../helpers/runtime";
@@ -25,7 +25,7 @@ test.each([false, true])("actual configured proxy adapts only trusted present or
     try {
         applyTestRoot(root.rootDir);
         const option = ServerOptionStore.instance.serverOption;
-        SessionStore.instance;
+        await IdentityMigration.runAtStartup();
         api = new AdminServer({} as any, false);
         const backendPort = await api.listen(0, "127.0.0.1");
         const backendOrigin = `http://127.0.0.1:${backendPort}`;
