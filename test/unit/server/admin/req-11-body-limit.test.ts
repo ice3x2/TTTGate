@@ -11,7 +11,7 @@
 import http from "http";
 import net from "net";
 import AdminServer from "../../../../src/server/admin/AdminServer";
-import SessionStore from "../../../../src/server/admin/SessionStore";
+import {IdentityMigration} from "../../../../src/server/rbac/IdentityMigration";
 import ServerOptionStore from "../../../../src/server/ServerOptionStore";
 import {applyTestRoot, cleanupTestRoot, createTestRoot, TestRoot} from "../../../helpers/runtime";
 
@@ -26,7 +26,7 @@ describe("REQ-11 JSON body size / timeout", () => {
         testRoot = await createTestRoot("req-11-body");
         applyTestRoot(testRoot.rootDir);
         ServerOptionStore.instance;
-        SessionStore.instance;
+        await IdentityMigration.runAtStartup();
         adminServer = new AdminServer({} as any, false);
         port = await adminServer.listen(0, "127.0.0.1");
     });

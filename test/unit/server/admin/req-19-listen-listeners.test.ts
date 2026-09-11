@@ -9,7 +9,7 @@
  *  (3) 영구 핸들러의 function identity 가 생성자에서 등록된 것과 동일.
  */
 import AdminServer from "../../../../src/server/admin/AdminServer";
-import SessionStore from "../../../../src/server/admin/SessionStore";
+import {IdentityMigration} from "../../../../src/server/rbac/IdentityMigration";
 import ServerOptionStore from "../../../../src/server/ServerOptionStore";
 import {applyTestRoot, cleanupTestRoot, createTestRoot, TestRoot} from "../../../helpers/runtime";
 
@@ -22,7 +22,7 @@ describe("REQ-19 AdminServer listen listener accumulation prevention", () => {
         testRoot = await createTestRoot("req-19-listen");
         applyTestRoot(testRoot.rootDir);
         ServerOptionStore.instance;
-        SessionStore.instance;
+        await IdentityMigration.runAtStartup();
     });
 
     afterEach(async () => {

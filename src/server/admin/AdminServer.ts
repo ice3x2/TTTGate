@@ -1,7 +1,10 @@
 import http, {IncomingMessage, ServerResponse} from "http";
 import https from "https";
 import ServerOptionStore from "../ServerOptionStore";
-import SessionStore from "./SessionStore";
+import SessionStore, {Session} from "./SessionStore";
+import {IdentityStore} from "../rbac/IdentityStore";
+import {IdentityMigration, LEGACY_ADMIN_USERNAME} from "../rbac/IdentityMigration";
+import {validateUsername} from "../rbac/IdentityTypes";
 import {createHash} from "node:crypto";
 
 import {CertificationStore, CertInfo, PemData} from "../CertificationStore";
@@ -226,6 +229,9 @@ class AdminServer {
     private routePost = async (req: IncomingMessage, res: ServerResponse, url: string) => {
         if (url == "/api/login") {
             await this.onLogin(req, res);
+            return;
+        } else if (url == "/api/logout") {
+            await this.onLogout(req, res);
             return;
         } else if (url == "/api/adminCert") {
             await this.onUpdateAdminCert(req, res);
@@ -812,12 +818,48 @@ class AdminServer {
 
 
     private onGetValidateSession = async (req: IncomingMessage, res: ServerResponse) => {
-        let valid = await this.validateSession(req);
-        if(!valid) {
+        const session = this.resolveSession(req);
+        if(!session) {
             this.sendApiFailure(res, 401, {valid: false, message: 'Invalid session'});
             return;
         }
-        this.sendApiSuccess(res, {valid: valid});
+        if(session.userId === 'legacy-admin') {
+            this.sendApiSuccess(res, {
+                valid: true,
+                user: {id: 'legacy-admin', username: LEGACY_ADMIN_USERNAME, displayName: LEGACY_ADMIN_USERNAME, role: 'superuser'},
+                mustChangePassword: false
+            });
+            return;
+        }
+        const user = IdentityStore.instance.user(session.userId);
+        if(!user || user.status === 'disabled') {
+            await SessionStore.instance.removeSession(session.key);
+            this.sendApiFailure(res, 401, {valid: false, message: 'Invalid session'});
+            return;
+        }
+        this.sendApiSuccess(res, {
+            valid: true,
+            user: {id: user.id, username: user.username, displayName: user.displayName, role: user.role},
+            mustChangePassword: user.mustChangePassword
+        });
+    }
+
+    private onLogout = async (req: IncomingMessage, res: ServerResponse) => {
+        const session = this.resolveSession(req);
+        if(!session) {
+            this.sendApiFailure(res, 401, {message: 'Invalid session'});
+            return;
+        }
+        await SessionStore.instance.removeSession(session.key);
+        const secure = this._tls ? ' Secure;' : '';
+        res.writeHead(200, {
+            'Content-Type': 'application/json',
+            'Set-Cookie': [
+                `sessionKey=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict;${secure}`,
+                `${CSRF_COOKIE_NAME}=; Path=/; Max-Age=0; SameSite=Strict;${secure}`
+            ]
+        });
+        res.end(JSON.stringify({success: true, partial: false, failedScopes: [], warnings: [], message: ''}));
     }
 
     /**
@@ -841,8 +883,8 @@ class AdminServer {
     }
 
     private checkSession = async (req: IncomingMessage, res: ServerResponse) : Promise<boolean> => {
-        let validSession = await this.validateSession(req);
-        if(!validSession) {
+        const session = this.resolveSession(req);
+        if(!session) {
             this.sendApiFailure(res, 401, {message: 'Invalid session'});
             return false;
         }
@@ -1039,44 +1081,121 @@ class AdminServer {
             if(!res.headersSent) this.sendApiFailure(res, 400, {message: 'Invalid login body'});
             return;
         }
-        const key = typeof json?.['key'] == 'string' ? json['key'] : '';
-        const bootstrapToken = typeof json?.['bootstrapToken'] == 'string' ? json['bootstrapToken'] : undefined;
         // 단일 관리자 암호이므로 제출 값과 무관하게 네트워크 버킷으로 집계한다.
+        // 본문 검증보다 먼저 판정한다 — 차단된 IP가 형식 오류로 401을 받아 백오프를
+        // 우회하거나, 차단 상태를 401/429로 구분당하지 않게 한다.
         if(this.isLoginBlocked(req)) {
             this.sendApiFailure(res, 429, {message: 'Too many login attempts'});
             return;
         }
-        const sessionStore = SessionStore.instance;
-        const result = await sessionStore.loginWithDetails(key, bootstrapToken);
-        if(result.success) {
-            this.resetLoginAttempts(req);
-            const sessionKey = await sessionStore.newSession();
-            // P5-T4 / REQ-12: 로그인 성공 시 CSRF 쿠키도 함께 발급 (double-submit).
-            const csrfToken = crypto.randomBytes(32).toString('hex');
-            const secure = this._tls ? ' Secure;' : '';
-            res.writeHead(200, {
-                'Content-Type': 'application/json',
-                'Set-Cookie': [
-                    `sessionKey=${sessionKey}; Path=/; Max-Age=${12 * 60 * 60}; HttpOnly; SameSite=Strict;${secure}`,
-                    // CSRF 토큰은 JS에서 읽어 헤더에 실어야 하므로 HttpOnly 금지.
-                    `${CSRF_COOKIE_NAME}=${csrfToken}; Path=/; Max-Age=${12 * 60 * 60}; SameSite=Strict;${secure}`
-                ]
-            });
-            res.end(JSON.stringify({success: true, partial: false, failedScopes: [], warnings: [], message: '', csrfToken}));
-        } else {
+
+        // password 별칭: password가 없으면 key (#102 (U2-10)가 제거할 때까지 유지).
+        const password = (typeof json?.['password'] == 'string' ? json['password']
+            : (typeof json?.['key'] == 'string' ? json['key'] : '')).trim();
+        const bootstrapToken = typeof json?.['bootstrapToken'] == 'string' ? json['bootstrapToken'] : undefined;
+
+        // username 별칭: username이 없으면 'admin'.
+        let username = LEGACY_ADMIN_USERNAME;
+        let invalidUsername = false;
+        if(json?.['username'] !== undefined) {
+            const usernameResult = validateUsername(json['username']);
+            if(usernameResult.success) {
+                username = usernameResult.value;
+            } else {
+                invalidUsername = true;
+            }
+        }
+
+        if(invalidUsername) {
+            // 형식 실패도 실패 횟수에 넣는다(비밀번호 오류와 같은 비용을 치르게 해 username 열거·탐색을 막는다).
             this.recordLoginFailure(req);
-            // P5-T2 / REQ-07: 실패 응답 지연은 computeBackoffMs(실패횟수) 기반.
             await this.delayFailedLogin(req);
-            if(result.bootstrapRequired) {
-                this.sendApiFailure(res, result.weakPassword ? 400 : 403, {
-                    bootstrapRequired: true,
-                    invalidBootstrapToken: result.invalidBootstrapToken,
-                    weakPassword: result.weakPassword
+            if(IdentityMigration.bootstrapRequired()) {
+                this.sendApiFailure(res, 403, {
+                    bootstrapRequired: true, invalidBootstrapToken: false, weakPassword: false, invalidUsername: true
                 });
                 return;
             }
             this.sendApiFailure(res, 401);
+            return;
         }
+
+        if(IdentityMigration.bootstrapRequired()) {
+            const result = await IdentityMigration.completeBootstrap({username, password, bootstrapToken});
+            if(!result.success) {
+                this.recordLoginFailure(req);
+                await this.delayFailedLogin(req);
+                if(!result.bootstrapRequired) {
+                    // completeBootstrap이 부트스트랩 플래그가 이미 꺼진 상태에서 호출된 경우(레이스).
+                    this.sendApiFailure(res, 401);
+                    return;
+                }
+                this.sendApiFailure(res, result.weakPassword ? 400 : 403, {
+                    bootstrapRequired: true,
+                    invalidBootstrapToken: result.invalidBootstrapToken,
+                    weakPassword: result.weakPassword,
+                    invalidUsername: result.invalidUsername
+                });
+                return;
+            }
+            await this.completeLogin(req, res, result.user.id, {
+                id: result.user.id, username: result.user.username, displayName: result.user.displayName, role: result.user.role
+            }, result.user.mustChangePassword);
+            return;
+        }
+
+        if(IdentityStore.instance.mode === 'legacy-fallback') {
+            const legacyOk = await IdentityMigration.verifyLegacyKey(password);
+            if(!legacyOk) {
+                this.recordLoginFailure(req);
+                await this.delayFailedLogin(req);
+                this.sendApiFailure(res, 401);
+                return;
+            }
+            await this.completeLogin(req, res, 'legacy-admin', {
+                id: 'legacy-admin', username: LEGACY_ADMIN_USERNAME, displayName: LEGACY_ADMIN_USERNAME, role: 'superuser'
+            }, false);
+            return;
+        }
+
+        const verifyResult = await IdentityStore.instance.verifyPassword(username, password);
+        if(!verifyResult.success) {
+            // not-found/disabled/mismatch를 구분하지 않는다(사용자 열거 방지).
+            this.recordLoginFailure(req);
+            await this.delayFailedLogin(req);
+            this.sendApiFailure(res, 401);
+            return;
+        }
+        const user = verifyResult.user;
+        await this.completeLogin(req, res, user.id, {
+            id: user.id, username: user.username, displayName: user.displayName, role: user.role
+        }, user.mustChangePassword);
+    }
+
+    /**
+     * 로그인 성공 공통 경로: 실패 카운터 초기화 → 세션 발급 → 세션/CSRF 쿠키 발급.
+     */
+    private async completeLogin(req: IncomingMessage, res: ServerResponse, userId: string,
+                                 user: {id: string; username: string; displayName: string; role: string},
+                                 mustChangePassword: boolean): Promise<void> {
+        this.resetLoginAttempts(req);
+        const userAgent = req.headers['user-agent'];
+        const sessionKey = await SessionStore.instance.newSession(userId, {
+            ip: this.getClientAddress(req),
+            userAgent: typeof userAgent == 'string' ? userAgent : undefined
+        });
+        // P5-T4 / REQ-12: 로그인 성공 시 CSRF 쿠키도 함께 발급 (double-submit).
+        const csrfToken = crypto.randomBytes(32).toString('hex');
+        const secure = this._tls ? ' Secure;' : '';
+        res.writeHead(200, {
+            'Content-Type': 'application/json',
+            'Set-Cookie': [
+                `sessionKey=${sessionKey}; Path=/; Max-Age=${12 * 60 * 60}; HttpOnly; SameSite=Strict;${secure}`,
+                // CSRF 토큰은 JS에서 읽어 헤더에 실어야 하므로 HttpOnly 금지.
+                `${CSRF_COOKIE_NAME}=${csrfToken}; Path=/; Max-Age=${12 * 60 * 60}; SameSite=Strict;${secure}`
+            ]
+        });
+        res.end(JSON.stringify({success: true, partial: false, failedScopes: [], warnings: [], message: '', csrfToken, user, mustChangePassword}));
     }
 
 
@@ -1136,13 +1255,12 @@ class AdminServer {
         });
     }
 
-    private validateSession = async (req: IncomingMessage) : Promise<boolean> => {
-        let sessionKey = AdminServer.getSessionKey(req);
-        if(sessionKey) {
-            let sessionStore = SessionStore.instance;
-            return await sessionStore.isSessionValid(sessionKey);
+    private resolveSession = (req: IncomingMessage) : Session | undefined => {
+        const sessionKey = AdminServer.getSessionKey(req);
+        if(sessionKey.length === 0) {
+            return undefined;
         }
-        return false;
+        return SessionStore.instance.resolveSession(sessionKey);
     }
 
 

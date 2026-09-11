@@ -31,8 +31,8 @@ describe("REQ-16 SessionStore isSessionValid + Cookie parse", () => {
 
     it("(1) isSessionValid — 유효 세션 true, for...of 반복으로 다수 키 처리", async () => {
         const store = SessionStore.instance;
-        const s1 = await store.newSession();
-        const s2 = await store.newSession();
+        const s1 = await store.newSession("u_test", {ip: "127.0.0.1"});
+        const s2 = await store.newSession("u_test", {ip: "127.0.0.1"});
         expect(s1).not.toBe(s2);
         // 두 세션 모두 유효 → true.
         expect(await store.isSessionValid([s1, s2])).toBe(true);
@@ -40,7 +40,7 @@ describe("REQ-16 SessionStore isSessionValid + Cookie parse", () => {
 
     it("(2) isSessionValid — 만료 세션은 false + Map 에서 제거", async () => {
         const store = SessionStore.instance;
-        const sk = await store.newSession();
+        const sk = await store.newSession("u_test", {ip: "127.0.0.1"});
         // 12시간 + 1ms 진행 → 만료.
         fakeClock.advance(12 * 60 * 60 * 1000 + 1);
         expect(await store.isSessionValid([sk])).toBe(false);

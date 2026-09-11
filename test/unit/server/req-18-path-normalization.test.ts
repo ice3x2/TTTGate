@@ -16,7 +16,7 @@
 import fs from "fs/promises";
 import Path from "path";
 import AdminServer from "../../../src/server/admin/AdminServer";
-import SessionStore from "../../../src/server/admin/SessionStore";
+import {IdentityMigration} from "../../../src/server/rbac/IdentityMigration";
 import ServerOptionStore from "../../../src/server/ServerOptionStore";
 import {httpRequest} from "../../helpers/http";
 import {applyTestRoot, cleanupTestRoot, createTestRoot, TestRoot, writeWebFixture} from "../../helpers/runtime";
@@ -32,7 +32,7 @@ describe("REQ-18 onGetWebResource path normalization", () => {
         testRoot = await createTestRoot("req-18-path");
         applyTestRoot(testRoot.rootDir);
         ServerOptionStore.instance;
-        SessionStore.instance;
+        await IdentityMigration.runAtStartup();
         await writeWebFixture(testRoot.rootDir, "index.html", "<html><body>OK</body></html>");
         // 탈출 방어 테스트용: web 디렉토리 밖에 시크릿 파일 생성.
         await fs.writeFile(Path.join(testRoot.rootDir, "config", "secret.txt"), "TOP_SECRET", {encoding: "utf-8"});

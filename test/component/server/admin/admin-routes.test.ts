@@ -2,7 +2,7 @@ import http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
 import AdminServer from "../../../../src/server/admin/AdminServer";
-import SessionStore, {BOOTSTRAP_TOKEN_FILE_NAME} from "../../../../src/server/admin/SessionStore";
+import {BOOTSTRAP_TOKEN_FILE_NAME, IdentityMigration} from "../../../../src/server/rbac/IdentityMigration";
 import {CertificationStore} from "../../../../src/server/CertificationStore";
 import {createTestRoot, applyTestRoot, cleanupTestRoot} from "../../../helpers/runtime";
 
@@ -12,7 +12,7 @@ const withRoutes = async (check: (fixture: any) => Promise<void>) => {
     try {
         applyTestRoot(root.rootDir);
         await CertificationStore.instance.load();
-        SessionStore.instance;
+        await IdentityMigration.runAtStartup();
         const token = (await fs.readFile(path.join(root.rootDir, "config", BOOTSTRAP_TOKEN_FILE_NAME), "utf8")).trim();
         // These routes use no tunnel runtime; the actual AdminServer/HTTP guards run.
         api = new AdminServer(undefined as any, false);

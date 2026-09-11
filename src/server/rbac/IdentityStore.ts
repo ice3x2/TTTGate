@@ -6,6 +6,7 @@ import Files from "../../util/Files";
 import {ClockRngProvider} from "../../util/ClockRng";
 import {timingSafeStringEqual} from "../../util/timingSafeStringEqual";
 import LoggerFactory from "../../util/logger/LoggerFactory";
+import SessionStore from "../admin/SessionStore";
 import {hashLegacyPassword} from "./legacyPasswordHash";
 import {
     cloneGroupAttributes,
@@ -332,6 +333,9 @@ class IdentityStore {
         if(!saveResult.success) {
             return saveFailedResult(saveResult.message);
         }
+        if(updatedUser.status === 'disabled') {
+            SessionStore.instance.removeSessionsOfUser(updatedUser.id);
+        }
         return {success: true, value: cloneUser(updatedUser)};
     }
 
@@ -347,6 +351,7 @@ class IdentityStore {
         if(!saveResult.success) {
             return saveFailedResult(saveResult.message);
         }
+        SessionStore.instance.removeSessionsOfUser(id);
         return {success: true, value: undefined};
     }
 

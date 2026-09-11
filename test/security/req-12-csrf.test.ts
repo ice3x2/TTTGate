@@ -12,7 +12,7 @@
 import fs from "fs/promises";
 import Path from "path";
 import AdminServer from "../../src/server/admin/AdminServer";
-import SessionStore, {BOOTSTRAP_TOKEN_FILE_NAME} from "../../src/server/admin/SessionStore";
+import {BOOTSTRAP_TOKEN_FILE_NAME, IdentityMigration} from "../../src/server/rbac/IdentityMigration";
 import ServerOptionStore from "../../src/server/ServerOptionStore";
 import {AdminSecurityPolicyRegistry} from "../../src/server/AdminSecurityPolicy";
 import {httpRequest} from "../helpers/http";
@@ -30,7 +30,7 @@ describe("REQ-12 CSRF + Origin guard for state-changing APIs", () => {
         testRoot = await createTestRoot("req-12-csrf");
         applyTestRoot(testRoot.rootDir);
         ServerOptionStore.instance;
-        SessionStore.instance;
+        await IdentityMigration.runAtStartup();
         adminServer = new AdminServer({} as any, false);
         port = await adminServer.listen(0, "127.0.0.1");
         bootstrapToken = (await fs.readFile(
