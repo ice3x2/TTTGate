@@ -62,7 +62,8 @@ type ServerOption = {
     trustedClients?: Array<TrustedClient>,
     tunnelingOptions: Array<TunnelingOption>,
     globalMemCacheLimit?: number
-    keepAlive: number
+    keepAlive: number,
+    connectionSecurity?: ConnectionSecurityOption
 
 
 }
@@ -85,6 +86,16 @@ type TunnelingOption = {
 }
 
 const DEFAULT_KEY = "hello-TTTGate";
+
+/**
+ * U5-03 / #118 — 국가 필터(geo) 설정.
+ *
+ * D10: 국가 허용·차단 목록은 서버 전역 하나이며 관리자 페이지에도 적용된다.
+ */
+type GeoMode = 'off' | 'allow' | 'deny';
+type GeoConfig = {mode: GeoMode; countries: string[]; applyToAdmin: boolean; unknownPolicy: 'allow' | 'deny'};
+type ConnectionSecurityOption = {geo: GeoConfig};
+const DEFAULT_GEO_CONFIG: Readonly<GeoConfig> = Object.freeze({mode: 'off', countries: [], applyToAdmin: true, unknownPolicy: 'allow'});
 
 /**
  * U5-02 / #117 — 터널 레이트 리밋 옵션.
@@ -267,5 +278,9 @@ export {
     RateLimitOption,
     RATE_LIMIT_RANGE,
     defaultRateLimit,
-    normalizeRateLimit
+    normalizeRateLimit,
+    GeoMode,
+    GeoConfig,
+    ConnectionSecurityOption,
+    DEFAULT_GEO_CONFIG
 };

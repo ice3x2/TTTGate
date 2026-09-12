@@ -107,6 +107,11 @@ class AdminServer {
         };
         this._server.on('error', this._permanentErrorHandler);
 
+        // U5-03 / #118: TLS 핸드셰이크 전 원시 소켓 단계에서 국가 필터를 적용한다.
+        this._server.on('connection', (socket) => {
+            if(!AdmissionController.instance.admit({kind: 'admin'}, socket.remoteAddress).allowed) socket.destroy();
+        });
+
         // P5-T3 / REQ-11: HTTP 서버 수준 타임아웃.
         try {
             (this._server as any).headersTimeout = ADMIN_HEADERS_TIMEOUT_MS;

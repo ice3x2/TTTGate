@@ -10,6 +10,7 @@ import fs from "fs";
 import {createOpaqueToken} from "../commons/ProtocolV2";
 import {redactSecrets} from "../util/SecretRedactor";
 import {createInitialRevisionState, RevisionState} from "./RevisionState";
+import {normalizeConnectionSecurity} from "./security/connectionSecurity";
 
 const logger = LoggerFactory.getLogger('server', 'ServerOptionStore');
 
@@ -401,6 +402,11 @@ class ServerOptionStore {
             clientSecret: trustedClient.clientSecret,
             displayName: trustedClient.displayName?.trim() || trustedClient.clientId.trim()
         }));
+        const connectionSecurity = normalizeConnectionSecurity(option.connectionSecurity);
+        if(!connectionSecurity.success) {
+            return {success: false, message: connectionSecurity.message};
+        }
+        option.connectionSecurity = connectionSecurity.value;
         return {success: true, message: "", serverOption: option};
     }
 

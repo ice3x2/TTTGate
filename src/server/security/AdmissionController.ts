@@ -1,6 +1,8 @@
 import {ADMIT, AdmissionDecision, AdmissionPolicy, AdmissionScope} from "./AdmissionPolicy";
 import {ConnectionRateLimiter} from "./ConnectionRateLimiter";
 import {normalizeRemoteAddress} from "./address";
+import {GeoFilter} from "./GeoFilter";
+import {DEFAULT_GEO_CONFIG, GeoConfig} from "../../types/TunnelingOption";
 
 export type TunnelRateLimitSource = {
     forwardPort: number;
@@ -23,9 +25,18 @@ export class AdmissionController implements AdmissionPolicy {
     }
 
     public readonly rateLimiter = new ConnectionRateLimiter();
+    public readonly geo = new GeoFilter();
     private readonly _geoDenials = new Map<number | 'admin', number>();
     private _concurrencyProvider: ((port: number) => number) | undefined;
     private _pruneTimer: NodeJS.Timeout | undefined;
+
+    private constructor() {
+        this.geo.configure(DEFAULT_GEO_CONFIG as GeoConfig);
+    }
+
+    public configureGeo(config: GeoConfig): void {
+        this.geo.configure(config);
+    }
 
     private dispose(): void {
         if (this._pruneTimer) clearInterval(this._pruneTimer);
@@ -69,7 +80,12 @@ export class AdmissionController implements AdmissionPolicy {
             if (banDecision) return banDecision;
         }
 
-        // geo 판정 자리 — #118 (U5-03) 이 여기에 삽입한다.
+        const geoDecision = this.geo.decide(ip, scope);
+        if (!geoDecision.allowed) {
+            const key = scope.kind === 'admin' ? 'admin' : scope.port;
+            this._geoDenials.set(key, (this._geoDenials.get(key) ?? 0) + 1);
+            return geoDecision;
+        }
 
         if (scope.kind === 'tunnel') {
             const decision = this.rateLimiter.admit(scope.port, ip, now);

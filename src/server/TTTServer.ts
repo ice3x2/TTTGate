@@ -1,6 +1,6 @@
 import {ExternalPortServerPool, ExternalPortServerStatus } from "./ExternalPortServerPool";
 import {TunnelServer, ClientStatus} from "./TunnelServer";
-import {ServerOption, TunnelingOption, resolveSessionTtlMs} from "../types/TunnelingOption";
+import {ConnectionSecurityOption, DEFAULT_GEO_CONFIG, ServerOption, TunnelingOption, resolveSessionTtlMs} from "../types/TunnelingOption";
 import SocketState from "../util/SocketState";
 import {CertInfo, CertificationStore} from "./CertificationStore";
 import ServerOptionStore from "./ServerOptionStore";
@@ -9,6 +9,7 @@ import {SysInfo} from "../commons/SysMonitor";
 import AppCompositionRoot from "../bootstrap/AppCompositionRoot";
 import ObjectUtil from "../util/ObjectUtil";
 import {SocketHandler} from "../util/SocketHandler";
+import {AdmissionController} from "./security/AdmissionController";
 const logger = LoggerFactory.getLogger('server', 'TTTServer');
 
 type RuntimeApplyResult = {
@@ -193,6 +194,13 @@ class TTTServer {
         return this._tunnelServer.clientStatuses();
     }
 
+    // U5-03 / #118 — connectionSecurity.geo 를 AdmissionController에 적용한다. #120 (U5-05)의 PUT /api/security/geo도 같은 진입점을 쓴다.
+    public applyConnectionSecurity(next: ConnectionSecurityOption | undefined): void {
+        const geo = next?.geo ?? DEFAULT_GEO_CONFIG;
+        AdmissionController.instance.configureGeo(geo);
+        this._appliedServerOption.connectionSecurity = {geo: {...geo, countries: [...geo.countries]}};
+    }
+
     private controlOptionsChanged(next: ServerOption, previous: ServerOption): boolean {
         return ['port', 'tls', 'key', 'keepAlive', 'controlProtocolMode', 'allowLegacyControlAuth', 'trustedClients']
             .some(key => key === 'trustedClients'
@@ -257,6 +265,7 @@ class TTTServer {
             this._appliedScopeRevisions = {...state.scopes};
             this._appliedServerOption = ObjectUtil.cloneDeep(state.serverOption);
         }
+        this.applyConnectionSecurity(state.serverOption.connectionSecurity);
         return failures;
     }
 
@@ -273,6 +282,9 @@ class TTTServer {
     public async applyServerOption(nextOption: ServerOption, previousOption: ServerOption): Promise<RuntimeApplyResult> {
         const ttl = resolveSessionTtlMs(nextOption.sessionTtlMs);
         if(!ttl.success) return {success: false, partial: false, failedScopes: ['session-ttl'], warnings: [ttl.message], restartRequiredScopes: []};
+        if(!ObjectUtil.canonicalEquals(previousOption.connectionSecurity?.geo ?? DEFAULT_GEO_CONFIG, nextOption.connectionSecurity?.geo ?? DEFAULT_GEO_CONFIG)) {
+            this.applyConnectionSecurity(nextOption.connectionSecurity);
+        }
         const restartRequiredScopes: string[] = [];
         const warnings: string[] = [];
 
