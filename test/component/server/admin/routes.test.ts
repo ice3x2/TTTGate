@@ -9,13 +9,16 @@ import {createTestRoot, applyTestRoot, cleanupTestRoot} from "../../../helpers/r
 
 jest.setTimeout(30_000);
 
-// 이슈 #95 표(#117 의 bans 라우트 2개 포함) 그대로 옮긴 기대 목록.
+// 이슈 #95 표(#117 의 bans 라우트 2개, #96 의 /api/me 3개 포함) 그대로 옮긴 기대 목록.
 const EXPECTED_ROUTES: ReadonlyArray<{method: string; pattern: string}> = [
     {method: "POST", pattern: "^/api/login$"},
     {method: "GET", pattern: "^/api/version$"},
     {method: "POST", pattern: "^/api/logout$"},
     {method: "GET", pattern: "^/api/validateSession$"},
     {method: "GET", pattern: "^/api/csrfToken$"},
+    {method: "GET", pattern: "^/api/me$"},
+    {method: "PUT", pattern: "^/api/me/password$"},
+    {method: "POST", pattern: "^/api/me/acknowledge-migration$"},
     {method: "GET", pattern: "^/api/serverOption$"},
     {method: "POST", pattern: "^/api/serverOption$"},
     {method: "PUT", pattern: "^/api/serverOption$"},

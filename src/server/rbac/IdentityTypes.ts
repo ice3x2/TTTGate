@@ -46,6 +46,7 @@ export type IdentityFile = {version: 1; users: User[]; groups: Group[]};
 export const IDENTITY_FILE_NAME = 'identity.yaml';
 export const IDENTITY_SCHEMA_VERSION = 1;
 export const SYSTEM_SUPERUSER_GROUP_ID = 'system:superuser';
+export const SYSTEM_SUPERUSER_GROUP_NAME = 'Superusers';
 export const DEFAULT_GROUP_ID = 'default';
 export const MIGRATED_OWNER_ID = 'system:migrated';
 export const MIN_PASSWORD_LENGTH = 8;
@@ -237,7 +238,7 @@ export function newGroupId(): string {
 
 export function createSystemGroups(): [Group, Group] {
     return [
-        {id: SYSTEM_SUPERUSER_GROUP_ID, name: 'Superusers', system: true, attributes: cloneGroupAttributes(DEFAULT_GROUP_ATTRIBUTES)},
+        {id: SYSTEM_SUPERUSER_GROUP_ID, name: SYSTEM_SUPERUSER_GROUP_NAME, system: true, attributes: cloneGroupAttributes(DEFAULT_GROUP_ATTRIBUTES)},
         {id: DEFAULT_GROUP_ID, name: 'Default', system: true, attributes: cloneGroupAttributes(DEFAULT_GROUP_ATTRIBUTES)}
     ];
 }
