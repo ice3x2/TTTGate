@@ -51,8 +51,7 @@ const withRoutesServer = async (check: (fixture: any) => Promise<void>) => {
         const token = (await fs.readFile(path.join(root.rootDir, "config", BOOTSTRAP_TOKEN_FILE_NAME), "utf8")).trim();
         api = new AdminServer(undefined as any, false);
         const port = await api.listen(0, "127.0.0.1");
-        const request = (method: string, target: string, body: object = {}, headers: Record<string, string> = {}) => new Promise<any>((resolve, reject) => {
-            const bytes = JSON.stringify(body);
+        const requestRaw = (method: string, target: string, bytes: string, headers: Record<string, string> = {}) => new Promise<any>((resolve, reject) => {
             const req = http.request({host: "127.0.0.1", port, method, path: target,
                 headers: {"Content-Type": "application/json", "Content-Length": String(Buffer.byteLength(bytes)), ...headers}}, res => {
                 const data: Buffer[] = [];
@@ -64,6 +63,8 @@ const withRoutesServer = async (check: (fixture: any) => Promise<void>) => {
             req.setTimeout(2_000, () => req.destroy(new Error("owned HTTP route did not respond")));
             req.end(bytes);
         });
+        const request = (method: string, target: string, body: object = {}, headers: Record<string, string> = {}) =>
+            requestRaw(method, target, JSON.stringify(body), headers);
         const login = async () => {
             const response = await request("POST", "/api/login", {key: "routes95-password", bootstrapToken: token});
             expect(response.status).toBe(200);
@@ -71,7 +72,7 @@ const withRoutesServer = async (check: (fixture: any) => Promise<void>) => {
             return {Cookie: cookies.map(value => value.split(";")[0]).join("; "),
                 "X-CSRF-Token": cookies.find(value => value.startsWith("csrfToken="))!.split(";")[0].slice("csrfToken=".length)};
         };
-        await check({port, token, request, login, api});
+        await check({port, token, request, requestRaw, login, api});
     } finally {
         try { await api?.close(); } finally { await cleanupTestRoot(root); }
     }
@@ -155,4 +156,22 @@ test("GET /api/externalCert/12/34 no longer matches (multi-segment) -> 404 JSON"
     const response = await f.request("GET", "/api/externalCert/12/34", {}, headers);
     expect(response.status).toBe(404);
     expect(JSON.parse(response.body).success).toBe(false);
+}));
+
+// 본문 파싱이 route() 로 중앙화되어, onLogin 전용 catch(구 400 'Invalid login body')가 사라지고
+// 다른 모든 POST/PUT/DELETE 와 같은 공용 400 'Invalid JSON body' 를 받는다 (#95, 의도된 변경).
+test("POST /api/login with syntactically broken JSON gets the shared 'Invalid JSON body' message, not a login-specific one", async () => withRoutesServer(async f => {
+    const response = await f.requestRaw("POST", "/api/login", "{not valid json");
+    expect(response.status).toBe(400);
+    expect(JSON.parse(response.body).message).toBe("Invalid JSON body");
+}));
+
+// 세그먼트 수가 (?<port>[^/]+)/(?<ip>[^/]+) 와 맞지 않으면 앵커 정규식이 매칭하지 않아
+// 핸들러(400 'invalid port')에 도달하기 전에 404 가 된다 — 존재하지 않는 경로는 인자 오류가 아니다 (#95, 의도된 변경).
+test("DELETE /api/security/bans with a wrong segment count is 404, not the handler's 400", async () => withRoutesServer(async f => {
+    const headers = await f.login();
+    const oneSegment = await f.request("DELETE", "/api/security/bans/12", {}, headers);
+    expect(oneSegment.status).toBe(404);
+    const threeSegments = await f.request("DELETE", "/api/security/bans/12/1.1.1.1/extra", {}, headers);
+    expect(threeSegments.status).toBe(404);
 }));
