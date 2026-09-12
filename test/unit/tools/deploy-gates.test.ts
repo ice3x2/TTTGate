@@ -106,6 +106,16 @@ test("packaged binaries bundle the geoip-lite country databases", () => {
     expect(manifest.scripts["geoip:update"]).toBe("node scripts/geoip-update.mjs");
 });
 
+// 종료 코드 2 는 "갱신하지 않았다" 를 실제 갱신 실패(1)와 구분하는 신호다. 0 으로 바뀌면 릴리스가
+// 갱신하지 않은 DB 를 담은 채 그대로 진행된다. 라이선스 키가 있는 경로는 실제 다운로드를 수행하므로
+// 실행하지 않는다.
+test("the geoip update script reports a skipped update without a license key", () => {
+    const result = spawnSync(process.execPath, [path.join(root, "scripts/geoip-update.mjs")],
+        {cwd: root, encoding: "utf8", timeout: 15_000, env: {...process.env, MAXMIND_LICENSE_KEY: ""}});
+    expect({status: result.status, stdout: result.stdout, stderr: result.stderr}).toEqual({status: 2, stdout: "",
+        stderr: "MAXMIND_LICENSE_KEY is not set; keeping the bundled GeoLite2 database\n"});
+});
+
 test("explicit source-only deployment runs all gates but never invokes pkg", () => {
     withFixture(({directory, result, journal}) => {
         expect(result.status).toBe(0);
