@@ -16,7 +16,27 @@ export type TestCertBundle = {
     commonName: string;
 };
 
+// node-forge@1.4.0 의 인증서 ASN.1 직렬화가 약 1/750 확률로 유효하지 않은 DER 을 만든다(GitHub #132).
+// 재시도는 유효한 인증서를 얻기 위한 것이지 오류를 숨기기 위한 것이 아니므로,
+// 이 횟수를 모두 소진하면 마지막 오류를 그대로 던진다.
+const MAX_CERT_GENERATION_ATTEMPTS = 5;
+
 export function generateSelfSignedCert(commonName: string = "localhost"): TestCertBundle {
+    let lastError: unknown;
+    for (let attempt = 0; attempt < MAX_CERT_GENERATION_ATTEMPTS; attempt++) {
+        const bundle = buildCertBundle(commonName);
+        try {
+            new crypto.X509Certificate(bundle.certPem);
+            crypto.createPrivateKey(bundle.keyPem);
+            return bundle;
+        } catch (error) {
+            lastError = error;
+        }
+    }
+    throw lastError;
+}
+
+function buildCertBundle(commonName: string): TestCertBundle {
     const pki = forge.pki;
     const keys = pki.rsa.generateKeyPair(2048);
     const cert = pki.createCertificate();
