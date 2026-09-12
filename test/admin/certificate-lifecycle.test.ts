@@ -78,10 +78,10 @@ test("related Gauge and Timer lifecycle paths mount, update and unmount under Sv
         await app.page.goto(`${app.url}/test/certificate.html?auxiliary`);
         expect(app.errors).toEqual([]);
         await app.page.evaluate(() => (window as any).certificateFixture.updateAuxiliary());
-        await app.page.waitForFunction(() => document.querySelector(".percent-box")?.textContent?.includes("50"));
-        expect(await app.page.locator(".time-text").textContent()).toMatch(/\d+m.*\d+s/);
+        await app.page.waitForFunction(() => document.querySelector(".gauge-val .n")?.textContent?.includes("50"));
+        expect(await app.page.locator(".timer-text").textContent()).toMatch(/\d+m.*\d+s/);
         await app.page.evaluate(() => (window as any).unmountFixture());
-        expect(await app.page.locator(".percent-box").count()).toBe(0);
+        expect(await app.page.locator(".gauge-val").count()).toBe(0);
         expect(app.errors).toEqual([]);
     } finally {
         await app.close();
