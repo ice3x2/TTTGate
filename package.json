@@ -19,7 +19,12 @@
   },
   "scripts": {
     "test": "jest --detectOpenHandles",
+    "test:unit": "jest --detectOpenHandles test/unit test/commons test/util",
+    "test:component": "jest --detectOpenHandles --runInBand test/component test/security test/supply-chain test/ci",
     "test:admin": "jest --runInBand test/admin",
+    "test:e2e": "jest --runInBand test/e2e/tunnel test/e2e/target test/e2e/req-09-pool-swap-zombie.test.ts",
+    "test:e2e:browser": "jest --runInBand test/e2e/browser",
+    "test:stress": "jest --runInBand test/stress",
     "test:browser:install": "playwright install chromium",
     "test:coverage": "jest --detectOpenHandles --coverage",
     "lint": "node scripts/lint-auth-compare.mjs src --strict",
