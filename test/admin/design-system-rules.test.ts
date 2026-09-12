@@ -92,6 +92,31 @@ describe("R3: app.css :root 토큰 계약", () => {
     });
 });
 
+// R4: admin/src 전체에서 `max-width: 1024px` 를 쓰는 파일은 Shell.svelte 하나뿐이다.
+describe("R4: 본문 최대 너비 선언의 단일 위치", () => {
+    const EXTENSIONS = new Set([".svelte", ".css", ".ts"]);
+
+    const collectFiles = (dir: string): string[] => {
+        if(!fs.existsSync(dir)) return [];
+        const entries = fs.readdirSync(dir, {withFileTypes: true});
+        let files: string[] = [];
+        for(const entry of entries) {
+            const full = path.join(dir, entry.name);
+            if(entry.isDirectory()) { files = files.concat(collectFiles(full)); continue; }
+            if(EXTENSIONS.has(path.extname(entry.name))) files.push(full);
+        }
+        return files;
+    };
+
+    test("`max-width: 1024px` 를 포함하는 파일이 admin/src/shell/Shell.svelte 하나다", () => {
+        const owners = collectFiles(path.join(root, "admin/src"))
+            .filter((file) => fs.readFileSync(file, "utf8").includes("max-width: 1024px"))
+            .map((file) => path.relative(root, file).split(path.sep).join("/"))
+            .sort();
+        expect(owners).toEqual(["admin/src/shell/Shell.svelte"]);
+    });
+});
+
 // R5: admin/src 와 admin/index.html 의 텍스트 파일에 외부 URL(http/https)이 없다.
 describe("R5: 외부 요청 URL 부재", () => {
     const excludedDirs = [
