@@ -310,6 +310,24 @@ describe("rbac-login: #96 권한 결정기 · 비밀번호 변경 게이트 · /
         });
     });
 
+    // 이슈 본문의 목적 절은 "/api/me 와 /api/me/password 외에 아무것도 못 한다" 고 썼지만,
+    // 같은 본문의 권한 표는 이 엔드포인트에 me:read 를 지정했고 게이트는 me:read 를 통과시킨다.
+    // 더 구체적인 권한 표를 따른다: 임시 비밀번호 상태에서도 마이그레이션 배너는 닫을 수 있어야 한다.
+    it("mustChangePassword 사용자도 마이그레이션 확인은 할 수 있다", async () => {
+        await withServer(setupBcryptAccount("routes-password"), async ({loginAs, request}) => {
+            await createRegularUser("ivan", "ivan-temp-pw-1", true);
+            const login = await loginAs({username: "ivan", password: "ivan-temp-pw-1"});
+            expect(login.status).toBe(200);
+            expect(login.body).toMatchObject({mustChangePassword: true});
+            const auth = login.auth!;
+
+            const acknowledged = await request("POST", "/api/me/acknowledge-migration", {},
+                {Cookie: auth.Cookie, "x-csrf-token": auth["X-CSRF-Token"]});
+            expect(acknowledged.status).toBe(200);
+            expect(acknowledged.body).toMatchObject({success: true});
+        });
+    });
+
     it("PUT /api/me/password 가 현재 비밀번호와 새 비밀번호를 검증하고 게이트를 해제한다", async () => {
         await withServer(setupBcryptAccount("routes-password"), async ({loginAs, request}) => {
             await createRegularUser("dave", "dave-temp-pw-1", true);
