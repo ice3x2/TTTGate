@@ -8,6 +8,10 @@
   },
   "pkg": {
     "scripts": "build/**/*.js",
+    "assets": [
+      "node_modules/geoip-lite/data/geoip-country.dat",
+      "node_modules/geoip-lite/data/geoip-country6.dat"
+    ],
     "targets": [
       "node24-linux-arm64",
       "node24-win-arm64",
@@ -29,6 +33,7 @@
     "test:coverage": "jest --detectOpenHandles --coverage",
     "lint": "node scripts/lint-auth-compare.mjs src --strict",
     "smoke": "node scripts/smoke.mjs",
+    "geoip:update": "node scripts/geoip-update.mjs",
     "build": "tsc -b",
     "pkg": "pkg . --no-bytecode --public-packages \"*\" --public",
     "dist": "node deploy.js",

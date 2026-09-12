@@ -98,6 +98,14 @@ test("the actual browser gate invokes the installed Playwright CLI", () => {
     expect(manifest.scripts["test:browser:install"]).toBe("playwright install chromium");
 });
 
+test("packaged binaries bundle the geoip-lite country databases", () => {
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+    expect(manifest.pkg.assets).toEqual([
+        "node_modules/geoip-lite/data/geoip-country.dat",
+        "node_modules/geoip-lite/data/geoip-country6.dat"]);
+    expect(manifest.scripts["geoip:update"]).toBe("node scripts/geoip-update.mjs");
+});
+
 test("explicit source-only deployment runs all gates but never invokes pkg", () => {
     withFixture(({directory, result, journal}) => {
         expect(result.status).toBe(0);
