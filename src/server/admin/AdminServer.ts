@@ -25,6 +25,7 @@ import {computeBackoffMs} from "./loginBackoff";
 import crypto from "crypto";
 import {TunnelingOption} from "../../types/TunnelingOption";
 import {AdmissionController} from "../security/AdmissionController";
+import {buildAdminRoutes, Route, RouteContext} from "./routes";
 
 const logger = LoggerFactory.getLogger('server', 'AdminServer');
 
@@ -74,6 +75,8 @@ class AdminServer {
     private _currentTlsOptions: { key: string, cert: string, ca?: string } | undefined;
     // P5-T6 / REQ-19: 영구 error 핸들러 참조 보존 (removeAllListeners 절대 사용 금지).
     private readonly _permanentErrorHandler: (err: Error) => void;
+    // U2-03: 선언적 라우트 표. route() 가 이 표로 매칭·세션 해석을 한 번에 한다.
+    private readonly _routes: readonly Route[];
 
     constructor(tttServer: TTTServer, tls : boolean, certInfo? : CertInfo) {
         this._tttServer = tttServer;
@@ -109,6 +112,37 @@ class AdminServer {
             (this._server as any).headersTimeout = ADMIN_HEADERS_TIMEOUT_MS;
             (this._server as any).requestTimeout = ADMIN_REQUEST_TIMEOUT_MS;
         } catch { /* no-op: runtime 차이 보호 */ }
+
+        this._routes = buildAdminRoutes({
+            onLogin: this.onLogin,
+            onGetVersion: this.onGetVersion,
+            onLogout: this.onLogout,
+            onGetValidateSession: this.onGetValidateSession,
+            onGetCsrfToken: this.onGetCsrfToken,
+            onGetServerOption: this.onGetServerOption,
+            onUpdateServerOption: this.onUpdateServerOption,
+            onGetServerOptionHash: this.onGetServerOptionHash,
+            onGetAdminCert: this.onGetAdminCert,
+            onUpdateAdminCert: this.onUpdateAdminCert,
+            onGetSysInfo: this.onGetSysInfo,
+            onGetSysUsage: this.onGetSysUsage,
+            onGetClientStatus: this.onGetClientStatus,
+            onGetClientSysInfo: this.onGetClientSysInfo,
+            onGetTunnelingOption: this.onGetTunnelingOption,
+            onUpdateTunnelingOption: this.onUpdateTunnelingOption,
+            onRemoveTunnelingOption: this.onRemoveTunnelingOption,
+            onActiveTunneling: this.onActiveTunneling,
+            onGetExternalServerStatuses: this.onGetExternalServerStatuses,
+            onGetExternalServerCert: this.onGetExternalServerCert,
+            onUpdateExternalServerCert: this.onUpdateExternalServerCert,
+            onDeleteExternalServerCert: this.onDeleteExternalServerCert,
+            onGetSecurityBans: this.onGetSecurityBans,
+            onDeleteSecurityBan: this.onDeleteSecurityBan
+        });
+    }
+
+    public get routes(): readonly Route[] {
+        return this._routes;
     }
 
     /**
@@ -166,22 +200,41 @@ class AdminServer {
                    return;
                }
            }
-           if (method == 'GET') {
-                await this.routeGet(req, res, pathname);
-                return;
+
+           const matched = this.matchRoute(method, pathname);
+
+           if(method == 'GET') {
+               // 캐시 하지 않기. 매칭 여부와 무관하게 모든 GET 응답에 적용된다.
+               res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
            }
-           else if(method == 'POST') {
-                await this.routePost(req, res, pathname);
-                return;
-           }
-           else if(method == 'PUT') {
-                await this.routePost(req, res, pathname);
-                return;
-           }
-           else if(method == 'DELETE') {
-               await this.routeDelete(req, res, pathname);
+
+           if(!matched) {
+               if(pathname.startsWith("/api/")) {
+                   this.sendApiFailure(res, 404, {message: `Not Found ${url}`});
+                   return;
+               }
+               if(method == 'GET') {
+                   await this.onGetWebResource(req, res, pathname);
+                   return;
+               }
+               this.sendApiFailure(res, 404, {message: `Not Found ${url}`});
                return;
            }
+
+           const ctx: RouteContext = {req, res, params: matched.params, ip: this.getClientAddress(req)};
+           if(matched.route.action !== 'public') {
+               const session = this.resolveSession(req);
+               if(!session) {
+                   this.sendApiFailure(res, 401, {message: 'Invalid session'});
+                   return;
+               }
+               ctx.session = session;
+           }
+           if(method === 'POST' || method === 'PUT' || method === 'DELETE') {
+               ctx.body = await AdminServer.readJson(req);
+           }
+           await matched.route.handler(ctx);
+           return;
 
         } catch (e: any) {
             try {
@@ -214,101 +267,14 @@ class AdminServer {
         res.end(`Not Found ${url}`);
     }
 
-    private routeDelete = async (req: IncomingMessage, res: ServerResponse, url: string) => {
-        if (url == "/api/tunnelingOption") {
-            await this.onRemoveTunnelingOption(req, res);
-            return;
-        } else if (url.startsWith("/api/externalCert/")) {
-            await this.onDeleteExternalServerCert(req, res);
-            return;
-        } else if (url.startsWith("/api/security/bans/")) {
-            await this.onDeleteSecurityBan(req, res);
-            return;
+    private matchRoute(method: string | undefined, pathname: string): {route: Route; params: Record<string, string>} | undefined {
+        for(const route of this._routes) {
+            if(route.method !== method) continue;
+            const matched = route.pattern.exec(pathname);
+            if(!matched) continue;
+            return {route, params: {...(matched.groups ?? {})}};
         }
-        this.sendApiFailure(res, 404, {message: `Not Found ${url}`});
-    }
-
-
-
-    private routePost = async (req: IncomingMessage, res: ServerResponse, url: string) => {
-        if (url == "/api/login") {
-            await this.onLogin(req, res);
-            return;
-        } else if (url == "/api/logout") {
-            await this.onLogout(req, res);
-            return;
-        } else if (url == "/api/adminCert") {
-            await this.onUpdateAdminCert(req, res);
-        } else if (url == "/api/serverOption") {
-            await this.onUpdateServerOption(req, res);
-        } else if (url == "/api/tunnelingOption") {
-            await this.onUpdateTunnelingOption(req, res);
-        } else if (url.startsWith("/api/externalCert/")) {
-            await this.onUpdateExternalServerCert(req, res);
-            return;
-        } else if (url.startsWith("/api/tunneling/active/")) {
-            await this.onActiveTunneling(req, res);
-            return;
-        } else {
-            this.sendApiFailure(res, 404, {message: `Not Found ${url}`});
-        }
-    }
-
-    private routeGet = async (req: IncomingMessage, res: ServerResponse, url: string) => {
-        // 캐시 하지 않기.
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-
-        if (url == "/api/serverOption") {
-            await this.onGetServerOption(req, res);
-            return;
-        } else if(url == '/api/sysInfo') {
-            await this.onGetSysInfo(req, res);
-        } else if(url == '/api/sysInfo') {
-            await this.onGetSysInfo(req, res);
-        } else if(url == '/api/sysUsage') {
-            await this.onGetSysUsage(req, res);
-        } else if(url == '/api/clientStatus') {
-            await this.onGetClientStatus(req, res);
-        }
-        else if (url == "/api/tunnelingOption") {
-            await this.onGetTunnelingOption(req, res);
-            return;
-        } else if (url == "/api/externalServerStatuses") {
-            await this.onGetExternalServerStatuses(req, res);
-            return;
-        } else if (url == "/api/security/bans") {
-            await this.onGetSecurityBans(req, res);
-            return;
-        } else if(url == "/api/serverOptionHash") {
-            await this.onGetServerOptionHash(req, res);
-            return;
-        } else if (url == "/api/validateSession") {
-            await this.onGetValidateSession(req, res);
-            return;
-        } else if (url == "/api/csrfToken") {
-            await this.onGetCsrfToken(req, res);
-            return;
-        } else if (url == "/api/adminCert") {
-            await this.onGetAdminCert(req, res);
-            return;
-        } else if (url.startsWith("/api/externalCert/")) {
-            await this.onGetExternalServerCert(req, res);
-            return;
-        } else if (url.startsWith("/api/clientSysInfo/")) {
-            await this.onGetClientSysInfo(req, res);
-            return;
-        } else if(url == '/api/version') {
-            await this.onGetVersion(req, res);
-        }
-        else {
-            if(url.startsWith("/api/")) {
-                this.sendApiFailure(res, 404, {message: `Not Found ${url}`});
-                return;
-            }
-            await this.onGetWebResource(req, res, url);
-            return;
-        }
-
+        return undefined;
     }
 
     private onGetWebResource = async (req: IncomingMessage, res: ServerResponse, url: string) => {
@@ -359,11 +325,9 @@ class AdminServer {
 
     }
 
-    private onUpdateAdminCert = async (req: IncomingMessage, res: ServerResponse) => {
-        if(!await this.checkSession(req, res)) {
-            return;
-        }
-        let json = await AdminServer.readJson(req);
+    private onUpdateAdminCert = async (ctx: RouteContext) => {
+        const {res} = ctx;
+        let json = ctx.body;
         await ServerOptionStore.instance.runConfigurationMutation(async () => {
             let certInfo = json['certInfo'];
             let certStore = CertificationStore.instance;
@@ -466,11 +430,9 @@ class AdminServer {
         });
     }
 
-    private onUpdateServerOption = async (req: IncomingMessage, res: ServerResponse) => {
-        if(!await this.checkSession(req, res)) {
-            return;
-        }
-        const requestedServerOption = await AdminServer.readJson(req);
+    private onUpdateServerOption = async (ctx: RouteContext) => {
+        const {res} = ctx;
+        const requestedServerOption = ctx.body;
         await this.mutateConfiguration(res, requestedServerOption, async (serverOptionStore) => {
             let currentServerOption = serverOptionStore.serverOption;
             let prepareResult = serverOptionStore.prepareServerOption(ObjectUtil.cloneDeep(requestedServerOption));
@@ -611,11 +573,9 @@ class AdminServer {
     }
 
 
-    private onUpdateTunnelingOption = async (req: IncomingMessage, res: ServerResponse) => {
-        if(!await this.checkSession(req, res)) {
-            return;
-        }
-        const payload = await AdminServer.readJson(req);
+    private onUpdateTunnelingOption = async (ctx: RouteContext) => {
+        const {res} = ctx;
+        const payload = ctx.body;
         await this.mutateConfiguration(res, payload, async (serverOptionStore) => {
             const {certInfo, expectedCertificateRevision, previousForwardPort, ...tunnelingOption} = payload;
             if(certInfo !== undefined || previousForwardPort !== undefined) {
@@ -766,11 +726,9 @@ class AdminServer {
         this.sendApiSuccess(res, {forwardPort: option.forwardPort, revisionState: store.revisionState, certificateRevisionState: certificates.revisionState});
     }
 
-    private onRemoveTunnelingOption = async (req: IncomingMessage, res: ServerResponse) => {
-        if(!await this.checkSession(req, res)) {
-            return;
-        }
-        const json = await AdminServer.readJson(req);
+    private onRemoveTunnelingOption = async (ctx: RouteContext) => {
+        const {res} = ctx;
+        const json = ctx.body;
         await this.mutateConfiguration(res, json, async (serverOptionStore) => {
             let forwardPort = json['forwardPort'];
             let previousOption = serverOptionStore.getTunnelingOption(forwardPort);
@@ -824,12 +782,9 @@ class AdminServer {
     }
 
 
-    private onGetValidateSession = async (req: IncomingMessage, res: ServerResponse) => {
-        const session = this.resolveSession(req);
-        if(!session) {
-            this.sendApiFailure(res, 401, {valid: false, message: 'Invalid session'});
-            return;
-        }
+    private onGetValidateSession = async (ctx: RouteContext) => {
+        const {res} = ctx;
+        const session = ctx.session!;
         if(session.userId === 'legacy-admin') {
             this.sendApiSuccess(res, {
                 valid: true,
@@ -851,12 +806,9 @@ class AdminServer {
         });
     }
 
-    private onLogout = async (req: IncomingMessage, res: ServerResponse) => {
-        const session = this.resolveSession(req);
-        if(!session) {
-            this.sendApiFailure(res, 401, {message: 'Invalid session'});
-            return;
-        }
+    private onLogout = async (ctx: RouteContext) => {
+        const {res} = ctx;
+        const session = ctx.session!;
         await SessionStore.instance.removeSession(session.key);
         const secure = this._tls ? ' Secure;' : '';
         res.writeHead(200, {
@@ -874,10 +826,8 @@ class AdminServer {
      * 세션이 유효할 때만 새 토큰을 발급하고 csrfToken 쿠키를 갱신한다.
      * (GET 은 CSRF 게이트 바깥이므로, 탈취 쿠키로 악용되지 않도록 반드시 세션 검증을 선행한다.)
      */
-    private onGetCsrfToken = async (req: IncomingMessage, res: ServerResponse) => {
-        if(!await this.checkSession(req, res)) {
-            return;
-        }
+    private onGetCsrfToken = async (ctx: RouteContext) => {
+        const {res} = ctx;
         const csrfToken = crypto.randomBytes(32).toString('hex');
         const secure = this._tls ? ' Secure;' : '';
         res.writeHead(200, {
@@ -889,19 +839,8 @@ class AdminServer {
         res.end(JSON.stringify({success: true, partial: false, failedScopes: [], warnings: [], message: '', csrfToken}));
     }
 
-    private checkSession = async (req: IncomingMessage, res: ServerResponse) : Promise<boolean> => {
-        const session = this.resolveSession(req);
-        if(!session) {
-            this.sendApiFailure(res, 401, {message: 'Invalid session'});
-            return false;
-        }
-        return true;
-    }
-
-    private onGetAdminCert = async (req: IncomingMessage, res: ServerResponse) => {
-        if(!await this.checkSession(req, res)) {
-            return;
-        }
+    private onGetAdminCert = async (ctx: RouteContext) => {
+        const {res} = ctx;
         await ServerOptionStore.instance.runConfigurationMutation(async () => {
             let certStore = CertificationStore.instance;
             let certInfo = certStore.getAdminCert();
@@ -909,14 +848,11 @@ class AdminServer {
         });
     }
 
-    private getNumberInPath = async (req: IncomingMessage, res: ServerResponse, pathStart: string, errorMessage: string ='Invalid port' ) : Promise<number | undefined> => {
-        if(!await this.checkSession(req, res)) {
-            return undefined;
-        }
-        let numStr = this.pathname(req.url).substring(pathStart.length);
+    private getNumberInPath = async (ctx: RouteContext, paramName: string, errorMessage: string ='Invalid port' ) : Promise<number | undefined> => {
+        let numStr = ctx.params[paramName];
         let num = numStr == undefined ? undefined : parseInt(numStr);
         if(num == undefined || isNaN(num)) {
-            this.sendApiFailure(res, 400, {message:errorMessage});
+            this.sendApiFailure(ctx.res, 400, {message:errorMessage});
             return undefined;
         }
         return num;
@@ -924,10 +860,11 @@ class AdminServer {
 
 
 
-    private onActiveTunneling = async (req: IncomingMessage, res: ServerResponse) => {
-        let port = await this.getNumberInPath(req, res,'/api/tunneling/active/');
+    private onActiveTunneling = async (ctx: RouteContext) => {
+        const {res} = ctx;
+        let port = await this.getNumberInPath(ctx, 'port');
         if(port == undefined) return;
-        let json = await AdminServer.readJson(req);
+        let json = ctx.body;
         let timeout = json['timeout'];
         let active = json['active'];
         if(timeout == undefined || isNaN(timeout)) {
@@ -944,10 +881,11 @@ class AdminServer {
         });
     }
 
-    private onDeleteExternalServerCert = async (req: IncomingMessage, res: ServerResponse) => {
-        let port = await this.getNumberInPath(req, res,'/api/externalCert/');
+    private onDeleteExternalServerCert = async (ctx: RouteContext) => {
+        const {res} = ctx;
+        let port = await this.getNumberInPath(ctx, 'port');
         if(port == undefined) return;
-        const payload = await AdminServer.readJson(req);
+        const payload = ctx.body;
         await ServerOptionStore.instance.runConfigurationMutation(async () => {
             if(!this.admitCertificateRevision(res, payload?.expectedCertificateRevision)) return;
             if(!await CertificationStore.instance.removeForExternalServer(port)) {
@@ -957,10 +895,11 @@ class AdminServer {
         });
     }
 
-    private onUpdateExternalServerCert = async (req: IncomingMessage, res: ServerResponse) => {
-        let port = await this.getNumberInPath(req, res,'/api/externalCert/');
+    private onUpdateExternalServerCert = async (ctx: RouteContext) => {
+        const {res} = ctx;
+        let port = await this.getNumberInPath(ctx, 'port');
         if(port == undefined) return;
-        let json = await AdminServer.readJson(req);
+        let json = ctx.body;
         await ServerOptionStore.instance.runConfigurationMutation(async () => {
             let certInfo = json['certInfo'];
             let certStore = CertificationStore.instance;
@@ -1019,14 +958,15 @@ class AdminServer {
         });
     }
 
-    private onGetVersion = async (req: IncomingMessage, res: ServerResponse) => {
+    private onGetVersion = async (ctx: RouteContext) => {
         let version = Environment.version;
-        this.sendApiSuccess(res, {name: version.name, build: version.build});
+        this.sendApiSuccess(ctx.res, {name: version.name, build: version.build});
     }
 
 
-    private onGetExternalServerCert = async (req: IncomingMessage, res: ServerResponse) => {
-        let port = await this.getNumberInPath(req, res,'/api/externalCert/');
+    private onGetExternalServerCert = async (ctx: RouteContext) => {
+        const {res} = ctx;
+        let port = await this.getNumberInPath(ctx, 'port');
         if(port == undefined) return;
         await ServerOptionStore.instance.runConfigurationMutation(async () => {
             let certStore = CertificationStore.instance;
@@ -1040,8 +980,9 @@ class AdminServer {
     }
 
 
-    private onGetClientSysInfo = async (req: IncomingMessage, res: ServerResponse) => {
-        let id = await this.getNumberInPath(req, res,'/api/clientSysInfo/', "Invalid client ID");
+    private onGetClientSysInfo = async (ctx: RouteContext) => {
+        const {res} = ctx;
+        let id = await this.getNumberInPath(ctx, 'id', "Invalid client ID");
         if(id == undefined) return;
         let sysInfo = this._tttServer?.getClientSysInfo(id);
         if(sysInfo == undefined) {
@@ -1078,16 +1019,9 @@ class AdminServer {
 
 
 
-    private onLogin = async (req: IncomingMessage, res: ServerResponse) => {
-        let json: any;
-        try {
-            json = await AdminServer.readJson(req);
-        } catch (e: any) {
-            // body 크기 초과/타임아웃은 상위 route()에서 처리하지만,
-            // 방어적으로 여기서도 fail-fast.
-            if(!res.headersSent) this.sendApiFailure(res, 400, {message: 'Invalid login body'});
-            return;
-        }
+    private onLogin = async (ctx: RouteContext) => {
+        const {req, res} = ctx;
+        const json: any = ctx.body;
         // 단일 관리자 암호이므로 제출 값과 무관하게 네트워크 버킷으로 집계한다.
         // 본문 검증보다 먼저 판정한다 — 차단된 IP가 형식 오류로 401을 받아 백오프를
         // 우회하거나, 차단 상태를 401/429로 구분당하지 않게 한다.
@@ -1271,10 +1205,8 @@ class AdminServer {
     }
 
 
-    private onGetServerOption = async (req: IncomingMessage, res: ServerResponse) => {
-        if(!await this.checkSession(req, res)) {
-            return;
-        }
+    private onGetServerOption = async (ctx: RouteContext) => {
+        const {req, res} = ctx;
         // P5-T1 / REQ-03: Vary + CORS whitelist. 자기 호스트 아닐 시 CORS 헤더 생략.
         this.applySelfOriginCorsHeaders(req, res);
         await ServerOptionStore.instance.runConfigurationMutation(async () => {
@@ -1289,35 +1221,27 @@ class AdminServer {
     }
 
 
-    private onGetSysInfo = async (req: IncomingMessage, res: ServerResponse) => {
-        if(!await this.checkSession(req, res)) {
-            return;
-        }
+    private onGetSysInfo = async (ctx: RouteContext) => {
+        const {res} = ctx;
         let status = await SysMonitor.instance.sysInfo();
         this.sendApiSuccess(res, {sysInfo: status});
     }
 
-    private onGetSysUsage = async (req: IncomingMessage, res: ServerResponse) => {
-        if(!await this.checkSession(req, res)) {
-            return;
-        }
+    private onGetSysUsage = async (ctx: RouteContext) => {
+        const {res} = ctx;
         let status = await SysMonitor.instance.usage();
         this.sendApiSuccess(res, {sysUsage: status});
     }
 
-    private onGetClientStatus = async (req: IncomingMessage, res: ServerResponse) => {
-        if(!await this.checkSession(req, res)) {
-            return;
-        }
+    private onGetClientStatus = async (ctx: RouteContext) => {
+        const {res} = ctx;
         let status = this._tttServer?.clientStatus();
         this.sendApiSuccess(res, {statuses: status ?? []});
     }
 
 
-    private onGetTunnelingOption = async (req: IncomingMessage, res: ServerResponse) => {
-        if(!await this.checkSession(req, res)) {
-            return;
-        }
+    private onGetTunnelingOption = async (ctx: RouteContext) => {
+        const {res} = ctx;
         await ServerOptionStore.instance.runConfigurationMutation(async () => {
             let store = ServerOptionStore.instance;
             let tunnelingOptions = store.serverOption.tunnelingOptions;
@@ -1328,36 +1252,28 @@ class AdminServer {
         });
     }
 
-    private onGetExternalServerStatuses = async (req: IncomingMessage, res: ServerResponse) => {
-        if(!await this.checkSession(req, res)) {
-            return;
-        }
+    private onGetExternalServerStatuses = async (ctx: RouteContext) => {
+        const {res} = ctx;
         let statuses = this._tttServer?.externalServerStatuses();
         this.sendApiSuccess(res, {serverTime: Date.now(), statuses: statuses ?? []});
     }
 
     // U5-02 / #117 — 임시 차단 목록 조회·해제 API. 세션 검사만 한다.
     // 권한·감사는 #118 (U5-03)·#120 (U5-05) 이 더한다.
-    private onGetSecurityBans = async (req: IncomingMessage, res: ServerResponse) => {
-        if(!await this.checkSession(req, res)) {
-            return;
-        }
+    private onGetSecurityBans = async (ctx: RouteContext) => {
+        const {res} = ctx;
         const now = Date.now();
         this.sendApiSuccess(res, {serverTime: now, bans: AdmissionController.instance.rateLimiter.bans(now)});
     }
 
-    private onDeleteSecurityBan = async (req: IncomingMessage, res: ServerResponse) => {
-        if(!await this.checkSession(req, res)) {
-            return;
-        }
-        const rest = this.pathname(req.url).substring("/api/security/bans/".length);
-        const segments = rest.split("/");
-        const port = segments.length === 2 ? Number(segments[0]) : NaN;
+    private onDeleteSecurityBan = async (ctx: RouteContext) => {
+        const {res} = ctx;
+        const port = Number(ctx.params.port);
         if(!Number.isInteger(port) || port < 1 || port > 65535) {
             this.sendApiFailure(res, 400, {message: 'invalid port'});
             return;
         }
-        const ip = segments.length === 2 && segments[1].length > 0 ? decodeURIComponent(segments[1]) : '';
+        const ip = ctx.params.ip.length > 0 ? decodeURIComponent(ctx.params.ip) : '';
         if(ip.length === 0) {
             this.sendApiFailure(res, 400, {message: 'invalid ip'});
             return;
@@ -1366,11 +1282,8 @@ class AdminServer {
     }
 
 
-    private onGetServerOptionHash = async (req: IncomingMessage, res: ServerResponse) => {
-        // P5-T1 / REQ-03: 세션 인증 필수.
-        if(!await this.checkSession(req, res)) {
-            return;
-        }
+    private onGetServerOptionHash = async (ctx: RouteContext) => {
+        const {req, res} = ctx;
         // P5-T1 / REQ-03: 자기 호스트 CORS 화이트리스트 + Vary: Origin 항상.
         const corsHeaders = this.buildSelfOriginCorsHeaders(req);
         // P5-T1 / REQ-03: cloneDeep 후 구조 분해로 tunnelingOptions 제외 — 런타임 상태 파괴 방지.
