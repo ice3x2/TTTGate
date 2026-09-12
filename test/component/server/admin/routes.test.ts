@@ -38,7 +38,8 @@ const EXPECTED_ROUTES: ReadonlyArray<{method: string; pattern: string}> = [
     {method: "PUT", pattern: "^/api/externalCert/(?<port>[^/]*)$"},
     {method: "DELETE", pattern: "^/api/externalCert/(?<port>[^/]*)$"},
     {method: "GET", pattern: "^/api/security/bans$"},
-    {method: "DELETE", pattern: "^/api/security/bans/(?<port>[^/]+)/(?<ip>[^/]+)$"}
+    {method: "DELETE", pattern: "^/api/security/bans/(?<port>[^/]+)/(?<ip>[^/]+)$"},
+    {method: "GET", pattern: "^/api/security/stats$"}
 ];
 
 const withRoutesServer = async (check: (fixture: any) => Promise<void>) => {

@@ -1,4 +1,4 @@
-import {ADMIT, AdmissionDecision} from "./AdmissionPolicy";
+import {ADMIT, AdmissionDecision, AdmissionDenial} from "./AdmissionPolicy";
 
 export type RateLimitConfig = {windowMs: number; maxConnections: number; banMs: number};
 
@@ -31,7 +31,7 @@ export class ConnectionRateLimiter {
         });
     }
 
-    public banned(port: number, ip: string, now: number): AdmissionDecision | undefined {
+    public banned(port: number, ip: string, now: number): AdmissionDenial | undefined {
         const state = this._ports.get(port);
         if (!state) return undefined;
 

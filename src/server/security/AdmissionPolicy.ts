@@ -1,6 +1,7 @@
 export type AdmissionScope = {kind: 'tunnel'; port: number; protocol: 'tcp' | 'http' | 'https'} | {kind: 'admin'};
 export type AdmissionReason = 'geo-deny' | 'rate-limit-ban' | 'rate-limit-exceeded' | 'concurrency-limit';
-export type AdmissionDecision = {allowed: true} | {allowed: false; reason: AdmissionReason; retryAfterMs?: number};
+export type AdmissionDenial = {allowed: false; reason: AdmissionReason; retryAfterMs?: number};
+export type AdmissionDecision = {allowed: true} | AdmissionDenial;
 
 export interface AdmissionPolicy {
     admit(scope: AdmissionScope, remoteAddress: string | undefined, now?: number): AdmissionDecision;
