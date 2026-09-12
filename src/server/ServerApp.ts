@@ -2,7 +2,8 @@ import TTTServer from "./TTTServer";
 import ServerOptionStore from "./ServerOptionStore";
 import AdminServer from "./admin/AdminServer";
 import {CertificationStore, CertInfo} from "./CertificationStore";
-import {ServerOption} from "../types/TunnelingOption";
+import {DEFAULT_GEO_CONFIG, ServerOption} from "../types/TunnelingOption";
+import {AdmissionController} from "./security/AdmissionController";
 import CLI from "../util/CLI";
 import Files from "../util/Files";
 import File from "../util/File";
@@ -31,6 +32,7 @@ const startService = async (serverOption: ServerOption, adminCertInfo: CertInfo)
     }
     AppCompositionRoot.applyGlobalMemLimitMiB(serverOption.globalMemCacheLimit ?? 128);
     logger.info("Start service with option: " + JSON.stringify(redactSecrets(serverOption), null, 2));
+    AdmissionController.instance.configureGeo(serverOption.connectionSecurity?.geo ?? DEFAULT_GEO_CONFIG);
     tttServer = TTTServer.create(serverOption);
     adminServer = new AdminServer(tttServer, serverOption.adminTls === true, adminCertInfo);
     await adminServer.listen(serverOption.adminPort!, serverOption.adminBindHost);

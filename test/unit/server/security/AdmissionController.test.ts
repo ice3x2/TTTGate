@@ -83,6 +83,55 @@ describe("AdmissionController", () => {
         expect(controller.admit(scope, "1.1.1.1", 0)).toEqual({allowed: true});
     });
 
+    it("admits tunnel and admin traffic by default (geo mode off)", () => {
+        const controller = AdmissionController.instance;
+        expect(controller.geo.isDatabaseLoaded()).toBe(false);
+        expect(controller.admit({kind: "tunnel", port: 1, protocol: "tcp"}, "8.8.8.8", 0)).toEqual({allowed: true});
+        expect(controller.admit({kind: "admin"}, "8.8.8.8", 0)).toEqual({allowed: true});
+    });
+
+    it("denies a tunnel connection on geo-deny and tallies the port's geo counter", () => {
+        const controller = AdmissionController.instance;
+        controller.configureGeo({mode: "deny", countries: [], applyToAdmin: true, unknownPolicy: "deny"});
+
+        const scope = {kind: "tunnel", port: 1, protocol: "tcp"} as const;
+        expect(controller.admit(scope, "127.0.0.1", 0)).toEqual({allowed: false, reason: "geo-deny"});
+        expect(controller.denials(1)).toEqual({geo: 1, rateLimit: 0});
+    });
+
+    it("applies geo denial to the admin scope as well, bypassing only the rate-limit stage", () => {
+        const controller = AdmissionController.instance;
+        controller.configureGeo({mode: "deny", countries: [], applyToAdmin: true, unknownPolicy: "deny"});
+
+        expect(controller.admit({kind: "admin"}, "127.0.0.1", 0)).toEqual({allowed: false, reason: "geo-deny"});
+        expect(controller.denials("admin")).toEqual({geo: 1, rateLimit: 0});
+    });
+
+    it("checks geo denial before the rate-limit ban/admit stage", () => {
+        const controller = AdmissionController.instance;
+        controller.configureTunnel({
+            forwardPort: 1,
+            rateLimit: {enabled: true, windowMs: 1000, maxConnections: 100, banMs: 1000}
+        });
+        controller.configureGeo({mode: "deny", countries: [], applyToAdmin: true, unknownPolicy: "deny"});
+
+        const scope = {kind: "tunnel", port: 1, protocol: "tcp"} as const;
+        expect(controller.admit(scope, "127.0.0.1", 0)).toEqual({allowed: false, reason: "geo-deny"});
+        expect(controller.denials(1)).toEqual({geo: 1, rateLimit: 0});
+    });
+
+    it("resets the geo instance and its denial counters on resetForTest", () => {
+        const controller = AdmissionController.instance;
+        controller.configureGeo({mode: "deny", countries: [], applyToAdmin: true, unknownPolicy: "deny"});
+        controller.admit({kind: "admin"}, "127.0.0.1", 0);
+
+        AdmissionController.resetForTest();
+
+        const after = AdmissionController.instance;
+        expect(after.geo.isDatabaseLoaded()).toBe(false);
+        expect(after.denials("admin")).toEqual({geo: 0, rateLimit: 0});
+    });
+
     it("returns a fresh, unconfigured instance after resetForTest", () => {
         const before = AdmissionController.instance;
         before.configureTunnel({

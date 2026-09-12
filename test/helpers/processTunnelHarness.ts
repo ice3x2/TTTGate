@@ -30,6 +30,9 @@ export type ProcessTunnelOptions = {
     clientOptionExtra?: Partial<ClientOption>;
     clientCount?: number;
     startClient?: boolean;
+    // U5-03 / #118 — false면 관리자 포트 폴링 대신 서버 stdout의 `Listen - port:` 로그로 준비 판정한다.
+    // 국가 필터가 외부 포트·관리자 포트를 막아 놓은 상태로 기동하는 시나리오(geo-filter.test.ts)를 위한 옵션.
+    adminAccess?: boolean;
 };
 
 export type ProcessTunnelHarness = {
@@ -107,6 +110,7 @@ export async function createProcessTunnelHarness(options: ProcessTunnelOptions):
 
     const clientCount = options.clientCount ?? 1;
     const startClientOnBoot = options.startClient !== false;
+    const adminAccessEnabled = options.adminAccess !== false;
 
     const createdRoots: string[] = [];
     // 생성 도중 실패 시 정리용: spawn된 모든 프로세스(서버 재시작 이력 포함)를 남긴다.
@@ -307,16 +311,39 @@ export async function createProcessTunnelHarness(options: ProcessTunnelOptions):
             }, {timeoutMs, intervalMs: 200, label: "waitForClientOnline"});
         };
 
-        await waitForAdminReady();
-        for(const forwardPort of forwardPorts) {
-            await waitForTunnelOnline(forwardPort);
+        // U5-03 / #118 — adminAccess: false일 때의 유일한 준비 판정: 서버 stdout에 `Listen - port: <forwardPort>` 로그가 나타나는지.
+        const waitForListenLog = async (forwardPort: number, timeoutMs: number = 20000): Promise<void> => {
+            const marker = `Listen - port: ${forwardPort}`;
+            await waitUntil(() => {
+                if(currentServer.child.exitCode !== null) {
+                    throw new Error(`Server exited while waiting for listen log.\n${formatTail(currentServer, 50)}`);
+                }
+                return Buffer.concat(currentServer.stdoutChunks).toString("utf-8").includes(marker);
+            }, {timeoutMs, intervalMs: 200, label: `waitForListenLog(${forwardPort})`});
+        };
+
+        const disabledFn = (name: string) => async (): Promise<never> => {
+            throw new Error(`${name} is disabled when adminAccess is false`);
+        };
+
+        if(adminAccessEnabled) {
+            await waitForAdminReady();
+            for(const forwardPort of forwardPorts) {
+                await waitForTunnelOnline(forwardPort);
+            }
+        } else {
+            for(const forwardPort of forwardPorts) {
+                await waitForListenLog(forwardPort);
+            }
         }
 
         if(startClientOnBoot) {
             for(let n = 0; n < clientCount; n++) {
                 clientProcesses[n] = spawnClient(n);
             }
-            await waitForClientOnline();
+            if(adminAccessEnabled) {
+                await waitForClientOnline();
+            }
         }
 
         const stopClient = async (index: number = 0): Promise<void> => {
@@ -349,9 +376,15 @@ export async function createProcessTunnelHarness(options: ProcessTunnelOptions):
             for(;;) {
                 currentServer = spawnServer();
                 try {
-                    await waitForAdminReady(Math.max(1000, deadline - Date.now()));
-                    for(const forwardPort of forwardPorts) {
-                        await waitForTunnelOnline(forwardPort, Math.max(1000, deadline - Date.now()));
+                    if(adminAccessEnabled) {
+                        await waitForAdminReady(Math.max(1000, deadline - Date.now()));
+                        for(const forwardPort of forwardPorts) {
+                            await waitForTunnelOnline(forwardPort, Math.max(1000, deadline - Date.now()));
+                        }
+                    } else {
+                        for(const forwardPort of forwardPorts) {
+                            await waitForListenLog(forwardPort, Math.max(1000, deadline - Date.now()));
+                        }
                     }
                     break;
                 } catch(err) {
@@ -361,9 +394,11 @@ export async function createProcessTunnelHarness(options: ProcessTunnelOptions):
                     await new Promise((resolve) => setTimeout(resolve, 500));
                 }
             }
-            const anyClientRunning = clientProcesses.some((p) => p && p.child.exitCode === null && p.child.signalCode === null);
-            if(anyClientRunning) {
-                await waitForClientOnline();
+            if(adminAccessEnabled) {
+                const anyClientRunning = clientProcesses.some((p) => p && p.child.exitCode === null && p.child.signalCode === null);
+                if(anyClientRunning) {
+                    await waitForClientOnline();
+                }
             }
         };
 
@@ -385,9 +420,9 @@ export async function createProcessTunnelHarness(options: ProcessTunnelOptions):
             clientIds,
             get server() { return currentServer; },
             get clients() { return clientProcesses.filter((p): p is SpawnedProcess => p !== undefined); },
-            adminRequest,
-            waitForClientOnline,
-            waitForTunnelOnline,
+            adminRequest: adminAccessEnabled ? adminRequest : disabledFn("adminRequest"),
+            waitForClientOnline: adminAccessEnabled ? waitForClientOnline : disabledFn("waitForClientOnline"),
+            waitForTunnelOnline: adminAccessEnabled ? waitForTunnelOnline : disabledFn("waitForTunnelOnline"),
             restartServer,
             stopClient,
             startClient,
