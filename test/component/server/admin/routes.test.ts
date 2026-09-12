@@ -2,45 +2,58 @@ import http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
 import AdminServer from "../../../../src/server/admin/AdminServer";
-import {ADMIN_ROUTES} from "../../../../src/server/admin/routes";
+import {ADMIN_ROUTES, RouteAction, RouteContext} from "../../../../src/server/admin/routes";
+import ServerOptionStore from "../../../../src/server/ServerOptionStore";
 import {BOOTSTRAP_TOKEN_FILE_NAME, IdentityMigration} from "../../../../src/server/rbac/IdentityMigration";
 import {CertificationStore} from "../../../../src/server/CertificationStore";
 import {createTestRoot, applyTestRoot, cleanupTestRoot} from "../../../helpers/runtime";
 
 jest.setTimeout(30_000);
 
-// 이슈 #95 표(#117 의 bans 라우트 2개 포함) 그대로 옮긴 기대 목록.
-const EXPECTED_ROUTES: ReadonlyArray<{method: string; pattern: string}> = [
-    {method: "POST", pattern: "^/api/login$"},
-    {method: "GET", pattern: "^/api/version$"},
-    {method: "POST", pattern: "^/api/logout$"},
-    {method: "GET", pattern: "^/api/validateSession$"},
-    {method: "GET", pattern: "^/api/csrfToken$"},
-    {method: "GET", pattern: "^/api/serverOption$"},
-    {method: "POST", pattern: "^/api/serverOption$"},
-    {method: "PUT", pattern: "^/api/serverOption$"},
-    {method: "GET", pattern: "^/api/serverOptionHash$"},
-    {method: "GET", pattern: "^/api/adminCert$"},
-    {method: "POST", pattern: "^/api/adminCert$"},
-    {method: "PUT", pattern: "^/api/adminCert$"},
-    {method: "GET", pattern: "^/api/sysInfo$"},
-    {method: "GET", pattern: "^/api/sysUsage$"},
-    {method: "GET", pattern: "^/api/clientStatus$"},
-    {method: "GET", pattern: "^/api/clientSysInfo/(?<id>[^/]*)$"},
-    {method: "GET", pattern: "^/api/tunnelingOption$"},
-    {method: "POST", pattern: "^/api/tunnelingOption$"},
-    {method: "PUT", pattern: "^/api/tunnelingOption$"},
-    {method: "DELETE", pattern: "^/api/tunnelingOption$"},
-    {method: "POST", pattern: "^/api/tunneling/active/(?<port>[^/]*)$"},
-    {method: "GET", pattern: "^/api/externalServerStatuses$"},
-    {method: "GET", pattern: "^/api/externalCert/(?<port>[^/]*)$"},
-    {method: "POST", pattern: "^/api/externalCert/(?<port>[^/]*)$"},
-    {method: "PUT", pattern: "^/api/externalCert/(?<port>[^/]*)$"},
-    {method: "DELETE", pattern: "^/api/externalCert/(?<port>[^/]*)$"},
-    {method: "GET", pattern: "^/api/security/bans$"},
-    {method: "DELETE", pattern: "^/api/security/bans/(?<port>[^/]+)/(?<ip>[^/]+)$"},
-    {method: "GET", pattern: "^/api/security/stats$"}
+// 이슈 #95 표(#117 의 bans 2개, #119 의 stats 1개, #96 의 /api/me 3개 포함) 그대로 옮긴 기대 목록.
+// method 와 pattern 뿐 아니라 권한 결정에 쓰이는 선언(action, target 공급 여부)까지 함께 고정한다.
+// 이 둘을 빼면 라우트의 action 을 'session' 이나 'public' 으로 바꿔 놓아도 표 테스트가 통과해 버린다.
+// 함수형 action 은 값 비교가 불가능하므로 함수 이름을 식별자로 삼고,
+// 실제 판정 결과는 아래의 "함수형 action" 테스트가 따로 고정한다.
+type ExpectedRoute = {method: string; pattern: string; action: string; hasTarget: boolean};
+
+const EXPECTED_ROUTES: ReadonlyArray<ExpectedRoute> = [
+    {method: "POST", pattern: "^/api/login$", action: "public", hasTarget: false},
+    {method: "GET", pattern: "^/api/version$", action: "public", hasTarget: false},
+    {method: "POST", pattern: "^/api/logout$", action: "session", hasTarget: false},
+    {method: "GET", pattern: "^/api/validateSession$", action: "session", hasTarget: false},
+    {method: "GET", pattern: "^/api/csrfToken$", action: "session", hasTarget: false},
+    {method: "GET", pattern: "^/api/me$", action: "me:read", hasTarget: false},
+    {method: "PUT", pattern: "^/api/me/password$", action: "me:password", hasTarget: false},
+    {method: "POST", pattern: "^/api/me/acknowledge-migration$", action: "me:read", hasTarget: false},
+    {method: "GET", pattern: "^/api/serverOption$", action: "server:manage", hasTarget: false},
+    {method: "POST", pattern: "^/api/serverOption$", action: "server:manage", hasTarget: false},
+    {method: "PUT", pattern: "^/api/serverOption$", action: "server:manage", hasTarget: false},
+    {method: "GET", pattern: "^/api/serverOptionHash$", action: "server:manage", hasTarget: false},
+    {method: "GET", pattern: "^/api/adminCert$", action: "server:manage", hasTarget: false},
+    {method: "POST", pattern: "^/api/adminCert$", action: "server:manage", hasTarget: false},
+    {method: "PUT", pattern: "^/api/adminCert$", action: "server:manage", hasTarget: false},
+    {method: "GET", pattern: "^/api/sysInfo$", action: "status:read", hasTarget: false},
+    {method: "GET", pattern: "^/api/sysUsage$", action: "status:read", hasTarget: false},
+    {method: "GET", pattern: "^/api/clientStatus$", action: "status:read", hasTarget: false},
+    {method: "GET", pattern: "^/api/clientSysInfo/(?<id>[^/]*)$", action: "status:read", hasTarget: false},
+    {method: "GET", pattern: "^/api/tunnelingOption$", action: "tunnel:list", hasTarget: true},
+    {method: "POST", pattern: "^/api/tunnelingOption$", action: "tunnelWriteAction", hasTarget: true},
+    {method: "PUT", pattern: "^/api/tunnelingOption$", action: "tunnelWriteAction", hasTarget: true},
+    {method: "DELETE", pattern: "^/api/tunnelingOption$", action: "tunnel:delete", hasTarget: true},
+    {method: "POST", pattern: "^/api/tunneling/active/(?<port>[^/]*)$", action: "tunnel:activate", hasTarget: true},
+    {method: "GET", pattern: "^/api/externalServerStatuses$", action: "tunnel:list", hasTarget: true},
+    {method: "GET", pattern: "^/api/externalCert/(?<port>[^/]*)$", action: "tunnel:cert", hasTarget: true},
+    {method: "POST", pattern: "^/api/externalCert/(?<port>[^/]*)$", action: "tunnel:cert", hasTarget: true},
+    {method: "PUT", pattern: "^/api/externalCert/(?<port>[^/]*)$", action: "tunnel:cert", hasTarget: true},
+    {method: "DELETE", pattern: "^/api/externalCert/(?<port>[^/]*)$", action: "tunnel:cert", hasTarget: true},
+    {method: "GET", pattern: "^/api/security/bans$", action: "security:manage", hasTarget: false},
+    {method: "DELETE", pattern: "^/api/security/bans/(?<port>[^/]+)/(?<ip>[^/]+)$", action: "security:manage", hasTarget: false},
+    {method: "GET", pattern: "^/api/security/stats$", action: "security:manage", hasTarget: false}
 ];
+
+/** 함수형 action 은 값으로 비교할 수 없으므로 함수 이름을 식별자로 쓴다. */
+const actionIdOf = (action: RouteAction): string => typeof action === "function" ? action.name : action;
 
 const withRoutesServer = async (check: (fixture: any) => Promise<void>) => {
     const root = await createTestRoot("routes95");
@@ -82,10 +95,30 @@ const withRoutesServer = async (check: (fixture: any) => Promise<void>) => {
 test("ADMIN_ROUTES matches the route table agreed in issue #95 exactly", () => {
     // RegExp#source 는 생성 방식과 무관하게 '/' 를 항상 이스케이프해 돌려주므로(JS 스펙),
     // 기대 목록도 같은 규칙(new RegExp(pattern).source)으로 변환해 비교한다.
-    const actual = ADMIN_ROUTES.map(route => ({method: route.method, pattern: route.pattern.source}));
-    const expected = EXPECTED_ROUTES.map(route => ({method: route.method, pattern: new RegExp(route.pattern).source}));
+    const actual = ADMIN_ROUTES.map(route => ({
+        method: route.method, pattern: route.pattern.source,
+        action: actionIdOf(route.action), hasTarget: route.target !== undefined
+    }));
+    const expected = EXPECTED_ROUTES.map(route => ({
+        method: route.method, pattern: new RegExp(route.pattern).source,
+        action: route.action, hasTarget: route.hasTarget
+    }));
     expect(actual).toEqual(expected);
 });
+
+// 위 표는 함수형 action 을 이름으로만 고정하므로, 그 함수가 실제로 무엇을 돌려주는지는 여기서 잠근다.
+test("the functional action on /api/tunnelingOption picks update for a registered port and create otherwise", async () => withRoutesServer(async () => {
+    ServerOptionStore.instance.updateTunnelingOption({
+        forwardPort: 18099, protocol: "tcp", destinationAddress: "127.0.0.1", destinationPort: 8080, keepAlive: 0
+    });
+    const entry = ADMIN_ROUTES.find(route => route.method === "POST" && route.pattern.source === new RegExp("^/api/tunnelingOption$").source)!;
+    expect(typeof entry.action).toBe("function");
+    const resolve = entry.action as (ctx: RouteContext) => string;
+    const contextOf = (forwardPort: number) => ({params: {}, body: {forwardPort}} as unknown as RouteContext);
+
+    expect(resolve(contextOf(18099))).toBe("tunnel:update");
+    expect(resolve(contextOf(18100))).toBe("tunnel:create");
+}));
 
 test("every ADMIN_ROUTES pattern is fully anchored", () => {
     for(const route of ADMIN_ROUTES) {

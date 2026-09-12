@@ -4,7 +4,7 @@ import ServerOptionStore from "../ServerOptionStore";
 import SessionStore, {Session} from "./SessionStore";
 import {IdentityStore} from "../rbac/IdentityStore";
 import {IdentityMigration, LEGACY_ADMIN_USERNAME} from "../rbac/IdentityMigration";
-import {validateUsername} from "../rbac/IdentityTypes";
+import {SYSTEM_SUPERUSER_GROUP_NAME, validatePassword, validateUsername} from "../rbac/IdentityTypes";
 import {createHash} from "node:crypto";
 
 import {CertificationStore, CertInfo, PemData} from "../CertificationStore";
@@ -26,6 +26,9 @@ import crypto from "crypto";
 import {TunnelingOption} from "../../types/TunnelingOption";
 import {AdmissionController} from "../security/AdmissionController";
 import {buildAdminRoutes, Route, RouteContext} from "./routes";
+import {Action, authorize, sections} from "../rbac/AdminAuthorizer";
+import {LEGACY_PRINCIPAL, Principal, principalOf} from "../rbac/Principal";
+import {toUserView} from "../rbac/UserView";
 
 const logger = LoggerFactory.getLogger('server', 'AdminServer');
 
@@ -63,6 +66,11 @@ const EMPTY_CERT_INFO : CertInfo = {
     ca: EMPTY_PEM_DATA
 }
 
+export type AdminServerOptions = {
+    /** authorize 소요 시간을 X-Authz-Us 응답 헤더(µs)로 노출한다. 성능 측정 전용이며 기본은 false. */
+    exposeAuthzTiming?: boolean;
+};
+
 class AdminServer {
 
     private readonly _server : http.Server | https.Server;
@@ -77,10 +85,13 @@ class AdminServer {
     private readonly _permanentErrorHandler: (err: Error) => void;
     // U2-03: 선언적 라우트 표. route() 가 이 표로 매칭·세션 해석을 한 번에 한다.
     private readonly _routes: readonly Route[];
+    // U2-04 / #96: authorize 소요 시간을 X-Authz-Us 로 노출할지. 측정 전용이라 기본은 꺼 둔다.
+    private readonly _exposeAuthzTiming: boolean;
 
-    constructor(tttServer: TTTServer, tls : boolean, certInfo? : CertInfo) {
+    constructor(tttServer: TTTServer, tls : boolean, certInfo? : CertInfo, options: AdminServerOptions = {}) {
         this._tttServer = tttServer;
         this._tls = tls;
+        this._exposeAuthzTiming = options.exposeAuthzTiming === true;
         if(tls) {
             if(!certInfo) throw new Error('AdminServer certInfo is undefined');
             let options : { key: string, cert: string, ca? : string} = {
@@ -124,6 +135,9 @@ class AdminServer {
             onLogout: this.onLogout,
             onGetValidateSession: this.onGetValidateSession,
             onGetCsrfToken: this.onGetCsrfToken,
+            onGetMe: this.onGetMe,
+            onUpdateMePassword: this.onUpdateMePassword,
+            onAcknowledgeMigration: this.onAcknowledgeMigration,
             onGetServerOption: this.onGetServerOption,
             onUpdateServerOption: this.onUpdateServerOption,
             onGetServerOptionHash: this.onGetServerOptionHash,
@@ -235,9 +249,35 @@ class AdminServer {
                    return;
                }
                ctx.session = session;
+               const principal = principalOf(session, IdentityStore.instance);
+               if(!principal) {
+                   // 사용자가 삭제되었거나 비활성화되었다 — 세션도 함께 끊는다.
+                   await SessionStore.instance.removeSession(session.key);
+                   this.sendApiFailure(res, 401, {message: 'Invalid session'});
+                   return;
+               }
+               ctx.principal = principal;
            }
            if(method === 'POST' || method === 'PUT' || method === 'DELETE') {
                ctx.body = await AdminServer.readJson(req);
+           }
+           // 'public' 과 'session' 은 권한 판정 없이 통과한다(세션 존재만으로 충분한 엔드포인트).
+           if(matched.route.action !== 'public' && matched.route.action !== 'session') {
+               const action: Action = typeof matched.route.action === 'function'
+                   ? matched.route.action(ctx) : matched.route.action;
+               const startedAt = process.hrtime.bigint();
+               const decision = authorize(ctx.principal!, action, matched.route.target?.(ctx));
+               const elapsed = process.hrtime.bigint() - startedAt;
+               if(!decision.allowed) {
+                   this.sendApiFailure(res, decision.status, {
+                       code: decision.code,
+                       message: decision.status === 403 ? 'Forbidden' : 'Not Found'
+                   });
+                   return;
+               }
+               if(this._exposeAuthzTiming) {
+                   res.setHeader('X-Authz-Us', String(Number(elapsed / 1000n)));
+               }
            }
            await matched.route.handler(ctx);
            return;
@@ -843,6 +883,91 @@ class AdminServer {
             ]
         });
         res.end(JSON.stringify({success: true, partial: false, failedScopes: [], warnings: [], message: '', csrfToken}));
+    }
+
+    /**
+     * U2-04 / #96: 현재 주체의 프로필·그룹 속성·볼 수 있는 섹션을 한 번에 돌려준다.
+     * identity.yaml 을 읽지 못한 legacy-fallback 주체는 저장소에 사용자가 없으므로 합성해 응답한다.
+     */
+    private onGetMe = async (ctx: RouteContext) => {
+        const {res} = ctx;
+        const principal = ctx.principal!;
+        if(principal.legacy) {
+            this.sendApiSuccess(res, {
+                user: {
+                    id: principal.userId, username: principal.username, displayName: principal.username,
+                    role: principal.role, status: 'active', groupId: principal.groupId, groupName: SYSTEM_SUPERUSER_GROUP_NAME,
+                    mustChangePassword: false, migratedFromLegacyAdmin: false, createdAt: 0, updatedAt: 0
+                },
+                group: {id: principal.groupId, name: SYSTEM_SUPERUSER_GROUP_NAME, attributes: principal.attributes},
+                sections: sections(principal),
+                migrationBanner: false
+            });
+            return;
+        }
+        const store = IdentityStore.instance;
+        const user = store.user(principal.userId)!;
+        const groups = store.groups();
+        const group = groups.find((candidate) => candidate.id === user.groupId);
+        this.sendApiSuccess(res, {
+            user: toUserView(user, groups),
+            group: {id: principal.groupId, name: group?.name ?? principal.groupId, attributes: principal.attributes},
+            sections: sections(principal),
+            migrationBanner: user.migratedFromLegacyAdmin && !user.migrationAcknowledged
+        });
+    }
+
+    /**
+     * U2-04 / #96: 본인 비밀번호 변경. mustChangePassword 상태에서는 발급받은 임시 비밀번호가 currentPassword 다.
+     * 변경에 성공하면 요청한 세션만 남기고 같은 사용자의 다른 세션을 모두 끊는다.
+     */
+    private onUpdateMePassword = async (ctx: RouteContext) => {
+        const {res} = ctx;
+        const principal = ctx.principal!;
+        if(principal.legacy) {
+            this.sendIdentityStoreUnavailable(res);
+            return;
+        }
+        const newPassword = validatePassword(ctx.body?.['newPassword']);
+        if(!newPassword.success) {
+            this.sendApiFailure(res, newPassword.status, {code: newPassword.code, message: newPassword.message});
+            return;
+        }
+        const currentPassword = typeof ctx.body?.['currentPassword'] == 'string' ? ctx.body['currentPassword'] : '';
+        const store = IdentityStore.instance;
+        // 이미 인증된 세션 안에서의 재확인이므로 로그인 실패 백오프 대상이 아니다.
+        const verified = await store.verifyPassword(principal.username, currentPassword);
+        if(!verified.success) {
+            this.sendApiFailure(res, 422, {code: 'current_password_mismatch', message: 'The current password does not match'});
+            return;
+        }
+        const updated = await store.setPassword(principal.userId, newPassword.value, {clearMustChange: true});
+        if(!updated.success) {
+            this.sendApiFailure(res, updated.status, {code: updated.code, message: updated.message});
+            return;
+        }
+        SessionStore.instance.removeSessionsOfUser(principal.userId, {except: ctx.session!.key});
+        this.sendApiSuccess(res, {mustChangePassword: false});
+    }
+
+    /** U2-04 / #96: 레거시 admin 승격 안내 배너를 닫는다. */
+    private onAcknowledgeMigration = async (ctx: RouteContext) => {
+        const {res} = ctx;
+        const principal = ctx.principal!;
+        if(principal.legacy) {
+            this.sendIdentityStoreUnavailable(res);
+            return;
+        }
+        const updated = IdentityStore.instance.updateUser(principal.userId, {migrationAcknowledged: true});
+        if(!updated.success) {
+            this.sendApiFailure(res, updated.status, {code: updated.code, message: updated.message});
+            return;
+        }
+        this.sendApiSuccess(res);
+    }
+
+    private sendIdentityStoreUnavailable(res: ServerResponse): void {
+        this.sendApiFailure(res, 503, {code: 'identity_store_unavailable', message: 'Identity store is unavailable'});
     }
 
     private onGetAdminCert = async (ctx: RouteContext) => {

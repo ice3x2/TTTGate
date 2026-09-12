@@ -267,3 +267,214 @@ describe("rbac-login: session-based /api/login, /api/logout, /api/validateSessio
         });
     });
 });
+
+describe("rbac-login: #96 권한 결정기 · 비밀번호 변경 게이트 · /api/me", () => {
+    let bcryptCostBackup: number;
+
+    beforeAll(() => {
+        bcryptCostBackup = IdentityStore.bcryptCost;
+        IdentityStore.bcryptCost = 4;
+    });
+
+    afterAll(() => {
+        IdentityStore.bcryptCost = bcryptCostBackup;
+    });
+
+    const createRegularUser = async (username: string, password: string, mustChangePassword: boolean): Promise<{id: string}> => {
+        const result = await IdentityStore.instance.createUser({username, password, role: "regular", mustChangePassword});
+        expect(result.success).toBe(true);
+        return (result as {success: true; value: {id: string}}).value;
+    };
+
+    it("mustChangePassword 사용자는 /api/me 와 세션 엔드포인트 외에 403 password_change_required 를 받는다", async () => {
+        await withServer(setupBcryptAccount("routes-password"), async ({loginAs, request}) => {
+            await createRegularUser("carol", "carol-temp-pw-1", true);
+
+            const login = await loginAs({username: "carol", password: "carol-temp-pw-1"});
+            expect(login.status).toBe(200);
+            expect(login.body).toMatchObject({mustChangePassword: true});
+            const auth = login.auth!;
+
+            const tunnels = await request("GET", "/api/tunnelingOption", {}, {Cookie: auth.Cookie});
+            expect(tunnels.status).toBe(403);
+            expect(tunnels.body).toMatchObject({success: false, code: "password_change_required"});
+
+            const me = await request("GET", "/api/me", {}, {Cookie: auth.Cookie});
+            expect(me.status).toBe(200);
+
+            const validateSession = await request("GET", "/api/validateSession", {}, {Cookie: auth.Cookie});
+            expect(validateSession.status).toBe(200);
+
+            const logout = await request("POST", "/api/logout", {}, {Cookie: auth.Cookie, "x-csrf-token": auth["X-CSRF-Token"]});
+            expect(logout.status).toBe(200);
+        });
+    });
+
+    // 이슈 본문의 목적 절은 "/api/me 와 /api/me/password 외에 아무것도 못 한다" 고 썼지만,
+    // 같은 본문의 권한 표는 이 엔드포인트에 me:read 를 지정했고 게이트는 me:read 를 통과시킨다.
+    // 더 구체적인 권한 표를 따른다: 임시 비밀번호 상태에서도 마이그레이션 배너는 닫을 수 있어야 한다.
+    it("mustChangePassword 사용자도 마이그레이션 확인은 할 수 있다", async () => {
+        await withServer(setupBcryptAccount("routes-password"), async ({loginAs, request}) => {
+            await createRegularUser("ivan", "ivan-temp-pw-1", true);
+            const login = await loginAs({username: "ivan", password: "ivan-temp-pw-1"});
+            expect(login.status).toBe(200);
+            expect(login.body).toMatchObject({mustChangePassword: true});
+            const auth = login.auth!;
+
+            const acknowledged = await request("POST", "/api/me/acknowledge-migration", {},
+                {Cookie: auth.Cookie, "x-csrf-token": auth["X-CSRF-Token"]});
+            expect(acknowledged.status).toBe(200);
+            expect(acknowledged.body).toMatchObject({success: true});
+        });
+    });
+
+    it("PUT /api/me/password 가 현재 비밀번호와 새 비밀번호를 검증하고 게이트를 해제한다", async () => {
+        await withServer(setupBcryptAccount("routes-password"), async ({loginAs, request}) => {
+            await createRegularUser("dave", "dave-temp-pw-1", true);
+            const login = await loginAs({username: "dave", password: "dave-temp-pw-1"});
+            expect(login.status).toBe(200);
+            const auth = login.auth!;
+            const headers = {Cookie: auth.Cookie, "x-csrf-token": auth["X-CSRF-Token"]};
+
+            const wrongCurrent = await request("PUT", "/api/me/password",
+                {currentPassword: "not-the-temp-pw", newPassword: "dave-new-password-1"}, headers);
+            expect(wrongCurrent.status).toBe(422);
+            expect(wrongCurrent.body).toMatchObject({success: false, code: "current_password_mismatch"});
+
+            const shortNew = await request("PUT", "/api/me/password",
+                {currentPassword: "dave-temp-pw-1", newPassword: "short"}, headers);
+            expect(shortNew.status).toBe(422);
+            expect(shortNew.body).toMatchObject({success: false, code: "password_too_short"});
+
+            const changed = await request("PUT", "/api/me/password",
+                {currentPassword: "dave-temp-pw-1", newPassword: "dave-new-password-1"}, headers);
+            expect(changed.status).toBe(200);
+            expect(changed.body).toMatchObject({success: true, mustChangePassword: false});
+
+            const me = await request("GET", "/api/me", {}, {Cookie: auth.Cookie});
+            expect(me.status).toBe(200);
+            expect(me.body.user.mustChangePassword).toBe(false);
+
+            const tunnels = await request("GET", "/api/tunnelingOption", {}, {Cookie: auth.Cookie});
+            expect(tunnels.status).toBe(200);
+        });
+    });
+
+    it("비밀번호 변경은 요청한 세션만 남기고 같은 사용자의 다른 세션을 끊는다", async () => {
+        await withServer(setupBcryptAccount("routes-password"), async ({loginAs, request}) => {
+            await createRegularUser("erin", "erin-password-1", false);
+
+            const first = await loginAs({username: "erin", password: "erin-password-1"});
+            const second = await loginAs({username: "erin", password: "erin-password-1"});
+            expect(first.status).toBe(200);
+            expect(second.status).toBe(200);
+            const keeping = first.auth!;
+            const dropped = second.auth!;
+
+            const changed = await request("PUT", "/api/me/password",
+                {currentPassword: "erin-password-1", newPassword: "erin-password-2"},
+                {Cookie: keeping.Cookie, "x-csrf-token": keeping["X-CSRF-Token"]});
+            expect(changed.status).toBe(200);
+
+            const alive = await request("GET", "/api/me", {}, {Cookie: keeping.Cookie});
+            expect(alive.status).toBe(200);
+
+            const killed = await request("GET", "/api/me", {}, {Cookie: dropped.Cookie});
+            expect(killed.status).toBe(401);
+        });
+    });
+
+    it("승격된 admin 의 /api/me 는 마이그레이션 배너와 9개 섹션을 돌려주고 확인 후 배너가 꺼진다", async () => {
+        await withServer(setupBcryptAccount("routes-password"), async ({loginAs, request}) => {
+            const login = await loginAs({username: "admin", password: "routes-password"});
+            expect(login.status).toBe(200);
+            const auth = login.auth!;
+
+            const me = await request("GET", "/api/me", {}, {Cookie: auth.Cookie});
+            expect(me.status).toBe(200);
+            expect(me.body.migrationBanner).toBe(true);
+            expect(me.body.user).toMatchObject({username: "admin", role: "superuser", groupName: "Superusers"});
+            expect(me.body.user.passwordHash).toBeUndefined();
+            expect(me.body.group).toMatchObject({id: "system:superuser", name: "Superusers"});
+            expect(me.body.sections).toEqual(["status", "tunnels", "server", "users", "groups", "security", "audit", "sessions", "me"]);
+
+            const acknowledged = await request("POST", "/api/me/acknowledge-migration", {},
+                {Cookie: auth.Cookie, "x-csrf-token": auth["X-CSRF-Token"]});
+            expect(acknowledged.status).toBe(200);
+            expect(acknowledged.body).toMatchObject({success: true});
+
+            const afterAck = await request("GET", "/api/me", {}, {Cookie: auth.Cookie});
+            expect(afterAck.body.migrationBanner).toBe(false);
+        });
+    });
+
+    it("일반 유저는 슈퍼유저 전용 엔드포인트에서 403 forbidden 을 받고 없는 라우트는 404 다", async () => {
+        await withServer(setupBcryptAccount("routes-password"), async ({loginAs, request}) => {
+            await createRegularUser("frank", "frank-password-1", false);
+            const login = await loginAs({username: "frank", password: "frank-password-1"});
+            expect(login.status).toBe(200);
+            const cookie = {Cookie: login.auth!.Cookie};
+
+            const serverOption = await request("GET", "/api/serverOption", {}, cookie);
+            expect(serverOption.status).toBe(403);
+            expect(serverOption.body).toMatchObject({success: false, code: "forbidden"});
+
+            const sysInfo = await request("GET", "/api/sysInfo", {}, cookie);
+            expect(sysInfo.status).toBe(403);
+            expect(sysInfo.body).toMatchObject({code: "forbidden"});
+
+            const externalCert = await request("GET", "/api/externalCert/1", {}, cookie);
+            expect(externalCert.status).toBe(403);
+            expect(externalCert.body).toMatchObject({code: "forbidden"});
+
+            const users = await request("GET", "/api/users", {}, cookie);
+            expect(users.status).toBe(404);
+        });
+    });
+
+    it("사용자를 disabled 로 바꾸면 기존 세션의 /api/me 가 401 이다", async () => {
+        await withServer(setupBcryptAccount("routes-password"), async ({loginAs, request}) => {
+            const grace = await createRegularUser("grace", "grace-password-1", false);
+            const login = await loginAs({username: "grace", password: "grace-password-1"});
+            expect(login.status).toBe(200);
+            const cookie = {Cookie: login.auth!.Cookie};
+
+            expect((await request("GET", "/api/me", {}, cookie)).status).toBe(200);
+
+            const disabled = IdentityStore.instance.updateUser(grace.id, {status: "disabled"});
+            expect(disabled.success).toBe(true);
+
+            expect((await request("GET", "/api/me", {}, cookie)).status).toBe(401);
+        });
+    });
+
+    it("세션 없는 /api/me 는 401 이고 CSRF 헤더 없는 acknowledge-migration 은 403 이다", async () => {
+        await withServer(setupBcryptAccount("routes-password"), async ({loginAs, request}) => {
+            const noCookie = await request("GET", "/api/me");
+            expect(noCookie.status).toBe(401);
+
+            const login = await loginAs({username: "admin", password: "routes-password"});
+            const noCsrf = await request("POST", "/api/me/acknowledge-migration", {}, {Cookie: login.auth!.Cookie});
+            expect(noCsrf.status).toBe(403);
+        });
+    });
+
+    it("legacy-fallback 서버의 /api/me 는 legacy-admin 이고 비밀번호 변경은 503 이다", async () => {
+        await withServer(setupLegacyFallback("legacy-fallback-pw-1"), async ({loginAs, request}) => {
+            const login = await loginAs({password: "legacy-fallback-pw-1"});
+            expect(login.status).toBe(200);
+            const auth = login.auth!;
+
+            const me = await request("GET", "/api/me", {}, {Cookie: auth.Cookie});
+            expect(me.status).toBe(200);
+            expect(me.body.user.id).toBe("legacy-admin");
+            expect(me.body.migrationBanner).toBe(false);
+
+            const changed = await request("PUT", "/api/me/password",
+                {currentPassword: "legacy-fallback-pw-1", newPassword: "legacy-new-password-1"},
+                {Cookie: auth.Cookie, "x-csrf-token": auth["X-CSRF-Token"]});
+            expect(changed.status).toBe(503);
+            expect(changed.body).toMatchObject({success: false, code: "identity_store_unavailable"});
+        });
+    });
+});
