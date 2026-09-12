@@ -142,7 +142,8 @@ class AdminServer {
             onUpdateExternalServerCert: this.onUpdateExternalServerCert,
             onDeleteExternalServerCert: this.onDeleteExternalServerCert,
             onGetSecurityBans: this.onGetSecurityBans,
-            onDeleteSecurityBan: this.onDeleteSecurityBan
+            onDeleteSecurityBan: this.onDeleteSecurityBan,
+            onGetSecurityStats: this.onGetSecurityStats
         });
     }
 
@@ -1284,6 +1285,12 @@ class AdminServer {
             return;
         }
         this.sendApiSuccess(res, {removed: AdmissionController.instance.rateLimiter.unban(port, ip)});
+    }
+
+    // U5-04 / #119 — 포트별 거절 수·차단 IP 수 조회. 세션 검사만 하고, GeoFilter 설정은 싣지 않는다(#120).
+    private onGetSecurityStats = async (ctx: RouteContext) => {
+        const {res} = ctx;
+        this.sendApiSuccess(res, {serverTime: Date.now(), stats: AdmissionController.instance.snapshot()});
     }
 
 

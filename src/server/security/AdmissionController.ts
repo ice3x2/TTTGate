@@ -2,6 +2,8 @@ import {ADMIT, AdmissionDecision, AdmissionPolicy, AdmissionScope} from "./Admis
 import {ConnectionRateLimiter} from "./ConnectionRateLimiter";
 import {normalizeRemoteAddress} from "./address";
 import {GeoFilter} from "./GeoFilter";
+import {DenialAggregator} from "./DenialAggregator";
+import LoggerFactory from "../../util/logger/LoggerFactory";
 import {DEFAULT_GEO_CONFIG, GeoConfig} from "../../types/TunnelingOption";
 
 export type TunnelRateLimitSource = {
@@ -26,6 +28,8 @@ export class AdmissionController implements AdmissionPolicy {
 
     public readonly rateLimiter = new ConnectionRateLimiter();
     public readonly geo = new GeoFilter();
+    // 거절은 건마다 로그로 남지 않는다. 30초 prune 타이머가 창이 닫힌 버킷만 한 줄로 내보낸다.
+    public readonly denialLog = new DenialAggregator(line => LoggerFactory.getLogger('server', 'Admission').warn(line));
     private readonly _geoDenials = new Map<number | 'admin', number>();
     private _concurrencyProvider: ((port: number) => number) | undefined;
     private _pruneTimer: NodeJS.Timeout | undefined;
@@ -45,7 +49,11 @@ export class AdmissionController implements AdmissionPolicy {
 
     public configureTunnel(option: TunnelRateLimitSource): void {
         if (!this._pruneTimer) {
-            this._pruneTimer = setInterval(() => this.rateLimiter.prune(Date.now()), PRUNE_INTERVAL_MS).unref();
+            this._pruneTimer = setInterval(() => {
+                const now = Date.now();
+                this.rateLimiter.prune(now);
+                this.denialLog.flushDue(now);
+            }, PRUNE_INTERVAL_MS).unref();
         }
 
         if (option.rateLimit?.enabled) {
@@ -77,19 +85,26 @@ export class AdmissionController implements AdmissionPolicy {
 
         if (scope.kind === 'tunnel') {
             const banDecision = this.rateLimiter.banned(scope.port, ip, now);
-            if (banDecision) return banDecision;
+            if (banDecision) {
+                this.denialLog.record(scope, banDecision.reason, now);
+                return banDecision;
+            }
         }
 
         const geoDecision = this.geo.decide(ip, scope);
         if (!geoDecision.allowed) {
             const key = scope.kind === 'admin' ? 'admin' : scope.port;
             this._geoDenials.set(key, (this._geoDenials.get(key) ?? 0) + 1);
+            this.denialLog.record(scope, geoDecision.reason, now);
             return geoDecision;
         }
 
         if (scope.kind === 'tunnel') {
             const decision = this.rateLimiter.admit(scope.port, ip, now);
-            if (!decision.allowed) return decision;
+            if (!decision.allowed) {
+                this.denialLog.record(scope, decision.reason, now);
+                return decision;
+            }
         }
 
         // 동시 연결 상한 자리 — #123 (U5-08) 이 여기에 삽입한다.
@@ -103,5 +118,21 @@ export class AdmissionController implements AdmissionPolicy {
 
         const stats = this.rateLimiter.stats(scope);
         return {geo, rateLimit: stats.rejectedBans + stats.rejectedExceeded};
+    }
+
+    // 계수기만 읽는 순수 집계다. GeoFilter 설정은 싣지 않는다(#120 이 응답에서 합친다).
+    // 관리자 포트는 터널 포트가 아니어서 ports 에 자리가 없으므로 admin 으로 따로 둔다.
+    public snapshot(): {ports: Record<string, {rejectedBans: number; rejectedExceeded: number; rejectedGeo: number; bannedIps: number}>; admin: {rejectedGeo: number}} {
+        const ports: Record<string, {rejectedBans: number; rejectedExceeded: number; rejectedGeo: number; bannedIps: number}> = {};
+        for (const port of this.rateLimiter.ports()) {
+            const stats = this.rateLimiter.stats(port);
+            ports[String(port)] = {
+                rejectedBans: stats.rejectedBans,
+                rejectedExceeded: stats.rejectedExceeded,
+                rejectedGeo: this.denials(port).geo,
+                bannedIps: stats.bannedIps
+            };
+        }
+        return {ports, admin: {rejectedGeo: this.denials('admin').geo}};
     }
 }

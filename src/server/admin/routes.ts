@@ -56,7 +56,9 @@ export const ADMIN_ROUTES: ReadonlyArray<{method: Route['method']; pattern: RegE
     {method: 'DELETE', pattern: new RegExp('^/api/externalCert/(?<port>[^/]*)$'), action: 'session', handler: 'onDeleteExternalServerCert'},
     // U5-02 / #117 이 임시로 추가한 차단 목록 라우트. 세션 검사만 한다.
     {method: 'GET', pattern: new RegExp('^/api/security/bans$'), action: 'session', handler: 'onGetSecurityBans'},
-    {method: 'DELETE', pattern: new RegExp('^/api/security/bans/(?<port>[^/]+)/(?<ip>[^/]+)$'), action: 'session', handler: 'onDeleteSecurityBan'}
+    {method: 'DELETE', pattern: new RegExp('^/api/security/bans/(?<port>[^/]+)/(?<ip>[^/]+)$'), action: 'session', handler: 'onDeleteSecurityBan'},
+    // U5-04 / #119 이 추가한 거절 집계 조회 라우트. 세션 검사만 한다(권한은 #120 이 얹는다).
+    {method: 'GET', pattern: new RegExp('^/api/security/stats$'), action: 'session', handler: 'onGetSecurityStats'}
 ];
 
 export function buildAdminRoutes(handlers: RouteHandlers): readonly Route[] {
