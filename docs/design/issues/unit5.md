@@ -448,7 +448,7 @@ git log -1 --format=%B   # 서명 0건, 제목에 단계 표식 없음 확인
 - `src/types/TunnelingOption.ts:52-68` `type ServerOption`(`connectionSecurity` 없음).
 - `dependencies` 에 `@types/*` 가 함께 있는 것이 이 저장소의 관례다. `scripts.lint` 는 `node scripts/lint-auth-compare.mjs src --strict`(비밀값 비교는 `timingSafeStringEqual` 만 허용).
 - `test/supply-chain/r3-req-04-medium-cleared.test.ts` 가 `npm audit --omit=dev --audit-level=moderate` 0건 게이트다. `scripts/supply-chain-gate.cjs` 가 감사와 의존성 트리를 검사한다. `test/unit/tools/source-archives.test.ts`·`binary-archives.test.ts` 는 배포 산출물 크기·구성을 검사하므로 의존성 추가 뒤 함께 돌려 통과를 확인한다.
-- `geoip-lite@1.4.10` 의 unpackedSize 는 약 160MB 로 대부분이 city DB 다. 런타임은 `data/geoip-country.dat`·`geoip-country6.dat` 두 파일만 읽는다(city DB 가 없으면 country 로 폴백). 배포 바이너리 동봉은 U5-10 이 두 파일만 넣는다.
+- `geoip-lite@2.0.3` 의 unpackedSize 는 약 110MB(설치 후 실측 111MB)로 대부분이 city DB 다. 런타임은 `data/geoip-country.dat`·`geoip-country6.dat` 두 파일만 읽는다(city DB 가 없으면 country 로 폴백). 배포 바이너리 동봉은 U5-10 이 두 파일만 넣는다.
 - 컴포넌트 테스트 본보기: `test/component/server/admin/AdminServer.security.test.ts`(`new AdminServer({} as any, false)` → `listen(0)`, `test/helpers/http.ts` `httpRequest`, 맨 위 `jest.setTimeout(30_000)`).
 - TLS 외부 포트(`tls: true`)와 관리자 포트의 차이: `AdminServer` 의 `'connection'` 이벤트는 TLS 핸드셰이크 **전** 원시 소켓에서 발생하므로 국가 차단이 핸드셰이크 비용을 막는다. 반면 U5-02 가 판정을 끼운 외부 포트의 `TCPServer.onBind` 는 `tls.createServer` 가 핸드셰이크를 끝낸 뒤에 불리므로, TLS 외부 포트에서는 국가 차단이 핸드셰이크 비용을 막지 못한다. 이는 설계 §2 의 결정을 따른 결과이며 이 이슈에서 바꾸지 않는다.
 - `geoip-lite` 에 관한 아래 서술(city 우선 탐색과 country 폴백, 데이터 디렉터리 결정 방식, `data/*.dat` 파일명)은 패키지를 설치한 뒤 `node_modules/geoip-lite/lib/geoip.js` 와 `node_modules/geoip-lite/README.md` 로 확인한다. 실제와 다르면 구현을 멈추고 이슈에 확인한 내용을 코멘트한다.
@@ -477,7 +477,7 @@ git log -1 --format=%B   # 서명 0건, 제목에 단계 표식 없음 확인
 
 ### 의존성
 
-- `npm install --save geoip-lite@^1.4.10 @types/geoip-lite@^1.4.4` → `dependencies` 두 항목 + `package-lock.json` 갱신. 레지스트리 최신은 `geoip-lite@2.0.3` 이지만 설계 §4.3 의 `^1.4.10` 을 따른다.
+- `npm install --save geoip-lite@^2.0.3` 과 `npm install --save-dev @types/geoip-lite@^1.4.4` → `dependencies` 한 항목 + `devDependencies` 한 항목 + `package-lock.json` 갱신. **`^1.4.10` 을 쓰면 안 된다** — 공급망 게이트(`npm audit --omit=dev --audit-level=moderate` 0건)를 깬다(`ip-address@5.9.4` high 2건, `brace-expansion@1.1.14` high 3건). 2.0.3 은 audit 0건이며 API 는 1.4.x 와 같다.
 - 설치 직후 `npx jest --runInBand test/supply-chain test/unit/tools` 을 실행한다. `npm audit --omit=dev --audit-level=moderate` 게이트가 실패하면 **구현을 멈추고** 이슈에 감사 결과를 코멘트한다(게이트를 완화하거나 버전을 임의로 올리지 않는다).
 - `package.json` 의 `pkg` 블록과 `scripts` 는 이 이슈에서 건드리지 않는다(U5-10).
 
@@ -1635,7 +1635,7 @@ U5-03 이 들여온 `geoip-lite` 가 개발 환경뿐 아니라 `pkg` 로 만든
 
 ## 배경
 
-- U5-03 이 `dependencies` 에 `geoip-lite@^1.4.10` 과 `@types/geoip-lite@^1.4.4` 를 넣었고, `src/server/security/GeoFilter.ts` 가 `mode !== 'off'` 인 순간에만 `require('geoip-lite')` 로 지연 로드한다. `lookupCountry` 는 `geoip.lookup(ip)?.country` 를 쓴다.
+- U5-03 이 `dependencies` 에 `geoip-lite@^2.0.3` 을, `devDependencies` 에 `@types/geoip-lite@^1.4.4` 를 넣었고, `src/server/security/GeoFilter.ts` 가 `mode !== 'off'` 인 순간에만 `require('geoip-lite')` 로 지연 로드한다. `lookupCountry` 는 `geoip.lookup(ip)?.country` 를 쓴다.
 - `package.json` 의 `pkg` 블록은 `{"scripts": "build/**/*.js", "targets": [node24-linux-arm64, node24-win-arm64, node24-win-x64, node24-linux-x64, node24-alpine-x64], "outputPath": "dist/bin/"}` 이고 **`assets` 키가 없다**. `scripts.pkg` 는 `pkg . --no-bytecode --public-packages "*" --public`.
 - `geoip-lite` 의 데이터 파일은 `node_modules/geoip-lite/data/` 아래에 있고, 런타임이 실제로 읽는 것은 `geoip-country.dat` 과 `geoip-country6.dat` 두 개다(city 파일이 없으면 country 로 폴백한다). 패키지 전체 unpackedSize 는 약 160MB 이고 그 대부분이 city DB 이므로, 플랫폼 바이너리 다섯 개 각각에 들어가는 `assets` 에는 두 파일만 넣는다.
 - 갱신 스크립트는 패키지가 동봉한 `node_modules/geoip-lite/scripts/updatedb.js` 를 호출한다. 이 파일의 인자 형식(`license_key=<키>`)과 데이터 디렉터리 결정 방식(환경 변수 `GEODATADIR` 또는 그에 준하는 설정)은 **설치된 패키지에서 직접 확인한다**: `node_modules/geoip-lite/lib/geoip.js`, `node_modules/geoip-lite/scripts/updatedb.js`, `node_modules/geoip-lite/README.md`. 서술과 다르면 구현을 멈추고 확인한 내용을 이슈에 코멘트한다.
