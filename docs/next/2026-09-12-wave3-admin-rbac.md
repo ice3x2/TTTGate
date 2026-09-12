@@ -87,13 +87,11 @@ TTTGate 관리자 콘솔을 다사용자 RBAC 체계로 전환하고, 관리자 
 
 ## 3. 현재 워킹트리·저장소 상태
 
-- 브랜치: `refactor/admin`, HEAD `5b178db`. upstream 미설정.
-- 미커밋 파일: **이 핸드오프 문서와 `docs/next/LATEST.md` 를 포함해** 아래가 나온다.
+- 브랜치: `refactor/admin`, HEAD `49a92d6`. upstream 미설정. 코드 변경의 마지막 커밋은 `5b178db` 이고, 그 뒤 `49a92d6`(이 문서 추가)만 얹혔다.
+- 미커밋 파일: **아래 세 줄만 나온다.** 이 문서와 `docs/next/LATEST.md` 는 커밋 `49a92d6` 에 들어갔다.
   - `?? .serena/` — 도구 상태 디렉터리. 커밋 대상 아님.
   - `?? .snoworca/` — 도구 상태 디렉터리. 커밋 대상 아님.
   - `?? docs/plan/srs/.TTTGate-work/` — SRS 도구 중간 파일. 커밋 대상 아님.
-  - `?? docs/next/2026-09-12-wave3-admin-rbac.md` — 이 문서.
-  - ` M docs/next/LATEST.md` — 포인터 갱신.
 - 작업 브랜치는 모두 정리했다. `git branch` 에 `develop`·`feature/firewall`·`feature/logger`·`main`·`refactor/admin`·`refactor/safecode`·`refactor/sfacecode-old` 만 남는다. `git branch -d`(소문자)로 지웠으므로 병합되지 않은 작업은 없다.
 - 워크트리는 메인 하나뿐이다. `git worktree list` 로 확인할 수 있다.
 - **`reports/*.json` 3개가 테스트·lint 실행의 부수 산출물로 자주 더러워진다.** 커밋 전에 `git checkout -- reports/` 로 되돌린다.
