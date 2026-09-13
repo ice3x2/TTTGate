@@ -27,10 +27,10 @@ const config: Config = {
     coverageReporters: ["text", "lcov", "json-summary"],
     coverageThreshold: {
         global: {
-            lines: 64.26,
-            functions: 69.74,
-            branches: 52.23,
-            statements: 63.71
+            lines: 85.48,
+            functions: 90.66,
+            branches: 75.59,
+            statements: 84.67
         }
     },
     // stress / e2e 제외 (기본 run에는 포함되지만 Phase 1 인프라 수립 목적상 유지).
