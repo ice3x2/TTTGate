@@ -1,0 +1,17 @@
+{
+  "commit": "2a366ad7bcd4332ad9e34f751c94854334d6bbe7",
+  "command": "npm run test:coverage -- --runInBand",
+  "date": "2026-09-13",
+  "measured": {
+    "lines": 85.98,
+    "statements": 85.17,
+    "functions": 91.16,
+    "branches": 76.09
+  },
+  "threshold": {
+    "lines": 85.48,
+    "statements": 84.67,
+    "functions": 90.66,
+    "branches": 75.59
+  }
+}
