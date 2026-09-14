@@ -427,8 +427,14 @@ describe("rbac-login: #96 권한 결정기 · 비밀번호 변경 게이트 · /
             expect(externalCert.status).toBe(403);
             expect(externalCert.body).toMatchObject({code: "forbidden"});
 
+            // #98 이 /api/users 를 표에 더했으므로 이제 존재하는 슈퍼유저 전용 라우트다.
             const users = await request("GET", "/api/users", {}, cookie);
-            expect(users.status).toBe(404);
+            expect(users.status).toBe(403);
+            expect(users.body).toMatchObject({code: "forbidden"});
+
+            // 표에 없는 경로는 권한 판정 이전에 404 다.
+            const absent = await request("GET", "/api/absent", {}, cookie);
+            expect(absent.status).toBe(404);
         });
     });
 

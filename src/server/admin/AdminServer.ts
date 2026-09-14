@@ -25,9 +25,10 @@ import {computeBackoffMs} from "./loginBackoff";
 import crypto from "crypto";
 import {TunnelingOption} from "../../types/TunnelingOption";
 import {AdmissionController} from "../security/AdmissionController";
-import {AuditRouteMeta, buildAdminRoutes, isTunnelActivationRequested, Route, RouteContext} from "./routes";
+import {auditEventOf, AuditRouteMeta, buildAdminRoutes, isTunnelActivationRequested, Route, RouteContext} from "./routes";
+import {rbacRouteHandlers} from "./rbacRoutes";
 import {Action, authorize, sections} from "../rbac/AdminAuthorizer";
-import {LEGACY_PRINCIPAL, Principal, principalOf} from "../rbac/Principal";
+import {LEGACY_PRINCIPAL, principalOf} from "../rbac/Principal";
 import {toUserView} from "../rbac/UserView";
 import {AuditEvent, AuditSinkRegistry, recordAuditEvent} from "../audit/AuditSink";
 
@@ -158,7 +159,9 @@ class AdminServer {
             onDeleteExternalServerCert: this.onDeleteExternalServerCert,
             onGetSecurityBans: this.onGetSecurityBans,
             onDeleteSecurityBan: this.onDeleteSecurityBan,
-            onGetSecurityStats: this.onGetSecurityStats
+            onGetSecurityStats: this.onGetSecurityStats,
+            // U2-06 / #98: 사용자·그룹 핸들러는 rbacRoutes.ts 가 갖는다(AdminServer.ts 를 2,000줄 아래로 유지).
+            ...rbacRouteHandlers
         });
     }
 
@@ -242,7 +245,14 @@ class AdminServer {
                return;
            }
 
-           const ctx: RouteContext = {req, res, params: matched.params, ip: this.getClientAddress(req)};
+           // audited() 가 record 직전에 읽는 누적 객체. ctx.auditDetail 이 여기에 얕게 병합한다.
+           const auditDetailPatch: Record<string, unknown> = {};
+           const ctx: RouteContext = {
+               req, res, params: matched.params, ip: this.getClientAddress(req),
+               ok: (data, status = 200) => this.sendApiSuccess(res, data, status),
+               fail: (status, code, message) => this.sendApiFailure(res, status, {code, message}),
+               auditDetail: (patch) => { Object.assign(auditDetailPatch, patch); }
+           };
            if(matched.route.action !== 'public') {
                const session = this.resolveSession(req);
                if(!session) {
@@ -270,12 +280,9 @@ class AdminServer {
                const decision = authorize(ctx.principal!, action, matched.route.target?.(ctx));
                const elapsed = process.hrtime.bigint() - startedAt;
                if(!decision.allowed) {
-                   this.emitAudit({
-                       at: this.now(), actor: this.auditActor(ctx.principal),
-                       sessionIdHash: SessionStore.sessionIdOf(ctx.session!.key), ip: ctx.ip,
-                       type: 'access_denied', outcome: 'failure',
-                       summary: `access_denied ${action}`, detail: {action, path: pathname}
-                   });
+                   this.emitAudit(auditEventOf(ctx, {
+                       type: 'access_denied', summary: `access_denied ${action}`, detail: {action, path: pathname}
+                   }, 'failure'));
                    this.sendApiFailure(res, decision.status, {
                        code: decision.code,
                        message: decision.status === 403 ? 'Forbidden' : 'Not Found'
@@ -285,10 +292,17 @@ class AdminServer {
                if(this._exposeAuthzTiming) {
                    res.setHeader('X-Authz-Us', String(Number(elapsed / 1000n)));
                }
+               // identity.yaml 을 읽지 못한 상태에서는 사용자·그룹을 읽지도 고치지도 못한다.
+               // 핸들러마다 판정하지 않고 라우트 계층에서 한 번에 막는다.
+               if((action === 'user:manage' || action === 'group:manage')
+                   && IdentityStore.instance.mode === 'legacy-fallback') {
+                   this.sendIdentityStoreUnavailable(res);
+                   return;
+               }
            }
            const auditMeta = matched.route.audit?.(ctx);
            if(auditMeta) {
-               await this.audited(ctx, auditMeta, matched.route.handler);
+               await this.audited(ctx, auditMeta, matched.route.handler, auditDetailPatch);
            } else {
                await matched.route.handler(ctx);
            }
@@ -325,13 +339,6 @@ class AdminServer {
         res.end(`Not Found ${url}`);
     }
 
-    /** 감사 행위자. 주체가 없는 경로(로그인 실패·내부 가드)는 system 이 된다. */
-    private auditActor(principal?: Principal): AuditEvent['actor'] {
-        return principal
-            ? {userId: principal.userId, username: principal.username, role: principal.role}
-            : {userId: 'system'};
-    }
-
     /** reserve() 를 거치지 않고 흘려보내는 이벤트(로그인·권한 거부). 응답을 감사 배압으로 막지 않는다. */
     private emitAudit(event: AuditEvent): void {
         recordAuditEvent(event).catch((e) => logger.error('audit record failed', e));
@@ -341,32 +348,29 @@ class AdminServer {
      * CUD 라우트의 감사 래퍼. 기록할 자리를 먼저 선점하고 핸들러의 성공·실패를 모두 남긴다.
      * 자리를 얻지 못하면 핸들러를 실행하지 않고 503 을 낸다(드롭 금지, NFR-PERF-AUDIT-WRITE-001).
      */
-    private async audited(ctx: RouteContext, meta: AuditRouteMeta, handler: (ctx: RouteContext) => Promise<void>): Promise<void> {
+    private async audited(ctx: RouteContext, meta: AuditRouteMeta, handler: (ctx: RouteContext) => Promise<void>,
+                          auditDetailPatch: Record<string, unknown>): Promise<void> {
         const sink = AuditSinkRegistry.current();
         if(!sink.reserve()) {
             this.sendApiFailure(ctx.res, 503, {code: 'audit_unavailable', message: 'Audit log unavailable'});
             return;
         }
         let failure: {error: unknown} | undefined;
-        let detail = meta.detail;
         try {
             await handler(ctx);
         } catch(e) {
             failure = {error: e};
-            detail = {...(detail ?? {}), error: String(e)};
         }
+        // 메타가 미리 준 값 → 핸들러가 auditDetail 로 더한 값 → 예외 순으로 합친다.
+        const merged: Record<string, unknown> = {
+            ...(meta.detail ?? {}),
+            ...auditDetailPatch,
+            ...(failure ? {error: String(failure.error)} : {})
+        };
         try {
-            await recordAuditEvent({
-                at: this.now(),
-                actor: this.auditActor(ctx.principal),
-                sessionIdHash: ctx.session ? SessionStore.sessionIdOf(ctx.session.key) : undefined,
-                ip: ctx.ip,
-                type: meta.type,
-                target: meta.target,
-                outcome: !failure && ctx.res.statusCode < 400 ? 'success' : 'failure',
-                summary: meta.summary,
-                detail
-            }, sink);
+            await recordAuditEvent(auditEventOf(ctx,
+                {...meta, detail: Object.keys(merged).length > 0 ? merged : undefined},
+                !failure && ctx.res.statusCode < 400 ? 'success' : 'failure'), sink);
         } catch(e) {
             // 자리는 reserve() 로 확보했으므로 여기서의 실패는 싱크 장애다. 응답은 이미 나갔다.
             logger.error('audit record failed', e);
