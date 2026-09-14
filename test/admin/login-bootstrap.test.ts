@@ -36,7 +36,7 @@ const withLogin = async (check: (fixture: any) => Promise<void>, storedKey?: str
     };
     const startBackend = async () => {
         output = "";
-        child = fork(path.join(__dirname, "login-backend-driver.ts"), [root.rootDir], {
+        child = fork(path.join(__dirname, "admin-backend-driver.ts"), [root.rootDir, "bootstrap"], {
             execArgv: ["-r", "ts-node/register/transpile-only"], stdio: ["ignore", "pipe", "pipe", "ipc"],
         });
         child.stdout!.on("data", (data) => { output += data; });
