@@ -13,12 +13,15 @@ const principalWith = (overrides: Record<string, any>, role: string = "regular")
     attributes: {...cloneGroupAttributes(DEFAULT_GROUP_ATTRIBUTES as GroupAttributes), ...overrides} as GroupAttributes
 });
 
-const TCP: TunnelingOption = {forwardPort: 20010, protocol: "tcp", destinationAddress: "127.0.0.1", destinationPort: 80, keepAlive: 0};
+// 일반 유저는 allowedClientIds 가 비면 거부된다(아래 "신뢰 클라이언트" 참조). 성공 케이스가 다른 이유로
+// 실패하지 않도록 기준 터널·속성·컨텍스트는 허용·등록된 클라이언트 c1 하나를 함께 갖는다.
+const TCP: TunnelingOption = {forwardPort: 20010, protocol: "tcp", destinationAddress: "127.0.0.1", destinationPort: 80, keepAlive: 0,
+    allowedClientIds: ["c1"]};
 const tunnel = (overrides: Record<string, any>): TunnelingOption => ({...TCP, ...overrides} as TunnelingOption);
 
 /** TCP 기준 터널을 받아들이는 최소 속성. 각 케이스는 여기서 한 속성만 바꿔 경계를 본다. */
-const BASE = {allowed_port_range: [{from: 20000, to: 20099}], allowed_protocols: ["TCP"], max_tunnel_count: 2};
-const CONTEXT: EnforceContext = {ownedCount: 1, trustedClientIds: []};
+const BASE = {allowed_port_range: [{from: 20000, to: 20099}], allowed_protocols: ["TCP"], max_tunnel_count: 2, allowed_trusted_clients: ["c1"]};
+const CONTEXT: EnforceContext = {ownedCount: 1, trustedClientIds: ["c1"]};
 
 const expectFailure = (result: EnforceResult, status: number, code: string): void => {
     expect(result).toMatchObject({success: false, status, code});
@@ -217,9 +220,29 @@ describe("enforce: 신뢰 클라이언트(allowed_trusted_clients)", () => {
             422, "trusted_client_not_allowed");
     });
 
-    it("id 가 없으면 목록과 무관하게 통과한다", () => {
-        expect(enforce(principalWith(BASE), tunnel({allowedClientIds: []}), "update", CONTEXT)).toEqual({success: true});
-        expect(enforce(principalWith(BASE), tunnel({allowedClientIds: undefined}), "update", CONTEXT)).toEqual({success: true});
+    // 이슈 #99 표는 빈 목록을 통과로 적었지만 결정에 따라 거부로 바꿨다. 런타임 TunnelServer.getNextHandlerPool 은
+    // allowedClientIds·allowedClientNames 가 모두 비면 연결된 모든 클라이언트를 후보로 삼으므로, 빈 목록은 곧
+    // PRD §7 속성 7 의 슈퍼유저 전용 `*`(전체) 다. 일반 유저는 목록을 비워 그 권한을 얻을 수 없다.
+    it.each([[[]], [undefined], [null]])("일반 유저의 allowedClientIds %j 는 그룹·등록 목록이 넓어도 거부한다", (ids) => {
+        const wide = principalWith({...BASE, allowed_trusted_clients: ["c1", "c2"]});
+        expectFailure(enforce(wide, tunnel({allowedClientIds: ids}), "update", {...CONTEXT, trustedClientIds: ["c1", "c2"]}),
+            422, "trusted_client_not_allowed");
+        expectFailure(enforce(wide, tunnel({allowedClientIds: ids}), "create", {ownedCount: 0, trustedClientIds: ["c1", "c2"]}),
+            422, "trusted_client_not_allowed");
+    });
+
+    it.each([[[]], [undefined]])("슈퍼유저의 allowedClientIds %j 는 계속 허용한다", (ids) => {
+        const superuser = principalWith({allowed_trusted_clients: []}, "superuser");
+        expect(enforce(superuser, tunnel({allowedClientIds: ids}), "update", {ownedCount: 0, trustedClientIds: []})).toEqual({success: true});
+        expect(enforce(superuser, tunnel({allowedClientIds: ids}), "create", {ownedCount: 0, trustedClientIds: []})).toEqual({success: true});
+    });
+
+    it("빈 목록 거부는 레거시 이름 검사 다음 단계에서 같은 코드로 나온다", () => {
+        expectFailure(enforce(principalWith(BASE), tunnel({allowedClientNames: ["old"], allowedClientIds: []}), "update", CONTEXT),
+            422, "legacy_client_names_not_allowed");
+        const denied = enforce(principalWith(BASE), tunnel({allowedClientIds: []}), "update", CONTEXT);
+        const notAllowed = enforce(principalWith(BASE), tunnel({allowedClientIds: ["c9"]}), "update", CONTEXT);
+        expect(JSON.stringify(denied)).toBe(JSON.stringify(notAllowed));
     });
 
     // 등록된 clientId 목록이 응답으로 새면 안 된다. 어느 쪽에서 어긋났는지 구분하지 않고, 값이 메시지에 없는지 본다.

@@ -2,7 +2,7 @@ import fs from "fs";
 import Path from "path";
 import YAML from "yaml";
 import bcrypt from "bcryptjs";
-import {AuthorizationContext} from "../../../../src/server/rbac/AuthorizationContext";
+import AuthorizationContextDefault, {AuthorizationContext} from "../../../../src/server/rbac/AuthorizationContext";
 import {IdentityStore} from "../../../../src/server/rbac/IdentityStore";
 import {
     cloneGroupAttributes,
@@ -34,6 +34,11 @@ const tcpTunnel = (forwardPort: number, ownerId?: string): TunnelingOption => ({
     forwardPort, protocol: "tcp", destinationAddress: "127.0.0.1", destinationPort: 80, keepAlive: 0,
     ...(ownerId === undefined ? {} : {ownerId})
 } as TunnelingOption);
+
+// 5 단위 이슈(#122~#124)는 기본 내보내기 싱글턴으로 가져온다. 두 형태가 같은 객체여야 상태(경고 Set)가 갈리지 않는다.
+it("기본 내보내기와 이름 내보내기는 같은 싱글턴 객체다", () => {
+    expect(AuthorizationContextDefault).toBe(AuthorizationContext);
+});
 
 describe("AuthorizationContext", () => {
     let testRoot: TestRoot;

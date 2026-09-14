@@ -88,3 +88,6 @@ export const AuthorizationContext = {
         warnedOrphanPorts.clear();
     }
 };
+
+// 5 단위(#122~#124)는 기본 내보내기로 가져온다. 이름 내보내기와 같은 객체다.
+export default AuthorizationContext;

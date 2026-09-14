@@ -97,12 +97,18 @@ const isRewriteGranted = (attributes: Record<string, unknown>, permission: keyof
 const hasNoLegacyClientNames = (names: unknown): boolean =>
     isAbsent(names) || (Array.isArray(names) && names.length === 0);
 
-/** 각 id 가 그룹 허용 목록과 서버 등록 목록 양쪽에 모두 있어야 한다. */
+/**
+ * 각 id 가 그룹 허용 목록과 서버 등록 목록 양쪽에 모두 있어야 한다.
+ *
+ * 목록이 없거나 비어 있어도 거부한다. 이슈 #99 표는 빈 목록을 통과로 적었지만 되돌리지 말 것:
+ * 런타임 TunnelServer.getNextHandlerPool 은 allowedClientIds 와 allowedClientNames 가 모두 비면
+ * 연결된 모든 클라이언트를 브리지 후보로 삼는다(TTTServer 도 빈 목록이면 제한을 등록하지 않는다).
+ * 앞 단계가 allowedClientNames 를 비우도록 강제하므로, 여기서 빈 목록을 허용하면 일반 유저가
+ * PRD §7 속성 7(allowed_trusted_clients: 기본값 빈 집합, `*` 는 슈퍼유저 전용)의 `*` 를 얻는다.
+ * 빈 목록은 enforce 의 슈퍼유저 우회에서만 허용된다.
+ */
 const areClientIdsAllowed = (attributes: Record<string, unknown>, ids: unknown, registered: readonly string[]): boolean => {
-    if(isAbsent(ids)) {
-        return true;
-    }
-    if(!Array.isArray(ids)) {
+    if(!Array.isArray(ids) || ids.length === 0) {
         return false;
     }
     const groupAllowed = listOf(attributes.allowed_trusted_clients);
