@@ -1,18 +1,19 @@
 <script lang="ts">
-    import InputCertFile from '../src/layout/InputCertFile.svelte';
+    import InputCertFile from '../src/screens/parts/InputCertFile.svelte';
     import Gauge from '../src/ui/Gauge.svelte';
     import Timer from '../src/ui/Timer.svelte';
     import type {CertInfo} from '../src/controller/Types';
 
-    export let auxiliary = false;
-    let certificate: CertInfo | null = (window as any).initialCertificate ?? {
+    let {auxiliary = false}: {auxiliary?: boolean} = $props();
+
+    let certificate = $state<CertInfo | null>((window as any).initialCertificate ?? {
         key: {name: '', value: ''}, cert: {name: '', value: ''}, ca: {name: '', value: ''},
-    };
-    let width = 250;
-    let updates = 0;
-    let gaugeValue = 0;
-    let timerTotal = 0;
-    let timerSeconds = 0;
+    });
+    let redraws = $state(0);
+    let updates = $state(0);
+    let gaugeValue = $state(0);
+    let timerTotal = $state(0);
+    let timerSeconds = $state(0);
 
     (window as any).certificateFixture = {
         replace: (value: CertInfo | null) => { certificate = value; },
@@ -29,9 +30,10 @@
     <Gauge value={gaugeValue} max={100} duration={0} title="Auxiliary gauge" message="" />
     <Timer seconds={timerSeconds} total={timerTotal} />
 {:else}
-    <button on:click={() => width++}>Parent redraw</button>
-    <InputCertFile certInfo={certificate} {width} hideMessage={true}
-        on:update={(event) => { certificate = event.detail; updates++; }} />
+    <button onclick={() => redraws++}>Parent redraw</button>
+    <InputCertFile certInfo={certificate} hideMessage={true}
+        onupdate={(value) => { certificate = value; updates++; }} />
     <output id="updates">{updates}</output>
+    <output id="redraws">{redraws}</output>
     <pre id="certificate">{JSON.stringify(certificate)}</pre>
 {/if}

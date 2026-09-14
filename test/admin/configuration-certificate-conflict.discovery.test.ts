@@ -28,7 +28,7 @@ test("stale TLS editor cannot replace the live certificate before its config con
             await app.page.waitForFunction(() => (document.querySelector('input[type="file"]') as HTMLInputElement)?.files?.length === 1);
             await files.nth(0).setInputFiles({name: "next.key", mimeType: "text/plain", buffer: Buffer.from(next.keyPem)});
             await app.page.getByText("Invalid Key Pair", {exact: true}).waitFor();
-            await app.page.getByRole("button", {name: "Ok", exact: true}).click();
+            await app.page.getByRole("button", {name: "OK", exact: true}).click();
             await files.nth(0).setInputFiles({name: "next.key", mimeType: "text/plain", buffer: Buffer.from(next.keyPem)});
             await files.nth(1).setInputFiles({name: "next.crt", mimeType: "text/plain", buffer: Buffer.from(next.certPem)});
             const current = await snapshot();
