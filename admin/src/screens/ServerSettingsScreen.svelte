@@ -52,6 +52,11 @@
         if(raw == '') return value;
         if(parseInt(raw) < min) return min;
         if(parseInt(raw) > max) return max;
+        // 옛 판정과 의도적으로 다른 부분: 원문이 1e5·1e-7 같은 지수 표기면 parseInt 가 1 로 읽어 범위 밖 값을
+        // 통과시켰다. 숫자 값의 정수부로 한 번 더 비교해 그 경우만 막는다. 정수부로 비교하므로 -0.5(정수부 -0)는
+        // 옛 판정처럼 그대로 남고, 지수 표기가 아닌 입력은 첫 판정과 같은 결과를 낸다.
+        if(value !== null && Math.trunc(value) < min) return min;
+        if(value !== null && Math.trunc(value) > max) return max;
         return value;
     };
 

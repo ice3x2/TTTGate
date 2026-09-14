@@ -67,15 +67,26 @@ test("숫자 입력은 입력란의 원문 문자열을 정수부로 범위와 �
         // 기대값은 삭제 전 8b39082 의 ServerSetLayout.svelte 66~76행(_enforceMinMax)을 그대로 실행해 얻었다.
         // 원문 문자열에 parseInt 를 쓰므로 -0.5 는 0 보다 작다고 보지 않아 남고, 0.5 와 0.0000001 은 1 이 된다.
         // 숫자로 바꾼 뒤 문자열화하면 1e23 이 되어 parseInt 가 1 을 내므로, 반드시 원문으로 비교해야 잘린다.
-        const CASES: ReadonlyArray<readonly [string, string, string]> = [
+        const SAME_AS_ORIGINAL: ReadonlyArray<readonly [string, string, string]> = [
             ["#input-admin-port", "70000", "65535"],
             ["#input-admin-port", "0", "0"],
             ["#input-admin-port", "-0.5", "-0.5"],
+            ["#input-admin-port", "-1", "0"],
             ["#input-admin-port", "100000000000000000000000", "65535"],
+            ["#input-admin-port", "", ""],
             ["#input-mem-cache-limit", "0.5", "1"],
             ["#input-mem-cache-limit", "0.0000001", "1"],
             ["#input-mem-cache-limit", "100000", "99999"],
+            ["#input-mem-cache-limit", "1.5e3", "1.5e3"],
         ];
+        // 원본과 의도적으로 다른 입력. 원본은 지수 표기 원문을 parseInt 가 1 로 읽어 자르지 않았으므로
+        // 1e5 는 100000(최대 99999 초과), 1e-7 은 최소 1 미만이 모델에 남았다. 범위 검사의 목적에 어긋나는
+        // 결함이므로 정수부로 한 번 더 비교해 범위 안으로 넣는다.
+        const DIFFERENT_FROM_ORIGINAL: ReadonlyArray<readonly [string, string, string]> = [
+            ["#input-mem-cache-limit", "1e5", "99999"],
+            ["#input-mem-cache-limit", "1e-7", "1"],
+        ];
+        const CASES = [...SAME_AS_ORIGINAL, ...DIFFERENT_FROM_ORIGINAL];
         for(const [selector, typed, expected] of CASES) {
             await app.page.locator(selector).fill(typed);
             await nextFrame(app.page);
