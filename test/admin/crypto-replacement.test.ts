@@ -9,7 +9,7 @@ test("admin removes crypto-js and its certificate challenge uses the shared nati
     const lock = JSON.parse(fs.readFileSync(path.join(root, "admin/package-lock.json"), "utf8"));
     expect(manifest.dependencies["crypto-js"]).toBeUndefined();
     expect(lock.packages["node_modules/crypto-js"]).toBeUndefined();
-    const component = fs.readFileSync(path.join(root, "admin/src/layout/InputCertFile.svelte"), "utf8");
+    const component = fs.readFileSync(path.join(root, "admin/src/screens/parts/InputCertFile.svelte"), "utf8");
     expect(component).not.toContain("CryptoJS");
     expect(component).toContain("randomHex(64)");
     const helper = fs.readFileSync(path.join(root, "admin/src/util/hash.ts"), "utf8");

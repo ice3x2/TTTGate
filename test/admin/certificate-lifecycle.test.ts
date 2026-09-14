@@ -30,7 +30,7 @@ test("partial file edits survive component and unrelated parent updates until th
         await app.page.getByRole("button", {name: "Parent redraw"}).click();
         await files.nth(1).setInputFiles({name: "invalid.pem", mimeType: "text/plain", buffer: Buffer.from("invalid certificate")});
         await app.page.getByText("Invalid certificate", {exact: true}).waitFor({state: "visible"});
-        await app.page.getByRole("button", {name: "Ok", exact: true}).click();
+        await app.page.getByRole("button", {name: "OK", exact: true}).click();
         expect(await files.nth(0).evaluate((input: HTMLInputElement) => input.files?.[0]?.name)).toBe("draft-key.pem");
         expect(await app.page.locator("#updates").textContent()).toBe("0");
         // Equivalent replacement props must not erase an unfinished user edit.

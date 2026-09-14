@@ -8,7 +8,7 @@
     import AlertLayout from "../component/AlertLayout.svelte";
     import Loading from "../component/Loading.svelte";
     import {type CertInfo} from "../controller/Types";
-    import InputCertFile from "./InputCertFile.svelte";
+    import InputCertFile from "../screens/parts/InputCertFile.svelte";
     import CertificationCtrl from "../controller/CertificationCtrl";
     import Switch from "../component/Switch.svelte";
     import Timer from "../component/Timer.svelte";
@@ -529,7 +529,7 @@
                 </div>
 
                 {#if option.tls === true}
-                   <InputCertFile certInfo={option.certInfo} on:update={(e) => {option.certInfo = e.detail}}  hideMessage={true}></InputCertFile>
+                   <InputCertFile certInfo={option.certInfo} onupdate={(value) => { option.certInfo = value; }} hideMessage={true} />
                 {/if}
 
 
