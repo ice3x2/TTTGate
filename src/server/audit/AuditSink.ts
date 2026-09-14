@@ -53,6 +53,15 @@ export class LoggerAuditSink implements AuditSink {
 
 let currentSink: AuditSink = new LoggerAuditSink();
 
+/**
+ * 감사 이벤트를 싱크로 보내는 유일한 진입점. detail 마스킹은 여기서만 한다.
+ * sink.record 를 직접 부르면 그 마스킹을 건너뛰므로, 기록은 반드시 이 함수를 거친다.
+ * (마스킹은 마지막 안전망이지 detail 에 비밀값을 담아도 된다는 허가가 아니다.)
+ */
+export function recordAuditEvent(event: AuditEvent, sink: AuditSink = AuditSinkRegistry.current()): Promise<void> {
+    return sink.record(event.detail === undefined ? event : {...event, detail: redactSecrets(event.detail)});
+}
+
 export const AuditSinkRegistry = {
     current(): AuditSink {
         return currentSink;

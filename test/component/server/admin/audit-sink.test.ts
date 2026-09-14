@@ -39,6 +39,7 @@ type LoginResult = ApiResponse & {auth?: Auth; sessionKey?: string};
 
 type Fixture = {
     rootDir: string;
+    api: AdminServer;
     sink: StubSink;
     store: ServerOptionStore;
     admin: {auth: Auth; sessionKey: string; userId: string; mustChangePassword: boolean};
@@ -105,7 +106,7 @@ const withAuditServer = async (check: (fixture: Fixture) => Promise<void>): Prom
         sink.events.length = 0;
 
         await check({
-            rootDir: root.rootDir, sink, store,
+            rootDir: root.rootDir, api, sink, store,
             admin: {
                 auth: bootstrap.auth!, sessionKey: bootstrap.sessionKey!,
                 userId: bootstrap.body.user.id, mustChangePassword: bootstrap.body.mustChangePassword
@@ -297,5 +298,37 @@ describe("audit-sink: audited() 밖의 이벤트", () => {
         expect(deleted.success).toBe(false);
         expect(f.sink.events).toHaveLength(1);
         expect(f.sink.events[0]).toMatchObject({type: "last_superuser_guard_hit", detail: {operation: "delete"}});
+    }));
+});
+
+describe("audit-sink: detail 마스킹은 기록 진입점 한 곳에서만 한다", () => {
+    // 현재 라우트의 detail 에는 비밀 키가 없어 요청만으로는 마스킹을 유발할 수 없다.
+    // 두 기록 경로를 직접 불러, 마스킹이 사라지면 반드시 실패하도록 고정한다.
+    // 스텁 싱크는 LoggerAuditSink 를 거치지 않으므로 진입점의 마스킹만 검증된다.
+    const TEMPORARY_PASSWORD_PLAINTEXT = "audited-temporary-password-plaintext";
+    const SESSION_TOKEN_PLAINTEXT = "emitted-session-token-plaintext";
+
+    it("audited() 가 싱크에 넘기는 detail 은 이미 마스킹되어 있다", async () => withAuditServer(async (f) => {
+        const ctx = {req: {} as any, res: {statusCode: 200} as any, params: {}, ip: "127.0.0.1"};
+        await (f.api as any).audited(ctx,
+            {type: "temp_password_issued", target: {kind: "user", id: "u_1"}, summary: "temp_password_issued u_1",
+                detail: {temporaryPassword: TEMPORARY_PASSWORD_PLAINTEXT}},
+            async () => {});
+
+        expect(f.sink.events).toHaveLength(1);
+        expect(f.sink.events[0].detail).toEqual({temporaryPassword: "[REDACTED]"});
+        expect(JSON.stringify(f.sink.events[0])).not.toContain(TEMPORARY_PASSWORD_PLAINTEXT);
+    }));
+
+    it("emitAudit() 가 싱크에 넘기는 detail 도 같은 마스킹을 거친다", async () => withAuditServer(async (f) => {
+        (f.api as any).emitAudit({
+            at: 1_757_548_800_000, actor: {userId: "system"}, ip: "127.0.0.1",
+            type: "login_failure", outcome: "failure", summary: "login_failure",
+            detail: {sessionToken: SESSION_TOKEN_PLAINTEXT}
+        });
+
+        expect(f.sink.events).toHaveLength(1);
+        expect(f.sink.events[0].detail).toEqual({sessionToken: "[REDACTED]"});
+        expect(JSON.stringify(f.sink.events[0])).not.toContain(SESSION_TOKEN_PLAINTEXT);
     }));
 });

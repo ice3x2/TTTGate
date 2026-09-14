@@ -7,7 +7,7 @@ import {ClockRngProvider} from "../../util/ClockRng";
 import {timingSafeStringEqual} from "../../util/timingSafeStringEqual";
 import LoggerFactory from "../../util/logger/LoggerFactory";
 import SessionStore from "../admin/SessionStore";
-import {AuditSinkRegistry} from "../audit/AuditSink";
+import {recordAuditEvent} from "../audit/AuditSink";
 import {hashLegacyPassword} from "./legacyPasswordHash";
 import {
     cloneGroupAttributes,
@@ -426,7 +426,7 @@ class IdentityStore {
 
     /** PRD K6 집계 근거. 409 를 내는 호출마다 하나씩 흘린다(응답을 막지 않는다). */
     private recordLastSuperuserGuardHit(id: string, operation: 'demote' | 'disable' | 'delete'): void {
-        AuditSinkRegistry.current().record({
+        recordAuditEvent({
             at: ClockRngProvider.current().now(),
             actor: {userId: 'system'},
             type: 'last_superuser_guard_hit',

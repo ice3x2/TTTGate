@@ -29,8 +29,7 @@ import {AuditRouteMeta, buildAdminRoutes, Route, RouteContext} from "./routes";
 import {Action, authorize, sections} from "../rbac/AdminAuthorizer";
 import {LEGACY_PRINCIPAL, Principal, principalOf} from "../rbac/Principal";
 import {toUserView} from "../rbac/UserView";
-import {AuditEvent, AuditSinkRegistry} from "../audit/AuditSink";
-import {redactSecrets} from "../../util/SecretRedactor";
+import {AuditEvent, AuditSinkRegistry, recordAuditEvent} from "../audit/AuditSink";
 
 const logger = LoggerFactory.getLogger('server', 'AdminServer');
 
@@ -335,7 +334,7 @@ class AdminServer {
 
     /** reserve() 를 거치지 않고 흘려보내는 이벤트(로그인·권한 거부). 응답을 감사 배압으로 막지 않는다. */
     private emitAudit(event: AuditEvent): void {
-        AuditSinkRegistry.current().record(event).catch((e) => logger.error('audit record failed', e));
+        recordAuditEvent(event).catch((e) => logger.error('audit record failed', e));
     }
 
     /**
@@ -357,7 +356,7 @@ class AdminServer {
             detail = {...(detail ?? {}), error: String(e)};
         }
         try {
-            await sink.record({
+            await recordAuditEvent({
                 at: this.now(),
                 actor: this.auditActor(ctx.principal),
                 sessionIdHash: ctx.session ? SessionStore.sessionIdOf(ctx.session.key) : undefined,
@@ -366,8 +365,8 @@ class AdminServer {
                 target: meta.target,
                 outcome: !failure && ctx.res.statusCode < 400 ? 'success' : 'failure',
                 summary: meta.summary,
-                detail: detail === undefined ? undefined : redactSecrets(detail)
-            });
+                detail
+            }, sink);
         } catch(e) {
             // 자리는 reserve() 로 확보했으므로 여기서의 실패는 싱크 장애다. 응답은 이미 나갔다.
             logger.error('audit record failed', e);
