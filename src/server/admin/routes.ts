@@ -50,6 +50,12 @@ const tunnelWriteAction = (ctx: RouteContext): Action =>
 const auditMeta = (type: string, target?: AuditTarget, detail?: Record<string, unknown>): AuditRouteMeta =>
     ({type, target, summary: target ? `${type} ${target.id}` : type, detail});
 
+/**
+ * POST /api/tunneling/active/:port 가 활성화를 요구했는지 판정한다.
+ * 핸들러와 감사 메타가 이 함수 하나만 부르게 해, 감사 기록이 실제 동작과 갈리지 않게 한다.
+ */
+export const isTunnelActivationRequested = (ctx: RouteContext): boolean => ctx.body?.active == true;
+
 /** 터널 감사 대상의 id 는 포트다. 경로 세그먼트가 없으면 본문의 forwardPort 를 쓴다. */
 const tunnelAuditTarget = (ctx: RouteContext): AuditTarget =>
     ({kind: 'tunnel', id: String(ctx.params.port ?? ctx.body?.forwardPort)});
@@ -104,7 +110,8 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
     {method: 'DELETE', pattern: new RegExp('^/api/tunnelingOption$'), action: 'tunnel:delete', target: tunnelTarget,
         audit: (ctx) => auditMeta('tunnel_deleted', tunnelAuditTarget(ctx)), handler: 'onRemoveTunnelingOption'},
     {method: 'POST', pattern: new RegExp('^/api/tunneling/active/(?<port>[^/]*)$'), action: 'tunnel:activate', target: tunnelTarget,
-        audit: (ctx) => auditMeta(ctx.body?.active ? 'tunnel_activated' : 'tunnel_deactivated', tunnelAuditTarget(ctx)), handler: 'onActiveTunneling'},
+        audit: (ctx) => auditMeta(isTunnelActivationRequested(ctx) ? 'tunnel_activated' : 'tunnel_deactivated', tunnelAuditTarget(ctx)),
+        handler: 'onActiveTunneling'},
     {method: 'GET', pattern: new RegExp('^/api/externalServerStatuses$'), action: 'tunnel:list', target: tunnelTarget, handler: 'onGetExternalServerStatuses'},
     {method: 'GET', pattern: new RegExp('^/api/externalCert/(?<port>[^/]*)$'), action: 'tunnel:cert', target: tunnelTarget, handler: 'onGetExternalServerCert'},
     {method: 'POST', pattern: new RegExp('^/api/externalCert/(?<port>[^/]*)$'), action: 'tunnel:cert', target: tunnelTarget, audit: tunnelCertAudit, handler: 'onUpdateExternalServerCert'},

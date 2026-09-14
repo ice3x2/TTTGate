@@ -40,6 +40,7 @@ type LoginResult = ApiResponse & {auth?: Auth; sessionKey?: string};
 type Fixture = {
     rootDir: string;
     api: AdminServer;
+    tunnel: TTTServer;
     sink: StubSink;
     store: ServerOptionStore;
     admin: {auth: Auth; sessionKey: string; userId: string; mustChangePassword: boolean};
@@ -106,7 +107,7 @@ const withAuditServer = async (check: (fixture: Fixture) => Promise<void>): Prom
         sink.events.length = 0;
 
         await check({
-            rootDir: root.rootDir, api, sink, store,
+            rootDir: root.rootDir, api, tunnel, sink, store,
             admin: {
                 auth: bootstrap.auth!, sessionKey: bootstrap.sessionKey!,
                 userId: bootstrap.body.user.id, mustChangePassword: bootstrap.body.mustChangePassword
@@ -206,6 +207,35 @@ describe("audit-sink: audited() 가 감싼 CUD 라우트", () => {
 
             const read = await f.request("GET", "/api/tunnelingOption", {}, f.admin.auth);
             expect(read.status).toBe(200);
+        } finally { await service.close(); }
+    }));
+
+    // 핸들러의 active == true 와 감사 메타의 판정이 갈리면 감사가 실제와 반대를 말한다.
+    // "true" 는 truthy 이면서 == true 가 아니므로 두 술어가 갈리는 값이다.
+    it("truthy 이지만 true 가 아닌 active 값에서도 감사가 실제 동작과 같은 답을 낸다", async () => withAuditServer(async (f) => {
+        const service = await startEchoServer();
+        try {
+            const forwardPort = await f.freePort();
+            const created = await f.request("POST", "/api/tunnelingOption", tunnelBody(forwardPort, service.port, f.store), f.admin.auth);
+            expect(created.status).toBe(200);
+
+            // 두 술어가 같은 답을 내는 값으로 먼저 활성화해 둔다.
+            f.sink.events.length = 0;
+            const activated = await f.request("POST", `/api/tunneling/active/${forwardPort}`, {active: true}, f.admin.auth);
+            expect(activated.status).toBe(200);
+            expect(f.tunnel.externalServerStatus(forwardPort).active).toBe(true);
+            expect(f.sink.events).toHaveLength(1);
+            expect(f.sink.events[0]).toMatchObject({type: "tunnel_activated", outcome: "success"});
+
+            f.sink.events.length = 0;
+            const deactivated = await f.request("POST", `/api/tunneling/active/${forwardPort}`, {active: "true"}, f.admin.auth);
+            expect(deactivated.status).toBe(200);
+            expect(f.tunnel.externalServerStatus(forwardPort).active).toBe(false);
+
+            expect(f.sink.events).toHaveLength(1);
+            expect(f.sink.events[0]).toMatchObject({
+                type: "tunnel_deactivated", outcome: "success", target: {kind: "tunnel", id: String(forwardPort)}
+            });
         } finally { await service.close(); }
     }));
 

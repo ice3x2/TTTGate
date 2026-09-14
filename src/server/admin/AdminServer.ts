@@ -25,7 +25,7 @@ import {computeBackoffMs} from "./loginBackoff";
 import crypto from "crypto";
 import {TunnelingOption} from "../../types/TunnelingOption";
 import {AdmissionController} from "../security/AdmissionController";
-import {AuditRouteMeta, buildAdminRoutes, Route, RouteContext} from "./routes";
+import {AuditRouteMeta, buildAdminRoutes, isTunnelActivationRequested, Route, RouteContext} from "./routes";
 import {Action, authorize, sections} from "../rbac/AdminAuthorizer";
 import {LEGACY_PRINCIPAL, Principal, principalOf} from "../rbac/Principal";
 import {toUserView} from "../rbac/UserView";
@@ -1061,14 +1061,13 @@ class AdminServer {
         if(port == undefined) return;
         let json = ctx.body;
         let timeout = json['timeout'];
-        let active = json['active'];
         if(timeout == undefined || isNaN(timeout)) {
             timeout = 0;
         }
         await ServerOptionStore.instance.runConfigurationMutation(async () => {
             let success = false;
             if(this._tttServer) {
-                success = active == true
+                success = isTunnelActivationRequested(ctx)
                     ? await this._tttServer.activeExternalPortServer(port, timeout)
                     : await this._tttServer.inactiveExternalPortServer(port);
             }
