@@ -44,11 +44,14 @@
 
     const sessionOut = () => alert('Session is expired. Please login again.', 'OK', () => session.invalidate());
 
-    // 옛 _enforceMinMax 와 같다. 정수부로 비교하므로 -0.5 는 0 보다 작다고 보지 않는다. 빈 값은 그대로 둔다.
-    const clamp = (value: number | null, min: number, max: number): number | null => {
-        if(value === null) return value;
-        if(parseInt(String(value)) < min) return min;
-        if(parseInt(String(value)) > max) return max;
+    // 옛 _enforceMinMax 처럼 입력란의 원문 문자열에 parseInt 를 적용해 범위와 비교한다. 빈 값은 그대로 둔다.
+    // NumberInput 은 숫자로 바꾼 값만 넘기는데, 그 숫자를 다시 문자열화하면 1e23 처럼 지수 표기가 되어
+    // parseInt 가 1 을 내므로 원문을 입력란에서 직접 읽는다.
+    const enforceMinMax = (id: string, value: number | null, min: number, max: number): number | null => {
+        const raw = (document.getElementById(id) as HTMLInputElement).value;
+        if(raw == '') return value;
+        if(parseInt(raw) < min) return min;
+        if(parseInt(raw) > max) return max;
         return value;
     };
 
@@ -176,22 +179,22 @@
             </Field>
             <Field label="Admin service port number" for="input-admin-port">
                 <NumberInput id="input-admin-port" min={0} max={65535} bind:value={serverOption.adminPort}
-                    oninput={(v) => (serverOption.adminPort = clamp(v, 0, 65535) as number)} />
+                    oninput={(v) => (serverOption.adminPort = enforceMinMax('input-admin-port', v, 0, 65535) as number)} />
             </Field>
             <Checkbox id="input-admin-tls" label="Admin TLS" bind:checked={serverOption.adminTls} />
             {#if serverOption.adminTls}<InputCertFile certInfo={adminCert} onupdate={updateAdminCert} />{/if}
             <Field label="Tunnel server port number" for="input-tunnel-port">
                 <NumberInput id="input-tunnel-port" min={0} max={65535} bind:value={serverOption.port}
-                    oninput={(v) => (serverOption.port = clamp(v, 0, 65535) as number)} />
+                    oninput={(v) => (serverOption.port = enforceMinMax('input-tunnel-port', v, 0, 65535) as number)} />
             </Field>
             <Checkbox id="input-tunnel-tls" label="Tunnel TLS" bind:checked={serverOption.tls} />
             <Field label="Memory cache limit (MiB)" for="input-mem-cache-limit">
                 <NumberInput id="input-mem-cache-limit" min={1} max={99999} bind:value={serverOption.globalMemCacheLimit}
-                    oninput={(v) => (serverOption.globalMemCacheLimit = clamp(v, 1, 99999) as number)} />
+                    oninput={(v) => (serverOption.globalMemCacheLimit = enforceMinMax('input-mem-cache-limit', v, 1, 99999) as number)} />
             </Field>
             <Field label="Keep-Alive (ms)" for="input-keep-alive" hint="0 or less disables keep-alive.">
                 <NumberInput id="input-keep-alive" min={1} max={99999} bind:value={serverOption.keepAlive}
-                    oninput={(v) => (serverOption.keepAlive = clamp(v, 1, 99999) as number)} />
+                    oninput={(v) => (serverOption.keepAlive = enforceMinMax('input-keep-alive', v, 1, 99999) as number)} />
             </Field>
         </div>
     </Card>
