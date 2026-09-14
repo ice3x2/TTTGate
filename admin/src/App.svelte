@@ -1,7 +1,7 @@
 <script lang="ts">
   import {onMount} from "svelte";
   import LoginCtrl from "./controller/LoginCtrl";
-  import Login from "./layout/Login.svelte";
+  import LoginScreen from "./screens/LoginScreen.svelte";
   import ServerSetLayout from "./layout/ServerSetLayout.svelte";
   import ServerStatusLayout from "./layout/ServerStatusLayout.svelte";
   import TunnelOptionSetLayout from "./layout/TunnelOptionSetLayout.svelte";
@@ -32,7 +32,7 @@
 {:else if state === 'Offline'}
   <p class="offline">Offline server...</p>
 {:else if state === 'Invalid'}
-  <Login />
+  <LoginScreen onsuccess={() => (state = 'Valid')} />
 {:else}
   <Shell title={current.title} back={current.back}>
     {#if $route.screen === 'status'}<ServerStatusLayout />
