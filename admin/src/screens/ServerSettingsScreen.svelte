@@ -45,16 +45,17 @@
     const sessionOut = () => alert('Session is expired. Please login again.', 'OK', () => session.invalidate());
 
     // 옛 _enforceMinMax 처럼 입력란의 원문 문자열에 parseInt 를 적용해 범위와 비교한다. 빈 값은 그대로 둔다.
-    // NumberInput 은 숫자로 바꾼 값만 넘기는데, 그 숫자를 다시 문자열화하면 1e23 처럼 지수 표기가 되어
-    // parseInt 가 1 을 내므로 원문을 입력란에서 직접 읽는다.
+    // NumberInput 은 숫자로 바꾼 값만 넘기는데, 그 숫자를 다시 문자열화하면 원문과 다른 문자열이 되어
+    // 판정이 달라진다(70000e-1 은 7000 이 되어 잘리지 않는다). 그래서 원문을 입력란에서 직접 읽는다.
     const enforceMinMax = (id: string, value: number | null, min: number, max: number): number | null => {
         const raw = (document.getElementById(id) as HTMLInputElement).value;
         if(raw == '') return value;
         if(parseInt(raw) < min) return min;
         if(parseInt(raw) > max) return max;
-        // 옛 판정과 의도적으로 다른 부분: 원문이 1e5·1e-7 같은 지수 표기면 parseInt 가 1 로 읽어 범위 밖 값을
-        // 통과시켰다. 숫자 값의 정수부로 한 번 더 비교해 그 경우만 막는다. 정수부로 비교하므로 -0.5(정수부 -0)는
-        // 옛 판정처럼 그대로 남고, 지수 표기가 아닌 입력은 첫 판정과 같은 결과를 낸다.
+        // 옛 판정과 의도적으로 다른 부분: 옛 판정은 원문의 parseInt 만 보므로 1e5·.5·99999.99999999999999999 처럼
+        // 원본이 범위 밖 값을 통과시키던 입력이 있었다. 숫자 값의 정수부로 한 번 더 비교해, 그 가운데 정수부가
+        // 범위를 벗어난 입력만 범위 안으로 넣는다. min·max 가 정수이므로 정수부가 범위 밖이면 값도 범위 밖이고,
+        // 그래서 원본이 범위 안의 결과를 내던 입력은 바뀌지 않는다. -0.5 는 정수부가 -0 이라 옛 판정처럼 남는다.
         if(value !== null && Math.trunc(value) < min) return min;
         if(value !== null && Math.trunc(value) > max) return max;
         return value;
