@@ -383,6 +383,37 @@ describe("rbac-users-groups", () => {
         }
     }));
 
+    // 키 이름 검사만으로는 평문을 다른 키(tempPw 등)에 담는 누출을 잡지 못한다.
+    // 응답으로 받은 실제 평문 값이 싱크가 받은 이벤트 전체 어디에도 없는지를 본다.
+    it("임시 비밀번호 발급 감사는 발급 방식만 담고 평문 값은 어떤 키로도 남기지 않는다", async () => withRbacServer(async (f) => {
+        const issue = async (method: string, target: string, body: object): Promise<unknown[]> => {
+            f.sink.events.length = 0;
+            const response = await f.request(method, target, body, f.admin.auth);
+            expect(response.status).toBeLessThan(300);
+            const plaintext: string = response.body.temporaryPassword;
+            expect(plaintext.length).toBeGreaterThanOrEqual(16);
+            expect(JSON.stringify(f.sink.events)).not.toContain(plaintext);
+            return f.sink.events.filter((event) => event.type === "temp_password_issued").map((event) => event.detail);
+        };
+
+        const generatedOnCreate = await issue("POST", "/api/users", {username: "alice", role: "regular"});
+        expect(generatedOnCreate).toEqual([{generated: true}]);
+
+        const specifiedOnCreate = await issue("POST", "/api/users",
+            {username: "bob", role: "regular", temporaryPassword: "admin-specified-create-password"});
+        expect(specifiedOnCreate).toEqual([{generated: false}]);
+
+        const users = (await f.request("GET", "/api/users", {}, f.admin.auth)).body.users;
+        const idOf = (username: string) => users.find((user: any) => user.username === username).id;
+
+        const generatedOnReset = await issue("POST", `/api/users/${idOf("alice")}/password-reset`, {});
+        expect(generatedOnReset).toEqual([{generated: true}]);
+
+        const specifiedOnReset = await issue("POST", `/api/users/${idOf("bob")}/password-reset`,
+            {temporaryPassword: "admin-specified-reset-password"});
+        expect(specifiedOnReset).toEqual([{generated: false}]);
+    }));
+
     it("CSRF 헤더 없이 보낸 사용자 생성은 403 이다", async () => withRbacServer(async (f) => {
         const response = await f.request("POST", "/api/users",
             {username: "bob", role: "regular"}, {Cookie: f.admin.auth.Cookie});

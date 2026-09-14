@@ -1,5 +1,5 @@
 import SessionStore from "./SessionStore";
-import {auditEventOf, RouteContext, RouteHandlers} from "./routes";
+import {auditEventOf, isFieldProvided, RouteContext, RouteHandlers} from "./routes";
 import {recordAuditEvent} from "../audit/AuditSink";
 import {IdentityStore} from "../rbac/IdentityStore";
 import {toUserView} from "../rbac/UserView";
@@ -61,11 +61,11 @@ const changedAttributeKeys = (before: GroupAttributes, after: GroupAttributes): 
  */
 function resolveTemporaryPassword(ctx: RouteContext): {password: string; generated: boolean} | undefined {
     const requested = ctx.body?.temporaryPassword;
-    if(requested !== undefined && typeof requested !== 'string') {
+    if(isFieldProvided(ctx.body, 'temporaryPassword') && typeof requested !== 'string') {
         ctx.fail(422, 'password_too_short', 'temporaryPassword must be a string');
         return undefined;
     }
-    return requested === undefined
+    return !isFieldProvided(ctx.body, 'temporaryPassword')
         ? {password: generateTemporaryPassword(), generated: true}
         : {password: requested, generated: false};
 }
@@ -131,7 +131,7 @@ const onUpdateUser = async (ctx: RouteContext): Promise<void> => {
     const body = ctx.body ?? {};
     // 허용하는 네 키만 골라 넘긴다. mustChangePassword·migrationAcknowledged 가 와도 무시한다.
     const patch: {displayName?: string; role?: Role; status?: UserStatus; groupId?: string} = {};
-    if(body.displayName !== undefined) {
+    if(isFieldProvided(body, 'displayName')) {
         const displayName = validateDisplayName(body.displayName);
         if(!displayName.success) {
             ctx.fail(displayName.status, displayName.code, displayName.message);
@@ -139,21 +139,21 @@ const onUpdateUser = async (ctx: RouteContext): Promise<void> => {
         }
         patch.displayName = displayName.value;
     }
-    if(body.role !== undefined) {
+    if(isFieldProvided(body, 'role')) {
         if(!ROLES.includes(body.role)) {
             ctx.fail(422, 'role_invalid', `role must be one of ${ROLES.join(', ')}`);
             return;
         }
         patch.role = body.role as Role;
     }
-    if(body.status !== undefined) {
+    if(isFieldProvided(body, 'status')) {
         if(!USER_STATUSES.includes(body.status)) {
             ctx.fail(422, 'status_invalid', `status must be one of ${USER_STATUSES.join(', ')}`);
             return;
         }
         patch.status = body.status as UserStatus;
     }
-    if(body.groupId !== undefined) {
+    if(isFieldProvided(body, 'groupId')) {
         patch.groupId = body.groupId;
     }
     const store = IdentityStore.instance;
@@ -216,10 +216,10 @@ const onUpdateGroup = async (ctx: RouteContext): Promise<void> => {
     const store = IdentityStore.instance;
     const before = store.group(ctx.params.id);
     const patch: {name?: string; attributes?: Partial<GroupAttributes>} = {};
-    if(ctx.body?.name !== undefined) {
+    if(isFieldProvided(ctx.body, 'name')) {
         patch.name = ctx.body.name;
     }
-    if(ctx.body?.attributes !== undefined) {
+    if(isFieldProvided(ctx.body, 'attributes')) {
         patch.attributes = ctx.body.attributes;
     }
     const updated = store.updateGroup(ctx.params.id, patch);
@@ -227,7 +227,7 @@ const onUpdateGroup = async (ctx: RouteContext): Promise<void> => {
         ctx.fail(updated.status, updated.code, updated.message);
         return;
     }
-    if(before && patch.attributes !== undefined) {
+    if(before && isFieldProvided(ctx.body, 'attributes')) {
         ctx.auditDetail({changedKeys: changedAttributeKeys(before.attributes, updated.value.attributes)});
     }
     ctx.ok({group: toGroupView(updated.value)});

@@ -96,16 +96,19 @@ const tunnelWriteAudit = (ctx: RouteContext): AuditRouteMeta =>
     auditMeta(tunnelWriteAction(ctx) === 'tunnel:create' ? 'tunnel_created' : 'tunnel_updated', tunnelAuditTarget(ctx));
 const tunnelCertAudit = (ctx: RouteContext): AuditRouteMeta => auditMeta('tunnel_cert_updated', tunnelAuditTarget(ctx));
 
-const hasKey = (body: any, key: string): boolean =>
-    body != undefined && Object.prototype.hasOwnProperty.call(body, key);
+/**
+ * 요청 본문에 필드가 들어왔는지 판정한다. 감사 메타의 타입 분기와 핸들러의 패치 구성이
+ * 이 함수 하나만 불러, 감사가 말하는 변경과 실제로 반영된 변경이 갈리지 않게 한다.
+ */
+export const isFieldProvided = (body: any, key: string): boolean => body?.[key] !== undefined;
 
 const pathIdTarget = (kind: AuditTarget['kind']) =>
     (ctx: RouteContext): AuditTarget => ({kind, id: ctx.params.id});
 
 /** PUT /api/users/:id 의 감사 타입은 본문에 어떤 키가 왔는지로 갈린다(설계 §5.2). */
 const userUpdateAuditType = (ctx: RouteContext): string =>
-    hasKey(ctx.body, 'role') ? 'role_changed'
-        : hasKey(ctx.body, 'status') ? 'user_status_changed'
+    isFieldProvided(ctx.body, 'role') ? 'role_changed'
+        : isFieldProvided(ctx.body, 'status') ? 'user_status_changed'
             : 'user_updated';
 
 export type RouteEntry = {
@@ -180,7 +183,7 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
         audit: (ctx) => auditMeta('group_created', {kind: 'group', id: String(ctx.body?.name)}), handler: 'onCreateGroup'},
     {method: 'GET', pattern: new RegExp('^/api/groups/(?<id>[^/]+)$'), action: 'group:manage', handler: 'onGetGroup'},
     {method: 'PUT', pattern: new RegExp('^/api/groups/(?<id>[^/]+)$'), action: 'group:manage',
-        audit: (ctx) => auditMeta(hasKey(ctx.body, 'attributes') ? 'group_attributes_changed' : 'group_updated',
+        audit: (ctx) => auditMeta(isFieldProvided(ctx.body, 'attributes') ? 'group_attributes_changed' : 'group_updated',
             pathIdTarget('group')(ctx)), handler: 'onUpdateGroup'},
     {method: 'DELETE', pattern: new RegExp('^/api/groups/(?<id>[^/]+)$'), action: 'group:manage',
         audit: (ctx) => auditMeta('group_deleted', pathIdTarget('group')(ctx)), handler: 'onDeleteGroup'}
