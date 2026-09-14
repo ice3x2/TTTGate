@@ -1,9 +1,11 @@
 import type {Page} from "playwright";
-import {ADMIN_TEST_PASSWORD, AdminApp, startAdminApp} from "../helpers/adminApp";
+import {ADMIN_TEST_PASSWORD, startAdminApp} from "../helpers/adminApp";
+import type {AdminApp} from "../helpers/adminApp";
 
 // 옛 layout/ServerStatusLayout.svelte 는 현재 API 봉투 규약({success, …, sysUsage})을 풀지 않아
 // #/status 에 도착하면 예외를 던진다. 그 화면은 #88 (U1-06) 이 교체하므로 여기서는 고치지 않고,
-// 로그인 화면이 만든 오류만 남기고 그 한 가지만 걸러낸다.
+// 로그인 화면이 만든 오류만 남기고 그 한 가지만 걸러낸다. 컴포넌트 이름이 메시지에 붙는 것은
+// Svelte 개발 모드의 동작이며, startAdminApp 은 항상 Vite 개발 서버로 앱을 연다.
 const loginErrors = (app: AdminApp): string[] => app.errors.filter((message) => !message.includes("ServerStatusLayout.svelte"));
 
 const clickOk = (page: Page) => page.getByRole("button", {name: "OK", exact: true}).click();
@@ -107,7 +109,11 @@ test("with-tunnels fixture 는 기본 옵션만으로 로그인을 마치고 호
     const app = await startAdminApp({fixture: "with-tunnels"});
     try {
         await expectStatusScreen(app.page);
-        expect(Array.isArray(await app.calls())).toBe(true);
+        // 호출 기록은 IPC 왕복으로 오므로 배열이 오는 것과 각 항목의 형태까지 확인한다.
+        // 어떤 메서드가 담기는지는 화면마다 다르므로 여기서 고정하지 않는다.
+        const calls = await app.calls();
+        expect(Array.isArray(calls)).toBe(true);
+        expect(calls.every((call) => typeof call.method === "string" && Array.isArray(call.args))).toBe(true);
         expect(loginErrors(app)).toEqual([]);
     } finally {
         await app.close();

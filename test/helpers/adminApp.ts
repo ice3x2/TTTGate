@@ -4,10 +4,11 @@ import path from "path";
 import type {Page} from "playwright";
 import {cleanupTestRoot, createTestRoot} from "./runtime";
 import {startAdminBrowser} from "./adminBrowser";
+import {ADMIN_TEST_PASSWORD} from "./adminFixture";
+import type {AdminFixture} from "./adminFixture";
 
-export type AdminFixture = 'bootstrap' | 'password' | 'with-tunnels';
-
-export const ADMIN_TEST_PASSWORD = 'test-password-1234';
+export {ADMIN_TEST_PASSWORD};
+export type {AdminFixture};
 
 export type AdminApp = {
     page: Page;
@@ -74,11 +75,18 @@ export const startAdminApp = async (options: {fixture?: AdminFixture; login?: bo
         });
         child.stdout!.on("data", (data) => { output += data; });
         child.stderr!.on("data", (data) => { output += data; });
+        const owned = child;
         const port = await new Promise<number>((resolve, reject) => {
-            const timer = setTimeout(() => reject(new Error(`Admin backend did not start within ${BACKEND_START_TIMEOUT_MS}ms: ${output}`)), BACKEND_START_TIMEOUT_MS);
-            child!.once("message", (message: any) => { clearTimeout(timer); resolve(message.port); });
-            child!.once("error", (error) => { clearTimeout(timer); reject(error); });
-            child!.once("exit", (code) => { clearTimeout(timer); reject(new Error(`Admin backend exited ${code}: ${output}`)); });
+            const finish = (error?: Error, port?: number) => {
+                clearTimeout(timer);
+                owned.off("message", ready); owned.off("error", failed); owned.off("exit", ended);
+                if(error) reject(error); else resolve(port!);
+            };
+            const ready = (message: any) => { if(typeof message?.port === "number") finish(undefined, message.port); };
+            const failed = (error: Error) => finish(error);
+            const ended = (code: number | null) => finish(new Error(`Admin backend exited ${code}: ${output}`));
+            const timer = setTimeout(() => finish(new Error(`Admin backend did not start within ${BACKEND_START_TIMEOUT_MS}ms: ${output}`)), BACKEND_START_TIMEOUT_MS);
+            owned.on("message", ready); owned.once("error", failed); owned.once("exit", ended);
         });
         const origin = `http://127.0.0.1:${port}`;
 
@@ -103,11 +111,11 @@ export const startAdminApp = async (options: {fixture?: AdminFixture; login?: bo
             await page.waitForFunction(() => document.querySelector("h1")?.textContent === "Status");
         }
 
-        const owned = browser;
+        const ownedBrowser = browser;
         return {
-            page, url: owned.url, origin, rootDir: root.rootDir, errors: owned.errors, calls, token,
+            page, url: ownedBrowser.url, origin, rootDir: root.rootDir, errors: ownedBrowser.errors, calls, token,
             async close(): Promise<void> {
-                try { await owned.close(); }
+                try { await ownedBrowser.close(); }
                 finally {
                     try { await closeBackend(); }
                     finally { await cleanupTestRoot(root); }

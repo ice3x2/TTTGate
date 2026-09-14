@@ -67,7 +67,8 @@
 
 <style>
     .login { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: var(--s-4); }
-    .login-card { width: 100%; max-width: 400px; }
+    /* Card 가 그리는 요소이므로 :global 로 짚는다. 스코프 선택자로는 닿지 않는다. */
+    .login :global(.login-card) { width: 100%; max-width: 400px; }
     .login-title { font-family: var(--ff-display); font-size: var(--fs-2xl); margin: 0 0 var(--s-5); }
     form { display: flex; flex-direction: column; gap: var(--s-4); }
     .login-message { min-height: 1.5em; margin: 0; color: var(--alarm); font-size: var(--fs-sm); }
