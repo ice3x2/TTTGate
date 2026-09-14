@@ -1,12 +1,5 @@
 import type {Page} from "playwright";
 import {ADMIN_TEST_PASSWORD, startAdminApp} from "../helpers/adminApp";
-import type {AdminApp} from "../helpers/adminApp";
-
-// 옛 layout/ServerStatusLayout.svelte 는 현재 API 봉투 규약({success, …, sysUsage})을 풀지 않아
-// #/status 에 도착하면 예외를 던진다. 그 화면은 #88 (U1-06) 이 교체하므로 여기서는 고치지 않고,
-// 로그인 화면이 만든 오류만 남기고 그 한 가지만 걸러낸다. 컴포넌트 이름이 메시지에 붙는 것은
-// Svelte 개발 모드의 동작이며, startAdminApp 은 항상 Vite 개발 서버로 앱을 연다.
-const loginErrors = (app: AdminApp): string[] => app.errors.filter((message) => !message.includes("ServerStatusLayout.svelte"));
 
 const clickOk = (page: Page) => page.getByRole("button", {name: "OK", exact: true}).click();
 
@@ -54,7 +47,7 @@ test("부트스트랩 화면이 단계별 문구를 보여주고 새로고침 �
         await expectStatusScreen(app.page);
 
         expect(loads).toBe(0);
-        expect(loginErrors(app)).toEqual([]);
+        expect(app.errors).toEqual([]);
     } finally {
         await app.close();
     }
@@ -74,7 +67,7 @@ test("비밀번호 fixture 는 오답에 문구를 보여주고 정답에 상태
         await clickOk(app.page);
         await expectStatusScreen(app.page);
 
-        expect(loginErrors(app)).toEqual([]);
+        expect(app.errors).toEqual([]);
     } finally {
         await app.close();
     }
@@ -99,7 +92,7 @@ test("비밀번호 입력란에서 Enter 를 누르면 로그인 요청 1건으�
 
         await expectStatusScreen(app.page);
         expect(loginRequests.length).toBe(1);
-        expect(loginErrors(app)).toEqual([]);
+        expect(app.errors).toEqual([]);
     } finally {
         await app.close();
     }
@@ -114,7 +107,7 @@ test("with-tunnels fixture 는 기본 옵션만으로 로그인을 마치고 호
         const calls = await app.calls();
         expect(Array.isArray(calls)).toBe(true);
         expect(calls.every((call) => typeof call.method === "string" && Array.isArray(call.args))).toBe(true);
-        expect(loginErrors(app)).toEqual([]);
+        expect(app.errors).toEqual([]);
     } finally {
         await app.close();
     }
