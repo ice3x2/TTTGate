@@ -4,6 +4,7 @@
   import LoginScreen from "./screens/LoginScreen.svelte";
   import StatusScreen from "./screens/StatusScreen.svelte";
   import ServerSettingsScreen from "./screens/ServerSettingsScreen.svelte";
+  import TunnelsScreen from "./screens/TunnelsScreen.svelte";
   import TunnelOptionSetLayout from "./layout/TunnelOptionSetLayout.svelte";
   import Loading from "./ui/Loading.svelte";
   import Shell from "./shell/Shell.svelte";
@@ -36,7 +37,8 @@
 {:else}
   <Shell title={current.title} back={current.back}>
     {#if $route.screen === 'status'}<StatusScreen />
-    {:else if $route.screen === 'tunnels' || $route.screen === 'tunnel-edit'}<TunnelOptionSetLayout />
+    {:else if $route.screen === 'tunnels'}<TunnelsScreen />
+    {:else if $route.screen === 'tunnel-edit'}<TunnelOptionSetLayout />
     {:else}<ServerSettingsScreen />{/if}
   </Shell>
 {/if}
