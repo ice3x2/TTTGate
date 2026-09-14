@@ -4,7 +4,7 @@ import ServerOptionStore from "../ServerOptionStore";
 import SessionStore, {Session} from "./SessionStore";
 import {IdentityStore} from "../rbac/IdentityStore";
 import {IdentityMigration, LEGACY_ADMIN_USERNAME} from "../rbac/IdentityMigration";
-import {SYSTEM_SUPERUSER_GROUP_NAME, validatePassword, validateUsername} from "../rbac/IdentityTypes";
+import {Role, SYSTEM_SUPERUSER_GROUP_NAME, validatePassword, validateUsername} from "../rbac/IdentityTypes";
 import {createHash} from "node:crypto";
 
 import {CertificationStore, CertInfo, PemData} from "../CertificationStore";
@@ -25,10 +25,11 @@ import {computeBackoffMs} from "./loginBackoff";
 import crypto from "crypto";
 import {TunnelingOption} from "../../types/TunnelingOption";
 import {AdmissionController} from "../security/AdmissionController";
-import {buildAdminRoutes, Route, RouteContext} from "./routes";
+import {AuditRouteMeta, buildAdminRoutes, isTunnelActivationRequested, Route, RouteContext} from "./routes";
 import {Action, authorize, sections} from "../rbac/AdminAuthorizer";
 import {LEGACY_PRINCIPAL, Principal, principalOf} from "../rbac/Principal";
 import {toUserView} from "../rbac/UserView";
+import {AuditEvent, AuditSinkRegistry, recordAuditEvent} from "../audit/AuditSink";
 
 const logger = LoggerFactory.getLogger('server', 'AdminServer');
 
@@ -269,6 +270,12 @@ class AdminServer {
                const decision = authorize(ctx.principal!, action, matched.route.target?.(ctx));
                const elapsed = process.hrtime.bigint() - startedAt;
                if(!decision.allowed) {
+                   this.emitAudit({
+                       at: this.now(), actor: this.auditActor(ctx.principal),
+                       sessionIdHash: SessionStore.sessionIdOf(ctx.session!.key), ip: ctx.ip,
+                       type: 'access_denied', outcome: 'failure',
+                       summary: `access_denied ${action}`, detail: {action, path: pathname}
+                   });
                    this.sendApiFailure(res, decision.status, {
                        code: decision.code,
                        message: decision.status === 403 ? 'Forbidden' : 'Not Found'
@@ -279,7 +286,12 @@ class AdminServer {
                    res.setHeader('X-Authz-Us', String(Number(elapsed / 1000n)));
                }
            }
-           await matched.route.handler(ctx);
+           const auditMeta = matched.route.audit?.(ctx);
+           if(auditMeta) {
+               await this.audited(ctx, auditMeta, matched.route.handler);
+           } else {
+               await matched.route.handler(ctx);
+           }
            return;
 
         } catch (e: any) {
@@ -311,6 +323,58 @@ class AdminServer {
         }
         res.writeHead(404);
         res.end(`Not Found ${url}`);
+    }
+
+    /** 감사 행위자. 주체가 없는 경로(로그인 실패·내부 가드)는 system 이 된다. */
+    private auditActor(principal?: Principal): AuditEvent['actor'] {
+        return principal
+            ? {userId: principal.userId, username: principal.username, role: principal.role}
+            : {userId: 'system'};
+    }
+
+    /** reserve() 를 거치지 않고 흘려보내는 이벤트(로그인·권한 거부). 응답을 감사 배압으로 막지 않는다. */
+    private emitAudit(event: AuditEvent): void {
+        recordAuditEvent(event).catch((e) => logger.error('audit record failed', e));
+    }
+
+    /**
+     * CUD 라우트의 감사 래퍼. 기록할 자리를 먼저 선점하고 핸들러의 성공·실패를 모두 남긴다.
+     * 자리를 얻지 못하면 핸들러를 실행하지 않고 503 을 낸다(드롭 금지, NFR-PERF-AUDIT-WRITE-001).
+     */
+    private async audited(ctx: RouteContext, meta: AuditRouteMeta, handler: (ctx: RouteContext) => Promise<void>): Promise<void> {
+        const sink = AuditSinkRegistry.current();
+        if(!sink.reserve()) {
+            this.sendApiFailure(ctx.res, 503, {code: 'audit_unavailable', message: 'Audit log unavailable'});
+            return;
+        }
+        let failure: {error: unknown} | undefined;
+        let detail = meta.detail;
+        try {
+            await handler(ctx);
+        } catch(e) {
+            failure = {error: e};
+            detail = {...(detail ?? {}), error: String(e)};
+        }
+        try {
+            await recordAuditEvent({
+                at: this.now(),
+                actor: this.auditActor(ctx.principal),
+                sessionIdHash: ctx.session ? SessionStore.sessionIdOf(ctx.session.key) : undefined,
+                ip: ctx.ip,
+                type: meta.type,
+                target: meta.target,
+                outcome: !failure && ctx.res.statusCode < 400 ? 'success' : 'failure',
+                summary: meta.summary,
+                detail
+            }, sink);
+        } catch(e) {
+            // 자리는 reserve() 로 확보했으므로 여기서의 실패는 싱크 장애다. 응답은 이미 나갔다.
+            logger.error('audit record failed', e);
+        }
+        if(failure) {
+            // route() 의 기존 처리(413/408/400/500)가 그대로 받도록 되던진다.
+            throw failure.error;
+        }
     }
 
     private matchRoute(method: string | undefined, pathname: string): {route: Route; params: Record<string, string>} | undefined {
@@ -997,14 +1061,13 @@ class AdminServer {
         if(port == undefined) return;
         let json = ctx.body;
         let timeout = json['timeout'];
-        let active = json['active'];
         if(timeout == undefined || isNaN(timeout)) {
             timeout = 0;
         }
         await ServerOptionStore.instance.runConfigurationMutation(async () => {
             let success = false;
             if(this._tttServer) {
-                success = active == true
+                success = isTunnelActivationRequested(ctx)
                     ? await this._tttServer.activeExternalPortServer(port, timeout)
                     : await this._tttServer.inactiveExternalPortServer(port);
             }
@@ -1151,6 +1214,18 @@ class AdminServer {
 
 
     private onLogin = async (ctx: RouteContext) => {
+        await this.performLogin(ctx);
+        // 성공은 completeLogin 이 남긴다(새 세션 해시를 그곳에서만 알 수 있다).
+        if(ctx.res.statusCode === 200) return;
+        const username = typeof ctx.body?.['username'] == 'string' ? ctx.body['username'] : LEGACY_ADMIN_USERNAME;
+        this.emitAudit({
+            at: this.now(), actor: {userId: 'system'}, ip: ctx.ip,
+            type: 'login_failure', outcome: 'failure',
+            summary: `login_failure ${username}`, detail: {username}
+        });
+    }
+
+    private performLogin = async (ctx: RouteContext) => {
         const {req, res} = ctx;
         const json: any = ctx.body;
         // 단일 관리자 암호이므로 제출 값과 무관하게 네트워크 버킷으로 집계한다.
@@ -1268,6 +1343,13 @@ class AdminServer {
             ]
         });
         res.end(JSON.stringify({success: true, partial: false, failedScopes: [], warnings: [], message: '', csrfToken, user, mustChangePassword}));
+        // PRD K2 는 role=superuser 로 집계하므로 actor.role 을 반드시 채운다.
+        this.emitAudit({
+            at: this.now(), actor: {userId: user.id, username: user.username, role: user.role as Role},
+            sessionIdHash: SessionStore.sessionIdOf(sessionKey), ip: this.getClientAddress(req),
+            type: 'login_success', target: {kind: 'user', id: user.id},
+            outcome: 'success', summary: `login_success ${user.id}`
+        });
     }
 
 

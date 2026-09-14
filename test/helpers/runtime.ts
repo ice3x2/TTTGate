@@ -17,6 +17,7 @@ import ServerOptionStore from "../../src/server/ServerOptionStore";
 import {CertificationStore} from "../../src/server/CertificationStore";
 import {IdentityStore} from "../../src/server/rbac/IdentityStore";
 import {IdentityMigration} from "../../src/server/rbac/IdentityMigration";
+import {AuditSinkRegistry} from "../../src/server/audit/AuditSink";
 
 type TestRoot = {
     rootDir: string;
@@ -59,6 +60,7 @@ const resetRuntimeState = (): void => {
     CertificationStore.resetForTest();
     IdentityStore.resetForTest();
     IdentityMigration.resetForTest();
+    AuditSinkRegistry.reset();
 };
 
 const applyTestRoot = (rootDir: string): void => {

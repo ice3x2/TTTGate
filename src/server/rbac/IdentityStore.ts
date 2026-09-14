@@ -7,6 +7,7 @@ import {ClockRngProvider} from "../../util/ClockRng";
 import {timingSafeStringEqual} from "../../util/timingSafeStringEqual";
 import LoggerFactory from "../../util/logger/LoggerFactory";
 import SessionStore from "../admin/SessionStore";
+import {recordAuditEvent} from "../audit/AuditSink";
 import {hashLegacyPassword} from "./legacyPasswordHash";
 import {
     cloneGroupAttributes,
@@ -312,6 +313,7 @@ class IdentityStore {
             const willBeDemoted = effectiveRole !== 'superuser';
             const willBeDisabled = nextStatus !== 'active';
             if((willBeDemoted || willBeDisabled) && this.countOtherActiveSuperusers(id) === 0) {
+                this.recordLastSuperuserGuardHit(id, willBeDemoted ? 'demote' : 'disable');
                 return {success: false, status: 409, code: 'last_superuser', message: 'cannot remove the last active superuser'};
             }
         }
@@ -345,6 +347,7 @@ class IdentityStore {
             return {success: false, status: 404, code: 'user_not_found', message: `user not found: ${id}`};
         }
         if(user.role === 'superuser' && user.status === 'active' && this.countOtherActiveSuperusers(id) === 0) {
+            this.recordLastSuperuserGuardHit(id, 'delete');
             return {success: false, status: 409, code: 'last_superuser', message: 'cannot delete the last active superuser'};
         }
         const saveResult = this.replaceData({...this._data, users: this._data.users.filter((u) => u.id !== id)});
@@ -419,6 +422,19 @@ class IdentityStore {
             return saveFailedResult(saveResult.message);
         }
         return {success: true, value: undefined};
+    }
+
+    /** PRD K6 집계 근거. 409 를 내는 호출마다 하나씩 흘린다(응답을 막지 않는다). */
+    private recordLastSuperuserGuardHit(id: string, operation: 'demote' | 'disable' | 'delete'): void {
+        recordAuditEvent({
+            at: ClockRngProvider.current().now(),
+            actor: {userId: 'system'},
+            type: 'last_superuser_guard_hit',
+            target: {kind: 'user', id},
+            outcome: 'failure',
+            summary: `last_superuser_guard_hit ${id}`,
+            detail: {operation}
+        }).catch((e) => logger.error('audit record failed', e));
     }
 
     public async setPassword(id: string, password: string, options: {clearMustChange: boolean}): Promise<Result<void>> {
