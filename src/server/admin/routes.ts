@@ -3,7 +3,8 @@ import SessionStore, {Session} from "./SessionStore";
 import {Action, Target} from "../rbac/AdminAuthorizer";
 import {Principal} from "../rbac/Principal";
 import ServerOptionStore from "../ServerOptionStore";
-import type {AuditTarget} from "../audit/AuditSink";
+import type {AuditEvent, AuditTarget} from "../audit/AuditSink";
+import {ClockRngProvider} from "../../util/ClockRng";
 
 export type {Action, Target};
 
@@ -15,6 +16,12 @@ export type RouteContext = {
     session?: Session;
     principal?: Principal;
     ip: string;
+    /** 성공 응답. status 는 생성 라우트가 201 을 낼 때만 넘긴다. */
+    ok: (data: object, status?: number) => void;
+    /** 실패 응답. 401·403 은 route() 가 내므로 핸들러는 404·409·422·503 만 쓴다. */
+    fail: (status: number, code: string, message: string) => void;
+    /** 요청 전에 계산한 audit 메타에 뒤늦게 알게 된 값을 더한다. audited() 가 record 직전에 합친다. */
+    auditDetail: (patch: Record<string, unknown>) => void;
 };
 
 export type RouteAction = Action | 'public' | 'session' | ((ctx: RouteContext) => Action);
@@ -26,6 +33,26 @@ export type AuditRouteMeta = {
     summary: string;
     detail?: Record<string, unknown>;
 };
+
+/**
+ * RouteContext 가 아는 주체·세션·IP 를 감사 이벤트의 공통 필드로 옮긴다.
+ * audited() 와 핸들러가 흘리는 이벤트가 같은 모양을 갖도록 이 함수 하나만 쓴다.
+ */
+export function auditEventOf(ctx: RouteContext, meta: AuditRouteMeta, outcome: AuditEvent['outcome']): AuditEvent {
+    return {
+        at: ClockRngProvider.current().now(),
+        actor: ctx.principal
+            ? {userId: ctx.principal.userId, username: ctx.principal.username, role: ctx.principal.role}
+            : {userId: 'system'},
+        sessionIdHash: ctx.session ? SessionStore.sessionIdOf(ctx.session.key) : undefined,
+        ip: ctx.ip,
+        type: meta.type,
+        target: meta.target,
+        outcome,
+        summary: meta.summary,
+        detail: meta.detail
+    };
+}
 
 export type Route = {
     method: 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -69,7 +96,19 @@ const tunnelWriteAudit = (ctx: RouteContext): AuditRouteMeta =>
     auditMeta(tunnelWriteAction(ctx) === 'tunnel:create' ? 'tunnel_created' : 'tunnel_updated', tunnelAuditTarget(ctx));
 const tunnelCertAudit = (ctx: RouteContext): AuditRouteMeta => auditMeta('tunnel_cert_updated', tunnelAuditTarget(ctx));
 
-type RouteEntry = {
+const hasKey = (body: any, key: string): boolean =>
+    body != undefined && Object.prototype.hasOwnProperty.call(body, key);
+
+const pathIdTarget = (kind: AuditTarget['kind']) =>
+    (ctx: RouteContext): AuditTarget => ({kind, id: ctx.params.id});
+
+/** PUT /api/users/:id 의 감사 타입은 본문에 어떤 키가 왔는지로 갈린다(설계 §5.2). */
+const userUpdateAuditType = (ctx: RouteContext): string =>
+    hasKey(ctx.body, 'role') ? 'role_changed'
+        : hasKey(ctx.body, 'status') ? 'user_status_changed'
+            : 'user_updated';
+
+export type RouteEntry = {
     method: Route['method'];
     pattern: RegExp;
     action: RouteAction;
@@ -123,7 +162,28 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
     {method: 'DELETE', pattern: new RegExp('^/api/security/bans/(?<port>[^/]+)/(?<ip>[^/]+)$'), action: 'security:manage',
         audit: (ctx) => auditMeta('security_ban_removed', {kind: 'security', id: `${ctx.params.port}/${ctx.params.ip}`}), handler: 'onDeleteSecurityBan'},
     // U5-04 / #119 가 추가한 거절 집계 조회 라우트. bans 와 같은 성격이라 같은 권한을 쓴다.
-    {method: 'GET', pattern: new RegExp('^/api/security/stats$'), action: 'security:manage', handler: 'onGetSecurityStats'}
+    {method: 'GET', pattern: new RegExp('^/api/security/stats$'), action: 'security:manage', handler: 'onGetSecurityStats'},
+    // U2-06 / #98 사용자·그룹 관리. 핸들러 본문은 rbacRoutes.ts 에 있고 표는 여기 한 곳에 모아 둔다.
+    {method: 'GET', pattern: new RegExp('^/api/users$'), action: 'user:manage', handler: 'onListUsers'},
+    {method: 'POST', pattern: new RegExp('^/api/users$'), action: 'user:manage',
+        // 생성 전이라 id 가 없다. 요청한 username 을 대상으로 적고 새 id 는 핸들러가 auditDetail 로 더한다.
+        audit: (ctx) => auditMeta('user_created', {kind: 'user', id: String(ctx.body?.username)}), handler: 'onCreateUser'},
+    {method: 'GET', pattern: new RegExp('^/api/users/(?<id>[^/]+)$'), action: 'user:manage', handler: 'onGetUser'},
+    {method: 'PUT', pattern: new RegExp('^/api/users/(?<id>[^/]+)$'), action: 'user:manage',
+        audit: (ctx) => auditMeta(userUpdateAuditType(ctx), pathIdTarget('user')(ctx)), handler: 'onUpdateUser'},
+    {method: 'DELETE', pattern: new RegExp('^/api/users/(?<id>[^/]+)$'), action: 'user:manage',
+        audit: (ctx) => auditMeta('user_deleted', pathIdTarget('user')(ctx)), handler: 'onDeleteUser'},
+    {method: 'POST', pattern: new RegExp('^/api/users/(?<id>[^/]+)/password-reset$'), action: 'user:manage',
+        audit: (ctx) => auditMeta('temp_password_issued', pathIdTarget('user')(ctx)), handler: 'onResetUserPassword'},
+    {method: 'GET', pattern: new RegExp('^/api/groups$'), action: 'group:manage', handler: 'onListGroups'},
+    {method: 'POST', pattern: new RegExp('^/api/groups$'), action: 'group:manage',
+        audit: (ctx) => auditMeta('group_created', {kind: 'group', id: String(ctx.body?.name)}), handler: 'onCreateGroup'},
+    {method: 'GET', pattern: new RegExp('^/api/groups/(?<id>[^/]+)$'), action: 'group:manage', handler: 'onGetGroup'},
+    {method: 'PUT', pattern: new RegExp('^/api/groups/(?<id>[^/]+)$'), action: 'group:manage',
+        audit: (ctx) => auditMeta(hasKey(ctx.body, 'attributes') ? 'group_attributes_changed' : 'group_updated',
+            pathIdTarget('group')(ctx)), handler: 'onUpdateGroup'},
+    {method: 'DELETE', pattern: new RegExp('^/api/groups/(?<id>[^/]+)$'), action: 'group:manage',
+        audit: (ctx) => auditMeta('group_deleted', pathIdTarget('group')(ctx)), handler: 'onDeleteGroup'}
 ];
 
 export function buildAdminRoutes(handlers: RouteHandlers): readonly Route[] {

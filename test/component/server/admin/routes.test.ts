@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import AdminServer from "../../../../src/server/admin/AdminServer";
 import {ADMIN_ROUTES, RouteAction, RouteContext} from "../../../../src/server/admin/routes";
+import {rbacRouteHandlers} from "../../../../src/server/admin/rbacRoutes";
 import ServerOptionStore from "../../../../src/server/ServerOptionStore";
 import {BOOTSTRAP_TOKEN_FILE_NAME, IdentityMigration} from "../../../../src/server/rbac/IdentityMigration";
 import {CertificationStore} from "../../../../src/server/CertificationStore";
@@ -49,7 +50,19 @@ const EXPECTED_ROUTES: ReadonlyArray<ExpectedRoute> = [
     {method: "DELETE", pattern: "^/api/externalCert/(?<port>[^/]*)$", action: "tunnel:cert", hasTarget: true},
     {method: "GET", pattern: "^/api/security/bans$", action: "security:manage", hasTarget: false},
     {method: "DELETE", pattern: "^/api/security/bans/(?<port>[^/]+)/(?<ip>[^/]+)$", action: "security:manage", hasTarget: false},
-    {method: "GET", pattern: "^/api/security/stats$", action: "security:manage", hasTarget: false}
+    {method: "GET", pattern: "^/api/security/stats$", action: "security:manage", hasTarget: false},
+    // U2-06 / #98 이 더한 사용자·그룹 관리 라우트. 핸들러는 rbacRoutes.ts 에 있다.
+    {method: "GET", pattern: "^/api/users$", action: "user:manage", hasTarget: false},
+    {method: "POST", pattern: "^/api/users$", action: "user:manage", hasTarget: false},
+    {method: "GET", pattern: "^/api/users/(?<id>[^/]+)$", action: "user:manage", hasTarget: false},
+    {method: "PUT", pattern: "^/api/users/(?<id>[^/]+)$", action: "user:manage", hasTarget: false},
+    {method: "DELETE", pattern: "^/api/users/(?<id>[^/]+)$", action: "user:manage", hasTarget: false},
+    {method: "POST", pattern: "^/api/users/(?<id>[^/]+)/password-reset$", action: "user:manage", hasTarget: false},
+    {method: "GET", pattern: "^/api/groups$", action: "group:manage", hasTarget: false},
+    {method: "POST", pattern: "^/api/groups$", action: "group:manage", hasTarget: false},
+    {method: "GET", pattern: "^/api/groups/(?<id>[^/]+)$", action: "group:manage", hasTarget: false},
+    {method: "PUT", pattern: "^/api/groups/(?<id>[^/]+)$", action: "group:manage", hasTarget: false},
+    {method: "DELETE", pattern: "^/api/groups/(?<id>[^/]+)$", action: "group:manage", hasTarget: false}
 ];
 
 /** 함수형 action 은 값으로 비교할 수 없으므로 함수 이름을 식별자로 쓴다. */
@@ -127,9 +140,12 @@ test("every ADMIN_ROUTES pattern is fully anchored", () => {
     }
 });
 
-test("every ADMIN_ROUTES handler name exists as a callable member on AdminServer", async () => withRoutesServer(async f => {
+// #98 이후 핸들러는 두 모듈에 나뉘어 있다: 기존 핸들러는 AdminServer 의 멤버, 사용자·그룹 핸들러는
+// rbacRouteHandlers. 이름이 어느 쪽에서든 실제 함수로 풀리는지를 그대로 확인한다.
+test("every ADMIN_ROUTES handler name resolves to a callable handler", async () => withRoutesServer(async f => {
     for(const route of ADMIN_ROUTES) {
-        expect(typeof (f.api as any)[route.handler]).toBe("function");
+        const handler = (f.api as any)[route.handler] ?? rbacRouteHandlers[route.handler];
+        expect(typeof handler).toBe("function");
     }
 }));
 
