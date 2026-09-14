@@ -14,11 +14,21 @@ const openTunnels = async (page: Page) => {
 };
 
 // 화면이 아니라 스텁 TTTServer 가 들고 있는 상태를 직접 읽는다. 상태 API 는 스텁의 활성 맵으로 응답한다.
-const stubStatus = (page: Page, port: number) => page.evaluate(async (target) => {
+// 남은 시간 기대값을 만들려면 서버 시각도 필요하므로 함께 돌려준다.
+const statusSnapshot = (page: Page, port: number) => page.evaluate(async (target) => {
     const response = await fetch("/api/externalServerStatuses", {credentials: "same-origin"});
     const json = await response.json();
-    return json.statuses.find((status: {port: number}) => status.port === target);
+    return {serverTime: json.serverTime as number,
+        status: json.statuses.find((status: {port: number}) => status.port === target)};
 }, port);
+
+const stubStatus = async (page: Page, port: number) => (await statusSnapshot(page, port)).status;
+
+const shownSeconds = (text: string | null): number => {
+    const parsed = /^(\d+)m (\d+)s$/.exec(text ?? "");
+    if(!parsed) throw new Error(`Unexpected timer text: ${text}`);
+    return Number(parsed[1]) * 60 + Number(parsed[2]);
+};
 
 // 요청 직후 한 번 더 도착한 상태 응답까지 기다린다. 스위치는 클릭 즉시 자기 표시를 바꾸므로,
 // 폴링이 서버 값으로 되돌리지 않는지 보려면 그 다음 응답 뒤에 확인해야 한다.
@@ -65,8 +75,13 @@ test("활성 터널은 켜진 스위치와 남은 시간 타이머를 보여준�
         await toggle.waitFor({state: "visible", timeout: 10_000});
         expect(await toggle.getAttribute("aria-checked")).toBe("true");
         expect(await tunnel.getByText("Timeout", {exact: true}).isVisible()).toBe(true);
-        // 남은 초 = activeStart + 3600·1000 − serverTime 이라 항상 3600 미만이고, 시가 0 이면 {m}m {s}s 만 찍는다.
-        expect(await tunnel.locator(".timer-text").textContent()).toMatch(/^59m \d+s$/);
+        // 남은 초 = activeStart + activeTimeout·1000 − serverTime 이다. 분 값은 드라이버가 뜬 뒤 흐른 시간에 따라
+        // 달라지므로 상수로 두지 않고 서버가 준 값에서 계산해 비교한다. 시가 0 인 동안은 {m}m {s}s 로 찍힌다.
+        const text = await tunnel.locator(".timer-text").textContent();
+        expect(text).toMatch(/^\d+m \d+s$/);
+        const {serverTime, status} = await statusSnapshot(app.page, 20001);
+        const remaining = Math.floor((status.activeStart + status.activeTimeout * 1000 - serverTime) / 1000);
+        expect(Math.abs(shownSeconds(text) - remaining)).toBeLessThanOrEqual(3);
         expect(app.errors).toEqual([]);
     } finally {
         await app.close();
@@ -110,6 +125,9 @@ test("스위치를 끄면 불리언 active=false 요청이 나가고 스텁과 �
 test("타이머에서 10분을 고르면 active=true·timeout=600 요청이 나가고 남은 시간이 그 값에서 다시 센다", async () => {
     const app = await startAdminApp({fixture: "with-tunnels"});
     try {
+        // 시계를 멈춰 폴링 틱을 없앤다. 그러면 아래 표기 갱신은 활성 변경 직후의 상태 재조회에서만 올 수 있다.
+        await app.page.clock.install();
+        await app.page.clock.pauseAt(Date.now() + 1_000);
         await openTunnels(app.page);
         const tunnel = card(app.page, 20002);
         await tunnel.locator(".timer-text").waitFor({state: "visible", timeout: 10_000});
