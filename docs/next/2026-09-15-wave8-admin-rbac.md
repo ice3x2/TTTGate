@@ -20,7 +20,7 @@
 1. 이 문서를 끝까지 읽는다.
 2. `gh issue view 125` 로 에픽 체크리스트(28/52)와 파동 표를 확인한다.
 3. **`C:\Work\git\_Snoworca\TTTGate-wt\100` 의 미커밋 작업물을 확인한다.** §3 을 보고 살릴지 버릴지 정한다.
-4. `cd C:\Work\git\_Snoworca\TTTGate && git status --porcelain` 로 메인이 §3 과 같은지 본다. **이 문서와 `docs/next/LATEST.md` 가 아직 커밋되지 않았다면 먼저 커밋한다**(`docs:` 접두어).
+4. `cd C:\Work\git\_Snoworca\TTTGate && git status --porcelain` 로 메인이 §3 과 같은지 본다. 미추적 디렉터리 3개만 나와야 한다.
 5. §7 우선순위 표의 맨 위 항목부터 §8 루프로 처리한다.
 
 ---
@@ -77,13 +77,9 @@ TTTGate 관리자 콘솔을 다사용자 RBAC 체계로 전환하고, 관리자 
 
 ### 메인 워크트리
 
-- 브랜치 `refactor/admin`, HEAD **`3c6ae6d`**.
-- 미커밋 (이 문서를 쓴 직후 기준):
-  - `M docs/next/LATEST.md` — 이 문서를 가리키도록 갱신. **커밋 대상**
-  - `?? docs/next/2026-09-15-wave8-admin-rbac.md` — 이 문서. **커밋 대상**
-  - `?? .serena/`, `?? .snoworca/`, `?? docs/plan/srs/.TTTGate-work/` — 도구 상태 디렉터리. 커밋 대상 아님
-  앞의 둘을 커밋하면 미추적 디렉터리 3개만 남는다.
-- 작업 브랜치는 병합 후 모두 삭제했다.
+- 브랜치 `refactor/admin`. **코드의 마지막 커밋은 `3c6ae6d`**(#90 병합)이고, 그 위에 이 문서를 넣은 `docs:` 커밋이 얹혀 있다. 따라서 코드 상태는 `3c6ae6d` 와 같다.
+- 미커밋: **미추적 디렉터리 3개만** — `.serena/`, `.snoworca/`, `docs/plan/srs/.TTTGate-work/`. 전부 커밋 대상 아님.
+- 작업 브랜치는 병합 후 모두 삭제했다. `git branch` 에 `develop`·`feature/firewall`·`feature/logger`·`main`·`refactor/admin`·`refactor/safecode`·`refactor/sfacecode-old` 만 남는다.
 
 ### ⚠️ `TTTGate-wt\100` — 커밋 전 작업물이 남아 있다
 
