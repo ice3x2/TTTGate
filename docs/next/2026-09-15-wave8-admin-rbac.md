@@ -77,8 +77,8 @@ TTTGate 관리자 콘솔을 다사용자 RBAC 체계로 전환하고, 관리자 
 
 ### 메인 워크트리
 
-- 브랜치 `refactor/admin`. **코드의 마지막 커밋은 `3c6ae6d`**(#90 병합)이고, 그 위에 이 문서를 넣은 `docs:` 커밋 2개(`872e668`, `2e0fb5a`)가 얹혀 있다. 따라서 코드 상태는 `3c6ae6d` 와 같다.
-- 미커밋: **미추적 디렉터리 3개만** — `.serena/`, `.snoworca/`, `docs/plan/srs/.TTTGate-work/`. 전부 커밋 대상 아님.
+- 브랜치 `refactor/admin`. **코드의 마지막 커밋은 `3c6ae6d`**(#90 병합)이고, 그 위는 전부 이 문서를 넣고 다듬은 `docs:` 커밋이다. 따라서 **코드 상태는 `3c6ae6d` 와 같다.** `git diff --stat 3c6ae6d HEAD` 가 `docs/next/` 아래만 보여 주는 것으로 확인할 수 있다.
+- 미커밋: `.serena/`, `.snoworca/`, `docs/plan/srs/.TTTGate-work/` 세 미추적 디렉터리는 도구 상태이고 커밋 대상이 아니다. 이 문서를 고친 직후라면 문서 자신도 미커밋으로 보일 수 있다.
 - 병합이 끝난 작업 브랜치는 모두 삭제했다. `git branch` 에는 **`feat/u2-100-tunnel-ownership` 이 남아 있다**(아래 워크트리 100 의 브랜치). 그 외에는 `develop`·`feature/firewall`·`feature/logger`·`main`·`refactor/admin`·`refactor/safecode`·`refactor/sfacecode-old` 뿐이다.
 
 ### ⚠️ `TTTGate-wt\100` — 커밋 전 작업물이 남아 있다
