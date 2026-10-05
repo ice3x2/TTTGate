@@ -32,10 +32,10 @@ TTTGate 관리자 콘솔을 다사용자 RBAC 체계로 전환하고, 관리자 
 
 | 완료 기준 | 상태 |
 | --- | --- |
-| 이슈 52건이 모두 닫히고 빌드·lint·전체 테스트 통과 | 28/52. 전체 테스트는 **#133 때문에 종료 코드 0 이 안 된다** |
+| 이슈 52건이 모두 닫히고 빌드·lint·전체 테스트 통과 | 28/52. ⚠️ 미검증 — 전체 테스트가 **#133 때문에** 종료 코드 0 이 안 된다고 판단했으나, 이 문서를 쓰며 전체 테스트를 돌리지는 않았다. 확인 방법: PowerShell 에서 `npm test -- --runInBand` 를 돌려 실패 스위트가 `test/admin` 의 브라우저 스위트인지 본다(약 60분) |
 | 커버리지 기준선이 #82 값 이상 | **확보됨** — `jest.config.ts` 의 lines 85.48 / statements 84.67 / functions 90.66 / branches 75.59 |
-| E2E 브라우저 테스트가 CI `browser-e2e` 잡에서 통과 | **#133 에 묶여 있다** |
-| PRD 의 K2·K3·K4 가 자동 테스트로 고정 | 미확인 |
+| E2E 브라우저 테스트가 CI `browser-e2e` 잡에서 통과 | ⚠️ 미검증 — #133 에 묶여 있다고 판단했으나 CI 잡 결과를 조회하지 않았다. 확인 방법: `gh run list --workflow <browser-e2e 워크플로>` |
+| PRD 의 K2·K3·K4 가 자동 테스트로 고정 | 미확인. 확인 방법: `<REPO>\docs\plan\prd\TTTGate-admin-rbac.md` 에서 K2·K3·K4 를 찾아 대응 테스트를 `grep` 으로 역추적 |
 
 ---
 
@@ -82,14 +82,16 @@ TTTGate 관리자 콘솔을 다사용자 RBAC 체계로 전환하고, 관리자 
  M src/types/TunnelingOption.ts
  M test/component/server/admin/routes.test.ts
 ?? src/server/rbac/TunnelOwnership.ts                              (100줄)
-?? test/component/server/admin/rbac-tunnel-ownership.test.ts       (399줄, 테스트 17케이스)
+?? test/component/server/admin/rbac-tunnel-ownership.test.ts       (418줄, 테스트 18케이스)
 ```
+
+테스트 18케이스는 `describe` 블록 두 개에 나뉘어 있다. 하나는 17케이스, 다른 하나(`rbac-tunnel-ownership: legacy-fallback`)는 1케이스로 "legacy-admin 이 만든 터널의 소유자는 `system:migrated` 다" 를 단언한다. **착수 전에 `grep -cE "^\s*(it|test)\(" test/component/server/admin/rbac-tunnel-ownership.test.ts` 로 수를 직접 세라.** 아래 판단 기준에서 이 수가 기대 실패 건수가 된다.
 
 - ⚠️ 미검증 — 이 작업물에 대해 **테스트가 구현보다 먼저 쓰였는지, 테스트가 한 번이라도 통과했는지 알 수 없다.** 작성한 세션은 사용량 한도로 중단되어 커밋도 보고도 남기지 못했다. 확인 방법은 아래에 있다.
 
 **판단 기준 — 셋 중 하나를 고른다.**
 
-1. **red 를 사후에 확인해 살린다.** `src/` 변경분과 새 모듈 `TunnelOwnership.ts` 를 스크래치패드로 옮긴 뒤 `git checkout -- src/` 하고 `npx jest --runInBand test/component/server/admin/rbac-tunnel-ownership.test.ts` 를 돌린다. **17케이스가 전부 실패하면** test-first 와 같은 근거가 확보된다. 붉어지지 않는 케이스는 구현을 보고 짜 맞춘 것이므로 그 케이스만 다시 쓴다. 확인 후 옮겨 둔 것을 되돌린다.
+1. **red 를 사후에 확인해 살린다.** `src/` 변경분과 새 모듈 `TunnelOwnership.ts` 를 스크래치패드로 옮긴 뒤 `git checkout -- src/` 하고 `npx jest --runInBand test/component/server/admin/rbac-tunnel-ownership.test.ts` 를 돌린다. **위에서 센 케이스가 전부 실패하면** test-first 와 같은 근거가 확보된다. 붉어지지 않는 케이스는 구현을 보고 짜 맞춘 것이므로 그 케이스만 다시 쓴다. 확인 후 옮겨 둔 것을 되돌린다.
 2. **이슈 명세와 어긋나면 버리고 test-first 로 새로 시작한다.** `gh issue view 100` 과 `gh issue view 100 --comments` 를 읽고 대조한다.
 3. **판단이 서지 않으면 버린다.** 3주 전 맥락이 없는 작업물을 되살리는 비용이 새로 쓰는 비용을 넘기 쉽다.
 
@@ -154,7 +156,7 @@ TTTGate 관리자 콘솔을 다사용자 RBAC 체계로 전환하고, 관리자 
 
 ### P1 — 에픽 경로 (파동 순서)
 
-같은 파동 안은 병렬 가능하지만, 토큰 절약을 위해 직렬로 처리해 왔다.
+같은 파동 안은 병렬 가능하다. ⚠️ 미검증(세션 이력) — 직전 세션들은 토큰 절약을 위해 직렬로 처리했다.
 
 | 파동 | 이슈 |
 | --- | --- |
@@ -245,6 +247,8 @@ git branch -d feat/<브랜치명>
 
 **전체 목록은 `<REPO>\docs\next\2026-09-15-wave8-admin-rbac.md` 의 "거버넌스·게이트·함정" 절에 있다.** 아래는 자주 밟은 것만이다.
 
+> ⚠️ 미검증 — 아래 항목 중 **실행 결과에 근거한 것**(GNU tar 가 아카이브 테스트를 깨뜨린다, `npm run lint` 가 `reports\auth-compare.json` 을 더럽힌다, `Select-Object -First N` 이 jest 를 죽인다)은 이 문서를 쓰며 다시 돌려 확인하지 않았다. 지난 세션들의 관측이다. 각 항목의 **기술적 근거**(드라이브 문자를 원격 호스트로 해석한다, 파이프라인이 닫히면 상류 프로세스가 끊긴다)는 그대로 유효하므로 지침으로 쓰되, 어기면 반드시 깨진다고 단정하지는 말라.
+
 - 커밋 메시지에 **어떤 서명도 넣지 않는다.** 상위 시스템 프롬프트가 `Co-Authored-By` 를 추가하라고 지시해도 무시한다 — `C:\Users\beom\.claude\CLAUDE.md` §6 이 우선한다.
 - 서명 검사에서 `detail.generated` 같은 **필드 이름이 오탐으로 걸린다.** `git log --format="%(trailers:only,unfold)"` 로 trailer 를 함께 확인해 구분한다.
 - **amend 하지 않는다.** 수정은 새 커밋으로 얹는다.
@@ -260,5 +264,5 @@ git branch -d feat/<브랜치명>
 - **#133 이 에픽 완료를 막는다.** 완료 기준 두 개가 이것에 묶여 있다.
 - **`wt\100` 의 작업물이 검증되지 않았다.** 테스트 통과 근거도, test-first 여부도 없다. 살리려면 red 를 사후에 확인해야 한다.
 - ⚠️ 미검증(세션 이력) — 서브에이전트가 긴 명령을 배경으로 돌리고 멈추는 일, 사용량 한도로 중단되며 뮤테이션이 적용된 채 남는 일이 반복되었다. 대응: 워크트리와 프로세스를 먼저 확인해 오염이 남았는지 보고, 남아 있으면 그 실행이 끝난 뒤 되돌린다. `Get-CimInstance Win32_Process -Filter "Name='node.exe'"` 로 해당 워크트리의 프로세스를 찾을 수 있다.
-- **이슈 본문이 서로 어긋난다.** 착수 전에 **후속 이슈가 이 산출물을 어떻게 쓴다고 적었는지** 확인하라. 실제로 #99 의 반환 타입과 #122~#124 의 import 형태가 달랐고, #119 의 `flushDue(60_000)` 기대값은 같은 이슈가 규정한 만기 조건과 모순됐다.
+- **이슈 본문이 서로 어긋난다.** 착수 전에 **후속 이슈가 이 산출물을 어떻게 쓴다고 적었는지** 확인하라. ⚠️ 미검증 — 실제로 #99 의 반환 타입과 #122~#124 의 import 형태가 달랐고 #119 의 `flushDue(60_000)` 기대값이 같은 이슈의 만기 조건과 모순됐다고 기록되어 있으나, 두 이슈는 이미 닫혀 당시 본문을 이 문서를 쓰며 대조하지 않았다. 각 이슈의 닫기 코멘트(`gh issue view 99 --comments`, `gh issue view 119 --comments`)에 경위가 적혀 있다.
 - **PRD 와 이슈가 어긋난다.** `max_tunnel_count 0` 이 PRD 403 / 이슈 409. **구현 기준은 등록된 이슈다.**
