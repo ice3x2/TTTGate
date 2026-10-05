@@ -59,7 +59,7 @@ test.each([[false, true], [true, true], [false, false]])("old-port replacement r
             await app.page.waitForFunction(() => !!(window as any).configurationFixture);
             expect(await app.page.evaluate(async () => (await fetch("/api/login", {method: "POST",
                 headers: {"Content-Type": "application/json"}, body: JSON.stringify({key: "revision-password"})})).status)).toBe(200);
-            await app.page.evaluate(() => (window as any).configurationFixture.mount("tunnel"));
+            await app.page.evaluate((port) => (window as any).configurationFixture.mount("tunnel", port), String(oldPort));
             await app.page.locator("#input-external-port").waitFor();
             await app.page.locator("#input-external-port").fill(String(newPort));
             const current = await snapshot();

@@ -21,7 +21,7 @@ test.each(["target-stale", "source-stale", "target-fresh"])("rename deletion sna
         await app.page.waitForFunction(() => !!(window as any).configurationFixture);
         expect(await app.page.evaluate(async () => (await fetch("/api/login", {method: "POST", headers: {"Content-Type": "application/json"},
             body: JSON.stringify({key: "revision-password"})})).status)).toBe(200);
-        await app.page.evaluate(() => (window as any).configurationFixture.mount("tunnel"));
+        await app.page.evaluate((port) => (window as any).configurationFixture.mount("tunnel", port), String(sourcePort));
         await app.page.waitForFunction(() => (document.querySelector('input[type="file"]') as HTMLInputElement)?.files?.length === 1);
         const originalToken = CertificationStore.instance.revisionState.currentRevision;
         if(mode !== "source-stale") await app.page.locator("#input-external-port").fill(String(targetPort));
@@ -30,7 +30,7 @@ test.each(["target-stale", "source-stale", "target-fresh"])("rename deletion sna
             certificates: CertificationStore.instance.getAllExternalCert(), certificateRevision: CertificationStore.instance.revisionState,
             files: configurationFiles(f.root.rootDir), fingerprint: await peerFingerprint(sourcePort)};
         const refreshed = app.page.waitForResponse(response => new URL(response.url()).pathname === `/api/externalCert/${mode === "source-stale" ? sourcePort : targetPort}`);
-        await app.page.locator("#sdf").uncheck();
+        await app.page.locator("#input-tls").uncheck();
         await (await refreshed).finished();
         await app.page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
         if(mode === "source-stale") await app.page.locator("#input-external-port").fill(String(targetPort));

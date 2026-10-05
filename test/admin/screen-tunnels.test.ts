@@ -1,3 +1,6 @@
+import * as fs from "fs";
+import * as net from "net";
+import * as path from "path";
 import type {Page, Request, Response} from "playwright";
 import {startAdminApp} from "../helpers/adminApp";
 
@@ -252,6 +255,260 @@ test("터널 화면은 1초마다 상태를 다시 읽고 화면을 떠나면 �
         await app.page.waitForTimeout(300);
         expect(requests - afterLeaving).toBe(0);
 
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, 60_000);
+
+// ── #91 (U1-09) TunnelEditScreen ──────────────────────────────────────────────
+
+const EMPTY_HTTP_OPTION = {
+    rewriteHostInTextBody: true, replaceAccessControlAllowOrigin: false,
+    customRequestHeaders: [], customResponseHeaders: [], bodyRewriteRules: [],
+};
+
+const apiGet = (page: Page, path: string) => page.evaluate(async (target) =>
+    await (await fetch(target, {credentials: "same-origin"})).json(), path);
+
+// 편집 화면으로 간 뒤 그 포트의 값이 실제로 채워질 때까지 기다린다. 제목만 보면 로드 전에도 참이 된다.
+const openEdit = async (page: Page, port: number) => {
+    await page.evaluate((target) => { location.hash = `#/tunnels/${target}`; }, port);
+    await page.waitForFunction(() => document.querySelector("h1")?.textContent?.startsWith("Tunnel "), undefined, {timeout: 10_000});
+    await page.waitForFunction((target) => (document.querySelector("#input-external-port") as HTMLInputElement)?.value === String(target),
+        port, {timeout: 10_000});
+};
+
+const openNew = async (page: Page) => {
+    await page.evaluate(() => { location.hash = "#/tunnels/new"; });
+    await page.waitForFunction(() => document.querySelector("h1")?.textContent === "New tunnel", undefined, {timeout: 10_000});
+    await page.waitForFunction(() => (document.querySelector("#input-destination-port") as HTMLInputElement)?.value === "8080",
+        undefined, {timeout: 10_000});
+};
+
+// 새 터널 저장은 AdminServer 의 UsablePortChecker 가 실제로 바인딩을 시도한다. 비어 있지 않으면 건너뛰지 않고 실패시킨다.
+const requireFreePort = (port: number) => new Promise<void>((resolve, reject) => {
+    const probe = net.createServer();
+    probe.once("error", (error) => reject(new Error(`Port ${port} is busy: ${error.message}`)));
+    probe.listen(port, "127.0.0.1", () => probe.close(() => resolve()));
+});
+
+const bodiesOf = (page: Page, method: string, pathname: string): Array<any> => {
+    const bodies: Array<any> = [];
+    page.on("request", (request) => {
+        if(request.method() === method && new URL(request.url()).pathname === pathname) bodies.push(request.postDataJSON());
+    });
+    return bodies;
+};
+
+test("편집 화면은 그 포트의 저장된 값을 채우고 옛 터널 레이아웃은 남아 있지 않다", async () => {
+    // 옛 화면을 지운 것이 이 이슈의 범위다. 디렉터리가 남아 있으면 이식이 끝나지 않은 것이다.
+    expect(fs.existsSync(path.resolve(__dirname, "../../admin/src/layout"))).toBe(false);
+
+    const app = await startAdminApp({fixture: "with-tunnels"});
+    try {
+        await openEdit(app.page, 20001);
+        expect(await app.page.locator("h1").textContent()).toBe("Tunnel 20001");
+        expect(await app.page.locator("#input-external-port").inputValue()).toBe("20001");
+        expect(await app.page.locator("#select-protocol").inputValue()).toBe("tcp");
+        expect(await app.page.locator("#input-tls").isChecked()).toBe(false);
+        expect(await app.page.locator("#input-tls").isDisabled()).toBe(false);
+        expect(await app.page.locator("#input-destination-host").inputValue()).toBe("127.0.0.1");
+        expect(await app.page.locator("#input-buffer-limit-client").inputValue()).toBe("8");
+        expect(await app.page.getByRole("button", {name: "Stop and Remove", exact: true}).isVisible()).toBe(true);
+        expect(await app.page.getByRole("button", {name: "Apply and Restart", exact: true}).isEnabled()).toBe(true);
+        expect(await app.page.getByRole("heading", {name: "HTTP options", exact: true}).count()).toBe(0);
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, 60_000);
+
+test("목적지 호스트를 바꿔 저장하면 본문 전체가 그대로 나가고 토스트 뒤 목록으로 돌아간다", async () => {
+    const app = await startAdminApp({fixture: "with-tunnels"});
+    try {
+        await openEdit(app.page, 20001);
+        // 기대 본문은 저장 직전의 서버 상태에서 만든다. 구현을 보고 역산하지 않는다.
+        const list = await apiGet(app.page, "/api/tunnelingOption");
+        const stored = list.tunnelingOptions.find((option: any) => option.forwardPort === 20001);
+        expect(stored).toBeDefined();
+        const cert = await apiGet(app.page, "/api/externalCert/20001");
+        const sent = bodiesOf(app.page, "POST", "/api/tunnelingOption");
+
+        await app.page.locator("#input-destination-host").fill("10.0.0.9");
+        await app.page.getByRole("button", {name: "Apply and Restart", exact: true}).click();
+
+        await app.page.waitForFunction(() => document.querySelector(".toast.pulse .msg")?.textContent === "Success to apply tunneling option",
+            undefined, {timeout: 10_000});
+        await app.page.waitForFunction(() => location.hash === "#/tunnels", undefined, {timeout: 10_000});
+        await app.page.waitForFunction(() => document.querySelectorAll("li[data-port]").length === 2, undefined, {timeout: 10_000});
+        expect(await app.page.locator("li[data-port]").count()).toBe(2);
+
+        expect(sent).toEqual([{
+            ...stored,
+            httpOption: stored.httpOption ?? EMPTY_HTTP_OPTION,
+            destinationAddress: "10.0.0.9",
+            allowedClientNames: [],
+            expectedCertificateRevision: cert.revisionState.currentRevision,
+            previousForwardPort: 20001,
+            expectedRevision: list.revisionState.currentRevision,
+        }]);
+
+        const calls = await app.calls();
+        const applied = calls.filter((call) => call.method === "applyTunnelingOption");
+        expect(applied).toHaveLength(1);
+        expect(applied[0].args[0]).toMatchObject({forwardPort: 20001, destinationAddress: "10.0.0.9"});
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, 60_000);
+
+test("http 터널은 HTTP 옵션 절을 펼쳐 보이고 tcp 로 바꾸면 그 절이 사라지고 TLS 가 풀린다", async () => {
+    const app = await startAdminApp({fixture: "with-tunnels"});
+    try {
+        await openEdit(app.page, 20002);
+        await app.page.getByRole("heading", {name: "HTTP options", exact: true}).waitFor({state: "visible", timeout: 10_000});
+        expect(await app.page.locator("#select-change-host-in-body").inputValue()).toBe("true");
+        expect(await app.page.locator("#select-change-acao").inputValue()).toBe("false");
+
+        const requestHeaders = app.page.locator(".field").filter({hasText: "Inject request header"});
+        expect(await requestHeaders.locator(".rule").count()).toBe(1);
+        const bodyRules = app.page.locator(".field").filter({hasText: "Replace text in body"});
+        expect(await bodyRules.getByRole("button", {name: "Add", exact: true}).count()).toBe(1);
+
+        expect(await app.page.locator("#input-tls").isDisabled()).toBe(true);
+        await app.page.locator("#select-protocol").selectOption("tcp");
+        await app.page.getByRole("heading", {name: "HTTP options", exact: true}).waitFor({state: "detached", timeout: 10_000});
+        expect(await app.page.getByRole("heading", {name: "HTTP options", exact: true}).count()).toBe(0);
+        expect(await app.page.locator("#input-tls").isDisabled()).toBe(false);
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, 60_000);
+
+test("Stop and Remove 는 확인 대화상자를 거쳐 터널을 지우고 목록에서 사라진다", async () => {
+    const app = await startAdminApp({fixture: "with-tunnels"});
+    try {
+        await openEdit(app.page, 20002);
+        const list = await apiGet(app.page, "/api/tunnelingOption");
+        const stored = list.tunnelingOptions.find((option: any) => option.forwardPort === 20002);
+        expect(stored).toBeDefined();
+        const cert = await apiGet(app.page, "/api/externalCert/20002");
+        const sent = bodiesOf(app.page, "DELETE", "/api/tunnelingOption");
+
+        await app.page.getByRole("button", {name: "Stop and Remove", exact: true}).click();
+        const dialog = app.page.getByRole("dialog", {name: "Remove tunnel"});
+        await dialog.waitFor({state: "visible", timeout: 10_000});
+        expect(await dialog.textContent()).toContain("Remove tunnel 20002?");
+        await dialog.getByRole("button", {name: "Remove", exact: true}).click();
+
+        await app.page.waitForFunction(() => document.querySelector(".toast.pulse .msg")?.textContent
+            === "Tunneling option has been removed. The external server has been shut down.", undefined, {timeout: 10_000});
+        await app.page.waitForFunction(() => location.hash === "#/tunnels", undefined, {timeout: 10_000});
+        await app.page.waitForFunction(() => document.querySelectorAll("li[data-port]").length === 1, undefined, {timeout: 10_000});
+        expect(await app.page.locator("li[data-port]").count()).toBe(1);
+        expect(await card(app.page, 20001).isVisible()).toBe(true);
+
+        // 빈 행 하나는 HeaderAppender·BodyReplaceAppender 가 편집용으로 넣은 것이며 옛 화면과 같이 본문에 그대로 실린다(D14).
+        expect(sent).toEqual([{
+            ...stored,
+            httpOption: {
+                ...stored.httpOption,
+                customRequestHeaders: [{name: "", value: "", replace: false}],
+                customResponseHeaders: [{name: "", value: "", replace: false}],
+                bodyRewriteRules: [{from: "", to: ""}],
+            },
+            isSync: true,
+            originalForwardPort: 20002,
+            allowedClientNamesQuery: "",
+            certInfo: cert.certInfo,
+            certificateRevision: cert.revisionState.currentRevision,
+            originalCertificateRevision: cert.revisionState.currentRevision,
+            expectedRevision: list.revisionState.currentRevision,
+        }]);
+
+        // AdminServer.onRemoveTunnelingOption 은 설정을 먼저 commit(905행)한 뒤 externalServerStatus(917행)로 가동 여부를 본다.
+        // 스텁의 externalServerStatus 는 설정에 남은 포트만 online 으로 돌려주므로, 삭제 경로에서는 늘 offline 으로 읽혀
+        // stopExternalPortServer(919행)에 닿지 않는다. 그래서 이슈 본문이 적은 stopExternalPortServer 호출은 성립하지 않는다.
+        const calls = await app.calls();
+        expect(calls.filter((call) => call.method === "externalServerStatus"))
+            .toEqual([{method: "externalServerStatus", args: [20002]}]);
+        expect(calls.filter((call) => call.method === "stopExternalPortServer")).toEqual([]);
+        // 화면만 보면 요청이 안 나가도 통과하므로 서버가 들고 있는 설정에서도 사라졌는지 본다.
+        const after = await apiGet(app.page, "/api/tunnelingOption");
+        expect(after.tunnelingOptions.map((option: any) => option.forwardPort)).toEqual([20001]);
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, 60_000);
+
+test("새 터널 화면은 삭제 버튼 없이 기본값을 채우고 Start 로 터널을 추가한다", async () => {
+    await requireFreePort(20003);
+    const app = await startAdminApp({fixture: "with-tunnels"});
+    try {
+        await openNew(app.page);
+        expect(await app.page.locator("h1").textContent()).toBe("New tunnel");
+        expect(await app.page.getByRole("button", {name: "Stop and Remove", exact: true}).count()).toBe(0);
+        expect(await app.page.getByRole("button", {name: "Start", exact: true}).count()).toBe(1);
+        expect(await app.page.locator("#input-destination-host").inputValue()).toBe("127.0.0.1");
+        expect(await app.page.locator("#input-destination-port").inputValue()).toBe("8080");
+
+        const list = await apiGet(app.page, "/api/tunnelingOption");
+        const sent = bodiesOf(app.page, "POST", "/api/tunnelingOption");
+        await app.page.locator("#input-external-port").fill("20003");
+        await app.page.getByRole("button", {name: "Start", exact: true}).click();
+
+        await app.page.waitForFunction(() => document.querySelector(".toast.pulse .msg")?.textContent === "Success to apply tunneling option",
+            undefined, {timeout: 10_000});
+        await app.page.waitForFunction(() => location.hash === "#/tunnels", undefined, {timeout: 10_000});
+        await app.page.waitForFunction(() => document.querySelectorAll("li[data-port]").length === 3, undefined, {timeout: 10_000});
+        expect(await app.page.locator("li[data-port]").count()).toBe(3);
+        expect(await card(app.page, 20003).isVisible()).toBe(true);
+
+        expect(sent).toEqual([{
+            forwardPort: 20003,
+            tls: false,
+            protocol: "tcp",
+            httpOption: EMPTY_HTTP_OPTION,
+            destinationAddress: "127.0.0.1",
+            destinationPort: 8080,
+            inactiveOnStartup: false,
+            bufferLimitOnClient: 10,
+            bufferLimitOnServer: 10,
+            allowedClientNames: [],
+            expectedRevision: list.revisionState.currentRevision,
+        }]);
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, 60_000);
+
+test("포트와 클라이언트 버퍼는 범위 안으로 잘리고, 서버 버퍼가 범위 밖이면 저장이 막히며 없는 포트는 목록으로 돌아간다", async () => {
+    const app = await startAdminApp({fixture: "with-tunnels"});
+    try {
+        await openEdit(app.page, 20001);
+        await app.page.locator("#input-external-port").fill("70000");
+        await app.page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+        expect(await app.page.locator("#input-external-port").inputValue()).toBe("65535");
+        await app.page.locator("#input-buffer-limit-client").fill("-5");
+        await app.page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+        expect(await app.page.locator("#input-buffer-limit-client").inputValue()).toBe("-1");
+
+        await openNew(app.page);
+        const start = app.page.getByRole("button", {name: "Start", exact: true});
+        expect(await start.isEnabled()).toBe(true);
+        await app.page.locator("#input-buffer-limit-server").fill("0");
+        await app.page.locator(".err-msg").waitFor({state: "visible", timeout: 10_000});
+        expect(await app.page.locator(".err-msg").textContent()).toBe("Server buffer must be a finite number of at least 1 MiB.");
+        expect(await start.isDisabled()).toBe(true);
+
+        await app.page.evaluate(() => { location.hash = "#/tunnels/65534"; });
+        await app.page.waitForFunction(() => location.hash === "#/tunnels", undefined, {timeout: 10_000});
+        expect(await app.page.evaluate(() => location.hash)).toBe("#/tunnels");
         expect(app.errors).toEqual([]);
     } finally {
         await app.close();
