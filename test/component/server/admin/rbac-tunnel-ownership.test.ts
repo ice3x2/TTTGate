@@ -211,6 +211,8 @@ describe("rbac-tunnel-ownership", () => {
         for(const option of forAlice) {
             expect(option.owner).toEqual({id: alice.id, username: "alice"});
             expect(option.editable).toBe(true);
+            // 저장된 ownerId 도 응답에 그대로 남아야 한다. owner 는 그것을 풀어 보인 것이지 대체가 아니다.
+            expect(option.ownerId).toBe(alice.id);
         }
 
         const forBob = await listTunnels(bob.auth);
@@ -239,6 +241,9 @@ describe("rbac-tunnel-ownership", () => {
         const write = await request("POST", "/api/tunnelingOption", tunnelBody(20010), bob.auth);
         expect({status: write.status, code: write.body.code}).toEqual({status: 403, code: "read_only"});
 
+        const updated = await request("PUT", "/api/tunnelingOption", tunnelBody(20010), bob.auth);
+        expect({status: updated.status, code: updated.body.code}).toEqual({status: 403, code: "read_only"});
+
         const removed = await request("DELETE", "/api/tunnelingOption", tunnelBody(20010), bob.auth);
         expect({status: removed.status, code: removed.body.code}).toEqual({status: 403, code: "read_only"});
 
@@ -247,19 +252,20 @@ describe("rbac-tunnel-ownership", () => {
     });
 
     it("다른 그룹 사람에게는 남의 터널과 없는 터널이 구분되지 않는다", async () => {
-        // 전제: 20010 은 실재하며 소유자는 alice 다. 이것이 없으면 아래 네 응답이 모두 '없는 포트' 라 공회전한다.
+        // 전제: 20010 은 실재하며 소유자는 alice 다. 이것이 없으면 아래 응답이 모두 '없는 포트' 라 공회전한다.
         expect((await storedTunnel(20010)).ownerId).toBe(alice.id);
         expect((await listTunnels(alice.auth)).map((option: any) => option.forwardPort)).toContain(20010);
 
         const write = await request("POST", "/api/tunnelingOption", tunnelBody(20010), carol.auth);
+        const updated = await request("PUT", "/api/tunnelingOption", tunnelBody(20010), carol.auth);
         const removed = await request("DELETE", "/api/tunnelingOption", tunnelBody(20010), carol.auth);
         const activated = await request("POST", "/api/tunneling/active/20010", {active: true}, carol.auth);
         const absent = await request("POST", "/api/tunneling/active/65000", {active: true}, carol.auth);
 
-        for(const response of [write, removed, activated, absent]) {
+        for(const response of [write, updated, removed, activated, absent]) {
             expect(response.status).toBe(404);
         }
-        const bodies = [write, removed, activated, absent].map((response) => JSON.stringify(response.body));
+        const bodies = [write, updated, removed, activated, absent].map((response) => JSON.stringify(response.body));
         expect(new Set(bodies).size).toBe(1);
     });
 
@@ -269,7 +275,10 @@ describe("rbac-tunnel-ownership", () => {
         const seenBySuperuser = (await listTunnels(superuser)).find((option: any) => option.forwardPort === MIGRATED_PORT);
         expect(seenBySuperuser.owner).toEqual({id: "system:migrated"});
         expect(seenBySuperuser.editable).toBe(true);
-        expect((await listTunnels(alice.auth)).map((option: any) => option.forwardPort)).not.toContain(MIGRATED_PORT);
+        // 전제: alice 목록이 비어 있지 않다. 비어 있으면 아래 not.toContain 이 무엇을 넣어도 통과한다.
+        const forAlice = (await listTunnels(alice.auth)).map((option: any) => option.forwardPort);
+        expect(forAlice.length).toBeGreaterThan(0);
+        expect(forAlice).not.toContain(MIGRATED_PORT);
 
         const byAlice = await request("DELETE", "/api/tunnelingOption", tunnelBody(MIGRATED_PORT), alice.auth);
         expect(byAlice.status).toBe(404);
