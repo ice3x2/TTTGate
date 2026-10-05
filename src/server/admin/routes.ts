@@ -3,6 +3,7 @@ import SessionStore, {Session} from "./SessionStore";
 import {Action, Target} from "../rbac/AdminAuthorizer";
 import {Principal} from "../rbac/Principal";
 import ServerOptionStore from "../ServerOptionStore";
+import {AuthorizationContext} from "../rbac/AuthorizationContext";
 import type {AuditEvent, AuditTarget} from "../audit/AuditSink";
 import {ClockRngProvider} from "../../util/ClockRng";
 
@@ -66,8 +67,10 @@ export type Route = {
 
 export type RouteHandlers = {[name: string]: (ctx: RouteContext) => Promise<void>};
 
-/** tunnel:* action 의 대상. owner 는 #100 (U2-08) 이 채운다 — 이 단계에서는 항상 undefined 다. */
-const tunnelTarget = (ctx: RouteContext): Target => ({port: Number(ctx.params.port ?? ctx.body?.forwardPort)});
+const tunnelPortOf = (ctx: RouteContext): number => Number(ctx.params.port ?? ctx.body?.forwardPort);
+
+/** tunnel:* action 의 대상. 소유자는 AuthorizationContext 가 저장소에서 읽어 채운다(#100 U2-08). */
+const tunnelTarget = (ctx: RouteContext): Target => AuthorizationContext.targetOf(tunnelPortOf(ctx));
 
 /** POST·PUT /api/tunnelingOption 은 본문의 forwardPort 가 이미 등록된 포트인지로 update/create 가 갈린다. */
 const tunnelWriteAction = (ctx: RouteContext): Action =>
@@ -151,6 +154,8 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
     {method: 'PUT', pattern: new RegExp('^/api/tunnelingOption$'), action: tunnelWriteAction, target: tunnelTarget, audit: tunnelWriteAudit, handler: 'onUpdateTunnelingOption'},
     {method: 'DELETE', pattern: new RegExp('^/api/tunnelingOption$'), action: 'tunnel:delete', target: tunnelTarget,
         audit: (ctx) => auditMeta('tunnel_deleted', tunnelAuditTarget(ctx)), handler: 'onRemoveTunnelingOption'},
+    {method: 'PUT', pattern: new RegExp('^/api/tunnelingOption/(?<port>[^/]*)/owner$'), action: 'tunnel:reassign', target: tunnelTarget,
+        audit: (ctx) => auditMeta('tunnel_reassigned', tunnelAuditTarget(ctx)), handler: 'onReassignTunnelOwner'},
     {method: 'POST', pattern: new RegExp('^/api/tunneling/active/(?<port>[^/]*)$'), action: 'tunnel:activate', target: tunnelTarget,
         audit: (ctx) => auditMeta(isTunnelActivationRequested(ctx) ? 'tunnel_activated' : 'tunnel_deactivated', tunnelAuditTarget(ctx)),
         handler: 'onActiveTunneling'},

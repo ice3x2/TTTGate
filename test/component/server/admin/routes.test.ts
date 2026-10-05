@@ -42,6 +42,7 @@ const EXPECTED_ROUTES: ReadonlyArray<ExpectedRoute> = [
     {method: "POST", pattern: "^/api/tunnelingOption$", action: "tunnelWriteAction", hasTarget: true},
     {method: "PUT", pattern: "^/api/tunnelingOption$", action: "tunnelWriteAction", hasTarget: true},
     {method: "DELETE", pattern: "^/api/tunnelingOption$", action: "tunnel:delete", hasTarget: true},
+    {method: "PUT", pattern: "^/api/tunnelingOption/(?<port>[^/]*)/owner$", action: "tunnel:reassign", hasTarget: true},
     {method: "POST", pattern: "^/api/tunneling/active/(?<port>[^/]*)$", action: "tunnel:activate", hasTarget: true},
     {method: "GET", pattern: "^/api/externalServerStatuses$", action: "tunnel:list", hasTarget: true},
     {method: "GET", pattern: "^/api/externalCert/(?<port>[^/]*)$", action: "tunnel:cert", hasTarget: true},

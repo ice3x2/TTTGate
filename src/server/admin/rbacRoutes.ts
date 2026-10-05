@@ -2,6 +2,7 @@ import SessionStore from "./SessionStore";
 import {auditEventOf, isFieldProvided, RouteContext, RouteHandlers} from "./routes";
 import {recordAuditEvent} from "../audit/AuditSink";
 import {IdentityStore} from "../rbac/IdentityStore";
+import {AuthorizationContext} from "../rbac/AuthorizationContext";
 import {toUserView} from "../rbac/UserView";
 import {generateTemporaryPassword} from "../rbac/temporaryPassword";
 import {
@@ -161,6 +162,12 @@ const onUpdateUser = async (ctx: RouteContext): Promise<void> => {
 };
 
 const onDeleteUser = async (ctx: RouteContext): Promise<void> => {
+    // 소유 터널을 남긴 채 사용자를 지우면 그 터널이 소유자 없는 상태가 된다. 재할당을 먼저 요구한다(#100 U2-08).
+    const owned = AuthorizationContext.portsOfOwner(ctx.params.id);
+    if(owned.length > 0) {
+        ctx.fail(409, 'user_owns_tunnels', `user still owns tunnels: ${owned.join(', ')}`);
+        return;
+    }
     replyResult(ctx, IdentityStore.instance.deleteUser(ctx.params.id), () => ({}));
 };
 
