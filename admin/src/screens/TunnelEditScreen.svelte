@@ -1,4 +1,4 @@
-﻿<script lang="ts">
+<script lang="ts">
     import {onMount} from 'svelte';
     import CertificationCtrl from '../controller/CertificationCtrl';
     import InvalidSession from '../controller/InvalidSession';
@@ -21,7 +21,7 @@
     import HeaderAppender from './parts/HeaderAppender.svelte';
     import InputCertFile from './parts/InputCertFile.svelte';
 
-    // ??layout/TunnelOptionSetLayout.svelte 21?됱쓽 ?뺤쓽 洹몃?濡쒕떎.
+    // 옛 layout/TunnelOptionSetLayout.svelte 21행의 정의 그대로다.
     type TunnelingOptionEx = Options & {updatable?: boolean, isSync?: boolean, certInfo?: CertInfo, certificateRevision?: number,
         originalCertificateRevision?: number, originalForwardPort?: number, allowedClientNamesQuery?: string, activeTimeout?: number};
 
@@ -53,7 +53,7 @@
 
     const connectionFail = () => alert('Unable to connect to the server.', 'Retry', () => load());
 
-    // ??_addEmptyOption(200~228????媛?洹몃?濡쒕떎.
+    // 옛 _addEmptyOption(200~228행)이 넣던 값 그대로다.
     const emptyOption = (): TunnelingOptionEx => ({
         forwardPort: Math.floor(Math.random() * 65534 + 10),
         tls: false,
@@ -74,11 +74,11 @@
         allowedClientNamesQuery: ''
     });
 
-    // ??_validServerBuffer(86?? 洹몃?濡쒕떎.
+    // 옛 _validServerBuffer(86행) 그대로다.
     const validServerBuffer = (value: unknown): boolean =>
         typeof value === 'number' && Number.isFinite(value) && value >= 1 && Number.isFinite(value * 1024 * 1024);
 
-    // ??_normalizePortNumber(65~73??쨌_normalizeMemBufferSize(75~83?? 瑜??낅젰 ?쒖젏?쇰줈 ??릿 寃껋씠??
+    // 옛 _normalizePortNumber(65~73행)와 _normalizeMemBufferSize(75~83행)를 입력 시점으로 옮긴 것이다.
     const clampPort = (value: number | null): number | null => {
         if(value === null) return value;
         if(value < 0) return 0;
@@ -95,7 +95,7 @@
 
     const updatable = $derived(option ? ServerOptionCtrl.checkValidTunnelingOption(option) && validServerBuffer(option.bufferLimitOnServer) : false);
 
-    // ??_loadCertInfo(134~156?? 洹몃?濡쒕떎. ??肄붾뱶???ы듃濡??됱쓣 李얠븘 ?놁쑝硫??뚯븘媛붾떎.
+    // 옛 _loadCertInfo(134~156행) 그대로다. 옛 코드는 포트로 행을 찾아 없으면 그대로 돌아갔다.
     const loadCertInfo = async (port: number) => {
         try {
             if(!option || option.forwardPort !== port) return;
@@ -116,7 +116,7 @@
         }
     };
 
-    // ??_loadTunnelingOption(96~124???먯꽌 ???붾㈃???ㅻ（?????됰쭔 ?④릿 寃껋씠??
+    // 옛 _loadTunnelingOption(96~124행)에서 이 화면이 다루는 한 행의 보강만 남긴 것이다.
     const load = async () => {
         try {
             loading = true;
@@ -153,13 +153,13 @@
         }
     };
 
-    // ??_onChangeSecureTunneling(344~351?? 洹몃?濡쒕떎.
+    // 옛 _onChangeSecureTunneling(344~351행) 그대로다.
     const onChangeSecureTunneling = async (forwardPort: number) => {
         if(!option) return;
         await loadCertInfo(forwardPort);
     };
 
-    // ??_onChangeProtocol(233~242?? 洹몃?濡쒕떎.
+    // 옛 _onChangeProtocol(233~242행) 그대로다.
     const onChangeProtocol = () => {
         if(!option) return;
         if(option.protocol == 'https') {
@@ -171,7 +171,7 @@
         }
     };
 
-    // ??_onClickApply(279~313??? 媛숇떎. ?깃났 ?뚮┝留??좎뒪?몃줈 諛붾뚭퀬 紐⑸줉?쇰줈 ?뚯븘媛꾨떎.
+    // 옛 _onClickApply(279~313행)와 같다. 성공 뒤 목록과 상태를 다시 읽던 부분만 토스트와 목록 이동으로 바뀌었다.
     const apply = async () => {
         if(!option) return;
         loading = true;
@@ -202,7 +202,7 @@
         }
     };
 
-    // ??_onClickRemove(245~277??? 媛숇떎. ??젣 踰꾪듉? ??λ맂 ?곕꼸?먮쭔 ?덉쑝誘濡?誘몃룞湲?遺꾧린媛 ?녿떎.
+    // 옛 _onClickRemove(245~277행)와 같다. 삭제 버튼은 저장된 터널에만 있으므로 미동기 분기를 두지 않았다.
     const remove = async () => {
         if(!option) return;
         loading = true;
@@ -254,8 +254,8 @@
                 <TextInput id="input-allow-client-names" bind:value={option.allowedClientNamesQuery} />
             </Field>
             <Field label="Keep-Alive timeout (ms)" for="input-active-timeout">
-                <!-- ???곕꼸?먮뒗 keepAlive 媛 ?녿떎. 洹몃?濡?bind ?섎㈃ undefined 瑜?fallback ?덈뒗 prop ???ｌ뼱 Svelte 媛 嫄곕??섎?濡?
-                     ?쎄린??null 濡?諛붽씀怨??곌린??鍮?媛믪쓣 ?ㅼ떆 undefined 濡??섎룎????蹂몃Ц怨?媛숈? 紐⑥뼇??吏?⑤떎. -->
+                <!-- 새 터널에는 keepAlive 가 없다. 그대로 bind 하면 fallback 이 있는 prop 에 undefined 가 들어가 Svelte 가 거부하므로,
+                     읽기는 null 로 바꾸고 쓰기는 빈 값을 다시 undefined 로 되돌려 옛 저장 본문과 같은 모양을 지킨다. -->
                 <NumberInput id="input-active-timeout"
                     bind:value={() => option!.keepAlive ?? null, (value) => (option!.keepAlive = value ?? undefined)} />
             </Field>

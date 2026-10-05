@@ -8,7 +8,7 @@
 
     const uid = $props.id();
 
-    // 옛 layout/HeaderAppender.svelte 14~22행과 같다. 목록이 비면 편집할 빈 행 하나를 둔다.
+    // 옛 layout/HeaderAppender.svelte 15~23행과 같다. 목록이 비면 편집할 빈 행 하나를 둔다.
     $effect(() => {
         if(options.length === 0) options = [{name: '', value: '', replace: false}];
     });
