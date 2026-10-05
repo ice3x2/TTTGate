@@ -17,12 +17,15 @@ test.each(['early', 'no-ready'])('actual admin child %s preserves startup diagno
         expect(failure.message).toContain(`pid=${child!.pid}`);
         expect(failure.message).toContain('ipc=');
         expect(failure.message).toContain('stage=');
+        expect(failure.message).toMatch(/timings=fork-created=\d+ms/);
+        expect(failure.message).toMatch(/total=\d+ms/);
         expect(failure.message).toContain('owned-ready-stdout');
         expect(failure.message).toContain('owned-ready-stderr');
         if(mode === 'early') expect(failure.message).toContain('exitCode=23');
         else {
             expect(failure.message).toContain('stage=listen');
             expect(failure.message).toContain('15000ms');
+            expect(failure.message).toMatch(/timings=fork-created=\d+ms listen=\d+ms total=\d+ms/);
             expect(failure.message).toContain('exitCode=0');
         }
         expect(child!.exitCode).not.toBeNull();
