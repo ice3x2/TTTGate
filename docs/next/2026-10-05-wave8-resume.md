@@ -43,8 +43,7 @@ TTTGate 관리자 콘솔을 다사용자 RBAC 체계로 전환하고, 관리자 
 
 **코드 변화 0건.** 확인 명령과 결과:
 
-- `git log --oneline -6` → 코드의 마지막 커밋은 `3c6ae6d`(#90 병합)이고 그 위는 `872e668`·`2e0fb5a`·`4647028`·`d60bc24` 네 개의 `docs:` 커밋뿐이다.
-- `git diff --stat 3c6ae6d HEAD` → `docs/next/` 아래만 바뀐다.
+- `git diff --stat 3c6ae6d HEAD` → `docs/next/` 아래만 바뀐다. 즉 `3c6ae6d` 이후의 커밋은 전부 핸드오프 문서 작업이다.
 - 에픽 #125 체크: 체크 28건 / 미체크 24건.
 - `gh issue list --state open` → 31건(에픽 #125 자신과 무관한 #2 포함).
 
@@ -63,8 +62,8 @@ TTTGate 관리자 콘솔을 다사용자 RBAC 체계로 전환하고, 관리자 
 
 ### 메인 워크트리
 
-- 경로 `C:\Work\git\_Snoworca\TTTGate`, 브랜치 `refactor/admin`, HEAD `d60bc24`.
-- **코드 상태는 `3c6ae6d` 와 같다.** 그 위는 전부 문서 커밋이다.
+- 경로 `C:\Work\git\_Snoworca\TTTGate`, 브랜치 `refactor/admin`.
+- **코드의 마지막 커밋은 `3c6ae6d`**(#90 병합)이고 그 위는 전부 `docs/next/` 만 건드리는 `docs:` 커밋이다. 따라서 **코드 상태는 `3c6ae6d` 와 같다.** `git diff --stat 3c6ae6d HEAD` 가 `docs/next/` 아래만 보이는 것으로 확인한다(이 문서를 고치면 그 커밋이 하나 더 늘어난다. 개수는 세지 말고 이 명령으로 확인하라).
 - `git status --porcelain` 출력은 세 줄이고 전부 커밋 대상이 아닌 도구 상태 디렉터리다: `?? .serena/`, `?? .snoworca/`, `?? docs/plan/srs/.TTTGate-work/`.
 - `git branch` 에는 작업 브랜치 `feat/u2-100-tunnel-ownership` 이 남아 있다(아래 워크트리의 브랜치). 그 외는 `develop`·`feature/firewall`·`feature/logger`·`main`·`refactor/admin`·`refactor/safecode`·`refactor/sfacecode-old`.
 
