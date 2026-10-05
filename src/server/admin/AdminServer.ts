@@ -29,6 +29,8 @@ import {auditEventOf, AuditRouteMeta, buildAdminRoutes, isTunnelActivationReques
 import {rbacRouteHandlers} from "./rbacRoutes";
 import {Action, authorize, sections} from "../rbac/AdminAuthorizer";
 import {LEGACY_PRINCIPAL, principalOf} from "../rbac/Principal";
+import {admitTunnelWrite, isTunnelEditable, isTunnelVisibleTo, ownerViewOf, resolveOwnerId} from "../rbac/TunnelOwnership";
+import {AuthorizationContext} from "../rbac/AuthorizationContext";
 import {toUserView} from "../rbac/UserView";
 import {AuditEvent, AuditSinkRegistry, recordAuditEvent} from "../audit/AuditSink";
 
@@ -153,6 +155,7 @@ class AdminServer {
             onUpdateTunnelingOption: this.onUpdateTunnelingOption,
             onRemoveTunnelingOption: this.onRemoveTunnelingOption,
             onActiveTunneling: this.onActiveTunneling,
+            onReassignTunnelOwner: this.onReassignTunnelOwner,
             onGetExternalServerStatuses: this.onGetExternalServerStatuses,
             onGetExternalServerCert: this.onGetExternalServerCert,
             onUpdateExternalServerCert: this.onUpdateExternalServerCert,
@@ -691,7 +694,15 @@ class AdminServer {
         const {res} = ctx;
         const payload = ctx.body;
         await this.mutateConfiguration(res, payload, async (serverOptionStore) => {
-            const {certInfo, expectedCertificateRevision, previousForwardPort, ...tunnelingOption} = payload;
+            // owner·editable 은 목록 응답이 덧붙이는 표시용 필드다. 관리자 UI 가 행을 그대로 되돌려 보내도 저장되지 않게 떼어 낸다.
+            const {certInfo, expectedCertificateRevision, previousForwardPort, owner, editable, ...tunnelingOption} = payload;
+            const admission = admitTunnelWrite(ctx.principal!, tunnelingOption, {certInfo, previousForwardPort});
+            if(!admission.success) {
+                this.sendApiFailure(res, admission.status, {code: admission.code, message: admission.message});
+                return;
+            }
+            tunnelingOption.ownerId = admission.ownerId;
+            ctx.auditDetail({ownerId: admission.ownerId});
             if(certInfo !== undefined || previousForwardPort !== undefined) {
                 await this.applyCompoundTunnelingOption(res, tunnelingOption, certInfo, expectedCertificateRevision, previousForwardPort);
                 return;
@@ -838,6 +849,40 @@ class AdminServer {
                 failedScopes: [...runtime.failedScopes, ...recoveryFailures], revisionState: store.revisionState, certificateRevisionState: certificates.revisionState}); return;
         }
         this.sendApiSuccess(res, {forwardPort: option.forwardPort, revisionState: store.revisionState, certificateRevisionState: certificates.revisionState});
+    }
+
+    /** U2-08 / #100: 슈퍼유저만 소유자를 바꾼다. 리스너 설정은 그대로이므로 런타임 재적용이 없다. */
+    private onReassignTunnelOwner = async (ctx: RouteContext) => {
+        const {res} = ctx;
+        const port = await this.getNumberInPath(ctx, 'port');
+        if(port == undefined) return;
+        await this.mutateConfiguration(res, ctx.body, async (serverOptionStore) => {
+            const option = serverOptionStore.getTunnelingOption(port);
+            if(!option) {
+                this.sendApiFailure(res, 404, {code: 'not_found', message: `External port(${port}) is not configured.`});
+                return;
+            }
+            const resolved = resolveOwnerId(ctx.body?.ownerId);
+            if(!resolved.success) {
+                this.sendApiFailure(res, resolved.status, {code: resolved.code, message: resolved.message});
+                return;
+            }
+            const from = AuthorizationContext.ownerIdOf(option);
+            const composed = serverOptionStore.composeServerOptionWithTunnelingOption({...option, ownerId: resolved.ownerId});
+            if(!composed.success || !composed.serverOption) {
+                this.sendApiFailure(res, 400, {message: 'Tunnel owner update failed.', forwardPort: port});
+                return;
+            }
+            const commitResult = serverOptionStore.commitPreparedServerOption(composed.serverOption);
+            if(!commitResult.success) {
+                serverOptionStore.recordRollback('tunnel owner commit failed', ["tunneling-option"]);
+                this.sendApiFailure(res, 500, {message: 'Unable to commit tunnel owner.', forwardPort: port,
+                    failedScopes: ["tunneling-option"], revisionState: serverOptionStore.revisionState});
+                return;
+            }
+            ctx.auditDetail({from, to: resolved.ownerId});
+            this.sendApiSuccess(res, {forwardPort: port, owner: ownerViewOf(port), revisionState: commitResult.revisionState});
+        });
     }
 
     private onRemoveTunnelingOption = async (ctx: RouteContext) => {
@@ -1465,14 +1510,24 @@ class AdminServer {
             for(let tunnelingOption of tunnelingOptions) {
                 tunnelingOption.keepAlive = tunnelingOption.keepAlive ?? TCPServer.DEFAULT_KEEP_ALIVE;
             }
-            this.sendApiSuccess(res, {tunnelingOptions: tunnelingOptions, revisionState: store.revisionState});
+            const principal = ctx.principal!;
+            const visible = tunnelingOptions
+                .filter((tunnelingOption) => isTunnelVisibleTo(principal, tunnelingOption.forwardPort))
+                .map((tunnelingOption) => ({
+                    ...tunnelingOption,
+                    owner: ownerViewOf(tunnelingOption.forwardPort),
+                    editable: isTunnelEditable(principal, tunnelingOption.forwardPort)
+                }));
+            this.sendApiSuccess(res, {tunnelingOptions: visible, revisionState: store.revisionState});
         });
     }
 
     private onGetExternalServerStatuses = async (ctx: RouteContext) => {
         const {res} = ctx;
-        let statuses = this._tttServer?.externalServerStatuses();
-        this.sendApiSuccess(res, {serverTime: Date.now(), statuses: statuses ?? []});
+        let statuses = this._tttServer?.externalServerStatuses() ?? [];
+        // 목록과 같은 가시성 판정을 쓴다. 상태로 남의 터널 존재가 새지 않게 한다.
+        statuses = statuses.filter((status) => isTunnelVisibleTo(ctx.principal!, status.port));
+        this.sendApiSuccess(res, {serverTime: Date.now(), statuses});
     }
 
     // U5-02 / #117 — 임시 차단 목록 조회·해제 API. 세션 검사만 한다.

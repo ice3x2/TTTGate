@@ -14,7 +14,7 @@ const warnedOrphanPorts = new Set<number>();
 
 /** ownerId 가 없거나 문자열이 아니거나 비어 있으면 슈퍼유저만 다룰 수 있는 system:migrated 소유로 본다. */
 function ownerIdOf(option: TunnelingOption): string {
-    const ownerId: unknown = (option as {ownerId?: unknown}).ownerId;
+    const ownerId: unknown = option.ownerId;
     return typeof ownerId === 'string' && ownerId.length > 0 ? ownerId : MIGRATED_OWNER_ID;
 }
 
@@ -55,6 +55,14 @@ function groupAttributes(groupId: string): GroupAttributes {
     return group ? group.attributes : cloneGroupAttributes(DEFAULT_GROUP_ATTRIBUTES as GroupAttributes);
 }
 
+/** 한 사용자가 소유한 포트. 사용자 삭제 가드가 포트를 알려줘야 하므로 개수만이 아니라 목록을 돌려준다. */
+function portsOfOwner(userId: string): number[] {
+    return ServerOptionStore.instance.getTunnelingOptions()
+        .filter((option) => resolveOwner(option)?.userId === userId)
+        .map((option) => option.forwardPort)
+        .sort((left, right) => left - right);
+}
+
 function portsOfGroup(groupId: string): number[] {
     return ServerOptionStore.instance.getTunnelingOptions()
         .filter((option) => resolveOwner(option)?.groupId === groupId)
@@ -67,9 +75,7 @@ function isSuperuserOwned(port: number): boolean {
 }
 
 function ownedCount(userId: string): number {
-    return ServerOptionStore.instance.getTunnelingOptions()
-        .filter((option) => resolveOwner(option)?.userId === userId)
-        .length;
+    return portsOfOwner(userId).length;
 }
 
 /**
@@ -82,6 +88,7 @@ export const AuthorizationContext = {
     targetOf,
     groupAttributes,
     portsOfGroup,
+    portsOfOwner,
     isSuperuserOwned,
     ownedCount,
     resetForTest(): void {

@@ -82,7 +82,9 @@ type TunnelingOption = {
     bufferLimitOnServer?: number,
     bufferLimitOnClient?: number,
     keepAlive: number,
-    rateLimit?: RateLimitOption
+    rateLimit?: RateLimitOption,
+    /** 소유자 사용자 id 또는 'system:migrated'. 없으면 system:migrated 로 해석한다(#100 U2-08). */
+    ownerId?: string
 }
 
 const DEFAULT_KEY = "hello-TTTGate";
