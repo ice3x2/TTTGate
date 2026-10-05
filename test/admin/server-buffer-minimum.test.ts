@@ -14,7 +14,7 @@ test('server buffer editor keeps invalid values and blocks mutation while preser
         await app.page.goto(`http://127.0.0.1:${f.ports[0]}`);
         await app.page.waitForFunction(() => !!(window as any).configurationFixture);
         expect(await app.page.evaluate(async () => (await fetch('/api/login', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({key: 'revision-password'})})).status)).toBe(200);
-        await app.page.evaluate(() => (window as any).configurationFixture.mount('tunnel'));
+        await app.page.evaluate((port) => (window as any).configurationFixture.mount('tunnel', port), String(port));
         const input = app.page.locator('#input-buffer-limit-server'); await input.waitFor();
         const button = app.page.getByRole('button', {name: 'Apply and Restart'}), mutations: string[] = [];
         app.page.on('request', req => { if(req.method() === 'POST') mutations.push(new URL(req.url()).pathname); });

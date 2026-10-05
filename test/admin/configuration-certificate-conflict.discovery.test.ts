@@ -22,7 +22,7 @@ test("stale TLS editor cannot replace the live certificate before its config con
             await app.page.waitForFunction(() => !!(window as any).configurationFixture);
             expect(await app.page.evaluate(async () => (await fetch("/api/login", {method: "POST",
                 headers: {"Content-Type": "application/json"}, body: JSON.stringify({key: "revision-password"})})).status)).toBe(200);
-            await app.page.evaluate(() => (window as any).configurationFixture.mount("tunnel"));
+            await app.page.evaluate((port) => (window as any).configurationFixture.mount("tunnel", port), String(forwardPort));
             const files = app.page.locator('input[type="file"]');
             await files.first().waitFor();
             await app.page.waitForFunction(() => (document.querySelector('input[type="file"]') as HTMLInputElement)?.files?.length === 1);

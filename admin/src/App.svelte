@@ -5,7 +5,7 @@
   import StatusScreen from "./screens/StatusScreen.svelte";
   import ServerSettingsScreen from "./screens/ServerSettingsScreen.svelte";
   import TunnelsScreen from "./screens/TunnelsScreen.svelte";
-  import TunnelOptionSetLayout from "./layout/TunnelOptionSetLayout.svelte";
+  import TunnelEditScreen from "./screens/TunnelEditScreen.svelte";
   import Loading from "./ui/Loading.svelte";
   import Shell from "./shell/Shell.svelte";
   import {provideSession} from "./shell/session";
@@ -38,7 +38,7 @@
   <Shell title={current.title} back={current.back}>
     {#if $route.screen === 'status'}<StatusScreen />
     {:else if $route.screen === 'tunnels'}<TunnelsScreen />
-    {:else if $route.screen === 'tunnel-edit'}<TunnelOptionSetLayout />
+    {:else if $route.screen === 'tunnel-edit'}{#key $route.param}<TunnelEditScreen param={$route.param ?? 'new'} />{/key}
     {:else}<ServerSettingsScreen />{/if}
   </Shell>
 {/if}
