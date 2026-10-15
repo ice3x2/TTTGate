@@ -2,7 +2,7 @@ import Environment from "../Environment";
 import File from "../util/File";
 import {ControlProtocolMode, DEFAULT_KEY, DEFAULT_SESSION_TTL_MS, resolveSessionTtlMs, HttpOption, ServerOption, TunnelingOption, normalizeRateLimit} from "../types/TunnelingOption";
 import YAML from "yaml";
-import Files from "../util/Files";
+import Files, {AtomicFileValue} from "../util/Files";
 import ObjectUtil from "../util/ObjectUtil";
 import LoggerFactory from "../util/logger/LoggerFactory";
 import {TCPServer} from "../util/TCPServer";
@@ -22,6 +22,26 @@ type TunnelingOptionNormalizationMode = "new-config" | "legacy-load";
 
 const OPTION_FILE_NAME: string = 'server.yaml';
 const OPTION_STATE_FILE_NAME: string = '.server.state.json';
+const ROLLBACK_BACKUP_SUFFIX: string = '.bak';
+
+// U2-09 / #101: 업그레이드 롤백 계약. 저장되는 옵션이 이 필드 가운데 하나라도 담고 있고
+// 디스크의 server.yaml 에는 하나도 없으면, 그 저장과 같은 배치로 직전 두 파일을 .bak 으로 남긴다.
+// 이전 바이너리는 verificationServerOption 에 허용 목록이 없어 새 필드가 든 yaml 도 읽으므로,
+// .bak 은 수기 편집 손실을 막기 위한 복원 지점이다(설계 §3.1).
+const ROLLBACK_SENSITIVE_TOP_FIELDS = ['connectionSecurity', 'mfaRequiredForSuperusers', 'auditRetentionDays', 'auditQueueSize'] as const;
+const ROLLBACK_SENSITIVE_TUNNEL_FIELDS = ['ownerId', 'rateLimit'] as const;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const hasRollbackSensitiveField = (option: unknown): boolean => {
+    if(!isRecord(option)) return false;
+    if(ROLLBACK_SENSITIVE_TOP_FIELDS.some((field) => option[field] !== undefined)) return true;
+    const tunnels = option['tunnelingOptions'];
+    if(!Array.isArray(tunnels)) return false;
+    return tunnels.some((tunnel) => isRecord(tunnel)
+        && ROLLBACK_SENSITIVE_TUNNEL_FIELDS.some((field) => tunnel[field] !== undefined));
+};
 
 type ConfigLoadStatus = {ready: true; source: 'loaded' | 'created' | 'reset'} |
     {ready: false; reason: 'non-file' | 'read-error' | 'empty' | 'parse' | 'validation'};
@@ -138,11 +158,40 @@ class ServerOptionStore {
             revisionState.lastKnownGoodAt = revisionState.lastCommittedAt;
         }
         revisionState.lastRollback = undefined;
-        const files = [
+        const files: AtomicFileValue[] = [
+            ...this.rollbackBackupFiles(serverOption),
             {file: this._configFile, data: YAML.stringify(result.serverOption), mode: 0o600},
             {file: this._stateFile, data: JSON.stringify(revisionState, null, 2), mode: 0o600},
         ];
         return {success: true, message: "", prepared: {serverOption: result.serverOption!, revisionState, files}};
+    }
+
+    /**
+     * U2-09 / #101: 업그레이드 직전의 server.yaml·.server.state.json 을 한 번만 .bak 으로 남긴다.
+     * 판정은 호출자가 넘긴 옵션(정규화 전)과 디스크의 server.yaml 원문으로 한다. 정규화된 옵션은
+     * connectionSecurity·rateLimit 을 항상 채우므로 판정 기준이 되지 못한다.
+     * 남길 이유가 없으면 빈 배열이고, 서버는 이 파일을 어떤 경로에서도 지우지 않는다.
+     */
+    private rollbackBackupFiles(next: ServerOption): AtomicFileValue[] {
+        const backupConfigFile = new File(`${this._configFile.toString()}${ROLLBACK_BACKUP_SUFFIX}`);
+        if(backupConfigFile.isFile()) return [];
+        if(!this._configFile.isFile()) return [];
+        const currentYaml = fs.readFileSync(this._configFile.toString());
+        let storedOption: unknown;
+        // YAML 파싱만이 이 메서드의 예외 경계다. 읽을 수 없는 yaml 은 복원 지점이 될 수 없으므로 남기지 않는다.
+        try { storedOption = YAML.parse(currentYaml.toString('utf-8')); }
+        catch { return []; }
+        if(hasRollbackSensitiveField(storedOption)) return [];
+        if(!hasRollbackSensitiveField(next)) return [];
+        const files: AtomicFileValue[] = [{file: backupConfigFile, data: currentYaml, mode: 0o600}];
+        if(this._stateFile.isFile()) {
+            files.push({
+                file: new File(`${this._stateFile.toString()}${ROLLBACK_BACKUP_SUFFIX}`),
+                data: fs.readFileSync(this._stateFile.toString()),
+                mode: 0o600
+            });
+        }
+        return files;
     }
 
     public publishPreparedServerOption(prepared: NonNullable<ReturnType<ServerOptionStore['prepareServerOptionCommit']>['prepared']>): boolean {

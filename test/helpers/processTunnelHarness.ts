@@ -6,13 +6,16 @@ import YAML from "yaml";
 import bcrypt from "bcryptjs";
 import {spawnProcess, getFreePort, waitUntil, SpawnedProcess} from "./smokeProcess";
 import {httpsRequest} from "./http";
+import {E2E_ADMIN_PASSWORD, IdentityFixture, serializeIdentityFixture} from "./identityFixture";
 import {__testInternals as clientAppTestInternals} from "../../src/client/ClientApp";
 import type {ClientOption, HttpOption, ServerOption, TunnelingOption} from "../../src/types/TunnelingOption";
 
 const APP_JS = path.resolve(__dirname, "..", "..", "build", "src", "app.js");
-const ADMIN_PASSWORD = "e2e-password-1234";
+const ADMIN_PASSWORD = E2E_ADMIN_PASSWORD;
+const DEFAULT_ADMIN_USERNAME = "admin";
 // P0-U0-01: 하네스 생성마다 cost-12 bcrypt 해시를 반복하지 않도록 모듈 수준에서 한 번만 계산한다.
-const ADMIN_PASSWORD_HASH = bcrypt.hashSync(ADMIN_PASSWORD, 12);
+// 하네스가 .key 에 심는 해시. 승격이 .key 를 다시 쓰지 않는 것을 테스트가 바이트로 고정할 수 있게 내보낸다.
+export const ADMIN_PASSWORD_HASH = bcrypt.hashSync(ADMIN_PASSWORD, 12);
 const VERBOSE = process.env.TTTGATE_E2E_VERBOSE === "1";
 
 export type ProcessTunnelSpec = {
@@ -33,7 +36,16 @@ export type ProcessTunnelOptions = {
     // U5-03 / #118 — false면 관리자 포트 폴링 대신 서버 stdout의 `Listen - port:` 로그로 준비 판정한다.
     // 국가 필터가 외부 포트·관리자 포트를 막아 놓은 상태로 기동하는 시나리오(geo-filter.test.ts)를 위한 옵션.
     adminAccess?: boolean;
+    // U2-09 / #101 — 사용자·그룹을 config/identity.yaml 에 미리 심는다. 지정하면 .key 를 쓰지 않으므로
+    // 레거시 승격 경로를 타지 않고, adminLogin 계정이 이 픽스처 안에 있어야 한다.
+    identityFixture?: IdentityFixture;
+    // U2-09 / #101 — adminRequest 가 로그인할 계정. 기본은 레거시 admin 계정이다.
+    adminLogin?: AdminLogin;
 };
+
+export type AdminLogin = {username: string; password: string};
+
+export type AdminRequest = (path: string, init?: {method?: string; body?: unknown}) => Promise<{status: number; json: any}>;
 
 export type ProcessTunnelHarness = {
     rootDir: string;
@@ -44,7 +56,9 @@ export type ProcessTunnelHarness = {
     clientIds: string[];
     server: SpawnedProcess;
     clients: SpawnedProcess[];
-    adminRequest(path: string, init?: {method?: string; body?: unknown}): Promise<{status: number; json: any}>;
+    adminRequest: AdminRequest;
+    // U2-09 / #101 — 계정별로 세션·CSRF 쿠키를 따로 들고 있는 요청 함수. 같은 login 이면 같은 함수를 돌려준다.
+    adminRequestAs(login: AdminLogin): AdminRequest;
     waitForClientOnline(timeoutMs?: number): Promise<void>;
     waitForTunnelOnline(forwardPort: number, timeoutMs?: number): Promise<void>;
     restartServer(patch?: {serverOptionExtra?: Partial<ServerOption>}): Promise<void>;
@@ -111,6 +125,14 @@ export async function createProcessTunnelHarness(options: ProcessTunnelOptions):
     const clientCount = options.clientCount ?? 1;
     const startClientOnBoot = options.startClient !== false;
     const adminAccessEnabled = options.adminAccess !== false;
+    const adminLogin: AdminLogin = options.adminLogin ?? {username: DEFAULT_ADMIN_USERNAME, password: ADMIN_PASSWORD};
+    const identityFixture = options.identityFixture;
+    if(identityFixture) {
+        const loginUser = identityFixture.users.find((user) => user.username === adminLogin.username);
+        if(!loginUser || loginUser.role !== "superuser" || loginUser.password !== adminLogin.password) {
+            throw new Error(`identityFixture must contain the adminLogin superuser: ${adminLogin.username}`);
+        }
+    }
 
     const createdRoots: string[] = [];
     // 생성 도중 실패 시 정리용: spawn된 모든 프로세스(서버 재시작 이력 포함)를 남긴다.
@@ -176,7 +198,12 @@ export async function createProcessTunnelHarness(options: ProcessTunnelOptions):
             await fs.promises.writeFile(path.join(rootDir, "config", "server.yaml"), YAML.stringify(serverOption), {encoding: "utf-8"});
         };
         await writeServerYaml();
-        await fs.promises.writeFile(path.join(rootDir, "config", ".key"), ADMIN_PASSWORD_HASH + "\n", {encoding: "utf-8"});
+        if(identityFixture) {
+            await fs.promises.writeFile(path.join(rootDir, "config", "identity.yaml"),
+                await serializeIdentityFixture(identityFixture), {encoding: "utf-8"});
+        } else {
+            await fs.promises.writeFile(path.join(rootDir, "config", ".key"), ADMIN_PASSWORD_HASH + "\n", {encoding: "utf-8"});
+        }
 
         for(let n = 0; n < clientCount; n++) {
             const clientOption = {
@@ -223,12 +250,23 @@ export async function createProcessTunnelHarness(options: ProcessTunnelOptions):
         const clientProcesses: (SpawnedProcess | undefined)[] = new Array(clientCount).fill(undefined);
 
         const sessions = new Map<string, {sessionKey: string; csrfToken: string}>();
+        const requestFunctions = new Map<string, AdminRequest>();
 
-        const adminRequest = async (requestPath: string, init: {method?: string; body?: unknown} = {}): Promise<{status: number; json: any}> => {
-            const doRequest = async (): Promise<{status: number; json: any}> => {
+        // #102 (U2-10) 가 로그인 본문을 {username, password} 로 통일한다.
+        // 그때까지 기본 admin 계정은 기존 {key} 별칭을 그대로 보내고, 다른 계정만 username 을 싣는다.
+        const loginBody = (login: AdminLogin): Record<string, string> => login.username === DEFAULT_ADMIN_USERNAME
+            ? {key: login.password}
+            : {username: login.username, password: login.password};
+
+        const adminRequestAs = (login: AdminLogin): AdminRequest => {
+            const identity = `${login.username}\n${login.password}`;
+            const existing = requestFunctions.get(identity);
+            if(existing) return existing;
+
+            const doRequest = async (requestPath: string, init: {method?: string; body?: unknown}): Promise<{status: number; json: any}> => {
                 const method = init.method ?? "GET";
                 const headers: Record<string, string> = {};
-                const session = sessions.get("default");
+                const session = sessions.get(identity);
                 if(session) {
                     headers["Cookie"] = `sessionKey=${session.sessionKey}; csrfToken=${session.csrfToken}`;
                 }
@@ -244,29 +282,36 @@ export async function createProcessTunnelHarness(options: ProcessTunnelOptions):
                 return {status: res.statusCode, json};
             };
 
-            const login = async (): Promise<void> => {
+            const acquireSession = async (): Promise<void> => {
                 const headers = {"Origin": `https://127.0.0.1:${adminPort}`, "Content-Type": "application/json"};
-                const res = await httpsRequest({port: adminPort, path: "/api/login", method: "POST", headers, body: JSON.stringify({key: ADMIN_PASSWORD})});
+                const res = await httpsRequest({port: adminPort, path: "/api/login", method: "POST", headers,
+                    body: JSON.stringify(loginBody(login))});
                 const json = res.body.length > 0 ? JSON.parse(res.body) : null;
                 const setCookieHeader = res.headers["set-cookie"] ?? [];
                 const sessionKeyMatch = setCookieHeader.map((c) => c.match(/^sessionKey=([^;]+)/)).find((m) => m)?.[1];
                 if(!sessionKeyMatch || !json?.csrfToken) {
-                    throw new Error(`admin login failed: status=${res.statusCode} body=${res.body}`);
+                    throw new Error(`admin login failed for ${login.username}: status=${res.statusCode} body=${res.body}`);
                 }
-                sessions.set("default", {sessionKey: sessionKeyMatch, csrfToken: json.csrfToken});
+                sessions.set(identity, {sessionKey: sessionKeyMatch, csrfToken: json.csrfToken});
             };
 
-            if(!sessions.has("default")) {
-                await login();
-            }
-            let result = await doRequest();
-            if(result.status === 401) {
-                sessions.delete("default");
-                await login();
-                result = await doRequest();
-            }
-            return result;
+            const request: AdminRequest = async (requestPath, init = {}) => {
+                if(!sessions.has(identity)) {
+                    await acquireSession();
+                }
+                let result = await doRequest(requestPath, init);
+                if(result.status === 401) {
+                    sessions.delete(identity);
+                    await acquireSession();
+                    result = await doRequest(requestPath, init);
+                }
+                return result;
+            };
+            requestFunctions.set(identity, request);
+            return request;
         };
+
+        const adminRequest = adminRequestAs(adminLogin);
 
         const waitForAdminReady = async (timeoutMs: number = 20000): Promise<void> => {
             await waitUntil(async () => {
@@ -421,6 +466,7 @@ export async function createProcessTunnelHarness(options: ProcessTunnelOptions):
             get server() { return currentServer; },
             get clients() { return clientProcesses.filter((p): p is SpawnedProcess => p !== undefined); },
             adminRequest: adminAccessEnabled ? adminRequest : disabledFn("adminRequest"),
+            adminRequestAs: adminAccessEnabled ? adminRequestAs : () => disabledFn("adminRequestAs"),
             waitForClientOnline: adminAccessEnabled ? waitForClientOnline : disabledFn("waitForClientOnline"),
             waitForTunnelOnline: adminAccessEnabled ? waitForTunnelOnline : disabledFn("waitForTunnelOnline"),
             restartServer,

@@ -43,6 +43,11 @@ Use owned loopback peers, temporary roots and bounded test processes. Restore ob
 
 `npm run build` must precede `test:component`, `test:e2e` and `test:e2e:browser`; the process harness fails with `Run npm run build first` otherwise.
 
+The browser end-to-end layer also owns the legacy `admin` promotion and the regular-user scope:
+
+- `test/e2e/browser/legacy-admin-migration.test.ts` — a server holding only `config/.key` promotes `admin` into `identity.yaml`, keeps the key file byte-for-byte, logs the promotion once, signs in through the real admin UI, and does not promote again across a restart.
+- `test/e2e/browser/regular-user-login.test.ts` — a server seeded with `identityFixture` writes no `config/.key`, stores only bcrypt hashes, and serves a regular user neither the `server` section nor a tunnel owned by `system:migrated`.
+
 Harness selection: use `test/helpers/tunnelHarness.ts` (`createTunnelHarness`) when the claim is about `TTTServer`/`TTTClient` behaviour inside one process and the test needs direct object access (`getServer()`); use `test/helpers/processTunnelHarness.ts` (`createProcessTunnelHarness`) when the claim crosses the process boundary (CLI arguments, `config/*.yaml`, PID files, signals, restart, browser access).
 
 The self-hosted target service (`test/e2e/target/targetService.ts`) exposes the following paths for process and browser end-to-end tests:
