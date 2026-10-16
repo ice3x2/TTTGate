@@ -73,6 +73,9 @@ const tunnelPortOf = (ctx: RouteContext): number => Number(ctx.params.port ?? ct
 /** tunnel:* action 의 대상. 소유자는 AuthorizationContext 가 저장소에서 읽어 채운다(#100 U2-08). */
 const tunnelTarget = (ctx: RouteContext): Target => AuthorizationContext.targetOf(tunnelPortOf(ctx));
 
+/** 감사 조회는 슈퍼유저면 전체, 일반 유저면 본인 것만이다(#110 U4-02). 범위 제한은 핸들러가 userId 로 집행한다. */
+const auditReadAction = (ctx: RouteContext): Action => ctx.principal?.role === 'superuser' ? 'audit:read-all' : 'audit:read-self';
+
 /** POST·PUT /api/tunnelingOption 은 본문의 forwardPort 가 이미 등록된 포트인지로 update/create 가 갈린다. */
 const tunnelWriteAction = (ctx: RouteContext): Action =>
     ServerOptionStore.instance.getTunnelingOption(ctx.body?.forwardPort) ? 'tunnel:update' : 'tunnel:create';
@@ -198,7 +201,10 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
         audit: (ctx) => auditMeta(isFieldProvided(ctx.body, 'attributes') ? AUDIT_EVENT_TYPES.group_attributes_changed : AUDIT_EVENT_TYPES.group_updated,
             pathIdTarget('group')(ctx)), handler: 'onUpdateGroup'},
     {method: 'DELETE', pattern: new RegExp('^/api/groups/(?<id>[^/]+)$'), action: 'group:manage',
-        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.group_deleted, pathIdTarget('group')(ctx)), handler: 'onDeleteGroup'}
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.group_deleted, pathIdTarget('group')(ctx)), handler: 'onDeleteGroup'},
+    // U4-02 / #110 감사 조회. 조회는 감사하지 않으므로 audit 콜백을 달지 않는다. 핸들러는 auditRoutes.ts 에 있다.
+    {method: 'GET', pattern: new RegExp('^/api/audit$'), action: auditReadAction, handler: 'onListAudit'},
+    {method: 'GET', pattern: new RegExp('^/api/audit/types$'), action: auditReadAction, handler: 'onListAuditTypes'}
 ];
 
 export function buildAdminRoutes(handlers: RouteHandlers): readonly Route[] {
