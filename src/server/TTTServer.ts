@@ -13,6 +13,7 @@ import {AdmissionController} from "./security/AdmissionController";
 import {AuditSinkRegistry, recordAuditEvent} from "./audit/AuditSink";
 import {AUDIT_EVENT_TYPES} from "./audit/AuditEventTypes";
 import {maxActiveSeconds} from "./security/TunnelLifetimePolicy";
+import {ConcurrencyDenial, ConcurrencyLimiter} from "./security/ConcurrencyLimiter";
 import AuthorizationContext from "./rbac/AuthorizationContext";
 import {auditDirPath, FileAuditSink} from "./audit/FileAuditSink";
 const logger = LoggerFactory.getLogger('server', 'TTTServer');
@@ -64,7 +65,19 @@ class TTTServer {
         // U5-07 / #122 — 일반 유저 터널의 활성 시간을 그룹 max_tunnel_duration_ms 로 제한한다.
         this._externalPortServerPool.ActiveTimeoutCap = (port) => maxActiveSeconds(port, AuthorizationContext);
         this._externalPortServerPool.OnAutoExpireCallback = this.onTunnelAutoExpire;
+        // U5-08 / #123 — 일반 유저 그룹의 동시 연결 상한. 소유자·그룹은 판정 때마다 AuthorizationContext 에서 읽는다.
+        const admission = AdmissionController.instance;
+        admission.attachConcurrency(new ConcurrencyLimiter(AuthorizationContext, (port) => admission.sessionCount(port)));
+        admission.onConcurrencyDenied = this.onConcurrencyDenied;
         this.syncAllowedClientMaps(serverOption);
+    }
+
+    private onConcurrencyDenied = (port: number, denial: ConcurrencyDenial, now: number): void => {
+        recordAuditEvent({at: now, actor: {userId: 'system'}, type: AUDIT_EVENT_TYPES.conn_limit_hit,
+            target: {kind: 'tunnel', id: String(port)}, outcome: 'failure',
+            summary: `${AUDIT_EVENT_TYPES.conn_limit_hit} ${port}`,
+            detail: {port, groupId: denial.groupId, limit: denial.limit, sessions: denial.sessions}})
+            .catch((error) => logger.error(`conn_limit_hit audit failed - port: ${port}`, error));
     }
 
     // 그룹 상한으로 만료된 경우만 감사한다. 사용자가 정한 타임아웃의 만료는 속성 3 의 집행이 아니다.
