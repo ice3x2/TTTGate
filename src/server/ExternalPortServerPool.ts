@@ -9,6 +9,11 @@ import {EndpointHandler, EndpointHttpHandler, EndPointInfo} from "../types/Endpo
 import {clearInterval} from "timers";
 import LoggerFactory  from "../util/logger/LoggerFactory";
 import {AdmissionController} from "./security/AdmissionController";
+import {BandwidthLimiter} from "./security/BandwidthLimiter";
+import {computeWatermarkBytes} from "../util/ResourcePolicy";
+
+// #124 (U5-09) 클라이언트→외부 대역폭 큐. 상한(limit)을 넘으면 세션을 닫고, 상단 워터마크에서 터널 소스를 멈춘다.
+type SendQueue = {chunks: Buffer[]; bytes: number; limit: number; timer: NodeJS.Timeout | null; reliefListeners: Array<() => void>};
 const logger = LoggerFactory.getLogger('server', 'ExternalPortServerPool');
 
 // U5-02 / #117 — concurrency-limit 거절을 http/https에서만 명시 응답으로 되돌려준다(#123 (U5-08) 전까지는 발생하지 않는다).
@@ -60,6 +65,11 @@ class ExternalPortServerPool {
     private _onNewSessionCallback : NewSessionCallback | null = null;
     private _onHandlerEventCallback : OnHandlerEventCallback | null = null;
     private _onTerminateSessionCallback : OnTerminateSessionCallback | null = null;
+    // U5-09 / #124 — 그룹 대역폭. 버킷은 풀이 살아 있는 동안만 의미가 있어 풀의 필드 하나로 둔다(싱글턴 없음).
+    // 소유자·그룹은 rbac 를 모르도록 정책 함수로 주입받는다.
+    private readonly _bandwidth = new BandwidthLimiter();
+    private _bandwidthPolicy: ((port: number) => {groupId: string; bytesPerSecond: number} | undefined) | null = null;
+    private readonly _sendQueues = new Map<number, SendQueue>();
     // U5-07 / #122 — 포트별 최대 활성 시간(초)과 그 상한으로 만료됐을 때의 알림. rbac 를 모르도록 주입받는다.
     private _activeTimeoutCap : ((port: number) => number | undefined) | null = null;
     private _onAutoExpire : ((port: number, info: {timeoutSeconds: number; cappedByGroup: boolean}) => void) | null = null;
@@ -214,6 +224,10 @@ class ExternalPortServerPool {
         this._onTerminateSessionCallback = callback;
     }
 
+    public set BandwidthPolicy(policy: ((port: number) => {groupId: string; bytesPerSecond: number} | undefined) | null) {
+        this._bandwidthPolicy = policy;
+    }
+
     public set ActiveTimeoutCap(cap: ((port: number) => number | undefined) | null) {
         this._activeTimeoutCap = cap;
     }
@@ -253,39 +267,138 @@ class ExternalPortServerPool {
     }
 
 
+    /** 소켓 출력 백프레셔 또는 #124 대역폭 큐가 상단 워터마크에 이른 상태. TTTServer 가 터널 소스를 멈추는 기준이다. */
     public isSessionBackpressured(id: number) : boolean {
-        return this._handlerMap.get(id)?.isBackpressured ?? false;
+        return (this._handlerMap.get(id)?.isBackpressured ?? false) || this.isQueuePressured(id);
     }
 
     public addSessionPressureReliefListener(id: number, listener: () => void) : void {
+        const queue = this._sendQueues.get(id);
+        if(queue && this.isQueuePressured(id)) {
+            // 대역폭 큐가 하단 워터마크 아래로 비면 drain 이 부른다.
+            queue.reliefListeners.push(listener);
+            return;
+        }
         const handler = this._handlerMap.get(id);
         if(handler) {
             handler.addOncePressureReliefListener(() => listener());
         }
     }
 
+    private isQueuePressured(id: number): boolean {
+        const queue = this._sendQueues.get(id);
+        return queue !== undefined && queue.bytes >= computeWatermarkBytes(queue.limit).high;
+    }
+
     public send(id: number, data: Buffer) : boolean {
         let handler = this._handlerMap.get(id);
         if(handler) {
             if(handler.closeInitiated) return false;
+            // 대역폭 큐에 남은 바이트도 이미 보낸 것으로 친다(아직 쓰지 않았을 뿐이다).
+            const queuedBytes = this._sendQueues.get(id)?.bytes ?? 0;
             if(handler instanceof HttpHandler && handler.closeWait &&
-                handler.responseInputLength + data.length > handler.endLength!) {
+                handler.responseInputLength + queuedBytes + data.length > handler.endLength!) {
                 this.closeIfSatisfiedLength(handler, true);
                 return false;
             }
-            handler.lastSendTime = Date.now();
-            handler.sendData(data, (handler: SocketHandler, success: boolean) => {
-                this.onSendDataCallback(handler, success);
-            });
-            if(handler instanceof HttpHandler) this.closeIfSatisfiedLength(handler);
-            let portNumber : number = handler.getBundle(PORT_BUNDLE_KEY);
-            let status = this._statusMap.get(portNumber);
-            if(status) {
-                status.tx += data.length;
+            // 대역폭 큐가 있으면 정책과 무관하게 순서를 지키도록 뒤에 붙인다(정책이 사라져도 drain 이 비운다).
+            // 청크는 합치거나 쪼개지 않는다.
+            const queue = this._sendQueues.get(id);
+            if(queue) return this.enqueue(id, handler, queue, data);
+            const portNumber: number = handler.getBundle(PORT_BUNDLE_KEY);
+            const policy = this._bandwidthPolicy?.(portNumber);
+            if(!policy) {
+                this.writeToHandler(handler, data);
+                return true;
             }
+            const wait = this._bandwidth.consume(policy.groupId, policy.bytesPerSecond, data.length, Date.now());
+            if(wait === 0) {
+                this.writeToHandler(handler, data);
+                return true;
+            }
+            const configured = handler.getBundle(OPTION_BUNDLE_KEY)?.bufferLimitOnServer;
+            const created: SendQueue = {chunks: [], bytes: 0, timer: null, reliefListeners: [],
+                limit: (typeof configured === 'number' && configured > 0 ? configured : 8) * 1024 * 1024};
+            this._sendQueues.set(id, created);
+            if(!this.enqueue(id, handler, created, data)) return false;
+            this.scheduleDrain(id, wait);
             return true;
         }
         return false;
+    }
+
+    /** 클라이언트→외부 실제 쓰기. 대역폭 큐가 비울 때와 정책이 없을 때 같은 경로를 쓴다. */
+    private writeToHandler(handler: EndpointHandler | EndpointHttpHandler, data: Buffer): void {
+        handler.lastSendTime = Date.now();
+        handler.sendData(data, (sent: SocketHandler, success: boolean) => {
+            this.onSendDataCallback(sent, success);
+        });
+        if(handler instanceof HttpHandler) this.closeIfSatisfiedLength(handler);
+        const status = this._statusMap.get(handler.getBundle(PORT_BUNDLE_KEY));
+        if(status) {
+            status.tx += data.length;
+        }
+    }
+
+    /** 큐 상한을 넘으면 데이터를 버리고 계속 가지 않고 세션을 닫는다. */
+    private enqueue(id: number, handler: EndpointHandler | EndpointHttpHandler, queue: SendQueue, data: Buffer): boolean {
+        queue.chunks.push(data);
+        queue.bytes += data.length;
+        if(queue.bytes > queue.limit) {
+            this.clearSendQueue(id);
+            this.closeIfSatisfiedLength(handler, true);
+            return false;
+        }
+        return true;
+    }
+
+    private scheduleDrain(id: number, wait: number): void {
+        const queue = this._sendQueues.get(id);
+        if(!queue) return;
+        queue.timer = setTimeout(() => this.drain(id), wait);
+    }
+
+    private drain(id: number): void {
+        const queue = this._sendQueues.get(id);
+        if(!queue) return;
+        queue.timer = null;
+        const handler = this._handlerMap.get(id);
+        if(!handler || handler.closeInitiated) {
+            this.clearSendQueue(id);
+            return;
+        }
+        while(queue.chunks.length > 0) {
+            const head = queue.chunks.shift()!;
+            queue.bytes -= head.length;
+            this.writeToHandler(handler, head);
+            this.notifyQueueRelief(queue);
+            const next = queue.chunks[0];
+            if(next === undefined) break;
+            const policy = this._bandwidthPolicy?.(handler.getBundle(PORT_BUNDLE_KEY));
+            const wait = policy ? this._bandwidth.consume(policy.groupId, policy.bytesPerSecond, next.length, Date.now()) : 0;
+            if(wait > 0) {
+                this.scheduleDrain(id, wait);
+                return;
+            }
+        }
+        this._sendQueues.delete(id);
+        this.notifyQueueRelief(queue, true);
+        this.closeIfSatisfiedLength(handler);
+    }
+
+    /** 큐가 하단 워터마크 아래로 내려가면(또는 비면) 멈춰 둔 터널 소스를 다시 흐르게 한다. */
+    private notifyQueueRelief(queue: SendQueue, emptied: boolean = false): void {
+        if(queue.reliefListeners.length === 0) return;
+        if(!emptied && queue.bytes > computeWatermarkBytes(queue.limit).low) return;
+        const listeners = queue.reliefListeners.splice(0);
+        for(const listener of listeners) listener();
+    }
+
+    private clearSendQueue(id: number): void {
+        const queue = this._sendQueues.get(id);
+        if(!queue) return;
+        if(queue.timer) clearTimeout(queue.timer);
+        this._sendQueues.delete(id);
     }
 
     private onSendDataCallback = (handler: SocketHandler,success: boolean) : void => {
@@ -343,8 +456,18 @@ class ExternalPortServerPool {
 
 
                 this._onHandlerEventCallback?.(sessionID, state, {data: data, receiveLength: handler.receiveLength});
+                // 외부→클라이언트 방향 대역폭. 버킷 빚만큼 읽기를 멈춘다. 백프레셔로 멈춘 상태는 풀지 않는다.
+                const policy = this._bandwidthPolicy?.(portNumber);
+                if(policy) {
+                    const wait = this._bandwidth.consume(policy.groupId, policy.bytesPerSecond, data.length, Date.now());
+                    if(wait > 0) {
+                        handler.pauseRead();
+                        setTimeout(() => { if(!handler.isBackpressured) handler.resumeRead(); }, wait).unref();
+                    }
+                }
             } else if (sessionID && (state == SocketState.End || state == SocketState.Closed)) {
                 this.updateCount(handler.getBundle(OPTION_BUNDLE_KEY).forwardPort, false);
+                this.clearSendQueue(sessionID);
                 if (this._handlerMap.has(sessionID)) {
                     this._onHandlerEventCallback?.(sessionID, SocketState.Closed, {
                         data: data,
@@ -468,6 +591,7 @@ class ExternalPortServerPool {
         let handlers : Array<SocketHandler | HttpHandler> = [];
         for(let id of ids) {
             let handler = this._handlerMap.get(id);
+            this.clearSendQueue(id);
             if(handler) {
                 handlers.push(handler);
                 handler.destroy();

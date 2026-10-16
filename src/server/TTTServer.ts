@@ -14,6 +14,7 @@ import {AuditSinkRegistry, recordAuditEvent} from "./audit/AuditSink";
 import {AUDIT_EVENT_TYPES} from "./audit/AuditEventTypes";
 import {maxActiveSeconds} from "./security/TunnelLifetimePolicy";
 import {ConcurrencyDenial, ConcurrencyLimiter} from "./security/ConcurrencyLimiter";
+import {PRESET_BYTES_PER_SECOND} from "./security/BandwidthLimiter";
 import AuthorizationContext from "./rbac/AuthorizationContext";
 import {auditDirPath, FileAuditSink} from "./audit/FileAuditSink";
 const logger = LoggerFactory.getLogger('server', 'TTTServer');
@@ -69,6 +70,13 @@ class TTTServer {
         const admission = AdmissionController.instance;
         admission.attachConcurrency(new ConcurrencyLimiter(AuthorizationContext, (port) => admission.sessionCount(port)));
         admission.onConcurrencyDenied = this.onConcurrencyDenied;
+        // U5-09 / #124 — 일반 유저 그룹의 대역폭 프리셋. unlimited·슈퍼유저·migrated 는 정책이 없어 버킷도 없다.
+        this._externalPortServerPool.BandwidthPolicy = (port) => {
+            const owner = AuthorizationContext.ownerOf(port);
+            if(!owner || owner.role === 'superuser') return undefined;
+            const bytesPerSecond = PRESET_BYTES_PER_SECOND[AuthorizationContext.groupAttributes(owner.groupId).rate_limit] ?? 0;
+            return bytesPerSecond > 0 ? {groupId: owner.groupId, bytesPerSecond} : undefined;
+        };
         this.syncAllowedClientMaps(serverOption);
     }
 

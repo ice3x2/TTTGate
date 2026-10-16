@@ -48,6 +48,10 @@ class HttpHandler {
     public get responseInputLength(): number { return this._bufLength; }
     public get responseInputEnded(): boolean { return this._responseInputEnded; }
 
+    // #124 (U5-09) 대역폭 집행이 외부→클라이언트 방향 읽기를 잠시 멈춘다. 감싼 SocketHandler 에 위임한다.
+    public pauseRead(): void { this._socketHandler.pauseRead(); }
+    public resumeRead(): void { this._socketHandler.resumeRead(); }
+
     public endResponseInput(): void {
         if(this._responseInputEnded || this._released) return;
         this._responseInputEnded = true;
