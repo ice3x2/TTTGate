@@ -162,3 +162,32 @@ describe("ServerOptionStore 감사 옵션 검증", () => {
         expect(verify({auditQueueSize: 0}).result.success).toBe(false);
     });
 });
+
+describe("ServerOptionStore mfaRequiredForSuperusers (#112 U4-04)", () => {
+    let testRoot: TestRoot;
+
+    beforeEach(async () => {
+        testRoot = await createTestRoot("server-option-store-mfa");
+        applyTestRoot(testRoot.rootDir);
+    });
+
+    afterEach(async () => {
+        await cleanupTestRoot(testRoot);
+    });
+
+    const normalized = (value: unknown): unknown => {
+        const store = ServerOptionStore.instance;
+        const option: any = {...store.serverOption, mfaRequiredForSuperusers: value};
+        if(value === undefined) delete option.mfaRequiredForSuperusers;
+        expect(store.verificationServerOption(option).success).toBe(true);
+        return option.mfaRequiredForSuperusers;
+    };
+
+    it("생략하면 false, true 면 true, 그 밖의 값은 false 다", () => {
+        expect(normalized(undefined)).toBe(false);
+        expect(normalized(true)).toBe(true);
+        expect(normalized("yes")).toBe(false);
+        expect(normalized(1)).toBe(false);
+        expect(normalized(false)).toBe(false);
+    });
+});

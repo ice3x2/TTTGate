@@ -441,3 +441,18 @@ describe("AdminAuthorizer 성능 (NFR-PERF-PERMCHECK-001)", () => {
         expect(p95).toBeLessThanOrEqual(0.2);
     });
 });
+
+describe("AdminAuthorizer me:mfa (#112 U4-04)", () => {
+    it("슈퍼유저와 일반 유저 모두 me:mfa 가 허용이다", () => {
+        for(const name of Object.keys(PRINCIPALS)) {
+            expect({name, decision: authorize(PRINCIPALS[name], "me:mfa")}).toEqual({name, decision: {allowed: true}});
+        }
+    });
+
+    it("mustChangePassword 인 주체는 비밀번호 게이트가 먼저라 403 password_change_required 다", () => {
+        for(const name of ["superuser", "regular(full,private)"]) {
+            const principal: Principal = {...PRINCIPALS[name], mustChangePassword: true};
+            expect(authorize(principal, "me:mfa")).toEqual({allowed: false, status: 403, code: "password_change_required"});
+        }
+    });
+});

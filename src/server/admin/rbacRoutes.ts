@@ -17,6 +17,12 @@ import {
     validateDisplayName
 } from "../rbac/IdentityTypes";
 import ObjectUtil from "../../util/ObjectUtil";
+import {ClockRngProvider} from "../../util/ClockRng";
+import ServerOptionStore from "../ServerOptionStore";
+import {sections} from "../rbac/AdminAuthorizer";
+import {SYSTEM_SUPERUSER_GROUP_NAME, User} from "../rbac/IdentityTypes";
+import {base32Encode} from "../mfa/Base32";
+import {generateRecoveryCodes, generateSecret, hashRecoveryCode, otpauthUri, verify} from "../mfa/Totp";
 import LoggerFactory from "../../util/logger/LoggerFactory";
 
 const logger = LoggerFactory.getLogger('server', 'rbacRoutes');
@@ -245,12 +251,147 @@ const onDeleteGroup = async (ctx: RouteContext): Promise<void> => {
     replyResult(ctx, IdentityStore.instance.deleteGroup(ctx.params.id), () => ({}));
 };
 
+/** /api/me 와 MFA 응답의 mfa 요약. secret·해시는 담지 않는다. */
+const mfaSummaryOf = (user: User | undefined): {enabled: boolean; recoveryCodesRemaining: number} =>
+    user?.mfa?.enabled ? {enabled: true, recoveryCodesRemaining: user.mfa.recoveryCodeHashes.length} : {enabled: false, recoveryCodesRemaining: 0};
+
+/**
+ * U2-04 / #96: 현재 주체의 프로필·그룹 속성·볼 수 있는 섹션을 한 번에 돌려준다.
+ * identity.yaml 을 읽지 못한 legacy-fallback 주체는 저장소에 사용자가 없으므로 합성해 응답한다.
+ * #112 (U4-04) 이 me 계열 핸들러의 자리인 이 파일로 옮기며 mfa 요약을 더했다.
+ */
+const onGetMe = async (ctx: RouteContext): Promise<void> => {
+    const principal = ctx.principal!;
+    if(principal.legacy) {
+        ctx.ok({
+            user: {
+                id: principal.userId, username: principal.username, displayName: principal.username,
+                role: principal.role, status: 'active', groupId: principal.groupId, groupName: SYSTEM_SUPERUSER_GROUP_NAME,
+                mustChangePassword: false, migratedFromLegacyAdmin: false, mfaEnabled: false, createdAt: 0, updatedAt: 0
+            },
+            group: {id: principal.groupId, name: SYSTEM_SUPERUSER_GROUP_NAME, attributes: principal.attributes},
+            sections: sections(principal),
+            migrationBanner: false,
+            mfa: mfaSummaryOf(undefined)
+        });
+        return;
+    }
+    const store = IdentityStore.instance;
+    const user = store.user(principal.userId)!;
+    const groups = store.groups();
+    const group = groups.find((candidate) => candidate.id === user.groupId);
+    ctx.ok({
+        user: toUserView(user, groups),
+        group: {id: principal.groupId, name: group?.name ?? principal.groupId, attributes: principal.attributes},
+        sections: sections(principal),
+        migrationBanner: user.migratedFromLegacyAdmin && !user.migrationAcknowledged,
+        mfa: mfaSummaryOf(user)
+    });
+};
+
+// ---- #112 (U4-04) 본인 MFA. 코드·해시 비교는 Totp.ts 의 verify·findRecoveryCodeHash 만 거친다. ----
+
+const nowMs = (): number => ClockRngProvider.current().now();
+
+/** MFA 를 다루려면 identity.yaml 의 사용자가 있어야 한다(legacy-fallback 은 503). */
+const mfaUserOf = (ctx: RouteContext): User | undefined => {
+    if(ctx.principal!.legacy) {
+        ctx.fail(503, 'identity_store_unavailable', 'Identity store is unavailable');
+        return undefined;
+    }
+    const user = IdentityStore.instance.user(ctx.principal!.userId);
+    // 세션 확인 뒤 본문을 읽는 사이에 사용자가 지워졌을 수 있다.
+    if(!user) ctx.fail(404, 'user_not_found', 'User not found');
+    return user;
+};
+
+/** 세션 안의 재확인이라 로그인 백오프 버킷에 기록하지 않는다(PUT /api/me/password 와 같다). */
+const passwordConfirmed = async (ctx: RouteContext, user: User): Promise<boolean> => {
+    const password = typeof ctx.body?.password === 'string' ? ctx.body.password : '';
+    const verified = await IdentityStore.instance.verifyPassword(user.username, password);
+    if(!verified.success) ctx.fail(401, 'password_incorrect', 'The password is incorrect.');
+    return verified.success;
+};
+
+const onEnrollMfa = async (ctx: RouteContext): Promise<void> => {
+    const user = mfaUserOf(ctx);
+    if(!user) return;
+    if(user.mfa?.enabled) {
+        ctx.fail(409, 'mfa_already_enabled', 'Two-factor authentication is already enabled.');
+        return;
+    }
+    const secret = generateSecret();
+    const recoveryCodes = generateRecoveryCodes();
+    ctx.mfa!.pending.set(user.id, {secret, recoveryCodes});
+    const secretBase32 = base32Encode(secret);
+    // 평문 secret·복구 코드는 이 응답에만 실린다.
+    ctx.ok({secret: secretBase32, otpauthUri: otpauthUri(user.username, secretBase32), recoveryCodes});
+};
+
+const onConfirmMfa = async (ctx: RouteContext): Promise<void> => {
+    const user = mfaUserOf(ctx);
+    if(!user) return;
+    const pending = ctx.mfa!.pending.peek(user.id);
+    if(!pending) {
+        ctx.fail(409, 'mfa_enrollment_expired', 'Start the setup again.');
+        return;
+    }
+    // 코드는 6자리 문자열이다. 숫자로 보내면 앞자리 0 이 사라지므로 받지 않는다(형식 오류로 실패 1회).
+    const code = typeof ctx.body?.code === 'string' ? ctx.body.code : '';
+    const now = nowMs();
+    const verified = verify(pending.secret, code, now, -1);
+    if(!verified.ok) {
+        ctx.mfa!.pending.fail(user.id);
+        ctx.fail(401, 'mfa_code_invalid', 'The code is incorrect.');
+        return;
+    }
+    const saved = IdentityStore.instance.setMfa(user.id, {
+        enabled: true, secret: base32Encode(pending.secret), enrolledAt: now, lastUsedStep: verified.step,
+        recoveryCodeHashes: pending.recoveryCodes.map((code) => hashRecoveryCode(code, user.id))
+    });
+    // 저장에 성공했을 때만 대기 항목을 지운다. 디스크 오류면 QR 을 다시 찍지 않고 재시도할 수 있다(사이에 await 없음).
+    if(saved.success) ctx.mfa!.pending.consume(user.id);
+    replyResult(ctx, saved, () => ({mfa: {enabled: true, recoveryCodesRemaining: pending.recoveryCodes.length}}));
+};
+
+const onDisableMfa = async (ctx: RouteContext): Promise<void> => {
+    const user = mfaUserOf(ctx);
+    if(!user || !await passwordConfirmed(ctx, user)) return;
+    if(ServerOptionStore.instance.serverOption.mfaRequiredForSuperusers === true && user.role === 'superuser') {
+        ctx.fail(409, 'mfa_required', 'Superusers must keep two-factor authentication enabled.');
+        return;
+    }
+    if(!user.mfa?.enabled) {
+        ctx.fail(409, 'mfa_not_enabled', 'Two-factor authentication is not enabled.');
+        return;
+    }
+    replyResult(ctx, IdentityStore.instance.clearMfa(user.id), () => ({mfa: mfaSummaryOf(undefined)}));
+};
+
+const onRegenerateRecoveryCodes = async (ctx: RouteContext): Promise<void> => {
+    const user = mfaUserOf(ctx);
+    if(!user || !await passwordConfirmed(ctx, user)) return;
+    if(!user.mfa?.enabled) {
+        ctx.fail(409, 'mfa_not_enabled', 'Two-factor authentication is not enabled.');
+        return;
+    }
+    const recoveryCodes = generateRecoveryCodes();
+    const hashes = recoveryCodes.map((code) => hashRecoveryCode(code, user.id));
+    // 평문 복구 코드는 이 응답에만 실린다. 기존 코드는 모두 무효가 된다.
+    replyResult(ctx, IdentityStore.instance.replaceRecoveryCodeHashes(user.id, hashes), () => ({recoveryCodes}));
+};
+
 /**
  * 라우트 표(routes.ts)가 이름으로 가리키는 사용자·그룹 핸들러.
  * 단위 4 가 /api/me/mfa/* 와 /api/me/sessions* 를 더할 때도 이 맵에 항목을 더하고
  * 같은 ctx.ok / ctx.fail / ctx.auditDetail 을 쓴다. AdminServer.ts 에 핸들러를 새로 두지 않는다.
  */
 export const rbacRouteHandlers: RouteHandlers = {
+    onGetMe,
+    onEnrollMfa,
+    onConfirmMfa,
+    onDisableMfa,
+    onRegenerateRecoveryCodes,
     onListUsers,
     onCreateUser,
     onGetUser,

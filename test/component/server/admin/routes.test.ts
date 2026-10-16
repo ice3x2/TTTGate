@@ -29,6 +29,11 @@ const EXPECTED_ROUTES: ReadonlyArray<ExpectedRoute> = [
     {method: "GET", pattern: "^/api/me$", action: "me:read", hasTarget: false},
     {method: "PUT", pattern: "^/api/me/password$", action: "me:password", hasTarget: false},
     {method: "POST", pattern: "^/api/me/acknowledge-migration$", action: "me:read", hasTarget: false},
+    // U4-04 / #112 본인 MFA. enroll 은 상태를 바꾸지 않는 준비 단계라 audit: false 로 감사에서 뺀다.
+    {method: "POST", pattern: "^/api/me/mfa/enroll$", action: "me:mfa", hasTarget: false},
+    {method: "POST", pattern: "^/api/me/mfa/confirm$", action: "me:mfa", hasTarget: false},
+    {method: "DELETE", pattern: "^/api/me/mfa$", action: "me:mfa", hasTarget: false},
+    {method: "POST", pattern: "^/api/me/mfa/recovery-codes$", action: "me:mfa", hasTarget: false},
     {method: "GET", pattern: "^/api/serverOption$", action: "server:manage", hasTarget: false},
     {method: "POST", pattern: "^/api/serverOption$", action: "server:manage", hasTarget: false},
     {method: "PUT", pattern: "^/api/serverOption$", action: "server:manage", hasTarget: false},

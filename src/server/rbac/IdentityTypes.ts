@@ -37,6 +37,17 @@ export type User = {
     migrationAcknowledged: boolean;
     createdAt: number;
     updatedAt: number;
+    /** #112 (U4-04) 본인 MFA. 없으면 MFA 를 쓰지 않는다. */
+    mfa?: UserMfa;
+};
+
+/** secret 은 identity.yaml 에만 저장한다. API 응답·감사 detail·로그에 넣지 않는다. */
+export type UserMfa = {
+    enabled: boolean;
+    secret: string;               // base32
+    enrolledAt: number;
+    lastUsedStep: number;
+    recoveryCodeHashes: string[];
 };
 
 export type Group = {id: string; name: string; system: boolean; attributes: GroupAttributes};

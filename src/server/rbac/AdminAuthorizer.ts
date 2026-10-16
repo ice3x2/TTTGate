@@ -4,7 +4,7 @@ import {AdminUiSection} from "./IdentityTypes";
 export type Action =
     | 'user:manage' | 'group:manage' | 'server:manage' | 'security:manage' | 'session:manage' | 'audit:read-all'
     | 'tunnel:list' | 'tunnel:create' | 'tunnel:read' | 'tunnel:update' | 'tunnel:delete' | 'tunnel:activate' | 'tunnel:cert' | 'tunnel:reassign'
-    | 'status:read' | 'me:read' | 'me:password' | 'me:sessions' | 'audit:read-self';
+    | 'status:read' | 'me:read' | 'me:password' | 'me:sessions' | 'me:mfa' | 'audit:read-self';
 
 /** owner 가 없으면 system:migrated 소유이거나 아직 존재하지 않는 터널이다. 라우트 계층이 채운다. */
 export type Target = {port?: number; owner?: {userId: string; groupId: string}};
@@ -81,6 +81,7 @@ export function authorize(principal: Principal, action: Action, target?: Target)
         case 'me:read':
         case 'me:password':
         case 'me:sessions':
+        case 'me:mfa':
         case 'audit:read-self':
             return ALLOWED;
         case 'tunnel:list':

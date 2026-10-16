@@ -4,7 +4,7 @@ import ServerOptionStore from "../ServerOptionStore";
 import SessionStore, {Session} from "./SessionStore";
 import {IdentityStore} from "../rbac/IdentityStore";
 import {IdentityMigration, LEGACY_ADMIN_USERNAME} from "../rbac/IdentityMigration";
-import {Role, SYSTEM_SUPERUSER_GROUP_NAME, validatePassword, validateUsername} from "../rbac/IdentityTypes";
+import {Role, validatePassword, validateUsername} from "../rbac/IdentityTypes";
 import {createHash} from "node:crypto";
 
 import {CertificationStore, CertInfo, PemData} from "../CertificationStore";
@@ -29,18 +29,19 @@ import {normalizeConnectionSecurity} from "../security/connectionSecurity";
 import {listCountries} from "../security/countries";
 import {auditEventOf, AuditRouteMeta, buildAdminRoutes, isTunnelActivationRequested, Route, RouteContext} from "./routes";
 import {rbacRouteHandlers} from "./rbacRoutes";
+import {MfaTicketStore, PendingEnrollmentStore} from "../mfa/MfaTickets";
 import {auditRouteHandlers} from "./auditRoutes";
 import {AuditQuery} from "../audit/AuditQuery";
 import {auditDirPath} from "../audit/FileAuditSink";
-import {Action, authorize, sections} from "../rbac/AdminAuthorizer";
+import {Action, authorize} from "../rbac/AdminAuthorizer";
 import {LEGACY_PRINCIPAL, principalOf} from "../rbac/Principal";
 import {admitTunnelWrite, isTunnelEditable, isTunnelVisibleTo, ownerViewOf, resolveOwnerId} from "../rbac/TunnelOwnership";
 import {AuthorizationContext} from "../rbac/AuthorizationContext";
-import {toUserView} from "../rbac/UserView";
 import {AuditEvent, AuditSinkRegistry, recordAuditEvent} from "../audit/AuditSink";
 import {AUDIT_EVENT_TYPES} from "../audit/AuditEventTypes";
 
 const logger = LoggerFactory.getLogger('server', 'AdminServer');
+const MFA_NOW = (): number => ClockRngProvider.current().now();
 
 /** 경로 세그먼트를 퍼센트 디코딩한다. 잘못된 인코딩이면 던지지 않고 undefined 를 돌려준다. */
 const decodedPathSegment = (segment: string): string | undefined => {
@@ -106,6 +107,9 @@ class AdminServer {
     private readonly _routes: readonly Route[];
     // U2-04 / #96: authorize 소요 시간을 X-Authz-Us 로 노출할지. 측정 전용이라 기본은 꺼 둔다.
     private readonly _exposeAuthzTiming: boolean;
+    // U4-04 / #112: MFA 등록 대기·2단계 로그인 티켓(메모리). 만료 항목은 listen 동안 60초마다 쓸어 낸다.
+    private readonly _mfa = {pending: new PendingEnrollmentStore(MFA_NOW), tickets: new MfaTicketStore(MFA_NOW)};
+    private _mfaSweepTimer: NodeJS.Timeout | undefined;
 
     constructor(tttServer: TTTServer, tls : boolean, certInfo? : CertInfo, options: AdminServerOptions = {}) {
         this._tttServer = tttServer;
@@ -154,7 +158,6 @@ class AdminServer {
             onLogout: this.onLogout,
             onGetValidateSession: this.onGetValidateSession,
             onGetCsrfToken: this.onGetCsrfToken,
-            onGetMe: this.onGetMe,
             onUpdateMePassword: this.onUpdateMePassword,
             onAcknowledgeMigration: this.onAcknowledgeMigration,
             onGetServerOption: this.onGetServerOption,
@@ -274,7 +277,8 @@ class AdminServer {
                req, res, params: matched.params, ip: this.getClientAddress(req),
                ok: (data, status = 200) => this.sendApiSuccess(res, data, status),
                fail: (status, code, message) => this.sendApiFailure(res, status, {code, message}),
-               auditDetail: (patch) => { Object.assign(auditDetailPatch, patch); }
+               auditDetail: (patch) => { Object.assign(auditDetailPatch, patch); },
+               mfa: this._mfa
            };
            if(matched.route.action !== 'public') {
                const session = this.resolveSession(req);
@@ -323,7 +327,7 @@ class AdminServer {
                    return;
                }
            }
-           const auditMeta = matched.route.audit?.(ctx);
+           const auditMeta = typeof matched.route.audit === 'function' ? matched.route.audit(ctx) : undefined;
            if(auditMeta) {
                await this.audited(ctx, auditMeta, matched.route.handler, auditDetailPatch);
            } else {
@@ -1019,38 +1023,6 @@ class AdminServer {
     }
 
     /**
-     * U2-04 / #96: 현재 주체의 프로필·그룹 속성·볼 수 있는 섹션을 한 번에 돌려준다.
-     * identity.yaml 을 읽지 못한 legacy-fallback 주체는 저장소에 사용자가 없으므로 합성해 응답한다.
-     */
-    private onGetMe = async (ctx: RouteContext) => {
-        const {res} = ctx;
-        const principal = ctx.principal!;
-        if(principal.legacy) {
-            this.sendApiSuccess(res, {
-                user: {
-                    id: principal.userId, username: principal.username, displayName: principal.username,
-                    role: principal.role, status: 'active', groupId: principal.groupId, groupName: SYSTEM_SUPERUSER_GROUP_NAME,
-                    mustChangePassword: false, migratedFromLegacyAdmin: false, createdAt: 0, updatedAt: 0
-                },
-                group: {id: principal.groupId, name: SYSTEM_SUPERUSER_GROUP_NAME, attributes: principal.attributes},
-                sections: sections(principal),
-                migrationBanner: false
-            });
-            return;
-        }
-        const store = IdentityStore.instance;
-        const user = store.user(principal.userId)!;
-        const groups = store.groups();
-        const group = groups.find((candidate) => candidate.id === user.groupId);
-        this.sendApiSuccess(res, {
-            user: toUserView(user, groups),
-            group: {id: principal.groupId, name: group?.name ?? principal.groupId, attributes: principal.attributes},
-            sections: sections(principal),
-            migrationBanner: user.migratedFromLegacyAdmin && !user.migrationAcknowledged
-        });
-    }
-
-    /**
      * U2-04 / #96: 본인 비밀번호 변경. mustChangePassword 상태에서는 발급받은 임시 비밀번호가 currentPassword 다.
      * 변경에 성공하면 요청한 세션만 남기고 같은 사용자의 다른 세션을 모두 끊는다.
      */
@@ -1659,6 +1631,8 @@ class AdminServer {
 
 
     public async listen(port : number, host?: string)  : Promise<number> {
+        clearInterval(this._mfaSweepTimer);
+        this._mfaSweepTimer = setInterval(() => { this._mfa.pending.sweep(); this._mfa.tickets.sweep(); }, 60_000).unref();
         // P5-T6 / REQ-19: listen 전용 핸들러를 named function 으로 등록해 listen 종료 후 removeListener(named).
         // removeAllListeners 를 호출하면 생성자에서 등록한 영구 핸들러(_permanentErrorHandler)까지 제거되므로 절대 사용 금지.
         return new Promise((resolve, reject) => {
@@ -1693,6 +1667,8 @@ class AdminServer {
 
     public async close() : Promise<boolean> {
         logger.info(`AdminServer.close()`);
+        clearInterval(this._mfaSweepTimer);
+        this._mfaSweepTimer = undefined;
         if(this._port < 0) {
             logger.info(`Admin server is already closed on port ${this._port}`);
             return false;

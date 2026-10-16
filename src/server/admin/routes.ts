@@ -7,6 +7,7 @@ import {AuthorizationContext} from "../rbac/AuthorizationContext";
 import type {AuditEvent, AuditTarget} from "../audit/AuditSink";
 import {AUDIT_EVENT_TYPES, AuditEventType} from "../audit/AuditEventTypes";
 import {ClockRngProvider} from "../../util/ClockRng";
+import type {MfaTicketStore, PendingEnrollmentStore} from "../mfa/MfaTickets";
 
 export type {Action, Target};
 
@@ -24,6 +25,8 @@ export type RouteContext = {
     fail: (status: number, code: string, message: string) => void;
     /** 요청 전에 계산한 audit 메타에 뒤늦게 알게 된 값을 더한다. audited() 가 record 직전에 합친다. */
     auditDetail: (patch: Record<string, unknown>) => void;
+    /** #112 (U4-04) MFA 메모리 저장소. AdminServer 가 한 벌을 갖고 요청마다 넘긴다. */
+    mfa?: {pending: PendingEnrollmentStore; tickets: MfaTicketStore};
 };
 
 export type RouteAction = Action | 'public' | 'session' | ((ctx: RouteContext) => Action);
@@ -61,8 +64,11 @@ export type Route = {
     pattern: RegExp;
     action: RouteAction;
     target?: (ctx: RouteContext) => Target | undefined;
-    /** 정의되어 있으면 route() 가 핸들러를 audited() 로 감싼다. GET 에는 달지 않는다. */
-    audit?: (ctx: RouteContext) => AuditRouteMeta;
+    /**
+     * 함수면 route() 가 핸들러를 audited() 로 감싼다. GET 에는 달지 않는다.
+     * false 는 "상태를 바꾸지 않아 감사하지 않는다" 는 표의 명시적 예외다(#112 의 MFA enroll).
+     */
+    audit?: ((ctx: RouteContext) => AuditRouteMeta) | false;
     handler: (ctx: RouteContext) => Promise<void>;
 };
 
@@ -123,7 +129,7 @@ export type RouteEntry = {
     pattern: RegExp;
     action: RouteAction;
     target?: (ctx: RouteContext) => Target | undefined;
-    audit?: (ctx: RouteContext) => AuditRouteMeta;
+    audit?: ((ctx: RouteContext) => AuditRouteMeta) | false;
     handler: string;
 };
 
@@ -142,6 +148,14 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.password_changed, userAuditTarget(ctx), {firstLogin: ctx.principal!.mustChangePassword}), handler: 'onUpdateMePassword'},
     {method: 'POST', pattern: new RegExp('^/api/me/acknowledge-migration$'), action: 'me:read',
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.user_updated, userAuditTarget(ctx), {field: 'migrationAcknowledged'}), handler: 'onAcknowledgeMigration'},
+    // U4-04 / #112 본인 MFA. 핸들러는 rbacRoutes.ts 에 있다. enroll 은 상태를 바꾸지 않는 준비 단계라 감사하지 않는다.
+    {method: 'POST', pattern: new RegExp('^/api/me/mfa/enroll$'), action: 'me:mfa', audit: false, handler: 'onEnrollMfa'},
+    {method: 'POST', pattern: new RegExp('^/api/me/mfa/confirm$'), action: 'me:mfa',
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.mfa_enrolled, userAuditTarget(ctx)), handler: 'onConfirmMfa'},
+    {method: 'DELETE', pattern: new RegExp('^/api/me/mfa$'), action: 'me:mfa',
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.mfa_disabled, userAuditTarget(ctx)), handler: 'onDisableMfa'},
+    {method: 'POST', pattern: new RegExp('^/api/me/mfa/recovery-codes$'), action: 'me:mfa',
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.mfa_recovery_codes_regenerated, userAuditTarget(ctx)), handler: 'onRegenerateRecoveryCodes'},
     {method: 'GET', pattern: new RegExp('^/api/serverOption$'), action: 'server:manage', handler: 'onGetServerOption'},
     {method: 'POST', pattern: new RegExp('^/api/serverOption$'), action: 'server:manage', audit: serverOptionAudit, handler: 'onUpdateServerOption'},
     {method: 'PUT', pattern: new RegExp('^/api/serverOption$'), action: 'server:manage', audit: serverOptionAudit, handler: 'onUpdateServerOption'},
