@@ -24,6 +24,8 @@ export const E2E_ADMIN_PASSWORD = 'e2e-password-1234';
 const BCRYPT_COST = 12;
 
 export type IdentityFixtureUser = {
+    /** 생략하면 newUserId() 로 만든다. 터널 ownerId 를 미리 정해야 하는 E2E(#123)가 고정 id 를 쓴다. */
+    id?: string;
     username: string;
     password: string;
     role: Role;
@@ -103,8 +105,11 @@ export async function serializeIdentityFixture(fixture: IdentityFixture): Promis
         if(users.some((user) => user.username === username.value)) {
             throw new Error(`identityFixture username is declared twice: ${username.value}`);
         }
+        if(requested.id !== undefined && users.some((user) => user.id === requested.id)) {
+            throw new Error(`identityFixture user id is declared twice: ${requested.id}`);
+        }
         users.push({
-            id: newUserId(),
+            id: requested.id ?? newUserId(),
             username: username.value,
             displayName: requested.displayName ?? username.value,
             role: requested.role,

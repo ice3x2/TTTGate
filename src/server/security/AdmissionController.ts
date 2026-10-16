@@ -3,6 +3,8 @@ import {ConnectionRateLimiter} from "./ConnectionRateLimiter";
 import {normalizeRemoteAddress} from "./address";
 import {GeoFilter} from "./GeoFilter";
 import {DenialAggregator} from "./DenialAggregator";
+import {ConcurrencyDenial, ConcurrencyLimiter} from "./ConcurrencyLimiter";
+import {AuditRateGate} from "./AuditRateGate";
 import LoggerFactory from "../../util/logger/LoggerFactory";
 import {DEFAULT_GEO_CONFIG, GeoConfig} from "../../types/TunnelingOption";
 
@@ -32,6 +34,10 @@ export class AdmissionController implements AdmissionPolicy {
     public readonly denialLog = new DenialAggregator(line => LoggerFactory.getLogger('server', 'Admission').warn(line));
     private readonly _geoDenials = new Map<number | 'admin', number>();
     private _concurrencyProvider: ((port: number) => number) | undefined;
+    // #123 (U5-08) 동시 연결 상한. 소유자·그룹은 TTTServer 가 넘긴 limiter 가 판정 시점에 읽는다(rbac 를 import 하지 않는다).
+    private _concurrency: ConcurrencyLimiter | null = null;
+    private _onConcurrencyDenied: ((port: number, denial: ConcurrencyDenial, now: number) => void) | null = null;
+    private readonly _concurrencyAuditGate = new AuditRateGate(60_000);
     private _pruneTimer: NodeJS.Timeout | undefined;
 
     private constructor() {
@@ -53,6 +59,7 @@ export class AdmissionController implements AdmissionPolicy {
                 const now = Date.now();
                 this.rateLimiter.prune(now);
                 this.denialLog.flushDue(now);
+                this._concurrencyAuditGate.prune(now);
             }, PRUNE_INTERVAL_MS).unref();
         }
 
@@ -67,6 +74,15 @@ export class AdmissionController implements AdmissionPolicy {
     // 포트별 현재 세션 수 공급 함수. 저장만 한다(사용은 #123 이 담당).
     public configureConcurrency(provider: (port: number) => number): void {
         this._concurrencyProvider = provider;
+    }
+
+    public attachConcurrency(limiter: ConcurrencyLimiter | null): void {
+        this._concurrency = limiter;
+    }
+
+    /** 동시 연결 상한 거절 알림. 포트·그룹별 1분에 한 번만 부른다(감사용). */
+    public set onConcurrencyDenied(callback: ((port: number, denial: ConcurrencyDenial, now: number) => void) | null) {
+        this._onConcurrencyDenied = callback;
     }
 
     // #123 (U5-08)의 ConcurrencyLimiter가 이 메서드로 포트별 세션 수를 읽는다.
@@ -107,7 +123,17 @@ export class AdmissionController implements AdmissionPolicy {
             }
         }
 
-        // 동시 연결 상한 자리 — #123 (U5-08) 이 여기에 삽입한다.
+        // 5 단계: 그룹 동시 연결 상한(#123 U5-08). 거절은 Bound 전이라 세션 수에 들어가지 않는다.
+        if (scope.kind === 'tunnel' && this._concurrency) {
+            const {decision, denial} = this._concurrency.decide(scope.port);
+            if (!decision.allowed) {
+                this.denialLog.record(scope, decision.reason, now);
+                if (denial && this._concurrencyAuditGate.allow(`${scope.port}|${denial.groupId}`, now)) {
+                    this._onConcurrencyDenied?.(scope.port, denial, now);
+                }
+                return decision;
+            }
+        }
 
         return ADMIT;
     }
