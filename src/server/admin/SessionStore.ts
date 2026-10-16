@@ -105,6 +105,17 @@ class SessionStore {
         return keysToRemove.length;
     }
 
+    /**
+     * #113 (U4-05) 공개 id(sessionIdOf) 로 세션 하나를 지우고 돌려준다. 없거나 만료되었으면 undefined.
+     * 비교는 호출식을 좌변에 둔다(lint-auth-compare 는 sessionId 식별자의 === 를 금지한다).
+     */
+    public removeSessionById(id: string): Session | undefined {
+        this.sweepSession();
+        const found = this.listSessions().find((session) => SessionStore.sessionIdOf(session.key) === id);
+        if(found) this._sessions.delete(found.key);
+        return found;
+    }
+
     public listSessions(): Session[] {
         return Array.from(this._sessions.values()).map((session) => ({...session}));
     }

@@ -278,7 +278,8 @@ class AdminServer {
                ok: (data, status = 200) => this.sendApiSuccess(res, data, status),
                fail: (status, code, message) => this.sendApiFailure(res, status, {code, message}),
                auditDetail: (patch) => { Object.assign(auditDetailPatch, patch); },
-               mfa: this._mfa
+               mfa: this._mfa,
+               expireSessionCookies: () => this.expireSessionCookies(res)
            };
            if(matched.route.action !== 'public') {
                const session = this.resolveSession(req);
@@ -993,14 +994,8 @@ class AdminServer {
         const {res} = ctx;
         const session = ctx.session!;
         await SessionStore.instance.removeSession(session.key);
-        const secure = this._tls ? ' Secure;' : '';
-        res.writeHead(200, {
-            'Content-Type': 'application/json',
-            'Set-Cookie': [
-                `sessionKey=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict;${secure}`,
-                `${CSRF_COOKIE_NAME}=; Path=/; Max-Age=0; SameSite=Strict;${secure}`
-            ]
-        });
+        this.expireSessionCookies(res);
+        res.writeHead(200, {'Content-Type': 'application/json'});
         res.end(JSON.stringify({success: true, partial: false, failedScopes: [], warnings: [], message: ''}));
     }
 
@@ -1069,6 +1064,15 @@ class AdminServer {
             return;
         }
         this.sendApiSuccess(res);
+    }
+
+    /** 로그아웃과 본인 세션 강제 종료(#113)가 함께 쓰는 만료 쿠키. writeHead 전에 불러야 한다. */
+    private expireSessionCookies(res: ServerResponse): void {
+        const secure = this._tls ? ' Secure;' : '';
+        res.setHeader('Set-Cookie', [
+            `sessionKey=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict;${secure}`,
+            `${CSRF_COOKIE_NAME}=; Path=/; Max-Age=0; SameSite=Strict;${secure}`
+        ]);
     }
 
     private sendIdentityStoreUnavailable(res: ServerResponse): void {

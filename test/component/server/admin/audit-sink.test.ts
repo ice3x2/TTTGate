@@ -150,6 +150,14 @@ describe("audit-sink: 라우트 표의 CUD 전수 감사 커버리지", () => {
         expect(exempt).toEqual([`POST ${new RegExp("^/api/me/mfa/enroll$").source}`]);
         const mfaAudited = requiring.filter((route) => route.pattern.source.includes("mfa") && typeof route.audit === "function")
             .map((route) => `${route.method} ${route.pattern.source}`).sort();
+        // #113 (U4-05): 세션 강제 종료 세 경로는 감사 대상이다.
+        const sessionAudited = requiring.filter((route) => route.pattern.source.includes("sessions") && typeof route.audit === "function")
+            .map((route) => `${route.method} ${route.pattern.source}`).sort();
+        expect(sessionAudited).toEqual([
+            `DELETE ${new RegExp("^/api/sessions/(?<id>[^/]+)$").source}`,
+            `DELETE ${new RegExp("^/api/users/(?<id>[^/]+)/sessions$").source}`,
+            `POST ${new RegExp("^/api/me/sessions/logout-others$").source}`,
+        ].sort());
         expect(mfaAudited).toEqual([
             `DELETE ${new RegExp("^/api/me/mfa$").source}`,
             `POST ${new RegExp("^/api/me/mfa/confirm$").source}`,
