@@ -23,8 +23,10 @@ import {AdminSecurityPolicyRegistry, evaluateAdminSecurityPolicy, formatAdminSec
 import {timingSafeStringEqual} from "../../util/timingSafeStringEqual";
 import {computeBackoffMs} from "./loginBackoff";
 import crypto from "crypto";
-import {TunnelingOption} from "../../types/TunnelingOption";
+import {DEFAULT_GEO_CONFIG, GeoConfig, TunnelingOption} from "../../types/TunnelingOption";
 import {AdmissionController} from "../security/AdmissionController";
+import {normalizeConnectionSecurity} from "../security/connectionSecurity";
+import {listCountries} from "../security/countries";
 import {auditEventOf, AuditRouteMeta, buildAdminRoutes, isTunnelActivationRequested, Route, RouteContext} from "./routes";
 import {rbacRouteHandlers} from "./rbacRoutes";
 import {Action, authorize, sections} from "../rbac/AdminAuthorizer";
@@ -36,6 +38,15 @@ import {AuditEvent, AuditSinkRegistry, recordAuditEvent} from "../audit/AuditSin
 import {AUDIT_EVENT_TYPES} from "../audit/AuditEventTypes";
 
 const logger = LoggerFactory.getLogger('server', 'AdminServer');
+
+/** 경로 세그먼트를 퍼센트 디코딩한다. 잘못된 인코딩이면 던지지 않고 undefined 를 돌려준다. */
+const decodedPathSegment = (segment: string): string | undefined => {
+    try {
+        return decodeURIComponent(segment);
+    } catch {
+        return undefined;
+    }
+};
 
 type LoginAttemptState = {
     failedCount: number;
@@ -164,6 +175,9 @@ class AdminServer {
             onGetSecurityBans: this.onGetSecurityBans,
             onDeleteSecurityBan: this.onDeleteSecurityBan,
             onGetSecurityStats: this.onGetSecurityStats,
+            onGetSecurityGeo: this.onGetSecurityGeo,
+            onUpdateSecurityGeo: this.onUpdateSecurityGeo,
+            onGetSecurityCountries: this.onGetSecurityCountries,
             // U2-06 / #98: 사용자·그룹 핸들러는 rbacRoutes.ts 가 갖는다(AdminServer.ts 를 2,000줄 아래로 유지).
             ...rbacRouteHandlers
         });
@@ -1531,12 +1545,17 @@ class AdminServer {
         this.sendApiSuccess(res, {serverTime: Date.now(), statuses});
     }
 
-    // U5-02 / #117 — 임시 차단 목록 조회·해제 API. 세션 검사만 한다.
-    // 권한·감사는 #118 (U5-03)·#120 (U5-05) 이 더한다.
+    // U5-02 / #117 — 차단 목록 조회·해제 API. 권한은 라우트 표의 security:manage 가 본다.
+    // #120 (U5-05) — 국가 DB 가 이미 로드되어 있으면 항목마다 국가를 싣는다. 조회 때문에 로드하지는 않는다.
     private onGetSecurityBans = async (ctx: RouteContext) => {
         const {res} = ctx;
         const now = Date.now();
-        this.sendApiSuccess(res, {serverTime: now, bans: AdmissionController.instance.rateLimiter.bans(now)});
+        const geo = AdmissionController.instance.geo;
+        const bans = AdmissionController.instance.rateLimiter.bans(now).map((ban) => {
+            const country = geo.lookupCountry(ban.ip);
+            return country === undefined ? ban : {...ban, country};
+        });
+        this.sendApiSuccess(res, {serverTime: now, bans});
     }
 
     private onDeleteSecurityBan = async (ctx: RouteContext) => {
@@ -1546,18 +1565,73 @@ class AdminServer {
             this.sendApiFailure(res, 400, {message: 'invalid port'});
             return;
         }
-        const ip = ctx.params.ip.length > 0 ? decodeURIComponent(ctx.params.ip) : '';
-        if(ip.length === 0) {
+        const ip = decodedPathSegment(ctx.params.ip);
+        if(ip === undefined || ip.length === 0) {
             this.sendApiFailure(res, 400, {message: 'invalid ip'});
             return;
         }
-        this.sendApiSuccess(res, {removed: AdmissionController.instance.rateLimiter.unban(port, ip)});
+        // unban 은 입력 IP 를 정규화하지 않는다. 리미터가 저장한 문자열과 같아야 지워진다.
+        const removed = AdmissionController.instance.rateLimiter.unban(port, ip);
+        ctx.auditDetail({port, ip, removed});
+        this.sendApiSuccess(res, {removed});
     }
 
-    // U5-04 / #119 — 포트별 거절 수·차단 IP 수 조회. 세션 검사만 하고, GeoFilter 설정은 싣지 않는다(#120).
+    // U5-04 / #119 — 포트별 거절 수·차단 IP 수 조회. #120 (U5-05) 이 현재 GeoConfig 를 함께 싣는다.
     private onGetSecurityStats = async (ctx: RouteContext) => {
         const {res} = ctx;
-        this.sendApiSuccess(res, {serverTime: Date.now(), stats: AdmissionController.instance.snapshot()});
+        // 설정을 읽지 못한 상태면 런타임 필터도 기본값으로 떠 있으므로 기본값을 싣는다. 집계는 설정과 무관하게 보여 준다.
+        const geo = this.storedGeoConfig() ?? {...DEFAULT_GEO_CONFIG, countries: []};
+        this.sendApiSuccess(res, {serverTime: Date.now(), stats: {geo, ...AdmissionController.instance.snapshot()}});
+    }
+
+    // U5-05 / #120 — 국가 필터 조회·저장과 국가 목록.
+    // PUT 의 "부분 허용" 은 빠진 필드를 기본값으로 채운다는 뜻이다(normalizeConnectionSecurity). 현재값과 병합하지 않는다.
+    // 저장된 GeoConfig. 저장값이 없으면 기본값이고, 설정을 아직 읽지 못했으면 undefined 다.
+    private storedGeoConfig(): GeoConfig | undefined {
+        const read = ServerOptionStore.instance.readServerOption();
+        if(!read.success) return undefined;
+        return read.serverOption.connectionSecurity?.geo ?? {...DEFAULT_GEO_CONFIG, countries: []};
+    }
+
+    private onGetSecurityGeo = async (ctx: RouteContext) => {
+        const geo = this.storedGeoConfig();
+        if(geo === undefined) {
+            this.sendApiFailure(ctx.res, 503, {message: 'server configuration is not ready'});
+            return;
+        }
+        this.sendApiSuccess(ctx.res, {geo});
+    }
+
+    private onUpdateSecurityGeo = async (ctx: RouteContext) => {
+        const {res} = ctx;
+        const normalized = normalizeConnectionSecurity({geo: ctx.body});
+        if(!normalized.success) {
+            this.sendApiFailure(res, 422, {message: normalized.message});
+            return;
+        }
+        const value = normalized.value;
+        let committed = false;
+        await ServerOptionStore.instance.runConfigurationMutation(async () => {
+            const store = ServerOptionStore.instance;
+            const read = store.readServerOption();
+            if(!read.success) return;
+            const serverOption = read.serverOption;
+            serverOption.connectionSecurity = value;
+            committed = store.commitPreparedServerOption(serverOption).success;
+        });
+        if(!committed) {
+            this.sendApiFailure(res, 500, {message: 'Unable to commit server option.'});
+            return;
+        }
+        // 런타임 반영은 applyServerOption 이 아니라 이 전용 진입점으로만 한다(#118 U5-03).
+        this._tttServer?.applyConnectionSecurity(value);
+        // 감사 메타는 요청 전에 계산되므로 정규화된 값은 여기서 더한다.
+        ctx.auditDetail({...value.geo});
+        this.sendApiSuccess(res, {geo: value.geo, warnings: normalized.warnings});
+    }
+
+    private onGetSecurityCountries = async (ctx: RouteContext) => {
+        this.sendApiSuccess(ctx.res, {countries: listCountries()});
     }
 
 

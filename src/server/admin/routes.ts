@@ -166,12 +166,18 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
     {method: 'PUT', pattern: new RegExp('^/api/externalCert/(?<port>[^/]*)$'), action: 'tunnel:cert', target: tunnelTarget, audit: tunnelCertAudit, handler: 'onUpdateExternalServerCert'},
     {method: 'DELETE', pattern: new RegExp('^/api/externalCert/(?<port>[^/]*)$'), action: 'tunnel:cert', target: tunnelTarget,
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.tunnel_cert_deleted, tunnelAuditTarget(ctx)), handler: 'onDeleteExternalServerCert'},
-    // U5-02 / #117 이 임시로 추가한 차단 목록 라우트. #120 (U5-05) 이 감사까지 더한다.
+    // U5-02 / #117 이 추가한 차단 목록 라우트. 권한·감사는 #96·#97 이, 국가·감사 detail 은 #120 (U5-05) 이 더했다.
     {method: 'GET', pattern: new RegExp('^/api/security/bans$'), action: 'security:manage', handler: 'onGetSecurityBans'},
     {method: 'DELETE', pattern: new RegExp('^/api/security/bans/(?<port>[^/]+)/(?<ip>[^/]+)$'), action: 'security:manage',
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.security_ban_removed, {kind: 'security', id: `${ctx.params.port}/${ctx.params.ip}`}), handler: 'onDeleteSecurityBan'},
     // U5-04 / #119 가 추가한 거절 집계 조회 라우트. bans 와 같은 성격이라 같은 권한을 쓴다.
     {method: 'GET', pattern: new RegExp('^/api/security/stats$'), action: 'security:manage', handler: 'onGetSecurityStats'},
+    // U5-05 / #120 — 국가 필터는 서버 전역 설정이라 슈퍼유저 전용이다(결정 D10).
+    // 대상 id 는 'geo' 로 고정이고, 정규화된 값은 핸들러가 auditDetail 로 더한다.
+    {method: 'GET', pattern: new RegExp('^/api/security/geo$'), action: 'security:manage', handler: 'onGetSecurityGeo'},
+    {method: 'PUT', pattern: new RegExp('^/api/security/geo$'), action: 'security:manage',
+        audit: () => auditMeta(AUDIT_EVENT_TYPES.security_geo_updated, {kind: 'security', id: 'geo'}), handler: 'onUpdateSecurityGeo'},
+    {method: 'GET', pattern: new RegExp('^/api/security/countries$'), action: 'security:manage', handler: 'onGetSecurityCountries'},
     // U2-06 / #98 사용자·그룹 관리. 핸들러 본문은 rbacRoutes.ts 에 있고 표는 여기 한 곳에 모아 둔다.
     {method: 'GET', pattern: new RegExp('^/api/users$'), action: 'user:manage', handler: 'onListUsers'},
     {method: 'POST', pattern: new RegExp('^/api/users$'), action: 'user:manage',
