@@ -441,6 +441,7 @@ class ServerOptionStore {
             }
         }
         option.adminTls = option.adminTls === true;
+        option.mfaRequiredForSuperusers = option.mfaRequiredForSuperusers === true;
         option.controlProtocolMode = this.normalizeControlProtocolMode(option.controlProtocolMode);
         option.allowLegacyControlAuth = option.allowLegacyControlAuth === true;
         if(option.controlProtocolMode === "mtls-strict" && option.tls !== true) {

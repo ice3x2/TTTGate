@@ -144,6 +144,18 @@ describe("audit-sink: 라우트 표의 CUD 전수 감사 커버리지", () => {
             .map((route) => `${route.method} ${route.pattern.source}`);
         expect(missing).toEqual([]);
 
+        // #112 (U4-04): 감사 면제는 audit: false 로 표에 적힌 예외뿐이다. 조용히 빠뜨린 라우트가 없게 목록을 고정한다.
+        const exempt = requiring.filter((route) => route.audit === false)
+            .map((route) => `${route.method} ${route.pattern.source}`);
+        expect(exempt).toEqual([`POST ${new RegExp("^/api/me/mfa/enroll$").source}`]);
+        const mfaAudited = requiring.filter((route) => route.pattern.source.includes("mfa") && typeof route.audit === "function")
+            .map((route) => `${route.method} ${route.pattern.source}`).sort();
+        expect(mfaAudited).toEqual([
+            `DELETE ${new RegExp("^/api/me/mfa$").source}`,
+            `POST ${new RegExp("^/api/me/mfa/confirm$").source}`,
+            `POST ${new RegExp("^/api/me/mfa/recovery-codes$").source}`,
+        ].sort());
+
         const logout = ADMIN_ROUTES.find((route) =>
             route.method === "POST" && route.pattern.source === new RegExp("^/api/logout$").source)!;
         expect(typeof logout.audit).toBe("function");
@@ -170,7 +182,7 @@ describe("audit-sink: 라우트 표의 CUD 전수 감사 커버리지", () => {
                     ip: "127.0.0.1",
                     ok: () => {}, fail: () => {}, auditDetail: () => {}
                 } as unknown as RouteContext;
-                return ADMIN_ROUTES.filter((route) => route.audit !== undefined).map((route) => route.audit!(ctx).type);
+                return ADMIN_ROUTES.flatMap((route) => typeof route.audit === "function" ? [route.audit(ctx).type] : []);
             });
 
             expect(types.length).toBeGreaterThan(0);

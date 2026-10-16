@@ -10,6 +10,7 @@ import SessionStore from "../admin/SessionStore";
 import {recordAuditEvent} from "../audit/AuditSink";
 import {AUDIT_EVENT_TYPES} from "../audit/AuditEventTypes";
 import {hashLegacyPassword} from "./legacyPasswordHash";
+import {findRecoveryCodeHash} from "../mfa/Totp";
 import {
     cloneGroupAttributes,
     createSystemGroups,
@@ -27,6 +28,7 @@ import {
     Role,
     SYSTEM_SUPERUSER_GROUP_ID,
     User,
+    UserMfa,
     UserStatus,
     validateGroupAttributes,
     validatePassword,
@@ -41,7 +43,8 @@ type CreateUserInput = {username: string; displayName?: string; role: Role; grou
     & ({password: string} | {passwordHash: string});
 
 function cloneUser(user: User): User {
-    return {...user};
+    // mfa 는 중첩 객체라 함께 복사해야 호출자가 저장소 내부를 고치지 못한다.
+    return user.mfa ? {...user, mfa: {...user.mfa, recoveryCodeHashes: [...user.mfa.recoveryCodeHashes]}} : {...user};
 }
 
 function cloneGroup(group: Group): Group {
@@ -340,6 +343,54 @@ class IdentityStore {
             SessionStore.instance.removeSessionsOfUser(updatedUser.id);
         }
         return {success: true, value: cloneUser(updatedUser)};
+    }
+
+    // #112 (U4-04) 본인 MFA. 모두 원자 저장이며 lastUsedStep 도 파일에 남겨 재기동 뒤에도 재사용을 막는다.
+    public setMfa(id: string, mfa: UserMfa): Result<void> {
+        return this.replaceMfa(id, () => ({...mfa, recoveryCodeHashes: [...mfa.recoveryCodeHashes]}), false);
+    }
+
+    public clearMfa(id: string): Result<void> {
+        return this.replaceMfa(id, () => undefined, false);
+    }
+
+    public markMfaStep(id: string, step: number): Result<void> {
+        return this.replaceMfa(id, (current) => ({...current!, lastUsedStep: step}), true);
+    }
+
+    public replaceRecoveryCodeHashes(id: string, hashes: string[]): Result<void> {
+        return this.replaceMfa(id, (current) => ({...current!, recoveryCodeHashes: [...hashes]}), true);
+    }
+
+    /** 일치하는 복구 코드 해시를 지운다. 없으면 422 recovery_code_invalid(401 매핑은 쓰는 라우트가 한다). */
+    public consumeRecoveryCode(id: string, hash: string): Result<{remaining: number}> {
+        const current = this._data.users.find((u) => u.id === id)?.mfa;
+        const index = current ? findRecoveryCodeHash(current.recoveryCodeHashes, hash) : -1;
+        if(!current || index < 0) {
+            return {success: false, status: 422, code: 'recovery_code_invalid', message: 'The code is incorrect.'};
+        }
+        const remaining = current.recoveryCodeHashes.filter((_, i) => i !== index);
+        const saved = this.replaceMfa(id, () => ({...current, recoveryCodeHashes: remaining}), true);
+        return saved.success ? {success: true, value: {remaining: remaining.length}} : saved;
+    }
+
+    /** 사용자의 mfa 를 next() 결과로 바꿔 저장한다. requireMfa 면 mfa 가 없는 사용자는 409 다. */
+    private replaceMfa(id: string, next: (current: UserMfa | undefined) => UserMfa | undefined, requireMfa: boolean): Result<void> {
+        const index = this._data.users.findIndex((u) => u.id === id);
+        if(index < 0) {
+            return {success: false, status: 404, code: 'user_not_found', message: `user not found: ${id}`};
+        }
+        const current = this._data.users[index];
+        if(requireMfa && !current.mfa) {
+            return {success: false, status: 409, code: 'mfa_not_enabled', message: 'Two-factor authentication is not enabled.'};
+        }
+        const {mfa: _previous, ...rest} = current;
+        const mfa = next(current.mfa);
+        const updatedUser: User = mfa ? {...rest, mfa} : rest;
+        const nextUsers = [...this._data.users];
+        nextUsers[index] = updatedUser;
+        const saveResult = this.replaceData({...this._data, users: nextUsers});
+        return saveResult.success ? {success: true, value: undefined} : saveFailedResult(saveResult.message);
     }
 
     public deleteUser(id: string): Result<void> {

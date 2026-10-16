@@ -55,6 +55,8 @@ type ServerOption = {
     adminPort?: number,
     adminBindHost?: string,
     adminTls?: boolean,
+    /** #112 (U4-04) 슈퍼유저 MFA 강제. 기본 false. */
+    mfaRequiredForSuperusers?: boolean,
     port: number,
     tls : boolean,
     controlProtocolMode?: ControlProtocolMode,

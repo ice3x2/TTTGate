@@ -4,7 +4,8 @@ import YAML from "yaml";
 import Files from "../../../../src/util/Files";
 import {IdentityStore} from "../../../../src/server/rbac/IdentityStore";
 import {hashLegacyPassword} from "../../../../src/server/rbac/legacyPasswordHash";
-import {DEFAULT_GROUP_ATTRIBUTES} from "../../../../src/server/rbac/IdentityTypes";
+import {DEFAULT_GROUP_ATTRIBUTES, UserMfa} from "../../../../src/server/rbac/IdentityTypes";
+import {hashRecoveryCode} from "../../../../src/server/mfa/Totp";
 import {applyTestRoot, cleanupTestRoot, createTestRoot, TestRoot} from "../../../helpers/runtime";
 
 jest.setTimeout(15_000);
@@ -298,5 +299,101 @@ describe("IdentityStore", () => {
         } finally {
             spy.mockRestore();
         }
+    });
+});
+
+describe("IdentityStore MFA (#112 U4-04)", () => {
+    let testRoot: TestRoot;
+
+    beforeAll(() => { IdentityStore.bcryptCost = 4; });
+    afterAll(() => { IdentityStore.bcryptCost = 12; });
+
+    beforeEach(async () => {
+        testRoot = await createTestRoot("identity-store-mfa");
+        applyTestRoot(testRoot.rootDir);
+        IdentityStore.resetForTest();
+    });
+
+    afterEach(async () => {
+        await cleanupTestRoot(testRoot);
+    });
+
+    const createAlice = async (): Promise<string> => {
+        IdentityStore.instance.load();
+        const created = await IdentityStore.instance.createUser({username: "alice", role: "regular", password: "alice-password-1", mustChangePassword: false});
+        expect(created.success).toBe(true);
+        return created.success ? created.value.id : "";
+    };
+
+    const mfaOf = (userId: string, hashes: string[]): UserMfa => ({
+        enabled: true, secret: "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", enrolledAt: 1_757_548_800_000, lastUsedStep: 58_584_960,
+        recoveryCodeHashes: hashes
+    });
+
+    const reload = () => {
+        IdentityStore.resetForTest();
+        expect(IdentityStore.instance.load()).toEqual({success: true, source: "file"});
+        return IdentityStore.instance;
+    };
+
+    it("setMfa 는 저장되어 새 인스턴스에서도 같고, clearMfa 뒤에는 mfa 가 없다", async () => {
+        const id = await createAlice();
+        const hashes = Array.from({length: 10}, (_, i) => hashRecoveryCode(`code-${i}`, id));
+        expect(IdentityStore.instance.setMfa(id, mfaOf(id, hashes))).toEqual({success: true, value: undefined});
+        expect(reload().user(id)!.mfa).toEqual(mfaOf(id, hashes));
+
+        expect(IdentityStore.instance.clearMfa(id).success).toBe(true);
+        expect(reload().user(id)!.mfa).toBeUndefined();
+        expect(fs.readFileSync(Path.join(testRoot.rootDir, "config", "identity.yaml"), "utf8")).not.toContain("GEZDGNBVGY3TQOJQ");
+    });
+
+    it("markMfaStep 은 lastUsedStep 을 갱신해 저장한다", async () => {
+        const id = await createAlice();
+        IdentityStore.instance.setMfa(id, mfaOf(id, []));
+        expect(IdentityStore.instance.markMfaStep(id, 58_584_999).success).toBe(true);
+        expect(reload().user(id)!.mfa!.lastUsedStep).toBe(58_584_999);
+    });
+
+    it("replaceRecoveryCodeHashes 는 목록을 통째로 바꾼다", async () => {
+        const id = await createAlice();
+        IdentityStore.instance.setMfa(id, mfaOf(id, [hashRecoveryCode("old", id)]));
+        const next = [hashRecoveryCode("new-1", id), hashRecoveryCode("new-2", id)];
+        expect(IdentityStore.instance.replaceRecoveryCodeHashes(id, next).success).toBe(true);
+        expect(reload().user(id)!.mfa!.recoveryCodeHashes).toEqual(next);
+    });
+
+    it("consumeRecoveryCode 는 해당 해시만 지우고 남은 개수를 돌려준다", async () => {
+        const id = await createAlice();
+        const hashes = Array.from({length: 10}, (_, i) => hashRecoveryCode(`code-${i}`, id));
+        IdentityStore.instance.setMfa(id, mfaOf(id, hashes));
+
+        expect(IdentityStore.instance.consumeRecoveryCode(id, hashes[3])).toEqual({success: true, value: {remaining: 9}});
+        const stored = reload().user(id)!.mfa!.recoveryCodeHashes;
+        expect(stored).toEqual(hashes.filter((_, i) => i !== 3));
+
+        const missing = IdentityStore.instance.consumeRecoveryCode(id, hashRecoveryCode("not-issued", id));
+        expect(missing).toMatchObject({success: false, status: 422, code: "recovery_code_invalid", message: "The code is incorrect."});
+        expect(reload().user(id)!.mfa!.recoveryCodeHashes).toHaveLength(9);
+
+        // 이미 쓴 코드는 다시 쓸 수 없다.
+        expect(IdentityStore.instance.consumeRecoveryCode(id, hashes[3])).toMatchObject({success: false, code: "recovery_code_invalid"});
+    });
+
+    it("user() 가 돌려준 mfa 를 고쳐도 저장소는 바뀌지 않는다", async () => {
+        const id = await createAlice();
+        const hashes = [hashRecoveryCode("a", id), hashRecoveryCode("b", id)];
+        IdentityStore.instance.setMfa(id, mfaOf(id, hashes));
+        const copy = IdentityStore.instance.user(id)!;
+        copy.mfa!.recoveryCodeHashes.push("tampered");
+        copy.mfa!.lastUsedStep = 0;
+        expect(IdentityStore.instance.user(id)!.mfa).toEqual(mfaOf(id, hashes));
+        expect(IdentityStore.instance.users().find((user) => user.id === id)!.mfa).toEqual(mfaOf(id, hashes));
+    });
+
+    it("없는 사용자나 MFA 가 없는 사용자는 실패한다", async () => {
+        const id = await createAlice();
+        expect(IdentityStore.instance.setMfa("u_missing", mfaOf("u_missing", []))).toMatchObject({success: false, status: 404});
+        expect(IdentityStore.instance.markMfaStep(id, 1)).toMatchObject({success: false});
+        expect(IdentityStore.instance.consumeRecoveryCode(id, "x")).toMatchObject({success: false, code: "recovery_code_invalid"});
     });
 });

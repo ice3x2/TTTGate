@@ -11,6 +11,8 @@ export type UserView = {
     groupName: string;
     mustChangePassword: boolean;
     migratedFromLegacyAdmin: boolean;
+    /** #112 (U4-04). mfa 객체 자체는 어떤 응답에도 넣지 않는다. */
+    mfaEnabled: boolean;
     createdAt: number;
     updatedAt: number;
 };
@@ -27,6 +29,7 @@ export function toUserView(user: User, groups: Group[]): UserView {
         groupName: groups.find((group) => group.id === user.groupId)?.name ?? user.groupId,
         mustChangePassword: user.mustChangePassword,
         migratedFromLegacyAdmin: user.migratedFromLegacyAdmin,
+        mfaEnabled: user.mfa?.enabled === true,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt
     };
