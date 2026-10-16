@@ -4,6 +4,8 @@ import path from "node:path";
 import AdminServer from "../../../../src/server/admin/AdminServer";
 import {ADMIN_ROUTES, RouteAction, RouteContext} from "../../../../src/server/admin/routes";
 import {rbacRouteHandlers} from "../../../../src/server/admin/rbacRoutes";
+import {auditRouteHandlers} from "../../../../src/server/admin/auditRoutes";
+import {AuditQuery} from "../../../../src/server/audit/AuditQuery";
 import ServerOptionStore from "../../../../src/server/ServerOptionStore";
 import {BOOTSTRAP_TOKEN_FILE_NAME, IdentityMigration} from "../../../../src/server/rbac/IdentityMigration";
 import {CertificationStore} from "../../../../src/server/CertificationStore";
@@ -67,7 +69,10 @@ const EXPECTED_ROUTES: ReadonlyArray<ExpectedRoute> = [
     {method: "POST", pattern: "^/api/groups$", action: "group:manage", hasTarget: false},
     {method: "GET", pattern: "^/api/groups/(?<id>[^/]+)$", action: "group:manage", hasTarget: false},
     {method: "PUT", pattern: "^/api/groups/(?<id>[^/]+)$", action: "group:manage", hasTarget: false},
-    {method: "DELETE", pattern: "^/api/groups/(?<id>[^/]+)$", action: "group:manage", hasTarget: false}
+    {method: "DELETE", pattern: "^/api/groups/(?<id>[^/]+)$", action: "group:manage", hasTarget: false},
+    // U4-02 / #110 감사 조회. 슈퍼유저는 audit:read-all, 일반 유저는 audit:read-self 로 판정한다.
+    {method: "GET", pattern: "^/api/audit$", action: "auditReadAction", hasTarget: false},
+    {method: "GET", pattern: "^/api/audit/types$", action: "auditReadAction", hasTarget: false}
 ];
 
 /** 함수형 action 은 값으로 비교할 수 없으므로 함수 이름을 식별자로 쓴다. */
@@ -145,11 +150,12 @@ test("every ADMIN_ROUTES pattern is fully anchored", () => {
     }
 });
 
-// #98 이후 핸들러는 두 모듈에 나뉘어 있다: 기존 핸들러는 AdminServer 의 멤버, 사용자·그룹 핸들러는
-// rbacRouteHandlers. 이름이 어느 쪽에서든 실제 함수로 풀리는지를 그대로 확인한다.
+// #98 이후 핸들러는 세 모듈에 나뉘어 있다: 기존 핸들러는 AdminServer 의 멤버, 사용자·그룹 핸들러는
+// rbacRouteHandlers, 감사 조회 핸들러는 auditRouteHandlers(#110). 이름이 어느 쪽에서든 실제 함수로 풀리는지를 그대로 확인한다.
 test("every ADMIN_ROUTES handler name resolves to a callable handler", async () => withRoutesServer(async f => {
+    const auditHandlers = auditRouteHandlers(new AuditQuery("unused"), () => undefined);
     for(const route of ADMIN_ROUTES) {
-        const handler = (f.api as any)[route.handler] ?? rbacRouteHandlers[route.handler];
+        const handler = (f.api as any)[route.handler] ?? rbacRouteHandlers[route.handler] ?? auditHandlers[route.handler];
         expect(typeof handler).toBe("function");
     }
 }));

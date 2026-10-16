@@ -29,6 +29,9 @@ import {normalizeConnectionSecurity} from "../security/connectionSecurity";
 import {listCountries} from "../security/countries";
 import {auditEventOf, AuditRouteMeta, buildAdminRoutes, isTunnelActivationRequested, Route, RouteContext} from "./routes";
 import {rbacRouteHandlers} from "./rbacRoutes";
+import {auditRouteHandlers} from "./auditRoutes";
+import {AuditQuery} from "../audit/AuditQuery";
+import {auditDirPath} from "../audit/FileAuditSink";
 import {Action, authorize, sections} from "../rbac/AdminAuthorizer";
 import {LEGACY_PRINCIPAL, principalOf} from "../rbac/Principal";
 import {admitTunnelWrite, isTunnelEditable, isTunnelVisibleTo, ownerViewOf, resolveOwnerId} from "../rbac/TunnelOwnership";
@@ -179,7 +182,9 @@ class AdminServer {
             onUpdateSecurityGeo: this.onUpdateSecurityGeo,
             onGetSecurityCountries: this.onGetSecurityCountries,
             // U2-06 / #98: 사용자·그룹 핸들러는 rbacRoutes.ts 가 갖는다(AdminServer.ts 를 2,000줄 아래로 유지).
-            ...rbacRouteHandlers
+            ...rbacRouteHandlers,
+            // U4-02 / #110: 감사 조회. 422 본문에 status 를 담아야 하므로 sendApiFailure 를 넘긴다.
+            ...auditRouteHandlers(new AuditQuery(auditDirPath()), (res, status, payload) => this.sendApiFailure(res, status, payload))
         });
     }
 
