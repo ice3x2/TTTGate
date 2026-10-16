@@ -5,6 +5,7 @@ import {Principal} from "../rbac/Principal";
 import ServerOptionStore from "../ServerOptionStore";
 import {AuthorizationContext} from "../rbac/AuthorizationContext";
 import type {AuditEvent, AuditTarget} from "../audit/AuditSink";
+import {AUDIT_EVENT_TYPES, AuditEventType} from "../audit/AuditEventTypes";
 import {ClockRngProvider} from "../../util/ClockRng";
 
 export type {Action, Target};
@@ -29,7 +30,7 @@ export type RouteAction = Action | 'public' | 'session' | ((ctx: RouteContext) =
 
 /** audited() 가 record 직전까지 들고 있는 감사 메타. 요청 본문·주체가 준비된 뒤 계산된다. */
 export type AuditRouteMeta = {
-    type: string;
+    type: AuditEventType;
     target?: AuditTarget;
     summary: string;
     detail?: Record<string, unknown>;
@@ -77,7 +78,7 @@ const tunnelWriteAction = (ctx: RouteContext): Action =>
     ServerOptionStore.instance.getTunnelingOption(ctx.body?.forwardPort) ? 'tunnel:update' : 'tunnel:create';
 
 /** summary 는 '<type> <target.id>' 로 고정한다(설계 §4.6). 한 곳에서만 만든다. */
-const auditMeta = (type: string, target?: AuditTarget, detail?: Record<string, unknown>): AuditRouteMeta =>
+const auditMeta = (type: AuditEventType, target?: AuditTarget, detail?: Record<string, unknown>): AuditRouteMeta =>
     ({type, target, summary: target ? `${type} ${target.id}` : type, detail});
 
 /**
@@ -93,11 +94,11 @@ const tunnelAuditTarget = (ctx: RouteContext): AuditTarget =>
 const userAuditTarget = (ctx: RouteContext): AuditTarget => ({kind: 'user', id: ctx.principal!.userId});
 
 // POST 와 PUT 이 같은 핸들러를 쓰는 쌍은 감사 메타도 같으므로 한 번만 정의해 두 행이 함께 가리킨다.
-const serverOptionAudit = (): AuditRouteMeta => auditMeta('server_option_updated', {kind: 'server', id: 'server'});
-const adminCertAudit = (): AuditRouteMeta => auditMeta('admin_cert_updated', {kind: 'server', id: 'admin-cert'});
+const serverOptionAudit = (): AuditRouteMeta => auditMeta(AUDIT_EVENT_TYPES.server_option_updated, {kind: 'server', id: 'server'});
+const adminCertAudit = (): AuditRouteMeta => auditMeta(AUDIT_EVENT_TYPES.admin_cert_updated, {kind: 'server', id: 'admin-cert'});
 const tunnelWriteAudit = (ctx: RouteContext): AuditRouteMeta =>
-    auditMeta(tunnelWriteAction(ctx) === 'tunnel:create' ? 'tunnel_created' : 'tunnel_updated', tunnelAuditTarget(ctx));
-const tunnelCertAudit = (ctx: RouteContext): AuditRouteMeta => auditMeta('tunnel_cert_updated', tunnelAuditTarget(ctx));
+    auditMeta(tunnelWriteAction(ctx) === 'tunnel:create' ? AUDIT_EVENT_TYPES.tunnel_created : AUDIT_EVENT_TYPES.tunnel_updated, tunnelAuditTarget(ctx));
+const tunnelCertAudit = (ctx: RouteContext): AuditRouteMeta => auditMeta(AUDIT_EVENT_TYPES.tunnel_cert_updated, tunnelAuditTarget(ctx));
 
 /**
  * 요청 본문에 필드가 들어왔는지 판정한다. 감사 메타의 타입 분기와 핸들러의 패치 구성이
@@ -109,10 +110,10 @@ const pathIdTarget = (kind: AuditTarget['kind']) =>
     (ctx: RouteContext): AuditTarget => ({kind, id: ctx.params.id});
 
 /** PUT /api/users/:id 의 감사 타입은 본문에 어떤 키가 왔는지로 갈린다(설계 §5.2). */
-const userUpdateAuditType = (ctx: RouteContext): string =>
-    isFieldProvided(ctx.body, 'role') ? 'role_changed'
-        : isFieldProvided(ctx.body, 'status') ? 'user_status_changed'
-            : 'user_updated';
+const userUpdateAuditType = (ctx: RouteContext): AuditEventType =>
+    isFieldProvided(ctx.body, 'role') ? AUDIT_EVENT_TYPES.role_changed
+        : isFieldProvided(ctx.body, 'status') ? AUDIT_EVENT_TYPES.user_status_changed
+            : AUDIT_EVENT_TYPES.user_updated;
 
 export type RouteEntry = {
     method: Route['method'];
@@ -130,14 +131,14 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
     {method: 'POST', pattern: new RegExp('^/api/login$'), action: 'public', handler: 'onLogin'},
     {method: 'GET', pattern: new RegExp('^/api/version$'), action: 'public', handler: 'onGetVersion'},
     {method: 'POST', pattern: new RegExp('^/api/logout$'), action: 'session',
-        audit: (ctx) => auditMeta('logout', {kind: 'session', id: SessionStore.sessionIdOf(ctx.session!.key)}), handler: 'onLogout'},
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.logout, {kind: 'session', id: SessionStore.sessionIdOf(ctx.session!.key)}), handler: 'onLogout'},
     {method: 'GET', pattern: new RegExp('^/api/validateSession$'), action: 'session', handler: 'onGetValidateSession'},
     {method: 'GET', pattern: new RegExp('^/api/csrfToken$'), action: 'session', handler: 'onGetCsrfToken'},
     {method: 'GET', pattern: new RegExp('^/api/me$'), action: 'me:read', handler: 'onGetMe'},
     {method: 'PUT', pattern: new RegExp('^/api/me/password$'), action: 'me:password',
-        audit: (ctx) => auditMeta('password_changed', userAuditTarget(ctx), {firstLogin: ctx.principal!.mustChangePassword}), handler: 'onUpdateMePassword'},
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.password_changed, userAuditTarget(ctx), {firstLogin: ctx.principal!.mustChangePassword}), handler: 'onUpdateMePassword'},
     {method: 'POST', pattern: new RegExp('^/api/me/acknowledge-migration$'), action: 'me:read',
-        audit: (ctx) => auditMeta('user_updated', userAuditTarget(ctx), {field: 'migrationAcknowledged'}), handler: 'onAcknowledgeMigration'},
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.user_updated, userAuditTarget(ctx), {field: 'migrationAcknowledged'}), handler: 'onAcknowledgeMigration'},
     {method: 'GET', pattern: new RegExp('^/api/serverOption$'), action: 'server:manage', handler: 'onGetServerOption'},
     {method: 'POST', pattern: new RegExp('^/api/serverOption$'), action: 'server:manage', audit: serverOptionAudit, handler: 'onUpdateServerOption'},
     {method: 'PUT', pattern: new RegExp('^/api/serverOption$'), action: 'server:manage', audit: serverOptionAudit, handler: 'onUpdateServerOption'},
@@ -153,45 +154,45 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
     {method: 'POST', pattern: new RegExp('^/api/tunnelingOption$'), action: tunnelWriteAction, target: tunnelTarget, audit: tunnelWriteAudit, handler: 'onUpdateTunnelingOption'},
     {method: 'PUT', pattern: new RegExp('^/api/tunnelingOption$'), action: tunnelWriteAction, target: tunnelTarget, audit: tunnelWriteAudit, handler: 'onUpdateTunnelingOption'},
     {method: 'DELETE', pattern: new RegExp('^/api/tunnelingOption$'), action: 'tunnel:delete', target: tunnelTarget,
-        audit: (ctx) => auditMeta('tunnel_deleted', tunnelAuditTarget(ctx)), handler: 'onRemoveTunnelingOption'},
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.tunnel_deleted, tunnelAuditTarget(ctx)), handler: 'onRemoveTunnelingOption'},
     {method: 'PUT', pattern: new RegExp('^/api/tunnelingOption/(?<port>[^/]*)/owner$'), action: 'tunnel:reassign', target: tunnelTarget,
-        audit: (ctx) => auditMeta('tunnel_reassigned', tunnelAuditTarget(ctx)), handler: 'onReassignTunnelOwner'},
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.tunnel_reassigned, tunnelAuditTarget(ctx)), handler: 'onReassignTunnelOwner'},
     {method: 'POST', pattern: new RegExp('^/api/tunneling/active/(?<port>[^/]*)$'), action: 'tunnel:activate', target: tunnelTarget,
-        audit: (ctx) => auditMeta(isTunnelActivationRequested(ctx) ? 'tunnel_activated' : 'tunnel_deactivated', tunnelAuditTarget(ctx)),
+        audit: (ctx) => auditMeta(isTunnelActivationRequested(ctx) ? AUDIT_EVENT_TYPES.tunnel_activated : AUDIT_EVENT_TYPES.tunnel_deactivated, tunnelAuditTarget(ctx)),
         handler: 'onActiveTunneling'},
     {method: 'GET', pattern: new RegExp('^/api/externalServerStatuses$'), action: 'tunnel:list', target: tunnelTarget, handler: 'onGetExternalServerStatuses'},
     {method: 'GET', pattern: new RegExp('^/api/externalCert/(?<port>[^/]*)$'), action: 'tunnel:cert', target: tunnelTarget, handler: 'onGetExternalServerCert'},
     {method: 'POST', pattern: new RegExp('^/api/externalCert/(?<port>[^/]*)$'), action: 'tunnel:cert', target: tunnelTarget, audit: tunnelCertAudit, handler: 'onUpdateExternalServerCert'},
     {method: 'PUT', pattern: new RegExp('^/api/externalCert/(?<port>[^/]*)$'), action: 'tunnel:cert', target: tunnelTarget, audit: tunnelCertAudit, handler: 'onUpdateExternalServerCert'},
     {method: 'DELETE', pattern: new RegExp('^/api/externalCert/(?<port>[^/]*)$'), action: 'tunnel:cert', target: tunnelTarget,
-        audit: (ctx) => auditMeta('tunnel_cert_deleted', tunnelAuditTarget(ctx)), handler: 'onDeleteExternalServerCert'},
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.tunnel_cert_deleted, tunnelAuditTarget(ctx)), handler: 'onDeleteExternalServerCert'},
     // U5-02 / #117 이 임시로 추가한 차단 목록 라우트. #120 (U5-05) 이 감사까지 더한다.
     {method: 'GET', pattern: new RegExp('^/api/security/bans$'), action: 'security:manage', handler: 'onGetSecurityBans'},
     {method: 'DELETE', pattern: new RegExp('^/api/security/bans/(?<port>[^/]+)/(?<ip>[^/]+)$'), action: 'security:manage',
-        audit: (ctx) => auditMeta('security_ban_removed', {kind: 'security', id: `${ctx.params.port}/${ctx.params.ip}`}), handler: 'onDeleteSecurityBan'},
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.security_ban_removed, {kind: 'security', id: `${ctx.params.port}/${ctx.params.ip}`}), handler: 'onDeleteSecurityBan'},
     // U5-04 / #119 가 추가한 거절 집계 조회 라우트. bans 와 같은 성격이라 같은 권한을 쓴다.
     {method: 'GET', pattern: new RegExp('^/api/security/stats$'), action: 'security:manage', handler: 'onGetSecurityStats'},
     // U2-06 / #98 사용자·그룹 관리. 핸들러 본문은 rbacRoutes.ts 에 있고 표는 여기 한 곳에 모아 둔다.
     {method: 'GET', pattern: new RegExp('^/api/users$'), action: 'user:manage', handler: 'onListUsers'},
     {method: 'POST', pattern: new RegExp('^/api/users$'), action: 'user:manage',
         // 생성 전이라 id 가 없다. 요청한 username 을 대상으로 적고 새 id 는 핸들러가 auditDetail 로 더한다.
-        audit: (ctx) => auditMeta('user_created', {kind: 'user', id: String(ctx.body?.username)}), handler: 'onCreateUser'},
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.user_created, {kind: 'user', id: String(ctx.body?.username)}), handler: 'onCreateUser'},
     {method: 'GET', pattern: new RegExp('^/api/users/(?<id>[^/]+)$'), action: 'user:manage', handler: 'onGetUser'},
     {method: 'PUT', pattern: new RegExp('^/api/users/(?<id>[^/]+)$'), action: 'user:manage',
         audit: (ctx) => auditMeta(userUpdateAuditType(ctx), pathIdTarget('user')(ctx)), handler: 'onUpdateUser'},
     {method: 'DELETE', pattern: new RegExp('^/api/users/(?<id>[^/]+)$'), action: 'user:manage',
-        audit: (ctx) => auditMeta('user_deleted', pathIdTarget('user')(ctx)), handler: 'onDeleteUser'},
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.user_deleted, pathIdTarget('user')(ctx)), handler: 'onDeleteUser'},
     {method: 'POST', pattern: new RegExp('^/api/users/(?<id>[^/]+)/password-reset$'), action: 'user:manage',
-        audit: (ctx) => auditMeta('temp_password_issued', pathIdTarget('user')(ctx)), handler: 'onResetUserPassword'},
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.temp_password_issued, pathIdTarget('user')(ctx)), handler: 'onResetUserPassword'},
     {method: 'GET', pattern: new RegExp('^/api/groups$'), action: 'group:manage', handler: 'onListGroups'},
     {method: 'POST', pattern: new RegExp('^/api/groups$'), action: 'group:manage',
-        audit: (ctx) => auditMeta('group_created', {kind: 'group', id: String(ctx.body?.name)}), handler: 'onCreateGroup'},
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.group_created, {kind: 'group', id: String(ctx.body?.name)}), handler: 'onCreateGroup'},
     {method: 'GET', pattern: new RegExp('^/api/groups/(?<id>[^/]+)$'), action: 'group:manage', handler: 'onGetGroup'},
     {method: 'PUT', pattern: new RegExp('^/api/groups/(?<id>[^/]+)$'), action: 'group:manage',
-        audit: (ctx) => auditMeta(isFieldProvided(ctx.body, 'attributes') ? 'group_attributes_changed' : 'group_updated',
+        audit: (ctx) => auditMeta(isFieldProvided(ctx.body, 'attributes') ? AUDIT_EVENT_TYPES.group_attributes_changed : AUDIT_EVENT_TYPES.group_updated,
             pathIdTarget('group')(ctx)), handler: 'onUpdateGroup'},
     {method: 'DELETE', pattern: new RegExp('^/api/groups/(?<id>[^/]+)$'), action: 'group:manage',
-        audit: (ctx) => auditMeta('group_deleted', pathIdTarget('group')(ctx)), handler: 'onDeleteGroup'}
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.group_deleted, pathIdTarget('group')(ctx)), handler: 'onDeleteGroup'}
 ];
 
 export function buildAdminRoutes(handlers: RouteHandlers): readonly Route[] {

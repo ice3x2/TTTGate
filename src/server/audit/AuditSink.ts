@@ -1,4 +1,5 @@
 import type {Role} from "../rbac/IdentityTypes";
+import type {AuditEventType} from "./AuditEventTypes";
 import LoggerFactory from "../../util/logger/LoggerFactory";
 import {redactSecrets} from "../../util/SecretRedactor";
 
@@ -11,13 +12,13 @@ export type AuditTargetKind = 'user' | 'group' | 'tunnel' | 'server' | 'session'
 
 export type AuditTarget = {kind: AuditTargetKind; id: string};
 
-/** type 문자열 목록은 4 단위 설계 §2.2 가 확정하며 #109 (U4-01) 이 상수 파일로 옮긴다. */
+/** type 이름은 AuditEventTypes.ts 의 표가 확정한다(설계 §2.2). */
 export type AuditEvent = {
     at: number;
     actor: AuditActor;
     sessionIdHash?: string;
     ip?: string;
-    type: string;
+    type: AuditEventType;
     target?: AuditTarget;
     outcome: 'success' | 'failure';
     summary: string;

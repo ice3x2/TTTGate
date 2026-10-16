@@ -1,6 +1,6 @@
 import {ExternalPortServerPool, ExternalPortServerStatus } from "./ExternalPortServerPool";
 import {TunnelServer, ClientStatus} from "./TunnelServer";
-import {ConnectionSecurityOption, DEFAULT_GEO_CONFIG, ServerOption, TunnelingOption, resolveSessionTtlMs} from "../types/TunnelingOption";
+import {ConnectionSecurityOption, DEFAULT_AUDIT_QUEUE_SIZE, DEFAULT_AUDIT_RETENTION_DAYS, DEFAULT_GEO_CONFIG, ServerOption, TunnelingOption, resolveSessionTtlMs} from "../types/TunnelingOption";
 import SocketState from "../util/SocketState";
 import {CertInfo, CertificationStore} from "./CertificationStore";
 import ServerOptionStore from "./ServerOptionStore";
@@ -10,6 +10,8 @@ import AppCompositionRoot from "../bootstrap/AppCompositionRoot";
 import ObjectUtil from "../util/ObjectUtil";
 import {SocketHandler} from "../util/SocketHandler";
 import {AdmissionController} from "./security/AdmissionController";
+import {AuditSinkRegistry} from "./audit/AuditSink";
+import {auditDirPath, FileAuditSink} from "./audit/FileAuditSink";
 const logger = LoggerFactory.getLogger('server', 'TTTServer');
 
 type RuntimeApplyResult = {
@@ -279,12 +281,30 @@ class TTTServer {
         if(controlChanged) this._appliedScopeRevisions['tunnel-control'] = ServerOptionStore.instance.revisionState.currentRevision;
     }
 
+    /**
+     * 저장된 감사 옵션을 실행 중 싱크에 반영한다. 큐 상한·보존 기간은 인스턴스 생성 시점에 고정되므로
+     * 하나라도 달라지면 새 인스턴스로 갈아 끼운다. 새 싱크를 먼저 등록해 이후 이벤트가 새 큐로 가게 하고,
+     * 옛 큐에 남은 이벤트는 close() 의 flush 가 끝까지 쓴다.
+     */
+    private static async applyAuditOption(nextOption: ServerOption): Promise<void> {
+        const previous = AuditSinkRegistry.current();
+        if(!(previous instanceof FileAuditSink)) return;
+        const retentionDays = nextOption.auditRetentionDays ?? DEFAULT_AUDIT_RETENTION_DAYS;
+        const queueSize = nextOption.auditQueueSize ?? DEFAULT_AUDIT_QUEUE_SIZE;
+        if(previous.retentionDays === retentionDays && previous.queueSize === queueSize) return;
+        const next = new FileAuditSink({dir: auditDirPath(), queueSize, retentionDays});
+        next.startRetentionTimer();
+        AuditSinkRegistry.set(next);
+        await previous.close();
+    }
+
     public async applyServerOption(nextOption: ServerOption, previousOption: ServerOption): Promise<RuntimeApplyResult> {
         const ttl = resolveSessionTtlMs(nextOption.sessionTtlMs);
         if(!ttl.success) return {success: false, partial: false, failedScopes: ['session-ttl'], warnings: [ttl.message], restartRequiredScopes: []};
         if(!ObjectUtil.canonicalEquals(previousOption.connectionSecurity?.geo ?? DEFAULT_GEO_CONFIG, nextOption.connectionSecurity?.geo ?? DEFAULT_GEO_CONFIG)) {
             this.applyConnectionSecurity(nextOption.connectionSecurity);
         }
+        await TTTServer.applyAuditOption(nextOption);
         const restartRequiredScopes: string[] = [];
         const warnings: string[] = [];
 

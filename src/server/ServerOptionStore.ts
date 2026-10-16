@@ -1,6 +1,6 @@
 import Environment from "../Environment";
 import File from "../util/File";
-import {ControlProtocolMode, DEFAULT_KEY, DEFAULT_SESSION_TTL_MS, resolveSessionTtlMs, HttpOption, ServerOption, TunnelingOption, normalizeRateLimit} from "../types/TunnelingOption";
+import {ControlProtocolMode, DEFAULT_KEY, DEFAULT_SESSION_TTL_MS, resolveSessionTtlMs, resolveAuditRetentionDays, resolveAuditQueueSize, HttpOption, ServerOption, TunnelingOption, normalizeRateLimit} from "../types/TunnelingOption";
 import YAML from "yaml";
 import Files, {AtomicFileValue} from "../util/Files";
 import ObjectUtil from "../util/ObjectUtil";
@@ -404,6 +404,12 @@ class ServerOptionStore {
         const ttl = resolveSessionTtlMs(option.sessionTtlMs);
         if(!ttl.success) return ttl;
         option.sessionTtlMs = ttl.ttlMs;
+        const retention = resolveAuditRetentionDays(option.auditRetentionDays);
+        if(!retention.success) return retention;
+        option.auditRetentionDays = retention.days;
+        const queue = resolveAuditQueueSize(option.auditQueueSize);
+        if(!queue.success) return queue;
+        option.auditQueueSize = queue.size;
         if(!option.key) {
             return {success: false, message: "key is undefined"};
         }

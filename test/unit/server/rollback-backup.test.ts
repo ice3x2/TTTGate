@@ -108,11 +108,15 @@ test('a later save does not overwrite an existing backup', async () => {
 
 test('saving an option that carries none of the rollback-sensitive fields creates no backup', async () => {
     const boot = await bootLegacyStore('rollback-backup-absent');
-    const {connectionSecurity, ...withoutSecurity} = boot.store.serverOption;
+    // 최상위 민감 필드 네 개를 모두 벗긴다. verificationServerOption 이 로드 때
+    // auditRetentionDays·auditQueueSize 를 기본값으로 채우므로 그 둘도 빼야
+    // "민감 필드가 하나도 없는 옵션" 이 된다.
+    const {connectionSecurity, mfaRequiredForSuperusers, auditRetentionDays, auditQueueSize,
+        ...withoutSensitive} = boot.store.serverOption;
     const tunnel = legacyTunnel(boot.store);
     const {rateLimit, ownerId, ...tunnelWithoutNewFields} = tunnel;
     const result = boot.store.commitPreparedServerOption({
-        ...withoutSecurity,
+        ...withoutSensitive,
         tunnelingOptions: [tunnelWithoutNewFields as TunnelingOption]
     } as ServerOption);
     expect(result.success).toBe(true);

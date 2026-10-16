@@ -33,6 +33,7 @@ import {admitTunnelWrite, isTunnelEditable, isTunnelVisibleTo, ownerViewOf, reso
 import {AuthorizationContext} from "../rbac/AuthorizationContext";
 import {toUserView} from "../rbac/UserView";
 import {AuditEvent, AuditSinkRegistry, recordAuditEvent} from "../audit/AuditSink";
+import {AUDIT_EVENT_TYPES} from "../audit/AuditEventTypes";
 
 const logger = LoggerFactory.getLogger('server', 'AdminServer');
 
@@ -284,7 +285,7 @@ class AdminServer {
                const elapsed = process.hrtime.bigint() - startedAt;
                if(!decision.allowed) {
                    this.emitAudit(auditEventOf(ctx, {
-                       type: 'access_denied', summary: `access_denied ${action}`, detail: {action, path: pathname}
+                       type: AUDIT_EVENT_TYPES.access_denied, summary: `access_denied ${action}`, detail: {action, path: pathname}
                    }, 'failure'));
                    this.sendApiFailure(res, decision.status, {
                        code: decision.code,
@@ -1269,7 +1270,7 @@ class AdminServer {
         const username = typeof ctx.body?.['username'] == 'string' ? ctx.body['username'] : LEGACY_ADMIN_USERNAME;
         this.emitAudit({
             at: this.now(), actor: {userId: 'system'}, ip: ctx.ip,
-            type: 'login_failure', outcome: 'failure',
+            type: AUDIT_EVENT_TYPES.login_failure, outcome: 'failure',
             summary: `login_failure ${username}`, detail: {username}
         });
     }
@@ -1396,7 +1397,7 @@ class AdminServer {
         this.emitAudit({
             at: this.now(), actor: {userId: user.id, username: user.username, role: user.role as Role},
             sessionIdHash: SessionStore.sessionIdOf(sessionKey), ip: this.getClientAddress(req),
-            type: 'login_success', target: {kind: 'user', id: user.id},
+            type: AUDIT_EVENT_TYPES.login_success, target: {kind: 'user', id: user.id},
             outcome: 'success', summary: `login_success ${user.id}`
         });
     }
