@@ -60,6 +60,9 @@ class ExternalPortServerPool {
     private _onNewSessionCallback : NewSessionCallback | null = null;
     private _onHandlerEventCallback : OnHandlerEventCallback | null = null;
     private _onTerminateSessionCallback : OnTerminateSessionCallback | null = null;
+    // U5-07 / #122 — 포트별 최대 활성 시간(초)과 그 상한으로 만료됐을 때의 알림. rbac 를 모르도록 주입받는다.
+    private _activeTimeoutCap : ((port: number) => number | undefined) | null = null;
+    private _onAutoExpire : ((port: number, info: {timeoutSeconds: number; cappedByGroup: boolean}) => void) | null = null;
     private _closeWaitTimeout : number = 60 * 1000;
 
     private static LAST_SESSION_ID = 1;
@@ -209,6 +212,14 @@ class ExternalPortServerPool {
 
     public set OnTerminateSessionCallback(callback: OnTerminateSessionCallback)  {
         this._onTerminateSessionCallback = callback;
+    }
+
+    public set ActiveTimeoutCap(cap: ((port: number) => number | undefined) | null) {
+        this._activeTimeoutCap = cap;
+    }
+
+    public set OnAutoExpireCallback(callback: ((port: number, info: {timeoutSeconds: number; cappedByGroup: boolean}) => void) | null) {
+        this._onAutoExpire = callback;
     }
 
 
@@ -510,6 +521,13 @@ class ExternalPortServerPool {
             return false;
         }
         if(timeout == undefined) timeout = status.activeTimeout;
+        // 상한이 있으면 타임아웃 없음(0 이하)과 상한보다 긴 요청을 상한으로 자른다.
+        // 상한과 같은 값도 상한 만료로 본다. 재적용(restoreExternalPortStatus)은 이미 잘린 값을 다시 넘기므로,
+        // '<' 로 비교하면 옵션을 고쳐 터널을 다시 만든 뒤의 만료가 감사에서 빠진다.
+        const cap = this._activeTimeoutCap?.(port);
+        const cappedByGroup = cap !== undefined && (timeout <= 0 || cap <= timeout);
+        if(cappedByGroup) timeout = cap!;
+        const effectiveTimeout = timeout;
         this.clearActiveTimeout(port);
         let timeoutCtrl = this._activeTimeoutMap.get(port);
         status.active = true;
@@ -518,6 +536,7 @@ class ExternalPortServerPool {
         if(timeout > 0){
             timeoutCtrl = setTimeout(async () => {
                 await this.inactive(port);
+                this._onAutoExpire?.(port, {timeoutSeconds: effectiveTimeout, cappedByGroup});
             }, timeout * 1000);
             this._activeTimeoutMap.set(port, timeoutCtrl);
         }
