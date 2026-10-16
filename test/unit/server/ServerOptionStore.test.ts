@@ -100,3 +100,65 @@ describe("ServerOptionStore baseline behavior", () => {
         expect(store.getTunnelingOption(18082)?.httpOption?.replaceAccessControlAllowOrigin).toBe(true);
     });
 });
+
+describe("ServerOptionStore 감사 옵션 검증", () => {
+    let testRoot: TestRoot;
+
+    beforeEach(async () => {
+        testRoot = await createTestRoot("server-option-store-audit");
+        applyTestRoot(testRoot.rootDir);
+    });
+
+    afterEach(async () => {
+        await cleanupTestRoot(testRoot);
+    });
+
+    const verify = (patch: object): {result: {success: boolean, message: string}, option: any} => {
+        const store = ServerOptionStore.instance;
+        const option: any = {...store.serverOption, ...patch};
+        return {result: store.verificationServerOption(option), option};
+    };
+
+    it("auditRetentionDays 를 생략하면 90 으로 채운다", () => {
+        const {result, option} = verify({auditRetentionDays: undefined});
+        expect(result.success).toBe(true);
+        expect(option.auditRetentionDays).toBe(90);
+    });
+
+    it("auditRetentionDays 0 은 무제한으로 허용한다", () => {
+        const {result, option} = verify({auditRetentionDays: 0});
+        expect(result.success).toBe(true);
+        expect(option.auditRetentionDays).toBe(0);
+    });
+
+    it("auditRetentionDays 3650 은 통과하고 3651 은 실패한다", () => {
+        expect(verify({auditRetentionDays: 3650}).option.auditRetentionDays).toBe(3650);
+
+        const over = verify({auditRetentionDays: 3651});
+        expect(over.result.success).toBe(false);
+        expect(over.result.message).toBe("auditRetentionDays must be 0 or an integer within 1..3650");
+    });
+
+    it("auditRetentionDays 가 정수가 아니거나 음수면 실패한다", () => {
+        expect(verify({auditRetentionDays: 1.5}).result.success).toBe(false);
+        expect(verify({auditRetentionDays: -1}).result.success).toBe(false);
+        expect(verify({auditRetentionDays: -1}).result.message).toBe("auditRetentionDays must be 0 or an integer within 1..3650");
+    });
+
+    it("auditQueueSize 를 생략하면 1000 으로 채운다", () => {
+        const {result, option} = verify({auditQueueSize: undefined});
+        expect(result.success).toBe(true);
+        expect(option.auditQueueSize).toBe(1000);
+    });
+
+    it("auditQueueSize 범위는 100..100000 이다", () => {
+        const under = verify({auditQueueSize: 99});
+        expect(under.result.success).toBe(false);
+        expect(under.result.message).toBe("auditQueueSize must be an integer within 100..100000");
+
+        expect(verify({auditQueueSize: 100000}).result.success).toBe(true);
+        expect(verify({auditQueueSize: 100000}).option.auditQueueSize).toBe(100000);
+        expect(verify({auditQueueSize: 100001}).result.success).toBe(false);
+        expect(verify({auditQueueSize: 0}).result.success).toBe(false);
+    });
+});

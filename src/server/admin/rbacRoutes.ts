@@ -1,6 +1,7 @@
 import SessionStore from "./SessionStore";
 import {auditEventOf, isFieldProvided, RouteContext, RouteHandlers} from "./routes";
 import {recordAuditEvent} from "../audit/AuditSink";
+import {AUDIT_EVENT_TYPES} from "../audit/AuditEventTypes";
 import {IdentityStore} from "../rbac/IdentityStore";
 import {AuthorizationContext} from "../rbac/AuthorizationContext";
 import {toUserView} from "../rbac/UserView";
@@ -74,7 +75,7 @@ function resolveTemporaryPassword(ctx: RouteContext): {password: string; generat
 /** 임시 비밀번호를 발급한 사실만 남긴다. 평문은 응답 본문 1회뿐이며 detail 에 담지 않는다. */
 function emitTemporaryPasswordIssued(ctx: RouteContext, userId: string, generated: boolean): void {
     recordAuditEvent(auditEventOf(ctx, {
-        type: 'temp_password_issued',
+        type: AUDIT_EVENT_TYPES.temp_password_issued,
         target: {kind: 'user', id: userId},
         summary: `temp_password_issued ${userId}`,
         detail: {generated}

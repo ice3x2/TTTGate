@@ -32,4 +32,15 @@ describe("SecretRedactor", () => {
             host: "127.0.0.1"
         });
     });
+    it("일회용 코드 계열 키도 마스킹한다", () => {
+        const result = redactSecrets({totp: "1", code: "2", recoveryCode: "3", Code: "4", keep: "5"});
+
+        expect(result).toEqual({
+            totp: REDACTED_VALUE,
+            code: REDACTED_VALUE,
+            recoveryCode: REDACTED_VALUE,
+            Code: REDACTED_VALUE,
+            keep: "5"
+        });
+    });
 });

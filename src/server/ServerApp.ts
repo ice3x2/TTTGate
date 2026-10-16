@@ -2,7 +2,7 @@ import TTTServer from "./TTTServer";
 import ServerOptionStore from "./ServerOptionStore";
 import AdminServer from "./admin/AdminServer";
 import {CertificationStore, CertInfo} from "./CertificationStore";
-import {DEFAULT_GEO_CONFIG, ServerOption} from "../types/TunnelingOption";
+import {DEFAULT_AUDIT_QUEUE_SIZE, DEFAULT_AUDIT_RETENTION_DAYS, DEFAULT_GEO_CONFIG, ServerOption} from "../types/TunnelingOption";
 import {AdmissionController} from "./security/AdmissionController";
 import CLI from "../util/CLI";
 import Files from "../util/Files";
@@ -13,6 +13,8 @@ import AppCompositionRoot from "../bootstrap/AppCompositionRoot";
 import {shouldResetServerState} from "./ServerCliOptions";
 import {redactSecrets} from "../util/SecretRedactor";
 import {IdentityMigration} from "./rbac/IdentityMigration";
+import {AuditSinkRegistry} from "./audit/AuditSink";
+import {auditDirPath, FileAuditSink} from "./audit/FileAuditSink";
 import {
     AdminSecurityPolicyRegistry,
     buildAdminSecurityAllowancesFromCliOptions,
@@ -34,6 +36,14 @@ const startService = async (serverOption: ServerOption, adminCertInfo: CertInfo)
     logger.info("Start service with option: " + JSON.stringify(redactSecrets(serverOption), null, 2));
     AdmissionController.instance.configureGeo(serverOption.connectionSecurity?.geo ?? DEFAULT_GEO_CONFIG);
     tttServer = TTTServer.create(serverOption);
+    // 감사 싱크는 AdminServer 보다 먼저 등록해 첫 요청의 감사 이벤트도 파일에 남게 한다.
+    const auditSink = new FileAuditSink({
+        dir: auditDirPath(),
+        queueSize: serverOption.auditQueueSize ?? DEFAULT_AUDIT_QUEUE_SIZE,
+        retentionDays: serverOption.auditRetentionDays ?? DEFAULT_AUDIT_RETENTION_DAYS
+    });
+    auditSink.startRetentionTimer();
+    AuditSinkRegistry.set(auditSink);
     adminServer = new AdminServer(tttServer, serverOption.adminTls === true, adminCertInfo);
     await adminServer.listen(serverOption.adminPort!, serverOption.adminBindHost);
     await tttServer.start();

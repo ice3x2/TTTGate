@@ -63,7 +63,11 @@ type ServerOption = {
     tunnelingOptions: Array<TunnelingOption>,
     globalMemCacheLimit?: number
     keepAlive: number,
-    connectionSecurity?: ConnectionSecurityOption
+    connectionSecurity?: ConnectionSecurityOption,
+    /** 감사 파일 보존 기간(일). 기본 90, 0 이면 무제한. */
+    auditRetentionDays?: number,
+    /** 감사 쓰기 큐 상한. 기본 1000. 가득 차면 CUD API 가 503 으로 실패한다. */
+    auditQueueSize?: number
 
 
 }
@@ -181,6 +185,30 @@ const resolveSessionTtlMs = (value: unknown): {success: true; ttlMs: number} | {
     return {success: true, ttlMs: value};
 };
 
+const DEFAULT_AUDIT_RETENTION_DAYS = 90;
+const DEFAULT_AUDIT_QUEUE_SIZE = 1000;
+const AUDIT_RETENTION_DAYS_RANGE = [1, 3650] as const;
+const AUDIT_QUEUE_SIZE_RANGE = [100, 100_000] as const;
+
+/** 0 은 무제한(PRD §12 Q3). 1..3650 은 입력 오류를 걸러내는 범위이지 정책 상한이 아니다. */
+const resolveAuditRetentionDays = (value: unknown): {success: true; days: number} | {success: false; message: string} => {
+    if(value === undefined) return {success: true, days: DEFAULT_AUDIT_RETENTION_DAYS};
+    const [min, max] = AUDIT_RETENTION_DAYS_RANGE;
+    const days = value as number;
+    if(!Number.isInteger(days) || (days !== 0 && (days < min || days > max)))
+        return {success: false, message: `auditRetentionDays must be 0 or an integer within ${min}..${max}`};
+    return {success: true, days};
+};
+
+const resolveAuditQueueSize = (value: unknown): {success: true; size: number} | {success: false; message: string} => {
+    if(value === undefined) return {success: true, size: DEFAULT_AUDIT_QUEUE_SIZE};
+    const [min, max] = AUDIT_QUEUE_SIZE_RANGE;
+    const size = value as number;
+    if(!Number.isInteger(size) || size < min || size > max)
+        return {success: false, message: `auditQueueSize must be an integer within ${min}..${max}`};
+    return {success: true, size};
+};
+
 const DEFAULT_CLIENT_PORT = 9126;
 const DEFAULT_CLIENT_KEEP_ALIVE = 10000;
 const DEFAULT_CLIENT_MEM_LIMIT_MIB = 128;
@@ -270,6 +298,10 @@ export {
     DEFAULT_KEY,
     DEFAULT_SESSION_TTL_MS,
     resolveSessionTtlMs,
+    DEFAULT_AUDIT_RETENTION_DAYS,
+    DEFAULT_AUDIT_QUEUE_SIZE,
+    resolveAuditRetentionDays,
+    resolveAuditQueueSize,
     normalizationClientOption,
     resolveClientKeepAlive,
     NormalizationClientOptionWarner,

@@ -7,7 +7,8 @@ import TTTServer from "../../../../src/server/TTTServer";
 import {CertificationStore} from "../../../../src/server/CertificationStore";
 import {BOOTSTRAP_TOKEN_FILE_NAME, IdentityMigration} from "../../../../src/server/rbac/IdentityMigration";
 import {IdentityStore} from "../../../../src/server/rbac/IdentityStore";
-import {ADMIN_ROUTES} from "../../../../src/server/admin/routes";
+import {ADMIN_ROUTES, RouteContext} from "../../../../src/server/admin/routes";
+import {AUDIT_EVENT_TYPE_LIST} from "../../../../src/server/audit/AuditEventTypes";
 import {AuditEvent, AuditSink, AuditSinkRegistry} from "../../../../src/server/audit/AuditSink";
 import {getFreePort, startEchoServer} from "../../../helpers/network";
 import {httpRequest} from "../../../helpers/http";
@@ -18,17 +19,20 @@ jest.setTimeout(60_000);
 const ADMIN_PASSWORD = "audit-sink-password";
 const REGULAR_PASSWORD = "audit-regular-password";
 
-type StubSink = AuditSink & {events: AuditEvent[]; reserveResult: boolean};
+type StubSink = AuditSink & {events: AuditEvent[]; allEvents: AuditEvent[]; reserveResult: boolean};
 
 /** 이슈 #97 수용 기준이 정한 스텁 싱크. reserveResult 로 배압을 흉내 낸다. */
+// allEvents 는 테스트가 비우지 않는 사본이다 — #109 의 "기록된 type 전수가 상수 목록에 있다" 판정에 쓴다.
 const createStubSink = (): StubSink => ({
     events: [],
+    allEvents: [],
     reserveResult: true,
     reserve(): boolean {
         return this.reserveResult;
     },
     record(event: AuditEvent): Promise<void> {
         this.events.push(event);
+        this.allEvents.push(event);
         return Promise.resolve();
     }
 });
@@ -114,6 +118,8 @@ const withAuditServer = async (check: (fixture: Fixture) => Promise<void>): Prom
             },
             request, login, freePort: getFreePort
         });
+        // #109 K3 확장 — 이 시나리오가 실제로 기록한 type 전수가 상수 목록 안에 있어야 한다.
+        expect(sink.allEvents.map((event) => event.type).filter((type) => !AUDIT_EVENT_TYPE_LIST.includes(type))).toEqual([]);
     } finally {
         try { await api?.close(); }
         finally {
@@ -141,6 +147,44 @@ describe("audit-sink: 라우트 표의 CUD 전수 감사 커버리지", () => {
         const logout = ADMIN_ROUTES.find((route) =>
             route.method === "POST" && route.pattern.source === new RegExp("^/api/logout$").source)!;
         expect(typeof logout.audit).toBe("function");
+    });
+
+    // K3 확장(#109) — 표가 내는 감사 타입이 상수 파일 밖의 문자열이면 조회 API·단위 5 가 어긋난다.
+    it("라우트 표의 audit 메타가 내는 type 이 전부 AUDIT_EVENT_TYPE_LIST 에 있다", async () => {
+        const root = await createTestRoot("audit-sink-types");
+        try {
+            applyTestRoot(root.rootDir);
+            // 본문에 따라 타입이 갈리는 라우트(users PUT, groups PUT, tunneling/active)를 모두 지나가게 한다.
+            const bodies: object[] = [
+                {username: "alice", name: "team", forwardPort: 19000, active: true, role: "regular"},
+                {username: "alice", name: "team", forwardPort: 19000, active: false, status: "disabled"},
+                {username: "alice", name: "team", forwardPort: 19000, displayName: "Alice", attributes: {}}
+            ];
+            const types = bodies.flatMap((body) => {
+                const ctx = {
+                    req: {} as any, res: {statusCode: 200} as any,
+                    params: {id: "g_1", port: "19000", ip: "127.0.0.1"},
+                    body,
+                    session: {key: "audit-sink-session-key"} as any,
+                    principal: {userId: "u_1", username: "admin", role: "superuser", mustChangePassword: false} as any,
+                    ip: "127.0.0.1",
+                    ok: () => {}, fail: () => {}, auditDetail: () => {}
+                } as unknown as RouteContext;
+                return ADMIN_ROUTES.filter((route) => route.audit !== undefined).map((route) => route.audit!(ctx).type);
+            });
+
+            expect(types.length).toBeGreaterThan(0);
+            expect(types.filter((type) => !AUDIT_EVENT_TYPE_LIST.includes(type))).toEqual([]);
+            // 분기 라우트가 실제로 갈렸는지 확인해, 한 가지 타입만 훑고 통과하는 일을 막는다.
+            expect(types).toContain("role_changed");
+            expect(types).toContain("user_status_changed");
+            expect(types).toContain("user_updated");
+            expect(types).toContain("group_attributes_changed");
+            expect(types).toContain("tunnel_activated");
+            expect(types).toContain("tunnel_deactivated");
+        } finally {
+            await cleanupTestRoot(root);
+        }
     });
 
     it("GET 라우트에는 audit 을 달지 않는다", () => {

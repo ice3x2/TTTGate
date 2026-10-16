@@ -8,6 +8,7 @@ import {timingSafeStringEqual} from "../../util/timingSafeStringEqual";
 import LoggerFactory from "../../util/logger/LoggerFactory";
 import SessionStore from "../admin/SessionStore";
 import {recordAuditEvent} from "../audit/AuditSink";
+import {AUDIT_EVENT_TYPES} from "../audit/AuditEventTypes";
 import {hashLegacyPassword} from "./legacyPasswordHash";
 import {
     cloneGroupAttributes,
@@ -429,7 +430,7 @@ class IdentityStore {
         recordAuditEvent({
             at: ClockRngProvider.current().now(),
             actor: {userId: 'system'},
-            type: 'last_superuser_guard_hit',
+            type: AUDIT_EVENT_TYPES.last_superuser_guard_hit,
             target: {kind: 'user', id},
             outcome: 'failure',
             summary: `last_superuser_guard_hit ${id}`,

@@ -9,6 +9,9 @@ const isSensitiveKey = (key: string): boolean => {
         || normalized == "password"
         || normalized == "sessionkey"
         || normalized == "bootstraptoken"
+        || normalized == "totp"
+        || normalized == "code"
+        || normalized == "recoverycode"
         || normalized.endsWith("secret")
         || normalized.endsWith("token")
         || normalized.endsWith("password")
