@@ -40,9 +40,8 @@ describe("R1: ui 부품의 네트워크·컨트롤러 호출 부재", () => {
     });
 });
 
-// R2: ui/·shell/·screens/ 아래 .svelte 파일에 hex 색상 리터럴이 없다(존재하는 디렉터리만 검사).
-describe("R2: 신규 디렉터리의 hex 색상 리터럴 부재", () => {
-    const NEW_DIRS = ["ui", "shell", "screens"];
+// R2: admin/src 아래 모든 .svelte 파일(App.svelte 포함)에 hex 색상 리터럴이 없다(#92 U1-10 이 범위를 넓혔다).
+describe("R2: hex 색상 리터럴 부재", () => {
     const HEX_PATTERN = /(?<![\w-])#[0-9a-fA-F]{3,8}(?![\w-])/;
 
     const collectSvelteFiles = (dir: string): string[] => {
@@ -57,11 +56,15 @@ describe("R2: 신규 디렉터리의 hex 색상 리터럴 부재", () => {
         return files;
     };
 
-    test("검사 대상 디렉터리 중 하나 이상 존재한다", () => {
-        expect(NEW_DIRS.some((name) => fs.existsSync(path.join(root, "admin/src", name)))).toBe(true);
-    });
+    const targets = collectSvelteFiles(path.join(root, "admin/src"));
 
-    const targets = NEW_DIRS.flatMap((name) => collectSvelteFiles(path.join(root, "admin/src", name)));
+    test("App.svelte 와 ui·shell·screens 의 부품이 검사 대상에 들어 있다", () => {
+        const relative = targets.map((file) => path.relative(root, file).split(path.sep).join("/"));
+        expect(relative).toContain("admin/src/App.svelte");
+        for(const dir of ["ui", "shell", "screens"]) {
+            expect(relative.some((file) => file.startsWith(`admin/src/${dir}/`))).toBe(true);
+        }
+    });
 
     test.each(targets.map((file) => [path.relative(root, file), file] as const))("%s 에 hex 색상 리터럴이 없다", (_label, file) => {
         const content = fs.readFileSync(file, "utf8");
@@ -118,14 +121,9 @@ describe("R4: 본문 최대 너비 선언의 단일 위치", () => {
 });
 
 // R5: admin/src 와 admin/index.html 의 텍스트 파일에 외부 URL(http/https)이 없다.
+// 영구 예외는 서체 라이선스 원문 하나뿐이다(#92 U1-10 이 임시 제외를 지웠다).
 describe("R5: 외부 요청 URL 부재", () => {
-    const excludedDirs = [
-        path.join(root, "admin/src/css"),
-        path.join(root, "admin/src/layout"),
-        path.join(root, "admin/src/component"),
-    ];
     const excludedFiles = [
-        path.join(root, "admin/src/assets/svelte.svg"),
         path.join(root, "admin/src/assets/fonts/LICENSE.md"),
     ];
     const textExtensions = new Set([".svelte", ".ts", ".js", ".css", ".html", ".md", ".json", ".svg", ".map"]);
@@ -135,7 +133,6 @@ describe("R5: 외부 요청 URL 부재", () => {
         let files: string[] = [];
         for(const entry of entries) {
             const full = path.join(dir, entry.name);
-            if(excludedDirs.some((excluded) => full === excluded || full.startsWith(excluded + path.sep))) continue;
             if(entry.isDirectory()) { files = files.concat(collectTextFiles(full)); continue; }
             if(excludedFiles.includes(full)) continue;
             if(textExtensions.has(path.extname(entry.name))) files.push(full);
@@ -148,6 +145,29 @@ describe("R5: 외부 요청 URL 부재", () => {
     test.each(targets.map((file) => [path.relative(root, file), file] as const))("%s 에 http(s):// 요청이 없다", (_label, file) => {
         const content = fs.readFileSync(file, "utf8");
         expect(/https?:\/\//.test(content)).toBe(false);
+    });
+});
+
+// R6: 단위 1 이 지운 옛 파일이 다시 생기지 않는다(#92 U1-10).
+describe("R6: 옛 부품·부산물 부재", () => {
+    const REMOVED = [
+        "admin/src/css", "admin/src/layout", "admin/src/component", "admin/src/lib",
+        "admin/src/main.js", "admin/src/main.js.map",
+        "admin/src/assets/svelte.svg", "admin/src/assets/cpu.png", "admin/src/assets/uptime.png",
+        "admin/src/assets/infinity.png", "admin/src/assets/icon.png",
+    ];
+
+    test.each(REMOVED)("%s 가 존재하지 않는다", (relative) => {
+        expect(fs.existsSync(path.join(root, relative))).toBe(false);
+    });
+
+    test("admin/src 의 최상위 항목이 정해진 목록과 같다", () => {
+        const entries = fs.readdirSync(path.join(root, "admin/src")).sort();
+        expect(entries).toEqual(["App.svelte", "app.css", "assets", "controller", "main.ts", "router.ts", "screens", "shell", "ui", "util", "vite-env.d.ts"].sort());
+    });
+
+    test("loading.png 는 ui/Loading.svelte 가 쓰므로 남아 있다", () => {
+        expect(fs.existsSync(path.join(root, "admin/src/assets/loading.png"))).toBe(true);
     });
 });
 

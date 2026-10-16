@@ -21,6 +21,8 @@
 {#if open}
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
     <div class="drawer-overlay" onclick={() => (open = false)}></div>
+    <!-- 서랍은 모달 대화상자로 동작하므로 role="dialog" 를 유지한다(#92: 빌드 경고만 막는다). -->
+    <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
     <nav id="nav-drawer" class="drawer" role="dialog" aria-modal="true" aria-label="Navigation">
         <ul>
             {#each NAV as item (item.hash)}
