@@ -110,3 +110,51 @@ describe("SessionStore baseline behavior", () => {
         expect(idA).not.toBe(idC);
     });
 });
+
+describe("SessionStore.removeSessionById (#113 U4-05)", () => {
+    let testRoot: TestRoot;
+    let fakeClock: FakeClockRng;
+
+    beforeEach(async () => {
+        testRoot = await createTestRoot("session-store-remove-by-id");
+        applyTestRoot(testRoot.rootDir);
+        fakeClock = createFakeClockRng(1_700_000_000_000, [0.125]);
+        ClockRngProvider.configure(fakeClock);
+    });
+
+    afterEach(async () => {
+        await cleanupTestRoot(testRoot);
+    });
+
+    const threeSessions = async () => {
+        const store = SessionStore.instance;
+        const k1 = await store.newSession("u1", {ip: "127.0.0.1"});
+        const k2 = await store.newSession("u1", {ip: "127.0.0.1"});
+        const k3 = await store.newSession("u2", {ip: "127.0.0.1"});
+        return {store, k1, k2, k3};
+    };
+
+    it("id 로 세션 하나를 지우고 그 세션을 돌려준다", async () => {
+        const {store, k1, k2, k3} = await threeSessions();
+        const removed = store.removeSessionById(SessionStore.sessionIdOf(k1));
+        expect(removed?.key).toBe(k1);
+        expect(store.listSessions()).toHaveLength(2);
+        expect(store.resolveSession([k1])).toBeUndefined();
+        expect(store.resolveSession([k2])?.key).toBe(k2);
+        expect(store.resolveSession([k3])?.key).toBe(k3);
+    });
+
+    it("없는 id 는 undefined 이고 목록이 변하지 않는다", async () => {
+        const {store} = await threeSessions();
+        expect(store.removeSessionById("0000000000000000")).toBeUndefined();
+        expect(store.removeSessionById("")).toBeUndefined();
+        expect(store.listSessions()).toHaveLength(3);
+    });
+
+    it("만료된 세션은 undefined 를 돌려준다", async () => {
+        const {store, k1} = await threeSessions();
+        fakeClock.advance(DEFAULT_TIMEOUT + 1);
+        expect(store.removeSessionById(SessionStore.sessionIdOf(k1))).toBeUndefined();
+        expect(store.listSessions()).toEqual([]);
+    });
+});

@@ -25,6 +25,8 @@ export type RouteContext = {
     fail: (status: number, code: string, message: string) => void;
     /** 요청 전에 계산한 audit 메타에 뒤늦게 알게 된 값을 더한다. audited() 가 record 직전에 합친다. */
     auditDetail: (patch: Record<string, unknown>) => void;
+    /** #113 (U4-05) 본인 세션을 끊은 응답에 sessionKey·csrfToken 만료 쿠키를 붙인다(POST /api/logout 과 같은 형식). */
+    expireSessionCookies: () => void;
     /** #112 (U4-04) MFA 메모리 저장소. AdminServer 가 한 벌을 갖고 요청마다 넘긴다. */
     mfa?: {pending: PendingEnrollmentStore; tickets: MfaTicketStore};
 };
@@ -156,6 +158,10 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.mfa_disabled, userAuditTarget(ctx)), handler: 'onDisableMfa'},
     {method: 'POST', pattern: new RegExp('^/api/me/mfa/recovery-codes$'), action: 'me:mfa',
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.mfa_recovery_codes_regenerated, userAuditTarget(ctx)), handler: 'onRegenerateRecoveryCodes'},
+    // U4-05 / #113 본인 세션. 목록은 읽기라 감사하지 않는다. 핸들러는 rbacRoutes.ts 에 있다.
+    {method: 'GET', pattern: new RegExp('^/api/me/sessions$'), action: 'me:sessions', handler: 'onListMySessions'},
+    {method: 'POST', pattern: new RegExp('^/api/me/sessions/logout-others$'), action: 'me:sessions',
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.sessions_killed_self_others, userAuditTarget(ctx)), handler: 'onLogoutOtherSessions'},
     {method: 'GET', pattern: new RegExp('^/api/serverOption$'), action: 'server:manage', handler: 'onGetServerOption'},
     {method: 'POST', pattern: new RegExp('^/api/serverOption$'), action: 'server:manage', audit: serverOptionAudit, handler: 'onUpdateServerOption'},
     {method: 'PUT', pattern: new RegExp('^/api/serverOption$'), action: 'server:manage', audit: serverOptionAudit, handler: 'onUpdateServerOption'},
@@ -216,6 +222,12 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
             pathIdTarget('group')(ctx)), handler: 'onUpdateGroup'},
     {method: 'DELETE', pattern: new RegExp('^/api/groups/(?<id>[^/]+)$'), action: 'group:manage',
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.group_deleted, pathIdTarget('group')(ctx)), handler: 'onDeleteGroup'},
+    // U4-05 / #113 세션 관리(슈퍼유저). 대상 id 는 공개 세션 id(sessionIdOf) 또는 사용자 id 다. 세션 키는 어디에도 싣지 않는다.
+    {method: 'GET', pattern: new RegExp('^/api/sessions$'), action: 'session:manage', handler: 'onListSessions'},
+    {method: 'DELETE', pattern: new RegExp('^/api/sessions/(?<id>[^/]+)$'), action: 'session:manage',
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.session_killed, {kind: 'session', id: ctx.params.id}), handler: 'onKillSession'},
+    {method: 'DELETE', pattern: new RegExp('^/api/users/(?<id>[^/]+)/sessions$'), action: 'session:manage',
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.sessions_killed_for_user, pathIdTarget('user')(ctx)), handler: 'onKillUserSessions'},
     // U4-02 / #110 감사 조회. 조회는 감사하지 않으므로 audit 콜백을 달지 않는다. 핸들러는 auditRoutes.ts 에 있다.
     {method: 'GET', pattern: new RegExp('^/api/audit$'), action: auditReadAction, handler: 'onListAudit'},
     {method: 'GET', pattern: new RegExp('^/api/audit/types$'), action: auditReadAction, handler: 'onListAuditTypes'}

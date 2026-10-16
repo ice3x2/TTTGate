@@ -34,6 +34,9 @@ const EXPECTED_ROUTES: ReadonlyArray<ExpectedRoute> = [
     {method: "POST", pattern: "^/api/me/mfa/confirm$", action: "me:mfa", hasTarget: false},
     {method: "DELETE", pattern: "^/api/me/mfa$", action: "me:mfa", hasTarget: false},
     {method: "POST", pattern: "^/api/me/mfa/recovery-codes$", action: "me:mfa", hasTarget: false},
+    // U4-05 / #113 본인 세션.
+    {method: "GET", pattern: "^/api/me/sessions$", action: "me:sessions", hasTarget: false},
+    {method: "POST", pattern: "^/api/me/sessions/logout-others$", action: "me:sessions", hasTarget: false},
     {method: "GET", pattern: "^/api/serverOption$", action: "server:manage", hasTarget: false},
     {method: "POST", pattern: "^/api/serverOption$", action: "server:manage", hasTarget: false},
     {method: "PUT", pattern: "^/api/serverOption$", action: "server:manage", hasTarget: false},
@@ -75,6 +78,10 @@ const EXPECTED_ROUTES: ReadonlyArray<ExpectedRoute> = [
     {method: "GET", pattern: "^/api/groups/(?<id>[^/]+)$", action: "group:manage", hasTarget: false},
     {method: "PUT", pattern: "^/api/groups/(?<id>[^/]+)$", action: "group:manage", hasTarget: false},
     {method: "DELETE", pattern: "^/api/groups/(?<id>[^/]+)$", action: "group:manage", hasTarget: false},
+    // U4-05 / #113 세션 관리.
+    {method: "GET", pattern: "^/api/sessions$", action: "session:manage", hasTarget: false},
+    {method: "DELETE", pattern: "^/api/sessions/(?<id>[^/]+)$", action: "session:manage", hasTarget: false},
+    {method: "DELETE", pattern: "^/api/users/(?<id>[^/]+)/sessions$", action: "session:manage", hasTarget: false},
     // U4-02 / #110 감사 조회. 슈퍼유저는 audit:read-all, 일반 유저는 audit:read-self 로 판정한다.
     {method: "GET", pattern: "^/api/audit$", action: "auditReadAction", hasTarget: false},
     {method: "GET", pattern: "^/api/audit/types$", action: "auditReadAction", hasTarget: false}

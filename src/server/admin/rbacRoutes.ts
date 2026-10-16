@@ -1,4 +1,4 @@
-import SessionStore from "./SessionStore";
+import SessionStore, {Session} from "./SessionStore";
 import {auditEventOf, isFieldProvided, RouteContext, RouteHandlers} from "./routes";
 import {recordAuditEvent} from "../audit/AuditSink";
 import {AUDIT_EVENT_TYPES} from "../audit/AuditEventTypes";
@@ -381,12 +381,81 @@ const onRegenerateRecoveryCodes = async (ctx: RouteContext): Promise<void> => {
     replyResult(ctx, IdentityStore.instance.replaceRecoveryCodeHashes(user.id, hashes), () => ({recoveryCodes}));
 };
 
+// ---- #113 (U4-05) 세션 목록·강제 종료. 세션 키는 응답·감사에 싣지 않고 sessionIdOf 만 쓴다. ----
+
+type SessionView = {id: string; userId: string; username: string; createdAt: number; lastSeenAt: number;
+    ip: string; userAgent: string; current: boolean};
+
+const sessionViewsOf = (ctx: RouteContext, filter: (session: Session) => boolean): SessionView[] => {
+    const store = IdentityStore.instance;
+    const currentKey = ctx.session!.key;
+    return SessionStore.instance.listSessions()
+        .filter(filter)
+        .map((session) => ({
+            id: SessionStore.sessionIdOf(session.key),
+            userId: session.userId,
+            // legacy-fallback 주체(legacy-admin)는 저장소에 없으므로 userId 를 그대로 쓴다.
+            username: store.user(session.userId)?.username ?? session.userId,
+            createdAt: session.createdAt,
+            lastSeenAt: session.lastSeenAt,
+            ip: session.ip,
+            userAgent: session.userAgent ?? '',
+            current: session.key === currentKey
+        }))
+        .sort((left, right) => right.lastSeenAt - left.lastSeenAt);
+};
+
+const onListSessions = async (ctx: RouteContext): Promise<void> => {
+    ctx.ok({sessions: sessionViewsOf(ctx, () => true)});
+};
+
+const onListMySessions = async (ctx: RouteContext): Promise<void> => {
+    const userId = ctx.principal!.userId;
+    ctx.ok({sessions: sessionViewsOf(ctx, (session) => session.userId === userId)});
+};
+
+const onKillSession = async (ctx: RouteContext): Promise<void> => {
+    const removed = SessionStore.instance.removeSessionById(ctx.params.id);
+    if(!removed) {
+        ctx.fail(404, 'session_not_found', 'Session not found');
+        return;
+    }
+    const self = removed.key === ctx.session!.key;
+    ctx.auditDetail({userId: removed.userId});
+    if(self) ctx.expireSessionCookies();
+    ctx.ok({removed: true, self});
+};
+
+const onKillUserSessions = async (ctx: RouteContext): Promise<void> => {
+    if(!IdentityStore.instance.user(ctx.params.id)) {
+        ctx.fail(404, 'user_not_found', 'User not found');
+        return;
+    }
+    // 사용자 상태(disabled 등)는 바꾸지 않는다. 세션만 끊는다.
+    const removed = SessionStore.instance.removeSessionsOfUser(ctx.params.id);
+    const self = ctx.params.id === ctx.principal!.userId;
+    ctx.auditDetail({removed});
+    if(self) ctx.expireSessionCookies();
+    ctx.ok({removed, self});
+};
+
+const onLogoutOtherSessions = async (ctx: RouteContext): Promise<void> => {
+    const removed = SessionStore.instance.removeSessionsOfUser(ctx.principal!.userId, {except: ctx.session!.key});
+    ctx.auditDetail({removed});
+    ctx.ok({removed});
+};
+
 /**
  * 라우트 표(routes.ts)가 이름으로 가리키는 사용자·그룹 핸들러.
  * 단위 4 가 /api/me/mfa/* 와 /api/me/sessions* 를 더할 때도 이 맵에 항목을 더하고
  * 같은 ctx.ok / ctx.fail / ctx.auditDetail 을 쓴다. AdminServer.ts 에 핸들러를 새로 두지 않는다.
  */
 export const rbacRouteHandlers: RouteHandlers = {
+    onListSessions,
+    onListMySessions,
+    onKillSession,
+    onKillUserSessions,
+    onLogoutOtherSessions,
     onGetMe,
     onEnrollMfa,
     onConfirmMfa,
