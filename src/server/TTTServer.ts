@@ -10,7 +10,10 @@ import AppCompositionRoot from "../bootstrap/AppCompositionRoot";
 import ObjectUtil from "../util/ObjectUtil";
 import {SocketHandler} from "../util/SocketHandler";
 import {AdmissionController} from "./security/AdmissionController";
-import {AuditSinkRegistry} from "./audit/AuditSink";
+import {AuditSinkRegistry, recordAuditEvent} from "./audit/AuditSink";
+import {AUDIT_EVENT_TYPES} from "./audit/AuditEventTypes";
+import {maxActiveSeconds} from "./security/TunnelLifetimePolicy";
+import AuthorizationContext from "./rbac/AuthorizationContext";
 import {auditDirPath, FileAuditSink} from "./audit/FileAuditSink";
 const logger = LoggerFactory.getLogger('server', 'TTTServer');
 
@@ -58,7 +61,19 @@ class TTTServer {
         this._externalPortServerPool.OnHandlerEventCallback = this.onHandlerEventOnExternalPortServer;
         this._externalPortServerPool.OnNewSessionCallback = this.onNewSession;
         this._externalPortServerPool.OnTerminateSessionCallback = this.OnTerminateSession;
+        // U5-07 / #122 — 일반 유저 터널의 활성 시간을 그룹 max_tunnel_duration_ms 로 제한한다.
+        this._externalPortServerPool.ActiveTimeoutCap = (port) => maxActiveSeconds(port, AuthorizationContext);
+        this._externalPortServerPool.OnAutoExpireCallback = this.onTunnelAutoExpire;
         this.syncAllowedClientMaps(serverOption);
+    }
+
+    // 그룹 상한으로 만료된 경우만 감사한다. 사용자가 정한 타임아웃의 만료는 속성 3 의 집행이 아니다.
+    private onTunnelAutoExpire = (port: number, info: {timeoutSeconds: number; cappedByGroup: boolean}): void => {
+        if(!info.cappedByGroup) return;
+        recordAuditEvent({at: Date.now(), actor: {userId: 'system'}, type: AUDIT_EVENT_TYPES.tunnel_autoexpire,
+            target: {kind: 'tunnel', id: String(port)}, outcome: 'success',
+            summary: `${AUDIT_EVENT_TYPES.tunnel_autoexpire} ${port}`, detail: {port, timeoutSeconds: info.timeoutSeconds}})
+            .catch((error) => logger.error(`tunnel_autoexpire audit failed - port: ${port}`, error));
     }
 
     private syncAllowedClientMaps(serverOption: ServerOption): void {
@@ -555,7 +570,11 @@ class TTTServer {
         for(let tunnelOption of tunnelOptions) {
             try {
                 const cert = certStore.getExternalCert(tunnelOption.forwardPort);
-                await this._externalPortServerPool.startServer(tunnelOption, cert);
+                const started = await this._externalPortServerPool.startServer(tunnelOption, cert);
+                // 기동 시 자동 활성은 타이머가 없으므로, 상한이 있는 터널은 active() 로 다시 켜 상한 타이머를 건다.
+                if(started && !tunnelOption.inactiveOnStartup && maxActiveSeconds(tunnelOption.forwardPort, AuthorizationContext) !== undefined) {
+                    await this._externalPortServerPool.active(tunnelOption.forwardPort);
+                }
                 this._appliedExternal[tunnelOption.forwardPort] = {option: ObjectUtil.cloneDeep(tunnelOption), cert,
                     configurationRevision: optionStore.revisionState.currentRevision, certificateRevision: certStore.revisionState.currentRevision};
             } catch (err) {
