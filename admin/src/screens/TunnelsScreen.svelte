@@ -11,11 +11,17 @@
     import Modal from '../ui/Modal.svelte';
     import Switch from '../ui/Switch.svelte';
     import Timer from '../ui/Timer.svelte';
+    import {me} from '../me';
     import {navigate} from '../router';
     import {useSession} from '../shell/session';
+    import {tunnelPolicy} from './parts/tunnelPolicy';
     import {startupTime, toSize} from './parts/units';
 
     let options = $state<Options[]>([]);
+
+    // U3-06: 소유자 표시와 그룹 한도. 한도에 걸리면 추가 버튼을 숨긴다.
+    const policy = $derived($me ? tunnelPolicy($me) : undefined);
+    const ownedCount = $derived(options.filter((option) => option.owner?.id === $me?.user.id).length);
     let statuses = $state<Record<number, TunnelingStatus>>({});
     let serverTime = $state(0);
     let loading = $state(false);
@@ -135,9 +141,14 @@
 </script>
 
 <div class="tunnels">
-    <div class="tunnels-bar">
-        <Button variant="primary" onclick={() => navigate('#/tunnels/new')}>Add tunneling service</Button>
-    </div>
+    {#if policy?.canCreate(ownedCount) ?? true}
+        <div class="tunnels-bar">
+            <Button variant="primary" onclick={() => navigate('#/tunnels/new')}>Add tunneling service</Button>
+        </div>
+    {/if}
+    {#if policy?.limitReached(ownedCount)}
+        <p id="tunnel-limit-note" style="color: var(--ink-2)">Tunnel limit reached ({ownedCount}/{policy.maxTunnelCount}).</p>
+    {/if}
     {#if options.length === 0}<p class="empty">No tunnels yet.</p>{/if}
     <ul class="tunnel-list">
         {#each options as option (option.forwardPort)}
@@ -150,6 +161,13 @@
                             <span class="tunnel-arrow" aria-hidden="true">⬌</span>
                             <span class="tunnel-dest">{option.destinationAddress}:{option.destinationPort}</span>
                             <Chip>{(option.protocol ?? '').toUpperCase()}</Chip>
+                            {#if option.owner}
+                                <!-- 프로토콜 Chip 하나만 .chip 이어야 기존 목록 계약(screen-tunnels)이 성립한다. 소유자는 mono 글자로 그린다. -->
+                                <span data-owner class="mono" style="color: var(--ink-2);">{option.owner.username !== undefined ? '@' + option.owner.username : option.owner.id === 'system:migrated' ? 'migrated' : option.owner.id}</span>
+                            {/if}
+                            {#if option.editable === false}
+                                <span data-readonly><Chip tone="trace">read only</Chip></span>
+                            {/if}
                         </div>
                         <div class="tunnel-row">
                             {#if status && status.online}
@@ -162,7 +180,7 @@
                             {/if}
                         </div>
                     </a>
-                    {#if status?.online}
+                    {#if status?.online && option.editable !== false}
                         <div class="tunnel-row tunnel-controls">
                             <span class="tunnel-label">Activation</span>
                             <Switch on={status.active} ariaLabel={`Activation ${option.forwardPort}`}
