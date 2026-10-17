@@ -11,11 +11,13 @@
         title,
         back,
         menuOpen = $bindable(false),
+        hideMenu = false,
         class: className = '',
     }: {
         title: string;
         back?: string;
         menuOpen?: boolean;
+        hideMenu?: boolean;
         class?: string;
     } = $props();
 
@@ -32,7 +34,10 @@
 </script>
 
 <header class="hdr {className}">
-    {#if back}
+    {#if hideMenu}
+        <!-- 버튼 없이 같은 크기의 자리만 남겨 제목 위치를 유지한다. -->
+        <span class="hdr-btn" aria-hidden="true"></span>
+    {:else if back}
         <button type="button" class="hdr-btn" aria-label="Back" onclick={() => navigate(back)}>{@html ARROW}</button>
     {:else}
         <button type="button" id="menu-button" class="hdr-btn" aria-label="Open menu" aria-expanded={menuOpen} aria-controls="nav-drawer" onclick={() => (menuOpen = true)}>{@html BURGER}</button>

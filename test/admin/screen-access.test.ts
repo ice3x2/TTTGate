@@ -62,10 +62,10 @@ test("alice 가 권한 없는 해시로 가면 #/denied 이고 버튼으로 기�
             await visit(app.page, app.url, hash);
             await hashIs(app.page, "#/denied");
         }
-        for(const hash of ["#/me", "#/me/password"]) {
+        for(const [hash, selector] of [["#/me", "#screen-placeholder"], ["#/me/password", "#pw-current"]]) {
             await visit(app.page, app.url, hash);
             await hashIs(app.page, hash);
-            await app.page.locator("#screen-placeholder").waitFor({state: "visible", timeout: 10_000});
+            await app.page.locator(selector).waitFor({state: "visible", timeout: 10_000});
             expect(await app.page.evaluate(() => location.hash)).toBe(hash);
         }
         expect(app.errors).toEqual([]);
@@ -142,6 +142,55 @@ test("갈 수 있는 섹션이 없는 유저는 #/denied 에서 버튼 대신 �
         await hashIs(app.page, "#/denied");
         await app.page.locator("#denied-help").waitFor({state: "visible", timeout: 10_000});
         expect(await app.page.getByRole("button", {name: "Go to my tunnels"}).count()).toBe(0);
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+});
+
+const BANNER_TEXT = "Your account was promoted to superuser during the upgrade.";
+
+test("마이그레이션으로 승격된 admin 은 배너를 보고, 닫으면 새로 읽어도 다시 나오지 않는다", async () => {
+    const app = await open("admin");
+    try {
+        await hashIs(app.page, "#/status");
+        const banner = app.page.locator(".banner").filter({hasText: BANNER_TEXT});
+        await banner.waitFor({state: "visible", timeout: 10_000});
+        await app.page.locator('.banner [aria-label="Dismiss"]').click();
+        await banner.waitFor({state: "detached", timeout: 10_000});
+        await app.page.reload();
+        await app.page.locator("header h1").waitFor({state: "visible", timeout: 10_000});
+        await app.page.locator("#menu-button").waitFor({state: "visible", timeout: 10_000});
+        expect(await app.page.getByText(BANNER_TEXT).count()).toBe(0);
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+});
+
+test("마이그레이션과 무관한 alice 에게는 배너가 없다", async () => {
+    const app = await open("alice");
+    try {
+        await hashIs(app.page, "#/tunnels");
+        await app.page.locator("header h1").waitFor({state: "visible", timeout: 10_000});
+        expect(await app.page.getByText(BANNER_TEXT).count()).toBe(0);
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+});
+
+test("배너 닫기가 실패하면 서버 문구를 토스트로 보이고 배너는 남는다", async () => {
+    const app = await open("admin");
+    try {
+        await hashIs(app.page, "#/status");
+        const banner = app.page.locator(".banner").filter({hasText: BANNER_TEXT});
+        await banner.waitFor({state: "visible", timeout: 10_000});
+        await app.page.route("**/api/me/acknowledge-migration", (route) =>
+            route.fulfill({status: 500, contentType: "application/json", body: JSON.stringify({success: false, message: "boom"})}));
+        await app.page.locator('.banner [aria-label="Dismiss"]').click();
+        await app.page.getByText("boom", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+        expect(await banner.count()).toBe(1);
         expect(app.errors).toEqual([]);
     } finally {
         await app.close();

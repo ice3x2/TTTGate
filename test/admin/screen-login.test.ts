@@ -226,15 +226,14 @@ test("일반 유저는 자기 섹션(tunnels)만 드로어에서 본다", async 
     }
 }, 60_000);
 
-test("비밀번호 변경이 필요한 사용자는 안내와 Sign out 만 본다", async () => {
+test("비밀번호 변경이 필요한 사용자는 #/me/password 에 고정되고 Sign out 으로만 나간다", async () => {
     const app = await startAdminApp({fixture: "regular-user", login: false});
     try {
         await loginWith(app.page, TEMP_USER.username, TEMP_USER.password);
-        const notice = app.page.locator("#password-change-required");
-        await notice.waitFor({state: "visible", timeout: 10_000});
-        expect(await notice.getAttribute("role")).toBe("alert");
-        expect(await app.page.getByRole("button", {name: "Open menu"}).count()).toBe(0);
-        await app.page.locator("#password-change-sign-out").click();
+        await app.page.waitForFunction(() => location.hash === "#/me/password", undefined, {timeout: 10_000});
+        await app.page.locator("#pw-forced-note").waitFor({state: "visible", timeout: 10_000});
+        expect(await app.page.locator('[aria-label="Open menu"]').count()).toBe(0);
+        await app.page.getByRole("button", {name: "Sign out", exact: true}).click();
         await app.page.locator("#login-password").waitFor({state: "visible", timeout: 10_000});
         expect(app.errors).toEqual([]);
     } finally {
