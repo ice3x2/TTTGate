@@ -1,5 +1,5 @@
 import {adminRequest} from "./AdminRequest";
-import type {ApiResult, MeResponse} from "./Types";
+import type {ApiResult, MeResponse, SessionView} from "./Types";
 
 // U3-01: 본인 정보·비밀번호 변경·마이그레이션 안내 확인. adminRequest 의 응답을 그대로 돌려준다(fetch 직접 사용 금지).
 class MeCtrl {
@@ -27,6 +27,16 @@ class MeCtrl {
 
     public acknowledgeMigration(): Promise<ApiResult<{}>> {
         return adminRequest("/api/me/acknowledge-migration", {method: "POST"});
+    }
+
+    /** U4-06: 본인 세션 목록. */
+    public sessions(): Promise<ApiResult<{sessions: SessionView[]}>> {
+        return adminRequest("/api/me/sessions");
+    }
+
+    /** U4-06: 현재 세션을 뺀 본인 세션을 모두 끊는다. */
+    public logoutOthers(): Promise<ApiResult<{removed: number}>> {
+        return adminRequest("/api/me/sessions/logout-others", {method: "POST"});
     }
 }
 

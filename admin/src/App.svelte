@@ -14,6 +14,8 @@
   import GroupsScreen from "./screens/GroupsScreen.svelte";
   import GroupEditScreen from "./screens/GroupEditScreen.svelte";
   import MeScreen from "./screens/MeScreen.svelte";
+  import AuditScreen from "./screens/AuditScreen.svelte";
+  import SessionsScreen from "./screens/SessionsScreen.svelte";
   import MeCtrl from "./controller/MeCtrl";
   import Loading from "./ui/Loading.svelte";
   import Banner from "./ui/Banner.svelte";
@@ -80,7 +82,8 @@
     else navigate('#/denied');
   });
 
-  const current = $derived(chrome($route));
+  // U4-06: chrome() 은 역할을 모른다. 일반 유저의 감사 화면 제목만 여기서 덮는다.
+  const current = $derived($route.screen === 'audit' && $me?.user.role === 'regular' ? {title: 'My activity'} : chrome($route));
 
   // U3-02: 마이그레이션 안내 배너를 닫는다. 성공하면 me 를 다시 읽어 migrationBanner 가 false 가 된다.
   const dismissMigration = async (): Promise<void> => {
@@ -123,6 +126,8 @@
     {:else if $route.screen === 'groups'}<GroupsScreen />
     {:else if $route.screen === 'group-edit'}{#key $route.param}<GroupEditScreen param={$route.param ?? 'new'} />{/key}
     {:else if $route.screen === 'me'}<MeScreen />
+    {:else if $route.screen === 'audit'}<AuditScreen />
+    {:else if $route.screen === 'sessions'}<SessionsScreen />
     {:else}
       <p id="screen-placeholder">This screen is not available yet.</p>
     {/if}

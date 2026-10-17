@@ -14,18 +14,23 @@ import {ADMIN_FIXTURES, ADMIN_TEST_PASSWORD, REGULAR_USER, TEMP_USER} from "../h
 import {IdentityStore} from "../../src/server/rbac/IdentityStore";
 import {DEFAULT_GROUP_ID} from "../../src/server/rbac/IdentityTypes";
 import {serializeIdentityFixture} from "../helpers/identityFixture";
-import {RBAC_IDENTITY_FIXTURE, RBAC_TRUSTED_CLIENTS, RBAC_TUNNELS} from "../helpers/rbacFixture";
+import {RBAC_IDENTITY_FIXTURE, RBAC_PASSWORDS, RBAC_TRUSTED_CLIENTS, RBAC_TUNNELS} from "../helpers/rbacFixture";
+import {AuditSinkRegistry} from "../../src/server/audit/AuditSink";
+import {AUDIT_EVENT_TYPES} from "../../src/server/audit/AuditEventTypes";
+import {auditDirPath, FileAuditSink} from "../../src/server/audit/FileAuditSink";
+import {httpRequest} from "../helpers/http";
 import type {AdminFixture} from "../helpers/adminFixture";
 import {applyTestRoot} from "../helpers/runtime";
 
 // 관리자 브라우저 테스트용 백엔드 드라이버. 실제 AdminServer 를 띄우고 TTTServer 만 스텁으로 바꾼다.
-// 인자: [rootDir, fixture]. fixture 는 'bootstrap' | 'password' | 'with-tunnels' | 'regular-user' | 'rbac'.
+// 인자: [rootDir, fixture]. fixture 는 adminFixture.ts 의 ADMIN_FIXTURES 중 하나다.
 
 const rootDir = process.argv[2];
 const fixture = (process.argv[3] ?? "bootstrap") as AdminFixture;
 if(!ADMIN_FIXTURES.includes(fixture)) {
     process.exit(2);
 }
+const rbac = fixture === "rbac" || fixture === "rbac-no-audit";
 
 const TUNNEL_OPTIONS: Array<TunnelingOption> = [
     {
@@ -149,13 +154,13 @@ const stub = {
     if(fixture === "password" || fixture === "with-tunnels" || fixture === "regular-user") {
         fs.writeFileSync(path.join(rootDir, "config", ".key"), bcrypt.hashSync(ADMIN_TEST_PASSWORD, 12));
     }
-    if(fixture === "rbac") {
+    if(rbac) {
         // #103 (U3-01): 사용자·그룹은 identity.yaml 로 심는다(.key 없음). 런타임 해시(사용자 생성 등)만 cost 4 다.
         IdentityStore.bcryptCost = 4;
         fs.writeFileSync(path.join(rootDir, "config", "identity.yaml"), await serializeIdentityFixture(RBAC_IDENTITY_FIXTURE));
     }
     await CertificationStore.instance.load();
-    if(fixture === "rbac") {
+    if(rbac) {
         const store = ServerOptionStore.instance;
         const tunnels = RBAC_TUNNELS.map((tunnel) => ({...TUNNEL_OPTIONS[0], ...tunnel,
             ...(tunnel.protocol === "http" ? {httpOption: TUNNEL_OPTIONS[1].httpOption} : {})}));
@@ -172,7 +177,14 @@ const stub = {
         void ServerOptionStore.instance;
     }
     void SessionStore.instance;
+    // U4-06: 감사 화면이 실제 파일을 읽도록 ServerApp 과 같이 파일 싱크를 연결한다(rootDir/logs/audit).
+    const auditSink = new FileAuditSink({dir: auditDirPath(), queueSize: 1000, retentionDays: 0});
+    AuditSinkRegistry.set(auditSink);
     await IdentityMigration.runAtStartup();
+    if(fixture === "rbac-no-audit") {
+        const grouped = IdentityStore.instance.updateGroup(DEFAULT_GROUP_ID, {attributes: {admin_ui_section_access: ["tunnels", "my_profile", "my_sessions"]}});
+        if(!grouped.success) throw new Error("Invalid rbac-no-audit fixture");
+    }
     if(fixture === "regular-user") {
         // 슈퍼유저 admin 은 .key 승격으로 생긴다. 일반 유저 둘은 저장소 API 로 직접 만든다(빠른 bcrypt).
         IdentityStore.bcryptCost = 4;
@@ -193,6 +205,33 @@ const stub = {
         }
         if(message && message.type === "calls") {
             process.send?.({type: "calls", calls});
+        }
+        // U4-06: 브라우저 로그인 전에 다른 사용자 세션을 서버에 만들어 둔다(로그인 진입점이 아니라 사전 세션 시드다).
+        if(message && message.type === "login") {
+            const password = (RBAC_PASSWORDS as Record<string, string>)[message.username];
+            const body = JSON.stringify({username: message.username, password});
+            const response = await httpRequest({port, path: "/api/login", method: "POST",
+                headers: {"Content-Type": "application/json", "Content-Length": String(Buffer.byteLength(body)), "User-Agent": message.userAgent},
+                body});
+            process.send?.({type: "login", ok: response.statusCode === 200});
+        }
+        if(message && message.type === "sessions") {
+            // 화면과 같은 모양이다. 세션을 새로 만들지 않도록 HTTP 대신 저장소를 직접 읽는다.
+            const sessions = SessionStore.instance.listSessions().map((session) => ({
+                id: SessionStore.sessionIdOf(session.key), userId: session.userId,
+                username: IdentityStore.instance.user(session.userId)?.username ?? session.userId,
+                createdAt: session.createdAt, lastSeenAt: session.lastSeenAt, ip: session.ip, userAgent: session.userAgent ?? "", current: false
+            }));
+            process.send?.({type: "sessions", sessions});
+        }
+        if(message && message.type === "seedAudit") {
+            const now = Date.now();
+            for(let i = 0; i < message.n; i++) {
+                await AuditSinkRegistry.current().record({at: now - message.n + i, actor: {userId: "system"}, type: AUDIT_EVENT_TYPES.user_updated,
+                    target: {kind: "user", id: "u_0000000000000002"}, outcome: "success", summary: "user_updated u_0000000000000002"});
+            }
+            await (AuditSinkRegistry.current() as FileAuditSink).flush();
+            process.send?.({type: "seedAudit"});
         }
     });
 })();

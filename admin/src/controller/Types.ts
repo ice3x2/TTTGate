@@ -133,4 +133,10 @@ export const DEFAULT_GROUP_ATTRIBUTES: GroupAttributes = {
 export type MeResponse = {user: UserView; group: {id: string; name: string; attributes: GroupAttributes};
     sections: string[]; migrationBanner: boolean};
 export type ApiFailure = {success: false; status: number; message: string; code?: string};
+/** U4-06: GET /api/audit 의 이벤트 한 건. */
+export type AuditEventView = {at: number; actor: {userId: string; username?: string; role?: string}; sessionIdHash?: string; ip?: string;
+    type: string; target?: {kind: string; id: string}; outcome: 'success' | 'failure'; summary: string; detail?: Record<string, unknown>};
+export type AuditQueryInput = {from?: number; to?: number; userId?: string; type?: string; outcome?: 'success' | 'failure'; limit?: number; cursor?: string};
+/** U4-06: GET /api/sessions·/api/me/sessions 의 세션 한 건. */
+export type SessionView = {id: string; userId: string; username: string; createdAt: number; lastSeenAt: number; ip: string; userAgent: string; current: boolean};
 export type ApiResult<T> = ({success: true} & T) | ApiFailure;

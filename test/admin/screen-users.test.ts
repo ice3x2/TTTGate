@@ -303,3 +303,22 @@ test("표시 이름을 비워도 변경으로 보지 않아 Save 가 비활성�
     await page.locator("#user-display-name").fill("");
     expect(await button(page, "Save").isDisabled()).toBe(true);
 }));
+
+test("사용자 편집 화면의 Sessions 행은 세션 수를 보이고 모두 끊을 수 있다", async () => {
+    const app = await startAdminApp({fixture: "rbac", extraLogins: [{as: "alice", userAgent: "UA-ALICE-1"}, {as: "alice", userAgent: "UA-ALICE-2"}]});
+    try {
+        const {page} = app;
+        await page.goto(`${app.url}#/users/${ALICE_ID}`);
+        const count = page.locator("#user-session-count");
+        await count.filter({hasText: "2 active session(s)"}).waitFor({state: "visible", timeout: 10_000});
+        await page.locator("#user-end-sessions button").click();
+        await page.locator(".end-all-modal").waitFor({state: "visible"});
+        await page.locator("#confirm-end-all").click();
+        await page.getByText("Ended 2 session(s).", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+        await count.filter({hasText: "0 active session(s)"}).waitFor({state: "visible", timeout: 10_000});
+        expect(await page.locator("#user-end-sessions button").isDisabled()).toBe(true);
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+});

@@ -29,14 +29,15 @@ const drawerTitles = async (page: Page): Promise<string[]> => {
     return titles;
 };
 
-test("alice 는 #/tunnels 에서 시작하고 드로어에 Tunnels·My account 만 있다", async () => {
+test("alice 는 #/tunnels 에서 시작하고 드로어에 자기 섹션(Tunnels·Audit log·Sessions·My account)만 있다", async () => {
     const app = await open("alice");
     try {
         await hashIs(app.page, "#/tunnels");
         await app.page.getByRole("button", {name: "Open menu"}).click();
         const dialog = app.page.locator('[role=dialog][aria-label="Navigation"]');
         await dialog.waitFor({state: "visible"});
-        expect(await dialog.locator(".drawer-item").allTextContents()).toEqual(["Tunnels", "My account"]);
+        // U4-06: Field team 은 my_audit·my_sessions 를 가진다.
+        expect(await dialog.locator(".drawer-item").allTextContents()).toEqual(["Tunnels", "Audit log", "Sessions", "My account"]);
         expect(await app.page.locator("#drawer-username").textContent()).toBe("alice");
         expect(app.errors).toEqual([]);
     } finally {
@@ -74,11 +75,11 @@ test("alice 가 권한 없는 해시로 가면 #/denied 이고 버튼으로 기�
     }
 });
 
-test("admin 은 #/status 에서 시작하고 NAV 6개를 모두 보며 어디로든 갈 수 있다", async () => {
+test("admin 은 #/status 에서 시작하고 NAV 8개를 모두 보며 어디로든 갈 수 있다", async () => {
     const app = await open("admin");
     try {
         await hashIs(app.page, "#/status");
-        expect(await drawerTitles(app.page)).toEqual(["Status", "Tunnels", "Server settings", "Users", "Groups", "My account"]);
+        expect(await drawerTitles(app.page)).toEqual(["Status", "Tunnels", "Server settings", "Users", "Groups", "Audit log", "Sessions", "My account"]);
         // U3-03: #/users 는 사용자 카드 목록이다.
         await visit(app.page, app.url, "#/users");
         await hashIs(app.page, "#/users");
@@ -102,11 +103,11 @@ test("admin 은 #/status 에서 시작하고 NAV 6개를 모두 보며 어디로
     }
 });
 
-test("carol(Default 그룹)은 #/tunnels 에서 시작하고 Tunnels·My account 를 본다", async () => {
+test("carol(Default 그룹)은 #/tunnels 에서 시작하고 자기 섹션만 본다", async () => {
     const app = await open("carol");
     try {
         await hashIs(app.page, "#/tunnels");
-        expect(await drawerTitles(app.page)).toEqual(["Tunnels", "My account"]);
+        expect(await drawerTitles(app.page)).toEqual(["Tunnels", "Audit log", "Sessions", "My account"]);
         expect(app.errors).toEqual([]);
     } finally {
         await app.close();
