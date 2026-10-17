@@ -79,7 +79,11 @@ test("admin 은 #/status 에서 시작하고 NAV 6개를 모두 보며 어디로
     try {
         await hashIs(app.page, "#/status");
         expect(await drawerTitles(app.page)).toEqual(["Status", "Tunnels", "Server settings", "Users", "Groups", "My account"]);
-        for(const hash of ["#/users", "#/groups", "#/me"]) {
+        // U3-03: #/users 는 사용자 카드 목록이다.
+        await visit(app.page, app.url, "#/users");
+        await hashIs(app.page, "#/users");
+        await app.page.waitForFunction(() => document.querySelectorAll("li[data-user-id]").length === 5, undefined, {timeout: 10_000});
+        for(const hash of ["#/groups", "#/me"]) {
             await visit(app.page, app.url, hash);
             await hashIs(app.page, hash);
             await app.page.locator("#screen-placeholder").waitFor({state: "visible", timeout: 10_000});
