@@ -75,11 +75,11 @@ test("alice 가 권한 없는 해시로 가면 #/denied 이고 버튼으로 기�
     }
 });
 
-test("admin 은 #/status 에서 시작하고 NAV 8개를 모두 보며 어디로든 갈 수 있다", async () => {
+test("admin 은 #/status 에서 시작하고 NAV 9개를 모두 보며 어디로든 갈 수 있다", async () => {
     const app = await open("admin");
     try {
         await hashIs(app.page, "#/status");
-        expect(await drawerTitles(app.page)).toEqual(["Status", "Tunnels", "Server settings", "Users", "Groups", "Audit log", "Sessions", "My account"]);
+        expect(await drawerTitles(app.page)).toEqual(["Status", "Tunnels", "Server settings", "Users", "Groups", "Security", "Audit log", "Sessions", "My account"]);
         // U3-03: #/users 는 사용자 카드 목록이다.
         await visit(app.page, app.url, "#/users");
         await hashIs(app.page, "#/users");
@@ -198,6 +198,19 @@ test("배너 닫기가 실패하면 서버 문구를 토스트로 보이고 배�
         await app.page.locator('.banner [aria-label="Dismiss"]').click();
         await app.page.getByText("boom", {exact: true}).waitFor({state: "visible", timeout: 10_000});
         expect(await banner.count()).toBe(1);
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+});
+
+test("alice 는 드로어에 Security 가 없고 #/security 로 가면 #/denied 다", async () => {
+    const app = await open("alice");
+    try {
+        await hashIs(app.page, "#/tunnels");
+        expect(await drawerTitles(app.page)).not.toContain("Security");
+        await visit(app.page, app.url, "#/security");
+        await hashIs(app.page, "#/denied");
         expect(app.errors).toEqual([]);
     } finally {
         await app.close();

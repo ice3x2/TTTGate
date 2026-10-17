@@ -10,7 +10,7 @@ export const NAV: ReadonlyArray<NavItem> = [
     {hash: '#/server',  title: 'Server settings', screen: 'server',  section: 'server'},
     {hash: '#/users',   title: 'Users',           screen: 'users',   section: 'users'},
     {hash: '#/groups',  title: 'Groups',          screen: 'groups',  section: 'groups'},
-    // 단위 5 가 이 앞에 Security 를 넣는다
+    {hash: '#/security', title: 'Security',   screen: 'security', section: 'security'},
     {hash: '#/audit',    title: 'Audit log',  screen: 'audit',    section: 'audit'},
     {hash: '#/sessions', title: 'Sessions',   screen: 'sessions', section: 'sessions'},
     {hash: '#/me',      title: 'My account',      screen: 'me',      section: 'me'},
@@ -21,7 +21,7 @@ export const SECTION_OF_SCREEN: Record<Screen, Section | null> = {
     status: 'status', tunnels: 'tunnels', 'tunnel-edit': 'tunnels', server: 'server',
     users: 'users', 'user-edit': 'users', groups: 'groups', 'group-edit': 'groups',
     me: 'me', 'me-password': null, denied: null,
-    audit: 'audit', sessions: 'sessions',
+    audit: 'audit', sessions: 'sessions', security: 'security',
 };
 
 export function visibleNav(sections: string[]): NavItem[] {
@@ -42,6 +42,7 @@ export function chrome(route: Route): {title: string; back?: string} {
         // U4-06: 역할과 무관한 기본 제목이다. 일반 유저의 "My activity" 는 App 이 덮는다.
         case 'audit': return {title: 'Audit log'};
         case 'sessions': return {title: 'Sessions'};
+        case 'security': return {title: 'Security'};
     }
     const item = NAV.find((entry) => entry.screen === route.screen);
     return {title: item ? item.title : 'Status'};

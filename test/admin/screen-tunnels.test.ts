@@ -479,6 +479,8 @@ test("새 터널 화면은 삭제 버튼 없이 기본값을 채우고 Start 로
             bufferLimitOnClient: 10,
             bufferLimitOnServer: 10,
             allowedClientNames: [],
+            // U5-06: 새 터널은 TCP 기본 레이트 리밋으로 시작한다.
+            rateLimit: {enabled: true, windowMs: 60000, maxConnections: 30, banMs: 600000, customized: false},
             expectedRevision: list.revisionState.currentRevision,
         }]);
         expect(app.errors).toEqual([]);
@@ -514,3 +516,78 @@ test("포트와 클라이언트 버퍼는 범위 안으로 잘리고, 서버 버
         await app.close();
     }
 }, 60_000);
+
+describe("U5-06 레이트 리밋 카드와 Blocked 표시", () => {
+    const openEdit = async (app: Awaited<ReturnType<typeof startAdminApp>>, port: number | "new") => {
+        await app.page.goto(`${app.url}#/tunnels/${port}`);
+        await app.page.locator("#input-rate-window").waitFor({state: "visible", timeout: 10_000});
+    };
+    const values = (page: Page) => Promise.all(["#input-rate-window", "#input-rate-max", "#input-rate-ban"].map((id) => page.locator(id).inputValue()));
+
+    test("거절이 있는 online 카드에만 Blocked 합계를 보인다", async () => {
+        const app = await startAdminApp({fixture: "with-tunnels"});
+        try {
+            await openTunnels(app.page);
+            await card(app.page, 20002).locator("[data-blocked]").waitFor({state: "visible", timeout: 10_000});
+            expect(await card(app.page, 20002).locator("[data-blocked]").textContent()).toBe("Blocked 7");
+            expect(await card(app.page, 20001).locator("[data-blocked]").count()).toBe(0);
+            expect(app.errors).toEqual([]);
+        } finally {
+            await app.close();
+        }
+    }, 120_000);
+
+    test("TCP 터널은 30/60초/10분이고, 고치지 않았으면 HTTP 로 바꿀 때 300 이 되며 고친 값은 유지되어 저장된다", async () => {
+        const app = await startAdminApp({fixture: "with-tunnels"});
+        try {
+            await openEdit(app, 20001);
+            expect(await values(app.page)).toEqual(["60", "30", "10"]);
+            expect(await app.page.locator('[aria-label="Rate limit enabled"]').getAttribute("aria-checked")).toBe("true");
+            await app.page.locator("#select-protocol").selectOption("http");
+            await app.page.waitForFunction(() => (document.querySelector("#input-rate-max") as HTMLInputElement).value === "300");
+            await app.page.locator("#input-rate-max").fill("50");
+            await app.page.locator("#select-protocol").selectOption("tcp");
+            expect(await app.page.locator("#input-rate-max").inputValue()).toBe("50");
+            await app.page.getByRole("button", {name: "Apply and Restart", exact: true}).click();
+            await app.page.waitForFunction(() => location.hash === "#/tunnels", undefined, {timeout: 10_000});
+            const applied = (await app.calls()).filter((call) => call.method === "applyTunnelingOption");
+            // 첫 인자가 저장된 터널 옵션이다.
+            expect(applied[applied.length - 1].args[0].rateLimit).toEqual({enabled: true, windowMs: 60000, maxConnections: 50, banMs: 600000, customized: true});
+            expect(app.errors).toEqual([]);
+        } finally {
+            await app.close();
+        }
+    }, 120_000);
+
+    test("새 터널은 TCP 기본값이고 범위 밖 값이면 오류를 보이고 저장을 막는다", async () => {
+        const app = await startAdminApp({fixture: "with-tunnels"});
+        try {
+            await openEdit(app, "new");
+            expect(await values(app.page)).toEqual(["60", "30", "10"]);
+            await app.page.locator("#input-rate-window").fill("0");
+            await app.page.getByText("1..3600", {exact: true}).waitFor({state: "visible"});
+            expect(await app.page.getByRole("button", {name: "Start", exact: true}).isDisabled()).toBe(true);
+            expect(app.errors).toEqual([]);
+        } finally {
+            await app.close();
+        }
+    }, 120_000);
+});
+
+test("U5-06 레이트 리밋 스위치를 끈 뒤 프로토콜을 바꿔도 꺼진 채로 남는다", async () => {
+    const app = await startAdminApp({fixture: "with-tunnels"});
+    try {
+        await app.page.goto(`${app.url}#/tunnels/20001`);
+        const toggle = app.page.locator('[aria-label="Rate limit enabled"]');
+        await toggle.waitFor({state: "visible", timeout: 10_000});
+        await toggle.click();
+        expect(await toggle.getAttribute("aria-checked")).toBe("false");
+        await app.page.locator("#select-protocol").selectOption("http");
+        expect(await toggle.getAttribute("aria-checked")).toBe("false");
+        // 스위치만 고쳤어도 사용자가 고친 것이므로 다른 값도 기본값으로 갈아끼우지 않는다.
+        expect(await app.page.locator("#input-rate-max").inputValue()).toBe("30");
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, 120_000);

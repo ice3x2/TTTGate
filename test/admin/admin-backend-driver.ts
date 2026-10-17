@@ -19,6 +19,7 @@ import {AuditSinkRegistry} from "../../src/server/audit/AuditSink";
 import {AUDIT_EVENT_TYPES} from "../../src/server/audit/AuditEventTypes";
 import {auditDirPath, FileAuditSink} from "../../src/server/audit/FileAuditSink";
 import {httpRequest} from "../helpers/http";
+import {AdmissionController} from "../../src/server/security/AdmissionController";
 import type {AdminFixture} from "../helpers/adminFixture";
 import {applyTestRoot} from "../helpers/runtime";
 
@@ -69,8 +70,9 @@ const statusOf = (port: number): ExternalPortServerStatus => ({
     uptime: startedAt,
     activeStart: active.get(port)?.activeStart ?? startedAt,
     activeTimeout: active.get(port)?.activeTimeout ?? 3600,
-    rejected: {geo: 0, rateLimit: 0},
-    bannedIps: 0
+    // U5-06: 20002 는 거절 7건(geo 2 + rateLimit 5)이 있는 카드다.
+    rejected: port === 20002 ? {geo: 2, rateLimit: 5} : {geo: 0, rateLimit: 0},
+    bannedIps: port === 20002 ? 1 : 0
 });
 
 const configuredPorts = (): Array<number> =>
@@ -92,6 +94,11 @@ const stub = {
     async applyTunnelingOption(...args: unknown[]) {
         record("applyTunnelingOption", args);
         return OK();
+    },
+    // U5-06: 국가 필터 저장(PUT /api/security/geo)이 부른다. 기록만 한다 — 실제로 적용하면
+    // unknownPolicy=deny + applyToAdmin 조합에서 루프백인 테스트 브라우저가 관리 콘솔에서 막힌다.
+    applyConnectionSecurity(...args: unknown[]) {
+        record("applyConnectionSecurity", args);
     },
     async applyExternalServerCert(...args: unknown[]) {
         record("applyExternalServerCert", args);
@@ -223,6 +230,14 @@ const stub = {
                 createdAt: session.createdAt, lastSeenAt: session.lastSeenAt, ip: session.ip, userAgent: session.userAgent ?? "", current: false
             }));
             process.send?.({type: "sessions", sessions});
+        }
+        // U5-06: 실제 리미터에 차단을 하나 만든다(한 번 허용 뒤 두 번째가 차단된다).
+        if(message && message.type === "seed-ban") {
+            AdmissionController.instance.configureTunnel({forwardPort: message.port,
+                rateLimit: {enabled: true, windowMs: 60000, maxConnections: 1, banMs: 600000}} as any);
+            AdmissionController.instance.admit({kind: "tunnel", port: message.port, protocol: "tcp"} as any, message.ip);
+            AdmissionController.instance.admit({kind: "tunnel", port: message.port, protocol: "tcp"} as any, message.ip);
+            process.send?.({type: "seed-ban"});
         }
         if(message && message.type === "seedAudit") {
             const now = Date.now();

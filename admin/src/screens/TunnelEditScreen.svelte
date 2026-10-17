@@ -16,6 +16,8 @@
     import Loading from '../ui/Loading.svelte';
     import Modal from '../ui/Modal.svelte';
     import NumberInput from '../ui/NumberInput.svelte';
+    import Switch from '../ui/Switch.svelte';
+    import {defaultRateLimit} from '../util/rateLimit';
     import Select from '../ui/Select.svelte';
     import TextInput from '../ui/TextInput.svelte';
     import {toast} from '../ui/toast';
@@ -90,7 +92,8 @@
         inactiveOnStartup: false,
         bufferLimitOnClient: 10,
         bufferLimitOnServer: 10,
-        allowedClientNamesQuery: ''
+        allowedClientNamesQuery: '',
+        rateLimit: defaultRateLimit('tcp')
     });
 
     // 옛 _validServerBuffer(86행) 그대로다.
@@ -112,7 +115,36 @@
         return value;
     };
 
-    const updatable = $derived(option ? ServerOptionCtrl.checkValidTunnelingOption(option) && validServerBuffer(option.bufferLimitOnServer) : false);
+    // U5-06: 레이트 리밋 입력은 초·분 단위로 보이고 저장할 때 밀리초로 바꾼다. 범위 밖이면 저장을 막는다.
+    const RATE_RANGES = {window: [1, 3600], max: [1, 100000], ban: [1, 1440]} as const;
+    const inRange = (value: number | null, [low, high]: readonly [number, number]): boolean =>
+        typeof value === 'number' && Number.isInteger(value) && value >= low && value <= high;
+    let rateWindow = $state<number | null>(60);
+    let rateMax = $state<number | null>(30);
+    let rateBan = $state<number | null>(10);
+    // 사용자가 고친 칸만 검사하고 다시 쓴다. 서버 값이 초·분으로 나누어떨어지지 않아도(API 로 넣은 1.5초 등)
+    // 손대지 않은 칸은 그대로 보내므로, 다른 필드 저장이 막히거나 값이 반올림되지 않는다.
+    let rateTouched = $state({window: false, max: false, ban: false});
+    const rateValid = $derived((!rateTouched.window || inRange(rateWindow, RATE_RANGES.window))
+        && (!rateTouched.max || inRange(rateMax, RATE_RANGES.max)) && (!rateTouched.ban || inRange(rateBan, RATE_RANGES.ban)));
+    const syncRateInputs = () => {
+        const limit = option?.rateLimit;
+        if(!limit) return;
+        rateWindow = limit.windowMs / 1000;
+        rateMax = limit.maxConnections;
+        rateBan = limit.banMs / 60000;
+        rateTouched = {window: false, max: false, ban: false};
+    };
+    const onRateInput = (field: 'window' | 'max' | 'ban') => {
+        if(!option?.rateLimit) return;
+        option.rateLimit.customized = true;
+        rateTouched[field] = true;
+        if(field === 'window' && inRange(rateWindow, RATE_RANGES.window)) option.rateLimit.windowMs = rateWindow! * 1000;
+        if(field === 'max' && inRange(rateMax, RATE_RANGES.max)) option.rateLimit.maxConnections = rateMax!;
+        if(field === 'ban' && inRange(rateBan, RATE_RANGES.ban)) option.rateLimit.banMs = rateBan! * 60000;
+    };
+
+    const updatable = $derived(option ? ServerOptionCtrl.checkValidTunnelingOption(option) && validServerBuffer(option.bufferLimitOnServer) && rateValid : false);
 
     // 옛 _loadCertInfo(134~156행) 그대로다. 옛 코드는 포트로 행을 찾아 없으면 그대로 돌아갔다.
     const loadCertInfo = async (port: number) => {
@@ -154,6 +186,7 @@
                     fresh.allowedClientIds = [...policy.trustedClients];
                 }
                 option = fresh;
+                syncRateInputs();
                 loading = false;
                 return;
             }
@@ -169,7 +202,10 @@
             if(!found.allowedClientNamesQuery) found.allowedClientNamesQuery = '';
             else found.allowedClientNamesQuery += ';';
             if(!found.httpOption) found.httpOption = emptyOption().httpOption;
+            // 서버가 늘 채워 주지만, 없으면 프로토콜 기본값으로 시작한다.
+            if(!found.rateLimit) found.rateLimit = defaultRateLimit(found.protocol);
             option = found;
+            syncRateInputs();
             ownerId = found.owner?.id ?? '';
             if(!restricted) await loadOwners();
             await loadCertInfo(found.forwardPort);
@@ -246,6 +282,11 @@
             if(!old) onChangeSecureTunneling(option.forwardPort);
         } else {
             option.tls = false;
+        }
+        // D9: 사용자가 직접 고치지 않은 레이트 리밋만 새 프로토콜의 기본값으로 바꾼다.
+        if(option.rateLimit && !option.rateLimit.customized) {
+            option.rateLimit = defaultRateLimit(option.protocol);
+            syncRateInputs();
         }
     };
 
@@ -414,6 +455,28 @@
             <Field label="Protocol" for="select-protocol">
                 <Select id="select-protocol" options={protocolOptions} bind:value={option.protocol} onchange={onChangeProtocol} />
             </Field>
+            {#if option.rateLimit}
+                <Card label="Rate limit">
+                    <div class="form-stack">
+                        <!-- 스위치도 사용자가 고친 값이다(D9). 끈 뒤 프로토콜을 바꿔도 기본값으로 되돌리지 않는다. -->
+                        <Switch ariaLabel="Rate limit enabled" disabled={readOnly} bind:on={option.rateLimit.enabled}
+                            onchange={() => { if(option?.rateLimit) option.rateLimit.customized = true; }} />
+                        <Field label="Window (seconds)" for="input-rate-window" error={!rateTouched.window || inRange(rateWindow, RATE_RANGES.window) ? undefined : '1..3600'}>
+                            <NumberInput id="input-rate-window" min={1} max={3600} invalid={rateTouched.window && !inRange(rateWindow, RATE_RANGES.window)}
+                                bind:value={rateWindow} oninput={() => onRateInput('window')} />
+                        </Field>
+                        <Field label="Max connections per IP" for="input-rate-max" error={!rateTouched.max || inRange(rateMax, RATE_RANGES.max) ? undefined : '1..100000'}>
+                            <NumberInput id="input-rate-max" min={1} max={100000} invalid={rateTouched.max && !inRange(rateMax, RATE_RANGES.max)}
+                                bind:value={rateMax} oninput={() => onRateInput('max')} />
+                        </Field>
+                        <Field label="Ban duration (minutes)" for="input-rate-ban" error={!rateTouched.ban || inRange(rateBan, RATE_RANGES.ban) ? undefined : '1..1440'}>
+                            <NumberInput id="input-rate-ban" min={1} max={1440} invalid={rateTouched.ban && !inRange(rateBan, RATE_RANGES.ban)}
+                                bind:value={rateBan} oninput={() => onRateInput('ban')} />
+                        </Field>
+                        <p class="notes" style="margin: 0; padding: 0; list-style: none;">Blocks an IP that opens more than N connections within the window. Browsers open several connections per page; keep HTTP limits higher.</p>
+                    </div>
+                </Card>
+            {/if}
             {#if (option.protocol === 'http' || option.protocol === 'https') && (policy?.showHttpOptions ?? true)}
                 <h2 class="section-title">HTTP options</h2>
                 {#if policy?.rewrite.host ?? true}

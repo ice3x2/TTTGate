@@ -27,6 +27,7 @@ const CASES: ReadonlyArray<readonly [string, Route]> = [
     ["#/users/u_0123456789abcdef", {screen: "user-edit", param: "u_0123456789abcdef"}],
     ["#/users/u_123", {screen: "users"}],
     ["#/audit", {screen: "audit"}],
+    ["#/security", {screen: "security"}],
     ["#/sessions", {screen: "sessions"}],
     ["#/users/u_0123456789ABCDEF", {screen: "users"}],
     ["#/users/alice", {screen: "users"}],

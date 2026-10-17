@@ -2,6 +2,7 @@
 
 
 // noinspection DuplicatedCode
+import type {RateLimitOption} from "./Types";
 type Protocol =  "tcp" | "http" | "https";
 type CustomHeader = {
     name: string;
@@ -35,6 +36,9 @@ type TunnelingStatus = {
     activeTimeout: number,
     rx: number,
     tx: number,
+    /** U5-06: 거절 건수와 차단된 IP 수. */
+    rejected?: {geo: number; rateLimit: number},
+    bannedIps?: number,
 }
 
 
@@ -65,6 +69,8 @@ type Options = {
     editable?: boolean;
     /** U3-06: 일반 유저는 allowedClientNames 대신 이것만 쓴다. */
     allowedClientIds?: Array<string>;
+    /** U5-06: 접속 레이트 리밋. 서버가 늘 채워 돌려준다. */
+    rateLimit?: RateLimitOption;
 }
 
 export type { ServerOption, Options, HttpOption, CustomHeader, TunnelingStatus, RewriteRule};
