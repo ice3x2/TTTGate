@@ -11,6 +11,8 @@
   import PasswordChangeScreen from "./screens/PasswordChangeScreen.svelte";
   import UsersScreen from "./screens/UsersScreen.svelte";
   import UserEditScreen from "./screens/UserEditScreen.svelte";
+  import GroupsScreen from "./screens/GroupsScreen.svelte";
+  import GroupEditScreen from "./screens/GroupEditScreen.svelte";
   import MeCtrl from "./controller/MeCtrl";
   import Loading from "./ui/Loading.svelte";
   import Banner from "./ui/Banner.svelte";
@@ -117,8 +119,10 @@
     {:else if $route.screen === 'me-password'}<PasswordChangeScreen />
     {:else if $route.screen === 'users'}<UsersScreen />
     {:else if $route.screen === 'user-edit'}{#key $route.param}<UserEditScreen param={$route.param ?? 'new'} />{/key}
+    {:else if $route.screen === 'groups'}<GroupsScreen />
+    {:else if $route.screen === 'group-edit'}{#key $route.param}<GroupEditScreen param={$route.param ?? 'new'} />{/key}
     {:else}
-      <!-- U3-04·U3-05 가 groups·me 화면으로 교체한다. -->
+      <!-- U3-05 가 me 화면으로 교체한다. -->
       <p id="screen-placeholder">This screen is not available yet.</p>
     {/if}
   </Shell>

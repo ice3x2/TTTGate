@@ -1,7 +1,7 @@
 import {adminRequest} from "./AdminRequest";
-import type {ApiResult, Group} from "./Types";
+import type {ApiResult, Group, GroupAttributes, UserView} from "./Types";
 
-// U3-03: 그룹 API. 이 단계에서는 목록만 쓴다(편집 메서드는 U3-04 가 더한다).
+// U3-03·U3-04: 그룹 API. 그룹 id(g_ + 16 hex, default, system:superuser)는 경로에 그대로 붙인다(인코딩하면 ':' 가 바뀐다).
 class GroupsCtrl {
     private static _instance: GroupsCtrl;
 
@@ -17,6 +17,22 @@ class GroupsCtrl {
 
     public list(): Promise<ApiResult<{groups: Array<Group & {memberCount: number}>}>> {
         return adminRequest("/api/groups");
+    }
+
+    public get(id: string): Promise<ApiResult<{group: Group & {memberCount: number}; members: UserView[]}>> {
+        return adminRequest(`/api/groups/${id}`);
+    }
+
+    public create(input: {name: string; attributes: GroupAttributes}): Promise<ApiResult<{group: Group}>> {
+        return adminRequest("/api/groups", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(input)});
+    }
+
+    public update(id: string, patch: {name?: string; attributes?: GroupAttributes}): Promise<ApiResult<{group: Group}>> {
+        return adminRequest(`/api/groups/${id}`, {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify(patch)});
+    }
+
+    public remove(id: string): Promise<ApiResult<{}>> {
+        return adminRequest(`/api/groups/${id}`, {method: "DELETE"});
     }
 }
 

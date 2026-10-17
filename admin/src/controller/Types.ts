@@ -19,6 +19,8 @@ type ServerOption = {
     tls: boolean;
     globalMemCacheLimit: number;
     keepAlive: number;
+    /** U3-04: 그룹 속성의 신뢰 클라이언트 선택지. clientSecret 은 타입에 넣지 않는다. */
+    trustedClients?: Array<{clientId: string; displayName?: string}>;
 }
 
 type VersionInfo = {
@@ -114,6 +116,20 @@ export type GroupAttributes = {
     rate_limit: 'unlimited' | '1MB/s' | '10MB/s' | '100MB/s';
 };
 export type Group = {id: string; name: string; system: boolean; attributes: GroupAttributes};
+/** U3-04: 단위 2 §3 기본값. 새 그룹 폼의 초기값이자 system:superuser 의 표시용 값이다. */
+export const DEFAULT_GROUP_ATTRIBUTES: GroupAttributes = {
+    tunnel_crud: 'full',
+    max_tunnel_count: 10,
+    max_tunnel_duration_ms: 0,
+    allowed_port_range: [],
+    allowed_protocols: [],
+    max_concurrent_connections: 100,
+    allowed_trusted_clients: [],
+    http_tunnel_rewrite_permissions: {cors: false, host: false, header: false, body: false},
+    admin_ui_section_access: ['tunnels', 'my_audit', 'my_profile', 'my_sessions'],
+    tunnel_visibility: 'private',
+    rate_limit: 'unlimited',
+};
 export type MeResponse = {user: UserView; group: {id: string; name: string; attributes: GroupAttributes};
     sections: string[]; migrationBanner: boolean};
 export type ApiFailure = {success: false; status: number; message: string; code?: string};

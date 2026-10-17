@@ -83,11 +83,13 @@ test("admin 은 #/status 에서 시작하고 NAV 6개를 모두 보며 어디로
         await visit(app.page, app.url, "#/users");
         await hashIs(app.page, "#/users");
         await app.page.waitForFunction(() => document.querySelectorAll("li[data-user-id]").length === 5, undefined, {timeout: 10_000});
-        for(const hash of ["#/groups", "#/me"]) {
-            await visit(app.page, app.url, hash);
-            await hashIs(app.page, hash);
-            await app.page.locator("#screen-placeholder").waitFor({state: "visible", timeout: 10_000});
-        }
+        // U3-04: #/groups 는 그룹 카드 목록이다.
+        await visit(app.page, app.url, "#/groups");
+        await hashIs(app.page, "#/groups");
+        await app.page.waitForFunction(() => document.querySelectorAll("li[data-group-id]").length === 3, undefined, {timeout: 10_000});
+        await visit(app.page, app.url, "#/me");
+        await hashIs(app.page, "#/me");
+        await app.page.locator("#screen-placeholder").waitFor({state: "visible", timeout: 10_000});
         await visit(app.page, app.url, "#/denied");
         await hashIs(app.page, "#/denied");
         await app.page.locator("#denied-message").waitFor({state: "visible", timeout: 10_000});
