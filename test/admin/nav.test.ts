@@ -15,6 +15,8 @@ describe("nav", () => {
         expect(chrome({screen: "me"})).toEqual({title: "My account"});
         expect(chrome({screen: "me-password"})).toEqual({title: "Change password", back: "#/me"});
         expect(chrome({screen: "denied"})).toEqual({title: "No access"});
+        expect(chrome({screen: "audit"})).toEqual({title: "Audit log"});
+        expect(chrome({screen: "sessions"})).toEqual({title: "Sessions"});
         // 기존 행은 그대로다.
         expect(chrome({screen: "tunnel-edit", param: "new"})).toEqual({title: "New tunnel", back: "#/tunnels"});
         expect(chrome({screen: "status"})).toEqual({title: "Status"});
@@ -28,26 +30,31 @@ describe("nav", () => {
         expect(navScreen({screen: "denied"})).toBe("denied");
     });
 
-    test("NAV 는 6개 항목을 정해진 순서로 갖는다", () => {
-        expect(NAV.map((item) => item.title)).toEqual(["Status", "Tunnels", "Server settings", "Users", "Groups", "My account"]);
+    test("NAV 는 8개 항목을 정해진 순서로 갖는다(U4-06 이 Groups 와 My account 사이에 Audit log·Sessions 를 넣었다)", () => {
+        expect(NAV.map((item) => item.title)).toEqual(["Status", "Tunnels", "Server settings", "Users", "Groups", "Audit log", "Sessions", "My account"]);
         // 편집 화면이 목록과 같은 섹션이어야 가드가 #/users/new 같은 해시도 막는다.
         expect(SECTION_OF_SCREEN).toEqual({
             status: "status", tunnels: "tunnels", "tunnel-edit": "tunnels", server: "server",
             users: "users", "user-edit": "users", groups: "groups", "group-edit": "groups",
             me: "me", "me-password": null, denied: null,
+            audit: "audit", sessions: "sessions",
         });
     });
 
     test("visibleNav 는 섹션에 있는 항목만 순서대로 돌려준다", () => {
         expect(visibleNav(SUPERUSER_SECTIONS).map((item) => item.title)).toEqual(NAV.map((item) => item.title));
-        expect(visibleNav(["tunnels", "audit", "me", "sessions"]).map((item) => item.title)).toEqual(["Tunnels", "My account"]);
+        expect(visibleNav(["tunnels", "audit", "me", "sessions"]).map((item) => item.title)).toEqual(["Tunnels", "Audit log", "Sessions", "My account"]);
+        const hashes = visibleNav(SUPERUSER_SECTIONS).map((item) => item.hash);
+        expect(hashes.indexOf("#/audit")).toBeLessThan(hashes.indexOf("#/sessions"));
+        expect(hashes.indexOf("#/sessions")).toBeLessThan(hashes.indexOf("#/me"));
         expect(visibleNav([])).toEqual([]);
     });
 
     test("defaultHash 는 첫 허용 항목, 없으면 #/me 다", () => {
         expect(defaultHash(SUPERUSER_SECTIONS)).toBe("#/status");
         expect(defaultHash(["tunnels", "audit", "me", "sessions"])).toBe("#/tunnels");
-        expect(defaultHash(["audit", "me"])).toBe("#/me");
+        // U4-06: Audit log 가 NAV 에 들어와 첫 허용 항목이 바뀐다(defaultHash 의 정의 그대로다).
+        expect(defaultHash(["audit", "me"])).toBe("#/audit");
         expect(defaultHash([])).toBe("#/me");
     });
 });

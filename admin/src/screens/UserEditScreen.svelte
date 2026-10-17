@@ -2,6 +2,7 @@
     import {onMount} from 'svelte';
     import InvalidSession from '../controller/InvalidSession';
     import GroupsCtrl from '../controller/GroupsCtrl';
+    import SessionsCtrl from '../controller/SessionsCtrl';
     import UsersCtrl from '../controller/UsersCtrl';
     import type {ApiFailure, Role, UserStatus, UserView} from '../controller/Types';
     import Button from '../ui/Button.svelte';
@@ -47,6 +48,34 @@
     let tempUsername = $state('');
     let tempValue = $state('');
     let afterTemp: () => void = () => {};
+
+    // U4-06: 수정 화면의 Sessions 행. 전체 세션 목록을 이 사용자 id 로 센다.
+    let sessionCount = $state(0);
+    let endSessionsOpen = $state(false);
+
+    const loadSessionCount = async (id: string): Promise<void> => {
+        const result = await SessionsCtrl.instance.list();
+        if(result.success) sessionCount = result.sessions.filter((entry) => entry.userId === id).length;
+    };
+
+    const endSessions = () => {
+        endSessionsOpen = false;
+        void run(async () => {
+            if(!loaded) return;
+            const id = loaded.id;
+            const result = await SessionsCtrl.instance.killAllForUser(id);
+            if(!result.success) {
+                toast.push({tone: 'alarm', message: result.message});
+                return;
+            }
+            if(result.self) {
+                session.invalidate();
+                return;
+            }
+            toast.push({tone: 'pulse', message: `Ended ${result.removed} session(s).`});
+            await loadSessionCount(id);
+        });
+    };
 
     // 표시 이름을 비우는 것은 변경으로 보지 않는다(요청에서 빼므로 저장해도 바뀌지 않는다).
     const dirty = $derived(loaded !== undefined && ((displayName !== loaded.displayName && displayName !== '') || role !== loaded.role
@@ -197,7 +226,10 @@
             } else {
                 toast.push({tone: 'alarm', message: listed.message});
             }
-            if(!isNew) await reload(param);
+            if(!isNew) {
+                await reload(param);
+                await loadSessionCount(param);
+            }
         });
     });
 </script>
@@ -239,6 +271,16 @@
             </div>
         </Card>
     {/if}
+    {#if !isNew}
+        <section id="user-sessions">
+            <Card label="Sessions">
+                <div style="display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; justify-content: space-between;">
+                    <span id="user-session-count">{sessionCount} active session(s)</span>
+                    <span id="user-end-sessions"><Button variant="danger" disabled={pending || sessionCount === 0} onclick={() => (endSessionsOpen = true)}>End all sessions</Button></span>
+                </div>
+            </Card>
+        </section>
+    {/if}
     {#if formError}
         <p id="user-form-error" role="alert">{formError}</p>
     {/if}
@@ -267,6 +309,13 @@
     {#snippet footer()}
         <Button onclick={() => (deleteOpen = false)}>Cancel</Button>
         <Button variant="danger" onclick={remove}>Delete user</Button>
+    {/snippet}
+</Modal>
+<Modal bind:open={endSessionsOpen} title="End all sessions" class="end-all-modal">
+    End all sessions for {loaded?.username}?
+    {#snippet footer()}
+        <Button onclick={() => (endSessionsOpen = false)}>Cancel</Button>
+        <span id="confirm-end-all"><Button variant="danger" onclick={endSessions}>End all</Button></span>
     {/snippet}
 </Modal>
 <TempPasswordModal bind:open={tempOpen} username={tempUsername} password={tempValue}

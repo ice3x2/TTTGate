@@ -161,12 +161,12 @@ test("드로어 하단에 사용자명과 Sign out 이 있고 Sign out 은 세�
     }
 }, 60_000);
 
-test("슈퍼유저 드로어는 NAV 6개를 순서대로 보여 준다", async () => {
+test("슈퍼유저 드로어는 NAV 8개를 순서대로 보여 준다", async () => {
     const app = await startAdminApp({fixture: "password"});
     try {
         await app.page.getByRole("button", {name: "Open menu"}).click();
         await app.page.getByRole("dialog", {name: "Navigation"}).waitFor({state: "visible"});
-        expect(await app.page.locator(".drawer-item").allTextContents()).toEqual(["Status", "Tunnels", "Server settings", "Users", "Groups", "My account"]);
+        expect(await app.page.locator(".drawer-item").allTextContents()).toEqual(["Status", "Tunnels", "Server settings", "Users", "Groups", "Audit log", "Sessions", "My account"]);
         expect(app.errors).toEqual([]);
     } finally {
         await app.close();

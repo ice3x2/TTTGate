@@ -18,6 +18,10 @@ export type AdminApp = {
     errors: string[];
     calls(): Promise<Array<{method: string; args: any[]}>>;
     token(): Promise<string>;
+    /** U4-06: 서버의 현재 세션 목록(드라이버가 저장소를 읽는다). 요청 세션이 없으므로 current 는 늘 false 다. */
+    sessions(): Promise<Array<{id: string; userId: string; username: string; createdAt: number; lastSeenAt: number; ip: string; userAgent: string}>>;
+    /** U4-06: user_updated 감사 이벤트 n 건을 파일에 기록하고 내려앉기를 기다린다. */
+    seedAudit(n: number): Promise<void>;
     close(): Promise<void>;
 };
 
@@ -29,7 +33,9 @@ const CALLS_TIMEOUT_MS = 5_000;
  * login: true(기본)는 admin / ADMIN_TEST_PASSWORD 로, 객체면 그 계정으로 로그인한 뒤 상태 화면까지 기다린다.
  * false 면 로그인 화면에서 멈춘다(#102 U2-10 이 계정 지정을 더했다).
  */
-export const startAdminApp = async (options: {fixture?: AdminFixture; login?: boolean | {username: string; password: string}} = {}): Promise<AdminApp> => {
+export const startAdminApp = async (options: {fixture?: AdminFixture; login?: boolean | {username: string; password: string};
+    /** U4-06: 브라우저 로그인 전에 서버 측에 만들어 둘 세션. 로그인 진입점이 아니라 사전 세션 시드다. */
+    extraLogins?: Array<{as: string; userAgent: string}>} = {}): Promise<AdminApp> => {
     const fixture: AdminFixture = options.fixture ?? 'password';
     const shouldLogin = options.login !== false;
     const account = typeof options.login === 'object' ? options.login : {username: 'admin', password: ADMIN_TEST_PASSWORD};
@@ -56,23 +62,29 @@ export const startAdminApp = async (options: {fixture?: AdminFixture; login?: bo
     const token = async (): Promise<string> =>
         (await fs.readFile(path.join(root.rootDir, "config", ".bootstrap-token"), "utf8")).trim();
 
-    const calls = async (): Promise<Array<{method: string; args: any[]}>> => {
+    /** 드라이버에 IPC 요청을 보내고 같은 type 의 첫 응답을 기다린다. */
+    const ask = <T,>(request: {type: string} & Record<string, unknown>, timeoutMs = CALLS_TIMEOUT_MS): Promise<T> => {
         const owned = child!;
         return new Promise((resolve, reject) => {
             const timer = setTimeout(() => {
                 owned.off("message", listener);
-                reject(new Error(`Admin backend did not report calls within ${CALLS_TIMEOUT_MS}ms: ${output}`));
-            }, CALLS_TIMEOUT_MS);
+                reject(new Error(`Admin backend did not answer ${request.type} within ${timeoutMs}ms: ${output}`));
+            }, timeoutMs);
             const listener = (message: any) => {
-                if(!message || message.type !== "calls") return;
+                if(!message || message.type !== request.type) return;
                 clearTimeout(timer);
                 owned.off("message", listener);
-                resolve(message.calls);
+                resolve(message as T);
             };
             owned.on("message", listener);
-            owned.send({type: "calls"});
+            owned.send(request);
         });
     };
+
+    const calls = async (): Promise<Array<{method: string; args: any[]}>> =>
+        (await ask<{calls: Array<{method: string; args: any[]}>}>({type: "calls"})).calls;
+    const sessions = async () => (await ask<{sessions: any[]}>({type: "sessions"})).sessions;
+    const seedAudit = async (n: number): Promise<void> => { await ask({type: "seedAudit", n}, 30_000); };
 
     try {
         child = fork(path.resolve(__dirname, "../admin/admin-backend-driver.ts"), [root.rootDir, fixture], {
@@ -94,6 +106,10 @@ export const startAdminApp = async (options: {fixture?: AdminFixture; login?: bo
             owned.on("message", ready); owned.once("error", failed); owned.once("exit", ended);
         });
         const origin = `http://127.0.0.1:${port}`;
+        for(const extra of options.extraLogins ?? []) {
+            const result = await ask<{ok: boolean}>({type: "login", username: extra.as, userAgent: extra.userAgent}, 15_000);
+            if(!result.ok) throw new Error(`extraLogins: ${extra.as} could not sign in: ${output}`);
+        }
 
         browser = await startAdminBrowser({apiOrigin: origin});
         const page = browser.page;
@@ -119,7 +135,7 @@ export const startAdminApp = async (options: {fixture?: AdminFixture; login?: bo
 
         const ownedBrowser = browser;
         return {
-            page, url: ownedBrowser.url, origin, rootDir: root.rootDir, errors: ownedBrowser.errors, calls, token,
+            page, url: ownedBrowser.url, origin, rootDir: root.rootDir, errors: ownedBrowser.errors, calls, token, sessions, seedAudit,
             async close(): Promise<void> {
                 try { await ownedBrowser.close(); }
                 finally {

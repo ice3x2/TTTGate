@@ -2,7 +2,8 @@
 // startAdminApp(부모 프로세스)이 같은 값을 봐야 하므로 여기 한 곳에서만 정의한다.
 // playwright 를 끌어오지 않도록 이 모듈은 아무것도 import 하지 않는다.
 
-export const ADMIN_FIXTURES = ['bootstrap', 'password', 'with-tunnels', 'regular-user', 'rbac'] as const;
+// 'rbac-no-audit' 은 rbac 에서 default 그룹의 admin_ui_section_access 에 my_audit 만 뺀 변형이다(U4-06, carol 용).
+export const ADMIN_FIXTURES = ['bootstrap', 'password', 'with-tunnels', 'regular-user', 'rbac', 'rbac-no-audit'] as const;
 
 export type AdminFixture = typeof ADMIN_FIXTURES[number];
 
