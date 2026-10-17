@@ -13,6 +13,7 @@
   import UserEditScreen from "./screens/UserEditScreen.svelte";
   import GroupsScreen from "./screens/GroupsScreen.svelte";
   import GroupEditScreen from "./screens/GroupEditScreen.svelte";
+  import MeScreen from "./screens/MeScreen.svelte";
   import MeCtrl from "./controller/MeCtrl";
   import Loading from "./ui/Loading.svelte";
   import Banner from "./ui/Banner.svelte";
@@ -121,8 +122,8 @@
     {:else if $route.screen === 'user-edit'}{#key $route.param}<UserEditScreen param={$route.param ?? 'new'} />{/key}
     {:else if $route.screen === 'groups'}<GroupsScreen />
     {:else if $route.screen === 'group-edit'}{#key $route.param}<GroupEditScreen param={$route.param ?? 'new'} />{/key}
+    {:else if $route.screen === 'me'}<MeScreen />
     {:else}
-      <!-- U3-05 가 me 화면으로 교체한다. -->
       <p id="screen-placeholder">This screen is not available yet.</p>
     {/if}
   </Shell>
