@@ -5,6 +5,7 @@
     import SessionsCtrl from '../controller/SessionsCtrl';
     import UsersCtrl from '../controller/UsersCtrl';
     import type {ApiFailure, Role, UserStatus, UserView} from '../controller/Types';
+    import Badge from '../ui/Badge.svelte';
     import Button from '../ui/Button.svelte';
     import Card from '../ui/Card.svelte';
     import Checkbox from '../ui/Checkbox.svelte';
@@ -48,6 +49,25 @@
     let tempUsername = $state('');
     let tempValue = $state('');
     let afterTemp: () => void = () => {};
+
+    // U4-09: 수정 화면의 Two-factor 행. 초기화하면 서버가 그 사용자의 세션을 모두 끊는다.
+    let resetMfaOpen = $state(false);
+    const resetMfa = () => {
+        resetMfaOpen = false;
+        void run(async () => {
+            if(!loaded) return;
+            const id = loaded.id;
+            const result = await UsersCtrl.instance.resetMfa(id);
+            if(!result.success) {
+                toast.push({tone: 'alarm', message: result.message});
+                return;
+            }
+            // 저장하지 않은 폼 편집을 덮지 않도록 MFA 상태만 바꾼다.
+            if(loaded) loaded = {...loaded, mfaEnabled: result.user.mfaEnabled === true};
+            toast.push({tone: 'pulse', message: 'Two-factor authentication reset.'});
+            await loadSessionCount(id);
+        });
+    };
 
     // U4-06: 수정 화면의 Sessions 행. 전체 세션 목록을 이 사용자 id 로 센다.
     let sessionCount = $state(0);
@@ -272,6 +292,16 @@
         </Card>
     {/if}
     {#if !isNew}
+        <section id="user-mfa">
+            <Card label="Two-factor">
+                <div style="display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; justify-content: space-between;">
+                    <span id="user-mfa-status">
+                        {#if loaded?.mfaEnabled}<Badge tone="pulse">Enabled</Badge>{:else}<Badge tone="neutral">Off</Badge>{/if}
+                    </span>
+                    <span id="user-reset-mfa"><Button variant="danger" disabled={pending || loaded?.mfaEnabled !== true} onclick={() => (resetMfaOpen = true)}>Reset MFA</Button></span>
+                </div>
+            </Card>
+        </section>
         <section id="user-sessions">
             <Card label="Sessions">
                 <div style="display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; justify-content: space-between;">
@@ -309,6 +339,13 @@
     {#snippet footer()}
         <Button onclick={() => (deleteOpen = false)}>Cancel</Button>
         <Button variant="danger" onclick={remove}>Delete user</Button>
+    {/snippet}
+</Modal>
+<Modal bind:open={resetMfaOpen} title="Reset two-factor" class="reset-mfa-modal">
+    Reset two-factor authentication for {loaded?.username}? Their sessions will end.
+    {#snippet footer()}
+        <Button onclick={() => (resetMfaOpen = false)}>Cancel</Button>
+        <span id="confirm-reset-mfa"><Button variant="danger" onclick={resetMfa}>Reset</Button></span>
     {/snippet}
 </Modal>
 <Modal bind:open={endSessionsOpen} title="End all sessions" class="end-all-modal">

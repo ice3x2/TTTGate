@@ -18,7 +18,8 @@ export const me: Writable<Me | undefined> = writable(undefined);
 export async function loadMe(): Promise<Me | undefined> {
     const result = await MeCtrl.instance.me();
     if(result.success !== true) return undefined;
-    const value: Me = {user: result.user, group: result.group, sections: result.sections, migrationBanner: result.migrationBanner};
+    const value: Me = {user: result.user, group: result.group, sections: result.sections, migrationBanner: result.migrationBanner,
+        mfa: result.mfa, mustEnrollMfa: result.mustEnrollMfa === true};
     me.set(value);
     return value;
 }

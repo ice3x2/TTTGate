@@ -260,6 +260,12 @@ const stub = {
             process.send?.({type: "seed-ban"});
         }
         // U4-07: 테스트 드라이버 전용 IPC. AdminServer 라우트로 노출하지 않는다.
+        // U4-09: 서버 옵션 일부를 갱신한다(드라이버 전용, 프로덕션 API 아님).
+        if(message && message.type === "serverOption") {
+            const store = ServerOptionStore.instance;
+            const ok = store.updateServerOption({...store.serverOption, ...message.patch});
+            process.send?.({type: "serverOption", ok: ok !== false});
+        }
         if(message && message.type === "mfaSecret") {
             process.send?.({type: "mfaSecret", secret: IdentityStore.instance.userByUsername(message.username)?.mfa?.secret});
         }

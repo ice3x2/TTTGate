@@ -30,6 +30,8 @@ export type AdminApp = {
     mfaRecoveryCodes(username: string): Promise<string[]>;
     /** U4-07: 서버 시계를 ms 만큼 앞당기고 누적 offset 을 돌려준다. */
     advanceClock(ms: number): Promise<number>;
+    /** U4-09: 서버 옵션 일부를 드라이버에서 바꾼다. */
+    serverOption(patch: Record<string, unknown>): Promise<void>;
     close(): Promise<void>;
 };
 
@@ -97,6 +99,10 @@ export const startAdminApp = async (options: {fixture?: AdminFixture; login?: bo
     const mfaSecret = async (username: string) => (await ask<{secret?: string}>({type: "mfaSecret", username})).secret;
     const mfaRecoveryCodes = async (username: string) => (await ask<{codes: string[]}>({type: "mfaRecoveryCodes", username})).codes;
     const advanceClock = async (ms: number) => (await ask<{offset: number}>({type: "advanceClock", ms})).offset;
+    const serverOption = async (patch: Record<string, unknown>): Promise<void> => {
+        const result = await ask<{ok: boolean}>({type: "serverOption", patch});
+        if(!result.ok) throw new Error(`serverOption patch was rejected: ${JSON.stringify(patch)}`);
+    };
 
     try {
         child = fork(path.resolve(__dirname, "../admin/admin-backend-driver.ts"), [root.rootDir, fixture], {
@@ -147,7 +153,7 @@ export const startAdminApp = async (options: {fixture?: AdminFixture; login?: bo
 
         const ownedBrowser = browser;
         return {
-            page, url: ownedBrowser.url, origin, rootDir: root.rootDir, errors: ownedBrowser.errors, calls, token, sessions, seedAudit, seedBan, mfaSecret, mfaRecoveryCodes, advanceClock,
+            page, url: ownedBrowser.url, origin, rootDir: root.rootDir, errors: ownedBrowser.errors, calls, token, sessions, seedAudit, seedBan, mfaSecret, mfaRecoveryCodes, advanceClock, serverOption,
             async close(): Promise<void> {
                 try { await ownedBrowser.close(); }
                 finally {

@@ -38,6 +38,11 @@ class UsersCtrl {
         return adminRequest(`/api/users/${id}`, {method: "DELETE"});
     }
 
+    /** U4-09: 다른 사용자의 MFA 를 끈다. 서버가 그 사용자의 세션을 모두 끊는다. */
+    public resetMfa(id: string): Promise<ApiResult<{user: UserView}>> {
+        return adminRequest(`/api/users/${id}/mfa/reset`, {method: "POST"});
+    }
+
     public resetPassword(id: string, temporaryPassword?: string): Promise<ApiResult<{temporaryPassword: string}>> {
         return adminRequest(`/api/users/${id}/password-reset`, {
             method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({temporaryPassword})

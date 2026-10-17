@@ -61,9 +61,12 @@
   // 그 사이 권한 없는 화면의 onMount 가 API 를 부르면 403 과 access_denied 감사가 쌓인다.
   // 강제 비밀번호 변경 중에는 #/me/password 만 그린다(다른 화면은 서버가 403 으로 막는다).
   const forced = $derived($me?.user.mustChangePassword === true);
+  // U4-09: MFA 강제 등록 중인 슈퍼유저는 #/me 와 #/me/password 만 쓴다(비밀번호 변경은 허용 액션이다).
+  const enrolling = $derived(!forced && $me?.mustEnrollMfa === true);
   const allowed = $derived.by(() => {
     if($me === undefined) return false;
     if(forced) return $route.screen === 'me-password';
+    if(enrolling) return $route.screen === 'me' || $route.screen === 'me-password';
     const section = SECTION_OF_SCREEN[$route.screen];
     return section === null || $me.sections.includes(section);
   });
@@ -75,6 +78,10 @@
     if(state !== 'Valid' || !principal) return;
     if(forced) {
       if($route.screen !== 'me-password' || location.hash !== '#/me/password') navigate('#/me/password');
+      return;
+    }
+    if(enrolling) {
+      if($route.screen !== 'me' && $route.screen !== 'me-password') navigate('#/me');
       return;
     }
     if(allowed) return;
@@ -109,7 +116,7 @@
 {:else if !$me}
   <Loading overlay />
 {:else}
-  <Shell title={current.title} back={forced ? undefined : current.back} hideMenu={forced}>
+  <Shell title={current.title} back={forced ? undefined : current.back} hideMenu={forced || enrolling}>
     {#snippet banner()}
       {#if $me?.migrationBanner}
         <Banner tone="trace" dismissible ondismiss={() => { void dismissMigration(); }}>Your account was promoted to superuser during the upgrade.</Banner>
