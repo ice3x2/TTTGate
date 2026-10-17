@@ -13,11 +13,13 @@ import {TunnelingOption} from "../../src/types/TunnelingOption";
 import {ADMIN_FIXTURES, ADMIN_TEST_PASSWORD, REGULAR_USER, TEMP_USER} from "../helpers/adminFixture";
 import {IdentityStore} from "../../src/server/rbac/IdentityStore";
 import {DEFAULT_GROUP_ID} from "../../src/server/rbac/IdentityTypes";
+import {serializeIdentityFixture} from "../helpers/identityFixture";
+import {RBAC_IDENTITY_FIXTURE, RBAC_TRUSTED_CLIENTS, RBAC_TUNNELS} from "../helpers/rbacFixture";
 import type {AdminFixture} from "../helpers/adminFixture";
 import {applyTestRoot} from "../helpers/runtime";
 
 // 관리자 브라우저 테스트용 백엔드 드라이버. 실제 AdminServer 를 띄우고 TTTServer 만 스텁으로 바꾼다.
-// 인자: [rootDir, fixture]. fixture 는 'bootstrap' | 'password' | 'with-tunnels' | 'regular-user'.
+// 인자: [rootDir, fixture]. fixture 는 'bootstrap' | 'password' | 'with-tunnels' | 'regular-user' | 'rbac'.
 
 const rootDir = process.argv[2];
 const fixture = (process.argv[3] ?? "bootstrap") as AdminFixture;
@@ -147,8 +149,20 @@ const stub = {
     if(fixture === "password" || fixture === "with-tunnels" || fixture === "regular-user") {
         fs.writeFileSync(path.join(rootDir, "config", ".key"), bcrypt.hashSync(ADMIN_TEST_PASSWORD, 12));
     }
+    if(fixture === "rbac") {
+        // #103 (U3-01): 사용자·그룹은 identity.yaml 로 심는다(.key 없음). 런타임 해시(사용자 생성 등)만 cost 4 다.
+        IdentityStore.bcryptCost = 4;
+        fs.writeFileSync(path.join(rootDir, "config", "identity.yaml"), await serializeIdentityFixture(RBAC_IDENTITY_FIXTURE));
+    }
     await CertificationStore.instance.load();
-    if(fixture === "with-tunnels") {
+    if(fixture === "rbac") {
+        const store = ServerOptionStore.instance;
+        const tunnels = RBAC_TUNNELS.map((tunnel) => ({...TUNNEL_OPTIONS[0], ...tunnel,
+            ...(tunnel.protocol === "http" ? {httpOption: TUNNEL_OPTIONS[1].httpOption} : {})}));
+        if(!store.updateServerOption({...store.serverOption, tunnelingOptions: tunnels as TunnelingOption[], trustedClients: RBAC_TRUSTED_CLIENTS})) {
+            throw new Error("Invalid rbac fixture configuration");
+        }
+    } else if(fixture === "with-tunnels") {
         const store = ServerOptionStore.instance;
         if(!store.updateServerOption({...store.serverOption, tunnelingOptions: TUNNEL_OPTIONS})) {
             throw new Error("Invalid with-tunnels fixture configuration");

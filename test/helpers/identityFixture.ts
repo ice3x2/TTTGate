@@ -32,6 +32,8 @@ export type IdentityFixtureUser = {
     groupId?: string;
     displayName?: string;
     mustChangePassword?: boolean;
+    /** #103 (U3-01): 레거시 admin 승격 사용자 표시. 기본 false. migrationAcknowledged 는 늘 false 로 쓴다. */
+    migratedFromLegacyAdmin?: boolean;
 };
 
 export type IdentityFixtureGroup = {
@@ -105,6 +107,9 @@ export async function serializeIdentityFixture(fixture: IdentityFixture): Promis
         if(users.some((user) => user.username === username.value)) {
             throw new Error(`identityFixture username is declared twice: ${username.value}`);
         }
+        if(requested.id !== undefined && !/^u_[0-9a-f]{16}$/.test(requested.id)) {
+            throw new Error(`identityFixture user id must match u_ + 16 hex: ${requested.id}`);
+        }
         if(requested.id !== undefined && users.some((user) => user.id === requested.id)) {
             throw new Error(`identityFixture user id is declared twice: ${requested.id}`);
         }
@@ -117,7 +122,7 @@ export async function serializeIdentityFixture(fixture: IdentityFixture): Promis
             groupId: resolveGroupId(requested, groups),
             passwordHash: await hashOnce(requested.password),
             mustChangePassword: requested.mustChangePassword ?? false,
-            migratedFromLegacyAdmin: false,
+            migratedFromLegacyAdmin: requested.migratedFromLegacyAdmin === true,
             migrationAcknowledged: false,
             createdAt: now,
             updatedAt: now

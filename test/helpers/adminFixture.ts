@@ -2,7 +2,7 @@
 // startAdminApp(부모 프로세스)이 같은 값을 봐야 하므로 여기 한 곳에서만 정의한다.
 // playwright 를 끌어오지 않도록 이 모듈은 아무것도 import 하지 않는다.
 
-export const ADMIN_FIXTURES = ['bootstrap', 'password', 'with-tunnels', 'regular-user'] as const;
+export const ADMIN_FIXTURES = ['bootstrap', 'password', 'with-tunnels', 'regular-user', 'rbac'] as const;
 
 export type AdminFixture = typeof ADMIN_FIXTURES[number];
 

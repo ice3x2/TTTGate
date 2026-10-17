@@ -142,8 +142,8 @@ test("드로어 하단에 사용자명과 Sign out 이 있고 Sign out 은 세�
     try {
         await app.page.getByRole("button", {name: "Open menu"}).click();
         await app.page.getByRole("dialog", {name: "Navigation"}).waitFor({state: "visible"});
-        expect(await app.page.locator("#nav-user").textContent()).toBe("admin");
-        expect(await app.page.locator("#nav-user").getAttribute("class")).toContain("mono");
+        expect(await app.page.locator("#drawer-username").textContent()).toBe("admin");
+        expect(await app.page.locator("#drawer-username").getAttribute("class")).toContain("mono");
 
         await app.page.locator("#nav-sign-out").click();
         await app.page.locator("#login-password").waitFor({state: "visible", timeout: 10_000});
@@ -161,12 +161,12 @@ test("드로어 하단에 사용자명과 Sign out 이 있고 Sign out 은 세�
     }
 }, 60_000);
 
-test("드로어 항목은 me.sections 순서(status, tunnels, server)다", async () => {
+test("슈퍼유저 드로어는 NAV 6개를 순서대로 보여 준다", async () => {
     const app = await startAdminApp({fixture: "password"});
     try {
         await app.page.getByRole("button", {name: "Open menu"}).click();
         await app.page.getByRole("dialog", {name: "Navigation"}).waitFor({state: "visible"});
-        expect(await app.page.locator(".drawer-item").allTextContents()).toEqual(["Status", "Tunnels", "Server settings"]);
+        expect(await app.page.locator(".drawer-item").allTextContents()).toEqual(["Status", "Tunnels", "Server settings", "Users", "Groups", "My account"]);
         expect(app.errors).toEqual([]);
     } finally {
         await app.close();
