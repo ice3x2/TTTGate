@@ -115,7 +115,7 @@ const withRoutesServer = async (check: (fixture: any) => Promise<void>) => {
         const request = (method: string, target: string, body: object = {}, headers: Record<string, string> = {}) =>
             requestRaw(method, target, JSON.stringify(body), headers);
         const login = async () => {
-            const response = await request("POST", "/api/login", {key: "routes95-password", bootstrapToken: token});
+            const response = await request("POST", "/api/login", {username: "admin", password: "routes95-password", bootstrapToken: token});
             expect(response.status).toBe(200);
             const cookies: string[] = response.headers["set-cookie"];
             return {Cookie: cookies.map(value => value.split(";")[0]).join("; "),

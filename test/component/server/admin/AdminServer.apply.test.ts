@@ -24,7 +24,7 @@ const loginAndGetAuth = async (port: number, testRoot: TestRoot): Promise<{cooki
         headers: {
             "Content-Type": "application/json"
         },
-        body: JSON.stringify({key: "supersecret1", bootstrapToken})
+        body: JSON.stringify({username: "admin", password: "supersecret1", bootstrapToken})
     });
     const setCookies = loginResponse.headers["set-cookie"] as string[];
     const cookie = setCookies.map((c) => c.split(";")[0]).join("; ");

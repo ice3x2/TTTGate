@@ -91,11 +91,7 @@ describe("legacy-admin-migration", () => {
             await page.goto(app.url);
             const password = page.locator("#login-password");
             await password.waitFor({state: "visible"});
-            // #102 (U2-10) 가 username 필드를 붙이면 이 분기가 사라지고 항상 채우게 된다.
-            const username = page.locator("#login-username");
-            if(await username.count() > 0) {
-                await username.fill("admin");
-            }
+            await page.locator("#login-username").fill("admin");
             await password.fill(E2E_ADMIN_PASSWORD);
             await page.getByRole("button", {name: "OK", exact: true}).click();
             await page.waitForFunction(() => location.hash === "#/status");

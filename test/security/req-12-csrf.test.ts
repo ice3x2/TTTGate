@@ -48,7 +48,7 @@ describe("REQ-12 CSRF + Origin guard for state-changing APIs", () => {
         const r = await httpRequest({
             port, path: "/api/login", method: "POST",
             headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({key: "supersecret1", bootstrapToken})
+            body: JSON.stringify({username: "admin", password: "supersecret1", bootstrapToken})
         });
         expect(r.statusCode).toBe(200);
         const setCookies = r.headers["set-cookie"] as string[];

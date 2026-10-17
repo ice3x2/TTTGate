@@ -109,8 +109,8 @@ test("controller sends the actual raw key and bootstrap token accepted by the se
         const password = "  암호🙂abcd  ";
         const bootstrapToken = await token();
         const pending = app.page.waitForRequest((request: any) => request.url().endsWith("/api/login") && request.method() === "POST");
-        const result = await app.page.evaluate((data: any) => (window as any).loginFixture.login(data.password, data.bootstrapToken), {password, bootstrapToken});
-        expect((await pending).postDataJSON()).toEqual({key: password, bootstrapToken});
+        const result = await app.page.evaluate((data: any) => (window as any).loginFixture.login("admin", data.password, data.bootstrapToken), {password, bootstrapToken});
+        expect((await pending).postDataJSON()).toEqual({username: "admin", password, bootstrapToken});
         expect(result).toMatchObject({success: true, status: 200});
         // 부트스트랩 경로에는 .key가 만들어지지 않는다 — 진실 원천은 identity.yaml의 passwordHash.
         const passwordHash = await readIdentityPasswordHash(root, "admin");
@@ -182,7 +182,7 @@ test.each(["bcrypt", "legacy"])("existing %s account works after a real backend 
 test("429 is shown without automatic login retries on an isolated server", async () => {
     await withLogin(async ({app, submit}) => {
         await app.page.evaluate(async () => {
-            for(let attempt = 0; attempt < 5; attempt++) await (window as any).loginFixture.login("wrong-password");
+            for(let attempt = 0; attempt < 5; attempt++) await (window as any).loginFixture.login("admin", "wrong-password");
         });
         let attempts = 0;
         app.page.on("request", (request: any) => { if(request.url().endsWith("/api/login") && request.method() === "POST") attempts++; });

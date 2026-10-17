@@ -48,7 +48,7 @@ describe("REQ-03 /api/serverOptionHash auth + CORS + cloneDeep", () => {
         const r = await httpRequest({
             port, path: "/api/login", method: "POST",
             headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({key: "supersecret1", bootstrapToken})
+            body: JSON.stringify({username: "admin", password: "supersecret1", bootstrapToken})
         });
         expect(r.statusCode).toBe(200);
         const sc = r.headers["set-cookie"] as string[];

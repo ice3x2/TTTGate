@@ -252,11 +252,8 @@ export async function createProcessTunnelHarness(options: ProcessTunnelOptions):
         const sessions = new Map<string, {sessionKey: string; csrfToken: string}>();
         const requestFunctions = new Map<string, AdminRequest>();
 
-        // #102 (U2-10) 가 로그인 본문을 {username, password} 로 통일한다.
-        // 그때까지 기본 admin 계정은 기존 {key} 별칭을 그대로 보내고, 다른 계정만 username 을 싣는다.
-        const loginBody = (login: AdminLogin): Record<string, string> => login.username === DEFAULT_ADMIN_USERNAME
-            ? {key: login.password}
-            : {username: login.username, password: login.password};
+        // #102 (U2-10) 이 서버의 {key} 별칭을 지웠다. 로그인 본문은 언제나 {username, password} 다.
+        const loginBody = (login: AdminLogin): Record<string, string> => ({username: login.username, password: login.password});
 
         const adminRequestAs = (login: AdminLogin): AdminRequest => {
             const identity = `${login.username}\n${login.password}`;

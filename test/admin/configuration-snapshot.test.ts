@@ -13,7 +13,7 @@ test("an editor retains its read revision when another controller read refreshes
             await app.page.waitForFunction(() => !!(window as any).adminControllers);
             const login = await app.page.evaluate(async () => {
                 const res = await fetch("/api/login", {method: "POST", headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({key: "revision-password"})});
+                    body: JSON.stringify({username: "admin", password: "revision-password"})});
                 return res.status;
             });
             expect(login).toBe(200);

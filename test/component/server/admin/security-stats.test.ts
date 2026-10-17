@@ -38,7 +38,7 @@ const withStatsServer = async (check: (fixture: any) => Promise<void>) => {
             req.end(bytes);
         });
         const login = async () => {
-            const response = await request("POST", "/api/login", {key: "stats-password", bootstrapToken: token});
+            const response = await request("POST", "/api/login", {username: "admin", password: "stats-password", bootstrapToken: token});
             expect(response.status).toBe(200);
             const cookies: string[] = response.headers["set-cookie"];
             return {Cookie: cookies.map((value: string) => value.split(";")[0]).join("; "),

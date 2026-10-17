@@ -32,7 +32,7 @@ export const withConfigurationServer = async (check: (fixture: any) => Promise<v
         await IdentityMigration.runAtStartup();
         const bootstrapToken = (await fs.readFile(path.join(root.rootDir, "config", BOOTSTRAP_TOKEN_FILE_NAME), "utf8")).trim();
         const login = await httpRequest({port: ports[0], path: "/api/login", method: "POST",
-            headers: {"Content-Type": "application/json"}, body: JSON.stringify({key: "revision-password", bootstrapToken})});
+            headers: {"Content-Type": "application/json"}, body: JSON.stringify({username: "admin", password: "revision-password", bootstrapToken})});
         if(login.statusCode !== 200) throw new Error(`Revision fixture login failed: ${login.body}`);
         const cookies = login.headers["set-cookie"] as string[];
         const cookie = cookies.map((value) => value.split(";")[0]).join("; ");

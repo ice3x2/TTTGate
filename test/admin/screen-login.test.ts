@@ -1,5 +1,6 @@
 import type {Page} from "playwright";
 import {ADMIN_TEST_PASSWORD, startAdminApp} from "../helpers/adminApp";
+import {REGULAR_USER, TEMP_USER} from "../helpers/adminFixture";
 
 const clickOk = (page: Page) => page.getByRole("button", {name: "OK", exact: true}).click();
 
@@ -108,6 +109,169 @@ test("with-tunnels fixture 는 기본 옵션만으로 로그인을 마치고 호
         expect(Array.isArray(calls)).toBe(true);
         expect(calls.every((call) => typeof call.method === "string" && Array.isArray(call.args))).toBe(true);
         expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, 60_000);
+
+// ---- #102 (U2-10) 다사용자 로그인 ----
+
+const loginWith = async (page: Page, username: string, password: string) => {
+    await page.locator("#login-password").waitFor({state: "visible", timeout: 10_000});
+    await page.locator("#login-username").fill(username);
+    await page.locator("#login-password").fill(password);
+    await clickOk(page);
+};
+
+test("Username 입력란은 비밀번호보다 앞에 있고 autocomplete=username 이다", async () => {
+    const app = await startAdminApp({fixture: "password", login: false});
+    try {
+        const username = app.page.locator("#login-username");
+        await username.waitFor({state: "visible", timeout: 10_000});
+        expect(await username.getAttribute("autocomplete")).toBe("username");
+        const order = await app.page.evaluate(() => {
+            const user = document.getElementById("login-username")!;
+            const pass = document.getElementById("login-password")!;
+            return Boolean(user.compareDocumentPosition(pass) & Node.DOCUMENT_POSITION_FOLLOWING);
+        });
+        expect(order).toBe(true);
+        expect(await app.page.getByLabel("Username", {exact: true}).count()).toBe(1);
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, 60_000);
+
+test("성공한 username 을 기억해 다음에 채워 둔다", async () => {
+    const app = await startAdminApp({fixture: "password", login: false});
+    try {
+        await loginWith(app.page, "admin", ADMIN_TEST_PASSWORD);
+        await expectStatusScreen(app.page);
+        expect(await app.page.evaluate(() => localStorage.getItem("tttgate.lastUsername"))).toBe("admin");
+
+        // 세션 쿠키만 지우고 페이지를 새로 열면 로그인 화면이 기억한 username 으로 시작한다(localStorage 는 남는다).
+        await app.page.context().clearCookies();
+        await app.page.reload();
+        await app.page.locator("#login-username").waitFor({state: "visible", timeout: 10_000});
+        expect(await app.page.locator("#login-username").inputValue()).toBe("admin");
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, 60_000);
+
+test("username 을 비우면 admin 으로 보낸다", async () => {
+    const app = await startAdminApp({fixture: "password", login: false});
+    try {
+        await app.page.locator("#login-password").waitFor({state: "visible", timeout: 10_000});
+        await app.page.locator("#login-username").fill("");
+        await app.page.locator("#login-password").fill(ADMIN_TEST_PASSWORD);
+        const pending = app.page.waitForRequest((request) => request.method() === "POST" && new URL(request.url()).pathname === "/api/login");
+        await clickOk(app.page);
+        expect((await pending).postDataJSON()).toEqual({username: "admin", password: ADMIN_TEST_PASSWORD});
+        await expectStatusScreen(app.page);
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, 60_000);
+
+test("없는 username 은 비밀번호 오류와 같은 문구다", async () => {
+    const app = await startAdminApp({fixture: "password", login: false});
+    try {
+        await loginWith(app.page, "nobody", ADMIN_TEST_PASSWORD);
+        await expectMessage(app.page, "The password is incorrect.");
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, 60_000);
+
+test("부트스트랩은 username 힌트를 보이고 형식 오류를 알리며 root 로 첫 슈퍼유저를 만든다", async () => {
+    const app = await startAdminApp({fixture: "bootstrap", login: false});
+    try {
+        await loginWith(app.page, "", "plainword");
+        await expectMessage(app.page, "Enter the bootstrap token to set the first password.");
+        await app.page.getByText("Choose the first superuser name (default: admin)", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+        const tokenField = app.page.getByLabel("Bootstrap token", {exact: true});
+        await tokenField.fill(await app.token());
+
+        await app.page.locator("#login-username").fill("bad name");
+        await clickOk(app.page);
+        await expectMessage(app.page, "Username must be 3-32 characters: a-z, 0-9, dot, underscore, hyphen.");
+
+        await app.page.locator("#login-username").fill("root");
+        await app.page.locator("#login-password").fill("strong-root-password-1");
+        await clickOk(app.page);
+        await expectStatusScreen(app.page);
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, 60_000);
+
+test("일반 유저는 자기 섹션(tunnels)만 드로어에서 본다", async () => {
+    const app = await startAdminApp({fixture: "regular-user", login: false});
+    try {
+        await loginWith(app.page, REGULAR_USER.username, REGULAR_USER.password);
+        await app.page.waitForFunction(() => location.hash === "#/status", undefined, {timeout: 10_000});
+        await app.page.getByRole("button", {name: "Open menu"}).click();
+        await app.page.getByRole("dialog", {name: "Navigation"}).waitFor({state: "visible"});
+        expect(await app.page.locator(".drawer-item").allTextContents()).toEqual(["Tunnels"]);
+        expect(await app.page.locator("#nav-user").textContent()).toBe(REGULAR_USER.username);
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, 60_000);
+
+test("비밀번호 변경이 필요한 사용자는 안내와 Sign out 만 본다", async () => {
+    const app = await startAdminApp({fixture: "regular-user", login: false});
+    try {
+        await loginWith(app.page, TEMP_USER.username, TEMP_USER.password);
+        const notice = app.page.locator("#password-change-required");
+        await notice.waitFor({state: "visible", timeout: 10_000});
+        expect(await notice.getAttribute("role")).toBe("alert");
+        expect(await app.page.getByRole("button", {name: "Open menu"}).count()).toBe(0);
+        await app.page.locator("#password-change-sign-out").click();
+        await app.page.locator("#login-password").waitFor({state: "visible", timeout: 10_000});
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, 60_000);
+
+test("슈퍼유저가 다른 화면에서 Sign out 해도 다음 사용자는 기본 화면에서 시작한다", async () => {
+    const app = await startAdminApp({fixture: "regular-user"});
+    try {
+        await app.page.evaluate(() => { window.location.hash = "#/server"; });
+        await app.page.locator("h1").filter({hasText: "Server settings"}).waitFor({state: "visible", timeout: 10_000});
+        await app.page.getByRole("button", {name: "Open menu"}).click();
+        await app.page.locator("#nav-sign-out").click();
+        await loginWith(app.page, REGULAR_USER.username, REGULAR_USER.password);
+        await app.page.waitForFunction(() => location.hash === "#/status", undefined, {timeout: 10_000});
+        await app.page.getByRole("button", {name: "Open menu"}).waitFor({state: "visible", timeout: 10_000});
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, 60_000);
+
+test("/api/me 가 401 이면 로그인 화면으로, 네트워크 오류면 Offline 으로 간다", async () => {
+    const app = await startAdminApp({fixture: "password", login: false});
+    try {
+        await app.page.route("**/api/me", (route) => route.fulfill({status: 401, contentType: "application/json", body: JSON.stringify({success: false})}));
+        await loginWith(app.page, "admin", ADMIN_TEST_PASSWORD);
+        // 로그인은 성공했지만 /api/me 가 401 이라 다시 로그인 화면이다.
+        await app.page.waitForFunction(() => document.querySelector("#login-password") !== null && document.querySelector("#menu-button") === null,
+            undefined, {timeout: 10_000});
+        await app.page.waitForTimeout(300);
+        expect(await app.page.getByRole("button", {name: "Open menu"}).count()).toBe(0);
+
+        await app.page.unroute("**/api/me");
+        await app.page.route("**/api/me", (route) => route.abort());
+        await loginWith(app.page, "admin", ADMIN_TEST_PASSWORD);
+        await app.page.getByText("Offline server...", {exact: true}).waitFor({state: "visible", timeout: 10_000});
     } finally {
         await app.close();
     }

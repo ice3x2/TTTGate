@@ -2,8 +2,12 @@
 // startAdminApp(부모 프로세스)이 같은 값을 봐야 하므로 여기 한 곳에서만 정의한다.
 // playwright 를 끌어오지 않도록 이 모듈은 아무것도 import 하지 않는다.
 
-export const ADMIN_FIXTURES = ['bootstrap', 'password', 'with-tunnels'] as const;
+export const ADMIN_FIXTURES = ['bootstrap', 'password', 'with-tunnels', 'regular-user'] as const;
 
 export type AdminFixture = typeof ADMIN_FIXTURES[number];
 
 export const ADMIN_TEST_PASSWORD = 'test-password-1234';
+
+// #102 (U2-10) 'regular-user' fixture 의 계정. alice 는 tunnels 섹션만 보는 일반 유저, temp 는 비밀번호 변경이 필요한 일반 유저다.
+export const REGULAR_USER = {username: 'alice', password: 'alice-pass-1234'} as const;
+export const TEMP_USER = {username: 'temp', password: 'temp-pass-1234'} as const;

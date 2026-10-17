@@ -7,6 +7,7 @@
         disabled = false,
         type = 'button',
         class: className = '',
+        id,
         onclick,
         children,
     }: {
@@ -15,12 +16,14 @@
         disabled?: boolean;
         type?: 'button' | 'submit';
         class?: string;
+        /** U2-10: 화면 테스트·라벨 연결용. 버튼 요소에 그대로 붙는다. */
+        id?: string;
         onclick?: (e: MouseEvent) => void;
         children?: Snippet;
     } = $props();
 </script>
 
-<button class="btn {variant} {size === 'sm' ? 'sm' : ''} {className}" {type} {disabled} {onclick}>
+<button class="btn {variant} {size === 'sm' ? 'sm' : ''} {className}" {id} {type} {disabled} {onclick}>
     {@render children?.()}
 </button>
 

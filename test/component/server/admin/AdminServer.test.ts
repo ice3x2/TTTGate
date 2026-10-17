@@ -56,7 +56,7 @@ describe("AdminServer baseline behavior", () => {
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({key: "supersecret1", bootstrapToken})
+            body: JSON.stringify({username: "admin", password: "supersecret1", bootstrapToken})
         });
 
         expect(loginResponse.statusCode).toBe(200);

@@ -52,7 +52,7 @@ describe("AdminServer security hardening", () => {
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({key: "supersecret1"})
+            body: JSON.stringify({username: "admin", password: "supersecret1"})
         });
 
         const emptyKeyResponse = await httpRequest({port, path: "/api/emptyKey"});
@@ -67,7 +67,7 @@ describe("AdminServer security hardening", () => {
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({key: "supersecret1", bootstrapToken})
+            body: JSON.stringify({username: "admin", password: "supersecret1", bootstrapToken})
         });
 
         expect(deniedLogin.statusCode).toBe(403);
@@ -94,7 +94,7 @@ describe("AdminServer security hardening", () => {
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({key: "supersecret1", bootstrapToken})
+            body: JSON.stringify({username: "admin", password: "supersecret1", bootstrapToken})
         });
 
         for(let i = 0; i < 5; i += 1) {
@@ -105,7 +105,7 @@ describe("AdminServer security hardening", () => {
                 headers: {
                     "Content-Type": "application/json"
                 },
-                body: JSON.stringify({key: "wrong-password"})
+                body: JSON.stringify({username: "admin", password: "wrong-password"})
             });
 
             expect([401, 429]).toContain(response.statusCode);
@@ -118,7 +118,7 @@ describe("AdminServer security hardening", () => {
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({key: "wrong-password"})
+            body: JSON.stringify({username: "admin", password: "wrong-password"})
         });
 
         expect(blockedResponse.statusCode).toBe(429);
@@ -137,7 +137,7 @@ describe("AdminServer security hardening", () => {
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({key: "supersecret1", bootstrapToken})
+            body: JSON.stringify({username: "admin", password: "supersecret1", bootstrapToken})
         });
         const setCookies = loginResponse.headers["set-cookie"] as string[];
         const cookie = setCookies.map((c) => c.split(";")[0]).join("; ");
@@ -184,7 +184,7 @@ describe("AdminServer security hardening", () => {
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({key: "supersecret1", bootstrapToken})
+            body: JSON.stringify({username: "admin", password: "supersecret1", bootstrapToken})
         });
         const setCookies = loginResponse.headers["set-cookie"] as string[];
         const cookie = setCookies.map((c) => c.split(";")[0]).join("; ");
