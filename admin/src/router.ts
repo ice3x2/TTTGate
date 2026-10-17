@@ -1,7 +1,7 @@
 // 해시 라우터. Jest(ts-jest, CommonJS)가 parseHash 를 import 하므로 이 파일은 아무것도 import 하지 않는다.
 
 export type Screen = 'status' | 'tunnels' | 'tunnel-edit' | 'server'
-    | 'users' | 'user-edit' | 'groups' | 'group-edit' | 'me' | 'me-password' | 'denied' | 'audit' | 'sessions';
+    | 'users' | 'user-edit' | 'groups' | 'group-edit' | 'me' | 'me-password' | 'denied' | 'audit' | 'sessions' | 'security';
 export type Route = {screen: Screen; param?: string};
 
 type Subscriber = (value: Route) => void;
@@ -20,6 +20,7 @@ export function parseHash(hash: string): Route {
         if(segments[0] === 'groups') return {screen: 'groups'};
         if(segments[0] === 'me') return {screen: 'me'};
         if(segments[0] === 'denied') return {screen: 'denied'};
+        if(segments[0] === 'security') return {screen: 'security'};
         if(segments[0] === 'audit') return {screen: 'audit'};
         if(segments[0] === 'sessions') return {screen: 'sessions'};
     }

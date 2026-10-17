@@ -22,6 +22,8 @@ export type AdminApp = {
     sessions(): Promise<Array<{id: string; userId: string; username: string; createdAt: number; lastSeenAt: number; ip: string; userAgent: string}>>;
     /** U4-06: user_updated 감사 이벤트 n 건을 파일에 기록하고 내려앉기를 기다린다. */
     seedAudit(n: number): Promise<void>;
+    /** U5-06: 드라이버의 실제 리미터에 (port, ip) 차단 하나를 만든다. */
+    seedBan(port: number, ip: string): Promise<void>;
     close(): Promise<void>;
 };
 
@@ -85,6 +87,7 @@ export const startAdminApp = async (options: {fixture?: AdminFixture; login?: bo
         (await ask<{calls: Array<{method: string; args: any[]}>}>({type: "calls"})).calls;
     const sessions = async () => (await ask<{sessions: any[]}>({type: "sessions"})).sessions;
     const seedAudit = async (n: number): Promise<void> => { await ask({type: "seedAudit", n}, 30_000); };
+    const seedBan = async (port: number, ip: string): Promise<void> => { await ask({type: "seed-ban", port, ip}); };
 
     try {
         child = fork(path.resolve(__dirname, "../admin/admin-backend-driver.ts"), [root.rootDir, fixture], {
@@ -135,7 +138,7 @@ export const startAdminApp = async (options: {fixture?: AdminFixture; login?: bo
 
         const ownedBrowser = browser;
         return {
-            page, url: ownedBrowser.url, origin, rootDir: root.rootDir, errors: ownedBrowser.errors, calls, token, sessions, seedAudit,
+            page, url: ownedBrowser.url, origin, rootDir: root.rootDir, errors: ownedBrowser.errors, calls, token, sessions, seedAudit, seedBan,
             async close(): Promise<void> {
                 try { await ownedBrowser.close(); }
                 finally {

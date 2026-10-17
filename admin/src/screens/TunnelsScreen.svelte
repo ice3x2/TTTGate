@@ -99,6 +99,9 @@
         }
     };
 
+    // U5-06: 레이트 리밋과 국가 필터로 거절한 접속 수. 0 이면 그리지 않는다(online 카드에만 있다).
+    const blockedOf = (status: TunnelingStatus): number => (status.rejected?.rateLimit ?? 0) + (status.rejected?.geo ?? 0);
+
     const getTimeout = (status: TunnelingStatus): number => {
         let timeout = status.activeStart + (status.activeTimeout * 1000) - serverTime;
         if(timeout < 0) {
@@ -172,7 +175,7 @@
                         <div class="tunnel-row">
                             {#if status && status.online}
                                 <Badge tone="pulse">Online</Badge>
-                                <span class="mono tunnel-stats">Uptime {startupTime(status.uptime)} · Sessions {status.sessions} · RX {toSize(status.rx)} · TX {toSize(status.tx)}</span>
+                                <span class="mono tunnel-stats">Uptime {startupTime(status.uptime)} · Sessions {status.sessions} · RX {toSize(status.rx)} · TX {toSize(status.tx)}</span>{#if blockedOf(status) > 0}<span class="mono tunnel-stats-extra" aria-hidden="true"> · </span><span class="mono" data-blocked>Blocked {blockedOf(status)}</span>{/if}
                             {:else if status}
                                 <Badge tone="alarm">Error</Badge>
                             {:else}

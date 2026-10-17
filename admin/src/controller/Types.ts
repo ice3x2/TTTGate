@@ -133,6 +133,11 @@ export const DEFAULT_GROUP_ATTRIBUTES: GroupAttributes = {
 export type MeResponse = {user: UserView; group: {id: string; name: string; attributes: GroupAttributes};
     sections: string[]; migrationBanner: boolean};
 export type ApiFailure = {success: false; status: number; message: string; code?: string};
+/** U5-06: 국가 필터·차단 목록·터널 레이트 리밋. */
+export type GeoConfig = {mode: 'off' | 'allow' | 'deny'; countries: string[]; applyToAdmin: boolean; unknownPolicy: 'allow' | 'deny'};
+export type CountryEntry = {code: string; name: string};
+export type BanEntry = {port: number; ip: string; country?: string; bannedUntil: number; hits: number};
+export type RateLimitOption = {enabled: boolean; windowMs: number; maxConnections: number; banMs: number; customized: boolean};
 /** U4-06: GET /api/audit 의 이벤트 한 건. */
 export type AuditEventView = {at: number; actor: {userId: string; username?: string; role?: string}; sessionIdHash?: string; ip?: string;
     type: string; target?: {kind: string; id: string}; outcome: 'success' | 'failure'; summary: string; detail?: Record<string, unknown>};
