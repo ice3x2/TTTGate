@@ -158,3 +158,39 @@ describe("SessionStore.removeSessionById (#113 U4-05)", () => {
         expect(store.listSessions()).toEqual([]);
     });
 });
+
+describe("SessionStore.updateSession (#127 U4-08)", () => {
+    let testRoot: TestRoot;
+    let fakeClock: FakeClockRng;
+
+    beforeEach(async () => {
+        testRoot = await createTestRoot("session-store-update");
+        applyTestRoot(testRoot.rootDir);
+        fakeClock = createFakeClockRng(1_700_000_000_000, [0.125]);
+        ClockRngProvider.configure(fakeClock);
+    });
+
+    afterEach(async () => {
+        await cleanupTestRoot(testRoot);
+    });
+
+    it("mustEnrollMfa 만 바꾸고 다른 필드는 그대로 둔다", async () => {
+        const store = SessionStore.instance;
+        const key = await store.newSession("u1", {ip: "10.0.0.7", userAgent: "agent-1", mustEnrollMfa: true});
+        const before = store.resolveSession([key])!;
+        expect(before.mustEnrollMfa).toBe(true);
+        store.updateSession(key, {mustEnrollMfa: false});
+        const after = store.resolveSession([key])!;
+        expect(after.mustEnrollMfa).toBe(false);
+        expect({createdAt: after.createdAt, ip: after.ip, userAgent: after.userAgent, userId: after.userId})
+            .toEqual({createdAt: before.createdAt, ip: before.ip, userAgent: before.userAgent, userId: before.userId});
+    });
+
+    it("새 세션의 mustEnrollMfa 기본값은 false 이고, 없는 키는 아무 일도 하지 않는다", async () => {
+        const store = SessionStore.instance;
+        const key = await store.newSession("u1", {ip: "10.0.0.7"});
+        expect(store.resolveSession([key])!.mustEnrollMfa).toBe(false);
+        expect(() => store.updateSession("missing", {mustEnrollMfa: true})).not.toThrow();
+        expect(store.listSessions()).toHaveLength(1);
+    });
+});

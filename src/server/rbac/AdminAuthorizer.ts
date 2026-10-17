@@ -20,6 +20,8 @@ const READ_ONLY: Decision = {allowed: false, status: 403, code: 'read_only'};
 const TUNNEL_ACCESS_DISABLED: Decision = {allowed: false, status: 403, code: 'tunnel_access_disabled'};
 const TUNNEL_CREATE_FORBIDDEN: Decision = {allowed: false, status: 403, code: 'tunnel_create_forbidden'};
 const PASSWORD_CHANGE_REQUIRED: Decision = {allowed: false, status: 403, code: 'password_change_required'};
+const MFA_ENROLLMENT_REQUIRED: Decision = {allowed: false, status: 403, code: 'mfa_enrollment_required'};
+const MFA_ENROLLMENT_ACTIONS: ReadonlySet<Action> = new Set<Action>(['me:read', 'me:password', 'me:mfa', 'me:sessions']);
 
 const SUPERUSER_SECTIONS: readonly Section[] = ['status', 'tunnels', 'server', 'users', 'groups', 'security', 'audit', 'sessions', 'me'];
 
@@ -73,6 +75,10 @@ function authorizeTunnelWrite(principal: Principal, target?: Target): Decision {
 export function authorize(principal: Principal, action: Action, target?: Target): Decision {
     if(principal.mustChangePassword && action !== 'me:read' && action !== 'me:password') {
         return PASSWORD_CHANGE_REQUIRED;
+    }
+    // #127 (U4-08) 비밀번호 게이트 다음이다. 등록을 마칠 때까지 me 계열만 쓴다.
+    if(principal.mustEnrollMfa === true && !MFA_ENROLLMENT_ACTIONS.has(action)) {
+        return MFA_ENROLLMENT_REQUIRED;
     }
     if(principal.role === 'superuser') {
         return ALLOWED;

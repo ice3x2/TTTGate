@@ -272,7 +272,8 @@ const onGetMe = async (ctx: RouteContext): Promise<void> => {
             group: {id: principal.groupId, name: SYSTEM_SUPERUSER_GROUP_NAME, attributes: principal.attributes},
             sections: sections(principal),
             migrationBanner: false,
-            mfa: mfaSummaryOf(undefined)
+            mfa: mfaSummaryOf(undefined),
+            mustEnrollMfa: false
         });
         return;
     }
@@ -285,7 +286,8 @@ const onGetMe = async (ctx: RouteContext): Promise<void> => {
         group: {id: principal.groupId, name: group?.name ?? principal.groupId, attributes: principal.attributes},
         sections: sections(principal),
         migrationBanner: user.migratedFromLegacyAdmin && !user.migrationAcknowledged,
-        mfa: mfaSummaryOf(user)
+        mfa: mfaSummaryOf(user),
+        mustEnrollMfa: ctx.session?.mustEnrollMfa === true
     });
 };
 
@@ -350,7 +352,11 @@ const onConfirmMfa = async (ctx: RouteContext): Promise<void> => {
         recoveryCodeHashes: pending.recoveryCodes.map((code) => hashRecoveryCode(code, user.id))
     });
     // 저장에 성공했을 때만 대기 항목을 지운다. 디스크 오류면 QR 을 다시 찍지 않고 재시도할 수 있다(사이에 await 없음).
-    if(saved.success) ctx.mfa!.pending.consume(user.id);
+    if(saved.success) {
+        ctx.mfa!.pending.consume(user.id);
+        // #127 (U4-08): 강제 등록 중이던 이 세션은 재로그인 없이 풀린다.
+        SessionStore.instance.updateSession(ctx.session!.key, {mustEnrollMfa: false});
+    }
     replyResult(ctx, saved, () => ({mfa: {enabled: true, recoveryCodesRemaining: pending.recoveryCodes.length}}));
 };
 
@@ -445,6 +451,22 @@ const onLogoutOtherSessions = async (ctx: RouteContext): Promise<void> => {
     ctx.ok({removed});
 };
 
+/** #127 (U4-08) 슈퍼유저의 남의 MFA 초기화. 켜져 있지 않아도 200(멱등)이고 대상의 세션을 모두 끊는다. */
+const onResetUserMfa = async (ctx: RouteContext): Promise<void> => {
+    const store = IdentityStore.instance;
+    if(!store.user(ctx.params.id)) {
+        ctx.fail(404, 'user_not_found', 'User not found');
+        return;
+    }
+    const cleared = store.clearMfa(ctx.params.id);
+    if(!cleared.success) {
+        ctx.fail(cleared.status, cleared.code, cleared.message);
+        return;
+    }
+    SessionStore.instance.removeSessionsOfUser(ctx.params.id);
+    ctx.ok({user: toUserView(store.user(ctx.params.id)!, store.groups())});
+};
+
 /**
  * 라우트 표(routes.ts)가 이름으로 가리키는 사용자·그룹 핸들러.
  * 단위 4 가 /api/me/mfa/* 와 /api/me/sessions* 를 더할 때도 이 맵에 항목을 더하고
@@ -461,6 +483,7 @@ export const rbacRouteHandlers: RouteHandlers = {
     onConfirmMfa,
     onDisableMfa,
     onRegenerateRecoveryCodes,
+    onResetUserMfa,
     onListUsers,
     onCreateUser,
     onGetUser,

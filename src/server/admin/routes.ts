@@ -140,6 +140,8 @@ export type RouteEntry = {
 // 남아 표(이슈 #95)에 적힌 패턴 문자열과 pattern.source 가 어긋나 보이므로 피한다.
 export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
     {method: 'POST', pattern: new RegExp('^/api/login$'), action: 'public', handler: 'onLogin'},
+    // U4-08 / #127 2단계 로그인. 세션이 없으므로 audited() 대신 핸들러가 직접 감사한다.
+    {method: 'POST', pattern: new RegExp('^/api/login/mfa$'), action: 'public', handler: 'onLoginMfa'},
     {method: 'GET', pattern: new RegExp('^/api/version$'), action: 'public', handler: 'onGetVersion'},
     {method: 'POST', pattern: new RegExp('^/api/logout$'), action: 'session',
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.logout, {kind: 'session', id: SessionStore.sessionIdOf(ctx.session!.key)}), handler: 'onLogout'},
@@ -213,6 +215,9 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.user_deleted, pathIdTarget('user')(ctx)), handler: 'onDeleteUser'},
     {method: 'POST', pattern: new RegExp('^/api/users/(?<id>[^/]+)/password-reset$'), action: 'user:manage',
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.temp_password_issued, pathIdTarget('user')(ctx)), handler: 'onResetUserPassword'},
+    // U4-08 / #127 슈퍼유저의 남의 MFA 초기화. 대상 사용자의 세션도 끊는다.
+    {method: 'POST', pattern: new RegExp('^/api/users/(?<id>[^/]+)/mfa/reset$'), action: 'user:manage',
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.mfa_reset, pathIdTarget('user')(ctx)), handler: 'onResetUserMfa'},
     {method: 'GET', pattern: new RegExp('^/api/groups$'), action: 'group:manage', handler: 'onListGroups'},
     {method: 'POST', pattern: new RegExp('^/api/groups$'), action: 'group:manage',
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.group_created, {kind: 'group', id: String(ctx.body?.name)}), handler: 'onCreateGroup'},
