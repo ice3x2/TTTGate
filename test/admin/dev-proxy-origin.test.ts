@@ -31,7 +31,7 @@ test.each([false, true])("actual configured proxy adapts only trusted present or
         const backendOrigin = `http://127.0.0.1:${backendPort}`;
         const token = (await fs.readFile(path.join(root.rootDir, "config", BOOTSTRAP_TOKEN_FILE_NAME), "utf8")).trim();
         const login = await httpRequest({port: backendPort, path: "/api/login", method: "POST",
-            headers: {"Content-Type": "application/json"}, body: JSON.stringify({key: "proxy-browser-password1!", bootstrapToken: token})});
+            headers: {"Content-Type": "application/json"}, body: JSON.stringify({username: "admin", password: "proxy-browser-password1!", bootstrapToken: token})});
         expect(login.statusCode).toBe(200);
         const cookies = login.headers["set-cookie"]!.map((cookie) => cookie.split(";")[0]);
         const csrf = JSON.parse(login.body).csrfToken;

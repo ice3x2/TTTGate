@@ -113,11 +113,15 @@ describe("rbac-login: session-based /api/login, /api/logout, /api/validateSessio
         });
     });
 
-    it("accepts the legacy {key} alias with no username (defaults to admin)", async () => {
+    // #102 (U2-10) 이 별칭(key → password, username 기본 'admin')을 제거했다.
+    it("rejects the removed {key} alias and a body without username", async () => {
         await withServer(setupBcryptAccount("routes-password"), async ({loginAs}) => {
-            const response = await loginAs({key: "routes-password"});
-            expect(response.status).toBe(200);
-            expect(response.body).toMatchObject({success: true, user: {username: "admin"}});
+            expect((await loginAs({key: "routes-password"})).status).toBe(401);
+            expect((await loginAs({password: "routes-password"})).status).toBe(401);
+            expect((await loginAs({username: "admin", key: "routes-password"})).status).toBe(401);
+            const ok = await loginAs({username: "admin", password: "routes-password"});
+            expect(ok.status).toBe(200);
+            expect(ok.body).toMatchObject({success: true, user: {username: "admin"}});
         });
     });
 
@@ -203,22 +207,25 @@ describe("rbac-login: session-based /api/login, /api/logout, /api/validateSessio
         });
     });
 
-    it("completes bootstrap via the legacy {key} alias (username defaults to admin)", async () => {
+    it("rejects bootstrap without username with 403 invalidUsername", async () => {
         await withServer(setupBootstrapRoot, async ({loginAs, rootDir}) => {
             const bootstrapToken = (await fs.readFile(path.join(rootDir, "config", ".bootstrap-token"), "utf-8")).trim();
-            const response = await loginAs({key: "root-password-1", bootstrapToken});
-            expect(response.status).toBe(200);
-            expect(response.body).toMatchObject({user: {username: "admin"}});
+            const response = await loginAs({password: "root-password-1", bootstrapToken});
+            expect(response.status).toBe(403);
+            expect(response.body).toMatchObject({bootstrapRequired: true, invalidUsername: true});
+            const ok = await loginAs({username: "admin", password: "root-password-1", bootstrapToken});
+            expect(ok.status).toBe(200);
+            expect(ok.body).toMatchObject({user: {username: "admin"}});
         });
     });
 
     it("falls back to the legacy .key verification when identity.yaml is unreadable", async () => {
         await withServer(setupLegacyFallback("legacy-fallback-pw-1"), async ({loginAs}) => {
-            const ok = await loginAs({password: "legacy-fallback-pw-1"});
+            const ok = await loginAs({username: "admin", password: "legacy-fallback-pw-1"});
             expect(ok.status).toBe(200);
             expect(ok.body).toMatchObject({user: {id: "legacy-admin"}});
 
-            const wrong = await loginAs({password: "wrong-password"});
+            const wrong = await loginAs({username: "admin", password: "wrong-password"});
             expect(wrong.status).toBe(401);
         });
     });
@@ -467,7 +474,7 @@ describe("rbac-login: #96 권한 결정기 · 비밀번호 변경 게이트 · /
 
     it("legacy-fallback 서버의 /api/me 는 legacy-admin 이고 비밀번호 변경은 503 이다", async () => {
         await withServer(setupLegacyFallback("legacy-fallback-pw-1"), async ({loginAs, request}) => {
-            const login = await loginAs({password: "legacy-fallback-pw-1"});
+            const login = await loginAs({username: "admin", password: "legacy-fallback-pw-1"});
             expect(login.status).toBe(200);
             const auth = login.auth!;
 

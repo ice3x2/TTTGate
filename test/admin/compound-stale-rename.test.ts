@@ -20,7 +20,7 @@ test.each(["target-stale", "source-stale", "target-fresh"])("rename deletion sna
         await app.page.goto(`http://127.0.0.1:${f.ports[0]}`);
         await app.page.waitForFunction(() => !!(window as any).configurationFixture);
         expect(await app.page.evaluate(async () => (await fetch("/api/login", {method: "POST", headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({key: "revision-password"})})).status)).toBe(200);
+            body: JSON.stringify({username: "admin", password: "revision-password"})})).status)).toBe(200);
         await app.page.evaluate((port) => (window as any).configurationFixture.mount("tunnel", port), String(sourcePort));
         await app.page.waitForFunction(() => (document.querySelector('input[type="file"]') as HTMLInputElement)?.files?.length === 1);
         const originalToken = CertificationStore.instance.revisionState.currentRevision;

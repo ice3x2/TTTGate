@@ -1262,7 +1262,8 @@ class AdminServer {
         await this.performLogin(ctx);
         // 성공은 completeLogin 이 남긴다(새 세션 해시를 그곳에서만 알 수 있다).
         if(ctx.res.statusCode === 200) return;
-        const username = typeof ctx.body?.['username'] == 'string' ? ctx.body['username'] : LEGACY_ADMIN_USERNAME;
+        // username 이 없으면 'admin' 으로 적지 않는다(별칭은 #102 에서 지웠다). 다른 계정에 실패가 쌓이지 않게 한다.
+        const username = typeof ctx.body?.['username'] == 'string' ? ctx.body['username'] : '(missing)';
         this.emitAudit({
             at: this.now(), actor: {userId: 'system'}, ip: ctx.ip,
             type: AUDIT_EVENT_TYPES.login_failure, outcome: 'failure',
@@ -1281,21 +1282,18 @@ class AdminServer {
             return;
         }
 
-        // password 별칭: password가 없으면 key (#102 (U2-10)가 제거할 때까지 유지).
-        const password = (typeof json?.['password'] == 'string' ? json['password']
-            : (typeof json?.['key'] == 'string' ? json['key'] : '')).trim();
+        // #102 (U2-10): 로그인 본문은 {username, password} 하나다. 옛 {key} 별칭과 username 기본값('admin')은 지웠다.
+        const password = (typeof json?.['password'] == 'string' ? json['password'] : '').trim();
         const bootstrapToken = typeof json?.['bootstrapToken'] == 'string' ? json['bootstrapToken'] : undefined;
 
-        // username 별칭: username이 없으면 'admin'.
-        let username = LEGACY_ADMIN_USERNAME;
+        // username 이 없거나 형식이 틀리면 부트스트랩 중에는 403 invalidUsername, 그 밖에는 401 이다.
+        let username = '';
         let invalidUsername = false;
-        if(json?.['username'] !== undefined) {
-            const usernameResult = validateUsername(json['username']);
-            if(usernameResult.success) {
-                username = usernameResult.value;
-            } else {
-                invalidUsername = true;
-            }
+        const usernameResult = validateUsername(json?.['username']);
+        if(usernameResult.success) {
+            username = usernameResult.value;
+        } else {
+            invalidUsername = true;
         }
 
         if(invalidUsername) {

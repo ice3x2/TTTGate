@@ -4,5 +4,5 @@ import LoginCtrl from '../src/controller/LoginCtrl';
 
 mount(LoginScreen, {target: document.getElementById('login')!, props: {onsuccess: () => { location.href = '/'; }}});
 (window as any).loginFixture = {
-    login: (key: string, bootstrapToken?: string) => (LoginCtrl.login as any)(key, bootstrapToken),
+    login: (username: string, password: string, bootstrapToken?: string) => LoginCtrl.login(username, password, bootstrapToken),
 };

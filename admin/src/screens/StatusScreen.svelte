@@ -33,8 +33,12 @@
 
     const loadServerStatus = async (): Promise<boolean> => {
         try {
-            usage = await ServerStatusCtrl.instance.getSysUsage();
-            clients = await ServerStatusCtrl.instance.getClientStatus();
+            const nextUsage = await ServerStatusCtrl.instance.getSysUsage();
+            const nextClients = await ServerStatusCtrl.instance.getClientStatus();
+            // 권한이 없는 주체(일반 유저, U2-10)는 403 본문을 받아 값이 비어 온다. 실패로 보고 폴링을 멈춘다.
+            if(nextUsage === undefined || !Array.isArray(nextClients)) return false;
+            usage = nextUsage;
+            clients = nextClients;
             return true;
         } catch(e) {
             if(e instanceof InvalidSession) sessionOut();

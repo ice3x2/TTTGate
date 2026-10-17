@@ -25,9 +25,14 @@ const BACKEND_START_TIMEOUT_MS = 15_000;
 const BACKEND_STOP_TIMEOUT_MS = 10_000;
 const CALLS_TIMEOUT_MS = 5_000;
 
-export const startAdminApp = async (options: {fixture?: AdminFixture; login?: boolean} = {}): Promise<AdminApp> => {
+/**
+ * login: true(기본)는 admin / ADMIN_TEST_PASSWORD 로, 객체면 그 계정으로 로그인한 뒤 상태 화면까지 기다린다.
+ * false 면 로그인 화면에서 멈춘다(#102 U2-10 이 계정 지정을 더했다).
+ */
+export const startAdminApp = async (options: {fixture?: AdminFixture; login?: boolean | {username: string; password: string}} = {}): Promise<AdminApp> => {
     const fixture: AdminFixture = options.fixture ?? 'password';
-    const shouldLogin = options.login ?? true;
+    const shouldLogin = options.login !== false;
+    const account = typeof options.login === 'object' ? options.login : {username: 'admin', password: ADMIN_TEST_PASSWORD};
     const root = await createTestRoot(`admin-app-${fixture}`);
     let child: ChildProcess | undefined;
     let browser: Awaited<ReturnType<typeof startAdminBrowser>> | undefined;
@@ -99,7 +104,8 @@ export const startAdminApp = async (options: {fixture?: AdminFixture; login?: bo
             const ok = () => page.getByRole("button", {name: "OK", exact: true}).click();
             const password = page.locator("#login-password");
             await password.waitFor({state: "visible"});
-            await password.fill(ADMIN_TEST_PASSWORD);
+            await page.locator("#login-username").fill(account.username);
+            await password.fill(account.password);
             await ok();
             if(fixture === 'bootstrap') {
                 const bootstrapToken = page.locator("#bootstrap-token");

@@ -55,51 +55,51 @@ describe("REQ-07 login rate limit (network bucket)", () => {
     }
 
     it("(a) five failures block every submitted password until the existing window expires", async () => {
-        const bootstrapRes = await login({key: "supersecret1", bootstrapToken});
+        const bootstrapRes = await login({username: "admin", password: "supersecret1", bootstrapToken});
         expect(bootstrapRes.statusCode).toBe(200);
         const clock = createFakeClockRng(Date.now());
         ClockRngProvider.configure(clock);
 
         for(let i = 0; i < 5; i++) {
-            const r = await login({key: "wrong-password-A"});
+            const r = await login({username: "admin", password: "wrong-password-A"});
             expect(r.statusCode).toBe(401);
         }
-        const blockedA = await login({key: "wrong-password-A"});
+        const blockedA = await login({username: "admin", password: "wrong-password-A"});
         expect(blockedA.statusCode).toBe(429);
 
-        const otherAcct = await login({key: "different-wrong-password-B"});
+        const otherAcct = await login({username: "admin", password: "different-wrong-password-B"});
         expect(otherAcct.statusCode).toBe(429);
         expect(JSON.parse(otherAcct.body)).toMatchObject({success: false, message: "Too many login attempts"});
-        expect((await login({key: "supersecret1"})).statusCode).toBe(429);
+        expect((await login({username: "admin", password: "supersecret1"})).statusCode).toBe(429);
         expect((adminServer as any)._loginAttempts.size).toBe(1);
         clock.advance(59_999);
-        expect((await login({key: "third-wrong-password"})).statusCode).toBe(429);
+        expect((await login({username: "admin", password: "third-wrong-password"})).statusCode).toBe(429);
         clock.advance(1);
-        expect((await login({key: "different-wrong-password-B"})).statusCode).toBe(401);
+        expect((await login({username: "admin", password: "different-wrong-password-B"})).statusCode).toBe(401);
         expect([...(adminServer as any)._loginAttempts.values()][0]).toMatchObject({failedCount: 1});
-        expect((await login({key: "supersecret1"})).statusCode).toBe(200);
+        expect((await login({username: "admin", password: "supersecret1"})).statusCode).toBe(200);
         expect((adminServer as any)._loginAttempts.size).toBe(0);
     });
 
     it("rotating passwords and untrusted XFF headers cannot create fresh buckets", async () => {
-        expect((await login({key: "supersecret1", bootstrapToken})).statusCode).toBe(200);
+        expect((await login({username: "admin", password: "supersecret1", bootstrapToken})).statusCode).toBe(200);
         for(let index = 0; index < 5; index++) {
-            const result = await login({key: `different-password-${index}`}, {"X-Forwarded-For": `10.${index}.1.1`});
+            const result = await login({username: "admin", password: `different-password-${index}`}, {"X-Forwarded-For": `10.${index}.1.1`});
             expect(result.statusCode).toBe(401);
         }
-        expect((await login({key: "sixth-new-password"}, {"X-Forwarded-For": "192.0.2.1"})).statusCode).toBe(429);
+        expect((await login({username: "admin", password: "sixth-new-password"}, {"X-Forwarded-For": "192.0.2.1"})).statusCode).toBe(429);
         expect((adminServer as any)._loginAttempts.size).toBe(1);
         expect([...(adminServer as any)._loginAttempts.values()][0]).toMatchObject({failedCount: 5});
     });
 
     it("explicit trusted XFF retains separate network buckets and groups the same IPv4 /24", async () => {
-        expect((await login({key: "supersecret1", bootstrapToken})).statusCode).toBe(200);
+        expect((await login({username: "admin", password: "supersecret1", bootstrapToken})).statusCode).toBe(200);
         AdminSecurityPolicyRegistry.configure({trustXForwardedFor: true});
         for(let index = 0; index < 5; index++) {
-            expect((await login({key: "trusted-wrong-password"}, {"X-Forwarded-For": "10.1.1.5, 192.0.2.1"})).statusCode).toBe(401);
+            expect((await login({username: "admin", password: "trusted-wrong-password"}, {"X-Forwarded-For": "10.1.1.5, 192.0.2.1"})).statusCode).toBe(401);
         }
-        expect((await login({key: "another-wrong-password"}, {"X-Forwarded-For": "10.1.1.99"})).statusCode).toBe(429);
-        expect((await login({key: "another-wrong-password"}, {"X-Forwarded-For": "10.1.2.5"})).statusCode).toBe(401);
+        expect((await login({username: "admin", password: "another-wrong-password"}, {"X-Forwarded-For": "10.1.1.99"})).statusCode).toBe(429);
+        expect((await login({username: "admin", password: "another-wrong-password"}, {"X-Forwarded-For": "10.1.2.5"})).statusCode).toBe(401);
     });
 
     it("(b) trustXForwardedFor=false 기본값 — XFF 헤더 무시", () => {
@@ -127,16 +127,16 @@ describe("REQ-07 login rate limit (network bucket)", () => {
 
     it("(d) 실패 응답 지연 하한 — 4회차 실패 시 computeBackoffMs >= 400ms", async () => {
         // 부트스트랩 완료 상태에서 연속 실패 유도.
-        const bootstrapRes = await login({key: "supersecret1", bootstrapToken});
+        const bootstrapRes = await login({username: "admin", password: "supersecret1", bootstrapToken});
         expect(bootstrapRes.statusCode).toBe(200);
         // 1~3 실패 누적 (모두 401/429 허용).
         for(let i = 0; i < 3; i++) {
-            await login({key: "wrong-d-pass"});
+            await login({username: "admin", password: "wrong-d-pass"});
         }
         // 4번째 실패 직전의 failCount 는 3 이므로 이번 응답 지연은 computeBackoffMs(4) = 1600ms 수준.
         // 하한만 검증(>= 400ms) — 시스템 편차 허용.
         const t0 = Date.now();
-        const r = await login({key: "wrong-d-pass"});
+        const r = await login({username: "admin", password: "wrong-d-pass"});
         const elapsed = Date.now() - t0;
         expect([401, 429]).toContain(r.statusCode);
         expect(elapsed).toBeGreaterThanOrEqual(400);

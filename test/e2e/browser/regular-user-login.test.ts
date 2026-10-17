@@ -96,28 +96,23 @@ describe("regular-user-login", () => {
         expect(adminTunnels.json.tunnelingOptions[0].forwardPort).toBe(harness.tunnels[0].forwardPort);
     });
 
-    test("the login form carries no username field until #102 adds one", async () => {
+    test("alice signs in through the admin UI and /api/me reports alice", async () => {
         const app = await startAdminBrowser({apiOrigin: `https://127.0.0.1:${harness.adminPort}`});
         try {
             const page = app.page;
             await page.goto(app.url);
             const password = page.locator("#login-password");
             await password.waitFor({state: "visible"});
-            const username = page.locator("#login-username");
-            if(await username.count() > 0) {
-                // #102 (U2-10) 이후: alice 로 화면 로그인까지 확인한다.
-                await username.fill("alice");
-                await password.fill(ALICE_PASSWORD);
-                await page.getByRole("button", {name: "OK", exact: true}).click();
-                await page.waitForFunction(() => location.hash.startsWith("#/"));
-                const sessionStatus = await page.evaluate(async () => (await fetch("/api/validateSession")).status);
-                expect(sessionStatus).toBe(200);
-            } else {
-                // #102 (U2-10) 전: 화면에는 비밀번호 칸만 있어서 alice 로 로그인할 수단이 없다.
-                // 건너뛰었다는 사실 자체를 단언해 둔다. #102 가 이 분기를 지운다.
-                expect(await username.count()).toBe(0);
-                expect(await password.count()).toBe(1);
-            }
+            await page.locator("#login-username").fill("alice");
+            await password.fill(ALICE_PASSWORD);
+            await page.getByRole("button", {name: "OK", exact: true}).click();
+            await page.waitForFunction(() => location.hash.startsWith("#/"));
+            const me = await page.evaluate(async () => {
+                const response = await fetch("/api/me");
+                return {status: response.status, body: await response.json()};
+            });
+            expect(me.status).toBe(200);
+            expect(me.body.user.username).toBe("alice");
             expect(app.errors).toEqual([]);
         } finally {
             await app.close();

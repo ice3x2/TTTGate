@@ -75,7 +75,7 @@ const setup = async (observe?: (resources: SetupResources) => void) => {
         const bootstrapToken = (await fs.readFile(path.join(root.rootDir, "config", BOOTSTRAP_TOKEN_FILE_NAME), "utf8")).trim();
         const login = await app.page.evaluate(async (token: string) => {
             const response = await fetch("/api/login", {method: "POST", credentials: "same-origin",
-                headers: {"Content-Type": "application/json"}, body: JSON.stringify({key: "csrf-browser-test1!", bootstrapToken: token})});
+                headers: {"Content-Type": "application/json"}, body: JSON.stringify({username: "admin", password: "csrf-browser-test1!", bootstrapToken: token})});
             return {status: response.status, body: await response.json()};
         }, bootstrapToken);
         expect(login.status).toBe(200);

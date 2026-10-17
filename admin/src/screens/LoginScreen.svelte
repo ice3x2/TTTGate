@@ -1,12 +1,23 @@
 <script lang="ts">
-    import LoginCtrl from '../controller/LoginCtrl';
+    import LoginCtrl, {type LoginUser} from '../controller/LoginCtrl';
     import Button from '../ui/Button.svelte';
     import Card from '../ui/Card.svelte';
     import Field from '../ui/Field.svelte';
     import TextInput from '../ui/TextInput.svelte';
 
-    let {onsuccess}: {onsuccess: () => void} = $props();
+    let {onsuccess}: {onsuccess: (result: {user?: LoginUser; mustChangePassword: boolean}) => void} = $props();
 
+    const LAST_USERNAME_KEY = 'tttgate.lastUsername';
+
+    // localStorage 는 브라우저 정책으로 막힐 수 있다. 이 접근만 예외로 감싼다.
+    const readLastUsername = (): string => {
+        try { return localStorage.getItem(LAST_USERNAME_KEY) ?? ''; } catch { return ''; }
+    };
+    const rememberUsername = (value: string): void => {
+        try { localStorage.setItem(LAST_USERNAME_KEY, value); } catch { /* 저장하지 못해도 로그인은 계속한다 */ }
+    };
+
+    let username = $state(readLastUsername());
     let password = $state('');
     let bootstrapToken = $state('');
     let bootstrapRequired = $state(false);
@@ -21,15 +32,20 @@
             return;
         }
         pending = true;
+        // 비워 두면 admin 으로 보낸다(UI 기본값. 서버에는 별칭이 없다).
+        const effectiveUsername = username.trim() === '' ? 'admin' : username.trim();
         try {
-            const result = await LoginCtrl.login(password, bootstrapToken || undefined);
+            const result = await LoginCtrl.login(effectiveUsername, password, bootstrapToken || undefined);
             if(result.success) {
-                onsuccess();
+                rememberUsername(effectiveUsername);
+                onsuccess({user: result.user, mustChangePassword: result.mustChangePassword === true});
                 return;
             }
             if(result.bootstrapRequired) bootstrapRequired = true;
             if(result.status === 429) {
                 message = 'Too many login attempts. Please try again later.';
+            } else if(result.invalidUsername) {
+                message = 'Username must be 3-32 characters: a-z, 0-9, dot, underscore, hyphen.';
             } else if(result.weakPassword) {
                 message = "The password does not meet the server's minimum length.";
             } else if(result.invalidBootstrapToken && bootstrapToken) {
@@ -51,6 +67,9 @@
     <Card class="login-card">
         <h1 class="login-title">Sign in</h1>
         <form onsubmit={submit} novalidate>
+            <Field label="Username" for="login-username" hint={bootstrapRequired ? 'Choose the first superuser name (default: admin)' : undefined}>
+                <TextInput id="login-username" autocomplete="username" bind:value={username} />
+            </Field>
             <Field label="Password" for="login-password">
                 <TextInput id="login-password" type="password" autocomplete="current-password" bind:value={password} />
             </Field>

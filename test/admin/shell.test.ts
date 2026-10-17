@@ -1,5 +1,6 @@
 import type {Page} from "playwright";
 import {startAdminBrowser} from "../helpers/adminBrowser";
+import {startAdminApp} from "../helpers/adminApp";
 
 const FIXTURE = "/test/shell-fixture.html";
 
@@ -128,6 +129,44 @@ test("본문이 모바일에서 전폭이고 데스크톱에서 1024px 중앙 �
             return {width: rect.width, left: rect.left};
         });
         expect(box).toEqual({width: 1024, left: 128});
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, 60_000);
+
+// ---- #102 (U2-10) 사용자명·Sign out·섹션 필터. 실제 백엔드가 필요하므로 startAdminApp 을 쓴다. ----
+
+test("드로어 하단에 사용자명과 Sign out 이 있고 Sign out 은 세션을 끝낸다", async () => {
+    const app = await startAdminApp({fixture: "password"});
+    try {
+        await app.page.getByRole("button", {name: "Open menu"}).click();
+        await app.page.getByRole("dialog", {name: "Navigation"}).waitFor({state: "visible"});
+        expect(await app.page.locator("#nav-user").textContent()).toBe("admin");
+        expect(await app.page.locator("#nav-user").getAttribute("class")).toContain("mono");
+
+        await app.page.locator("#nav-sign-out").click();
+        await app.page.locator("#login-password").waitFor({state: "visible", timeout: 10_000});
+        const validate = await app.page.request.get(`${app.origin}/api/validateSession`);
+        expect(validate.status()).toBe(401);
+
+        // 뒤로 가기로도 셸이 돌아오지 않는다.
+        await app.page.goBack().catch(() => undefined);
+        await app.page.waitForTimeout(300);
+        expect(await app.page.locator("#login-password").count()).toBe(1);
+        expect(await app.page.getByRole("button", {name: "Open menu"}).count()).toBe(0);
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, 60_000);
+
+test("드로어 항목은 me.sections 순서(status, tunnels, server)다", async () => {
+    const app = await startAdminApp({fixture: "password"});
+    try {
+        await app.page.getByRole("button", {name: "Open menu"}).click();
+        await app.page.getByRole("dialog", {name: "Navigation"}).waitFor({state: "visible"});
+        expect(await app.page.locator(".drawer-item").allTextContents()).toEqual(["Status", "Tunnels", "Server settings"]);
         expect(app.errors).toEqual([]);
     } finally {
         await app.close();

@@ -10,12 +10,14 @@ import {SysInfo} from "../../src/commons/SysMonitor";
 import {IdentityMigration} from "../../src/server/rbac/IdentityMigration";
 import SessionStore from "../../src/server/admin/SessionStore";
 import {TunnelingOption} from "../../src/types/TunnelingOption";
-import {ADMIN_FIXTURES, ADMIN_TEST_PASSWORD} from "../helpers/adminFixture";
+import {ADMIN_FIXTURES, ADMIN_TEST_PASSWORD, REGULAR_USER, TEMP_USER} from "../helpers/adminFixture";
+import {IdentityStore} from "../../src/server/rbac/IdentityStore";
+import {DEFAULT_GROUP_ID} from "../../src/server/rbac/IdentityTypes";
 import type {AdminFixture} from "../helpers/adminFixture";
 import {applyTestRoot} from "../helpers/runtime";
 
 // 관리자 브라우저 테스트용 백엔드 드라이버. 실제 AdminServer 를 띄우고 TTTServer 만 스텁으로 바꾼다.
-// 인자: [rootDir, fixture]. fixture 는 'bootstrap' | 'password' | 'with-tunnels'.
+// 인자: [rootDir, fixture]. fixture 는 'bootstrap' | 'password' | 'with-tunnels' | 'regular-user'.
 
 const rootDir = process.argv[2];
 const fixture = (process.argv[3] ?? "bootstrap") as AdminFixture;
@@ -142,7 +144,7 @@ const stub = {
 
 (async () => {
     applyTestRoot(rootDir);
-    if(fixture === "password" || fixture === "with-tunnels") {
+    if(fixture === "password" || fixture === "with-tunnels" || fixture === "regular-user") {
         fs.writeFileSync(path.join(rootDir, "config", ".key"), bcrypt.hashSync(ADMIN_TEST_PASSWORD, 12));
     }
     await CertificationStore.instance.load();
@@ -157,6 +159,15 @@ const stub = {
     }
     void SessionStore.instance;
     await IdentityMigration.runAtStartup();
+    if(fixture === "regular-user") {
+        // 슈퍼유저 admin 은 .key 승격으로 생긴다. 일반 유저 둘은 저장소 API 로 직접 만든다(빠른 bcrypt).
+        IdentityStore.bcryptCost = 4;
+        const store = IdentityStore.instance;
+        const grouped = store.updateGroup(DEFAULT_GROUP_ID, {attributes: {admin_ui_section_access: ["tunnels"]}});
+        const alice = await store.createUser({username: REGULAR_USER.username, role: "regular", password: REGULAR_USER.password, mustChangePassword: false});
+        const temp = await store.createUser({username: TEMP_USER.username, role: "regular", password: TEMP_USER.password, mustChangePassword: true});
+        if(!grouped.success || !alice.success || !temp.success) throw new Error("Invalid regular-user fixture");
+    }
     const api = new AdminServer(stub as any, false);
     const port = await api.listen(0, "127.0.0.1");
     process.send?.({port, pid: process.pid});

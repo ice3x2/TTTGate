@@ -33,7 +33,7 @@ const withRoutes = async (check: (fixture: any) => Promise<void>) => {
             req.end(bytes);
         });
         const login = async () => {
-            const response = await request("POST", "/api/login", {key: "routes-password", bootstrapToken: token});
+            const response = await request("POST", "/api/login", {username: "admin", password: "routes-password", bootstrapToken: token});
             expect(response.status).toBe(200);
             const cookies: string[] = response.headers["set-cookie"];
             return {Cookie: cookies.map(value => value.split(";")[0]).join("; "),
@@ -54,7 +54,7 @@ test.each(["POST", "PUT", "DELETE"])("unmatched %s completes with 404 after vali
 
 test("query login shares its exact pathname with the Origin/CSRF exception and keeps raw query", async () => withRoutes(async f => {
     const target = "/api/login?return=%2F&value=1+2";
-    const body = {key: "routes-password", bootstrapToken: f.token};
+    const body = {username: "admin", password: "routes-password", bootstrapToken: f.token};
     expect((await f.request("POST", target, body, {Origin: "https://evil.example"})).status).toBe(403);
     const result = await f.request("POST", target, body, {Origin: `http://127.0.0.1:${f.port}`});
     expect(result.status).toBe(200);
