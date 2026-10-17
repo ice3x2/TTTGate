@@ -214,11 +214,12 @@ test("일반 유저는 자기 섹션(tunnels)만 드로어에서 본다", async 
     const app = await startAdminApp({fixture: "regular-user", login: false});
     try {
         await loginWith(app.page, REGULAR_USER.username, REGULAR_USER.password);
-        await app.page.waitForFunction(() => location.hash === "#/status", undefined, {timeout: 10_000});
+        // #103 (U3-01): tunnels 섹션만 보는 사용자의 기본 화면은 #/tunnels 다.
+        await app.page.waitForFunction(() => location.hash === "#/tunnels", undefined, {timeout: 10_000});
         await app.page.getByRole("button", {name: "Open menu"}).click();
         await app.page.getByRole("dialog", {name: "Navigation"}).waitFor({state: "visible"});
         expect(await app.page.locator(".drawer-item").allTextContents()).toEqual(["Tunnels"]);
-        expect(await app.page.locator("#nav-user").textContent()).toBe(REGULAR_USER.username);
+        expect(await app.page.locator("#drawer-username").textContent()).toBe(REGULAR_USER.username);
         expect(app.errors).toEqual([]);
     } finally {
         await app.close();
@@ -249,7 +250,7 @@ test("슈퍼유저가 다른 화면에서 Sign out 해도 다음 사용자는 �
         await app.page.getByRole("button", {name: "Open menu"}).click();
         await app.page.locator("#nav-sign-out").click();
         await loginWith(app.page, REGULAR_USER.username, REGULAR_USER.password);
-        await app.page.waitForFunction(() => location.hash === "#/status", undefined, {timeout: 10_000});
+        await app.page.waitForFunction(() => location.hash === "#/tunnels", undefined, {timeout: 10_000});
         await app.page.getByRole("button", {name: "Open menu"}).waitFor({state: "visible", timeout: 10_000});
         expect(app.errors).toEqual([]);
     } finally {
@@ -261,7 +262,10 @@ test("/api/me 가 401 이면 로그인 화면으로, 네트워크 오류면 Offl
     const app = await startAdminApp({fixture: "password", login: false});
     try {
         await app.page.route("**/api/me", (route) => route.fulfill({status: 401, contentType: "application/json", body: JSON.stringify({success: false})}));
+        // /api/me 응답을 실제로 기다린다. 기다리지 않으면 로그인 전 화면에서도 아래 조건이 참이라 다음 단계와 경쟁한다.
+        const meRequested = app.page.waitForResponse((response) => new URL(response.url()).pathname === "/api/me", {timeout: 10_000});
         await loginWith(app.page, "admin", ADMIN_TEST_PASSWORD);
+        expect((await meRequested).status()).toBe(401);
         // 로그인은 성공했지만 /api/me 가 401 이라 다시 로그인 화면이다.
         await app.page.waitForFunction(() => document.querySelector("#login-password") !== null && document.querySelector("#menu-button") === null,
             undefined, {timeout: 10_000});

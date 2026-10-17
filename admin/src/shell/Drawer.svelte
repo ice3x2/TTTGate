@@ -1,5 +1,5 @@
 <script lang="ts">
-    import {NAV, navScreen} from './nav';
+    import {navScreen, visibleNav} from './nav';
     import {route} from '../router';
     import {me} from '../me';
     import Button from '../ui/Button.svelte';
@@ -9,7 +9,7 @@
 
     const session = useSession();
     // me 가 아직 없으면 아무 항목도 그리지 않는다(권한 없는 섹션 숨김, NFR-USAB-HIDE-001).
-    const items = $derived(NAV.filter((item) => $me?.sections.includes(item.section) === true));
+    const items = $derived(visibleNav($me?.sections ?? []));
 
     // 열릴 때 첫 항목으로 초점 이동, 닫힐 때 메뉴 버튼으로 복귀.
     $effect(() => {
@@ -38,7 +38,7 @@
         </ul>
         {#if $me}
             <div class="drawer-foot">
-                <span id="nav-user" class="mono">{$me.user.username}</span>
+                <span id="drawer-username" class="mono">{$me.user.username}</span>
                 <Button id="nav-sign-out" variant="ghost" onclick={() => { open = false; void signOut(session); }}>Sign out</Button>
             </div>
         {/if}

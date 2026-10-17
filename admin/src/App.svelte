@@ -7,11 +7,12 @@
   import ServerSettingsScreen from "./screens/ServerSettingsScreen.svelte";
   import TunnelsScreen from "./screens/TunnelsScreen.svelte";
   import TunnelEditScreen from "./screens/TunnelEditScreen.svelte";
+  import DeniedScreen from "./screens/DeniedScreen.svelte";
   import Loading from "./ui/Loading.svelte";
   import Button from "./ui/Button.svelte";
   import Shell from "./shell/Shell.svelte";
   import {provideSession, signOut} from "./shell/session";
-  import {chrome} from "./shell/nav";
+  import {chrome, defaultHash, SECTION_OF_SCREEN} from "./shell/nav";
   import {navigate, route} from "./router";
   import {clearMe, loadMe, me} from "./me";
 
@@ -43,6 +44,24 @@
   });
 
   $effect(() => { if(state === 'Valid' && $me && location.hash === '') navigate('#/status'); });
+  // 위 '#/status' 는 라우터 기본값이므로, 권한이 없으면 아래 가드가 기본 화면으로 바꾼다(여기서 바로 바꾸면 가드가 직접 고른 해시로 본다).
+
+  // 권한 판정이 끝나기 전에는 화면을 마운트하지 않는다. 가드의 navigate 는 hashchange 를 기다리므로,
+  // 그 사이 권한 없는 화면의 onMount 가 API 를 부르면 403 과 access_denied 감사가 쌓인다.
+  const allowed = $derived.by(() => {
+    const section = SECTION_OF_SCREEN[$route.screen];
+    return $me !== undefined && (section === null || $me.sections.includes(section));
+  });
+
+  // U3-01 라우트 가드. 권한 없는 섹션이면 라우터 기본값(#/status 류)은 기본 화면으로, 직접 고른 해시는 #/denied 로 보낸다.
+  // 강제 비밀번호 변경 흐름은 U3-02 가 맡으므로 여기서는 손대지 않는다.
+  $effect(() => {
+    const principal = $me;
+    if(state !== 'Valid' || !principal || principal.user.mustChangePassword || allowed) return;
+    const raw = location.hash;
+    if(raw === '' || raw === '#' || raw === '#/' || raw === '#/status') navigate(defaultHash(principal.sections));
+    else navigate('#/denied');
+  });
 
   const current = $derived(chrome($route));
 </script>
@@ -63,10 +82,16 @@
   </main>
 {:else}
   <Shell title={current.title} back={current.back}>
-    {#if $route.screen === 'status'}<StatusScreen />
+    {#if !allowed}<Loading />
+    {:else if $route.screen === 'status'}<StatusScreen />
     {:else if $route.screen === 'tunnels'}<TunnelsScreen />
     {:else if $route.screen === 'tunnel-edit'}{#key $route.param}<TunnelEditScreen param={$route.param ?? 'new'} />{/key}
-    {:else}<ServerSettingsScreen />{/if}
+    {:else if $route.screen === 'server'}<ServerSettingsScreen />
+    {:else if $route.screen === 'denied'}<DeniedScreen />
+    {:else}
+      <!-- U3-03~05 와 U3-02 가 users·groups·me·me-password 화면으로 교체한다. -->
+      <p id="screen-placeholder">This screen is not available yet.</p>
+    {/if}
   </Shell>
 {/if}
 

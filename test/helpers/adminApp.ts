@@ -113,8 +113,10 @@ export const startAdminApp = async (options: {fixture?: AdminFixture; login?: bo
                 await bootstrapToken.fill(await token());
                 await ok();
             }
-            await page.waitForFunction(() => location.hash === '#/status');
-            await page.waitForFunction(() => document.querySelector("h1")?.textContent === "Status");
+            // 일반 유저는 #/tunnels, 강제 변경 사용자는 안내 화면에 도착하므로 해시를 고정하지 않는다(#103 U3-01).
+            // #password-change-required 절은 #102 의 임시 안내용이며 #104 (U3-02) 가 지운다.
+            await page.waitForFunction(() => !document.querySelector('#login-password')
+                && (document.querySelector('header h1') || document.querySelector('#password-change-required')));
         }
 
         const ownedBrowser = browser;

@@ -12,7 +12,7 @@ jest.setTimeout(120_000);
 const FIXTURE: IdentityFixture = {
     users: [
         {username: "admin", password: E2E_ADMIN_PASSWORD, role: "superuser"},
-        {id: "u_alice", username: "alice", password: "alice-pass-1234", role: "regular", groupId: "g_field"}
+        {id: "u_00000000000a11ce", username: "alice", password: "alice-pass-1234", role: "regular", groupId: "g_field"}
     ],
     groups: [{id: "g_field", name: "Field", attributes: {max_concurrent_connections: 3}}]
 };
@@ -62,8 +62,8 @@ describe("concurrency-limit e2e", () => {
         target = await startTargetService();
         harness = await createProcessTunnelHarness({
             tunnels: [
-                {protocol: "tcp", destinationPort: target.port, extra: {ownerId: "u_alice"}},
-                {protocol: "http", destinationPort: target.port, extra: {ownerId: "u_alice"}}
+                {protocol: "tcp", destinationPort: target.port, extra: {ownerId: "u_00000000000a11ce"}},
+                {protocol: "http", destinationPort: target.port, extra: {ownerId: "u_00000000000a11ce"}}
             ],
             identityFixture: FIXTURE
         });
