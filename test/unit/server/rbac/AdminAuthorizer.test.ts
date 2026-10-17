@@ -456,3 +456,30 @@ describe("AdminAuthorizer me:mfa (#112 U4-04)", () => {
         }
     });
 });
+
+describe("AdminAuthorizer mustEnrollMfa 게이트 (#127 U4-08)", () => {
+    const enrolling = (base: Principal, patch: Partial<Principal> = {}): Principal => ({...base, mustEnrollMfa: true, ...patch});
+
+    it("me:read·me:password·me:mfa·me:sessions 만 허용하고 나머지는 403 mfa_enrollment_required 다", () => {
+        const principal = enrolling(PRINCIPALS["superuser"]);
+        for(const action of ["me:read", "me:password", "me:mfa", "me:sessions"] as Action[]) {
+            expect({action, decision: authorize(principal, action)}).toEqual({action, decision: {allowed: true}});
+        }
+        for(const action of ["tunnel:list", "user:manage", "server:manage", "audit:read-all"] as Action[]) {
+            expect({action, decision: authorize(principal, action)})
+                .toEqual({action, decision: {allowed: false, status: 403, code: "mfa_enrollment_required"}});
+        }
+    });
+
+    it("비밀번호 변경 게이트가 먼저다", () => {
+        const principal = enrolling(PRINCIPALS["superuser"], {mustChangePassword: true});
+        expect(authorize(principal, "me:mfa")).toEqual({allowed: false, status: 403, code: "password_change_required"});
+        // 두 게이트가 모두 막는 action 에서도 비밀번호 게이트의 답이 나온다(순서 고정).
+        expect(authorize(principal, "tunnel:list")).toEqual({allowed: false, status: 403, code: "password_change_required"});
+    });
+
+    it("mustEnrollMfa false 주체는 영향이 없다", () => {
+        expect(authorize({...PRINCIPALS["superuser"], mustEnrollMfa: false}, "user:manage")).toEqual({allowed: true});
+        expect(authorize({...PRINCIPALS["regular(full,private)"], mustEnrollMfa: false}, "tunnel:list")).toEqual({allowed: true});
+    });
+});

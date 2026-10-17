@@ -26,6 +26,8 @@ export type Principal = {
     /** 슈퍼유저에게는 무시된다(값은 system:superuser 그룹의 것). */
     attributes: GroupAttributes;
     mustChangePassword: boolean;
+    /** #127 (U4-08) 세션에 실린 MFA 등록 강제. 없으면 false 로 본다. */
+    mustEnrollMfa?: boolean;
     /** identity.yaml 을 읽지 못해 .key 로만 인증한 legacy-fallback 세션. */
     legacy?: true;
 };
@@ -63,6 +65,7 @@ export function principalOf(session: Session, store: IdentityStore): Principal |
         role: user.role,
         groupId: user.groupId,
         attributes: group ? group.attributes : cloneGroupAttributes(DEFAULT_GROUP_ATTRIBUTES),
-        mustChangePassword: user.mustChangePassword
+        mustChangePassword: user.mustChangePassword,
+        mustEnrollMfa: session.mustEnrollMfa === true
     };
 }

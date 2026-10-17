@@ -22,6 +22,8 @@ type ExpectedRoute = {method: string; pattern: string; action: string; hasTarget
 
 const EXPECTED_ROUTES: ReadonlyArray<ExpectedRoute> = [
     {method: "POST", pattern: "^/api/login$", action: "public", hasTarget: false},
+    // U4-08 / #127 2단계 로그인. 세션이 없는 공개 라우트이고 핸들러가 직접 감사한다.
+    {method: "POST", pattern: "^/api/login/mfa$", action: "public", hasTarget: false},
     {method: "GET", pattern: "^/api/version$", action: "public", hasTarget: false},
     {method: "POST", pattern: "^/api/logout$", action: "session", hasTarget: false},
     {method: "GET", pattern: "^/api/validateSession$", action: "session", hasTarget: false},
@@ -73,6 +75,7 @@ const EXPECTED_ROUTES: ReadonlyArray<ExpectedRoute> = [
     {method: "PUT", pattern: "^/api/users/(?<id>[^/]+)$", action: "user:manage", hasTarget: false},
     {method: "DELETE", pattern: "^/api/users/(?<id>[^/]+)$", action: "user:manage", hasTarget: false},
     {method: "POST", pattern: "^/api/users/(?<id>[^/]+)/password-reset$", action: "user:manage", hasTarget: false},
+    {method: "POST", pattern: "^/api/users/(?<id>[^/]+)/mfa/reset$", action: "user:manage", hasTarget: false},
     {method: "GET", pattern: "^/api/groups$", action: "group:manage", hasTarget: false},
     {method: "POST", pattern: "^/api/groups$", action: "group:manage", hasTarget: false},
     {method: "GET", pattern: "^/api/groups/(?<id>[^/]+)$", action: "group:manage", hasTarget: false},
@@ -162,14 +165,21 @@ test("every ADMIN_ROUTES pattern is fully anchored", () => {
     }
 });
 
-// #98 이후 핸들러는 세 모듈에 나뉘어 있다: 기존 핸들러는 AdminServer 의 멤버, 사용자·그룹 핸들러는
-// rbacRouteHandlers, 감사 조회 핸들러는 auditRouteHandlers(#110). 이름이 어느 쪽에서든 실제 함수로 풀리는지를 그대로 확인한다.
+// 핸들러는 여러 모듈에 나뉘어 있다(AdminServer 멤버, rbacRouteHandlers, auditRouteHandlers(#110),
+// 생성자에서 만드는 2단계 로그인 핸들러(#127)). 그래서 이름 대신 AdminServer 가 실제로 만든 라우트 표에서
+// 표의 모든 항목이 같은 순서로 함수 핸들러를 갖는지 확인한다.
 test("every ADMIN_ROUTES handler name resolves to a callable handler", async () => withRoutesServer(async f => {
-    const auditHandlers = auditRouteHandlers(new AuditQuery("unused"), () => undefined);
-    for(const route of ADMIN_ROUTES) {
-        const handler = (f.api as any)[route.handler] ?? rbacRouteHandlers[route.handler] ?? auditHandlers[route.handler];
-        expect(typeof handler).toBe("function");
+    const built: ReadonlyArray<{method: string; pattern: RegExp; handler: unknown}> = (f.api as any).routes;
+    expect(built.map((route) => `${route.method} ${route.pattern.source}`))
+        .toEqual(ADMIN_ROUTES.map((route) => `${route.method} ${route.pattern.source}`));
+    for(const route of built) {
+        expect({route: `${route.method} ${route.pattern.source}`, type: typeof route.handler})
+            .toEqual({route: `${route.method} ${route.pattern.source}`, type: "function"});
     }
+    // 이름으로 찾던 기존 세 모듈의 핸들러도 여전히 풀린다.
+    const auditHandlers = auditRouteHandlers(new AuditQuery("unused"), () => undefined);
+    expect(typeof ((f.api as any).onLogin ?? rbacRouteHandlers.onLogin)).toBe("function");
+    expect(typeof auditHandlers.onListAudit).toBe("function");
 }));
 
 test("GET routes without a session return 401 except the public ones", async () => withRoutesServer(async f => {

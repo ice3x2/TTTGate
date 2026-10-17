@@ -30,6 +30,7 @@ import {listCountries} from "../security/countries";
 import {auditEventOf, AuditRouteMeta, buildAdminRoutes, isTunnelActivationRequested, Route, RouteContext} from "./routes";
 import {rbacRouteHandlers} from "./rbacRoutes";
 import {MfaTicketStore, PendingEnrollmentStore} from "../mfa/MfaTickets";
+import {mfaLoginHandler} from "./mfaLoginRoutes";
 import {auditRouteHandlers} from "./auditRoutes";
 import {AuditQuery} from "../audit/AuditQuery";
 import {auditDirPath} from "../audit/FileAuditSink";
@@ -154,6 +155,14 @@ class AdminServer {
 
         this._routes = buildAdminRoutes({
             onLogin: this.onLogin,
+            onLoginMfa: mfaLoginHandler(this._mfa.tickets, {
+                isBlocked: (req) => this.isLoginBlocked(req),
+                fail: async (req) => { this.recordLoginFailure(req); await this.delayFailedLogin(req); },
+                issueSession: (req, res, user) => this.completeLogin(req, res, user.id,
+                    {id: user.id, username: user.username, displayName: user.displayName, role: user.role}, user.mustChangePassword),
+                sendFailure: (res, status, payload) => this.sendApiFailure(res, status, payload),
+                emitAudit: (event) => this.emitAudit(event)
+            }),
             onGetVersion: this.onGetVersion,
             onLogout: this.onLogout,
             onGetValidateSession: this.onGetValidateSession,
@@ -245,7 +254,7 @@ class AdminServer {
            if(method === 'POST' || method === 'PUT' || method === 'DELETE') {
                // /api/login 은 CSRF 토큰 발급 전 호출 가능해야 하므로 헤더 검증은 스킵하되,
                // Origin(존재 시)은 여전히 화이트리스트 강제.
-               const skipCsrfHeader = (pathname == '/api/login');
+               const skipCsrfHeader = (pathname == '/api/login' || pathname == '/api/login/mfa');
                if(!this.verifyCsrfGuard(req, res, skipCsrfHeader)) {
                    return;
                }
@@ -313,7 +322,8 @@ class AdminServer {
                    }, 'failure'));
                    this.sendApiFailure(res, decision.status, {
                        code: decision.code,
-                       message: decision.status === 403 ? 'Forbidden' : 'Not Found'
+                       message: decision.code === 'mfa_enrollment_required' ? 'Enable two-factor authentication first.'
+                           : decision.status === 403 ? 'Forbidden' : 'Not Found'
                    });
                    return;
                }
@@ -973,7 +983,8 @@ class AdminServer {
             this.sendApiSuccess(res, {
                 valid: true,
                 user: {id: 'legacy-admin', username: LEGACY_ADMIN_USERNAME, displayName: LEGACY_ADMIN_USERNAME, role: 'superuser'},
-                mustChangePassword: false
+                mustChangePassword: false,
+                mustEnrollMfa: false
             });
             return;
         }
@@ -986,7 +997,8 @@ class AdminServer {
         this.sendApiSuccess(res, {
             valid: true,
             user: {id: user.id, username: user.username, displayName: user.displayName, role: user.role},
-            mustChangePassword: user.mustChangePassword
+            mustChangePassword: user.mustChangePassword,
+            mustEnrollMfa: session.mustEnrollMfa === true
         });
     }
 
@@ -1357,6 +1369,12 @@ class AdminServer {
             return;
         }
         const user = verifyResult.user;
+        if(user.mfa?.enabled === true) {
+            // #127 (U4-08): 2단계가 끝나야 성공이다. 실패 카운터 초기화·login_success·쿠키는 /api/login/mfa 가 한다.
+            const mfaTicket = this._mfa.tickets.issue(user.id, this.getClientAddress(req));
+            this.sendApiSuccess(res, {mfaRequired: true, mfaTicket});
+            return;
+        }
         await this.completeLogin(req, res, user.id, {
             id: user.id, username: user.username, displayName: user.displayName, role: user.role
         }, user.mustChangePassword);
@@ -1370,9 +1388,13 @@ class AdminServer {
                                  mustChangePassword: boolean): Promise<void> {
         this.resetLoginAttempts(req);
         const userAgent = req.headers['user-agent'];
+        // #127 (U4-08): 슈퍼유저 MFA 강제는 로그인 시점에만 계산한다(이미 열린 세션은 소급하지 않는다).
+        const mustEnrollMfa = ServerOptionStore.instance.serverOption.mfaRequiredForSuperusers === true && user.role === 'superuser'
+            && userId !== 'legacy-admin' && IdentityStore.instance.user(userId)?.mfa?.enabled !== true;
         const sessionKey = await SessionStore.instance.newSession(userId, {
             ip: this.getClientAddress(req),
-            userAgent: typeof userAgent == 'string' ? userAgent : undefined
+            userAgent: typeof userAgent == 'string' ? userAgent : undefined,
+            mustEnrollMfa
         });
         // P5-T4 / REQ-12: 로그인 성공 시 CSRF 쿠키도 함께 발급 (double-submit).
         const csrfToken = crypto.randomBytes(32).toString('hex');
@@ -1385,7 +1407,7 @@ class AdminServer {
                 `${CSRF_COOKIE_NAME}=${csrfToken}; Path=/; Max-Age=${12 * 60 * 60}; SameSite=Strict;${secure}`
             ]
         });
-        res.end(JSON.stringify({success: true, partial: false, failedScopes: [], warnings: [], message: '', csrfToken, user, mustChangePassword}));
+        res.end(JSON.stringify({success: true, partial: false, failedScopes: [], warnings: [], message: '', csrfToken, user, mustChangePassword, mustEnrollMfa}));
         // PRD K2 는 role=superuser 로 집계하므로 actor.role 을 반드시 채운다.
         this.emitAudit({
             at: this.now(), actor: {userId: user.id, username: user.username, role: user.role as Role},

@@ -9,6 +9,8 @@ export type Session = {
     timeout: number;
     ip: string;
     userAgent?: string;
+    /** #127 (U4-08) 로그인 시점에 계산한 슈퍼유저 MFA 등록 강제. 등록을 마치면 updateSession 으로 끈다. */
+    mustEnrollMfa: boolean;
 }
 
 const DEFAULT_TIMEOUT = 1000 * 60 * 60 * 12; // 12 hours
@@ -43,7 +45,7 @@ class SessionStore {
         return createHash('sha256').update(key).digest('hex').slice(0, 16);
     }
 
-    public async newSession(userId: string, meta: {ip: string; userAgent?: string}): Promise<string> {
+    public async newSession(userId: string, meta: {ip: string; userAgent?: string; mustEnrollMfa?: boolean}): Promise<string> {
         const now = this.now();
         const sessionKey = crypto.randomBytes(64).toString("hex");
         this._sessions.set(sessionKey, {
@@ -53,9 +55,17 @@ class SessionStore {
             lastSeenAt: now,
             timeout: now + DEFAULT_TIMEOUT,
             ip: meta.ip,
-            userAgent: meta.userAgent
+            userAgent: meta.userAgent,
+            mustEnrollMfa: meta.mustEnrollMfa === true
         });
         return sessionKey;
+    }
+
+    /** 세션 항목을 새 객체로 바꾼다(불변 객체 + 참조 교체). 없는 키는 아무 일도 하지 않는다. */
+    public updateSession(key: string, patch: {mustEnrollMfa?: boolean}): void {
+        const session = this._sessions.get(key);
+        if(!session) return;
+        this._sessions.set(key, {...session, ...(patch.mustEnrollMfa !== undefined ? {mustEnrollMfa: patch.mustEnrollMfa} : {})});
     }
 
     /**

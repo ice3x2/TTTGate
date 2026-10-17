@@ -162,6 +162,8 @@ describe("audit-sink: 라우트 표의 CUD 전수 감사 커버리지", () => {
             `DELETE ${new RegExp("^/api/me/mfa$").source}`,
             `POST ${new RegExp("^/api/me/mfa/confirm$").source}`,
             `POST ${new RegExp("^/api/me/mfa/recovery-codes$").source}`,
+            // #127 (U4-08): 슈퍼유저의 남의 MFA 초기화.
+            `POST ${new RegExp("^/api/users/(?<id>[^/]+)/mfa/reset$").source}`,
         ].sort());
 
         const logout = ADMIN_ROUTES.find((route) =>
