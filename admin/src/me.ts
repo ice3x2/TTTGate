@@ -12,13 +12,12 @@ export const me: Writable<Me | undefined> = writable(undefined);
 /**
  * GET /api/me 결과를 스토어에 싣고 돌려준다. 401 이 아닌 실패(네트워크 오류 등)는 undefined 이고 App 이 'Offline' 으로 보낸다.
  * 401 은 다른 컨트롤러와 같이 adminRequest 가 InvalidSession 으로 알린다.
+ * 실패해도 이미 실린 me 는 지우지 않는다. 처음 읽기는 App 이 clearMe 로 먼저 비우고, 다시 읽기(U3-02)가 실패했을 때
+ * 화면 전체가 Loading 으로 바뀌지 않게 한다.
  */
 export async function loadMe(): Promise<Me | undefined> {
     const result = await MeCtrl.instance.me();
-    if(result.success !== true) {
-        me.set(undefined);
-        return undefined;
-    }
+    if(result.success !== true) return undefined;
     const value: Me = {user: result.user, group: result.group, sections: result.sections, migrationBanner: result.migrationBanner};
     me.set(value);
     return value;

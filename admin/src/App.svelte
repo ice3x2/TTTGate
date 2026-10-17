@@ -8,10 +8,13 @@
   import TunnelsScreen from "./screens/TunnelsScreen.svelte";
   import TunnelEditScreen from "./screens/TunnelEditScreen.svelte";
   import DeniedScreen from "./screens/DeniedScreen.svelte";
+  import PasswordChangeScreen from "./screens/PasswordChangeScreen.svelte";
+  import MeCtrl from "./controller/MeCtrl";
   import Loading from "./ui/Loading.svelte";
-  import Button from "./ui/Button.svelte";
+  import Banner from "./ui/Banner.svelte";
+  import {toast} from "./ui/toast";
   import Shell from "./shell/Shell.svelte";
-  import {provideSession, signOut} from "./shell/session";
+  import {provideSession} from "./shell/session";
   import {chrome, defaultHash, SECTION_OF_SCREEN} from "./shell/nav";
   import {navigate, route} from "./router";
   import {clearMe, loadMe, me} from "./me";
@@ -48,22 +51,44 @@
 
   // 권한 판정이 끝나기 전에는 화면을 마운트하지 않는다. 가드의 navigate 는 hashchange 를 기다리므로,
   // 그 사이 권한 없는 화면의 onMount 가 API 를 부르면 403 과 access_denied 감사가 쌓인다.
+  // 강제 비밀번호 변경 중에는 #/me/password 만 그린다(다른 화면은 서버가 403 으로 막는다).
+  const forced = $derived($me?.user.mustChangePassword === true);
   const allowed = $derived.by(() => {
+    if($me === undefined) return false;
+    if(forced) return $route.screen === 'me-password';
     const section = SECTION_OF_SCREEN[$route.screen];
-    return $me !== undefined && (section === null || $me.sections.includes(section));
+    return section === null || $me.sections.includes(section);
   });
 
   // U3-01 라우트 가드. 권한 없는 섹션이면 라우터 기본값(#/status 류)은 기본 화면으로, 직접 고른 해시는 #/denied 로 보낸다.
-  // 강제 비밀번호 변경 흐름은 U3-02 가 맡으므로 여기서는 손대지 않는다.
+  // U3-02: 강제 비밀번호 변경 중이면 어떤 해시든 #/me/password 로 고정하고 다음 단계로 가지 않는다.
   $effect(() => {
     const principal = $me;
-    if(state !== 'Valid' || !principal || principal.user.mustChangePassword || allowed) return;
+    if(state !== 'Valid' || !principal) return;
+    if(forced) {
+      if($route.screen !== 'me-password' || location.hash !== '#/me/password') navigate('#/me/password');
+      return;
+    }
+    if(allowed) return;
     const raw = location.hash;
     if(raw === '' || raw === '#' || raw === '#/' || raw === '#/status') navigate(defaultHash(principal.sections));
     else navigate('#/denied');
   });
 
   const current = $derived(chrome($route));
+
+  // U3-02: 마이그레이션 안내 배너를 닫는다. 성공하면 me 를 다시 읽어 migrationBanner 가 false 가 된다.
+  const dismissMigration = async (): Promise<void> => {
+    try {
+      const result = await MeCtrl.instance.acknowledgeMigration();
+      if(!result.success) toast.push({tone: 'alarm', message: result.message});
+      else if(!(await loadMe())) toast.push({tone: 'alarm', message: 'Unable to refresh the account. Reload the page.'});
+    } catch(error) {
+      // adminRequest 는 네트워크 오류를 실패 값으로 돌려준다. 여기에는 InvalidSession 과 예상하지 못한 예외만 온다.
+      if(error instanceof InvalidSession) session.invalidate();
+      else toast.push({tone: 'alarm', message: 'Unable to connect to the server.'});
+    }
+  };
 </script>
 
 {#if state === 'Checking'}
@@ -74,22 +99,22 @@
   <LoginScreen onsuccess={() => { void enterValid(); }} />
 {:else if !$me}
   <Loading overlay />
-{:else if $me.user.mustChangePassword}
-  <!-- 3 단위(U3-01)가 비밀번호 변경 화면으로 대체한다. -->
-  <main class="password-change">
-    <p role="alert" id="password-change-required">Password change required. Use the API or wait for the account screen.</p>
-    <Button id="password-change-sign-out" variant="ghost" onclick={() => { void signOut(session); }}>Sign out</Button>
-  </main>
 {:else}
-  <Shell title={current.title} back={current.back}>
+  <Shell title={current.title} back={forced ? undefined : current.back} hideMenu={forced}>
+    {#snippet banner()}
+      {#if $me?.migrationBanner}
+        <Banner tone="trace" dismissible ondismiss={() => { void dismissMigration(); }}>Your account was promoted to superuser during the upgrade.</Banner>
+      {/if}
+    {/snippet}
     {#if !allowed}<Loading />
     {:else if $route.screen === 'status'}<StatusScreen />
     {:else if $route.screen === 'tunnels'}<TunnelsScreen />
     {:else if $route.screen === 'tunnel-edit'}{#key $route.param}<TunnelEditScreen param={$route.param ?? 'new'} />{/key}
     {:else if $route.screen === 'server'}<ServerSettingsScreen />
     {:else if $route.screen === 'denied'}<DeniedScreen />
+    {:else if $route.screen === 'me-password'}<PasswordChangeScreen />
     {:else}
-      <!-- U3-03~05 와 U3-02 가 users·groups·me·me-password 화면으로 교체한다. -->
+      <!-- U3-03~05 가 users·groups·me 화면으로 교체한다. -->
       <p id="screen-placeholder">This screen is not available yet.</p>
     {/if}
   </Shell>
@@ -97,5 +122,4 @@
 
 <style>
   .offline { padding: var(--s-6); color: var(--ink-2); }
-  .password-change { padding: var(--s-6); display: flex; flex-direction: column; gap: var(--s-4); align-items: flex-start; }
 </style>
