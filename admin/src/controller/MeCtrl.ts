@@ -29,6 +29,26 @@ class MeCtrl {
         return adminRequest("/api/me/acknowledge-migration", {method: "POST"});
     }
 
+    /** U4-09: MFA 등록 시작. 평문 secret·복구 코드는 이 응답에만 온다. */
+    public enrollMfa(): Promise<ApiResult<{secret: string; otpauthUri: string; recoveryCodes: string[]}>> {
+        return adminRequest("/api/me/mfa/enroll", {method: "POST"});
+    }
+
+    public confirmMfa(code: string): Promise<ApiResult<{mfa: {enabled: boolean; recoveryCodesRemaining: number}}>> {
+        return adminRequest("/api/me/mfa/confirm", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({code})},
+            {credentialCheck: true});
+    }
+
+    public disableMfa(password: string): Promise<ApiResult<{}>> {
+        return adminRequest("/api/me/mfa", {method: "DELETE", headers: {"Content-Type": "application/json"}, body: JSON.stringify({password})},
+            {credentialCheck: true});
+    }
+
+    public regenerateRecoveryCodes(password: string): Promise<ApiResult<{recoveryCodes: string[]}>> {
+        return adminRequest("/api/me/mfa/recovery-codes", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({password})},
+            {credentialCheck: true});
+    }
+
     /** U4-06: 본인 세션 목록. */
     public sessions(): Promise<ApiResult<{sessions: SessionView[]}>> {
         return adminRequest("/api/me/sessions");

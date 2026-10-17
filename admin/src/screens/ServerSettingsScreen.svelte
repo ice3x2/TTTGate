@@ -17,6 +17,16 @@
     import {useSession} from '../shell/session';
     import InputCertFile from './parts/InputCertFile.svelte';
 
+    // U4-09: 서버가 값을 아직 저장하지 않았을 때 보이는 기본값(서버 src/types/TunnelingOption.ts 와 같다).
+    const DEFAULT_AUDIT_RETENTION_DAYS = 90;
+    const DEFAULT_AUDIT_QUEUE_SIZE = 1000;
+    // 입력 칸은 별도 상태다. 칸을 비워도 기본값이 다시 들어오지 않게, 불러올 때와 Reset 때만 서버 값(없으면 기본값)으로 맞춘다.
+    let retentionInput = $state<number | null>(DEFAULT_AUDIT_RETENTION_DAYS);
+    let queueInput = $state<number | null>(DEFAULT_AUDIT_QUEUE_SIZE);
+    const syncSecurityInputs = () => {
+        retentionInput = serverOption.auditRetentionDays ?? DEFAULT_AUDIT_RETENTION_DAYS;
+        queueInput = serverOption.auditQueueSize ?? DEFAULT_AUDIT_QUEUE_SIZE;
+    };
     let serverOption = $state<ServerOption>(ServerOptionCtrl.instance.getCachedServerOption());
     let lastServerOption = $state<ServerOption>(ServerOptionCtrl.instance.getCachedServerOption());
     let adminCert = $state<CertInfo | null>(null);
@@ -68,6 +78,7 @@
             loading = true;
             const snapshot = await ServerOptionCtrl.instance.getServerOption();
             serverOption = snapshot.value;
+            syncSecurityInputs();
             snapshotRevision = snapshot.revision;
             await ServerOptionCtrl.instance.getServerOptionHash();
             lastServerOption = _.cloneDeep($state.snapshot(serverOption));
@@ -166,6 +177,7 @@
     const reset = () => {
         const isChangedCert = !ObjectUtil.equalsDeep(adminCert, originalAdminCert);
         serverOption = _.cloneDeep($state.snapshot(lastServerOption));
+        syncSecurityInputs();
         adminCert = _.cloneDeep($state.snapshot(originalAdminCert));
         if(isChangedCert) {
             updateAdminCert(adminCert!);
@@ -204,6 +216,23 @@
             </Field>
         </div>
     </Card>
+    <!-- U4-09: 슈퍼유저 MFA 강제와 감사 보존·큐. 기존 isNewValue·Apply·Reset 흐름을 그대로 탄다. -->
+    <section id="server-security">
+        <Card label="Security">
+            <div class="form-stack">
+                <Checkbox id="input-mfa-required-superusers" label="Require two-factor for superusers"
+                    bind:checked={() => serverOption.mfaRequiredForSuperusers === true, (value) => (serverOption.mfaRequiredForSuperusers = value)} />
+                <Field label="Audit log retention (days)" hint="0 keeps logs forever." for="input-audit-retention-days">
+                    <NumberInput id="input-audit-retention-days" min={0} max={3650} step={1}
+                        bind:value={retentionInput} oninput={(value) => (serverOption.auditRetentionDays = value ?? undefined)} />
+                </Field>
+                <Field label="Audit queue size" for="input-audit-queue-size">
+                    <NumberInput id="input-audit-queue-size" min={100} max={100000} step={1}
+                        bind:value={queueInput} oninput={(value) => (serverOption.auditQueueSize = value ?? undefined)} />
+                </Field>
+            </div>
+        </Card>
+    </section>
     <div class="actions">
         <Button variant="primary" disabled={!isNewValue} onclick={apply}>Apply</Button>
         <Button onclick={reset}>Reset</Button>

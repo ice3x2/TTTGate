@@ -237,3 +237,57 @@ test("Retry 알림 뒤의 알림은 버튼 문구가 OK 로 돌아온다 (옛 _a
         await app.close();
     }
 }, 60_000);
+
+describe("U4-09 서버 설정 Security 카드", () => {
+    const security = (page: Page) => page.locator("#server-security");
+    const modalText = (page: Page, text: string) => page.getByRole("dialog").getByText(text);
+    const closeModal = (page: Page) => page.getByRole("dialog").getByRole("button", {name: "OK", exact: true}).click();
+
+    test("기본값을 보이고, 범위 밖 값은 실패 모달로, 고친 값은 저장되어 새로 읽어도 남는다", async () => {
+        const app = await startAdminApp({fixture: "password"});
+        try {
+            const {page} = app;
+            await openServerSettings(page);
+            await security(page).waitFor({state: "visible"});
+            expect(await page.locator("#input-mfa-required-superusers").isChecked()).toBe(false);
+            expect(await page.locator("#input-audit-retention-days").inputValue()).toBe("90");
+            expect(await page.locator("#input-audit-queue-size").inputValue()).toBe("1000");
+            // 칸을 비워도 기본값이 다시 들어오지 않는다(키보드로 지우고 새로 친다).
+            const retention = page.locator("#input-audit-retention-days");
+            await retention.click();
+            await retention.press("End");
+            await retention.press("Backspace");
+            await retention.press("Backspace");
+            expect(await retention.inputValue()).toBe("");
+            await retention.pressSequentially("45");
+            expect(await retention.inputValue()).toBe("45");
+
+            await page.locator("#input-mfa-required-superusers").check();
+            await waitForApply(page, false);
+            await page.locator("#input-audit-retention-days").fill("3651");
+            await page.getByRole("button", {name: "Apply", exact: true}).click();
+            await modalText(page, "auditRetentionDays must be 0 or an integer within 1..3650").waitFor({state: "visible", timeout: 10_000});
+            await closeModal(page);
+
+            await page.locator("#input-audit-queue-size").fill("99");
+            await page.locator("#input-audit-retention-days").fill("30");
+            await page.getByRole("button", {name: "Apply", exact: true}).click();
+            await modalText(page, "auditQueueSize must be an integer within 100..100000").waitFor({state: "visible", timeout: 10_000});
+            await closeModal(page);
+
+            await page.locator("#input-audit-queue-size").fill("1000");
+            const saved = page.waitForResponse((response) => response.request().method() === "POST"
+                && new URL(response.url()).pathname === "/api/serverOption", {timeout: 15_000});
+            await page.getByRole("button", {name: "Apply", exact: true}).click();
+            expect((await (await saved).json()).success).toBe(true);
+            // 저장 뒤 화면은 관리자 주소로 다시 이동하므로, 서버에서 다시 읽어 남았는지 본다.
+            const stored = await page.evaluate(async () => (await (await fetch("/api/serverOption", {credentials: "same-origin"})).json()).serverOption);
+            expect(stored.mfaRequiredForSuperusers).toBe(true);
+            expect(stored.auditRetentionDays).toBe(30);
+            expect(stored.auditQueueSize).toBe(1000);
+            expect(app.errors).toEqual([]);
+        } finally {
+            await app.close();
+        }
+    }, 120_000);
+});

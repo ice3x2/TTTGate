@@ -322,3 +322,41 @@ test("사용자 편집 화면의 Sessions 행은 세션 수를 보이고 모두 
         await app.close();
     }
 });
+
+describe("U4-09 사용자 편집의 Two-factor 행", () => {
+    test("MFA 가 켜진 alice 는 Reset MFA 로 끄고, 그 뒤 버튼이 비활성이다", async () => {
+        const app = await startAdminApp({fixture: "rbac-mfa"});
+        try {
+            const {page} = app;
+            await page.goto(`${app.url}#/users/${ALICE_ID}`);
+            await page.locator("#user-mfa-status").filter({hasText: "Enabled"}).waitFor({state: "visible", timeout: 10_000});
+            await page.locator("#user-reset-mfa button").click();
+            const modal = page.locator(".reset-mfa-modal");
+            await modal.waitFor({state: "visible"});
+            expect(await modal.textContent()).toContain("alice");
+            await page.locator("#confirm-reset-mfa").click();
+            await page.getByText("Two-factor authentication reset.", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+            await page.locator("#user-mfa-status").filter({hasText: "Off"}).waitFor({state: "visible", timeout: 10_000});
+            expect(await page.locator("#user-reset-mfa button").isDisabled()).toBe(true);
+            expect(app.errors).toEqual([]);
+        } finally {
+            await app.close();
+        }
+    });
+
+    test("MFA 가 없는 bob 은 Off 이고 Reset MFA 가 처음부터 비활성이며, 생성 화면에는 행이 없다", async () => {
+        const app = await startAdminApp({fixture: "rbac-mfa"});
+        try {
+            const {page} = app;
+            await page.goto(`${app.url}#/users/${BOB_ID}`);
+            await page.locator("#user-mfa-status").filter({hasText: "Off"}).waitFor({state: "visible", timeout: 10_000});
+            expect(await page.locator("#user-reset-mfa button").isDisabled()).toBe(true);
+            await page.goto(`${app.url}#/users/new`);
+            await page.locator("#user-username").waitFor({state: "visible", timeout: 10_000});
+            expect(await page.locator("#user-mfa").count()).toBe(0);
+            expect(app.errors).toEqual([]);
+        } finally {
+            await app.close();
+        }
+    });
+});

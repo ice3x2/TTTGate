@@ -193,3 +193,29 @@ describe("R7: 번들 서체 파일", () => {
         expect(fs.existsSync(path.join(fontsDir, "LICENSE.md"))).toBe(true);
     });
 });
+
+// R8: QR 은 qrcode 패키지로 로컬에서 그린다(U4-09). import 는 screens/parts/QrCanvas.svelte 한 곳, 최상위 경로만.
+describe("R8: qrcode 의존성과 import 위치", () => {
+    const srcDir = path.join(root, "admin/src");
+    const walk = (dir: string): string[] => fs.readdirSync(dir, {withFileTypes: true}).flatMap((entry) => {
+        const full = path.join(dir, entry.name);
+        if(entry.isDirectory()) return walk(full);
+        return /\.(svelte|ts)$/.test(entry.name) ? [full] : [];
+    });
+    const importers = walk(srcDir).filter((file) => /from\s+['"]qrcode(\/[^'"]*)?['"]/.test(fs.readFileSync(file, "utf8")));
+
+    test("qrcode 를 import 하는 파일은 QrCanvas.svelte 하나이고 최상위 'qrcode' 만 쓴다", () => {
+        expect(importers.map((file) => path.relative(root, file).split(path.sep).join("/"))).toEqual(["admin/src/screens/parts/QrCanvas.svelte"]);
+        const content = fs.readFileSync(importers[0], "utf8");
+        expect(/from\s+['"]qrcode['"]/.test(content)).toBe(true);
+        expect(/from\s+['"]qrcode\//.test(content)).toBe(false);
+    });
+
+    test("qrcode 는 exact 버전 dependencies, @types/qrcode 는 devDependencies 다", () => {
+        const pkg = JSON.parse(fs.readFileSync(path.join(root, "admin/package.json"), "utf8"));
+        expect(typeof pkg.dependencies?.qrcode).toBe("string");
+        expect(/^[\^~]/.test(pkg.dependencies.qrcode)).toBe(false);
+        expect(pkg.devDependencies?.qrcode).toBeUndefined();
+        expect(typeof pkg.devDependencies?.["@types/qrcode"]).toBe("string");
+    });
+});

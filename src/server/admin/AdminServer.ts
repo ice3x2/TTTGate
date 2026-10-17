@@ -589,7 +589,7 @@ class AdminServer {
             let currentServerOption = serverOptionStore.serverOption;
             let prepareResult = serverOptionStore.prepareServerOption(ObjectUtil.cloneDeep(requestedServerOption));
             if(!prepareResult.success || !prepareResult.serverOption) {
-                this.sendApiFailure(res, 400, {message: 'Invalid server option', updated: false});
+                this.sendApiFailure(res, 400, {message: prepareResult.message || 'Invalid server option', updated: false});
                 return;
             }
             let serverOption = prepareResult.serverOption;

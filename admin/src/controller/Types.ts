@@ -19,6 +19,10 @@ type ServerOption = {
     tls: boolean;
     globalMemCacheLimit: number;
     keepAlive: number;
+    /** U4-09: 서버 설정 Security 카드. */
+    mfaRequiredForSuperusers?: boolean;
+    auditRetentionDays?: number;
+    auditQueueSize?: number;
     /** U3-04: 그룹 속성의 신뢰 클라이언트 선택지. clientSecret 은 타입에 넣지 않는다. */
     trustedClients?: Array<{clientId: string; displayName?: string}>;
 }
@@ -131,7 +135,9 @@ export const DEFAULT_GROUP_ATTRIBUTES: GroupAttributes = {
     rate_limit: 'unlimited',
 };
 export type MeResponse = {user: UserView; group: {id: string; name: string; attributes: GroupAttributes};
-    sections: string[]; migrationBanner: boolean};
+    sections: string[]; migrationBanner: boolean;
+    /** U4-09: 본인 MFA 상태와 슈퍼유저 강제 등록 게이트. */
+    mfa?: {enabled: boolean; recoveryCodesRemaining: number}; mustEnrollMfa?: boolean};
 export type ApiFailure = {success: false; status: number; message: string; code?: string};
 /** U5-06: 국가 필터·차단 목록·터널 레이트 리밋. */
 export type GeoConfig = {mode: 'off' | 'allow' | 'deny'; countries: string[]; applyToAdmin: boolean; unknownPolicy: 'allow' | 'deny'};
