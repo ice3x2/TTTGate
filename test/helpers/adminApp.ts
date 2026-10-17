@@ -24,6 +24,12 @@ export type AdminApp = {
     seedAudit(n: number): Promise<void>;
     /** U5-06: 드라이버의 실제 리미터에 (port, ip) 차단 하나를 만든다. */
     seedBan(port: number, ip: string): Promise<void>;
+    /** U4-07: 드라이버가 들고 있는 사용자의 MFA secret(Base32). */
+    mfaSecret(username: string): Promise<string | undefined>;
+    /** U4-07: 'rbac-mfa' 가 심은 alice 의 복구 코드 평문. */
+    mfaRecoveryCodes(username: string): Promise<string[]>;
+    /** U4-07: 서버 시계를 ms 만큼 앞당기고 누적 offset 을 돌려준다. */
+    advanceClock(ms: number): Promise<number>;
     close(): Promise<void>;
 };
 
@@ -88,6 +94,9 @@ export const startAdminApp = async (options: {fixture?: AdminFixture; login?: bo
     const sessions = async () => (await ask<{sessions: any[]}>({type: "sessions"})).sessions;
     const seedAudit = async (n: number): Promise<void> => { await ask({type: "seedAudit", n}, 30_000); };
     const seedBan = async (port: number, ip: string): Promise<void> => { await ask({type: "seed-ban", port, ip}); };
+    const mfaSecret = async (username: string) => (await ask<{secret?: string}>({type: "mfaSecret", username})).secret;
+    const mfaRecoveryCodes = async (username: string) => (await ask<{codes: string[]}>({type: "mfaRecoveryCodes", username})).codes;
+    const advanceClock = async (ms: number) => (await ask<{offset: number}>({type: "advanceClock", ms})).offset;
 
     try {
         child = fork(path.resolve(__dirname, "../admin/admin-backend-driver.ts"), [root.rootDir, fixture], {
@@ -138,7 +147,7 @@ export const startAdminApp = async (options: {fixture?: AdminFixture; login?: bo
 
         const ownedBrowser = browser;
         return {
-            page, url: ownedBrowser.url, origin, rootDir: root.rootDir, errors: ownedBrowser.errors, calls, token, sessions, seedAudit, seedBan,
+            page, url: ownedBrowser.url, origin, rootDir: root.rootDir, errors: ownedBrowser.errors, calls, token, sessions, seedAudit, seedBan, mfaSecret, mfaRecoveryCodes, advanceClock,
             async close(): Promise<void> {
                 try { await ownedBrowser.close(); }
                 finally {

@@ -14,7 +14,10 @@ import {ADMIN_FIXTURES, ADMIN_TEST_PASSWORD, REGULAR_USER, TEMP_USER} from "../h
 import {IdentityStore} from "../../src/server/rbac/IdentityStore";
 import {DEFAULT_GROUP_ID} from "../../src/server/rbac/IdentityTypes";
 import {serializeIdentityFixture} from "../helpers/identityFixture";
-import {RBAC_IDENTITY_FIXTURE, RBAC_PASSWORDS, RBAC_TRUSTED_CLIENTS, RBAC_TUNNELS} from "../helpers/rbacFixture";
+import {RBAC_IDENTITY_FIXTURE, RBAC_PASSWORDS, RBAC_TRUSTED_CLIENTS, RBAC_TUNNELS, RBAC_USER_IDS} from "../helpers/rbacFixture";
+import {ClockRngProvider} from "../../src/util/ClockRng";
+import {generateRecoveryCodes, generateSecret, hashRecoveryCode} from "../../src/server/mfa/Totp";
+import {base32Encode} from "../../src/server/mfa/Base32";
 import {AuditSinkRegistry} from "../../src/server/audit/AuditSink";
 import {AUDIT_EVENT_TYPES} from "../../src/server/audit/AuditEventTypes";
 import {auditDirPath, FileAuditSink} from "../../src/server/audit/FileAuditSink";
@@ -31,7 +34,12 @@ const fixture = (process.argv[3] ?? "bootstrap") as AdminFixture;
 if(!ADMIN_FIXTURES.includes(fixture)) {
     process.exit(2);
 }
-const rbac = fixture === "rbac" || fixture === "rbac-no-audit";
+const rbac = fixture === "rbac" || fixture === "rbac-no-audit" || fixture === "rbac-mfa";
+
+// U4-07: 테스트가 TOTP 코드를 계산할 수 있게 서버 시계는 실시각 + 누적 offset 이다(advanceClock IPC 가 offset 을 늘린다).
+let clockOffset = 0;
+// 'rbac-mfa' 의 alice 복구 코드 평문. identity.yaml 에는 해시만 있다.
+let mfaRecoveryCodes: string[] = [];
 
 const TUNNEL_OPTIONS: Array<TunnelingOption> = [
     {
@@ -158,6 +166,11 @@ const stub = {
 
 (async () => {
     applyTestRoot(rootDir);
+    // applyTestRoot 가 런타임 상태(시계 포함)를 초기화하므로 그 뒤에 시계를 건다.
+    // 난수는 기본 구현(크기 검사 포함)에 맡기고 시각만 바꾼다.
+    const baseClock = ClockRngProvider.current();
+    ClockRngProvider.configure({now: () => Date.now() + clockOffset, random: () => baseClock.random(),
+        secureRandomBytes: (n: number) => baseClock.secureRandomBytes(n)});
     if(fixture === "password" || fixture === "with-tunnels" || fixture === "regular-user") {
         fs.writeFileSync(path.join(rootDir, "config", ".key"), bcrypt.hashSync(ADMIN_TEST_PASSWORD, 12));
     }
@@ -188,6 +201,13 @@ const stub = {
     const auditSink = new FileAuditSink({dir: auditDirPath(), queueSize: 1000, retentionDays: 0});
     AuditSinkRegistry.set(auditSink);
     await IdentityMigration.runAtStartup();
+    if(fixture === "rbac-mfa") {
+        const codes = generateRecoveryCodes();
+        const enabled = IdentityStore.instance.setMfa(RBAC_USER_IDS.alice, {enabled: true, secret: base32Encode(generateSecret()),
+            enrolledAt: Date.now(), lastUsedStep: -1, recoveryCodeHashes: codes.map((code) => hashRecoveryCode(code, RBAC_USER_IDS.alice))});
+        if(!enabled.success) throw new Error("Invalid rbac-mfa fixture");
+        mfaRecoveryCodes = codes;
+    }
     if(fixture === "rbac-no-audit") {
         const grouped = IdentityStore.instance.updateGroup(DEFAULT_GROUP_ID, {attributes: {admin_ui_section_access: ["tunnels", "my_profile", "my_sessions"]}});
         if(!grouped.success) throw new Error("Invalid rbac-no-audit fixture");
@@ -238,6 +258,17 @@ const stub = {
             AdmissionController.instance.admit({kind: "tunnel", port: message.port, protocol: "tcp"} as any, message.ip);
             AdmissionController.instance.admit({kind: "tunnel", port: message.port, protocol: "tcp"} as any, message.ip);
             process.send?.({type: "seed-ban"});
+        }
+        // U4-07: 테스트 드라이버 전용 IPC. AdminServer 라우트로 노출하지 않는다.
+        if(message && message.type === "mfaSecret") {
+            process.send?.({type: "mfaSecret", secret: IdentityStore.instance.userByUsername(message.username)?.mfa?.secret});
+        }
+        if(message && message.type === "mfaRecoveryCodes") {
+            process.send?.({type: "mfaRecoveryCodes", codes: message.username === "alice" ? mfaRecoveryCodes : []});
+        }
+        if(message && message.type === "advanceClock") {
+            clockOffset += message.ms;
+            process.send?.({type: "advanceClock", offset: clockOffset});
         }
         if(message && message.type === "seedAudit") {
             const now = Date.now();
