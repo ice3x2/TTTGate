@@ -1,11 +1,11 @@
-import { type ServerOption, type CertInfo } from "./Types";
+import { type ServerOption, type CertInfo, type ApiResult } from "./Types";
 import type {TunnelingStatus, Options} from "./Options";
 import InvalidSession from "./InvalidSession";
 import {adminRequest} from "./AdminRequest";
 
 
 export type ConfigurationSnapshot<T> = {value: T, readonly revision: number};
-export type ConfigurationResult = {success: boolean, message: string, revisionState?: {currentRevision: number}, certificateRevisionState?: {currentRevision: number}};
+export type ConfigurationResult = {success: boolean, message: string, code?: string, revisionState?: {currentRevision: number}, certificateRevisionState?: {currentRevision: number}};
 
 class ServerOptionCtrl {
 
@@ -154,6 +154,14 @@ class ServerOptionCtrl {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({...option, ...compound, expectedRevision})
+        });
+    }
+
+    /** U3-06: 슈퍼유저의 터널 소유자 변경. 저장과 별개로 즉시 커밋된다. */
+    public reassignOwner(port: number, ownerId: string, expectedRevision: number)
+        : Promise<ApiResult<{forwardPort: number; owner: {id: string; username?: string}; revisionState: {currentRevision: number}}>> {
+        return adminRequest(`/api/tunnelingOption/${port}/owner`, {
+            method: "PUT", headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ownerId, expectedRevision})
         });
     }
 

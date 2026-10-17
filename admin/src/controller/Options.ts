@@ -59,6 +59,12 @@ type Options = {
     bufferLimitOnServer?: number,
     bufferLimitOnClient?: number
     keepAlive?: number
+    /** U3-06: GET 응답의 소유자. system:migrated 에는 username 이 없다. */
+    owner?: {id: string; username?: string};
+    /** U3-06: GET 응답. false 면 읽기 전용(그룹 공유)이다. */
+    editable?: boolean;
+    /** U3-06: 일반 유저는 allowedClientNames 대신 이것만 쓴다. */
+    allowedClientIds?: Array<string>;
 }
 
 export type { ServerOption, Options, HttpOption, CustomHeader, TunnelingStatus, RewriteRule};
