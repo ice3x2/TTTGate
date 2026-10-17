@@ -62,7 +62,7 @@ test("alice 가 권한 없는 해시로 가면 #/denied 이고 버튼으로 기�
             await visit(app.page, app.url, hash);
             await hashIs(app.page, "#/denied");
         }
-        for(const [hash, selector] of [["#/me", "#screen-placeholder"], ["#/me/password", "#pw-current"]]) {
+        for(const [hash, selector] of [["#/me", "#me-username"], ["#/me/password", "#pw-current"]]) {
             await visit(app.page, app.url, hash);
             await hashIs(app.page, hash);
             await app.page.locator(selector).waitFor({state: "visible", timeout: 10_000});
@@ -89,7 +89,7 @@ test("admin 은 #/status 에서 시작하고 NAV 6개를 모두 보며 어디로
         await app.page.waitForFunction(() => document.querySelectorAll("li[data-group-id]").length === 3, undefined, {timeout: 10_000});
         await visit(app.page, app.url, "#/me");
         await hashIs(app.page, "#/me");
-        await app.page.locator("#screen-placeholder").waitFor({state: "visible", timeout: 10_000});
+        await app.page.locator("#me-username").waitFor({state: "visible", timeout: 10_000});
         await visit(app.page, app.url, "#/denied");
         await hashIs(app.page, "#/denied");
         await app.page.locator("#denied-message").waitFor({state: "visible", timeout: 10_000});

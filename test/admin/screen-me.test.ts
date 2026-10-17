@@ -102,6 +102,8 @@ describe("screen-me 비밀번호 변경", () => {
             await fill(app.page, {current: RBAC_PASSWORDS.alice, next: "new-password-5678", confirm: "new-password-5678"});
             await app.page.getByText("Password changed.", {exact: true}).waitFor({state: "visible", timeout: 10_000});
             await hashIs(app.page, "#/me");
+            // U3-05: 돌아온 #/me 는 계정 카드다.
+            await app.page.locator("#me-username").filter({hasText: "@alice"}).waitFor({state: "visible", timeout: 10_000});
 
             await app.page.locator('[aria-label="Open menu"]').click();
             await app.page.locator("#nav-sign-out").click();
@@ -203,6 +205,79 @@ describe("screen-me 다시 읽기 실패", () => {
             await message.filter({hasText: "Password changed, but the account could not be reloaded."}).waitFor({state: "visible", timeout: 10_000});
             expect(await app.page.locator("header h1").textContent()).toBe("Change password");
             expect(await app.page.evaluate(() => location.hash)).toBe("#/me/password");
+            expect(app.errors).toEqual([]);
+        } finally {
+            await app.close();
+        }
+    });
+});
+
+describe("screen-me 계정 카드", () => {
+    const goMe = async (page: Page, url: string) => {
+        await page.goto(`${url}#/me`);
+        await hashIs(page, "#/me");
+        await page.locator("#me-username").waitFor({state: "visible", timeout: 10_000});
+    };
+
+    test("alice 의 #/me 는 사용자명·표시 이름·역할·그룹을 보이고 /api/me 를 다시 부르지 않는다", async () => {
+        const app = await open("alice");
+        try {
+            await hashIs(app.page, "#/tunnels");
+            const meRequests: string[] = [];
+            app.page.on("request", (request) => { if(new URL(request.url()).pathname === "/api/me") meRequests.push(request.method()); });
+            // 같은 문서 안에서 해시만 바꾼다(새로 읽으면 App 이 /api/me 를 부른다).
+            await app.page.evaluate(() => { window.location.hash = "#/me"; });
+            await hashIs(app.page, "#/me");
+            await app.page.locator("#me-username").waitFor({state: "visible", timeout: 10_000});
+            expect(meRequests).toEqual([]);
+            expect(await app.page.locator("#me-username").textContent()).toBe("@alice");
+            expect(await app.page.locator("#me-display-name").textContent()).toBe("Alice");
+            expect((await app.page.locator("#me-role").textContent())?.trim()).toBe("regular");
+            expect(await app.page.locator("#me-group").textContent()).toBe("Field team");
+            expect(await app.page.locator("#screen-placeholder").count()).toBe(0);
+            expect(app.errors).toEqual([]);
+        } finally {
+            await app.close();
+        }
+    });
+
+    test("Change password 는 #/me/password 로 가고 Back 으로 #/me 에 돌아온다", async () => {
+        const app = await open("alice");
+        try {
+            await goMe(app.page, app.url);
+            await app.page.getByRole("button", {name: "Change password", exact: true}).click();
+            await hashIs(app.page, "#/me/password");
+            await app.page.locator('[aria-label="Back"]').click();
+            await hashIs(app.page, "#/me");
+            await app.page.locator("#me-username").waitFor({state: "visible", timeout: 10_000});
+            expect(app.errors).toEqual([]);
+        } finally {
+            await app.close();
+        }
+    });
+
+    test("드로어의 My account 는 #/me 로 간다", async () => {
+        const app = await open("alice");
+        try {
+            await hashIs(app.page, "#/tunnels");
+            await app.page.locator('[aria-label="Open menu"]').click();
+            const dialog = app.page.locator('[role=dialog][aria-label="Navigation"]');
+            await dialog.waitFor({state: "visible"});
+            await dialog.getByText("My account", {exact: true}).click();
+            await hashIs(app.page, "#/me");
+            await app.page.locator("#me-username").waitFor({state: "visible", timeout: 10_000});
+            expect(app.errors).toEqual([]);
+        } finally {
+            await app.close();
+        }
+    });
+
+    test("admin 의 #/me 는 superuser 와 Superusers 를 보인다", async () => {
+        const app = await open("admin");
+        try {
+            await goMe(app.page, app.url);
+            expect((await app.page.locator("#me-role").textContent())?.trim()).toBe("superuser");
+            expect(await app.page.locator("#me-group").textContent()).toBe("Superusers");
             expect(app.errors).toEqual([]);
         } finally {
             await app.close();
