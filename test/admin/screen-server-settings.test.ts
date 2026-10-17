@@ -291,3 +291,38 @@ describe("U4-09 서버 설정 Security 카드", () => {
         }
     }, 120_000);
 });
+
+test("#136 Keep-Alive 는 0 으로 비활성화할 수 있고 음수는 0 으로 올리며, 0 이 그대로 저장된다", async () => {
+    const app = await startAdminApp({fixture: "password"});
+    try {
+        await openServerSettings(app.page);
+        const keepAlive = app.page.locator("#input-keep-alive");
+        await keepAlive.fill("0");
+        await nextFrame(app.page);
+        expect(await keepAlive.inputValue()).toBe("0");
+        await keepAlive.fill("-1");
+        await nextFrame(app.page);
+        expect(await keepAlive.inputValue()).toBe("0");
+        // ms 단위라 소수는 정수로 자르고, 소수 음수도 0 으로 올린다.
+        for(const [typed, shown] of [["-0.5", "0"], ["0.5", "0"], ["1500.7", "1500"]]) {
+            await keepAlive.fill(typed);
+            await nextFrame(app.page);
+            expect({typed, value: await keepAlive.inputValue()}).toEqual({typed, value: shown});
+        }
+        await keepAlive.fill("0");
+        await nextFrame(app.page);
+
+        await waitForApply(app.page, false);
+        const saved = app.page.waitForResponse((response) => response.request().method() === "POST"
+            && new URL(response.url()).pathname === "/api/serverOption", {timeout: 15_000});
+        await app.page.getByRole("button", {name: "Apply", exact: true}).click();
+        const response = await saved;
+        expect(response.request().postDataJSON().keepAlive).toBe(0);
+        expect((await response.json()).success).toBe(true);
+        const applied = (await app.calls()).filter((call) => call.method === "applyServerOption");
+        expect(applied[applied.length - 1].args[0].keepAlive).toBe(0);
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, 60_000);

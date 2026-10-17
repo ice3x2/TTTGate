@@ -71,6 +71,8 @@
         return value;
     };
 
+    const keepAliveOf = (value: number | null): number | null => value === null ? null : Math.max(0, Math.trunc(value));
+
     const adminAddress = () => `${serverOption.adminTls ? 'https' : 'http'}://${location.hostname}:${serverOption.adminPort}/`;
 
     const load = async () => {
@@ -211,8 +213,9 @@
                     oninput={(v) => (serverOption.globalMemCacheLimit = enforceMinMax('input-mem-cache-limit', v, 1, 99999) as number)} />
             </Field>
             <Field label="Keep-Alive (ms)" for="input-keep-alive" hint="0 or less disables keep-alive.">
-                <NumberInput id="input-keep-alive" min={1} max={99999} bind:value={serverOption.keepAlive}
-                    oninput={(v) => (serverOption.keepAlive = enforceMinMax('input-keep-alive', v, 1, 99999) as number)} />
+                <!-- 문구대로 0 은 keep-alive 를 끈다(서버는 keepAlive > 0 일 때만 켠다). ms 단위라 정수로 자르고, 음수(-0.5 포함)는 0 으로 올린다. -->
+                <NumberInput id="input-keep-alive" min={0} max={99999} bind:value={serverOption.keepAlive}
+                    oninput={(v) => (serverOption.keepAlive = keepAliveOf(enforceMinMax('input-keep-alive', v, 0, 99999)) as number)} />
             </Field>
         </div>
     </Card>
