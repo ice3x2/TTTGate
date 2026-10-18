@@ -1545,7 +1545,7 @@ class AdminServer {
         const now = Date.now();
         const geo = AdmissionController.instance.geo;
         const bans = AdmissionController.instance.rateLimiter.bans(now).map((ban) => {
-            const country = geo.lookupCountry(ban.ip.replace(/::\/64$/, '::')); // IPv6 차단은 /64 버킷이다(#167).
+            const country = geo.lookupCountry(ban.ip.replace(/::\/(64|48)$/, '::')); // IPv6 차단은 /64 버킷, 묶어 센 경우 /48 이다(#167·#175).
             return country === undefined ? ban : {...ban, country};
         });
         this.sendApiSuccess(res, {serverTime: now, bans});
