@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import tls from "tls";
+import {peerFingerprint256} from "../../../helpers/tlsProbe";
 import {withConfigurationServer} from "./configuration-revision-fixture";
 import {failFileOperation} from "./persistence-fault-fixture";
 import {getFreePort} from "../../../helpers/network";
@@ -9,14 +9,8 @@ import {CertificationStore} from "../../../../src/server/CertificationStore";
 import Environment from "../../../../src/Environment";
 
 jest.setTimeout(60_000);
-const fingerprint = (port: number) => new Promise<string>((resolve, reject) => {
-    const socket = tls.connect({host: "127.0.0.1", port, rejectUnauthorized: false});
-    socket.once("secureConnect", () => {
-        const value = socket.getPeerCertificate().fingerprint256.replace(/:/g, "").toLowerCase();
-        socket.destroy(); resolve(value);
-    });
-    socket.once("error", (error) => { socket.destroy(); reject(error); });
-});
+// 클라이언트가 없는 포트라 핸드셰이크 직후 닫힌다. 그 리셋을 견디는 공용 탐침을 쓴다(#181).
+const fingerprint = async (port: number) => (await peerFingerprint256(port)).replace(/:/g, "").toLowerCase();
 const files = (directory: string): Record<string, string> => {
     const result: Record<string, string> = {};
     for(const entry of fs.readdirSync(directory, {withFileTypes: true})) {

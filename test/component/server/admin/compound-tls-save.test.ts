@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import tls from "tls";
+import {peerFingerprint256} from "../../../helpers/tlsProbe";
 import net from "net";
 import {once} from "events";
 import {setTimeout as delay} from "timers/promises";
@@ -13,13 +13,8 @@ import {CertificationStore} from "../../../../src/server/CertificationStore";
 jest.setTimeout(60000);
 const original = generateSelfSignedCert("compound-original"), replacement = generateSelfSignedCert("compound-replacement");
 const cert = (bundle: typeof original, name: string) => ({key: {name: `${name}.key`, value: bundle.keyPem}, cert: {name: `${name}.crt`, value: bundle.certPem}, ca: {name: "", value: ""}});
-const fingerprint = (port: number) => new Promise<string>((resolve, reject) => {
-    // Explicit test-only peer inspection; production certificate policy is untouched.
-    const socket = tls.connect({host: "127.0.0.1", port, rejectUnauthorized: false});
-    socket.setTimeout(3000, () => socket.destroy(new Error("TLS probe timeout")));
-    socket.once("secureConnect", () => { const value = socket.getPeerCertificate().fingerprint256.replace(/:/g, "").toLowerCase(); socket.destroy(); resolve(value); });
-    socket.once("error", error => { socket.destroy(); reject(error); });
-});
+// Explicit test-only peer inspection; production certificate policy is untouched. 리셋·부하를 견디는 공용 탐침(#181).
+const fingerprint = async (port: number) => (await peerFingerprint256(port)).replace(/:/g, "").toLowerCase();
 const fileBytes = (root: string) => {
     const result: Record<string, string> = {};
     const read = (directory: string) => {

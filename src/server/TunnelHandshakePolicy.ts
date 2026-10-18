@@ -1,6 +1,11 @@
 type TunnelHandshakePolicy = {
     /** 바인드 시각부터 인증까지의 절대 기한(ms). 유휴 시간이 아니다. */
     timeoutMs: number;
+    /**
+     * 미인증 슬롯이 절반 넘게 찼을 때 새 연결에 주는 기한(ms). 평소에는 약한 서버를 위해 넉넉한 timeoutMs 를 주고,
+     * 슬롯을 채우는 공격이 오면 이 값으로 줄여 슬롯 점유 비용을 다시 높인다(#181).
+     */
+    underPressureTimeoutMs: number;
     /** 프로세스 전체의 미인증 연결 상한. */
     maxUnauthenticatedConnections: number;
     /** 원격 주소 하나가 차지할 수 있는 미인증 연결 상한. 한 주소가 전체 슬롯을 차지하지 못하게 한다(#157). */
@@ -20,13 +25,19 @@ type TunnelHandshakePolicy = {
 
 type PartialTunnelHandshakePolicy = Partial<TunnelHandshakePolicy>;
 
+/**
+ * 기본값은 운영 서버(0.5코어·512MB, 스왑 사용) 기준이다(#181). 스왑 멈춤이 몇 초씩 걸려도 정상 클라이언트의
+ * TLS·v2 핸드셰이크가 잘리지 않게 15초를 둔다. 미인증 연결의 개수 상한은 그대로라 슬롯 점유의 상한은 같다.
+ */
 const DEFAULT_TUNNEL_HANDSHAKE_POLICY: TunnelHandshakePolicy = {
-    timeoutMs: 5000,
+    timeoutMs: 15_000,
+    underPressureTimeoutMs: 5_000,
     maxUnauthenticatedConnections: 256,
     maxUnauthenticatedPerAddress: 32,
     maxPendingDataConnections: 1024,
     maxPendingDataPerAddress: 256,
-    pendingSessionOpenTimeoutMs: 30_000
+    // 클라이언트의 엔드포인트 연결 기한(45초, #179)보다 길어야 클라이언트가 먼저 실패를 알린다.
+    pendingSessionOpenTimeoutMs: 60_000
 };
 
 let overrides: PartialTunnelHandshakePolicy = {};
@@ -42,6 +53,10 @@ const TunnelHandshakePolicyRegistry = {
     current(): TunnelHandshakePolicy {
         return {
             timeoutMs: normalizePositiveInt(overrides.timeoutMs ?? DEFAULT_TUNNEL_HANDSHAKE_POLICY.timeoutMs, DEFAULT_TUNNEL_HANDSHAKE_POLICY.timeoutMs),
+            underPressureTimeoutMs: normalizePositiveInt(
+                overrides.underPressureTimeoutMs ?? DEFAULT_TUNNEL_HANDSHAKE_POLICY.underPressureTimeoutMs,
+                DEFAULT_TUNNEL_HANDSHAKE_POLICY.underPressureTimeoutMs
+            ),
             maxUnauthenticatedConnections: normalizePositiveInt(
                 overrides.maxUnauthenticatedConnections ?? DEFAULT_TUNNEL_HANDSHAKE_POLICY.maxUnauthenticatedConnections,
                 DEFAULT_TUNNEL_HANDSHAKE_POLICY.maxUnauthenticatedConnections

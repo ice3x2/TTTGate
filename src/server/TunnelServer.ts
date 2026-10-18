@@ -76,6 +76,8 @@ const MAX_SESSION_TTL_CHECK_INTERVAL_MS = 60_000;
 const LEGACY_AUTH_FAILURE_WINDOW_MS = 60_000;
 const LEGACY_AUTH_MAX_FAILURES = 10;
 const LEGACY_AUTH_TRACKED_ADDRESSES = 10_000;
+/** 터널 포트에서 TLS 핸드셰이크 중일 수 있는 연결 수의 상한(#181). */
+const TUNNEL_MAX_PENDING_TLS_HANDSHAKES = 512;
 
 class TunnelServer {
 
@@ -137,7 +139,13 @@ class TunnelServer {
             keepAlive: option.keepAlive,
             // mtls-strict 는 검증된 클라이언트 인증서를 요구한다(SRS MODE-CTRL-PROTO-001, #159). 제어·데이터 연결이 같은 리스너다.
             requestClientCert: option.tls && option.controlProtocolMode === "mtls-strict",
-            handshakeTimeoutMs: TunnelHandshakePolicyRegistry.current().timeoutMs
+            handshakeTimeoutMs: TunnelHandshakePolicyRegistry.current().timeoutMs,
+            // 핸드셰이크 중인 연결은 미인증 상한(바인드 뒤에 센다) 밖이라 따로 묶는다. 512MB 서버의 fd·메모리를 지킨다(#181).
+            maxPendingTlsHandshakes: TUNNEL_MAX_PENDING_TLS_HANDSHAKES,
+            // 인증된 클라이언트도 세션이 몰리면 데이터 연결의 핸드셰이크가 겹친다. 핸드셰이크 단계에서는 인증 여부를 모르므로
+            // 바인드 뒤 인증 주소에 주는 상한(전체 미인증 상한의 절반)과 같게 둔다.
+            maxPendingTlsHandshakesPerAddress: Math.floor(TunnelHandshakePolicyRegistry.current().maxUnauthenticatedConnections / 2),
+            addressBucketOf: rateLimitBucketOf
         };
         // 클라이언트 인증서의 신뢰 앵커는 터널 인증서의 ca 다. 비어 있으면 시스템 루트로 검증되어 공인 CA 가 발급한
         // 아무 인증서나 통과하므로, strict 모드는 ca 없이 아무 클라이언트도 받지 않는다(fail closed, #159).
@@ -434,13 +442,26 @@ class TunnelServer {
     }
 
 
+    private hasAuthenticatedControlFrom(address: string): boolean {
+        for(const pool of this._clientHandlerPoolMap.values()) {
+            if(rateLimitBucketOf(pool.controlRemoteAddress ?? '') === address) return true;
+        }
+        return false;
+    }
+
     private onClientHandlerBound = (handler: TunnelHandler) : void => {
         const handshakePolicy = TunnelHandshakePolicyRegistry.current();
         // 주소별 상한은 rate-limit 과 같은 버킷(IPv6 /64)으로 센다. 주소 하나 단위면 /64 안에서 주소만 바꿔 상한을 피한다(#157·#167).
         const address = rateLimitBucketOf(handler.socket.remoteAddress ?? '');
         const fromAddress = this._unauthenticatedPerAddress.get(address) ?? 0;
-        if(this._unauthenticatedHandlerIds.size >= handshakePolicy.maxUnauthenticatedConnections
-            || fromAddress >= handshakePolicy.maxUnauthenticatedPerAddress) {
+        // 인증된 제어 연결이 있는 주소는 세션마다 새 데이터 연결을 연다. 바인드 순간에는 데이터 연결인지 모르므로
+        // 같은 상한으로 세면 세션이 몰릴 때 정상 세션이 실패한다. 그 주소는 상한을 4배로 올리되, 같은 NAT·/64 의
+        // 공격자가 전체 슬롯을 차지하지 못하게 전체의 절반을 넘지 않는다(#181).
+        const perAddressLimit = this.hasAuthenticatedControlFrom(address)
+            ? Math.max(handshakePolicy.maxUnauthenticatedPerAddress, Math.min(handshakePolicy.maxUnauthenticatedPerAddress * 4, Math.floor(handshakePolicy.maxUnauthenticatedConnections / 2)))
+            : handshakePolicy.maxUnauthenticatedPerAddress;
+        const perAddressCapped = fromAddress >= perAddressLimit;
+        if(this._unauthenticatedHandlerIds.size >= handshakePolicy.maxUnauthenticatedConnections || perAddressCapped) {
             logger.warn(`Rejecting unauthenticated connection because the cap is reached. handler=${handler.id}`);
             handler.destroy();
             return;
@@ -448,14 +469,17 @@ class TunnelServer {
         this._unauthenticatedHandlerIds.add(handler.id);
         this._unauthenticatedAddressOf.set(handler.id, address);
         this._unauthenticatedPerAddress.set(address, fromAddress + 1);
-        handler.setTimeout(handshakePolicy.timeoutMs);
+        // 평소에는 약한 서버를 위해 넉넉한 기한을 주고, 미인증 슬롯이 절반 넘게 차면(슬롯을 채우는 공격) 짧은 기한을 준다(#181).
+        const underPressure = this._unauthenticatedHandlerIds.size > handshakePolicy.maxUnauthenticatedConnections / 2;
+        const deadlineMs = underPressure ? Math.min(handshakePolicy.timeoutMs, handshakePolicy.underPressureTimeoutMs) : handshakePolicy.timeoutMs;
+        handler.setTimeout(deadlineMs);
         // 소켓 타임아웃은 유휴 시간만 잰다. 주기적으로 바이트를 보내면 슬롯을 영원히 차지하므로 바인드 시각 기준으로도 닫는다.
         const deadline = setTimeout(() => {
             if(!this._unauthenticatedHandlerIds.has(handler.id) && !this._pendingDataHandlerIds.has(handler.id)) return;
             logger.warn(`Closing unauthenticated connection at the handshake deadline. handler=${handler.id}`);
             this.clearUnauthenticatedHandler(handler.id);
             handler.destroy();
-        }, handshakePolicy.timeoutMs);
+        }, deadlineMs);
         deadline.unref?.();
         this._unauthenticatedDeadlines.set(handler.id, deadline);
         handler.handlerType = HandlerType.Unknown;

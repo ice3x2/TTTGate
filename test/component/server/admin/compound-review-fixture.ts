@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import tls from "node:tls";
+import {peerFingerprint256} from "../../../helpers/tlsProbe";
 
 // Existing equivalent helpers are private to test modules; importing those would
 // register unrelated suites. Share these real-I/O observations between review REDs.
@@ -17,12 +17,5 @@ export const configurationFiles = (root: string): Record<string, string> => {
     return result;
 };
 
-export const peerFingerprint = (port: number) => new Promise<string>((resolve, reject) => {
-    const socket = tls.connect({host: "127.0.0.1", port, rejectUnauthorized: false});
-    socket.setTimeout(3000, () => socket.destroy(new Error("TLS identity probe timed out")));
-    socket.once("secureConnect", () => {
-        const value = socket.getPeerCertificate().fingerprint256;
-        socket.destroy(); resolve(value);
-    });
-    socket.once("error", error => { socket.destroy(); reject(error); });
-});
+// 핸드셰이크 직후 리셋과 부하를 견디는 공용 탐침(#181).
+export const peerFingerprint = (port: number) => peerFingerprint256(port);

@@ -12,7 +12,7 @@ test.each(['early', 'no-ready'])('actual admin child %s preserves startup diagno
         return child;
     });
     try {
-        const failure = await startAdminBrowser().then(() => undefined, error => error);
+        const failure = await startAdminBrowser({startTimeoutMs: 15_000}).then(() => undefined, error => error);
         expect(failure).toBeInstanceOf(Error);
         expect(failure.message).toContain(`pid=${child!.pid}`);
         expect(failure.message).toContain('ipc=');
@@ -42,7 +42,7 @@ test('admin child error wrapper preserves the exact original error as its cause'
         return child;
     });
     try {
-        const failure = await startAdminBrowser().then(() => undefined, error => error);
+        const failure = await startAdminBrowser({startTimeoutMs: 15_000}).then(() => undefined, error => error);
         expect(failure.cause.cause).toBe(fault);
         expect(failure.cause.cause.stack).toBe(fault.stack);
     } finally { delegate.mockRestore(); }
