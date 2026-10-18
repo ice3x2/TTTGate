@@ -210,6 +210,25 @@ test("alice 가 HTTP 에서 CORS 를 켠 뒤 TCP 로 되돌려 저장하면 저�
     await hashIs(page, "#/tunnels");
 }, 2));
 
+// #150 — 서버는 allowedClientIds 가 있으면 이름 목록을 보지 않는다. 슈퍼유저 화면도 id 를 보이고 고칠 수 있어야 한다.
+test("admin 은 신뢰 클라이언트 id 를 고를 수 있고, id 가 있으면 이름보다 우선한다는 안내를 본다", () => withTunnels("admin", async ({page}) => {
+    await openTunnel(page, 20003);
+    await page.locator("#tunnel-client-id-client-a").waitFor({state: "visible", timeout: 10_000});
+    expect(await page.locator("#tunnel-client-id-client-b").count()).toBe(1);
+    expect(await page.locator("#tunnel-client-ids-priority").count()).toBe(0);
+    await page.locator("#tunnel-client-id-client-b").check();
+    await page.locator("#tunnel-client-ids-priority").waitFor({state: "visible"});
+    const saved = nextSave(page);
+    await button(page, "Apply and Restart").click();
+    expect((await saved).postDataJSON().allowedClientIds).toEqual(["client-b"]);
+    await page.getByText("Success to apply tunneling option", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+    await hashIs(page, "#/tunnels");
+    await openTunnel(page, 20003);
+    await page.waitForFunction(() => (document.querySelector("#tunnel-client-id-client-b") as HTMLInputElement | null)?.checked === true,
+        undefined, {timeout: 10_000});
+    await page.locator("#tunnel-client-ids-priority").waitFor({state: "visible"});
+}, 3));
+
 test("admin 이 소유자를 바꾼 뒤 같은 화면에서 저장해도 revision 충돌이 없다", () => withTunnels("admin", async ({page}) => {
     await openTunnel(page, 20003);
     await page.waitForFunction(() => (document.querySelector("#tunnel-owner") as HTMLSelectElement | null)?.value === "system:migrated",

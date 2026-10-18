@@ -12,6 +12,7 @@
     import Button from '../ui/Button.svelte';
     import Card from '../ui/Card.svelte';
     import Checkbox from '../ui/Checkbox.svelte';
+    import GroupsCtrl from '../controller/GroupsCtrl';
     import Field from '../ui/Field.svelte';
     import Loading from '../ui/Loading.svelte';
     import Modal from '../ui/Modal.svelte';
@@ -259,6 +260,16 @@
         }
     };
 
+    // 슈퍼유저의 신뢰 클라이언트 id 선택지. 서버는 allowedClientIds 가 있으면 이름 목록을 보지 않으므로 화면에도 보인다.
+    // 등록에서 지워졌지만 터널에 남아 있는 id 도 보여야 해제할 수 있다.
+    let allTrustedClients = $state<Array<{clientId: string; displayName?: string}>>([]);
+    const superuserClientIds = $derived([...new Set([...allTrustedClients.map((c) => c.clientId), ...(option?.allowedClientIds ?? [])])]);
+    const setSuperuserClientId = (clientId: string, on: boolean) => {
+        if(!option) return;
+        const current = option.allowedClientIds ?? [];
+        option.allowedClientIds = superuserClientIds.filter((id) => id === clientId ? on : current.includes(id));
+    };
+
     // 일반 유저의 신뢰 클라이언트 선택. 체크된 것이 allowedClientIds 다.
     const trusted = (clientId: string): boolean => option?.allowedClientIds?.includes(clientId) === true;
     const setTrusted = (clientId: string, on: boolean) => {
@@ -362,7 +373,14 @@
         }
     };
 
-    onMount(() => { load(); });
+    onMount(() => {
+        load();
+        // 일반 유저는 이 API 를 쓸 수 없다(403·access_denied 감사가 남지 않게 부르지 않는다).
+        if(policy && !policy.restricted) {
+            void GroupsCtrl.instance.trustedClients().then((result) => { if(result.success) allTrustedClients = result.trustedClients; })
+                .catch(() => { /* 선택지가 없어도 이름 목록은 쓸 수 있다 */ });
+        }
+    });
 </script>
 
 {#if option}
@@ -420,9 +438,22 @@
                     </div>
                 </Field>
             {:else}
+                <Field label="Trusted client IDs">
+                    <div style="display: flex; flex-wrap: wrap; gap: var(--s-4);">
+                        {#each superuserClientIds as clientId (clientId)}
+                            <Checkbox id={`tunnel-client-id-${clientId}`} label={allTrustedClients.find((c) => c.clientId === clientId)?.displayName ?? clientId}
+                                bind:checked={() => option!.allowedClientIds?.includes(clientId) === true, (on) => setSuperuserClientId(clientId, on)} />
+                        {:else}
+                            <p>No trusted clients are registered.</p>
+                        {/each}
+                    </div>
+                </Field>
                 <Field label="Allowed client names (Separate names with semicolon(;))" for="input-allow-client-names">
                     <TextInput id="input-allow-client-names" bind:value={option.allowedClientNamesQuery} />
                 </Field>
+                {#if (option.allowedClientIds ?? []).length > 0}
+                    <p id="tunnel-client-ids-priority" role="note" style="margin: 0; color: var(--ink-2);">Trusted client IDs are set, so the client names above are ignored.</p>
+                {/if}
             {/if}
             <Field label="Keep-Alive timeout (ms)" for="input-active-timeout">
                 <!-- 새 터널에는 keepAlive 가 없다. 그대로 bind 하면 fallback 이 있는 prop 에 undefined 가 들어가 Svelte 가 거부하므로,
