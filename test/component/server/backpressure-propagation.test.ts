@@ -6,6 +6,7 @@ import ServerOptionStore from "../../../src/server/ServerOptionStore";
 import {DEFAULT_KEY, ServerOption} from "../../../src/types/TunnelingOption";
 import {DataHandlerState} from "../../../src/types/TunnelHandler";
 import {SocketHandler} from "../../../src/util/SocketHandler";
+import SocketState from "../../../src/util/SocketState";
 import {getFreePort} from "../../helpers/network";
 import {applyTestRoot, cleanupTestRoot, createTestRoot, TestRoot} from "../../helpers/runtime";
 
@@ -161,6 +162,48 @@ describe("session downstream backpressure propagates to the tunnel source", () =
 
         expect(session1.sourceSocket.paused).toBe(true);
         expect(session2.sourceSocket.paused).toBe(false);
+    });
+
+    // #163 — 업로드 방향(외부 → 터널)도 같은 배압이 필요하다. 터널 데이터 소켓이 밀리면 외부 소켓 읽기를 멈춘다.
+    const deliverExternalData = (sessionID: number, length: number): void => {
+        (server as any).onHandlerEventOnExternalPortServer(sessionID, SocketState.Receive, {data: Buffer.alloc(length, 2), receiveLength: length});
+    };
+
+    it("pauses the external socket when the tunnel data socket for the session is backpressured, and resumes on relief", () => {
+        const {sourceSocket, downstreamSocket} = registerSession(5, 5);
+        const tunnelHandler: any = (server.tunnelServer as any)._clientHandlerPoolMap.get(5)._activatedSessionHandlerMap_.get(5);
+        tunnelHandler.setBufferSizeLimit(1024);
+        sourceSocket.stuck = true;
+
+        deliverExternalData(5, 2000);
+        expect(downstreamSocket.paused).toBe(true);
+
+        sourceSocket.stuck = false;
+        sourceSocket.flushPending();
+        expect(downstreamSocket.paused).toBe(false);
+    });
+
+    // #163 — 세션이 열리기 전에 들어온 업로드는 대기 큐에 쌓인다. 한도에 가까우면 외부 소켓을 멈추고, 큐가 비면 다시 읽는다.
+    it("pauses the external socket while the session-opening wait queue is near its limit", () => {
+        const tunnelServer: any = server.tunnelServer;
+        const pool = ClientHandlerPool.create(9, createBoundHandler(new ControllableSocket(), 6009));
+        tunnelServer._clientHandlerPoolMap.set(9, pool);
+        tunnelServer._sessionIDAndCtrlIDMap.set(10, 9);
+        pool.sendConnectEndPoint(10, {host: "127.0.0.1", port: 9, tls: false, bufferLimit: 4096} as any);
+        const downstreamSocket = new ControllableSocket();
+        (server as any)._externalPortServerPool._handlerMap.set(10, createBoundHandler(downstreamSocket, 8010));
+
+        deliverExternalData(10, 3500);
+        expect(downstreamSocket.paused).toBe(true);
+
+        pool.terminateSession(10);
+        expect(downstreamSocket.paused).toBe(false);
+    });
+
+    it("does not pause the external socket while the tunnel data socket keeps up", () => {
+        const {downstreamSocket} = registerSession(6, 6);
+        deliverExternalData(6, 2000);
+        expect(downstreamSocket.paused).toBe(false);
     });
 
     it("does not throw when pausing or resuming a session id that has no registered source", () => {

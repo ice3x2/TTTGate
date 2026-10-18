@@ -190,6 +190,11 @@ class TTTServer {
                 return;
             }
             this._tunnelServer.sendBuffer(id, bundle.data);
+            // #163: 업로드 방향의 배압. 터널 데이터 소켓이 밀리면 외부 소켓 읽기를 멈추고, 풀리면 다시 읽는다(#129 와 대칭).
+            if(this._tunnelServer.isSessionBackpressured(id)) {
+                this._externalPortServerPool.pauseSessionRead(id);
+                this._tunnelServer.addSessionPressureReliefListener(id, () => this._externalPortServerPool.resumeSessionRead(id));
+            }
         }
     }
 

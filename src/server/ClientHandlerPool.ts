@@ -2,7 +2,7 @@ import {SocketHandler} from "../util/SocketHandler";
 import {CtrlCmd, CtrlPacket, OpenOpt} from "../commons/CtrlPacket";
 import {createOpaqueToken} from "../commons/ProtocolV2";
 import Dequeue from "../util/Dequeue";
-import {ResourcePolicyRegistry} from "../util/ResourcePolicy";
+import {computeWatermarkBytes, ResourcePolicyRegistry} from "../util/ResourcePolicy";
 import {DataHandlerState, TunnelControlHandler, TunnelDataHandler} from "../types/TunnelHandler";
 import {Buffer} from "buffer";
 import LoggerFactory  from "../util/logger/LoggerFactory";
@@ -46,6 +46,7 @@ class ClientHandlerPool {
     // 열린 핸들러 맵. 세션ID를 키로 사용한다.
     private _activatedSessionHandlerMap_ : Map<number, TunnelDataHandler> = new Map<number, TunnelDataHandler>();
     private _waitingDataBufferQueueMap : Map<number, WaitingQueueState> = new Map<number, WaitingQueueState>();
+    private _waitingReliefListeners: Map<number, Array<() => void>> = new Map();
     private _bufferSize : number = 0;
     private _pendingSessionIDMap : Map<number, {handlerID: number, sessionID: number, openOpt: OpenOpt, available: boolean, bindingToken?: string }> = new Map<number, {handlerID: number, sessionID: number, openOpt: OpenOpt,available: boolean, bindingToken?: string }>();
     private _onSessionCloseCallback? : OnSessionCloseCallback;
@@ -225,6 +226,7 @@ class ClientHandlerPool {
             receiveData = receiveWaitPacketQueue.popFront();
         }
         this._waitingDataBufferQueueMap.delete(sessionID);
+        this.releaseWaitingListeners(sessionID);
     }
 
     public pauseSessionRead(sessionID: number) : void {
@@ -403,6 +405,7 @@ class ClientHandlerPool {
         let queue = this._waitingDataBufferQueueMap.get(sessionID);
         if(queue) {
             this._waitingDataBufferQueueMap.delete(sessionID);
+            this.releaseWaitingListeners(sessionID);
             this._bufferSize -= queue.sendBytes + queue.receiveBytes;
             this._bufferSize = Math.max(0, this._bufferSize);
             queue.send.clear();
@@ -456,6 +459,34 @@ class ClientHandlerPool {
      * @param sessionID
      * @param data
      */
+    /**
+     * 세션이 열리는 중이면 대기 큐가 상단 워터마크에 닿았는지, 열렸으면 데이터 소켓이 배압 상태인지(#163).
+     * 세션이 열리기 전에 들어온 업로드가 대기 큐 한도를 넘으면 세션이 닫히므로 이때도 외부 소켓을 멈춰야 한다.
+     */
+    public isSessionBackpressured(sessionID: number) : boolean {
+        const waiting = this._waitingDataBufferQueueMap.get(sessionID);
+        if(waiting) return waiting.limitBytes > 0 && waiting.sendBytes >= computeWatermarkBytes(waiting.limitBytes).high;
+        return this._activatedSessionHandlerMap_.get(sessionID)?.isBackpressured ?? false;
+    }
+
+    public addSessionPressureReliefListener(sessionID: number, listener: () => void) : void {
+        if(this._waitingDataBufferQueueMap.has(sessionID)) {
+            const listeners = this._waitingReliefListeners.get(sessionID) ?? [];
+            listeners.push(listener);
+            this._waitingReliefListeners.set(sessionID, listeners);
+            return;
+        }
+        this._activatedSessionHandlerMap_.get(sessionID)?.addOncePressureReliefListener(() => listener());
+    }
+
+    /** 대기 큐가 비워졌거나(세션 열림) 버려졌을 때(세션 실패) 멈춰 둔 외부 소켓을 다시 읽게 한다. */
+    private releaseWaitingListeners(sessionID: number) : void {
+        const listeners = this._waitingReliefListeners.get(sessionID);
+        if(!listeners) return;
+        this._waitingReliefListeners.delete(sessionID);
+        listeners.forEach((listener) => listener());
+    }
+
     public sendBuffer(sessionID: number, data: Buffer) : boolean  {
         if(this._waitingDataBufferQueueMap.has(sessionID)) {
             let waitingQueue = this._waitingDataBufferQueueMap.get(sessionID);
