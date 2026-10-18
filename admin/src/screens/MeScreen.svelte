@@ -14,7 +14,7 @@
     import TextInput from '../ui/TextInput.svelte';
     import {toast} from '../ui/toast';
     import {loadMe, me} from '../me';
-    import {navigate} from '../router';
+    import {blockNavigation, navigate} from '../router';
     import {useSession} from '../shell/session';
     import {relativeTime} from '../util/relativeTime';
     import QrCanvas from './parts/QrCanvas.svelte';
@@ -112,7 +112,12 @@
         if(!showingCodes) return;
         const block = (e: KeyboardEvent) => { if(e.key === 'Escape') e.stopPropagation(); };
         window.addEventListener('keydown', block, true);
-        return () => window.removeEventListener('keydown', block, true);
+        // 뒤로가기·주소 변경으로 화면이 사라지면 코드를 잃는다. 서버는 이미 옛 코드를 무효화했으므로 이동도 막는다.
+        const release = blockNavigation(() => {
+            toast.push({tone: 'alarm', message: 'Save the recovery codes before you leave this page.'});
+            return false;
+        });
+        return () => { window.removeEventListener('keydown', block, true); release(); };
     });
 
     const copy = (text: string) => { navigator.clipboard?.writeText(text)?.catch(() => {}); };

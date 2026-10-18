@@ -2,9 +2,7 @@ import {AuditEvent} from "../audit/AuditSink";
 import {AUDIT_EVENT_TYPES} from "../audit/AuditEventTypes";
 import {auditEventOf, Route, RouteContext} from "./routes";
 import {authorize} from "../rbac/AdminAuthorizer";
-
-/** 감사에 남길 경로의 최대 길이. 경로는 URL 에서 오므로 헤더 상한(16KiB)까지 길어질 수 있다. */
-const MAX_AUDIT_PATH_LENGTH = 256;
+import {truncateAuditValue} from "./auditValue";
 
 /**
  * #135: 본문을 읽다가 실패한(413·408·400) 감사 대상 CUD 요청의 최소 이벤트.
@@ -22,7 +20,7 @@ export function bodyRejectionReasonOf(error: unknown): BodyRejectionReason {
 }
 
 /**
- * 이 요청의 본문 실패를 감사할지. 본문 읽기는 권한 판정보다 먼저이므로, 권한이 없는 사용자의 시도가 그 사용자 이름의
+ * 이 요청의 본문 실패를 감사할지. 본문에 따라 action·대상이 갈리는 라우트는 본문 읽기가 권한 판정보다 먼저이므로, 권한이 없는 사용자의 시도가 그 사용자 이름의
  * CUD 시도로 남지 않게 여기서 미리 판정한다. 거부될 요청의 본문 실패는 남기지 않는다(본문 오류가 권한 판정보다 먼저 나므로 access_denied 도 남지 않는다).
  * 본문에 따라 action 이 갈리는 라우트(tunnel 생성·수정)는 둘 중 하나라도 허용될 때만 남긴다.
  */
@@ -37,7 +35,7 @@ export function isBodyRejectionAuditable(ctx: RouteContext, route: Route): boole
 
 export function bodyRejectionEvent(ctx: RouteContext, method: string, rawPath: string, error: unknown): AuditEvent {
     const reason = bodyRejectionReasonOf(error);
-    const path = rawPath.length > MAX_AUDIT_PATH_LENGTH ? `${rawPath.slice(0, MAX_AUDIT_PATH_LENGTH)}…` : rawPath;
+    const path = truncateAuditValue(rawPath);
     return auditEventOf(ctx, {
         type: AUDIT_EVENT_TYPES.request_body_rejected,
         summary: `request_body_rejected ${method} ${path}`,

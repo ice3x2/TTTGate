@@ -259,3 +259,17 @@ test("DELETE /api/security/bans with a wrong segment count is 404, not the handl
     const threeSegments = await f.request("DELETE", "/api/security/bans/12/1.1.1.1/extra", {}, headers);
     expect(threeSegments.status).toBe(404);
 }));
+
+// #173 — 정적 action 라우트는 본문을 읽기 전에 권한을 판정한다. 대상(target)을 경로에서 읽지 못하는 라우트는
+// 본문에서 읽으므로 targetFromBody 로 표시해야 한다. 빠뜨리면 정당한 요청이 대상 없이 판정되어 거부된다.
+describe("targetFromBody marking (#173)", () => {
+    it("every non-GET static-action route with a target but no path id is marked targetFromBody", () => {
+        const unmarked = ADMIN_ROUTES.filter((route) => route.method !== 'GET' && typeof route.action === 'string'
+            && route.action !== 'public' && route.action !== 'session' && route.target !== undefined
+            && !/\(\?<(port|id)>/.test(route.pattern.source) && route.targetFromBody !== true)
+            .map((route) => `${route.method} ${route.pattern.source}`);
+        expect(unmarked).toEqual([]);
+        expect(ADMIN_ROUTES.filter((route) => route.targetFromBody).map((route) => `${route.method} ${route.pattern.source}`))
+            .toEqual(["DELETE ^\\/api\\/tunnelingOption$"]);
+    });
+});

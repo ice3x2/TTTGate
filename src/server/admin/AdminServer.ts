@@ -31,6 +31,7 @@ import {listCountries} from "../security/countries";
 import {auditEventOf, AuditRouteMeta, buildAdminRoutes, errorLabelOf, isTunnelActivationRequested, parseActiveTimeout, parsePathId, parsePathPort, Route, RouteContext} from "./routes";
 import {createLoginFailureAuditor} from "./loginFailureAudit";
 import {bodyRejectionEvent, isBodyRejectionAuditable} from "./bodyRejectionAudit";
+import {truncateAuditValue} from "./auditValue";
 import {rbacRouteHandlers} from "./rbacRoutes";
 import {MfaTicketStore, PendingEnrollmentStore} from "../mfa/MfaTickets";
 import {mfaLoginHandler} from "./mfaLoginRoutes";
@@ -310,6 +311,11 @@ class AdminServer {
                }
                ctx.principal = principal;
            }
+           // #173: action 과 대상이 본문에 기대지 않는 라우트는 본문을 읽기 전에 권한을 판정한다. 권한이 없는 사용자가
+           // 최대 1MiB 본문으로 메모리와 시간을 쓰지 못하게 한다. 본문에 기대는 라우트는 아래에서 본문을 읽은 뒤 판정한다.
+           const staticAction = typeof matched.route.action === 'string' && matched.route.action !== 'public'
+               && matched.route.action !== 'session' && !matched.route.targetFromBody ? matched.route.action : undefined;
+           if(staticAction && this.denyIfUnauthorized(ctx, staticAction, matched.route, pathname, true)) return;
            if(method === 'POST' || method === 'PUT' || method === 'DELETE') {
                // #135: 감사 대상 CUD 의 본문 실패(413·408·400)도 남긴다. 상태를 바꾸지 않으므로 reserve() 없이 흘려보낸다(bodyRejectionAudit.ts).
                ctx.body = await AdminServer.readJson(req).catch((e) => { if(isBodyRejectionAuditable(ctx, matched.route)) this.emitAudit(bodyRejectionEvent(ctx, method!, pathname, e)); throw e; });
@@ -318,23 +324,7 @@ class AdminServer {
            if(matched.route.action !== 'public' && matched.route.action !== 'session') {
                const action: Action = typeof matched.route.action === 'function'
                    ? matched.route.action(ctx) : matched.route.action;
-               const startedAt = process.hrtime.bigint();
-               const decision = authorize(ctx.principal!, action, matched.route.target?.(ctx));
-               const elapsed = process.hrtime.bigint() - startedAt;
-               if(!decision.allowed) {
-                   this.emitAudit(auditEventOf(ctx, {
-                       type: AUDIT_EVENT_TYPES.access_denied, summary: `access_denied ${action}`, detail: {action, path: pathname}
-                   }, 'failure'));
-                   this.sendApiFailure(res, decision.status, {
-                       code: decision.code,
-                       message: decision.code === 'mfa_enrollment_required' ? 'Enable two-factor authentication first.'
-                           : decision.status === 403 ? 'Forbidden' : 'Not Found'
-                   });
-                   return;
-               }
-               if(this._exposeAuthzTiming) {
-                   res.setHeader('X-Authz-Us', String(Number(elapsed / 1000n)));
-               }
+               if(this.denyIfUnauthorized(ctx, action, matched.route, pathname)) return;
                // identity.yaml 을 읽지 못한 상태에서는 사용자·그룹을 읽지도 고치지도 못한다.
                // 핸들러마다 판정하지 않고 라우트 계층에서 한 번에 막는다.
                if((action === 'user:manage' || action === 'group:manage')
@@ -1766,6 +1756,29 @@ class AdminServer {
 
     private now(): number {
         return ClockRngProvider.current().now();
+    }
+
+    /** 권한이 없으면 access_denied 를 남기고 응답한 뒤 true 를 돌려준다. 감사 경로는 길이를 자른다(#173). */
+    private denyIfUnauthorized(ctx: RouteContext, action: Action, route: Route, pathname: string, beforeBody = false): boolean {
+        const startedAt = process.hrtime.bigint();
+        const decision = authorize(ctx.principal!, action, route.target?.(ctx));
+        const elapsed = process.hrtime.bigint() - startedAt;
+        if(decision.allowed) {
+            // 본문 전 판정 뒤에는 본문 판정이 다시 헤더를 붙인다. 본문 오류 응답에 측정값이 남지 않게 여기서는 붙이지 않는다.
+            if(this._exposeAuthzTiming && !beforeBody) ctx.res.setHeader('X-Authz-Us', String(Number(elapsed / 1000n)));
+            return false;
+        }
+        // 읽지 않은 본문이 남은 연결은 재사용하지 않는다. 남겨 두면 idle timeout 까지 소켓을 붙잡는다.
+        if(beforeBody && ctx.req.method !== 'GET') ctx.res.setHeader('Connection', 'close');
+        this.emitAudit(auditEventOf(ctx, {
+            type: AUDIT_EVENT_TYPES.access_denied, summary: `access_denied ${action}`, detail: {action, path: truncateAuditValue(pathname)}
+        }, 'failure'));
+        this.sendApiFailure(ctx.res, decision.status, {
+            code: decision.code,
+            message: decision.code === 'mfa_enrollment_required' ? 'Enable two-factor authentication first.'
+                : decision.status === 403 ? 'Forbidden' : 'Not Found'
+        });
+        return true;
     }
 
     /**
