@@ -480,7 +480,6 @@ class AdminServer {
         res.writeHead(200, {'Content-Type': contentType});
         res.end(body);
 
-
     }
 
     private onUpdateAdminCert = async (ctx: RouteContext) => {
@@ -729,7 +728,6 @@ class AdminServer {
             });
         });
     }
-
 
     private onUpdateTunnelingOption = async (ctx: RouteContext) => {
         const {res} = ctx;
@@ -984,7 +982,6 @@ class AdminServer {
         });
     }
 
-
     private onGetValidateSession = async (ctx: RouteContext) => {
         const {res} = ctx;
         const session = ctx.session!;
@@ -1119,8 +1116,6 @@ class AdminServer {
         return num;
     }
 
-
-
     private onActiveTunneling = async (ctx: RouteContext) => {
         const {res} = ctx;
         let port = await this.getNumberInPath(ctx, 'port');
@@ -1223,7 +1218,6 @@ class AdminServer {
         this.sendApiSuccess(ctx.res, {name: version.name, build: version.build});
     }
 
-
     private onGetExternalServerCert = async (ctx: RouteContext) => {
         const {res} = ctx;
         let port = await this.getNumberInPath(ctx, 'port');
@@ -1238,7 +1232,6 @@ class AdminServer {
             this.sendApiSuccess(res, {certInfo: certInfo, revisionState: certStore.revisionState});
         });
     }
-
 
     private onGetClientSysInfo = async (ctx: RouteContext) => {
         const {res} = ctx;
@@ -1276,8 +1269,6 @@ class AdminServer {
         }
         return param;
     }
-
-
 
     private onLogin = async (ctx: RouteContext) => {
         await this.performLogin(ctx);
@@ -1422,7 +1413,6 @@ class AdminServer {
         });
     }
 
-
     /**
      * P5-T3 / REQ-11: JSON 본문 상한 1MiB. 초과 시 413 응답 후 소켓 파괴.
      * 이 정적 헬퍼는 상한 초과를 예외로 전파하므로, 호출부는 상위 try/catch에서 처리하거나
@@ -1487,7 +1477,6 @@ class AdminServer {
         return SessionStore.instance.resolveSession(sessionKey);
     }
 
-
     private onGetServerOption = async (ctx: RouteContext) => {
         const {req, res} = ctx;
         // P5-T1 / REQ-03: Vary + CORS whitelist. 자기 호스트 아닐 시 CORS 헤더 생략.
@@ -1502,7 +1491,6 @@ class AdminServer {
             this.sendApiSuccess(res, {serverOption: pureServerOption, revisionState: store.revisionState});
         });
     }
-
 
     private onGetSysInfo = async (ctx: RouteContext) => {
         const {res} = ctx;
@@ -1521,7 +1509,6 @@ class AdminServer {
         let status = this._tttServer?.clientStatus();
         this.sendApiSuccess(res, {statuses: status ?? []});
     }
-
 
     private onGetTunnelingOption = async (ctx: RouteContext) => {
         const {res} = ctx;
@@ -1640,7 +1627,6 @@ class AdminServer {
         this.sendApiSuccess(ctx.res, {countries: listCountries()});
     }
 
-
     private onGetServerOptionHash = async (ctx: RouteContext) => {
         const {req, res} = ctx;
         // P5-T1 / REQ-03: 자기 호스트 CORS 화이트리스트 + Vary: Origin 항상.
@@ -1657,7 +1643,6 @@ class AdminServer {
             res.end(JSON.stringify({success: true, partial: false, failedScopes: [], warnings: [], message: '', hash: hash}));
         });
     }
-
 
     public async listen(port : number, host?: string)  : Promise<number> {
         clearInterval(this._mfaSweepTimer);
@@ -1994,8 +1979,6 @@ class AdminServer {
         }
         return true;
     }
-
-
 
 }
 

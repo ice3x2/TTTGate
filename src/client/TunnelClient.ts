@@ -721,11 +721,11 @@ class TunnelClient {
 
     /** #130: 목적지가 밀리는 동안 이 세션의 터널 데이터 소켓 읽기를 멈춘다. */
     public pauseSessionSource(sessionID: number) : void {
-        this._activatedSessionDataHandlerMap.get(sessionID)?.pauseRead();
+        this._activatedSessionDataHandlerMap.get(sessionID)?.pauseRead('upstream');
     }
 
     public resumeSessionSource(sessionID: number) : void {
-        this._activatedSessionDataHandlerMap.get(sessionID)?.resumeRead();
+        this._activatedSessionDataHandlerMap.get(sessionID)?.resumeRead('upstream');
     }
 
     public addSessionPressureReliefListener(sessionID: number, listener: () => void) : void {

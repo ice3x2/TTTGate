@@ -26,6 +26,7 @@ import {
 } from "../types/TunnelHandler";
 import DataStatePacket from "../commons/DataStatePacket";
 import {IdentityRegistry} from "./IdentityRegistry";
+import {rateLimitBucketOf} from "./security/ConnectionRateLimiter";
 import {TunnelHandshakePolicyRegistry} from "./TunnelHandshakePolicy";
 import {timingSafeStringEqual} from "../util/timingSafeStringEqual";
 import LoggerFactory  from "../util/logger/LoggerFactory";
@@ -430,7 +431,8 @@ class TunnelServer {
 
     private onClientHandlerBound = (handler: TunnelHandler) : void => {
         const handshakePolicy = TunnelHandshakePolicyRegistry.current();
-        const address = handler.socket.remoteAddress ?? '';
+        // 주소별 상한은 rate-limit 과 같은 버킷(IPv6 /64)으로 센다. 주소 하나 단위면 /64 안에서 주소만 바꿔 상한을 피한다(#157·#167).
+        const address = rateLimitBucketOf(handler.socket.remoteAddress ?? '');
         const fromAddress = this._unauthenticatedPerAddress.get(address) ?? 0;
         if(this._unauthenticatedHandlerIds.size >= handshakePolicy.maxUnauthenticatedConnections
             || fromAddress >= handshakePolicy.maxUnauthenticatedPerAddress) {

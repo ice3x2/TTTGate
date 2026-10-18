@@ -280,11 +280,11 @@ class ExternalPortServerPool {
 
     /** #163: 업로드 방향 배압. 터널 데이터 소켓이 밀리는 동안 외부 소켓 읽기를 멈춘다. */
     public pauseSessionRead(id: number) : void {
-        this._handlerMap.get(id)?.pauseRead();
+        this._handlerMap.get(id)?.pauseRead('upstream');
     }
 
     public resumeSessionRead(id: number) : void {
-        this._handlerMap.get(id)?.resumeRead();
+        this._handlerMap.get(id)?.resumeRead('upstream');
     }
 
     public addSessionPressureReliefListener(id: number, listener: () => void) : void {
