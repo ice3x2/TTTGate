@@ -108,6 +108,7 @@ class TunnelServer {
     private _rejectedHandlerIds: Set<number> = new Set<number>();
     /** 주소별 legacy 인증 실패 기록. 연결을 새로 맺으며 키를 대입하지 못하게 일정 시간 막는다(#165). */
     private _legacyAuthFailures: Map<string, {count: number; windowStart: number}> = new Map();
+    private _strictWithoutClientCa = false;
     private _nextSelectIdx = 0;
     private _onSessionCloseCallback? : OnSessionCloseCallback;
     private _onReceiveDataCallback? : OnReceiveDataCallback;
@@ -132,8 +133,16 @@ class TunnelServer {
             key: certInfo.key.value,
             cert: certInfo.cert.value,
             ca: (certInfo.ca.value == '') ? undefined : certInfo.ca.value,
-            keepAlive: option.keepAlive
+            keepAlive: option.keepAlive,
+            // mtls-strict 는 검증된 클라이언트 인증서를 요구한다(SRS MODE-CTRL-PROTO-001, #159). 제어·데이터 연결이 같은 리스너다.
+            requestClientCert: option.tls && option.controlProtocolMode === "mtls-strict"
         };
+        // 클라이언트 인증서의 신뢰 앵커는 터널 인증서의 ca 다. 비어 있으면 시스템 루트로 검증되어 공인 CA 가 발급한
+        // 아무 인증서나 통과하므로, strict 모드는 ca 없이 아무 클라이언트도 받지 않는다(fail closed, #159).
+        this._strictWithoutClientCa = option.controlProtocolMode === "mtls-strict" && tcpServerOption.ca === undefined;
+        if(this._strictWithoutClientCa) {
+            logger.error('mtls-strict requires a CA certificate (tunnel certificate ca) to verify client certificates; all handshakes will be rejected');
+        }
         this._tunnelServer = TCPServer.create(tcpServerOption);
     }
 
@@ -744,7 +753,7 @@ class TunnelServer {
                     this.rejectHandshake(ctrlHandler, "Protocol v2 is disabled in legacy mode");
                     return;
                 }
-                if(this._serverOption.controlProtocolMode === "mtls-strict" && !ctrlHandler.isSecure()) {
+                if(this._serverOption.controlProtocolMode === "mtls-strict" && (this._strictWithoutClientCa || !ctrlHandler.isClientCertificateVerified())) {
                     this.rejectHandshake(ctrlHandler, "Strict mode requires verified TLS");
                     return;
                 }

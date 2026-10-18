@@ -329,6 +329,11 @@ class SocketHandler {
         return this._tls;
     }
 
+    /** TLS 이고 상대가 낸 클라이언트 인증서가 서버의 ca 로 검증되었는지(mtls-strict, #159). */
+    public isClientCertificateVerified() : boolean {
+        return this._tls && (this._socket as unknown as {authorized?: boolean}).authorized === true;
+    }
+
     public get state() : SocketState {
         return this._state;
     }

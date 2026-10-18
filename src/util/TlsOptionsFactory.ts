@@ -9,6 +9,8 @@ type ServerTlsConfig = {
     cert?: string;
     key?: string;
     keepAlive?: number;
+    /** 클라이언트 인증서를 요구하고 ca 로 검증한다(mtls-strict, #159). */
+    requestClientCert?: boolean;
 }
 
 type TlsOptionsFactory = {
@@ -84,7 +86,11 @@ const DefaultTlsOptionsFactory: TlsOptionsFactory = {
         if(options.ca) {
             tlsOptions.ca = options.ca;
         }
-
+        if(options.requestClientCert) {
+            // 검증되지 않은 인증서나 인증서 없는 연결은 핸드셰이크에서 끊는다. ca 가 없으면 시스템 루트로 검증한다.
+            tlsOptions.requestCert = true;
+            tlsOptions.rejectUnauthorized = true;
+        }
         return tlsOptions;
     }
 };

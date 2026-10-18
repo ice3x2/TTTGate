@@ -22,7 +22,7 @@ interface OnSocketEvent {
 // (util/ 은 server/security를 import하지 않는다).
 type AdmitVerdict = {allowed: true} | {allowed: false; reason: string; retryAfterMs?: number; rejectResponse?: Buffer};
 
-interface ServerOption {port: number, tls?: boolean, ca?: string, cert?: string, key?: string, keepAlive?: number, admit?: (remoteAddress: string | undefined) => AdmitVerdict};
+interface ServerOption {port: number, tls?: boolean, ca?: string, cert?: string, key?: string, keepAlive?: number, requestClientCert?: boolean, admit?: (remoteAddress: string | undefined) => AdmitVerdict};
 
 class TCPServer {
 
