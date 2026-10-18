@@ -771,7 +771,8 @@ class TunnelServer {
                 this.markHandlerAuthenticated(ctrlHandler);
                 this.promoteToCtrlHandler(ctrlHandler, {
                     clientId: ackV2Meta.clientId,
-                    displayName: ackV2Meta.displayName || packet.clientName || trustedClient.displayName || ackV2Meta.clientId,
+                    // 이름 매칭(allowedClientNames)은 서버에 등록된 표시 이름으로만 한다. 클라이언트가 보낸 이름은 믿지 않는다(#162).
+                    displayName: trustedClient.displayName || ackV2Meta.clientId,
                     protocolVersion: ackV2Meta.protocolVersion || CONTROL_PROTOCOL_V2,
                     capabilities: (ackV2Meta.capabilities ?? pendingHandshake.capabilities).filter(capability =>
                         capability !== 'close-count-safe' || pendingHandshake.capabilities.includes(capability)),
