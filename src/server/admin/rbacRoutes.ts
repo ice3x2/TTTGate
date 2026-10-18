@@ -184,12 +184,8 @@ const onResetUserPassword = async (ctx: RouteContext): Promise<void> => {
         return;
     }
     const store = IdentityStore.instance;
-    const stored = await store.setPassword(ctx.params.id, temporary.password, {clearMustChange: false});
-    if(!stored.success) {
-        ctx.fail(stored.status, stored.code, stored.message);
-        return;
-    }
-    const updated = store.updateUser(ctx.params.id, {mustChangePassword: true});
+    // 해시와 mustChangePassword 를 한 번에 저장한다(#145).
+    const updated = await store.setPassword(ctx.params.id, temporary.password, {requireChange: true});
     if(!updated.success) {
         ctx.fail(updated.status, updated.code, updated.message);
         return;

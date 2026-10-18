@@ -489,7 +489,11 @@ class IdentityStore {
         }).catch((e) => logger.error('audit record failed', e));
     }
 
-    public async setPassword(id: string, password: string, options: {clearMustChange: boolean}): Promise<Result<void>> {
+    /**
+     * 해시와 mustChangePassword 를 한 번의 저장으로 바꾼다. requireChange 는 관리자 초기화용이다 — 둘을 나눠 저장하면
+     * 두 번째 저장이 실패할 때 해시만 바뀐 채 실패 응답이 나가 사용자가 모르는 비밀번호에 갇힌다(#145).
+     */
+    public async setPassword(id: string, password: string, options: {clearMustChange?: boolean; requireChange?: boolean}): Promise<Result<User>> {
         const index = this._data.users.findIndex((u) => u.id === id);
         if(index < 0) {
             return {success: false, status: 404, code: 'user_not_found', message: `user not found: ${id}`};
@@ -508,7 +512,7 @@ class IdentityStore {
         const updatedUser: User = {
             ...current,
             passwordHash,
-            mustChangePassword: options.clearMustChange ? false : current.mustChangePassword,
+            mustChangePassword: options.requireChange ? true : options.clearMustChange ? false : current.mustChangePassword,
             updatedAt: ClockRngProvider.current().now()
         };
         const nextUsers = [...this._data.users];
@@ -517,7 +521,7 @@ class IdentityStore {
         if(!saveResult.success) {
             return saveFailedResult(saveResult.message);
         }
-        return {success: true, value: undefined};
+        return {success: true, value: cloneUser(updatedUser)};
     }
 
     public async verifyPassword(username: string, password: string): Promise<VerifyResult> {
