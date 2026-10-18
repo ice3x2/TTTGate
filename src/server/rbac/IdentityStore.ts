@@ -297,6 +297,11 @@ class IdentityStore {
         const effectiveRole = patch.role ?? current.role;
 
         if(patch.groupId !== undefined) {
+            // 없는 그룹을 저장하면 실행 중에는 기본 그룹 속성이 적용되고, 재기동 때는 파일 검증이 실패해
+            // 서버가 legacy-fallback 으로 떨어진다(#140). createUser 와 같은 코드로 거절한다.
+            if(typeof patch.groupId !== 'string' || !this._data.groups.some((g) => g.id === patch.groupId)) {
+                return {success: false, status: 422, code: 'group_not_found', message: 'group not found'};
+            }
             if(effectiveRole === 'superuser' && patch.groupId !== SYSTEM_SUPERUSER_GROUP_ID) {
                 return {success: false, status: 422, code: 'superuser_group_reserved', message: 'superuser accounts must stay in the superuser group'};
             }
