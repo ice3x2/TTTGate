@@ -21,7 +21,16 @@ interface OnEndPointTerminateCallback {
 
 const SESSION_CLEANUP_INTERVAL : number = 10000;
 
+/**
+ * 엔드포인트 연결 기한의 기본값(ms). 서버는 열리는 중인 세션을 30초(pendingSessionOpenTimeoutMs) 뒤에 닫으므로(#174),
+ * 그보다 먼저 실패해야 클라이언트가 FailOfOpenSession 으로 알리고 연결 시도를 붙잡아 두지 않는다(#179).
+ */
+const DEFAULT_ENDPOINT_CONNECT_TIMEOUT_MS = 20_000;
+
 class EndPointClientPool {
+    /** 엔드포인트 연결(TCP·TLS 핸드셰이크) 기한. 테스트에서 줄이려고 연다(운영 설정은 아직 없다). */
+    public static connectTimeoutMs = DEFAULT_ENDPOINT_CONNECT_TIMEOUT_MS;
+
 
     private _endpointOwners = new Map<number, {handler?: EndpointHandler; terminal: boolean}>();
     private _connectOptMap: Map<number, ConnectOpt> = new Map<number, ConnectOpt>();
@@ -73,7 +82,7 @@ class EndPointClientPool {
         previous?.handler?.destroy();
         this._connectOptMap.set(sessionID, connectOpt);
         logger.info("Connect to endpoint: (sessionID " + sessionID +") " + connectOpt.host + ":" + connectOpt.port);
-        let endPointClient = SocketHandler.connect(connectOpt,(client: SocketHandler, state: SocketState, data?: any) => {
+        let endPointClient = SocketHandler.connect({...connectOpt, connectTimeout: EndPointClientPool.connectTimeoutMs},(client: SocketHandler, state: SocketState, data?: any) => {
             owner.handler ??= client as EndpointHandler;
             if(this._endpointOwners.get(sessionID) !== owner) { client.destroy(); return; }
             if(owner.terminal) return;
