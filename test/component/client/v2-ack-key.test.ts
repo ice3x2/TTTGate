@@ -16,7 +16,7 @@ test('v2 client sends an empty legacy key in AckCtrl and still authenticates', a
         return original.call(CtrlPacket, id, name, key, v2);
     });
     const client = TTTClient.create({host: '127.0.0.1', port: server.port, tls: false, key: DEFAULT_KEY,
-        name: 'wide', clientId: 'wide', clientSecret: 'fixture-wide-secret', allowLegacyFallback: false, keepAlive: 0});
+        name: 'wide', clientId: 'wide', clientSecret: 'fixture-wide-secret', allowLegacyFallback: false, keepAlive: 0, globalMemCacheLimit: 128});
     try {
         client.start();
         await until(() => (client as any)._isOnline, 'v2 client did not authenticate');

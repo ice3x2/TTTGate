@@ -52,9 +52,10 @@ const main = async () => {
         assert.equal(pool.getServerStatus(port).online, true);
         assert.equal(pool.getServerStatus(port).sessions, 0);
         assert.equal((pool as any)._handlerMap.size, 0);
-        assert.deepEqual(sessions, []);
+        // 타입 인자를 주지 않으면 strict assert 의 단언 시그니처가 배열을 never[] 로 좁힌다(아래 events 도 같다).
+        assert.deepEqual<typeof sessions>(sessions, []);
         assert.deepEqual(terminated, []);
-        assert.deepEqual(events, []);
+        assert.deepEqual<typeof events>(events, []);
 
         assert.equal(await pool.active(port, 0), true);
         const payload = Buffer.from(`reactivated-${mode}`);

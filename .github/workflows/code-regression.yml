@@ -32,6 +32,22 @@ jobs:
         run: npm run test:unit
       - name: Component tests
         run: npm run test:component
+  typecheck:
+    name: Type check source and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NODE_ENV: development
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Type check (src + test)
+        run: npm run typecheck
   browser-e2e:
     name: Admin, tunnel and browser end-to-end tests
     runs-on: ubuntu-latest

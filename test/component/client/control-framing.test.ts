@@ -17,7 +17,7 @@ async function withClient(check: (h: any) => Promise<void>) {
         TTTClientRuntimeRegistry.configure({reconnectIntervalMs: 100});
         const client = TTTClient.create({host: '127.0.0.1', port: f.server.tunnelServer.port, tls: false,
             key: DEFAULT_KEY, name: 'wide', clientId: 'wide', clientSecret: 'fixture-wide-secret',
-            allowLegacyFallback: false, keepAlive: 0});
+            allowLegacyFallback: false, keepAlive: 0, globalMemCacheLimit: 128});
         const sockets: net.Socket[] = [];
         try {
             client.start();
@@ -141,7 +141,7 @@ test('real queued endpoint payload is cleared once at malformed control teardown
                 old.sendData = send; h.tunnel._onConnectEndPointCallback = openEndpoint;
                 await until(() => h.client._tunnelClient !== h.tunnel && h.client._isOnline, 'Existing scheduler did not reconnect queued owner');
                 const fresh = await h.echo('fresh-after-queued-framing');
-                const lateFresh: Buffer[] = []; fresh.on('data', bytes => lateFresh.push(Buffer.from(bytes)));
+                const lateFresh: Buffer[] = []; fresh.on('data', (bytes: Buffer) => lateFresh.push(Buffer.from(bytes)));
                 await h.sibling.roundtrip(h.siblingSession, 'sibling-after-queued-framing');
                 facts.after = {generic, closed, oldSent: Buffer.concat(sent).toString(), oldForward: Buffer.concat(received).toString(),
                     lateFresh: Buffer.concat(lateFresh).toString(), oldBytes: h.tunnel._waitBufferBytesTotal,

@@ -21,7 +21,7 @@ test.each(['closed', 'endpoint-close', 'endpoint-terminate', 'endpoint-receive',
     const socket = await h.echo('fresh-before-old');
     const handler = [...fresh._activatedSessionDataHandlerMap.values()][0] as any, sid = handler.sessionID;
     const endpoint = freshPool._endPointClientMap.get(sid);
-    const received: Buffer[] = []; socket.on('data', bytes => received.push(Buffer.from(bytes)));
+    const received: Buffer[] = []; socket.on('data', (bytes: Buffer) => received.push(Buffer.from(bytes)));
     if(kind === 'closed') ctrl(old, 'closed', new Error('owned stale upper callback'));
     if(kind === 'endpoint-close') endpointClose(sid, 0);
     if(kind === 'endpoint-terminate') terminate(sid);

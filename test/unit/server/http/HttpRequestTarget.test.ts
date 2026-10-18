@@ -9,7 +9,7 @@ describe("HTTP request parsing and target rewrite", () => {
         let headers = 0;
         pipe.onErrorCallback = (error: Error) => { errors.push(error); };
         pipe.onHeaderCallback = () => { headers++; };
-        pipe.onDataCallback = () => {};
+        pipe.onDataCallback = () => false;
         pipe.onEndCallback = () => {};
         pipe.write(Buffer.from(`POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: ${contentLength}\r\n\r\nhello`));
         return {errors, headers};

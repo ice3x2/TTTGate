@@ -68,7 +68,7 @@ test.each(['end','reset'] as const)('actual endpoint %s reports one terminal sta
     pool.onEndPointTerminateCallback=(...args:any[])=>terminated.push(args);
     try {
         pool.open(9,{host:'127.0.0.1',port:(server.address() as net.AddressInfo).port,tls:false,bufferLimit:1024});
-        await until(()=>!!accepted);
+        await until(()=>!!accepted,'Endpoint never accepted');
         if(mode==='end')accepted!.end();else accepted!.resetAndDestroy();
         await wait(()=>terminated.length>0,'Endpoint terminal callback absent');
         expect(states).toHaveLength(1);expect(terminated).toEqual([[9,mode==='end'?'graceful':'abort']]);

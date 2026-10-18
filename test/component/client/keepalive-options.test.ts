@@ -43,7 +43,7 @@ describe.each(['direct', 'cli'] as const)('%s option path', mode => {
         const normalizationWarnings: string[] = [];
         const loggers = ['ClientApp', 'TunnelClient'].map(name => LoggerFactory.getLogger('client', name));
         const loggerWarnings = loggers.map(logger => logger.warn);
-        loggers.forEach((logger, index) => { logger.warn = function(...args: any[]) {
+        loggers.forEach((logger, index) => { logger.warn = function(...args: Parameters<typeof logger.warn>) {
             if(String(args[0]).includes('normalizationClientOption: keepAlive')) normalizationWarnings.push(String(args[0]));
             return loggerWarnings[index].apply(this, args);
         }; });

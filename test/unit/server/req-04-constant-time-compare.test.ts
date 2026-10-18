@@ -23,7 +23,9 @@ const P3_T4_TARGETS = [
     "src/server/admin/AdminServer.ts"
 ].map((p) => p.split("/").join(sep));
 
-function runLintScript(tmpReportDir: string): any {
+type LintEvent = { type: string; file?: string };
+
+function runLintScript(tmpReportDir: string): LintEvent[] {
     mkdirSync(tmpReportDir, { recursive: true });
     const res = spawnSync(
         process.execPath,
@@ -31,7 +33,7 @@ function runLintScript(tmpReportDir: string): any {
         { encoding: "utf-8", timeout: 60_000 }
     );
     const lines = (res.stdout ?? "").trim().split(/\r?\n/).filter((l) => l.length > 0);
-    return lines.map((l) => JSON.parse(l));
+    return lines.map((l) => JSON.parse(l) as LintEvent);
 }
 
 describe("REQ-04 상수시간 비교 전환", () => {

@@ -2,7 +2,7 @@ import net from "node:net";
 import {once} from "node:events";
 import {CtrlCmd, CtrlPacket} from "../../../src/commons/CtrlPacket";
 import DataStatePacket from "../../../src/commons/DataStatePacket";
-import {withLegacyIds, until} from "./legacy-handler-id-fixture";
+import {withLegacyIds, until, wideHandlerID} from "./legacy-handler-id-fixture";
 
 export const withHandshake = (wide: boolean, check: (fixture: any) => Promise<void>) => withLegacyIds(async f => {
     const peer = await f.peer(wide);
@@ -23,7 +23,7 @@ export const withHandshake = (wide: boolean, check: (fixture: any) => Promise<vo
     try {
         const socket = await connect(tunnel.port);
         const frame = DataStatePacket.create(peer.pool.id,
-            wide ? session.packet.newDataHandlerMeta!.handlerID : session.packet.ID,
+            wide ? wideHandlerID(session.packet) : session.packet.ID,
             session.packet.sessionID, wide ? session.packet.newDataHandlerMeta?.bindingToken : undefined).toBuffer();
         const received = () => observations.reduce((sum, observation) => sum + observation.bytes, 0);
         const finish = async () => {

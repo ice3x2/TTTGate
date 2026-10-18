@@ -12,7 +12,7 @@ export async function withClient(check: (h: any) => Promise<void>) {
         TTTClientRuntimeRegistry.configure({reconnectIntervalMs: 100});
         const client = TTTClient.create({host: '127.0.0.1', port: f.server.tunnelServer.port, tls: false,
             key: DEFAULT_KEY, name: 'wide', clientId: 'wide', clientSecret: 'fixture-wide-secret',
-            allowLegacyFallback: false, keepAlive: 0});
+            allowLegacyFallback: false, keepAlive: 0, globalMemCacheLimit: 128});
         const sockets: net.Socket[] = [];
         try {
             client.start();

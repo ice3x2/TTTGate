@@ -2,7 +2,7 @@ import fs from "fs";
 import Path from "path";
 import Environment from "../../../../src/Environment";
 import type {AuditEvent} from "../../../../src/server/audit/AuditSink";
-import {AuditBackpressureError, FileAuditSink} from "../../../../src/server/audit/FileAuditSink";
+import {AuditBackpressureError, AuditWriteStream, FileAuditSink} from "../../../../src/server/audit/FileAuditSink";
 import {applyTestRoot, cleanupTestRoot, createTestRoot, TestRoot} from "../../../helpers/runtime";
 
 jest.setTimeout(30_000);
@@ -16,6 +16,14 @@ type StubStream = {
     end(cb?: () => void): StubStream;
     emit(event: string): void;
 };
+
+/**
+ * 스텁을 FileAuditSink 의 스트림 타입으로 넘긴다.
+ * AuditWriteStream 의 once/on/end 는 this(fs.WriteStream)를 돌려주므로 스텁을 그대로 대입할 수 없다.
+ * 실제 Writable 을 상속하면 버퍼링·drain 의미가 바뀌어 배압 테스트가 달라진다.
+ * FileAuditSink 가 실제로 부르는 write·once·on·end 의 런타임 계약은 스텁이 지킨다(#131).
+ */
+const asWriteStream = (stub: StubStream): AuditWriteStream => stub as unknown as AuditWriteStream;
 
 /**
  * 배압 경계를 재현하는 쓰기 스트림 스텁.
@@ -127,7 +135,7 @@ describe("FileAuditSink", () => {
 
     it("선점이 큐 상한을 정확히 나눠 가지고 네 번째 record 는 배압으로 거부된다", async () => {
         const stream = createStubStream({writeResult: () => false, invokeCallback: () => {}});
-        const sink = new FileAuditSink({dir, queueSize: 3, retentionDays: 0, openStream: () => stream});
+        const sink = new FileAuditSink({dir, queueSize: 3, retentionDays: 0, openStream: () => asWriteStream(stream)});
 
         expect(sink.reserve()).toBe(true);
         expect(sink.reserve()).toBe(true);
@@ -146,7 +154,7 @@ describe("FileAuditSink", () => {
 
     it("reserve 없이 record 만 부르면 상한을 넘는 네 번째가 거부된다", async () => {
         const stream = createStubStream({writeResult: () => false, invokeCallback: () => {}});
-        const sink = new FileAuditSink({dir, queueSize: 3, retentionDays: 0, openStream: () => stream});
+        const sink = new FileAuditSink({dir, queueSize: 3, retentionDays: 0, openStream: () => asWriteStream(stream)});
 
         await sink.record(eventAt(1_757_548_800_000));
         await sink.record(eventAt(1_757_548_800_001));
@@ -157,7 +165,7 @@ describe("FileAuditSink", () => {
 
     it("선점 하나를 record 가 소비하고 남은 선점은 그대로 센다", async () => {
         const stream = createStubStream({writeResult: () => false, invokeCallback: () => {}});
-        const sink = new FileAuditSink({dir, queueSize: 3, retentionDays: 0, openStream: () => stream});
+        const sink = new FileAuditSink({dir, queueSize: 3, retentionDays: 0, openStream: () => asWriteStream(stream)});
 
         expect(sink.reserve()).toBe(true);
         expect(sink.reserve()).toBe(true);
@@ -175,7 +183,7 @@ describe("FileAuditSink", () => {
             invokeCallback: (_call, done) => { setImmediate(done); },
             beforeWriteReturn: (call) => { if(call === 0) queueLengthAtFirstWrite = sink.queueLength; }
         });
-        const sink = new FileAuditSink({dir, queueSize: 10, retentionDays: 0, openStream: () => stream});
+        const sink = new FileAuditSink({dir, queueSize: 10, retentionDays: 0, openStream: () => asWriteStream(stream)});
 
         await sink.record(eventAt(1_757_548_800_000, {summary: "first"}));
         await sink.record(eventAt(1_757_548_800_001, {summary: "second"}));
@@ -200,7 +208,7 @@ describe("FileAuditSink", () => {
         const stream = createStubStream({
             invokeCallback: (_call, done) => { setTimeout(() => { callbackCalled = true; done(); }, 100); }
         });
-        const sink = new FileAuditSink({dir, queueSize: 10, retentionDays: 0, openStream: () => stream});
+        const sink = new FileAuditSink({dir, queueSize: 10, retentionDays: 0, openStream: () => asWriteStream(stream)});
 
         await sink.record(eventAt(1_757_548_800_000));
         await sink.flush();
@@ -217,7 +225,7 @@ describe("FileAuditSink", () => {
         };
         const healthy = createStubStream();
         const streams = [failing, healthy];
-        const sink = new FileAuditSink({dir, queueSize: 10, retentionDays: 0, openStream: () => streams.shift() ?? healthy});
+        const sink = new FileAuditSink({dir, queueSize: 10, retentionDays: 0, openStream: () => asWriteStream(streams.shift() ?? healthy)});
 
         await sink.record(eventAt(1_757_548_800_000, {summary: "first"}));
         await sink.record(eventAt(1_757_548_800_001, {summary: "second"}));
@@ -249,7 +257,7 @@ describe("FileAuditSink", () => {
             cb?.(new Error("EACCES"));
             return true;
         };
-        const sink = new FileAuditSink({dir, queueSize: 3, retentionDays: 0, openStream: () => failing, closeTimeoutMs: 300});
+        const sink = new FileAuditSink({dir, queueSize: 3, retentionDays: 0, openStream: () => asWriteStream(failing), closeTimeoutMs: 300});
         for(let i = 0; i < 3; i += 1) {
             expect(sink.reserve()).toBe(true);
             await sink.record(eventAt(1_757_548_800_000 + i));
@@ -271,7 +279,7 @@ describe("FileAuditSink", () => {
             return true;
         };
         let opened = 0;
-        const sink = new FileAuditSink({dir, queueSize: 3, retentionDays: 0, openStream: () => { opened++; return stream; }, closeTimeoutMs: 100});
+        const sink = new FileAuditSink({dir, queueSize: 3, retentionDays: 0, openStream: () => { opened++; return asWriteStream(stream); }, closeTimeoutMs: 100});
         await sink.record(eventAt(1_757_548_800_000));
         await sleep(20);
         expect(held).toBeDefined();
