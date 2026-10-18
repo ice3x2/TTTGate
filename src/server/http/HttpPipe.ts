@@ -612,13 +612,13 @@ class HttpPipe {
             return ReadResult.End;
         }
         
-        // Keep payload buffered until its following CRLF is complete.
-        if (this._buffer.length < readable + CRLF_BUFFER.length) {
+        // 청크 데이터는 받은 만큼 바로 넘긴다. 청크 하나를 다 받을 때까지 쌓으면 큰 청크 응답이 통째로 메모리에 머물고
+        // 다운로드 배압(#129)도 걸리지 않는다(#176). 청크 뒤 CRLF 만 모두 받은 뒤 검증한다.
+        if (readable > 0 && this._buffer.length === 0) {
             return ReadResult.End;
         }
-        
-        let chunkedDataBuffer = this._buffer.subarray(0, readable);
-        this._buffer = this._buffer.subarray(readable);
+        let chunkedDataBuffer = this._buffer.subarray(0, Math.min(readable, this._buffer.length));
+        this._buffer = this._buffer.subarray(chunkedDataBuffer.length);
         this._chunkedSizeRead += chunkedDataBuffer.length;
         
         if (this._chunkedSizeRead == this._chunkedSize) {
@@ -636,7 +636,10 @@ class HttpPipe {
                     chunkedDataBuffer = Buffer.concat([chunkedDataBuffer, CRLF_BUFFER]);
                 }
             } else {
-                // 아직 CRLF를 받지 못함
+                // 아직 CRLF를 받지 못함. 받은 데이터는 넘기고 CRLF 는 다음 쓰기에서 검증한다.
+                if (chunkedDataBuffer.length > 0 && (!this._onDataCallback || !this._onDataCallback?.(chunkedDataBuffer))) {
+                    return ReadResult.Closed;
+                }
                 return ReadResult.End;
             }
         } else if (this._chunkedSizeRead > this._chunkedSize) {
