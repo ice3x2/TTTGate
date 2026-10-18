@@ -30,6 +30,7 @@ import {
     User,
     UserMfa,
     UserStatus,
+    validateDisplayName,
     validateGroupAttributes,
     validatePassword,
     validateUsername
@@ -53,6 +54,13 @@ function cloneGroup(group: Group): Group {
 
 function emptyIdentityFile(): IdentityFile {
     return {version: IDENTITY_SCHEMA_VERSION, users: [], groups: createSystemGroups()};
+}
+
+/** 그룹 이름 규칙: 문자열이고 앞뒤 공백을 뺀 길이가 1–64. 맞으면 다듬은 값, 아니면 undefined. */
+function groupNameOf(value: unknown): string | undefined {
+    if(typeof value !== 'string') return undefined;
+    const trimmed = value.trim();
+    return trimmed.length >= 1 && trimmed.length <= 64 ? trimmed : undefined;
 }
 
 function saveFailedResult(message: string): {success: false; status: 422; code: string; message: string} {
@@ -228,7 +236,13 @@ class IdentityStore {
             return {success: false, status: 409, code: 'username_taken', message: `username already taken: ${username}`};
         }
 
-        const displayName = input.displayName ?? username;
+        // 수정 경로와 같은 규칙으로 검증한다(#144). 없으면 username 을 쓴다.
+        let displayName = username;
+        if(input.displayName !== undefined) {
+            const displayNameResult = validateDisplayName(input.displayName);
+            if(!displayNameResult.success) return displayNameResult;
+            displayName = displayNameResult.value;
+        }
 
         const hasPassword = 'password' in input;
         const hasPasswordHash = 'passwordHash' in input;
@@ -416,15 +430,15 @@ class IdentityStore {
     }
 
     public createGroup(input: {name: string; attributes?: Partial<GroupAttributes>}): Result<Group> {
-        const name = input.name;
-        if(typeof name !== 'string' || name.trim().length < 1 || name.trim().length > 64) {
-            return {success: false, status: 422, code: 'group_name_invalid', message: `group name is invalid: ${name}`};
+        const name = groupNameOf(input.name);
+        if(name === undefined) {
+            return {success: false, status: 422, code: 'group_name_invalid', message: 'group name is invalid'};
         }
         const attributesResult = validateGroupAttributes(input.attributes ?? {}, DEFAULT_GROUP_ATTRIBUTES as GroupAttributes);
         if(!attributesResult.success) {
             return attributesResult;
         }
-        const group: Group = {id: newGroupId(), name: name.trim(), system: false, attributes: attributesResult.value};
+        const group: Group = {id: newGroupId(), name, system: false, attributes: attributesResult.value};
         const saveResult = this.replaceData({...this._data, groups: [...this._data.groups, group]});
         if(!saveResult.success) {
             return saveFailedResult(saveResult.message);
@@ -444,6 +458,11 @@ class IdentityStore {
             return {success: false, status: 422, code: 'system_group_readonly', message: 'the default group name is read-only'};
         }
 
+        // 생성과 같은 이름 규칙이다. 숫자 이름이 저장되면 목록 정렬(localeCompare)이 500 을 낸다(#144).
+        const nextName = patch.name === undefined ? undefined : groupNameOf(patch.name);
+        if(patch.name !== undefined && nextName === undefined) {
+            return {success: false, status: 422, code: 'group_name_invalid', message: 'group name is invalid'};
+        }
         const group = this._data.groups[index];
         let nextAttributes = group.attributes;
         if(patch.attributes !== undefined) {
@@ -453,7 +472,7 @@ class IdentityStore {
             }
             nextAttributes = attributesResult.value;
         }
-        const updatedGroup: Group = {...group, name: patch.name ?? group.name, attributes: nextAttributes};
+        const updatedGroup: Group = {...group, name: nextName ?? group.name, attributes: nextAttributes};
         const nextGroups = [...this._data.groups];
         nextGroups[index] = updatedGroup;
         const saveResult = this.replaceData({...this._data, groups: nextGroups});
