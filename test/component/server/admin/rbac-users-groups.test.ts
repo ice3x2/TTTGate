@@ -301,6 +301,60 @@ describe("rbac-users-groups", () => {
         expect(again.body.mustChangePassword).toBe(true);
     }));
 
+    it("#145 비밀번호 초기화는 해시와 mustChangePassword 를 한 번에 저장해, 저장이 실패하면 옛 비밀번호가 그대로다", async () => withRbacServer(async (f) => {
+        const groupId = await createFieldTeam(f);
+        const alice = await createAlice(f, groupId);
+        const first = await f.login({username: "alice", password: alice.temporaryPassword});
+        expect(first.status).toBe(200);
+        const own = "alice-own-pass-1";
+        expect((await f.request("PUT", "/api/me/password", {currentPassword: alice.temporaryPassword, newPassword: own}, first.auth)).status).toBe(200);
+
+        // 첫 저장만 성공하고 그 뒤 저장은 실패하는 디스크를 흉내 낸다. 두 번 나눠 저장하면 해시만 바뀐 채 실패한다.
+        const store = IdentityStore.instance as any;
+        const original = store.replaceData.bind(store);
+        let saves = 0;
+        const spy = jest.spyOn(store, "replaceData").mockImplementation((next: any) =>
+            (++saves === 1 ? original(next) : {success: false, message: "simulated disk failure"}));
+        let reset: ApiResponse;
+        try {
+            reset = await f.request("POST", `/api/users/${alice.id}/password-reset`, {temporaryPassword: "reset-pass-5678"}, f.admin.auth);
+        } finally {
+            spy.mockRestore();
+        }
+        if(reset.status === 200) {
+            expect(reset.body.user.mustChangePassword).toBe(true);
+            const again = await f.login({username: "alice", password: "reset-pass-5678"});
+            expect({status: again.status, mustChange: again.body.mustChangePassword}).toEqual({status: 200, mustChange: true});
+        } else {
+            expect((await f.login({username: "alice", password: own})).status).toBe(200);
+        }
+        expect(saves).toBe(1);
+    }));
+
+    it("#145 비밀번호 초기화 저장이 실패하면 422 이고 옛 비밀번호와 기존 세션이 그대로다", async () => withRbacServer(async (f) => {
+        const groupId = await createFieldTeam(f);
+        const alice = await createAlice(f, groupId);
+        const first = await f.login({username: "alice", password: alice.temporaryPassword});
+        const own = "alice-own-pass-2";
+        expect((await f.request("PUT", "/api/me/password", {currentPassword: alice.temporaryPassword, newPassword: own}, first.auth)).status).toBe(200);
+        const session = await f.login({username: "alice", password: own});
+        expect(session.status).toBe(200);
+
+        const store = IdentityStore.instance as any;
+        const spy = jest.spyOn(store, "replaceData").mockImplementation(() => ({success: false, message: "simulated disk failure"}));
+        let reset: ApiResponse;
+        try {
+            reset = await f.request("POST", `/api/users/${alice.id}/password-reset`, {temporaryPassword: "reset-pass-9999"}, f.admin.auth);
+        } finally {
+            spy.mockRestore();
+        }
+        expect(reset.status).toBe(422);
+        expect(reset.body.temporaryPassword).toBeUndefined();
+        expect((await f.request("GET", "/api/me", {}, session.auth)).status).toBe(200);
+        expect((await f.login({username: "alice", password: own})).status).toBe(200);
+        expect((await f.login({username: "alice", password: "reset-pass-9999"})).status).toBe(401);
+    }));
+
     it("그룹 상세·삭제 규칙이 시스템 그룹과 소속 인원을 지킨다", async () => withRbacServer(async (f) => {
         const groupId = await createFieldTeam(f);
         const alice = await createAlice(f, groupId);
