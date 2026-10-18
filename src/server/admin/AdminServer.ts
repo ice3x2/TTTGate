@@ -27,6 +27,7 @@ import {DEFAULT_GEO_CONFIG, GeoConfig, TunnelingOption} from "../../types/Tunnel
 import {AdmissionController} from "../security/AdmissionController";
 import {normalizeConnectionSecurity} from "../security/connectionSecurity";
 import {listCountries} from "../security/countries";
+import {createLoginFailureAuditor} from "./loginFailureAudit";
 import {auditEventOf, AuditRouteMeta, buildAdminRoutes, isTunnelActivationRequested, Route, RouteContext} from "./routes";
 import {rbacRouteHandlers} from "./rbacRoutes";
 import {MfaTicketStore, PendingEnrollmentStore} from "../mfa/MfaTickets";
@@ -100,6 +101,7 @@ class AdminServer {
     private _bindHost: string = '';
     private _tttServer : TTTServer | undefined;
     private _loginAttempts: Map<string, LoginAttemptState> = new Map<string, LoginAttemptState>();
+    private readonly _loginFailureAudit = createLoginFailureAuditor();
     // P3-T5 / REQ-08: hot-apply를 위해 현재 TLS 옵션을 보존.
     private _currentTlsOptions: { key: string, cert: string, ca?: string } | undefined;
     // P5-T6 / REQ-19: 영구 error 핸들러 참조 보존 (removeAllListeners 절대 사용 금지).
@@ -1274,13 +1276,9 @@ class AdminServer {
         await this.performLogin(ctx);
         // 성공은 completeLogin 이 남긴다(새 세션 해시를 그곳에서만 알 수 있다).
         if(ctx.res.statusCode === 200) return;
-        // username 이 없으면 'admin' 으로 적지 않는다(별칭은 #102 에서 지웠다). 다른 계정에 실패가 쌓이지 않게 한다.
-        const username = typeof ctx.body?.['username'] == 'string' ? ctx.body['username'] : '(missing)';
-        this.emitAudit({
-            at: this.now(), actor: {userId: 'system'}, ip: ctx.ip,
-            type: AUDIT_EVENT_TYPES.login_failure, outcome: 'failure',
-            summary: `login_failure ${username}`, detail: {username}
-        });
+        // username 이 없으면 'admin' 으로 적지 않는다(별칭은 #102 에서 지웠다). 형식·429 처리는 loginFailureAudit 에 있다(#139).
+        const event = this._loginFailureAudit(ctx.body, ctx.ip, this.buildLoginAttemptKey(ctx.req), ctx.res.statusCode, this.now());
+        if(event) this.emitAudit(event);
     }
 
     private performLogin = async (ctx: RouteContext) => {

@@ -358,6 +358,37 @@ describe("audit-sink: audited() 밖의 이벤트", () => {
         expect(backpressured.status).toBe(200);
     }));
 
+    it("로그인 실패 감사는 형식이 틀린 username 원문을 남기지 않는다", async () => withAuditServer(async (f) => {
+        const huge = "x".repeat(64 * 1024);
+        expect((await f.login({username: huge, password: "wrong-password"})).status).toBe(401);
+        expect((await f.login({username: "hunter2!!secret", password: "wrong-password"})).status).toBe(401);
+        const failures = f.sink.events.filter((event) => event.type === "login_failure");
+        expect(failures).toHaveLength(2);
+        expect(failures[0].detail).toEqual({username: "(invalid)", usernameLength: huge.length});
+        expect(failures[0].summary).toBe("login_failure (invalid)");
+        expect(failures[1].detail).toEqual({username: "(invalid)", usernameLength: "hunter2!!secret".length});
+        const serialized = JSON.stringify(failures);
+        expect(serialized).not.toContain("x".repeat(64));
+        expect(serialized).not.toContain("hunter2");
+    }));
+
+    it("차단(429) 중의 반복 로그인 실패는 IP 별로 묶여 감사가 요청 수만큼 늘지 않는다", async () => withAuditServer(async (f) => {
+        let status = 0;
+        for(let i = 0; i < 10 && status !== 429; i += 1) {
+            status = (await f.login({username: "admin", password: "wrong-password"})).status;
+        }
+        expect(status).toBe(429);
+        for(let i = 0; i < 5; i += 1) {
+            expect((await f.login({username: "admin", password: "wrong-password"})).status).toBe(429);
+        }
+        const blocked = f.sink.events.filter((event) => event.type === "login_failure" && (event.detail as any)?.blocked === true);
+        expect(blocked).toHaveLength(1);
+        // 차단 전 실패는 지금처럼 하나씩 남는다.
+        const plain = f.sink.events.filter((event) => event.type === "login_failure" && (event.detail as any)?.blocked !== true);
+        expect(plain.length).toBeGreaterThanOrEqual(1);
+        expect(plain.every((event) => (event.detail as any).username === "admin")).toBe(true);
+    }), 60_000);
+
     it("권한 거부가 access_denied 로 남는다", async () => withAuditServer(async (f) => {
         const created = await IdentityStore.instance.createUser({
             username: "bob", displayName: "Bob", role: "regular", mustChangePassword: false, password: REGULAR_PASSWORD
