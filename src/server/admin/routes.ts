@@ -7,6 +7,7 @@ import {AuthorizationContext} from "../rbac/AuthorizationContext";
 import type {AuditEvent, AuditTarget} from "../audit/AuditSink";
 import {AUDIT_EVENT_TYPES, AuditEventType} from "../audit/AuditEventTypes";
 import {ClockRngProvider} from "../../util/ClockRng";
+import {truncateAuditValue} from "./auditValue";
 import type {MfaTicketStore, PendingEnrollmentStore} from "../mfa/MfaTickets";
 
 export type {Action, Target};
@@ -73,6 +74,8 @@ export type Route = {
      * false 는 "상태를 바꾸지 않아 감사하지 않는다" 는 표의 명시적 예외다(#112 의 MFA enroll).
      */
     audit?: ((ctx: RouteContext) => AuditRouteMeta) | false;
+    /** 권한 판정 대상(target)을 본문에서 읽는다. 이런 라우트는 본문을 읽은 뒤에만 권한을 판정할 수 있다(#173). */
+    targetFromBody?: true;
     handler: (ctx: RouteContext) => Promise<void>;
 };
 
@@ -120,7 +123,7 @@ export const isTunnelActivationRequested = (ctx: RouteContext): boolean => ctx.b
 
 /** 터널 감사 대상의 id 는 포트다. 경로 세그먼트가 없으면 본문의 forwardPort 를 쓴다. */
 const tunnelAuditTarget = (ctx: RouteContext): AuditTarget =>
-    ({kind: 'tunnel', id: String(ctx.params.port ?? ctx.body?.forwardPort)});
+    ({kind: 'tunnel', id: truncateAuditValue(String(ctx.params.port ?? ctx.body?.forwardPort))});
 
 const userAuditTarget = (ctx: RouteContext): AuditTarget => ({kind: 'user', id: ctx.principal!.userId});
 
@@ -160,8 +163,9 @@ export const errorLabelOf = (error: unknown): string => {
     return error instanceof Error && /^[A-Za-z]{1,40}$/.test(error.name) ? error.name : 'Error';
 };
 
+// 경로 id 는 URL 에서 오므로 헤더 상한까지 길어질 수 있다. 감사에는 정해진 길이로 잘라 넣는다(#173).
 const pathIdTarget = (kind: AuditTarget['kind']) =>
-    (ctx: RouteContext): AuditTarget => ({kind, id: ctx.params.id});
+    (ctx: RouteContext): AuditTarget => ({kind, id: truncateAuditValue(ctx.params.id ?? '')});
 
 /** PUT /api/users/:id 의 감사 타입은 본문에 어떤 키가 왔는지로 갈린다(설계 §5.2). */
 const userUpdateAuditType = (ctx: RouteContext): AuditEventType =>
@@ -175,6 +179,7 @@ export type RouteEntry = {
     action: RouteAction;
     target?: (ctx: RouteContext) => Target | undefined;
     audit?: ((ctx: RouteContext) => AuditRouteMeta) | false;
+    targetFromBody?: true;
     handler: string;
 };
 
@@ -221,7 +226,7 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
     {method: 'GET', pattern: new RegExp('^/api/tunnelingOption$'), action: 'tunnel:list', target: tunnelTarget, handler: 'onGetTunnelingOption'},
     {method: 'POST', pattern: new RegExp('^/api/tunnelingOption$'), action: tunnelWriteAction, target: tunnelTarget, audit: tunnelWriteAudit, handler: 'onUpdateTunnelingOption'},
     {method: 'PUT', pattern: new RegExp('^/api/tunnelingOption$'), action: tunnelWriteAction, target: tunnelTarget, audit: tunnelWriteAudit, handler: 'onUpdateTunnelingOption'},
-    {method: 'DELETE', pattern: new RegExp('^/api/tunnelingOption$'), action: 'tunnel:delete', target: tunnelTarget,
+    {method: 'DELETE', pattern: new RegExp('^/api/tunnelingOption$'), action: 'tunnel:delete', target: tunnelTarget, targetFromBody: true,
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.tunnel_deleted, tunnelAuditTarget(ctx)), handler: 'onRemoveTunnelingOption'},
     {method: 'PUT', pattern: new RegExp('^/api/tunnelingOption/(?<port>[^/]*)/owner$'), action: 'tunnel:reassign', target: tunnelTarget,
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.tunnel_reassigned, tunnelAuditTarget(ctx)), handler: 'onReassignTunnelOwner'},
@@ -237,7 +242,7 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
     // U5-02 / #117 이 추가한 차단 목록 라우트. 권한·감사는 #96·#97 이, 국가·감사 detail 은 #120 (U5-05) 이 더했다.
     {method: 'GET', pattern: new RegExp('^/api/security/bans$'), action: 'security:manage', handler: 'onGetSecurityBans'},
     {method: 'DELETE', pattern: new RegExp('^/api/security/bans/(?<port>[^/]+)/(?<ip>[^/]+)$'), action: 'security:manage',
-        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.security_ban_removed, {kind: 'security', id: `${ctx.params.port}/${ctx.params.ip}`}), handler: 'onDeleteSecurityBan'},
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.security_ban_removed, {kind: 'security', id: truncateAuditValue(`${ctx.params.port}/${ctx.params.ip}`)}), handler: 'onDeleteSecurityBan'},
     // U5-04 / #119 가 추가한 거절 집계 조회 라우트. bans 와 같은 성격이라 같은 권한을 쓴다.
     {method: 'GET', pattern: new RegExp('^/api/security/stats$'), action: 'security:manage', handler: 'onGetSecurityStats'},
     // U5-05 / #120 — 국가 필터는 서버 전역 설정이라 슈퍼유저 전용이다(결정 D10).
@@ -250,7 +255,7 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
     {method: 'GET', pattern: new RegExp('^/api/users$'), action: 'user:manage', handler: 'onListUsers'},
     {method: 'POST', pattern: new RegExp('^/api/users$'), action: 'user:manage',
         // 생성 전이라 id 가 없다. 요청한 username 을 대상으로 적고 새 id 는 핸들러가 auditDetail 로 더한다.
-        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.user_created, {kind: 'user', id: String(ctx.body?.username)}), handler: 'onCreateUser'},
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.user_created, {kind: 'user', id: truncateAuditValue(String(ctx.body?.username))}), handler: 'onCreateUser'},
     {method: 'GET', pattern: new RegExp('^/api/users/(?<id>[^/]+)$'), action: 'user:manage', handler: 'onGetUser'},
     {method: 'PUT', pattern: new RegExp('^/api/users/(?<id>[^/]+)$'), action: 'user:manage',
         audit: (ctx) => auditMeta(userUpdateAuditType(ctx), pathIdTarget('user')(ctx)), handler: 'onUpdateUser'},
@@ -265,7 +270,7 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
     // 그룹 편집 화면의 신뢰 클라이언트 선택지(id·표시 이름만, #155).
     {method: 'GET', pattern: new RegExp('^/api/trustedClients$'), action: 'group:manage', handler: 'onListTrustedClients'},
     {method: 'POST', pattern: new RegExp('^/api/groups$'), action: 'group:manage',
-        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.group_created, {kind: 'group', id: String(ctx.body?.name)}), handler: 'onCreateGroup'},
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.group_created, {kind: 'group', id: truncateAuditValue(String(ctx.body?.name))}), handler: 'onCreateGroup'},
     {method: 'GET', pattern: new RegExp('^/api/groups/(?<id>[^/]+)$'), action: 'group:manage', handler: 'onGetGroup'},
     {method: 'PUT', pattern: new RegExp('^/api/groups/(?<id>[^/]+)$'), action: 'group:manage',
         audit: (ctx) => auditMeta(isFieldProvided(ctx.body, 'attributes') ? AUDIT_EVENT_TYPES.group_attributes_changed : AUDIT_EVENT_TYPES.group_updated,
@@ -275,7 +280,7 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
     // U4-05 / #113 세션 관리(슈퍼유저). 대상 id 는 공개 세션 id(sessionIdOf) 또는 사용자 id 다. 세션 키는 어디에도 싣지 않는다.
     {method: 'GET', pattern: new RegExp('^/api/sessions$'), action: 'session:manage', handler: 'onListSessions'},
     {method: 'DELETE', pattern: new RegExp('^/api/sessions/(?<id>[^/]+)$'), action: 'session:manage',
-        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.session_killed, {kind: 'session', id: ctx.params.id}), handler: 'onKillSession'},
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.session_killed, {kind: 'session', id: truncateAuditValue(ctx.params.id ?? '')}), handler: 'onKillSession'},
     {method: 'DELETE', pattern: new RegExp('^/api/users/(?<id>[^/]+)/sessions$'), action: 'session:manage',
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.sessions_killed_for_user, pathIdTarget('user')(ctx)), handler: 'onKillUserSessions'},
     // U4-02 / #110 감사 조회. 조회는 감사하지 않으므로 audit 콜백을 달지 않는다. 핸들러는 auditRoutes.ts 에 있다.
@@ -289,6 +294,7 @@ export function buildAdminRoutes(handlers: RouteHandlers): readonly Route[] {
         if(typeof handler !== 'function') {
             throw new Error(`AdminServer route handler not found: ${entry.handler}`);
         }
-        return {method: entry.method, pattern: entry.pattern, action: entry.action, target: entry.target, audit: entry.audit, handler};
+        return {method: entry.method, pattern: entry.pattern, action: entry.action, target: entry.target, audit: entry.audit,
+            targetFromBody: entry.targetFromBody, handler};
     });
 }

@@ -42,12 +42,35 @@ export function parseHash(hash: string): Route {
 
 const subscribers = new Set<Subscriber>();
 let current: Route = typeof window === 'undefined' ? {screen: 'status'} : parseHash(window.location.hash);
+let currentHash = typeof window === 'undefined' ? '' : window.location.hash;
+// 이동을 막는 화면(예: 한 번만 보이는 복구 코드)이 등록한다. false 를 돌려주면 hash 를 되돌리고 화면을 바꾸지 않는다.
+let guard: (() => boolean) | undefined;
 
 if(typeof window !== 'undefined') {
     window.addEventListener('hashchange', () => {
+        if(guard && !guard()) {
+            // hashchange 는 취소할 수 없다. 기록을 늘리지 않고 주소만 이전 hash 로 되돌린다.
+            history.replaceState(history.state, '', currentHash || '#');
+            return;
+        }
+        currentHash = window.location.hash;
         current = parseHash(window.location.hash);
         for(const run of subscribers) run(current);
     });
+}
+
+/**
+ * 화면을 떠나지 못하게 막는다. 해제 함수를 돌려준다.
+ * 새로고침·탭 닫기는 hashchange 로 막을 수 없으므로 브라우저 확인 창(beforeunload)도 함께 건다.
+ */
+export function blockNavigation(allow: () => boolean): () => void {
+    guard = allow;
+    const confirmUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', confirmUnload);
+    return () => {
+        window.removeEventListener('beforeunload', confirmUnload);
+        if(guard === allow) guard = undefined;
+    };
 }
 
 // Svelte store 계약(subscribe 즉시 호출 + 해제 함수 반환)만 맞춘 자체 구현.

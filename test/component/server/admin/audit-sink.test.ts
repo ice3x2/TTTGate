@@ -540,8 +540,43 @@ describe("audit-sink: 본문 파싱 단계에서 실패한 CUD 요청(#135)", ()
         const mallory = await f.login({username: "mallory", password: "mallory-next-pass"});
         f.sink.events.length = 0;
         const response = await f.raw("POST", "/api/users", '{"username": "broken', mallory.auth!);
-        expect(response.status).toBe(400);
+        // #173: 정적 action 라우트는 본문을 읽기 전에 권한을 판정한다. 깨진 본문이어도 400 이 아니라 403 이다.
+        expect(response.status).toBe(403);
         expect(rejected(f)).toEqual([]);
+        expect(f.sink.events.filter((event) => event.type === "access_denied")).toHaveLength(1);
+    }));
+
+    it("#173 권한이 없는 사용자의 큰 본문은 읽지 않고 403 으로 거절한다", async () => withAuditServer(async (f) => {
+        const created = await IdentityStore.instance.createUser({
+            username: "bob", displayName: "Bob", role: "regular", mustChangePassword: false, password: REGULAR_PASSWORD
+        });
+        expect(created.success).toBe(true);
+        const bob = await f.login({username: "bob", password: REGULAR_PASSWORD});
+        f.sink.events.length = 0;
+        const huge = JSON.stringify({username: "x".repeat(1024 * 1024 + 16)});
+        let status: number | undefined;
+        try { status = (await f.raw("POST", "/api/users", huge, bob.auth!)).status; } catch { status = undefined; }
+        expect(status).toBe(403);
+        expect(rejected(f)).toEqual([]);
+    }));
+
+    it("#173 access_denied 감사의 경로와 경로 id 대상은 길이를 자른다", async () => withAuditServer(async (f) => {
+        const created = await IdentityStore.instance.createUser({
+            username: "bob", displayName: "Bob", role: "regular", mustChangePassword: false, password: REGULAR_PASSWORD
+        });
+        expect(created.success).toBe(true);
+        const bob = await f.login({username: "bob", password: REGULAR_PASSWORD});
+        f.sink.events.length = 0;
+        const longId = "a".repeat(10_000);
+        expect((await f.request("PUT", `/api/users/${longId}`, {displayName: "x"}, bob.auth)).status).toBe(403);
+        const denied = f.sink.events.find((event) => event.type === "access_denied")!;
+        expect(String(denied.detail?.path).length).toBeLessThanOrEqual(257);
+        expect(JSON.stringify(denied).length).toBeLessThan(2_000);
+
+        f.sink.events.length = 0;
+        expect((await f.request("DELETE", `/api/users/${longId}`, {}, f.admin.auth)).status).toBe(404);
+        const failed = f.sink.events.find((event) => event.type === "user_deleted")!;
+        expect(String(failed.target?.id).length).toBeLessThanOrEqual(257);
     }));
 
     it("public 라우트와 GET 라우트에서는 남기지 않는다", async () => withAuditServer(async (f) => {

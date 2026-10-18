@@ -102,6 +102,46 @@ test("1단계의 Escape 는 모달을 닫지만 3단계의 Escape 는 닫지 않
     await finish(page);
 }));
 
+// #173 — 새 코드를 보이는 동안 뒤로가기·주소 변경으로 화면이 사라지면 코드를 잃는다(서버는 이미 옛 코드를 무효화했다).
+test("3단계에서 hash 를 바꾸려 하면 이동이 막히고 복구 코드가 그대로 보인다", () => withAlice(async ({page}) => {
+    const codes = await enrollToCodes(page);
+    await page.evaluate(() => { location.hash = "#/tunnels"; });
+    await page.waitForTimeout(300);
+    expect(await page.evaluate(() => location.hash)).toBe("#/me");
+    expect(await modal(page).isVisible()).toBe(true);
+    expect(await page.locator("#mfa-recovery-codes li").allTextContents()).toEqual(codes);
+    await page.getByText("Save the recovery codes before you leave this page.", {exact: true}).waitFor({state: "visible"});
+    await finish(page);
+    // 모달을 닫은 뒤에는 다시 이동할 수 있다.
+    await page.evaluate(() => { location.hash = "#/tunnels"; });
+    await hashIs(page, "#/tunnels");
+}));
+
+test("새 복구 코드를 보이는 동안 뒤로가기를 해도 화면과 코드가 남는다", () => withAlice(async ({page}) => {
+    await enrollToCodes(page);
+    await finish(page);
+    // 뒤로 갈 기록을 만든다.
+    await page.evaluate(() => { location.hash = "#/tunnels"; });
+    await hashIs(page, "#/tunnels");
+    await page.evaluate(() => { location.hash = "#/me"; });
+    await hashIs(page, "#/me");
+    await page.locator("#mfa-status").waitFor({state: "visible", timeout: 10_000});
+    const codesModal = page.locator(".mfa-codes-modal");
+    await page.locator("#mfa-new-codes button").click();
+    await codesModal.waitFor({state: "visible"});
+    await page.locator("#mfa-codes-password").fill(RBAC_PASSWORDS.alice);
+    await page.locator("#mfa-codes-generate button").click();
+    await codesModal.locator("#mfa-recovery-codes li").first().waitFor({state: "visible", timeout: 10_000});
+    const codes = await codesModal.locator("#mfa-recovery-codes li").allTextContents();
+    await page.goBack();
+    await page.waitForTimeout(300);
+    expect(await page.evaluate(() => location.hash)).toBe("#/me");
+    expect(await codesModal.locator("#mfa-recovery-codes li").allTextContents()).toEqual(codes);
+    await page.locator("#mfa-codes-saved").check();
+    await page.locator("#mfa-codes-done button").click();
+    await codesModal.waitFor({state: "detached"});
+}));
+
 test("복구 코드를 재발급하면 이전 목록과 모두 다르고, 틀린 비밀번호는 목록 없이 오류를 보인다", () => withAlice(async ({page}) => {
     const first = await enrollToCodes(page);
     await finish(page);
