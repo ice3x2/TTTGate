@@ -1,3 +1,4 @@
+import {isIP} from "net";
 import http, {IncomingMessage, ServerResponse} from "http";
 import https from "https";
 import ServerOptionStore from "../ServerOptionStore";
@@ -269,14 +270,14 @@ class AdminServer {
 
            if(!matched) {
                if(pathname.startsWith("/api/")) {
-                   this.sendApiFailure(res, 404, {message: `Not Found ${url}`});
+                   this.sendApiFailure(res, 404, {message: 'Not Found'});
                    return;
                }
                if(method == 'GET') {
                    await this.onGetWebResource(req, res, pathname);
                    return;
                }
-               this.sendApiFailure(res, 404, {message: `Not Found ${url}`});
+               this.sendApiFailure(res, 404, {message: 'Not Found'});
                return;
            }
 
@@ -361,7 +362,8 @@ class AdminServer {
                     status = 400;
                     message = 'Invalid JSON body';
                 }
-                logger.warn('HTTP Admin server processing error', e);
+                // 클라이언트 오류(본문 형식·크기·시간 초과)는 인증 없이 요청마다 생기므로 스택 없이 debug 로만 남긴다(#171).
+                if(status === 500) logger.warn('HTTP Admin server processing error', e); else logger.debug(`HTTP Admin request rejected: ${status} ${message}`);
                 if(!res.headersSent) {
                     this.sendApiFailure(res, status, {message, url: url,
                         partial: Boolean(e?.recoveryFailedPaths?.length),
@@ -374,7 +376,7 @@ class AdminServer {
             }
         }
         res.writeHead(404);
-        res.end(`Not Found ${url}`);
+        res.end('Not Found');
     }
 
     /** reserve() 를 거치지 않고 흘려보내는 이벤트(로그인·권한 거부). 응답을 감사 배압으로 막지 않는다. */
@@ -434,14 +436,14 @@ class AdminServer {
         const normalizedUrl = this.normalizeAssetUrl(url);
         if(normalizedUrl == undefined) {
             res.writeHead(404);
-            res.end(`Not Found ${url}`);
+            res.end('Not Found');
             return;
         }
         const realPath = Path.resolve(webRoot, `.${normalizedUrl}`);
         const relativePath = Path.relative(webRoot, realPath);
         if(relativePath.startsWith("..") || Path.isAbsolute(relativePath)) {
             res.writeHead(404);
-            res.end(`Not Found ${url}`);
+            res.end('Not Found');
             return;
         }
         let ext = Path.extname(realPath);
@@ -451,13 +453,13 @@ class AdminServer {
         const basenameLower = Path.basename(realPath).toLowerCase();
         if(contentType == 'application/octet-stream' && basenameLower !== "index.html") {
             res.writeHead(404);
-            res.end(`Not Found ${url}`);
+            res.end('Not Found');
             return;
         }
         let file = new File(realPath);
         if(!file.isFile()) {
             res.writeHead(404);
-            res.end(`Not Found ${url}`);
+            res.end('Not Found');
             return;
         }
         let body : Buffer | string | undefined;
@@ -468,7 +470,7 @@ class AdminServer {
         }
         if(body == undefined) {
             res.writeHead(404);
-            res.end(`Not Found ${url}`);
+            res.end('Not Found');
             return;
         }
         res.writeHead(200, {'Content-Type': contentType});
@@ -1788,8 +1790,11 @@ class AdminServer {
             const xff = req.headers['x-forwarded-for'];
             const xffRaw = Array.isArray(xff) ? xff[0] : xff;
             if(typeof xffRaw == 'string' && xffRaw.length > 0) {
+                // IP 형식만 쓴다. 아무 문자열이나 받으면 요청마다 값을 바꿔 로그인 차단 버킷을 새로 만들 수 있다(#171).
                 const first = xffRaw.split(',')[0]?.trim();
-                if(first && first.length > 0) return first;
+                // 일부 프록시는 포트를 붙인다(1.2.3.4:5678, [2001:db8::1]:443). 포트와 대괄호를 벗긴 뒤 검사한다.
+                const host = first?.replace(/^\[([^\]]+)\](?::\d+)?$/, '$1').replace(/^(\d{1,3}(?:\.\d{1,3}){3}):\d+$/, '$1');
+                if(host && host.length <= 64 && isIP(host) !== 0) return host;
             }
         }
         return req.socket.remoteAddress ?? "unknown";

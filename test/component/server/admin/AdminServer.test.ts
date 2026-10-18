@@ -40,7 +40,8 @@ describe("AdminServer baseline behavior", () => {
         const response = await httpRequest({port, path: "/missing.txt"});
 
         expect(response.statusCode).toBe(404);
-        expect(response.body).toContain("Not Found /missing.txt");
+        // #171 — 404 본문은 요청 URL 을 되돌려 보내지 않는다.
+        expect(response.body).toBe("Not Found");
     });
 
     it("issues a session cookie on login and validates it on follow-up requests", async () => {

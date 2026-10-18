@@ -102,6 +102,27 @@ describe("REQ-07 login rate limit (network bucket)", () => {
         expect((await login({username: "admin", password: "another-wrong-password"}, {"X-Forwarded-For": "10.1.2.5"})).statusCode).toBe(401);
     });
 
+    // #171 — IP 형식이 아닌 XFF 값을 그대로 버킷 키로 쓰면 요청마다 값을 바꿔 로그인 차단을 우회한다.
+    it("trusted XFF that is not an IP address falls back to the socket address", async () => {
+        expect((await login({username: "admin", password: "supersecret1", bootstrapToken})).statusCode).toBe(200);
+        AdminSecurityPolicyRegistry.configure({trustXForwardedFor: true});
+        for(let index = 0; index < 5; index++) {
+            expect((await login({username: "admin", password: "rotating-wrong"}, {"X-Forwarded-For": `not-an-ip-${index}`})).statusCode).toBe(401);
+        }
+        expect((await login({username: "admin", password: "rotating-wrong"}, {"X-Forwarded-For": "x".repeat(4000)})).statusCode).toBe(429);
+    });
+
+    it("trusted XFF with a port or brackets is read as the client address", async () => {
+        expect((await login({username: "admin", password: "supersecret1", bootstrapToken})).statusCode).toBe(200);
+        AdminSecurityPolicyRegistry.configure({trustXForwardedFor: true});
+        for(let index = 0; index < 5; index++) {
+            expect((await login({username: "admin", password: "ported-wrong"}, {"X-Forwarded-For": `198.51.100.7:${5000 + index}`})).statusCode).toBe(401);
+        }
+        expect((await login({username: "admin", password: "ported-wrong"}, {"X-Forwarded-For": "198.51.100.8"})).statusCode).toBe(429);
+        // 다른 네트워크(대괄호 IPv6)는 같은 버킷이 아니다.
+        expect((await login({username: "admin", password: "ported-wrong"}, {"X-Forwarded-For": "[2001:db8::1]:443"})).statusCode).toBe(401);
+    });
+
     it("(b) trustXForwardedFor=false 기본값 — XFF 헤더 무시", () => {
         const current = AdminSecurityPolicyRegistry.current();
         expect(current.trustXForwardedFor).toBe(false);
