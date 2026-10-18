@@ -147,9 +147,11 @@ class TTTServer {
     }
 
     private async restoreExternalPortStatus(port: number, option: TunnelingOption, lastServerStatus: ExternalPortServerStatus): Promise<void> {
-        this._externalPortServerPool.setActiveTimeout(port, lastServerStatus.activeTimeout);
+        // 잘린 값이 아니라 요청값과 원래 시작 시각으로 다시 건다. 상한은 지금 기준으로 다시 계산된다(#137).
+        const requested = lastServerStatus.requestedTimeout ?? lastServerStatus.activeTimeout;
+        this._externalPortServerPool.setActiveTimeout(port, requested);
         if(lastServerStatus.active && !option.inactiveOnStartup) {
-            await this._externalPortServerPool.active(port, lastServerStatus.activeTimeout);
+            await this._externalPortServerPool.active(port, requested, {startedAt: lastServerStatus.activeStart});
             return;
         }
         if(!lastServerStatus.active) {
@@ -246,6 +248,13 @@ class TTTServer {
                 : (next as any)[key] !== (previous as any)[key]);
     }
 
+    /** 켜져 있는 모든 외부 포트의 수명 상한을 다시 계산한다(#137 — 소유자·그룹·그룹 속성 변경 뒤). */
+    public reapplyActiveCaps(): void {
+        for(const port of Object.keys(this._appliedExternal).map(Number)) {
+            void this._externalPortServerPool.reapplyActiveCap(port).catch((error) => logger.error(`active cap reapply failed: ${port}`, error));
+        }
+    }
+
     public captureRuntimeState() {
         return {sessionTtlPolicy: this._tunnelServer.sessionTtlPolicy, serverOption: ObjectUtil.cloneDeep(this._appliedServerOption), external: ObjectUtil.cloneDeep(this._appliedExternal),
             allowClientNames: Array.from(this._allowClientNamesMap, ([port, names]) => [port, [...names]] as const),
@@ -279,14 +288,13 @@ class TTTServer {
                 if(status.online && !await this._externalPortServerPool.stop(port)) { failures.push(`external-listener:${port}:restore`); continue; }
                 if(previous && beforeStatus.online) {
                     if(!await this._externalPortServerPool.startServer(previous.option, previous.cert)) { failures.push(`external-listener:${port}:restore`); continue; }
+                    // 남은 시간을 소수 초로 넘기면 상한 판정(cappedByGroup)이 빠져 만료 감사가 남지 않았다(#137).
+                    // 요청값과 원래 시작 시각을 넘겨 상한과 마감 시각을 그대로 다시 계산한다.
                     const remaining = beforeStatus.activeTimeout > 0
-                        ? Math.max(0, (beforeStatus.activeStart + beforeStatus.activeTimeout * 1000 - Date.now()) / 1000) : 0;
-                    if(beforeStatus.active && (beforeStatus.activeTimeout === 0 || remaining > 0)) {
-                        await this._externalPortServerPool.active(port, remaining);
+                        ? beforeStatus.activeStart + beforeStatus.activeTimeout * 1000 - Date.now() : 1;
+                    if(beforeStatus.active && remaining > 0) {
+                        await this._externalPortServerPool.active(port, beforeStatus.requestedTimeout ?? beforeStatus.activeTimeout, {startedAt: beforeStatus.activeStart});
                     } else await this._externalPortServerPool.inactive(port);
-                    const restoredStatus = this._externalPortServerPool.getServerStatus(port);
-                    restoredStatus.activeStart = beforeStatus.activeStart;
-                    restoredStatus.activeTimeout = beforeStatus.activeTimeout;
                 }
                 this._allowClientNamesMap.delete(port);
                 this._allowClientIdsMap.delete(port);
@@ -576,8 +584,9 @@ class TTTServer {
         await this._externalPortServerPool.stop(port);
         let success = await this._externalPortServerPool.startServer(tunnelOption, CertificationStore.instance.getExternalCert(port));
         if(success && lastServerStatus && lastServerStatus.online) {
-            this._externalPortServerPool.setActiveTimeout(port, lastServerStatus.activeTimeout);
-            if(!tunnelOption.inactiveOnStartup)  await this._externalPortServerPool.active(port);
+            const requested = lastServerStatus.requestedTimeout ?? lastServerStatus.activeTimeout;
+            this._externalPortServerPool.setActiveTimeout(port, requested);
+            if(!tunnelOption.inactiveOnStartup)  await this._externalPortServerPool.active(port, requested, {startedAt: lastServerStatus.activeStart});
 
         }
         return success;

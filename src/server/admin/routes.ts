@@ -12,6 +12,8 @@ import type {MfaTicketStore, PendingEnrollmentStore} from "../mfa/MfaTickets";
 export type {Action, Target};
 
 export type RouteContext = {
+    /** 활성 터널의 수명 상한을 다시 계산한다(#137). 소유자·사용자 그룹·그룹 속성이 바뀐 뒤 부른다. */
+    reapplyTunnelCaps?: () => void;
     req: IncomingMessage;
     res: ServerResponse;
     params: Record<string, string>;

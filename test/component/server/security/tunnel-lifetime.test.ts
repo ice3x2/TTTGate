@@ -29,6 +29,7 @@ describe("tunnel-lifetime", () => {
     let server: TTTServer | undefined;
     let sink: StubSink;
     let ports: {a: number; b: number; c: number; d: number};
+    let aliceId: string;
 
     const status = (port: number) => server!.externalServerStatus(port);
     const autoExpireEvents = () => sink.events.filter((event) => event.type === "tunnel_autoexpire");
@@ -49,6 +50,7 @@ describe("tunnel-lifetime", () => {
         });
         await fs.writeFile(path.join(testRoot.rootDir, "config", "identity.yaml"), yaml, "utf-8");
         const idOf = (username: string): string => YAML.parse(yaml).users.find((user: any) => user.username === username).id;
+        aliceId = idOf("alice");
         IdentityStore.resetForTest();
         expect(IdentityStore.instance.load()).toEqual({success: true, source: "file"});
 
@@ -139,6 +141,49 @@ describe("tunnel-lifetime", () => {
         expect(status(ports.b).active).toBe(false);
         expect(status(ports.a).active).toBe(false);
         expect(autoExpireEvents().map((event) => event.target)).toEqual([{kind: "tunnel", id: String(ports.a)}]);
+    });
+
+    // #137 — 활성 중인 터널의 소유자·그룹 상한이 바뀌면 그 자리에서 다시 계산한다. 시작 시각은 유지한다.
+    it("슈퍼유저 터널을 상한 있는 그룹 사용자에게 넘기면 활성 중인 터널에 상한이 걸린다", async () => {
+        expect(status(ports.b)).toMatchObject({active: true, activeTimeout: 0});
+        const option = ServerOptionStore.instance.getTunnelingOption(ports.b)!;
+        expect(ServerOptionStore.instance.updateTunnelingOption({...option, ownerId: aliceId})).toBe(true);
+        server!.reapplyActiveCaps();
+        expect(status(ports.b)).toMatchObject({active: true, activeTimeout: 2});
+        // 기동 때 켜진 터널이라도 다시 계산한 순간 바로 만료되면 안 된다(시작 시각 0 이 마감을 과거로 만들던 회귀).
+        await sleep(300);
+        expect(status(ports.b).active).toBe(true);
+        await sleep(2200);
+        expect(status(ports.b).active).toBe(false);
+        expect(autoExpireEvents().map((event) => event.target)).toContainEqual({kind: "tunnel", id: String(ports.b)});
+    });
+
+    it("그룹 상한을 올리면 활성 중인 터널도 새 상한을 따른다", async () => {
+        expect(status(ports.a)).toMatchObject({active: true, activeTimeout: 2});
+        expect(IdentityStore.instance.updateGroup("g_field", {attributes: {max_tunnel_duration_ms: 3_600_000}}).success).toBe(true);
+        server!.reapplyActiveCaps();
+        expect(status(ports.a).activeTimeout).toBe(3600);
+        await sleep(2500);
+        expect(status(ports.a).active).toBe(true);
+    });
+
+    it("재적용은 상한을 처음부터 다시 걸지 않는다(시작 시각 유지)", async () => {
+        await sleep(1200);
+        const option = ServerOptionStore.instance.getTunnelingOption(ports.a)!;
+        expect((await server!.applyTunnelingOption(JSON.parse(JSON.stringify(option)), option)).success).toBe(true);
+        await sleep(1300);
+        expect(status(ports.a).active).toBe(false);
+    });
+
+    it("상한으로 잘린 터널을 슈퍼유저에게 넘긴 뒤 재적용하면 상한 없이 켜져 있다", async () => {
+        const option = ServerOptionStore.instance.getTunnelingOption(ports.a)!;
+        const admin = ServerOptionStore.instance.getTunnelingOption(ports.b)!.ownerId;
+        expect(ServerOptionStore.instance.updateTunnelingOption({...option, ownerId: admin})).toBe(true);
+        const updated = ServerOptionStore.instance.getTunnelingOption(ports.a)!;
+        expect((await server!.applyTunnelingOption(JSON.parse(JSON.stringify(updated)), updated)).success).toBe(true);
+        expect(status(ports.a)).toMatchObject({active: true, activeTimeout: 0});
+        await sleep(2500);
+        expect(status(ports.a).active).toBe(true);
     });
 
     it("터널 옵션을 다시 적용해 재생성해도 상한이 유지된다", async () => {

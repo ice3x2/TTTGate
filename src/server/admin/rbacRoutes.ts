@@ -165,7 +165,10 @@ const onUpdateUser = async (ctx: RouteContext): Promise<void> => {
         patch.groupId = body.groupId;
     }
     const store = IdentityStore.instance;
-    replyResult(ctx, store.updateUser(ctx.params.id, patch), (user) => ({user: toUserView(user, store.groups())}));
+    const updated = store.updateUser(ctx.params.id, patch);
+    // 그룹·역할이 바뀌면 그 사용자 터널의 수명 상한도 바뀐다(#137).
+    if(updated.success && (patch.groupId !== undefined || patch.role !== undefined)) ctx.reapplyTunnelCaps?.();
+    replyResult(ctx, updated, (user) => ({user: toUserView(user, store.groups())}));
 };
 
 const onDeleteUser = async (ctx: RouteContext): Promise<void> => {
@@ -240,6 +243,7 @@ const onUpdateGroup = async (ctx: RouteContext): Promise<void> => {
     if(before && isFieldProvided(ctx.body, 'attributes')) {
         ctx.auditDetail({changedKeys: changedAttributeKeys(before.attributes, updated.value.attributes)});
     }
+    if(isFieldProvided(ctx.body, 'attributes')) ctx.reapplyTunnelCaps?.(); // 수명 상한이 바뀌었을 수 있다(#137).
     ctx.ok({group: toGroupView(updated.value)});
 };
 
