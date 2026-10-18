@@ -194,6 +194,20 @@ describe("rbac-tunnel-ownership", () => {
         expect(off.status).toBe(200);
     });
 
+    // #170 — 본문 포트가 문자열이면 설정 행은 == 비교로 지워지지만 런타임 리스너는 키가 달라 남는다.
+    it("#170 본문 forwardPort 는 1–65535 의 정수만 받는다", async () => {
+        for(const forwardPort of [`${MIGRATED_PORT}.0`, String(MIGRATED_PORT), "0x4E21", 1.5, 0, 65536]) {
+            const removed = await request("DELETE", "/api/tunnelingOption", tunnelBody(MIGRATED_PORT, {forwardPort}), superuser);
+            expect({forwardPort, status: removed.status}).toEqual({forwardPort, status: 400});
+        }
+        expect(await storedTunnel(MIGRATED_PORT)).toBeDefined();
+        for(const forwardPort of ["20077", "0x4E5D", 20077.5]) {
+            const created = await request("POST", "/api/tunnelingOption", tunnelBody(20077, {forwardPort}), superuser);
+            expect({forwardPort, status: created.status}).toEqual({forwardPort, status: 400});
+        }
+        expect((await serverYamlTunnels()).map((option: any) => option.forwardPort)).not.toContain("20077");
+    });
+
     it("그룹 속성 밖의 포트와 프로토콜은 거부된다", async () => {
         const outside = await request("POST", "/api/tunnelingOption", tunnelBody(30000), alice.auth);
         expect({status: outside.status, code: outside.body.code}).toEqual({status: 422, code: "port_not_allowed"});

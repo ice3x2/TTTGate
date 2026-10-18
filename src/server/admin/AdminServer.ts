@@ -929,7 +929,8 @@ class AdminServer {
         const {res} = ctx;
         const json = ctx.body;
         await this.mutateConfiguration(res, json, async (serverOptionStore) => {
-            let forwardPort = json['forwardPort'];
+            const forwardPort = json['forwardPort'];
+            if(!Number.isSafeInteger(forwardPort) || forwardPort < 1 || forwardPort > 65535) { this.sendApiFailure(res, 400, {message: 'forwardPort must be an integer from 1 to 65535'}); return; }
             let previousOption = serverOptionStore.getTunnelingOption(forwardPort);
             if(!previousOption) {
                 this.sendApiFailure(res, 404, {message: `External port(${forwardPort}) server already removed.`, forwardPort});
