@@ -62,7 +62,7 @@ test("query login shares its exact pathname with the Origin/CSRF exception and k
     expect(f.seen).toEqual([target, target]);
 }), 15_000);
 
-test("query-bearing known routes preserve CSRF/auth rejection and numeric prefix policy", async () => withRoutes(async f => {
+test("query-bearing known routes preserve CSRF/auth rejection and reject numeric-prefix ports", async () => withRoutes(async f => {
     const browser = {Origin: `http://127.0.0.1:${f.port}`};
     expect((await f.request("POST", "/api/serverOption?next=/api/login", {}, browser)).status).toBe(403);
     expect((await f.request("POST", "/api/login/other?next=/api/login", {}, browser)).status).toBe(403);
@@ -76,11 +76,12 @@ test("query-bearing known routes preserve CSRF/auth rejection and numeric prefix
         expect((await f.request(method, `${endpoint}?keep=%2B+`, {}, headers)).status).toBe(400);
     }
     expect((await f.request("GET", "/api/version?value=%2B+", {}, headers)).status).toBe(200);
-    for(const target of ["/api/externalCert/12?value=%2F", "/api/externalCert/12suffix?value=3"]) {
-        const response = await f.request("GET", target, {}, headers);
-        expect(response.status).toBe(200);
-        expect(JSON.parse(response.body).certInfo.cert.name).toBe("external.12.cert.pem");
-        expect(f.seen).toContain(target);
-    }
+    const exact = "/api/externalCert/12?value=%2F";
+    const response = await f.request("GET", exact, {}, headers);
+    expect(response.status).toBe(200);
+    expect(JSON.parse(response.body).certInfo.cert.name).toBe("external.12.cert.pem");
+    expect(f.seen).toContain(exact);
+    // 숫자 접두 표기(parseInt 호환)는 더 받지 않는다. 판정과 동작이 다른 포트로 읽히는 우회로였다(#138).
+    expect((await f.request("GET", "/api/externalCert/12suffix?value=3", {}, headers)).status).toBe(400);
     expect((await f.request("GET", "/api/externalCert/?value=12", {}, headers)).status).toBe(400);
 }), 15_000);

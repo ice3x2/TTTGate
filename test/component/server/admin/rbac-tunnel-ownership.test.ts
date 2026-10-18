@@ -77,6 +77,7 @@ describe("rbac-tunnel-ownership", () => {
     let carol: {auth: Auth; id: string};
     let groupOne: string;
     let groupTwo: string;
+    let runtime: any;
 
     const serverYamlTunnels = async (): Promise<any[]> => {
         const raw = await fs.readFile(path.join(testRoot.rootDir, "config", "server.yaml"), "utf8");
@@ -113,7 +114,7 @@ describe("rbac-tunnel-ownership", () => {
             throw new Error("ownership fixture: invalid server option");
         }
 
-        const runtime = {
+        runtime = {
             applyServerOption: jest.fn(async () => ({success: true, partial: false, warnings: [], failedScopes: [], restartRequiredScopes: []})),
             applyTunnelingOption: jest.fn(async () => ({success: true, partial: false, warnings: [], failedScopes: [], restartRequiredScopes: []})),
             externalServerStatus: jest.fn(() => ({online: true, sessions: 0})),
@@ -235,6 +236,50 @@ describe("rbac-tunnel-ownership", () => {
         const forBob = await request("GET", "/api/externalServerStatuses", {}, bob.auth);
         expect(forBob.status).toBe(200);
         expect(forBob.body.statuses.map((status: any) => status.port).sort()).toEqual([20010, 20011]);
+    });
+
+    it("경로 포트는 판정과 동작이 같은 값으로 읽고, 숫자가 아닌 표기는 거절한다", async () => {
+        // 피해 터널: 슈퍼유저 소유 20. alice 는 20010 을 소유한다. Number("20.010e3") 는 20010, parseInt 는 20 이다.
+        const victim = await request("POST", "/api/tunnelingOption", tunnelBody(20), superuser);
+        expect(victim.status).toBe(200);
+        const touched = (): number[] => [
+            ...runtime.activeExternalPortServer.mock.calls, ...runtime.inactiveExternalPortServer.mock.calls,
+            ...runtime.applyExternalServerCert.mock.calls
+        ].map((call: any[]) => call[0]);
+        runtime.activeExternalPortServer.mockClear();
+        runtime.inactiveExternalPortServer.mockClear();
+        runtime.applyExternalServerCert.mockClear();
+        try {
+            for(const disguised of ["20.010e3", "2.0010e1"]) {
+                const on = await request("POST", `/api/tunneling/active/${disguised}`, {active: true}, alice.auth);
+                const off = await request("POST", `/api/tunneling/active/${disguised}`, {active: false}, alice.auth);
+                const certRemoved = await request("DELETE", `/api/externalCert/${disguised}`, {}, alice.auth);
+                const certRead = await request("GET", `/api/externalCert/${disguised}`, {}, alice.auth);
+                for(const response of [on, off, certRemoved, certRead]) {
+                    expect(response.status).not.toBe(200);
+                }
+            }
+            expect(touched()).not.toContain(20);
+
+            // 슈퍼유저에게도 숫자가 아닌 표기는 형식 오류다.
+            for(const malformed of ["20.010e3", "0x4E2A", "20010abc", "%2020010", "20010.0", "020010", "02001", "65536", "0"]) {
+                const response = await request("POST", `/api/tunneling/active/${malformed}`, {active: true}, superuser);
+                expect({malformed, status: response.status}).toEqual({malformed, status: 400});
+                // 인증서 라우트(tunnel:cert, 슈퍼유저 전용)도 같은 파싱이다. 예전에는 감사 대상과 실제 포트가 어긋났다.
+                const certRemoved = await request("DELETE", `/api/externalCert/${malformed}`, {}, superuser);
+                const certRead = await request("GET", `/api/externalCert/${malformed}`, {}, superuser);
+                expect({malformed, status: [certRemoved.status, certRead.status]}).toEqual({malformed, status: [400, 400]});
+            }
+            expect(touched()).toEqual([]);
+
+            // 정상 표기는 그대로 동작한다.
+            const valid = await request("POST", "/api/tunneling/active/20010", {active: true}, alice.auth);
+            expect(valid.status).toBe(200);
+            expect(touched()).toEqual([20010]);
+        } finally {
+            const removed = await request("DELETE", "/api/tunnelingOption", tunnelBody(20), superuser);
+            expect(removed.status).toBe(200);
+        }
     });
 
     it("같은 그룹의 다른 사람은 읽을 수 있어도 고치지 못한다", async () => {
