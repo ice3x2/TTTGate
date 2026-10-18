@@ -72,6 +72,31 @@ test("allow 모드는 국가가 있어야 저장되고, 저장한 값은 새로 
     expect(await page.locator("#geo-error").textContent()).toBe("Allow mode requires at least one country.");
 }));
 
+// #153 — 불러오지 못한 국가 필터를 초기값(off)으로 저장하면 서버의 필터가 꺼진다. 불러오기 전에는 편집·저장을 막는다.
+test("국가 필터를 불러오지 못하면 편집과 Save 가 막히고, Retry 로 불러온 뒤에야 저장할 수 있다", () => withSecurity(async ({page, url}) => {
+    let failGeo = true;
+    await page.route("**/api/security/geo", async (route) => {
+        if(failGeo && route.request().method() === "GET") {
+            await route.fulfill({status: 200, contentType: "application/json", body: JSON.stringify({success: false, message: "Temporary failure."})});
+            return;
+        }
+        await route.continue();
+    });
+    await page.goto(`${url}#/security`);
+    await hashIs(page, "#/security");
+    await page.locator("#geo-retry").waitFor({state: "visible", timeout: 10_000});
+    expect(await page.locator("#geo-apply-admin").isDisabled()).toBe(true);
+    expect(await page.locator("#geo-mode").isDisabled()).toBe(true);
+    expect(await page.locator("#geo-save").isDisabled()).toBe(true);
+
+    failGeo = false;
+    await page.locator("#geo-retry").click();
+    await page.locator("#geo-retry").waitFor({state: "detached", timeout: 10_000});
+    expect(await page.locator("#geo-apply-admin").isDisabled()).toBe(false);
+    await page.locator("#geo-apply-admin").uncheck();
+    expect(await page.locator("#geo-save").isDisabled()).toBe(false);
+}));
+
 test("필터를 끄고 저장하면 저장 토스트만 뜨고 경고는 없다", () => withSecurity(async ({page, url}) => {
     await goSecurity(page, url);
     await page.locator("#geo-mode").selectOption("deny");

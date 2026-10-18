@@ -22,6 +22,9 @@
     let countries = $state<CountryEntry[]>([]);
     const INITIAL_GEO: GeoConfig = {mode: 'off', countries: [], applyToAdmin: true, unknownPolicy: 'allow'};
     let geo = $state<GeoConfig>({...INITIAL_GEO});
+    // 서버 값을 불러오기 전에는 편집·저장을 막는다. 초기값(off)으로 저장하면 서버의 필터가 꺼진다.
+    let geoLoaded = $state(false);
+    let geoFailed = $state(false);
     let saved = $state(JSON.stringify(INITIAL_GEO));
     let filter = $state('');
     let serverError = $state('');
@@ -75,8 +78,35 @@
         }
     };
 
+    const loadGeo = async () => {
+        const loadedGeo = await SecurityCtrl.instance.getGeo();
+        if(loadedGeo.success) {
+            geo = loadedGeo.geo;
+            saved = JSON.stringify(loadedGeo.geo);
+            geoLoaded = true;
+            geoFailed = false;
+        } else {
+            geoFailed = true;
+            toast.push({tone: 'alarm', message: loadedGeo.message});
+        }
+    };
+
+    const retryGeo = async () => {
+        try {
+            await loadGeo();
+            // 첫 불러오기가 네트워크 오류였으면 국가 목록도 비어 있다. 함께 다시 읽어야 국가를 고를 수 있다.
+            if(countries.length === 0) {
+                const loadedCountries = await SecurityCtrl.instance.countries();
+                if(loadedCountries.success) countries = loadedCountries.countries;
+            }
+        } catch(e) {
+            geoFailed = true;
+            failed(e, 'Unable to connect to the server.');
+        }
+    };
+
     const save = async () => {
-        if(clientError || !dirty || pending) return;
+        if(!geoLoaded || clientError || !dirty || pending) return;
         pending = true;
         serverError = '';
         try {
@@ -114,15 +144,10 @@
     onMount(() => {
         void (async () => {
             try {
-                const [loadedGeo, loadedCountries] = await Promise.all([SecurityCtrl.instance.getGeo(), SecurityCtrl.instance.countries(), loadBans()]);
-                if(loadedGeo.success) {
-                    geo = loadedGeo.geo;
-                    saved = JSON.stringify(loadedGeo.geo);
-                } else {
-                    toast.push({tone: 'alarm', message: loadedGeo.message});
-                }
+                const [, loadedCountries] = await Promise.all([loadGeo(), SecurityCtrl.instance.countries(), loadBans()]);
                 if(loadedCountries.success) countries = loadedCountries.countries;
             } catch(e) {
+                if(!geoLoaded) geoFailed = true;
                 failed(e, 'Unable to connect to the server.');
             }
         })();
@@ -134,7 +159,13 @@
 
 <div style="display: flex; flex-direction: column; gap: var(--s-4);">
     <Card label="Country filter">
-        <div style="display: flex; flex-direction: column; gap: var(--s-4);">
+        {#if geoFailed}
+            <div style="display: flex; align-items: center; gap: var(--s-3); margin-bottom: var(--s-4);">
+                <span role="alert">The country filter could not be loaded. Editing is disabled.</span>
+                <Button id="geo-retry" onclick={() => { void retryGeo(); }}>Retry</Button>
+            </div>
+        {/if}
+        <fieldset disabled={!geoLoaded} style="border: 0; padding: 0; margin: 0; min-width: 0; display: flex; flex-direction: column; gap: var(--s-4);">
             <Field label="Mode" for="geo-mode">
                 <Select id="geo-mode" options={MODES} bind:value={() => geo.mode, (value) => { serverError = ''; geo.mode = value as GeoConfig['mode']; }} />
             </Field>
@@ -164,8 +195,8 @@
             {#if error}
                 <p id="geo-error" role="alert">{error}</p>
             {/if}
-            <div><Button id="geo-save" variant="primary" disabled={!dirty || clientError !== '' || pending} onclick={() => { void save(); }}>Save</Button></div>
-        </div>
+            <div><Button id="geo-save" variant="primary" disabled={!geoLoaded || !dirty || clientError !== '' || pending} onclick={() => { void save(); }}>Save</Button></div>
+        </fieldset>
     </Card>
 
     <Card label="Banned addresses">
