@@ -459,7 +459,7 @@ class IdentityStore {
         return {success: true, value: cloneGroup(group)};
     }
 
-    public updateGroup(id: string, patch: {name?: string; attributes?: Partial<GroupAttributes>}): Result<Group> {
+    public updateGroup(id: string, patch: {name?: string; attributes?: Partial<GroupAttributes>}, expectedRevision?: number): Result<Group> {
         const index = this._data.groups.findIndex((g) => g.id === id);
         if(index < 0) {
             return {success: false, status: 404, code: 'group_not_found', message: `group not found: ${id}`};
@@ -480,15 +480,22 @@ class IdentityStore {
             return {success: false, status: 409, code: 'group_name_taken', message: 'group name is already used'};
         }
         const group = this._data.groups[index];
+        // 화면이 읽은 뒤 다른 사람이 바꿨으면 거절한다. 덮어쓰면 다른 운영자의 권한 축소가 되돌아간다(#152).
+        // 파일에 숫자가 아닌 revision 이 있으면 0 으로 본다("3"+1 이 "31" 이 되지 않게).
+        const currentRevision = Number.isSafeInteger(group.revision) ? group.revision! : 0;
+        if(expectedRevision !== undefined && currentRevision !== expectedRevision) {
+            return {success: false, status: 409, code: 'group_revision_conflict', message: 'the group was changed by someone else'};
+        }
         let nextAttributes = group.attributes;
         if(patch.attributes !== undefined) {
-            const attributesResult = validateGroupAttributes(patch.attributes, group.attributes);
+            // 바뀐 키만 오므로, 이전 파일에 없던 속성은 기본값으로 채운 위에 합친다(#152). 그러지 않으면 빠진 키 때문에 어떤 저장도 422 다.
+            const attributesResult = validateGroupAttributes(patch.attributes, {...cloneGroupAttributes(DEFAULT_GROUP_ATTRIBUTES as GroupAttributes), ...group.attributes});
             if(!attributesResult.success) {
                 return attributesResult;
             }
             nextAttributes = attributesResult.value;
         }
-        const updatedGroup: Group = {...group, name: nextName ?? group.name, attributes: nextAttributes};
+        const updatedGroup: Group = {...group, name: nextName ?? group.name, attributes: nextAttributes, revision: currentRevision + 1};
         const nextGroups = [...this._data.groups];
         nextGroups[index] = updatedGroup;
         const saveResult = this.replaceData({...this._data, groups: nextGroups});

@@ -119,7 +119,7 @@ export type GroupAttributes = {
     tunnel_visibility: 'private' | 'group_read';
     rate_limit: 'unlimited' | '1MB/s' | '10MB/s' | '100MB/s';
 };
-export type Group = {id: string; name: string; system: boolean; attributes: GroupAttributes};
+export type Group = {id: string; name: string; system: boolean; attributes: GroupAttributes; revision?: number};
 /** U3-04: 단위 2 §3 기본값. 새 그룹 폼의 초기값이자 system:superuser 의 표시용 값이다. */
 export const DEFAULT_GROUP_ATTRIBUTES: GroupAttributes = {
     tunnel_crud: 'full',

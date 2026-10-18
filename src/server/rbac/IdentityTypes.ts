@@ -50,7 +50,8 @@ export type UserMfa = {
     recoveryCodeHashes: string[];
 };
 
-export type Group = {id: string; name: string; system: boolean; attributes: GroupAttributes};
+/** revision: 수정할 때마다 1 오른다. 낡은 화면의 덮어쓰기를 409 로 막는다(#152). 이전 파일에는 없을 수 있다(0 으로 본다). */
+export type Group = {id: string; name: string; system: boolean; attributes: GroupAttributes; revision?: number};
 
 export type IdentityFile = {version: 1; users: User[]; groups: Group[]};
 
