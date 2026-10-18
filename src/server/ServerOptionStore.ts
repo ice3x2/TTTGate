@@ -1,6 +1,6 @@
 import Environment from "../Environment";
 import File from "../util/File";
-import {ControlProtocolMode, DEFAULT_KEY, DEFAULT_SESSION_TTL_MS, resolveSessionTtlMs, resolveAuditRetentionDays, resolveAuditQueueSize, HttpOption, ServerOption, TunnelingOption, normalizeRateLimit} from "../types/TunnelingOption";
+import {ControlProtocolMode, DEFAULT_KEY, DEFAULT_SESSION_TTL_MS, resolveSessionTtlMs, resolveAuditRetentionDays, resolveAuditQueueSize, HttpOption, ServerOption, TunnelingOption, normalizeRateLimit, defaultRateLimit} from "../types/TunnelingOption";
 import YAML from "yaml";
 import Files, {AtomicFileValue} from "../util/Files";
 import ObjectUtil from "../util/ObjectUtil";
@@ -379,11 +379,50 @@ class ServerOptionStore {
                 })))) {
             this._loadStatus = {ready: false, reason: 'validation'}; return;
         }
+        this.preserveLegacyDefaults(candidate);
         if(!this.verificationServerOption(candidate).success ||
             candidate.tunnelingOptions.some(option => !this.verificationTunnelingOption(option, 'legacy-load').success)) {
             this._loadStatus = {ready: false, reason: 'validation'}; return;
         }
         this._serverOption = candidate; this._loadStatus = {ready: true, source: 'loaded'};
+    }
+
+    /**
+     * #182: 이전 버전(main)에는 터널 속도 제한과 세션 유휴 TTL 이 없었다. 그 설정 파일을 불러오면 두 값이 비어 있다.
+     * 기본값으로 채우면 업그레이드만으로 정상 연결이 10분씩 차단되거나 유휴 세션이 끊기므로, 비어 있는 값은 예전 동작(끔)으로
+     * 채운다. 속도 제한은 프로토콜 기본값을 담아 두어 관리 화면에서 켜기만 하면 된다. 이 버전이 저장한 파일은 두 값을 늘 담는다.
+     * 이전 버전 파일은 controlProtocolMode 가 없는 것으로 가린다(이전 버전에는 없던 키이고, 이 버전은 늘 저장한다).
+     * 이 버전 형식의 파일에서 값이 빠졌으면 지금 기본값을 따른다.
+     */
+    private preserveLegacyDefaults(candidate: ServerOption): void {
+        if(candidate.controlProtocolMode !== undefined) return;
+        const disabled: number[] = [];
+        for(const tunnel of candidate.tunnelingOptions ?? []) {
+            if(tunnel && typeof tunnel === 'object' && tunnel.rateLimit === undefined) {
+                tunnel.rateLimit = {...defaultRateLimit(tunnel.protocol), enabled: false};
+                disabled.push(tunnel.forwardPort);
+            }
+        }
+        if(disabled.length > 0) {
+            logger.warn(`rate limiting kept off for tunnels saved by an earlier version: ${disabled.join(', ')}. Turn it on per tunnel in the admin console.`);
+        }
+        // 이전 버전은 서버 버퍼 -1·0 을 "제한 없음"으로 저장했다. 지금은 1MiB 이상만 받으므로 그대로 두면 서버가 기동하지
+        // 않는다. 512MB 서버에서 무제한 버퍼는 위험하므로 기본값(8MiB)으로 바꾸고 알린다. 세션이 열린 뒤에는 배압으로
+        // 흐름을 조절하므로 정상 전송은 끊기지 않는다.
+        const unlimited: number[] = [];
+        for(const tunnel of candidate.tunnelingOptions ?? []) {
+            if(tunnel && typeof tunnel === 'object' && typeof tunnel.bufferLimitOnServer === 'number' && tunnel.bufferLimitOnServer <= 0) {
+                delete tunnel.bufferLimitOnServer;
+                unlimited.push(tunnel.forwardPort);
+            }
+        }
+        if(unlimited.length > 0) {
+            logger.warn(`server buffer "unlimited" (-1 or 0) from an earlier version replaced by the default 8 MiB for tunnels: ${unlimited.join(', ')}.`);
+        }
+        if(candidate.sessionTtlMs === undefined) {
+            candidate.sessionTtlMs = 0;
+            logger.warn('session idle TTL kept off because the configuration was saved by an earlier version. Set sessionTtlMs to turn it on.');
+        }
     }
 
     public verificationServerOption(option: ServerOption) : {success: boolean, message: string, serverOption?: ServerOption} {

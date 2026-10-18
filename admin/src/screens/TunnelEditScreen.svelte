@@ -313,9 +313,10 @@
         } else {
             option.tls = false;
         }
-        // D9: 사용자가 직접 고치지 않은 레이트 리밋만 새 프로토콜의 기본값으로 바꾼다.
+        // D9: 사용자가 직접 고치지 않은 레이트 리밋만 새 프로토콜의 기본값으로 바꾼다. 켜짐 여부는 그대로 둔다.
+        // 이전 버전에서 넘어와 꺼져 있던 터널이 프로토콜만 바꿔도 몰래 켜지면 안 된다.
         if(option.rateLimit && !option.rateLimit.customized) {
-            option.rateLimit = defaultRateLimit(option.protocol);
+            option.rateLimit = {...defaultRateLimit(option.protocol), enabled: option.rateLimit.enabled};
             syncRateInputs();
         }
     };
