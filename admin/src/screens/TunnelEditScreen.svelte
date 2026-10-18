@@ -246,6 +246,7 @@
             }
             snapshotRevision = result.revisionState.currentRevision;
             option.owner = result.owner;
+            option.ownerId = result.owner.id;
             ownerId = result.owner.id;
             toast.push({tone: 'pulse', message: 'Owner changed.'});
         } catch(e) {

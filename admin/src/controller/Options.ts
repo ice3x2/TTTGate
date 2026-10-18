@@ -65,6 +65,8 @@ type Options = {
     keepAlive?: number
     /** U3-06: GET 응답의 소유자. system:migrated 에는 username 이 없다. */
     owner?: {id: string; username?: string};
+    /** 서버에 저장된 소유자 id. 목록 응답에만 실리고 저장 본문에서는 뺀다(ServerOptionCtrl.updateTunnelingOption). */
+    ownerId?: string;
     /** U3-06: GET 응답. false 면 읽기 전용(그룹 공유)이다. */
     editable?: boolean;
     /** U3-06: 일반 유저는 allowedClientNames 대신 이것만 쓴다. */
