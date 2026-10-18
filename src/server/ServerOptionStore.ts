@@ -486,8 +486,14 @@ class ServerOptionStore {
         if(!option.protocol) {
             return {success: false,forwardPort:option.forwardPort,  message: "protocol is undefined"};
         }
-        if(option.forwardPort < 0 || option.forwardPort > 65535) {
-            return {success: false,forwardPort:option.forwardPort, message: "forwardPort is invalid (0 ~ 65535)"};
+        // 예전 서버는 본문 타입을 보지 않아 server.yaml 에 "8080" 같은 문자열 포트가 남았을 수 있다. 읽을 때만 정규 10진 문자열을
+        // 숫자로 바꾼다. 거절하면 업그레이드 뒤 서버 전체가 기동하지 못한다.
+        if(normalizationMode === "legacy-load" && typeof option.forwardPort === 'string' && /^[1-9]\d{0,4}$/.test(option.forwardPort)) {
+            option.forwardPort = Number(option.forwardPort);
+        }
+        // 숫자 타입의 정수만 받는다. "20010.0" 같은 문자열은 설정 조회(==)와 런타임 키(Map)가 서로 달라진다(#170).
+        if(!Number.isSafeInteger(option.forwardPort) || option.forwardPort < 1 || option.forwardPort > 65535) {
+            return {success: false,forwardPort:option.forwardPort, message: "forwardPort must be an integer from 1 to 65535"};
         }
         const buffer = this.normalizeServerBufferLimit(option);
         if(!buffer.success) return {...buffer, forwardPort: option.forwardPort};

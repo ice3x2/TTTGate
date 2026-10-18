@@ -99,6 +99,19 @@ describe("ServerOptionStore baseline behavior", () => {
 
         expect(store.getTunnelingOption(18082)?.httpOption?.replaceAccessControlAllowOrigin).toBe(true);
     });
+
+    // #170 — 예전 서버가 저장한 문자열 포트("18083")는 읽을 때 숫자로 바꾼다. 거절하면 업그레이드 뒤 기동하지 못한다.
+    it("loads a legacy string forwardPort as a number", () => {
+        const configFile = new File(Environment.path.configDir, "server.yaml");
+        Files.writeSync(configFile, YAML.stringify({
+            key: "srv-existing", adminPort: 9300, adminBindHost: "127.0.0.1", adminTls: true, port: 9126, tls: false,
+            controlProtocolMode: "mixed", allowLegacyControlAuth: false, trustedClients: [], globalMemCacheLimit: 128, keepAlive: 10000,
+            tunnelingOptions: [{forwardPort: "18083", protocol: "tcp", destinationAddress: "127.0.0.1", destinationPort: 8080, keepAlive: 0}]
+        }));
+        ServerOptionStore.resetForTest();
+        const store = ServerOptionStore.instance;
+        expect(store.getTunnelingOptions().map((option) => option.forwardPort)).toEqual([18083]);
+    });
 });
 
 describe("ServerOptionStore 감사 옵션 검증", () => {
