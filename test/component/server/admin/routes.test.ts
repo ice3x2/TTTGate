@@ -210,7 +210,7 @@ test("unknown /api/ GET is 404 JSON, unknown static asset is 404 text", async ()
 
     const staticResponse = await f.request("GET", "/nothing.txt");
     expect(staticResponse.status).toBe(404);
-    expect(staticResponse.body).toContain("Not Found /nothing.txt");
+    expect(staticResponse.body).toBe("Not Found");
 }));
 
 test("CSRF/Origin admission runs before route matching for an unknown mutating path", async () => withRoutesServer(async f => {
