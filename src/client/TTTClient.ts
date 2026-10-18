@@ -138,6 +138,11 @@ class TTTClient {
 
     private onSessionSendCallback = (id: number, data: Buffer) : void => {
         this._endPointClientPool.send(id, data);
+        // #130: 업로드 방향의 배압. 목적지가 느리면 그 세션의 터널 데이터 소켓 읽기를 멈추고, 풀리면 다시 읽는다(#129 와 대칭).
+        if(this._endPointClientPool.isSessionBackpressured(id)) {
+            this._tunnelClient.pauseSessionSource(id);
+            this._endPointClientPool.addSessionPressureReliefListener(id, () => this._tunnelClient.resumeSessionSource(id));
+        }
     }
 
     private onEndPointTerminateCallback = (sessionID: number, mode?: 'graceful' | 'abort') : void => {
