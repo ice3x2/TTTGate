@@ -77,6 +77,7 @@ describe("rbac-tunnel-ownership", () => {
     let carol: {auth: Auth; id: string};
     let groupOne: string;
     let groupTwo: string;
+    let runtime: any;
 
     const serverYamlTunnels = async (): Promise<any[]> => {
         const raw = await fs.readFile(path.join(testRoot.rootDir, "config", "server.yaml"), "utf8");
@@ -113,7 +114,7 @@ describe("rbac-tunnel-ownership", () => {
             throw new Error("ownership fixture: invalid server option");
         }
 
-        const runtime = {
+        runtime = {
             applyServerOption: jest.fn(async () => ({success: true, partial: false, warnings: [], failedScopes: [], restartRequiredScopes: []})),
             applyTunnelingOption: jest.fn(async () => ({success: true, partial: false, warnings: [], failedScopes: [], restartRequiredScopes: []})),
             externalServerStatus: jest.fn(() => ({online: true, sessions: 0})),
@@ -171,6 +172,26 @@ describe("rbac-tunnel-ownership", () => {
         const created = await request("POST", "/api/tunnelingOption", tunnelBody(20010, {ownerId: "u_someone"}), alice.auth);
         expect(created.status).toBe(200);
         expect((await storedTunnel(20010)).ownerId).toBe(alice.id);
+    });
+
+    it("#141 활성화 타임아웃은 상한 이하의 0 이상 숫자(초)만 받고, 끌 때는 보지 않는다", async () => {
+        runtime.activeExternalPortServer.mockClear();
+        for(const timeout of ["30", true, -5, 1e12, {}]) {
+            const response = await request("POST", `/api/tunneling/active/${MIGRATED_PORT}`, {active: true, timeout}, superuser);
+            expect({timeout, status: response.status}).toEqual({timeout, status: 400});
+        }
+        expect(runtime.activeExternalPortServer).not.toHaveBeenCalled();
+        const valid = await request("POST", `/api/tunneling/active/${MIGRATED_PORT}`, {active: true, timeout: 30}, superuser);
+        expect(valid.status).toBe(200);
+        const absent = await request("POST", `/api/tunneling/active/${MIGRATED_PORT}`, {active: true}, superuser);
+        expect(absent.status).toBe(200);
+        // 그룹 상한(ms)이 1000 의 배수가 아니면 화면이 소수 초를 보낸다.
+        const fractional = await request("POST", `/api/tunneling/active/${MIGRATED_PORT}`, {active: true, timeout: 1.5}, superuser);
+        expect(fractional.status).toBe(200);
+        expect(runtime.activeExternalPortServer.mock.calls.map((call: any[]) => call.slice(0, 2)))
+            .toEqual([[MIGRATED_PORT, 30], [MIGRATED_PORT, 0], [MIGRATED_PORT, 1.5]]);
+        const off = await request("POST", `/api/tunneling/active/${MIGRATED_PORT}`, {active: false, timeout: "garbage"}, superuser);
+        expect(off.status).toBe(200);
     });
 
     it("그룹 속성 밖의 포트와 프로토콜은 거부된다", async () => {

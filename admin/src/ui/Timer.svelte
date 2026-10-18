@@ -61,7 +61,7 @@
     </svg>
     <Modal bind:open title="Tunneling activity restriction time">
         <div class="timer-fields">
-            <Field label="Days" for={`${uid}-day`}><NumberInput id={`${uid}-day`} min={0} max={99999} bind:value={day} /></Field>
+            <Field label="Days" for={`${uid}-day`}><NumberInput id={`${uid}-day`} min={0} max={3650} bind:value={day} /></Field>
             <Field label="Hours" for={`${uid}-hour`}><NumberInput id={`${uid}-hour`} min={0} max={23} bind:value={hour} /></Field>
             <Field label="Minutes" for={`${uid}-min`}><NumberInput id={`${uid}-min`} min={0} max={59} bind:value={min} /></Field>
         </div>

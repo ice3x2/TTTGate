@@ -15,6 +15,8 @@ import {computeWatermarkBytes} from "../util/ResourcePolicy";
 // #124 (U5-09) 클라이언트→외부 대역폭 큐. 상한(limit)을 넘으면 세션을 닫고, 상단 워터마크에서 터널 소스를 멈춘다.
 type SendQueue = {chunks: Buffer[]; bytes: number; limit: number; timer: NodeJS.Timeout | null; reliefListeners: Array<() => void>};
 const logger = LoggerFactory.getLogger('server', 'ExternalPortServerPool');
+/** setTimeout 이 받는 최대 지연(2^31-1ms). 넘기면 Node 가 1ms 로 바꾼다. */
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
 
 // U5-02 / #117 — concurrency-limit 거절을 http/https에서만 명시 응답으로 되돌려준다(#123 (U5-08) 전까지는 발생하지 않는다).
 const HTTP_503 = Buffer.from('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
@@ -653,18 +655,33 @@ class ExternalPortServerPool {
         if(cappedByGroup) timeout = cap!;
         const effectiveTimeout = timeout;
         this.clearActiveTimeout(port);
-        let timeoutCtrl = this._activeTimeoutMap.get(port);
         status.active = true;
         status.activeTimeout = timeout;
         status.activeStart = Date.now();
         if(timeout > 0){
-            timeoutCtrl = setTimeout(async () => {
+            this.scheduleExpiry(port, status.activeStart + timeout * 1000, async () => {
                 await this.inactive(port);
                 this._onAutoExpire?.(port, {timeoutSeconds: effectiveTimeout, cappedByGroup});
-            }, timeout * 1000);
-            this._activeTimeoutMap.set(port, timeoutCtrl);
+            });
         }
         return true;
+    }
+
+    /**
+     * deadline 에 onExpire 를 부른다. Node 는 2^31-1ms(약 24.8일)를 넘는 setTimeout 지연을 1ms 로 바꾸므로(#141),
+     * 상한 이하로 나눠 걸고 깰 때마다 남은 시간을 다시 건다. 다른 타이머로 바뀌었거나 지워졌으면 아무 일도 하지 않는다.
+     */
+    private scheduleExpiry(port: number, deadline: number, onExpire: () => Promise<void>): void {
+        const delay = Math.min(Math.max(deadline - Date.now(), 0), MAX_TIMER_DELAY_MS);
+        const timeoutCtrl: NodeJS.Timeout = setTimeout(() => {
+            if(this._activeTimeoutMap.get(port) !== timeoutCtrl) return;
+            if(Date.now() < deadline) {
+                this.scheduleExpiry(port, deadline, onExpire);
+                return;
+            }
+            void onExpire();
+        }, delay);
+        this._activeTimeoutMap.set(port, timeoutCtrl);
     }
 
 
