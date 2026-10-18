@@ -94,7 +94,9 @@ export function admitTunnelWrite(principal: Principal, next: TunnelingOption,
     // 고치려는 터널이 이미 있으면 수정이다. 포트를 바꾸는 요청도 새 터널이 아니므로 개수 상한을 다시 세지 않는다.
     const mode = previousOption ? 'update' : 'create';
     const result = enforce(principal, {...next, ownerId: principal.userId}, mode,
-        {ownedCount: AuthorizationContext.ownedCount(principal.userId), trustedClientIds: trustedClientIdsOf()});
+        {ownedCount: AuthorizationContext.ownedCount(principal.userId), trustedClientIds: trustedClientIdsOf(),
+            maxServerBufferMiB: ServerOptionStore.instance.serverOption.globalMemCacheLimit,
+            currentServerBufferMiB: previousOption?.bufferLimitOnServer});
     if(!result.success) {
         return denied(result.status, result.code, result.message);
     }
