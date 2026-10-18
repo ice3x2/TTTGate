@@ -136,6 +136,29 @@ describe("IdentityStore", () => {
         expect(IdentityStore.instance.users().filter((u) => u.username === "heidi")).toHaveLength(1);
     });
 
+    it("#144 validates group names on update and display names on create", async () => {
+        IdentityStore.instance.load();
+        const group = IdentityStore.instance.createGroup({name: "Ops"});
+        expect(group.success).toBe(true);
+        if(!group.success) return;
+        for(const name of [5, "", "   ", "x".repeat(65), null, {}]) {
+            expect(IdentityStore.instance.updateGroup(group.value.id, {name: name as any}))
+                .toMatchObject({success: false, status: 422, code: "group_name_invalid"});
+        }
+        expect(IdentityStore.instance.group(group.value.id)!.name).toBe("Ops");
+        const renamed = IdentityStore.instance.updateGroup(group.value.id, {name: "  Ops West  "});
+        expect(renamed.success).toBe(true);
+        expect(IdentityStore.instance.group(group.value.id)!.name).toBe("Ops West");
+
+        for(const displayName of [5, "", "x".repeat(65)]) {
+            const created = await IdentityStore.instance.createUser({username: "judy", displayName: displayName as any, role: "regular", password: "judy-password-1", mustChangePassword: false});
+            expect(created).toMatchObject({success: false, status: 422, code: "display_name_invalid"});
+        }
+        const created = await IdentityStore.instance.createUser({username: "judy", displayName: "  Judy  ", role: "regular", password: "judy-password-1", mustChangePassword: false});
+        expect(created.success).toBe(true);
+        if(created.success) expect(created.value.displayName).toBe("Judy");
+    });
+
     it("guards the last active superuser from demotion, disabling, and deletion", async () => {
         IdentityStore.instance.load();
         const onlySuperuser = await IdentityStore.instance.createUser({username: "solo", role: "superuser", password: "solo-password-1", mustChangePassword: false});
