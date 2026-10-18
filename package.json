@@ -81,7 +81,8 @@
     "yaml": "^2.3.1"
   },
   "overrides": {
-    "form-data": "^4.0.4"
+    "form-data": "^4.0.4",
+    "ip-address": "^10.7.1"
   },
   "engines": {
     "node": ">=24.0.0"
