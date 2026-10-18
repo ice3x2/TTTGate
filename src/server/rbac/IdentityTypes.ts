@@ -138,6 +138,9 @@ export function validatePassword(value: unknown): {success: true; value: string}
     return {success: true, value: value.trim()};
 }
 
+/** 그룹 터널 수명 상한의 최댓값(10년, ms). */
+const MAX_TUNNEL_DURATION_MS = 10 * 365 * 86_400_000;
+
 function isNonNegativeInt(value: unknown): value is number {
     return typeof value === 'number' && Number.isInteger(value) && value >= 0;
 }
@@ -181,7 +184,8 @@ export function validateGroupAttributes(patch: unknown, base: GroupAttributes): 
     if(!isNonNegativeInt(merged.max_tunnel_count)) {
         return invalid('attribute_int_invalid', `invalid max_tunnel_count: ${merged.max_tunnel_count}`);
     }
-    if(!isNonNegativeInt(merged.max_tunnel_duration_ms)) {
+    // 상한 10년. 활성화 API 의 타임아웃 상한과 같아, 꺼 둔 터널을 다시 켤 때 화면이 되돌려 보내는 값이 거절되지 않는다(#141).
+    if(!isNonNegativeInt(merged.max_tunnel_duration_ms) || merged.max_tunnel_duration_ms > MAX_TUNNEL_DURATION_MS) {
         return invalid('attribute_int_invalid', `invalid max_tunnel_duration_ms: ${merged.max_tunnel_duration_ms}`);
     }
     if(!Array.isArray(merged.allowed_port_range) || !merged.allowed_port_range.every(isValidPortRange)) {

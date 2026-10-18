@@ -27,7 +27,7 @@ import {DEFAULT_GEO_CONFIG, GeoConfig, TunnelingOption} from "../../types/Tunnel
 import {AdmissionController} from "../security/AdmissionController";
 import {normalizeConnectionSecurity} from "../security/connectionSecurity";
 import {listCountries} from "../security/countries";
-import {auditEventOf, AuditRouteMeta, buildAdminRoutes, isTunnelActivationRequested, parsePathId, parsePathPort, Route, RouteContext} from "./routes";
+import {auditEventOf, AuditRouteMeta, buildAdminRoutes, isTunnelActivationRequested, parseActiveTimeout, parsePathId, parsePathPort, Route, RouteContext} from "./routes";
 import {createLoginFailureAuditor} from "./loginFailureAudit";
 import {rbacRouteHandlers} from "./rbacRoutes";
 import {MfaTicketStore, PendingEnrollmentStore} from "../mfa/MfaTickets";
@@ -1119,9 +1119,9 @@ class AdminServer {
         let port = await this.getNumberInPath(ctx, 'port');
         if(port == undefined) return;
         let json = ctx.body;
-        let timeout = json['timeout'];
-        if(timeout == undefined || isNaN(timeout)) {
-            timeout = 0;
+        const timeout = isTunnelActivationRequested(ctx) ? parseActiveTimeout(json['timeout']) : 0; // 끌 때는 쓰지 않는다
+        if(timeout === undefined) {
+            this.sendApiFailure(res, 400, {message: 'timeout must be a number of seconds from 0 to 10 years'}); return;
         }
         await ServerOptionStore.instance.runConfigurationMutation(async () => {
             let success = false;

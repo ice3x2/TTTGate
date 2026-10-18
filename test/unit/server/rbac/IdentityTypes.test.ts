@@ -42,6 +42,13 @@ describe("IdentityTypes.validatePassword", () => {
 });
 
 describe("IdentityTypes.validateGroupAttributes", () => {
+    it("#141 max_tunnel_duration_ms 는 10년을 넘지 못한다", () => {
+        const tenYears = 10 * 365 * 86_400_000;
+        expect(validateGroupAttributes({max_tunnel_duration_ms: tenYears}, DEFAULT_GROUP_ATTRIBUTES).success).toBe(true);
+        expect(validateGroupAttributes({max_tunnel_duration_ms: tenYears + 1}, DEFAULT_GROUP_ATTRIBUTES))
+            .toMatchObject({success: false, code: "attribute_int_invalid"});
+    });
+
     it("returns a deep-equal copy of the base attributes when the patch is empty", () => {
         const result = validateGroupAttributes({}, DEFAULT_GROUP_ATTRIBUTES);
         expect(result.success).toBe(true);

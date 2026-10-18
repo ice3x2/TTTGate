@@ -114,6 +114,22 @@ describe("tunnel-lifetime", () => {
         expect(autoExpireEvents()).toEqual([]);
     });
 
+    // #141 — Node 는 2^31-1ms(약 24.8일)를 넘는 setTimeout 지연을 1ms 로 바꾼다. 긴 수명이 즉시 만료로 바뀌면 안 된다.
+    it("24.8일을 넘는 사용자 타임아웃과 그룹 상한에서도 터널이 켜진 채로 남는다", async () => {
+        expect(await server!.activeExternalPortServer(ports.b, 3_000_000)).toBe(true);
+        const thirtyDaysMs = 30 * 86_400_000;
+        const group = IdentityStore.instance.updateGroup("g_field", {attributes: {max_tunnel_duration_ms: thirtyDaysMs}});
+        expect(group.success).toBe(true);
+        expect(await server!.activeExternalPortServer(ports.a, 0)).toBe(true);
+        expect(status(ports.a).activeTimeout).toBe(thirtyDaysMs / 1000);
+
+        await sleep(300);
+
+        expect(status(ports.b)).toMatchObject({active: true, activeTimeout: 3_000_000});
+        expect(status(ports.a).active).toBe(true);
+        expect(autoExpireEvents()).toEqual([]);
+    });
+
     it("슈퍼유저 터널의 사용자 타임아웃 만료는 감사하지 않는다", async () => {
         expect(await server!.activeExternalPortServer(ports.b, 1)).toBe(true);
         expect(status(ports.b).activeTimeout).toBe(1);

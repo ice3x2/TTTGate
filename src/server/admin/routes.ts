@@ -135,6 +135,19 @@ const tunnelCertAudit = (ctx: RouteContext): AuditRouteMeta => auditMeta(AUDIT_E
  */
 export const isFieldProvided = (body: any, key: string): boolean => body?.[key] !== undefined;
 
+/** 활성화 타임아웃(초)의 상한: 10년. 그룹 수명 상한(UI 최대 1년)보다 넉넉하고 타이머 계산이 안전한 범위다. */
+const MAX_ACTIVE_TIMEOUT_SECONDS = 10 * 365 * 86_400;
+
+/**
+ * POST /api/tunneling/active/:port 의 timeout(초). 없으면 0(무기한), 상한 이하의 0 이상 유한 숫자만 받고 아니면 undefined 다.
+ * 예전에는 isNaN 만 봐서 "30"·true 같은 값이 그대로 곱셈에 쓰였다(#141). 그룹 상한(ms)이 1000 의 배수가 아니면
+ * 화면이 소수 초를 되돌려 보내므로 소수는 받는다.
+ */
+export const parseActiveTimeout = (value: unknown): number | undefined => {
+    if(value === undefined || value === null) return 0;
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= MAX_ACTIVE_TIMEOUT_SECONDS ? value : undefined;
+};
+
 const pathIdTarget = (kind: AuditTarget['kind']) =>
     (ctx: RouteContext): AuditTarget => ({kind, id: ctx.params.id});
 
