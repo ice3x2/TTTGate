@@ -75,7 +75,8 @@ enum ReadResult {
 }
 
 const MAX_RECURSIVE_CALL_LEVEL = 1000;
-const MAX_HEADER_SIZE = 8 * 1024 * 1024; // 8MB 최대 헤더 크기
+// 헤더 상한. 인증 없는 외부 연결이 연결마다 이만큼 쌓을 수 있으므로 일반 서버 수준(64KiB)으로 둔다(#166).
+const MAX_HEADER_SIZE = 64 * 1024;
 
 class HttpPipe {
     private _buffer: Buffer = Buffer.alloc(0);
@@ -83,6 +84,8 @@ class HttpPipe {
 
     private _state: ParseState = ParseState.SEARCHING_FOR_HEADER;
     private _maxHeaderSize: number = MAX_HEADER_SIZE;
+    /** 헤더 끝(CRLFCRLF)을 찾기 시작할 위치. 청크마다 버퍼 전체를 다시 훑지 않는다(#166). */
+    private _headerSearchFrom = 0;
     private _messageType: MessageType = MessageType.Request;
     private _chunkedSize: number = 0;
     private _chunkedSizeRead: number = 0;
@@ -149,6 +152,7 @@ class HttpPipe {
         this._bodyForbidden = false;
         this._messageType = messageType;
         if(!preserveTail) this._buffer = Buffer.alloc(0);
+        this._headerSearchFrom = 0;
         this._state = ParseState.SEARCHING_FOR_HEADER;
         this._chunkedSize = 0;
         this._chunkedSizeRead = 0;
@@ -473,10 +477,13 @@ class HttpPipe {
             throw e; // 실제 에러면 전파
         }
 
-        let idx = this._buffer.indexOf("\r\n\r\n");
+        let idx = this._buffer.indexOf(DOUBLE_CRLF_BUFFER, this._headerSearchFrom);
         if (idx < 0) {
+            // 끝 3바이트는 다음 청크와 이어져 CRLFCRLF 가 될 수 있으므로 그 앞부터 다시 찾는다.
+            this._headerSearchFrom = Math.max(0, this._buffer.length - 3);
             return null;
         }
+        this._headerSearchFrom = 0;
         
         if (idx > this._maxHeaderSize) {
             throw new Error(`Header too large. Max size is ${this._maxHeaderSize} bytes`);

@@ -16,6 +16,8 @@ interface OnSocketEvent {
 const CHUNK_SIZE: number = 8 * 1024; // 8KB로 증가
 const MAX_BUFFER_SIZE: number = 16 * 1024 * 1024; // 16MB
 const MAX_PENDING_REQUESTS = 128;
+/** 연결 뒤 첫 요청 헤더를 다 받을 때까지의 기한. 헤더를 조금씩 보내 연결을 붙잡는 요청을 408 로 닫는다(#166). */
+const REQUEST_HEADER_DEADLINE_MS = 30_000;
 type RequestContext = Readonly<{host: string, origin: string, method: HttpMethod, webSocket: boolean}>;
 
 class HttpHandler {
@@ -131,6 +133,8 @@ class HttpHandler {
         this._socketHandler.deleteBundle(key);
     }
 
+    private _headerDeadline?: NodeJS.Timeout;
+
     private constructor(socketHandler: SocketHandler) {
         this._socketHandler = socketHandler;
         socketHandler.onSocketEvent = this.onSocketEventFromSocketHandler;
@@ -146,7 +150,9 @@ class HttpHandler {
             return true;
         };
         this._requestPipe.onEndCallback = () => this._requestPipe.reset(MessageType.Request, true);
-        this._requestPipe.onErrorCallback = this.onHttpMessageError;
+        this._requestPipe.onErrorCallback = this.onRequestMessageError;
+        this._headerDeadline = setTimeout(() => this.rejectRequestHead(408, 'Request Timeout'), REQUEST_HEADER_DEADLINE_MS);
+        this._headerDeadline.unref?.();
         this._responsePipe.onHeaderCallback = this.onHttpHeader;
         this._responsePipe.onDataCallback = this.onHttpBody;
         this._responsePipe.onEndCallback = this.onHttpMessageEnd;
@@ -185,6 +191,7 @@ class HttpHandler {
 
     private onHttpHeader = (header: HttpRequestHeader | HttpResponseHeader): void => {
         if(header.type === MessageType.Request) {
+            this.clearHeaderDeadline();
             if(this._pendingRequests.length >= MAX_PENDING_REQUESTS) {
                 logger.error(`HTTP pending request limit exceeded: ${MAX_PENDING_REQUESTS}`);
                 this.destroy();
@@ -479,6 +486,32 @@ class HttpHandler {
         this._socketHandler.end_();
     }
 
+    private clearHeaderDeadline(): void {
+        if(this._headerDeadline) clearTimeout(this._headerDeadline);
+        this._headerDeadline = undefined;
+    }
+
+    /** 요청 헤더 단계의 거절. 상태 줄만 보내고 닫는다. 인증 없는 경로라 로그는 debug 로만 남긴다(#166). */
+    private rejectRequestHead(status: number, reason: string): void {
+        this.clearHeaderDeadline();
+        if(this._rejectionSent || this._released || this._socketHandler.isEnd()) return;
+        this._rejectionSent = true;
+        logger.debug(`HTTP request rejected before the header: ${status} ${reason}`);
+        this._socketHandler.sendData(Buffer.from(`HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`), (_handler, success) => {
+            if(!success) this.destroy();
+        });
+        this._socketHandler.end_();
+    }
+
+    private onRequestMessageError = (error: Error): void => {
+        if(/^Header too large/.test(error.message) && this._pendingRequests.length === 0) {
+            this.rejectRequestHead(431, 'Request Header Fields Too Large');
+            return;
+        }
+        logger.debug(`HTTP request parse error: ${error.message}`);
+        this.destroy();
+    }
+
     private onHttpMessageError = (error: Error): void => {
         logger.error('HTTP Message parse Error', error);
         this.destroy();
@@ -521,6 +554,7 @@ class HttpHandler {
     }
 
     private release(): void {
+        this.clearHeaderDeadline();
         this._released = true;
         this.onOutputProgress = undefined;
         this._inputRejected = false;
