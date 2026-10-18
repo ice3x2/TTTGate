@@ -255,18 +255,21 @@ describe("security-api", () => {
         expect(eventsOf("security_ban_removed")[before + 1].detail).toEqual({port: TUNNEL_PORT, ip: BANNED_IP, removed: false});
     });
 
-    it("정규화되지 않은 IPv4-mapped 주소로는 차단이 지워지지 않는다", async () => {
+    // #167 — 리미터가 IPv4-mapped 주소를 IPv4 버킷으로 묶으므로, 어느 표기로 지워도 같은 차단이 지워진다.
+    it("IPv4-mapped 표기로도 같은 IPv4 버킷의 차단이 지워진다", async () => {
         banTwice("::ffff:1.2.3.4");
+        expect(AdmissionController.instance.rateLimiter.bans(Date.now()).map((ban) => ban.ip)).toEqual(["1.2.3.4"]);
         const response = await request("DELETE", `/api/security/bans/${TUNNEL_PORT}/%3A%3Affff%3A1.2.3.4`, {}, su);
         expect(response.status).toBe(200);
-        expect(response.body.removed).toBe(false);
-        expect(AdmissionController.instance.rateLimiter.bans(Date.now()).map((ban) => ban.ip)).toEqual(["1.2.3.4"]);
+        expect(response.body.removed).toBe(true);
+        expect(AdmissionController.instance.rateLimiter.bans(Date.now())).toEqual([]);
     });
 
     it("퍼센트 인코딩된 IPv6 주소는 디코딩해 차단을 지운다", async () => {
         const ip = "2001:db8::1";
         banTwice(ip);
-        expect(AdmissionController.instance.rateLimiter.bans(Date.now()).map((ban) => ban.ip)).toEqual([ip]);
+        // #167 — IPv6 차단은 /64 버킷으로 남는다.
+        expect(AdmissionController.instance.rateLimiter.bans(Date.now()).map((ban) => ban.ip)).toEqual(["2001:db8:0:0::/64"]);
         const response = await request("DELETE", `/api/security/bans/${TUNNEL_PORT}/${encodeURIComponent(ip)}`, {}, su);
         expect(response.status).toBe(200);
         expect(response.body.removed).toBe(true);

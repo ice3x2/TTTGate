@@ -1553,7 +1553,7 @@ class AdminServer {
         const now = Date.now();
         const geo = AdmissionController.instance.geo;
         const bans = AdmissionController.instance.rateLimiter.bans(now).map((ban) => {
-            const country = geo.lookupCountry(ban.ip);
+            const country = geo.lookupCountry(ban.ip.replace(/::\/64$/, '::')); // IPv6 차단은 /64 버킷이다(#167).
             return country === undefined ? ban : {...ban, country};
         });
         this.sendApiSuccess(res, {serverTime: now, bans});
@@ -1571,7 +1571,7 @@ class AdminServer {
             this.sendApiFailure(res, 400, {message: 'invalid ip'});
             return;
         }
-        // unban 은 입력 IP 를 정규화하지 않는다. 리미터가 저장한 문자열과 같아야 지워진다.
+        // unban 은 리미터가 입력을 같은 버킷(IPv6 /64, IPv4-mapped → IPv4)으로 바꿔 지운다(#167).
         const removed = AdmissionController.instance.rateLimiter.unban(port, ip);
         ctx.auditDetail({port, ip, removed});
         this.sendApiSuccess(res, {removed});
