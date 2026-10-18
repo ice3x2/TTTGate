@@ -49,6 +49,8 @@ class ClientHandlerPool {
     private _bufferSize : number = 0;
     private _pendingSessionIDMap : Map<number, {handlerID: number, sessionID: number, openOpt: OpenOpt, available: boolean, bindingToken?: string }> = new Map<number, {handlerID: number, sessionID: number, openOpt: OpenOpt,available: boolean, bindingToken?: string }>();
     private _onSessionCloseCallback? : OnSessionCloseCallback;
+    private _isSessionOwned? : (sessionID: number) => boolean;
+    private _foreignCloseCount = 0;
     private _onDataReceiveCallback? : OnDataReceiveCallback;
 
     private _sysInfo: SysInfo =  {
@@ -83,6 +85,16 @@ class ClientHandlerPool {
 
 
 
+    /**
+     * 이 pool 의 클라이언트에게 배정된 세션인지 묻는다. TunnelServer 가 세션→제어 연결 매핑으로 판정해 넣는다.
+     * 세션 ID 는 서버 전체에서 순차로 매기므로, 확인하지 않으면 한 클라이언트가 남의 세션을 닫을 수 있다(#158).
+     * pool 의 맵이 아니라 서버 매핑으로 묻는 이유: 데이터 소켓이 먼저 끊기면 맵은 이미 비지만, 뒤이어 오는
+     * 소유자의 CloseSession·FailOfOpenSession 이 외부 연결을 닫아야 한다.
+     */
+    public set isSessionOwned(predicate: (sessionID: number) => boolean) {
+        this._isSessionOwned = predicate;
+    }
+
     public set onSessionCloseCallback(callback: OnSessionCloseCallback) {
         this._onSessionCloseCallback = callback;
     }
@@ -115,6 +127,13 @@ class ClientHandlerPool {
      * @private
      */
     private closeSessionAndCallback(sessionID: number, endLength: number) : void {
+        if(this._isSessionOwned && !this._isSessionOwned(sessionID)) {
+            // 인증된 클라이언트가 패킷마다 로그를 남기게 하지 않도록 처음과 100번째마다만 남긴다.
+            if(this._foreignCloseCount++ % 100 === 0) {
+                logger.warn(`Ignored a session close for a session this client does not own: sessionID=${sessionID} (count=${this._foreignCloseCount})`);
+            }
+            return;
+        }
         this._onSessionCloseCallback?.(sessionID,endLength);
     }
 

@@ -445,6 +445,7 @@ class TunnelServer {
         handler.protocolVersion = identity.protocolVersion;
         handler.capabilities = [...identity.capabilities];
         let ctrlHandlerPool = ClientHandlerPool.create(handler.id, handler);
+        ctrlHandlerPool.isSessionOwned = (sessionID: number) => this._sessionIDAndCtrlIDMap.get(sessionID) === handler.id;
         ctrlHandlerPool.onSessionCloseCallback = (sessionID: number, endLength:  number) => {
             this._onSessionCloseCallback?.(sessionID, endLength);
         }

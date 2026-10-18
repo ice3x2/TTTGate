@@ -67,8 +67,10 @@ test("legacy exhaustion has bounded caller failure without new control packet or
     const peer = await f.peer();
     const pool = peer.pool as any;
     const realPending = pool._pendingSessionIDMap;
-    const send = pool._controlHandler.sendData, callback = pool._onSessionCloseCallback;
+    const send = pool._controlHandler.sendData, callback = pool._onSessionCloseCallback, owned = pool._isSessionOwned;
     let sends = 0; const closed: number[][] = [];
+    // sendConnectEndPoint 를 직접 부르므로 TunnelServer.openSession 의 세션→제어 연결 매핑이 없다. 실제 경로처럼 소유로 본다(#158).
+    pool._isSessionOwned = (session: number) => session === 900000;
     // Explicit occupancy fixture; these are records, not 65535 real sockets.
     const occupied = new Map(Array.from({length: 65535}, (_, i) => [i + 1,
         {handlerID: i + 1, sessionID: i + 1, available: i % 2 === 0, openOpt: {host: '127.0.0.1', port: 9, bufferLimit: 1}}]));
@@ -82,8 +84,19 @@ test("legacy exhaustion has bounded caller failure without new control packet or
     } finally {
         pool._pendingSessionIDMap = realPending;
         pool._waitingDataBufferQueueMap.delete(900000);
-        pool._controlHandler.sendData = send; pool._onSessionCloseCallback = callback;
+        pool._controlHandler.sendData = send; pool._onSessionCloseCallback = callback; pool._isSessionOwned = owned;
     }
+}));
+
+// #158 — TunnelServer 가 pool 에 넣는 소유 판정의 실제 연결을 지킨다. 세션은 자기 제어 연결의 pool 에만 소유로 보인다.
+test("TunnelServer wires session ownership so only the assigned pool may close a session", async () => withLegacyIds(async f => {
+    // 두 번째 클라이언트는 세션이 열린 뒤 붙인다(먼저 붙이면 세션이 그쪽으로 배정될 수 있다).
+    const owner = await f.peer(true);
+    const opened = await owner.open();
+    const sessionID = opened.packet.sessionID;
+    const other = await f.peer(); // 다른 제어 연결(legacy). 같은 clientId 로 붙이면 앞 연결을 대체한다.
+    expect((owner.pool as any)._isSessionOwned(sessionID)).toBe(true);
+    expect((other.pool as any)._isSessionOwned(sessionID)).toBe(false);
 }));
 
 test("mixed legacy and v2 peers retain short IDs and wide token-bound IDs respectively", async () => withLegacyIds(async f => {
