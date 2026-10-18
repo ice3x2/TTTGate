@@ -37,9 +37,11 @@ export const RBAC_IDENTITY_FIXTURE: IdentityFixture = {
     }]
 };
 
-export const RBAC_TUNNELS: Array<{forwardPort: number; protocol: 'tcp' | 'http'; destinationAddress: string; destinationPort: number; ownerId?: string}> = [
+export const RBAC_TUNNELS: Array<{forwardPort: number; protocol: 'tcp' | 'http'; destinationAddress: string; destinationPort: number; ownerId?: string;
+    allowedClientIds?: string[]}> = [
     {forwardPort: 20001, protocol: 'tcp', destinationAddress: '127.0.0.1', destinationPort: 8081, ownerId: RBAC_USER_IDS.alice},
-    {forwardPort: 20002, protocol: 'http', destinationAddress: '127.0.0.1', destinationPort: 8082, ownerId: RBAC_USER_IDS.bob},
+    // #178: 슈퍼유저가 그룹 밖 id(client-b)를 넣어 둔 상태. bob 의 그룹은 client-a 만 허용한다.
+    {forwardPort: 20002, protocol: 'http', destinationAddress: '127.0.0.1', destinationPort: 8082, ownerId: RBAC_USER_IDS.bob, allowedClientIds: ['client-b']},
     {forwardPort: 20003, protocol: 'tcp', destinationAddress: '127.0.0.1', destinationPort: 8083},
 ];
 

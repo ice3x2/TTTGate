@@ -4,7 +4,7 @@
     import InvalidSession from '../controller/InvalidSession';
     import type {Options} from '../controller/Options';
     import ServerOptionCtrl from '../controller/ServerOptionCtrl';
-    import type {CertInfo} from '../controller/Types';
+    import type {CertInfo, Group, UserView} from '../controller/Types';
     import UsersCtrl from '../controller/UsersCtrl';
     import {me} from '../me';
     import {navigate} from '../router';
@@ -206,6 +206,7 @@
             // 서버가 늘 채워 주지만, 없으면 프로토콜 기본값으로 시작한다.
             if(!found.rateLimit) found.rateLimit = defaultRateLimit(found.protocol);
             option = found;
+            loadedOutsideIds = (found.allowedClientIds ?? []).filter((id) => !(policy?.trustedClients ?? []).includes(id));
             syncRateInputs();
             ownerId = found.owner?.id ?? '';
             if(!restricted) await loadOwners();
@@ -229,6 +230,7 @@
             toast.push({tone: 'alarm', message: result.message});
             return;
         }
+        ownerUsers = result.users;
         owners = [...result.users].sort((a, b) => a.username.localeCompare(b.username))
             .map((user) => ({value: user.id, label: '@' + user.username}))
             .concat([{value: 'system:migrated', label: 'system:migrated'}]);
@@ -270,13 +272,29 @@
         const current = option.allowedClientIds ?? [];
         option.allowedClientIds = superuserClientIds.filter((id) => id === clientId ? on : current.includes(id));
     };
+    // 소유자 그룹이 허용하지 않은 id. 넣으면 소유자는 그 id 를 지우기 전까지 자기 터널을 저장하지 못한다.
+    // 슈퍼유저 소유자는 그룹 제한을 받지 않는다.
+    let ownerUsers = $state<UserView[]>([]);
+    let groups = $state<Group[]>([]);
+    let groupsUnavailable = $state(false);
+    const ownerAllowedClientIds = $derived.by(() => {
+        const owner = ownerUsers.find((user) => user.id === option?.owner?.id);
+        if(!owner || owner.role === 'superuser') return undefined;
+        return groups.find((group) => group.id === owner.groupId)?.attributes.allowed_trusted_clients;
+    });
+    const notAllowedForOwner = $derived(ownerAllowedClientIds === undefined ? []
+        : (option?.allowedClientIds ?? []).filter((id) => !ownerAllowedClientIds.includes(id)));
 
     // 일반 유저의 신뢰 클라이언트 선택. 체크된 것이 allowedClientIds 다.
+    // 슈퍼유저가 넣은 그룹 밖 id 도 보여야 해제할 수 있다. 해제해도 이 화면에서는 목록에 남겨 다시 고를 수 있다.
+    let loadedOutsideIds = $state<string[]>([]);
+    const outsideGroupClientIds = $derived((option?.allowedClientIds ?? []).filter((id) => !(policy?.trustedClients ?? []).includes(id)));
+    const restrictedClientIds = $derived([...(policy?.trustedClients ?? []), ...loadedOutsideIds]);
     const trusted = (clientId: string): boolean => option?.allowedClientIds?.includes(clientId) === true;
     const setTrusted = (clientId: string, on: boolean) => {
         if(!option || !policy) return;
         const current = option.allowedClientIds ?? [];
-        option.allowedClientIds = policy.trustedClients.filter((id) => id === clientId ? on : current.includes(id));
+        option.allowedClientIds = restrictedClientIds.filter((id) => id === clientId ? on : current.includes(id));
     };
 
     // 옛 _onChangeSecureTunneling(344~351행) 그대로다.
@@ -306,6 +324,11 @@
     const apply = async () => {
         if(!option) return;
         trustedError = '';
+        // 그룹 밖 id 가 남아 있으면 서버가 422 trusted_client_not_allowed 로 거부한다. 요청 전에 이유를 보인다.
+        if(restricted && outsideGroupClientIds.length > 0) {
+            trustedError = 'Remove the client IDs your group does not allow.';
+            return;
+        }
         // 고를 대상이 있을 때만 막는다. 그룹이 허용한 클라이언트가 없으면 서버가 순서대로 판정한다(포트 검사가 먼저다).
         if(restricted && policy!.trustedClients.length > 0 && (option.allowedClientIds ?? []).length === 0) {
             trustedError = 'Select at least one trusted client.';
@@ -380,6 +403,10 @@
         if(policy && !policy.restricted) {
             void GroupsCtrl.instance.trustedClients().then((result) => { if(result.success) allTrustedClients = result.trustedClients; })
                 .catch(() => { /* 선택지가 없어도 이름 목록은 쓸 수 있다 */ });
+            // 소유자 그룹의 허용 목록을 비교하려고 읽는다. 실패하면 경고만 보이지 않는다.
+            void GroupsCtrl.instance.list().then((result) => {
+                if(result.success) groups = result.groups; else groupsUnavailable = true;
+            }).catch(() => { groupsUnavailable = true; });
         }
     });
 </script>
@@ -430,14 +457,18 @@
             {#if restricted}
                 <Field label="Trusted clients" error={trustedError || undefined}>
                     <div style="display: flex; flex-wrap: wrap; gap: var(--s-4);">
-                        {#each policy!.trustedClients as clientId (clientId)}
-                            <Checkbox id={`tunnel-trusted-${clientId}`} label={clientId}
+                        {#each restrictedClientIds as clientId (clientId)}
+                            <Checkbox id={`tunnel-trusted-${clientId}`}
+                                label={loadedOutsideIds.includes(clientId) ? `${clientId} (not allowed for your group)` : clientId}
                                 bind:checked={() => trusted(clientId), (on) => setTrusted(clientId, on)} />
                         {:else}
                             <p>No trusted clients are allowed for your group.</p>
                         {/each}
                     </div>
                 </Field>
+                {#if outsideGroupClientIds.length > 0}
+                    <p id="tunnel-trusted-not-allowed" role="note" style="margin: 0; color: var(--alarm);">Your group does not allow {outsideGroupClientIds.join(', ')}. Clear it before you save.</p>
+                {/if}
             {:else}
                 <Field label="Trusted client IDs">
                     <div style="display: flex; flex-wrap: wrap; gap: var(--s-4);">
@@ -452,6 +483,12 @@
                 <Field label="Allowed client names (Separate names with semicolon(;))" for="input-allow-client-names">
                     <TextInput id="input-allow-client-names" bind:value={option.allowedClientNamesQuery} />
                 </Field>
+                {#if groupsUnavailable && (option.allowedClientIds ?? []).length > 0}
+                    <p id="tunnel-client-ids-owner-unknown" role="note" style="margin: 0; color: var(--ink-2);">Could not read the owner's group, so these IDs are not checked against it.</p>
+                {/if}
+                {#if notAllowedForOwner.length > 0}
+                    <p id="tunnel-client-ids-not-allowed" role="alert" style="margin: 0; color: var(--alarm);">The owner's group does not allow {notAllowedForOwner.join(', ')}. The owner cannot save this tunnel until it is removed.</p>
+                {/if}
                 {#if (option.allowedClientIds ?? []).length > 0}
                     <p id="tunnel-client-ids-priority" role="note" style="margin: 0; color: var(--ink-2);">Trusted client IDs are set, so the client names above are ignored.</p>
                 {/if}

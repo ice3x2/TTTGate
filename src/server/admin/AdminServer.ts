@@ -1,4 +1,3 @@
-import {isIP} from "net";
 import http, {IncomingMessage, ServerResponse} from "http";
 import https from "https";
 import ServerOptionStore from "../ServerOptionStore";
@@ -20,12 +19,13 @@ import {SysMonitor} from "../../commons/SysMonitor";
 import LoggerFactory from "../../util/logger/LoggerFactory";
 import {TCPServer} from "../../util/TCPServer";
 import {ClockRngProvider} from "../../util/ClockRng";
-import {AdminSecurityPolicyRegistry, evaluateAdminSecurityPolicy, formatAdminSecurityPolicyErrors} from "../AdminSecurityPolicy";
+import {AdminSecurityPolicyRegistry, clientAddressFromForwardedFor, evaluateAdminSecurityPolicy, formatAdminSecurityPolicyErrors} from "../AdminSecurityPolicy";
 import {timingSafeStringEqual} from "../../util/timingSafeStringEqual";
 import {computeBackoffMs} from "./loginBackoff";
 import crypto from "crypto";
 import {DEFAULT_GEO_CONFIG, GeoConfig, TunnelingOption} from "../../types/TunnelingOption";
 import {AdmissionController} from "../security/AdmissionController";
+import {rateLimitBucketOf} from "../security/ConnectionRateLimiter";
 import {normalizeConnectionSecurity} from "../security/connectionSecurity";
 import {listCountries} from "../security/countries";
 import {auditEventOf, AuditRouteMeta, buildAdminRoutes, errorLabelOf, isTunnelActivationRequested, parseActiveTimeout, parsePathId, parsePathPort, Route, RouteContext} from "./routes";
@@ -1770,22 +1770,13 @@ class AdminServer {
 
     /**
      * P5-T2 / REQ-07: 신뢰할 수 있는 클라이언트 원격 IP를 반환.
-     * trustXForwardedFor 가 true 일 때만 XFF 헤더 최좌측 IP 신뢰. 기본값(false)에서는 항상 socket.remoteAddress 사용.
+     * trustXForwardedFor 가 true 일 때만 신뢰 프록시가 붙인 XFF 값을 쓴다(#178). 기본값(false)에서는 항상 socket.remoteAddress 사용.
      */
     private getClientAddress(req: IncomingMessage): string {
         const allowances = AdminSecurityPolicyRegistry.current();
-        if(allowances.trustXForwardedFor) {
-            const xff = req.headers['x-forwarded-for'];
-            const xffRaw = Array.isArray(xff) ? xff[0] : xff;
-            if(typeof xffRaw == 'string' && xffRaw.length > 0) {
-                // IP 형식만 쓴다. 아무 문자열이나 받으면 요청마다 값을 바꿔 로그인 차단 버킷을 새로 만들 수 있다(#171).
-                const first = xffRaw.split(',')[0]?.trim();
-                // 일부 프록시는 포트를 붙인다(1.2.3.4:5678, [2001:db8::1]:443). 포트와 대괄호를 벗긴 뒤 검사한다.
-                const host = first?.replace(/^\[([^\]]+)\](?::\d+)?$/, '$1').replace(/^(\d{1,3}(?:\.\d{1,3}){3}):\d+$/, '$1');
-                if(host && host.length <= 64 && isIP(host) !== 0) return host;
-            }
-        }
-        return req.socket.remoteAddress ?? "unknown";
+        const forwarded = allowances.trustXForwardedFor
+            ? clientAddressFromForwardedFor(req.headers['x-forwarded-for'], allowances.trustedProxyHops) : undefined;
+        return forwarded ?? req.socket.remoteAddress ?? "unknown";
     }
 
     /**
@@ -1801,15 +1792,8 @@ class AdminServer {
             const parts = normalized.split('.');
             return `v4:${parts[0]}.${parts[1]}.${parts[2]}.0/24`;
         }
-        // IPv6: 앞 4그룹(64bit) 만 남김.
-        if(normalized.indexOf(':') >= 0) {
-            // zone suffix 제거
-            const noZone = normalized.split('%')[0];
-            // 축약 형태 확장
-            const segs = noZone.split(':');
-            const head = segs.slice(0, 4).join(':');
-            return `v6:${head}::/64`;
-        }
+        // IPv6: 축약 표기를 펼친 뒤 앞 64bit 로 묶는다. 문자열 그대로 자르면 2001:db8::1 과 ::2 가 다른 버킷이 된다(#178).
+        if(normalized.indexOf(':') >= 0) return `v6:${rateLimitBucketOf(normalized)}`;
         return `raw:${normalized}`;
     }
 

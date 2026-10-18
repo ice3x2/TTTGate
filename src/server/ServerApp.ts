@@ -19,7 +19,8 @@ import {
     AdminSecurityPolicyRegistry,
     buildAdminSecurityAllowancesFromCliOptions,
     evaluateAdminSecurityPolicy,
-    formatAdminSecurityPolicyErrors
+    formatAdminSecurityPolicyErrors,
+    trustedProxyHopsCliWarning
 } from "./AdminSecurityPolicy";
 
 const logger = LoggerFactory.getLogger('server', 'ServerApp');
@@ -105,7 +106,8 @@ let ServerApp : {start(options?: {[key: string]: string}) : Promise<void>} = {
             console.error(message);
             process.exit(1);
         }
-        policyDecision.warnings.forEach((warning) => {
+        const hopsWarning = trustedProxyHopsCliWarning(cliOptions);
+        [...policyDecision.warnings, ...(hopsWarning ? [hopsWarning] : [])].forEach((warning) => {
             logger.warn(warning);
             console.warn(warning);
         });

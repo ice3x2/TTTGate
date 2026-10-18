@@ -96,10 +96,40 @@ describe("REQ-07 login rate limit (network bucket)", () => {
         expect((await login({username: "admin", password: "supersecret1", bootstrapToken})).statusCode).toBe(200);
         AdminSecurityPolicyRegistry.configure({trustXForwardedFor: true});
         for(let index = 0; index < 5; index++) {
-            expect((await login({username: "admin", password: "trusted-wrong-password"}, {"X-Forwarded-For": "10.1.1.5, 192.0.2.1"})).statusCode).toBe(401);
+            expect((await login({username: "admin", password: "trusted-wrong-password"}, {"X-Forwarded-For": "192.0.2.1, 10.1.1.5"})).statusCode).toBe(401);
         }
         expect((await login({username: "admin", password: "another-wrong-password"}, {"X-Forwarded-For": "10.1.1.99"})).statusCode).toBe(429);
         expect((await login({username: "admin", password: "another-wrong-password"}, {"X-Forwarded-For": "10.1.2.5"})).statusCode).toBe(401);
+    });
+
+    // #178 — 최좌측 값은 클라이언트가 고른다. 신뢰 프록시가 붙인 최우측 값(hop 수만큼)으로 버킷을 정해야 한다.
+    it("trusted XFF uses the address the trusted proxy appended, not the client-chosen leftmost value", async () => {
+        expect((await login({username: "admin", password: "supersecret1", bootstrapToken})).statusCode).toBe(200);
+        AdminSecurityPolicyRegistry.configure({trustXForwardedFor: true, trustedProxyHops: 1});
+        for(let index = 0; index < 5; index++) {
+            expect((await login({username: "admin", password: "spoofed-wrong"}, {"X-Forwarded-For": `10.${index}.0.1, 203.0.113.9`})).statusCode).toBe(401);
+        }
+        expect((await login({username: "admin", password: "spoofed-wrong"}, {"X-Forwarded-For": "10.99.0.1, 203.0.113.9"})).statusCode).toBe(429);
+    });
+
+    it("with two trusted proxy hops the second value from the right is the client address", async () => {
+        expect((await login({username: "admin", password: "supersecret1", bootstrapToken})).statusCode).toBe(200);
+        AdminSecurityPolicyRegistry.configure({trustXForwardedFor: true, trustedProxyHops: 2});
+        for(let index = 0; index < 5; index++) {
+            expect((await login({username: "admin", password: "two-hop-wrong"}, {"X-Forwarded-For": `10.${index}.0.1, 203.0.113.9, 198.51.${index}.1`})).statusCode).toBe(401);
+        }
+        expect((await login({username: "admin", password: "two-hop-wrong"}, {"X-Forwarded-For": "203.0.113.9, 198.51.77.1"})).statusCode).toBe(429);
+    });
+
+    // #178 — 축약 IPv6 를 문자열로 자르면 같은 /64 안에서 주소만 바꿔 차단을 피한다.
+    it("IPv6 addresses in the same /64 share one login bucket", async () => {
+        expect((await login({username: "admin", password: "supersecret1", bootstrapToken})).statusCode).toBe(200);
+        AdminSecurityPolicyRegistry.configure({trustXForwardedFor: true});
+        for(let index = 0; index < 5; index++) {
+            expect((await login({username: "admin", password: "v6-wrong"}, {"X-Forwarded-For": `2001:db8::${index + 1}`})).statusCode).toBe(401);
+        }
+        expect((await login({username: "admin", password: "v6-wrong"}, {"X-Forwarded-For": "2001:db8:0:0:ffff::9"})).statusCode).toBe(429);
+        expect((await login({username: "admin", password: "v6-wrong"}, {"X-Forwarded-For": "2001:db8:0:1::1"})).statusCode).toBe(401);
     });
 
     // #171 — IP 형식이 아닌 XFF 값을 그대로 버킷 키로 쓰면 요청마다 값을 바꿔 로그인 차단을 우회한다.

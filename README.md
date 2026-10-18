@@ -45,6 +45,11 @@ Server options:
 - `-keepAlive [ms]`: control listener TCP keepalive interval.
 - `-allowLegacyAdminHttp`: allow legacy non-TLS admin mode for one process run.
 - `-allowLegacyAdminRemote`: allow legacy non-loopback admin bind for one process run.
+- `-trustXForwardedFor`: read the admin client address from `X-Forwarded-For`. Use it only behind a reverse proxy that you control.
+- `-trustedProxyHops [n]`: number of trusted proxies in front of the admin server (1–16, default 1). The address is taken from the right end of `X-Forwarded-For`, skipping this many entries, because clients can write anything on the left.
+  - Set it to the **exact** number of proxies. A larger value lets a client choose its own address again and evade the login lockout. A smaller value puts every admin behind the same proxy address, so one lockout locks out everyone and MFA tickets can fail when that address changes.
+  - Let only the proxy reach the admin port. If clients can connect directly, they also control the rightmost value.
+  - Upgrade note: earlier versions read the **leftmost** value. Check this setting when you upgrade.
 - `-allowLegacyControlAuth`: allow legacy shared-key control authentication for one process run. **Risk:** legacy data connections carry no binding token, so anyone who guesses a data handler ID can take over a session and read or inject external user traffic. The server logs a warning at startup while this is on.
 - `-reset [true|false]`: delete persisted server state only when explicitly `true`.
 - `-daemon`: run with process monitoring.
