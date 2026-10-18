@@ -52,6 +52,31 @@ describe("SessionStore baseline behavior", () => {
         expect(store.listSessions().length).toBe(0);
     });
 
+    it("#143 만료된 세션은 목록·사용자별 종료 수에서 빠지고 sweep 이 맵에서 지운다", async () => {
+        SessionStore.resetForTest();
+        const store = SessionStore.instance;
+        await store.newSession("u_old", {ip: "127.0.0.1"});
+        await store.newSession("u_old", {ip: "127.0.0.1"});
+        fakeClock.advance(DEFAULT_TIMEOUT + 1);
+        const fresh = await store.newSession("u_old", {ip: "127.0.0.1"});
+
+        // resolveSession 을 거치지 않은 만료 세션도 목록에 보이지 않는다.
+        expect(store.listSessions().map((session) => session.key)).toEqual([fresh]);
+        // 사용자 세션 종료 수에 만료 세션이 섞이지 않는다.
+        expect(store.removeSessionsOfUser("u_old", {except: fresh})).toBe(0);
+
+        // 경계: timeout == now 인 세션은 인증에서 거절되므로 목록에도 없다.
+        SessionStore.resetForTest();
+        const edge = await SessionStore.instance.newSession("u_edge", {ip: "127.0.0.1"});
+        fakeClock.advance(DEFAULT_TIMEOUT);
+        expect(SessionStore.instance.resolveSession([edge])).toBeUndefined();
+        expect(SessionStore.instance.listSessions()).toEqual([]);
+        await store.newSession("u_other", {ip: "127.0.0.1"});
+        fakeClock.advance(DEFAULT_TIMEOUT + 1);
+        store.sweepSession();
+        expect((store as any)._sessions.size).toBe(0);
+    });
+
     it("newSession returns a 128-char hex key and records the session metadata", async () => {
         const store = SessionStore.instance;
         const sessionKey = await store.newSession("u_1", {ip: "127.0.0.1"});

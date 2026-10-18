@@ -1654,7 +1654,7 @@ class AdminServer {
 
     public async listen(port : number, host?: string)  : Promise<number> {
         clearInterval(this._mfaSweepTimer);
-        this._mfaSweepTimer = setInterval(() => { this._mfa.pending.sweep(); this._mfa.tickets.sweep(); }, 60_000).unref();
+        this._mfaSweepTimer = setInterval(() => { this._mfa.pending.sweep(); this._mfa.tickets.sweep(); SessionStore.instance.sweepSession(); }, 60_000).unref();
         // P5-T6 / REQ-19: listen 전용 핸들러를 named function 으로 등록해 listen 종료 후 removeListener(named).
         // removeAllListeners 를 호출하면 생성자에서 등록한 영구 핸들러(_permanentErrorHandler)까지 제거되므로 절대 사용 금지.
         return new Promise((resolve, reject) => {
