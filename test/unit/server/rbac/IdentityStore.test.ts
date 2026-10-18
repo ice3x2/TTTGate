@@ -136,6 +136,30 @@ describe("IdentityStore", () => {
         expect(IdentityStore.instance.users().filter((u) => u.username === "heidi")).toHaveLength(1);
     });
 
+    it("#140 updateUser rejects a groupId that does not exist or is not a string, and keeps the stored group", async () => {
+        IdentityStore.instance.load();
+        const created = await IdentityStore.instance.createUser({username: "ivan", role: "regular", password: "ivan-password-1", mustChangePassword: false});
+        expect(created.success).toBe(true);
+        if(!created.success) return;
+        const id = created.value.id;
+        const before = IdentityStore.instance.user(id)!.groupId;
+
+        expect(IdentityStore.instance.updateUser(id, {groupId: "g_missing00000000"})).toMatchObject({success: false, status: 422, code: "group_not_found"});
+        expect(IdentityStore.instance.updateUser(id, {groupId: 5 as any})).toMatchObject({success: false, status: 422, code: "group_not_found"});
+        expect(IdentityStore.instance.updateUser(id, {groupId: {} as any})).toMatchObject({success: false, status: 422, code: "group_not_found"});
+        expect(IdentityStore.instance.user(id)!.groupId).toBe(before);
+
+        IdentityStore.resetForTest();
+        IdentityStore.instance.load();
+        expect(IdentityStore.instance.user(id)!.groupId).toBe(before);
+
+        const group = IdentityStore.instance.createGroup({name: "Field"});
+        expect(group.success).toBe(true);
+        if(!group.success) return;
+        expect(IdentityStore.instance.updateUser(id, {groupId: group.value.id}).success).toBe(true);
+        expect(IdentityStore.instance.user(id)!.groupId).toBe(group.value.id);
+    });
+
     it("guards the last active superuser from demotion, disabling, and deletion", async () => {
         IdentityStore.instance.load();
         const onlySuperuser = await IdentityStore.instance.createUser({username: "solo", role: "superuser", password: "solo-password-1", mustChangePassword: false});
