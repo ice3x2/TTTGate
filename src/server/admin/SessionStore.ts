@@ -102,6 +102,8 @@ class SessionStore {
      * (#96 (U2-04)의 /api/me/password가 현재 세션을 남기는 데 쓴다). 반환값은 제거한 개수.
      */
     public removeSessionsOfUser(userId: string, options?: {except?: string}): number {
+        // 만료 세션은 먼저 지운다. 남겨 두면 "끊은 세션 수" 에 이미 끝난 세션이 섞인다(#143).
+        this.sweepSession();
         const exceptKey = options?.except;
         const keysToRemove: string[] = [];
         for(const [key, session] of this._sessions) {
@@ -126,7 +128,9 @@ class SessionStore {
         return found;
     }
 
+    /** 살아 있는 세션만 돌려준다. 만료 세션은 이 호출에서 함께 지운다(#143 — 목록에 활성처럼 보이지 않게). */
     public listSessions(): Session[] {
+        this.sweepSession();
         return Array.from(this._sessions.values()).map((session) => ({...session}));
     }
 
@@ -135,7 +139,7 @@ class SessionStore {
         // forEach 는 async/await 를 무시하므로 비동기 안전성이 낮다.
         const now = this.now();
         for(const [key, session] of this._sessions) {
-            if(session.timeout < now) {
+            if(session.timeout <= now) { // resolveSession 과 같은 경계다. timeout == now 는 이미 인증에서 거절된다.
                 this._sessions.delete(key);
             }
         }
