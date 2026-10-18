@@ -183,6 +183,47 @@ describe("IdentityStore", () => {
         if(created.success) expect(created.value.displayName).toBe("Judy");
     });
 
+    it("#172 save failure messages do not expose the identity file path", async () => {
+        IdentityStore.instance.load();
+        const spy = jest.spyOn(Files, "writeAtomicBatchSync").mockImplementation(() => {
+            throw Object.assign(new Error(`EACCES: permission denied, open '${identityYamlPath()}'`), {code: "EACCES"});
+        });
+        try {
+            const result = IdentityStore.instance.createGroup({name: "Locked"});
+            expect(result.success).toBe(false);
+            if(!result.success) {
+                expect(result.message).not.toContain(testRoot.rootDir);
+                expect(result.message).toContain("EACCES");
+            }
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
+    it("#172 loads a stored non-string group name as a string instead of failing later", () => {
+        IdentityStore.instance.load();
+        const created = IdentityStore.instance.createGroup({name: "Numeric"});
+        expect(created.success).toBe(true);
+        if(!created.success) return;
+        const parsed = YAML.parse(fs.readFileSync(identityYamlPath(), "utf8"));
+        parsed.groups.find((group: any) => group.id === created.value.id).name = 5;
+        fs.writeFileSync(identityYamlPath(), YAML.stringify(parsed));
+        IdentityStore.resetForTest();
+        expect(IdentityStore.instance.load()).toMatchObject({success: true, source: "file"});
+        expect(IdentityStore.instance.group(created.value.id)!.name).toBe("5");
+    });
+
+    it("#172 rejects duplicate group names on create and rename", () => {
+        IdentityStore.instance.load();
+        expect(IdentityStore.instance.createGroup({name: "Field"}).success).toBe(true);
+        expect(IdentityStore.instance.createGroup({name: "  field "})).toMatchObject({success: false, status: 409, code: "group_name_taken"});
+        const other = IdentityStore.instance.createGroup({name: "Ops"});
+        expect(other.success).toBe(true);
+        if(!other.success) return;
+        expect(IdentityStore.instance.updateGroup(other.value.id, {name: "FIELD"})).toMatchObject({success: false, status: 409, code: "group_name_taken"});
+        expect(IdentityStore.instance.updateGroup(other.value.id, {name: "Ops"}).success).toBe(true);
+    });
+
     it("guards the last active superuser from demotion, disabling, and deletion", async () => {
         IdentityStore.instance.load();
         const onlySuperuser = await IdentityStore.instance.createUser({username: "solo", role: "superuser", password: "solo-password-1", mustChangePassword: false});
