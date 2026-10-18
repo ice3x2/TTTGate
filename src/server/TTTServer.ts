@@ -585,34 +585,6 @@ class TTTServer {
 
 
 
-    public async updateAndRestartExternalPortServer(port: number) : Promise<boolean>  {
-        let optionStore =  ServerOptionStore.instance;
-        let tunnelOption = optionStore.getTunnelingOption(port);
-        if(!tunnelOption) {
-            return false;
-        }
-        this._allowClientNamesMap.delete(port);
-        this._allowClientIdsMap.delete(port);
-        if(tunnelOption.allowedClientIds && tunnelOption.allowedClientIds.length > 0) {
-            this._allowClientIdsMap.set(port, tunnelOption.allowedClientIds);
-        }
-        if(tunnelOption.allowedClientNames && tunnelOption.allowedClientNames.length > 0) {
-            this._allowClientNamesMap.set(port, tunnelOption.allowedClientNames);
-            this.warnUnmatchedClientNames(port, tunnelOption.allowedClientNames);
-        }
-        let lastServerStatus = this._externalPortServerPool.getServerStatus(port);
-        await this._externalPortServerPool.stop(port);
-        let success = await this._externalPortServerPool.startServer(tunnelOption, CertificationStore.instance.getExternalCert(port));
-        if(success && lastServerStatus && lastServerStatus.online) {
-            const requested = lastServerStatus.requestedTimeout ?? lastServerStatus.activeTimeout;
-            this._externalPortServerPool.setActiveTimeout(port, requested);
-            if(!tunnelOption.inactiveOnStartup)  await this._externalPortServerPool.active(port, requested, {startedAt: lastServerStatus.activeStart});
-
-        }
-        return success;
-    }
-
-
     public async start() : Promise<void> {
         let optionStore =  ServerOptionStore.instance;
         let tunnelOptions =  optionStore.getTunnelingOptions();

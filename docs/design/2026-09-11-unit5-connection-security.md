@@ -187,7 +187,7 @@ HTTP 터널에서 `concurrency-limit` 거절만은 소켓을 바로 닫지 않�
 | 속성 | 집행 지점 | 동작 |
 |---|---|---|
 | (공통) | 감사 이벤트 타입은 이 단위에서 문자열 리터럴(`'tunnel_autoexpire'`, `'conn_limit_hit'`)로 쓰고, U4-01 이 `AuditEventTypes.ts` 상수로 치환한다(U5-07·08 이 U4-01 과 같은 파동이라 상수를 기다리지 않는다) | |
-| 3 `max_tunnel_duration_ms` | `ExternalPortServerPool.active(port, timeout)` 진입, 기동 시 자동 활성 | 소유자가 일반 유저이고 그룹 값 > 0 이면 `timeout = min(timeout || ∞, limit/1000)`. 만료로 `inactive` 되면 감사 이벤트 `tunnel_autoexpire` |
+| 3 `max_tunnel_duration_ms` | `ExternalPortServerPool.active(port, timeout)` 진입, 기동 시 자동 활성 | 소유자가 일반 유저이고 그룹 값 > 0 이면 `timeout = min(timeout || ∞, limit/1000)`. 만료로 `inactive` 되면 감사 이벤트 `tunnel_autoexpire`. 활성 중인 터널에도 다시 적용된다(#137): 상한을 낮추면 남은 시간이 바로 줄고, 상한을 올리거나 0(무제한)으로 바꾸면 남은 시간이 소유자가 처음 요청한 값(`requestedTimeout`, 활성 시각 기준)까지 다시 늘어난다. 즉 상한 완화는 이미 열린 터널의 노출 시간을 사후에 넓힌다(#177) |
 | 6 `max_concurrent_connections` | `AdmissionController.admit` 의 마지막 단계 | 그룹 합산 세션 수(`Σ status.sessions` over 그룹 소유 포트) `>= limit` 이면 `concurrency-limit`. 그룹→포트 목록은 `configureTunnel` 때 갱신. 감사 이벤트 `conn_limit_hit` 는 포트·그룹별 1분 1회로 묶음 |
 | 11 `rate_limit` 대역폭 프리셋 | `src/server/security/BandwidthLimiter.ts` | 그룹별 토큰 버킷(용량 = 초당 바이트, 100ms 마다 1/10 보충). 외부→클라이언트: `onHandlerEvent` Receive 에서 `consume(bytes)` 가 대기 ms 를 돌려주면 `handler.socket.pause()` 후 `setTimeout(resume)`. 클라이언트→외부: `send(id, data)` 에서 대기가 필요하면 핸들러별 FIFO 큐에 넣고 순서대로 흘려보낸다(핸들러당 큐 상한은 `bufferLimitOnServer` 를 재사용). `unlimited` 는 버킷을 만들지 않는다 |
 
