@@ -133,13 +133,12 @@ class ClientHandlerPool {
             dataHandler.bindingToken ?? "",
             "utf8"
         )) {
+            // 틀린 토큰을 보낸 연결만 닫는다. 열리던 정상 세션은 그대로 두어 진짜 데이터 연결을 기다린다(#160).
+            // 여기서 세션까지 실패시키면 추측한 ID 만으로 인증 없이 남의 세션을 끊을 수 있다.
+            // handlerID 는 순차값 그대로 둔다. v2 는 24바이트 바인딩 토큰이 보호하고, 토큰이 없는 legacy 는 명시적 opt-in 이다.
             logger.error(`putNewDataHandler: binding token mismatch for sessionID: ${pendingDataState.sessionID}`);
-            const fullHandlerID = dataHandler.handlerID ?? pendingDataState.handlerID;
-            this._controlHandler.sendData(CtrlPacket.resultOfOpenSession(fullHandlerID, pendingDataState.sessionID, false, {handlerID: fullHandlerID}).toBuffer());
+            dataHandler.sessionID = undefined;
             dataHandler.endImmediate();
-            this._pendingSessionIDMap.delete(pendingDataState.sessionID);
-            this.burnWaitBuffer(pendingDataState.sessionID);
-            this.closeSessionAndCallback(pendingDataState.sessionID, 0);
             return;
         }
         dataHandler.dataHandlerState = DataHandlerState.Initializing;

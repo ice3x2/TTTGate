@@ -259,7 +259,8 @@ describe("protocol v2 control plane", () => {
         expect(server.clientStatus()).toHaveLength(0);
     });
 
-    it("rejects mismatched data channel binding tokens", async () => {
+    // #160 — 틀린 토큰의 데이터 연결은 그 연결만 닫는다. 열리던 정상 세션까지 실패시키면 인증 없이 세션을 끊을 수 있다.
+    it("rejects mismatched data channel binding tokens without failing the pending session", async () => {
         echoServer = await startEchoServer();
         const tunnelForwardPort = await getFreePort();
         await startServer({
@@ -303,15 +304,29 @@ describe("protocol v2 control plane", () => {
         });
         spoofedDataSocket.write(DataStatePacket.create(syncAck.ID, newDataHandlerPacket.ID, newDataHandlerPacket.sessionID, "wrong-binding-token").toBuffer());
 
-        const failPacket = await waitFor(async () => {
+        await waitFor(() => {
+            if(!spoofedDataSocket.destroyed && spoofedDataSocket.readable) throw new Error("spoofed data socket is still open");
+            return true;
+        }, {timeoutMs: 5000, intervalMs: 25});
+
+        // 정상 클라이언트는 맞는 토큰으로 같은 세션을 연다. 서버는 실패 대신 OpenSession(엔드포인트 연결 요청)을 보낸다.
+        const realDataSocket = net.createConnection({host: "127.0.0.1", port: serverPort});
+        await new Promise<void>((resolve, reject) => {
+            realDataSocket.once("connect", () => resolve());
+            realDataSocket.once("error", reject);
+        });
+        realDataSocket.write(DataStatePacket.create(syncAck.ID, newDataHandlerPacket.ID, newDataHandlerPacket.sessionID,
+            newDataHandlerPacket.newDataHandlerMeta!.bindingToken!).toBuffer());
+        const next = await waitFor(async () => {
             const packet = await rawClient.readPacket();
-            if(packet.cmd !== CtrlCmd.FailOfOpenSession) {
-                throw new Error(`expected FailOfOpenSession but received ${CtrlCmd[packet.cmd]}`);
+            if(packet.cmd !== CtrlCmd.OpenSession && packet.cmd !== CtrlCmd.FailOfOpenSession) {
+                throw new Error(`unexpected ${CtrlCmd[packet.cmd]}`);
             }
             return packet;
         }, {timeoutMs: 5000, intervalMs: 25});
-
-        expect(failPacket.sessionID).toBe(newDataHandlerPacket.sessionID);
+        expect(CtrlCmd[next.cmd]).toBe("OpenSession");
+        expect(next.sessionID).toBe(newDataHandlerPacket.sessionID);
+        realDataSocket.destroy();
         spoofedDataSocket.destroy();
         externalSocket.destroy();
         rawClient.destroy();
