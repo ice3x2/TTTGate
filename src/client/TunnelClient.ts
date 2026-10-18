@@ -11,6 +11,7 @@ import Dequeue from "../util/Dequeue";
 import {ResourcePolicyRegistry} from "../util/ResourcePolicy";
 import LoggerFactory  from "../util/logger/LoggerFactory";
 import {SystemInfoProviderRegistry} from "../commons/SystemInfoProvider";
+import {sysinfoMessagePacket} from "./sysinfoPacket";
 const logger = LoggerFactory.getLogger('client', 'TunnelClient');
 
 
@@ -616,12 +617,11 @@ class TunnelClient {
     }
 
     private sendClientSysinfo(ctrlHandler: TunnelControlHandler, id: number) {
+        // 실패해도 연결은 유지한다. catch 가 없으면 unhandled rejection 으로 프로세스가 끝난다(#164).
         SystemInfoProviderRegistry.current().sysInfo().then((value) => {
-            let ctrlPacket = CtrlPacket.message(id, {
-                type: 'sysinfo',
-                payload: value
-            });
-            ctrlHandler.sendData(ctrlPacket.toBuffer());
+            ctrlHandler.sendData(sysinfoMessagePacket(id, value).toBuffer());
+        }).catch((error) => {
+            logger.warn('Failed to send client sysinfo', error);
         });
 
     }
