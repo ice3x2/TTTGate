@@ -12,6 +12,13 @@ import {DEFAULT_KEY} from "../../../src/types/TunnelingOption";
 import {getFreePort, startEchoServer} from "../../helpers/network";
 import {applyTestRoot, cleanupTestRoot, createTestRoot} from "../../helpers/runtime";
 
+/** wide 핸드셰이크의 handlerID. 값이 없으면 0 이 와이어에 써져 엉뚱한 이유로 거절되므로 크게 실패한다. */
+export function wideHandlerID(packet: CtrlPacket): number {
+    const handlerID = packet.newDataHandlerMeta?.handlerID;
+    if(handlerID === undefined) throw new Error('NewDataHandler packet has no wide handlerID');
+    return handlerID;
+}
+
 export async function until(condition: () => boolean, message: string) {
     const deadline = Date.now() + 3000;
     while(!condition()) {
@@ -89,7 +96,7 @@ async function setup() {
                 const packet = await read(CtrlCmd.NewDataHandler);
                 return {socket, packet, received};
             };
-            const handover = async (packet: CtrlPacket, sessionID = packet.sessionID, handlerID = wide ? packet.newDataHandlerMeta!.handlerID : packet.ID) => {
+            const handover = async (packet: CtrlPacket, sessionID = packet.sessionID, handlerID = wide ? wideHandlerID(packet) : packet.ID) => {
                 const data = await connect(controlPort);
                 data.write(DataStatePacket.create(controlID, handlerID, sessionID, wide ? packet.newDataHandlerMeta?.bindingToken : undefined).toBuffer());
                 return data;

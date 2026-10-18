@@ -7,6 +7,8 @@ const workflowPath = path.resolve(__dirname, "../../.github/workflows/code-regre
 const fastCommands = ["npm ci --no-audit --no-fund", "npm run build", "npm run lint", "npm run test:unit", "npm run test:component"];
 const browserCommands = ["npm ci --no-audit --no-fund", "npm ci --prefix admin --no-audit --no-fund",
     "npx playwright install --with-deps chromium", "npm run build", "npm run test:admin", "npm run test:e2e", "npm run test:e2e:browser"];
+// #131: src 와 test 를 함께 타입 체크한다. 실패하면 워크플로가 실패한다.
+const typecheckCommands = ["npm ci --no-audit --no-fund", "npm run typecheck"];
 
 describe("code regression CI (#14)", () => {
     test("runs for every pull request without branch or path filters", () => {
@@ -18,6 +20,7 @@ describe("code regression CI (#14)", () => {
     test.each([
         ["fast", fastCommands],
         ["browser-e2e", browserCommands],
+        ["typecheck", typecheckCommands],
     ])("%s job installs locked dependencies then runs its commands without bypassing failures", (jobName, commands) => {
         const workflow = parseYaml(fs.readFileSync(workflowPath, "utf8"));
         const job = workflow.jobs[jobName as string];
@@ -40,9 +43,9 @@ describe("code regression CI (#14)", () => {
         }
     });
 
-    test("declares exactly the fast and browser-e2e jobs with no dependency between them", () => {
+    test("declares exactly the fast, typecheck and browser-e2e jobs with no dependency between them", () => {
         const workflow = parseYaml(fs.readFileSync(workflowPath, "utf8"));
-        expect(Object.keys(workflow.jobs)).toEqual(["fast", "browser-e2e"]);
+        expect(Object.keys(workflow.jobs)).toEqual(["fast", "typecheck", "browser-e2e"]);
         for(const job of Object.values<any>(workflow.jobs)) expect(job.needs).toBeUndefined();
     });
 });

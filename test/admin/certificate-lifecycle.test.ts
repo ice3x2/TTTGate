@@ -64,7 +64,7 @@ test("changed parent props refresh native files, including in-place updates and 
         await app.page.evaluate((value) => (window as any).certificateFixture.mutate(value), mutated);
         await app.page.waitForFunction(() => (document.querySelector('input[type="file"]') as HTMLInputElement)?.files?.[0]?.name === "mutated-key.pem");
         await app.page.evaluate((value) => (window as any).certificateFixture.replace(value), empty());
-        await app.page.waitForFunction(() => Array.from(document.querySelectorAll('input[type="file"]')).every((input: HTMLInputElement) => input.files!.length === 0));
+        await app.page.waitForFunction(() => Array.from(document.querySelectorAll<HTMLInputElement>('input[type="file"]')).every((input) => input.files!.length === 0));
         expect(await app.page.locator("#updates").textContent()).toBe("0");
         expect(app.errors).toEqual([]);
     } finally {
@@ -94,7 +94,7 @@ test("a null parent certificate clears native file inputs without a lifecycle er
         await app.page.addInitScript((value) => { (window as any).initialCertificate = value; }, saved());
         await app.page.goto(`${app.url}/test/certificate.html`);
         await app.page.evaluate(() => (window as any).certificateFixture.replace(null));
-        await app.page.waitForFunction(() => Array.from(document.querySelectorAll('input[type="file"]')).every((input: HTMLInputElement) => input.files!.length === 0), undefined, {timeout: 3000});
+        await app.page.waitForFunction(() => Array.from(document.querySelectorAll<HTMLInputElement>('input[type="file"]')).every((input) => input.files!.length === 0), undefined, {timeout: 3000});
         expect(app.errors).toEqual([]);
     } finally {
         await app.close();

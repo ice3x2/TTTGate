@@ -1,4 +1,5 @@
-import { spawn, ChildProcessWithoutNullStreams } from "child_process";
+import { spawn, ChildProcessByStdio } from "child_process";
+import { Readable } from "stream";
 import { once } from "events";
 import { createServer, AddressInfo } from "net";
 
@@ -8,7 +9,7 @@ import { createServer, AddressInfo } from "net";
  */
 
 export interface SpawnedProcess {
-    readonly child: ChildProcessWithoutNullStreams;
+    readonly child: ChildProcessByStdio<null, Readable, Readable>;
     readonly pid: number;
     readonly stdoutChunks: Buffer[];
     readonly stderrChunks: Buffer[];
@@ -81,14 +82,14 @@ export async function getFreePort(): Promise<number> {
 export async function waitUntil<T>(
     fn: () => Promise<T> | T,
     opts: { timeoutMs: number; intervalMs?: number; label?: string }
-): Promise<T> {
+): Promise<NonNullable<T>> {
     const interval = opts.intervalMs ?? 100;
     const deadline = Date.now() + opts.timeoutMs;
     let lastErr: unknown;
     while (Date.now() < deadline) {
         try {
             const v = await fn();
-            if (v) return v as T;
+            if (v) return v as NonNullable<T>;
         } catch (e) {
             lastErr = e;
         }

@@ -8,7 +8,7 @@ describe("HttpPipe header limit", () => {
         let headers = 0;
         pipe.onErrorCallback = (error: Error) => { errors.push(error); };
         pipe.onHeaderCallback = () => { headers++; };
-        pipe.onDataCallback = () => {};
+        pipe.onDataCallback = () => false;
         pipe.onEndCallback = () => {};
         const head = Buffer.from("GET / HTTP/1.1\r\nHost: example.com\r\nX-Pad: ");
         const pad = Buffer.alloc(size, "a");

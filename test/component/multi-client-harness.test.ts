@@ -113,7 +113,7 @@ test('held B response remains on its real owner while A stops', async () => {
     try {
         await h.start(); const server = h.getServer().tunnelServer as any;
         const b = [...server._clientHandlerPoolMap.values()].find((pool: any) => pool.clientId === 'B') as any;
-        result = h.sendAndReceive('held-B-bytes', 'B'); result.catch(() => {});
+        const pending: Promise<Buffer> = h.sendAndReceive('held-B-bytes', 'B'); result = pending; pending.catch(() => {});
         await until(() => !!release, 'Actual B bytes never reached endpoint');
         const handlers = [...b._activatedSessionHandlerMap_.values()];
         await h.stopClient('A');

@@ -53,7 +53,8 @@ const withAuthorizedServer = async (
 
         const login = await request("POST", "/api/login", {username: "admin", password: PASSWORD});
         expect(login.status).toBe(200);
-        const cookies: string[] = login.headers["set-cookie"];
+        const cookies = login.headers["set-cookie"];
+        if(!cookies) throw new Error("login set no cookie");
         const cookie = cookies.map((value) => value.split(";")[0]).join("; ");
 
         await check({request, cookie});

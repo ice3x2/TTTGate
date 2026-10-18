@@ -82,7 +82,7 @@ const clientCase = async (pending: boolean) => {
     pausedPeer.listen(0, "127.0.0.1");
     await Promise.all([once(controlServer, "listening"), once(pausedPeer, "listening")]);
     const client = TunnelClient.create({key: "issue9-test-key", name: "issue9-client",
-        host: "127.0.0.1", port: (controlServer.address() as net.AddressInfo).port, tls: false, keepAlive: 0});
+        host: "127.0.0.1", port: (controlServer.address() as net.AddressInfo).port, tls: false, keepAlive: 0, globalMemCacheLimit: 128});
     let dataHandler: SocketHandler | undefined;
     let closedSessions = 0;
     client.onEndPointCloseCallback = () => { closedSessions++; };

@@ -32,6 +32,7 @@
     "test:browser:install": "playwright install chromium",
     "test:coverage": "jest --detectOpenHandles --coverage",
     "lint": "node scripts/lint-auth-compare.mjs src --strict",
+    "typecheck": "tsc -p tsconfig.test.json --noEmit",
     "smoke": "node scripts/smoke.mjs",
     "geoip:update": "node scripts/geoip-update.mjs",
     "build": "tsc -b",

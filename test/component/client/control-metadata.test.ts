@@ -22,7 +22,7 @@ async function withActualClient(check: (h: any) => Promise<void>, syncBad?: stri
             resume = () => originalSync.call(server, handler);
         };
         const client = TTTClient.create({host: '127.0.0.1', port: server.port, tls: false, key: DEFAULT_KEY,
-            name: 'wide', clientId: 'wide', clientSecret: 'fixture-wide-secret', allowLegacyFallback: false, keepAlive: 0});
+            name: 'wide', clientId: 'wide', clientSecret: 'fixture-wide-secret', allowLegacyFallback: false, keepAlive: 0, globalMemCacheLimit: 128});
         const sockets: net.Socket[] = [];
         try {
             client.start(); const tunnel = (client as any)._tunnelClient;
