@@ -139,6 +139,40 @@ describe("ConnectionRateLimiter", () => {
         expect(limiter.trackedIps(1)).toBe(0);
     });
 
+    // #167 — IPv6 는 /64 안에서 주소를 바꿔 우회하기 쉽다. /64 를 한 버킷으로 센다.
+    it("counts addresses in the same IPv6 /64 as one bucket and bans the bucket", () => {
+        const limiter = new ConnectionRateLimiter();
+        limiter.configurePort(1, BASE_CONFIG);
+        const decisions = ["2001:db8:0:1::1", "2001:db8:0:1::2", "2001:db8:0:1:ffff::3", "2001:0db8:0000:0001::4"]
+            .map((ip, i) => limiter.admit(1, ip, i).allowed);
+        expect(decisions).toEqual([true, true, true, false]);
+        expect(limiter.admit(1, "2001:db8:0:1::99", 10).allowed).toBe(false);
+        expect(limiter.admit(1, "2001:db8:0:2::1", 10).allowed).toBe(true);
+        expect(limiter.bans(10).map((ban) => ban.ip)).toEqual(["2001:db8:0:1::/64"]);
+        expect(limiter.unban(1, "2001:db8:0:1::/64")).toBe(true);
+        expect(limiter.admit(1, "2001:db8:0:1::5", 11).allowed).toBe(true);
+    });
+
+    it("treats IPv4-mapped IPv6 as the IPv4 address", () => {
+        const limiter = new ConnectionRateLimiter();
+        limiter.configurePort(1, BASE_CONFIG);
+        for(let i = 0; i < 3; i += 1) limiter.admit(1, "::ffff:10.1.1.1", i);
+        expect(limiter.admit(1, "10.1.1.1", 3).allowed).toBe(false);
+        expect(limiter.bans(4).map((ban) => ban.ip)).toEqual(["10.1.1.1"]);
+    });
+
+    // #167 — 상한에서 오래된 ban 을 지우면 새 주소로 ban 을 대량으로 만들어 운영자가 건 ban 을 풀 수 있다.
+    it("keeps existing bans when the ban table is full", () => {
+        const limiter = new ConnectionRateLimiter();
+        limiter.configurePort(1, {windowMs: 1000, maxConnections: 0, banMs: 60_000});
+        expect(limiter.admit(1, "1.1.1.1", 0).allowed).toBe(false);
+        for(let n = 0; n < MAX_TRACKED_IPS_PER_PORT + 5; n++) {
+            limiter.admit(1, `10.${(n >> 16) & 255}.${(n >> 8) & 255}.${n & 255}`, 1);
+        }
+        expect(limiter.banned(1, "1.1.1.1", 2)).toBeDefined();
+        expect(limiter.stats(1).bannedIps).toBeLessThanOrEqual(MAX_TRACKED_IPS_PER_PORT);
+    });
+
     it("evicts the oldest tracked IP once MAX_TRACKED_IPS_PER_PORT is exceeded", () => {
         const limiter = new ConnectionRateLimiter();
         limiter.configurePort(1, BASE_CONFIG);
