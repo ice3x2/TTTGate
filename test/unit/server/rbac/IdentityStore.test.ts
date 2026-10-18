@@ -158,6 +158,8 @@ describe("IdentityStore", () => {
         if(!group.success) return;
         expect(IdentityStore.instance.updateUser(id, {groupId: group.value.id}).success).toBe(true);
         expect(IdentityStore.instance.user(id)!.groupId).toBe(group.value.id);
+    });
+
     it("#144 validates group names on update and display names on create", async () => {
         IdentityStore.instance.load();
         const group = IdentityStore.instance.createGroup({name: "Ops"});
