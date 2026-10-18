@@ -344,8 +344,10 @@ test("목적지 호스트를 바꿔 저장하면 본문 전체가 그대로 나�
         await app.page.waitForFunction(() => document.querySelectorAll("li[data-port]").length === 2, undefined, {timeout: 10_000});
         expect(await app.page.locator("li[data-port]").count()).toBe(2);
 
+        // 목록 응답의 소유 정보(ownerId·owner·editable)는 저장 본문에 싣지 않는다. 소유자 변경은 전용 API 만 한다.
+        const {ownerId: _ownerId, owner: _owner, editable: _editable, ...storedBody} = stored;
         expect(sent).toEqual([{
-            ...stored,
+            ...storedBody,
             httpOption: stored.httpOption ?? EMPTY_HTTP_OPTION,
             destinationAddress: "10.0.0.9",
             allowedClientNames: [],

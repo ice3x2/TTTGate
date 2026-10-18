@@ -146,7 +146,9 @@ class ServerOptionCtrl {
     public async updateTunnelingOption(tunnelingOption : Options, expectedRevision: number,
         compound: {certInfo?: CertInfo, expectedCertificateRevision?: number, previousForwardPort?: number} = {}) : Promise<ConfigurationResult> {
         const option: Record<string, unknown> = {...tunnelingOption};
-        for(const name of ['certInfo', 'certificateRevision', 'originalCertificateRevision', 'originalForwardPort', 'previousForwardPort', 'expectedCertificateRevision', 'isSync', 'updatable', 'allowedClientNamesQuery', 'activeTimeout']) delete option[name];
+        // ownerId·owner·editable 은 목록 응답이 실어 준 값이다. 소유자 변경은 reassignOwner 만 하므로 저장 본문에서 뺀다.
+        // 남겨 두면 화면을 연 시점의 ownerId 가 실려, 같은 화면에서 바꾼 소유자가 저장 때 되돌아간다.
+        for(const name of ['certInfo', 'certificateRevision', 'originalCertificateRevision', 'originalForwardPort', 'previousForwardPort', 'expectedCertificateRevision', 'isSync', 'updatable', 'allowedClientNamesQuery', 'activeTimeout', 'ownerId', 'owner', 'editable']) delete option[name];
         return adminRequest("/api/tunnelingOption", {
             method: "POST",
             credentials: "same-origin",

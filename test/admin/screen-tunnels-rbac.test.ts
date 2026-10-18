@@ -210,6 +210,27 @@ test("alice 가 HTTP 에서 CORS 를 켠 뒤 TCP 로 되돌려 저장하면 저�
     await hashIs(page, "#/tunnels");
 }, 2));
 
+test("admin 이 소유자가 있는 터널의 소유자를 바꾼 뒤 같은 화면에서 저장해도 이전 소유자로 되돌아가지 않는다", () => withTunnels("admin", async ({page}) => {
+    await openTunnel(page, 20001);
+    await page.waitForFunction((id) => (document.querySelector("#tunnel-owner") as HTMLSelectElement | null)?.value === id,
+        RBAC_USER_IDS.alice, {timeout: 10_000});
+    await page.locator("#tunnel-owner").selectOption(RBAC_USER_IDS.bob);
+    await button(page, "Change owner").click();
+    await button(page, "Move").click();
+    await page.getByText("Owner changed.", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+    await page.locator("#input-destination-port").fill("9005");
+    const saved = nextSave(page);
+    await button(page, "Apply and Restart").click();
+    const body = (await saved).postDataJSON();
+    // 소유자 변경은 전용 API 만 한다. 저장 본문이 화면을 연 시점의 ownerId 를 실어 보내면 서버가 그 값으로 되돌린다.
+    expect("ownerId" in body).toBe(false);
+    expect("owner" in body).toBe(false);
+    expect("editable" in body).toBe(false);
+    await page.getByText("Success to apply tunneling option", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+    await hashIs(page, "#/tunnels");
+    await card(page, 20001).locator("[data-owner]").filter({hasText: "@bob"}).waitFor({state: "visible", timeout: 10_000});
+}, 3));
+
 test("admin 이 소유자를 바꾼 뒤 같은 화면에서 저장해도 revision 충돌이 없다", () => withTunnels("admin", async ({page}) => {
     await openTunnel(page, 20003);
     await page.waitForFunction(() => (document.querySelector("#tunnel-owner") as HTMLSelectElement | null)?.value === "system:migrated",
