@@ -244,6 +244,62 @@ describe("protocol v2 control plane", () => {
         rawClient.destroy();
     });
 
+    // #165 — 틀린 키 뒤에도 같은 연결에서 AckCtrl 을 계속 받으면 한 연결로 키를 대입할 수 있다.
+    it("does not accept a correct legacy key after a wrong one on the same connection", async () => {
+        await startServer({trustedClients: [], allowLegacyControlAuth: true});
+        const rawClient = new RawControlClient("127.0.0.1", serverPort);
+        await rawClient.waitUntilConnected();
+        rawClient.send(CtrlPacket.createSyncCtrl());
+        const syncAck = await rawClient.readPacket();
+        rawClient.send(CtrlPacket.createAckCtrl(syncAck.ID, "legacy-client", "wrong-key"));
+        rawClient.send(CtrlPacket.createAckCtrl(syncAck.ID, "legacy-client", DEFAULT_KEY));
+        // 닫히기 전(거절 뒤 대기 시간) 에도 인증된 pool 이 생기지 않아야 한다.
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        expect((server.tunnelServer as any)._clientHandlerPoolMap.size).toBe(0);
+        expect(server.clientStatus()).toHaveLength(0);
+        await rawClient.waitForClose();
+        expect(server.clientStatus()).toHaveLength(0);
+    });
+
+    // #165 — 연결을 새로 맺으며 반복 대입하는 것을 주소별로 묶는다.
+    it("rejects legacy handshakes from an address that keeps failing", async () => {
+        await startServer({trustedClients: [], allowLegacyControlAuth: true});
+        for(let attempt = 0; attempt < 10; attempt++) {
+            const failing = new RawControlClient("127.0.0.1", serverPort);
+            await failing.waitUntilConnected();
+            failing.send(CtrlPacket.createSyncCtrl());
+            const ack = await failing.readPacket();
+            failing.send(CtrlPacket.createAckCtrl(ack.ID, "legacy-client", `wrong-key-${attempt}`));
+            await failing.waitForClose();
+        }
+        const rawClient = new RawControlClient("127.0.0.1", serverPort);
+        await rawClient.waitUntilConnected();
+        rawClient.send(CtrlPacket.createSyncCtrl());
+        const syncAck = await rawClient.readPacket();
+        rawClient.send(CtrlPacket.createAckCtrl(syncAck.ID, "legacy-client", DEFAULT_KEY));
+        await rawClient.waitForClose();
+        expect(server.clientStatus()).toHaveLength(0);
+    });
+
+    // #165 — 인증된 연결이 SyncCtrl 을 다시 보내도 새 pool 을 만들지 않는다(기존 세션이 고아가 된다).
+    it("ignores SyncCtrl and AckCtrl replays on an authenticated legacy connection", async () => {
+        await startServer({trustedClients: [], allowLegacyControlAuth: true});
+        const rawClient = new RawControlClient("127.0.0.1", serverPort);
+        await rawClient.waitUntilConnected();
+        rawClient.send(CtrlPacket.createSyncCtrl());
+        const syncAck = await rawClient.readPacket();
+        rawClient.send(CtrlPacket.createAckCtrl(syncAck.ID, "legacy-client", DEFAULT_KEY));
+        await waitFor(() => { if(server.clientStatus().length !== 1) throw new Error("not registered"); return true; }, {timeoutMs: 5000, intervalMs: 25});
+        const pool = (server.tunnelServer as any)._clientHandlerPoolMap.get(syncAck.ID);
+        expect(pool).toBeDefined();
+        rawClient.send(CtrlPacket.createSyncCtrl());
+        rawClient.send(CtrlPacket.createAckCtrl(syncAck.ID, "legacy-client", DEFAULT_KEY));
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        expect((server.tunnelServer as any)._clientHandlerPoolMap.get(syncAck.ID)).toBe(pool);
+        expect(server.clientStatus()).toHaveLength(1);
+        rawClient.destroy();
+    });
+
     it("rejects legacy shared-key clients unless the server explicitly opts in", async () => {
         await startServer({
             trustedClients: []
