@@ -44,6 +44,8 @@ let app = () => {
         console.log('       -keepAlive [ms]    : Control listener TCP keepalive interval');
         console.log('       -allowLegacyAdminHttp   : Allow legacy admin HTTP for one process run');
         console.log('       -allowLegacyAdminRemote : Allow legacy non-loopback admin bind for one process run');
+        console.log('       -trustXForwardedFor     : Read the admin client address from X-Forwarded-For (behind your own proxy)');
+        console.log('       -trustedProxyHops [n]   : Trusted proxies in front of the admin server (default 1)');
         console.log('       -allowLegacyControlAuth : Allow legacy shared-key control authentication');
         console.log('                                 RISK: legacy data connections can be hijacked by a guessed handler ID');
         console.log('       -reset [true|false]: Reset persisted server state');

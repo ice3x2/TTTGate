@@ -264,3 +264,38 @@ test("admin 이 소유자를 바꾼 뒤 같은 화면에서 저장해도 revisio
     await hashIs(page, "#/tunnels");
     await card(page, 20003).locator("[data-owner]").filter({hasText: "@bob"}).waitFor({state: "visible", timeout: 10_000});
 }, 3));
+
+// #178 — 슈퍼유저가 소유자 그룹이 허용하지 않은 id 를 넣으면 소유자는 자기 터널을 저장하지 못한다.
+test("admin 이 소유자 그룹이 허용하지 않은 신뢰 클라이언트 id 를 고르면 저장 전에 경고를 본다", () => withTunnels("admin", async ({page}) => {
+    await openTunnel(page, 20001);
+    await page.locator("#tunnel-client-id-client-b").waitFor({state: "visible", timeout: 10_000});
+    expect(await page.locator("#tunnel-client-ids-not-allowed").count()).toBe(0);
+    await page.locator("#tunnel-client-id-client-a").check();
+    expect(await page.locator("#tunnel-client-ids-not-allowed").count()).toBe(0);
+    await page.locator("#tunnel-client-id-client-b").check();
+    const warning = page.locator("#tunnel-client-ids-not-allowed");
+    await warning.waitFor({state: "visible"});
+    expect(await warning.textContent()).toContain("client-b");
+    expect(await warning.textContent()).not.toContain("client-a");
+}, 3));
+
+test("bob 은 그룹 밖 id 가 들어간 자기 터널에서 그 id 를 보고 해제해 저장할 수 있다", () => withTunnels("bob", async ({page}) => {
+    await openTunnel(page, 20002);
+    const outside = page.locator("#tunnel-trusted-client-b");
+    await outside.waitFor({state: "visible", timeout: 10_000});
+    expect(await outside.isChecked()).toBe(true);
+    await page.locator("#tunnel-trusted-not-allowed").waitFor({state: "visible"});
+    let posts = 0;
+    page.on("request", (request) => { if(request.method() === "POST" && new URL(request.url()).pathname === "/api/tunnelingOption") posts++; });
+    // 그대로 저장하면 서버가 422 로 거부하므로 요청 없이 이유를 보인다.
+    await page.locator("#tunnel-trusted-client-a").check();
+    await button(page, "Apply and Restart").click();
+    await page.getByText("Remove the client IDs your group does not allow.", {exact: true}).waitFor({state: "visible"});
+    expect(posts).toBe(0);
+    await outside.uncheck();
+    const saved = nextSave(page);
+    await button(page, "Apply and Restart").click();
+    expect((await saved).postDataJSON().allowedClientIds).toEqual(["client-a"]);
+    await page.getByText("Success to apply tunneling option", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+    await hashIs(page, "#/tunnels");
+}, 2));
