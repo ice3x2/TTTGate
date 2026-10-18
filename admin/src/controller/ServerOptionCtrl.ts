@@ -7,20 +7,17 @@ import {adminRequest} from "./AdminRequest";
 export type ConfigurationSnapshot<T> = {value: T, readonly revision: number};
 export type ConfigurationResult = {success: boolean, message: string, code?: string, revisionState?: {currentRevision: number}, certificateRevisionState?: {currentRevision: number}};
 
+/** 서버 옵션을 아직 읽지 않았거나 세션이 끝났을 때의 빈 값. */
+const emptyServerOption = (): ServerOption => ({
+    key: '', adminPort: 0, adminTls: false, port: 0, tls: false, globalMemCacheLimit: 128, keepAlive: 0
+});
+
 class ServerOptionCtrl {
 
 
     private static _instance : ServerOptionCtrl;
     private _severOptionHash : string = '';
-    private _serverOption : ServerOption = {
-        key: '',
-        adminPort: 0,
-        adminTls: false,
-        port: 0,
-        tls: false,
-        globalMemCacheLimit: 128,
-        keepAlive: 0
-    }
+    private _serverOption : ServerOption = emptyServerOption();
     private _tunnelingOptions : Array<Options> = [];
 
     private constructor() {
@@ -34,6 +31,13 @@ class ServerOptionCtrl {
             ServerOptionCtrl._instance = new ServerOptionCtrl();
         }
         return ServerOptionCtrl._instance;
+    }
+
+    /** 로그아웃·세션 만료 때 캐시한 서버 옵션(서버 키·clientSecret 포함)과 터널 목록을 비운다. */
+    public clearCache() : void {
+        this._serverOption = emptyServerOption();
+        this._tunnelingOptions = [];
+        this._severOptionHash = '';
     }
 
     public getCachedServerOption() : ServerOption {

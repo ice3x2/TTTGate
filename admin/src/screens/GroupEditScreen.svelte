@@ -2,7 +2,6 @@
     import {onMount} from 'svelte';
     import GroupsCtrl from '../controller/GroupsCtrl';
     import InvalidSession from '../controller/InvalidSession';
-    import ServerOptionCtrl from '../controller/ServerOptionCtrl';
     import {DEFAULT_GROUP_ATTRIBUTES, type Group, type GroupAttributes, type TunnelProtocolName} from '../controller/Types';
     import Button from '../ui/Button.svelte';
     import Card from '../ui/Card.svelte';
@@ -162,11 +161,10 @@
 
     onMount(() => {
         void run(async () => {
-            try {
-                const snapshotValue = await ServerOptionCtrl.instance.getServerOption();
-                trustedClients = snapshotValue.value.trustedClients ?? [];
-            } catch(error) {
-                if(error instanceof InvalidSession) throw error;
+            const loaded = await GroupsCtrl.instance.trustedClients();
+            if(loaded.success) {
+                trustedClients = loaded.trustedClients;
+            } else {
                 toast.push({tone: 'alarm', message: 'Could not load trusted clients.'});
                 trustedClients = [];
             }

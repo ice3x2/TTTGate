@@ -203,6 +203,16 @@ const onListGroups = async (ctx: RouteContext): Promise<void> => {
     ctx.ok({groups});
 };
 
+/**
+ * 그룹 편집 화면의 신뢰 클라이언트 선택지. id 와 표시 이름만 준다. 예전에는 화면이 GET /api/serverOption 전체(서버 키·
+ * clientSecret 평문 포함)를 받아 캐시에 남겼다(#155).
+ */
+const onListTrustedClients = async (ctx: RouteContext): Promise<void> => {
+    const trustedClients = (ServerOptionStore.instance.serverOption.trustedClients ?? [])
+        .map((client) => ({clientId: client.clientId, ...(client.displayName ? {displayName: client.displayName} : {})}));
+    ctx.ok({trustedClients});
+};
+
 const onCreateGroup = async (ctx: RouteContext): Promise<void> => {
     const created = IdentityStore.instance.createGroup({name: ctx.body?.name, attributes: ctx.body?.attributes});
     replyResult(ctx, created, (group) => ({group: toGroupView(group)}), 201);
@@ -487,6 +497,7 @@ export const rbacRouteHandlers: RouteHandlers = {
     onDeleteUser,
     onResetUserPassword,
     onListGroups,
+    onListTrustedClients,
     onCreateGroup,
     onGetGroup,
     onUpdateGroup,

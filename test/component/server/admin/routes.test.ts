@@ -77,6 +77,7 @@ const EXPECTED_ROUTES: ReadonlyArray<ExpectedRoute> = [
     {method: "POST", pattern: "^/api/users/(?<id>[^/]+)/password-reset$", action: "user:manage", hasTarget: false},
     {method: "POST", pattern: "^/api/users/(?<id>[^/]+)/mfa/reset$", action: "user:manage", hasTarget: false},
     {method: "GET", pattern: "^/api/groups$", action: "group:manage", hasTarget: false},
+    {method: "GET", pattern: "^/api/trustedClients$", action: "group:manage", hasTarget: false},
     {method: "POST", pattern: "^/api/groups$", action: "group:manage", hasTarget: false},
     {method: "GET", pattern: "^/api/groups/(?<id>[^/]+)$", action: "group:manage", hasTarget: false},
     {method: "PUT", pattern: "^/api/groups/(?<id>[^/]+)$", action: "group:manage", hasTarget: false},

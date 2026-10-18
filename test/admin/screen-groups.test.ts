@@ -63,6 +63,11 @@ test("#/groups 는 그룹 카드 3개와 멤버 수·속성 요약을 보인다"
 }));
 
 test("Add group 은 기본값과 신뢰 클라이언트 선택지로 시작한다", () => withGroups(async ({page}) => {
+    // #155 — 신뢰 클라이언트 id 만 필요하므로 비밀값이 든 서버 옵션 전체를 받지 않는다.
+    const serverOptionReads: string[] = [];
+    const bodies: string[] = [];
+    page.on("request", (request) => { if(new URL(request.url()).pathname === "/api/serverOption") serverOptionReads.push(request.url()); });
+    page.on("response", async (response) => { if(new URL(response.url()).pathname.startsWith("/api/")) bodies.push(await response.text().catch(() => "")); });
     await newGroup(page);
     expect(await attr(page, "max_tunnel_count").inputValue()).toBe("10");
     expect(await attr(page, "tunnel_crud").inputValue()).toBe("full");
@@ -71,6 +76,8 @@ test("Add group 은 기본값과 신뢰 클라이언트 선택지로 시작한�
     // Checkbox 는 label 이 input 을 감싼다(for 속성 없음).
     expect((await page.locator("label:has(#group-attr-allowed_trusted_clients-client-a)").textContent())?.trim()).toBe("Client A");
     expect((await page.locator("label:has(#group-attr-allowed_trusted_clients-client-b)").textContent())?.trim()).toBe("Client B");
+    expect(serverOptionReads).toEqual([]);
+    expect(bodies.join("\n")).not.toContain("clientSecret");
 }));
 
 test("새 그룹의 속성 11종은 저장 뒤 새로 읽어도 그대로이고 목록 요약에 반영된다", () => withGroups(async ({page}) => {

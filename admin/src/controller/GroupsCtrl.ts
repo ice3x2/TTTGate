@@ -19,6 +19,11 @@ class GroupsCtrl {
         return adminRequest("/api/groups");
     }
 
+    /** 그룹 편집의 신뢰 클라이언트 선택지. 비밀값 없이 id·표시 이름만 받는다. */
+    public trustedClients(): Promise<ApiResult<{trustedClients: Array<{clientId: string; displayName?: string}>}>> {
+        return adminRequest("/api/trustedClients");
+    }
+
     public get(id: string): Promise<ApiResult<{group: Group & {memberCount: number}; members: UserView[]}>> {
         return adminRequest(`/api/groups/${id}`);
     }
