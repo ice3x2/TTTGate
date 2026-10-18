@@ -50,6 +50,8 @@
     let durationHours = $state<number | null>(0);
     let loadedSnapshot = $state(snapshot('', DEFAULT_GROUP_ATTRIBUTES));
     let nameError = $state('');
+    // 빈 한도 칸 오류. 빈칸을 0(무제한)으로 저장하면 운영자 모르게 제한이 풀린다(U3 그룹 한도).
+    let limitErrors = $state<{count?: string; duration?: string; concurrent?: string}>({});
     let formError = $state('');
     let pending = $state(false);
     let deleteOpen = $state(false);
@@ -81,18 +83,18 @@
 
     const setDuration = (value: number | null) => {
         durationHours = value;
-        attrs.max_tunnel_duration_ms = (value ?? 0) * HOUR_MS;
+        if(value !== null) attrs.max_tunnel_duration_ms = value * HOUR_MS;
     };
 
-    /** 빈 숫자 입력은 0 으로 저장한다. 포트 범위의 null 은 그대로 보내 서버 422 를 받는다. */
-    const normalized = (): GroupAttributes => {
-        const value = clone(attrs);
-        value.max_tunnel_count = value.max_tunnel_count ?? 0;
-        value.max_concurrent_connections = value.max_concurrent_connections ?? 0;
-        // 기간은 setDuration 이 attrs 에 이미 반영한다. 건드리지 않았으면 불러온 밀리초 값을 그대로 보낸다.
-        value.max_tunnel_duration_ms = value.max_tunnel_duration_ms ?? 0;
-        return value;
-    };
+    /** 한도 칸이 비었는지 본다. 빈칸은 저장하지 않는다 — 0 은 무제한이라 직접 넣어야 한다. */
+    const emptyLimitErrors = (): {count?: string; duration?: string; concurrent?: string} => ({
+        ...(attrs.max_tunnel_count == null ? {count: 'Enter a number. 0 disables tunnel creation.'} : {}),
+        ...(durationHours == null ? {duration: 'Enter a number. 0 means unlimited.'} : {}),
+        ...(attrs.max_concurrent_connections == null ? {concurrent: 'Enter a number. 0 means unlimited.'} : {})
+    });
+
+    /** 포트 범위의 null 은 그대로 보내 서버 422 를 받는다. 기간은 setDuration 이 attrs 에 이미 반영한다. */
+    const normalized = (): GroupAttributes => clone(attrs);
 
     const run = async (task: () => Promise<void>): Promise<void> => {
         pending = true;
@@ -118,7 +120,8 @@
         if(readOnly || pending) return;
         formError = '';
         nameError = name.trim() === '' ? 'Enter a group name.' : '';
-        if(nameError) return;
+        limitErrors = emptyLimitErrors();
+        if(nameError || Object.keys(limitErrors).length > 0) return;
         void run(async () => {
             const attributes = normalized();
             if(isNew) {
@@ -189,11 +192,11 @@
                 <Select id="group-attr-tunnel_crud" options={CRUD} disabled={readOnly}
                     bind:value={() => attrs.tunnel_crud, (value) => (attrs.tunnel_crud = value as GroupAttributes['tunnel_crud'])} />
             </Field>
-            <Field label="Max tunnels" hint="0 disables tunnel creation" for="group-attr-max_tunnel_count">
+            <Field label="Max tunnels" hint="0 disables tunnel creation" for="group-attr-max_tunnel_count" error={limitErrors.count}>
                 <NumberInput id="group-attr-max_tunnel_count" min={0} max={1000} step={1} disabled={readOnly}
                     bind:value={() => attrs.max_tunnel_count, (value) => (attrs.max_tunnel_count = value as number)} />
             </Field>
-            <Field label="Max tunnel duration (hours)" hint="0 = unlimited" for="group-attr-max_tunnel_duration_ms">
+            <Field label="Max tunnel duration (hours)" hint="0 = unlimited" for="group-attr-max_tunnel_duration_ms" error={limitErrors.duration}>
                 <NumberInput id="group-attr-max_tunnel_duration_ms" min={0} max={8760} step={1} disabled={readOnly}
                     bind:value={() => durationHours, setDuration} />
             </Field>
@@ -250,7 +253,7 @@
 
     <Card label="Limits">
         <div style="display: flex; flex-direction: column; gap: var(--s-4);">
-            <Field label="Max concurrent connections" for="group-attr-max_concurrent_connections">
+            <Field label="Max concurrent connections" hint="0 = unlimited" for="group-attr-max_concurrent_connections" error={limitErrors.concurrent}>
                 <NumberInput id="group-attr-max_concurrent_connections" min={0} max={100000} step={1} disabled={readOnly}
                     bind:value={() => attrs.max_concurrent_connections, (value) => (attrs.max_concurrent_connections = value as number)} />
             </Field>

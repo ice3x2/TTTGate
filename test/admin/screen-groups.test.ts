@@ -234,20 +234,30 @@ test("기존 그룹에서 기간만 바꿔도 저장할 수 있고 새로 읽은
         undefined, {timeout: 10_000});
 }));
 
-test("빈 숫자 입력은 0 으로 저장한다", () => withGroups(async ({page}) => {
+// #151 — 빈 한도 칸을 0(무제한)으로 저장하면 운영자 모르게 제한이 풀린다. 빈칸은 저장을 막고, 0 은 직접 넣어야 한다.
+test("한도 칸이 비면 요청 없이 칸마다 오류를 보이고, 0 을 직접 넣으면 저장된다", () => withGroups(async ({page}) => {
     await newGroup(page);
     await page.locator("#group-name").fill("Zero");
+    let posts = 0;
+    page.on("request", (request) => { if(new URL(request.url()).pathname === "/api/groups" && request.method() === "POST") posts++; });
+    // 기간과 동시 연결 칸 모두 0 의 뜻을 알린다.
+    expect(await page.getByText("0 = unlimited", {exact: true}).count()).toBe(2);
     await attr(page, "max_tunnel_count").fill("");
     await attr(page, "max_tunnel_duration_ms").fill("");
     await attr(page, "max_concurrent_connections").fill("");
+    await button(page, "Create group").click();
+    await page.getByText("Enter a number. 0 disables tunnel creation.", {exact: true}).waitFor({state: "visible"});
+    expect(await page.getByText("Enter a number. 0 means unlimited.", {exact: true}).count()).toBe(2);
+    expect(posts).toBe(0);
+
+    await attr(page, "max_tunnel_count").fill("0");
+    await attr(page, "max_tunnel_duration_ms").fill("0");
+    await attr(page, "max_concurrent_connections").fill("0");
     const created = page.waitForRequest((request) => new URL(request.url()).pathname === "/api/groups" && request.method() === "POST");
     await button(page, "Create group").click();
     const attributes = (await created).postDataJSON().attributes;
     expect([attributes.max_tunnel_count, attributes.max_tunnel_duration_ms, attributes.max_concurrent_connections]).toEqual([0, 0, 0]);
     await waitForEdit(page);
-    await page.reload();
-    await waitForEdit(page);
-    expect(await attr(page, "max_tunnel_count").inputValue()).toBe("0");
 }));
 
 test("시간 단위로 나누어떨어지지 않는 기간은 다른 필드만 저장할 때 바뀌지 않는다", () => withGroups(async ({page}) => {
