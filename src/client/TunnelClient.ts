@@ -718,6 +718,15 @@ class TunnelClient {
         return this._activatedSessionDataHandlerMap.get(sessionID)?.isBackpressured ?? false;
     }
 
+    /** #130: 목적지가 밀리는 동안 이 세션의 터널 데이터 소켓 읽기를 멈춘다. */
+    public pauseSessionSource(sessionID: number) : void {
+        this._activatedSessionDataHandlerMap.get(sessionID)?.pauseRead();
+    }
+
+    public resumeSessionSource(sessionID: number) : void {
+        this._activatedSessionDataHandlerMap.get(sessionID)?.resumeRead();
+    }
+
     public addSessionPressureReliefListener(sessionID: number, listener: () => void) : void {
         const handler = this._activatedSessionDataHandlerMap.get(sessionID);
         if(handler) {

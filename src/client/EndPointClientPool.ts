@@ -91,6 +91,15 @@ class EndPointClientPool {
         this._endPointClientMap.set(sessionID, endPointClient);
     }
 
+    /** #130: 목적지 핸들러가 배압 상태인지(업로드 방향). */
+    public isSessionBackpressured(sessionID: number) : boolean {
+        return this._endPointClientMap.get(sessionID)?.isBackpressured ?? false;
+    }
+
+    public addSessionPressureReliefListener(sessionID: number, listener: () => void) : void {
+        this._endPointClientMap.get(sessionID)?.addOncePressureReliefListener(() => listener());
+    }
+
     public pauseSessionRead(sessionID: number) : void {
         this._endPointClientMap.get(sessionID)?.pauseRead();
     }
