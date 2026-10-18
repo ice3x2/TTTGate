@@ -11,6 +11,11 @@ type TunnelHandshakePolicy = {
      */
     maxPendingDataConnections: number;
     maxPendingDataPerAddress: number;
+    /**
+     * 세션을 연 뒤 데이터 연결과 엔드포인트 연결 결과를 기다리는 기한(ms). 데이터 연결이 끝내 오지 않으면
+     * 세션 TTL(기본 1시간)까지 외부 연결이 남으므로 이 기한에 정리한다(#174).
+     */
+    pendingSessionOpenTimeoutMs: number;
 };
 
 type PartialTunnelHandshakePolicy = Partial<TunnelHandshakePolicy>;
@@ -20,7 +25,8 @@ const DEFAULT_TUNNEL_HANDSHAKE_POLICY: TunnelHandshakePolicy = {
     maxUnauthenticatedConnections: 256,
     maxUnauthenticatedPerAddress: 32,
     maxPendingDataConnections: 1024,
-    maxPendingDataPerAddress: 256
+    maxPendingDataPerAddress: 256,
+    pendingSessionOpenTimeoutMs: 30_000
 };
 
 let overrides: PartialTunnelHandshakePolicy = {};
@@ -51,6 +57,10 @@ const TunnelHandshakePolicyRegistry = {
             maxPendingDataPerAddress: normalizePositiveInt(
                 overrides.maxPendingDataPerAddress ?? DEFAULT_TUNNEL_HANDSHAKE_POLICY.maxPendingDataPerAddress,
                 DEFAULT_TUNNEL_HANDSHAKE_POLICY.maxPendingDataPerAddress
+            ),
+            pendingSessionOpenTimeoutMs: normalizePositiveInt(
+                overrides.pendingSessionOpenTimeoutMs ?? DEFAULT_TUNNEL_HANDSHAKE_POLICY.pendingSessionOpenTimeoutMs,
+                DEFAULT_TUNNEL_HANDSHAKE_POLICY.pendingSessionOpenTimeoutMs
             )
         };
     },

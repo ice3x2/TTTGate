@@ -45,6 +45,7 @@ let app = () => {
         console.log('       -allowLegacyAdminHttp   : Allow legacy admin HTTP for one process run');
         console.log('       -allowLegacyAdminRemote : Allow legacy non-loopback admin bind for one process run');
         console.log('       -allowLegacyControlAuth : Allow legacy shared-key control authentication');
+        console.log('                                 RISK: legacy data connections can be hijacked by a guessed handler ID');
         console.log('       -reset [true|false]: Reset persisted server state');
         console.log('       -daemon            : Background execution and process monitoring.');
         console.log('');
@@ -60,6 +61,7 @@ let app = () => {
         console.log('       -ca [pem]          : trusted CA/server certificate PEM');
         console.log('       -serverName [name] : expected TLS server name');
         console.log('       -allowLegacyFallback : allow legacy v1 fallback during rollback');
+        console.log('                              RISK: a fake server can downgrade and receive the shared key');
         console.log('       -allowInsecureTls    : disable TLS certificate verification');
         console.log('       -keepAlive [ms]    : Control connection TCP keepalive interval');
         console.log('       -bufferLimit [MiB] : Buffer limit size on memory.');

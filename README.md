@@ -45,7 +45,7 @@ Server options:
 - `-keepAlive [ms]`: control listener TCP keepalive interval.
 - `-allowLegacyAdminHttp`: allow legacy non-TLS admin mode for one process run.
 - `-allowLegacyAdminRemote`: allow legacy non-loopback admin bind for one process run.
-- `-allowLegacyControlAuth`: allow legacy shared-key control authentication for one process run.
+- `-allowLegacyControlAuth`: allow legacy shared-key control authentication for one process run. **Risk:** legacy data connections carry no binding token, so anyone who guesses a data handler ID can take over a session and read or inject external user traffic. The server logs a warning at startup while this is on.
 - `-reset [true|false]`: delete persisted server state only when explicitly `true`.
 - `-daemon`: run with process monitoring.
 
@@ -75,7 +75,7 @@ Client options:
 - `-displayName [name]`: display-only name announced to the server.
 - `-ca [pem]`: CA or pinned server certificate PEM path.
 - `-serverName [name]`: expected TLS server name.
-- `-allowLegacyFallback`: allow v1 fallback only when the server explicitly enables legacy auth.
+- `-allowLegacyFallback`: allow v1 fallback only when the server explicitly enables legacy auth. **Risk:** a fake server can answer with the legacy protocol and receive the shared key. The client logs a warning at startup while this is on.
 - `-allowInsecureTls`: disable certificate verification. Keep this off outside break-glass scenarios.
 - `-key [key]`: legacy shared key. Only used with explicit legacy control auth.
 - `-keepAlive [ms]`: control connection TCP keepalive interval.
@@ -97,6 +97,8 @@ Client options:
 - secure target state: `controlProtocolMode: mtls-strict`
 - legacy shared-key control auth stays off unless `-allowLegacyControlAuth` is used deliberately
 - client-side `allowLegacyFallback` should remain `false` unless you are in an approved rollback window
+- both legacy switches weaken session binding and key secrecy (see the option list above); turn them off when the rollback window ends
+- unauthenticated tunnel connections, including those still in the TLS handshake, close at the handshake deadline (5 s by default); a session whose data connection does not arrive closes after 30 s
 
 Recommended cutover order:
 
