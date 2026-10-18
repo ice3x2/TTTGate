@@ -67,7 +67,7 @@
         }
     });
 
-    // 불러온 속성. 저장 때 바뀐 키만 보낸다(#152 — 전체를 덮어쓰면 다른 운영자의 변경이 되돌아간다).
+    // 불러온 속성. 저장 때 바뀐 키만 보낸다(전체를 덮어쓰면 다른 운영자의 변경이 되돌아간다).
     let loadedAttrs = $state<GroupAttributes>(clone(DEFAULT_GROUP_ATTRIBUTES));
     const changedAttributes = (next: GroupAttributes): Partial<GroupAttributes> => Object.fromEntries(
         Object.entries(next).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify((loadedAttrs as Record<string, unknown>)[key]))) as Partial<GroupAttributes>;

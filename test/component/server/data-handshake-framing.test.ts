@@ -102,13 +102,15 @@ test("incomplete token extension uses the existing deadline without authenticati
         const handler = h.observations[0].handler;
         const pending = (h.peer.pool as any)._pendingSessionIDMap.get(h.session.packet.sessionID);
         const policy = TunnelHandshakePolicyRegistry.current();
-        expect(h.tunnel._unauthenticatedHandlerIds.has(handler.id)).toBe(true);
+        // 데이터 연결은 첫 바이트로 구분되면 제어 예산에서 빠져 데이터 예산으로 옮긴다(#157). 어느 쪽이든 아직 인증 전이다.
+        const pendingAuth = () => h.tunnel._unauthenticatedHandlerIds.has(handler.id) || h.tunnel._pendingDataHandlerIds.has(handler.id);
+        expect(pendingAuth()).toBe(true);
         handler.setTimeout(150);
         await h.until(() => h.socket.destroyed && handler.socket.destroyed && handler.isEnd()
-            && !h.tunnel._unauthenticatedHandlerIds.has(handler.id), 'Incomplete handshake exceeded its owned deadline');
+            && !pendingAuth(), 'Incomplete handshake exceeded its owned deadline');
         expect(handler.socket.destroyed).toBe(true);
         expect(handler.isEnd()).toBe(true);
-        expect(h.tunnel._unauthenticatedHandlerIds.has(handler.id)).toBe(false);
+        expect(pendingAuth()).toBe(false);
         expect(marked.filter(candidate => candidate === handler)).toHaveLength(0);
         expect((h.peer.pool as any)._pendingSessionIDMap.get(h.session.packet.sessionID)).toBe(pending);
         expect(TunnelHandshakePolicyRegistry.current()).toEqual(policy);
