@@ -261,7 +261,7 @@ class HttpHandler {
                 }
             }
 
-            requestHeader.path = requestHeader.path.replaceAll(originHost, this._destinationAddress);
+            requestHeader.path = HttpUtil.rewriteRequestTargetHost(requestHeader.path, originHost, this._destinationAddress);
         }
 
         this.appendCustomHeader(header, this._option.customRequestHeaders);

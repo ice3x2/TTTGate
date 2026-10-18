@@ -389,7 +389,10 @@ class HttpPipe {
         header.headers.forEach((nameValue) => {
             const name = nameValue.name.toLowerCase();
             if (name === 'content-length') {
-                header.contentLength = parseInt(nameValue.value);
+                // 십진 숫자만 받는다. parseInt 는 "10abc"·"+5"·"-1" 을 관대하게 읽어 백엔드와 요청 경계가 어긋난다(#168).
+                const value = nameValue.value.trim();
+                if(!/^\d{1,15}$/.test(value)) throw new Error('Invalid Content-Length');
+                header.contentLength = Number(value);
             } else if (name === 'transfer-encoding') {
                 // F-P4-P5: 토큰 단위 정확 일치 (마지막 원소가 chunked) — substring include 우회 차단.
                 const tokens = nameValue.value.toLowerCase().split(',').map(s => s.trim()).filter(s => s.length > 0);
