@@ -88,6 +88,29 @@ Client options:
 - `-save`: persist the resolved client config to `config/client.yaml`.
 - `-daemon`: run with process monitoring.
 
+## Upgrading an Existing Server
+
+Read this before you replace a running server with this version.
+
+**Steps that stop the server or the tunnels unless you act:**
+
+1. **Admin console security policy.** Earlier versions served the admin console over plain HTTP on all interfaces. This version refuses to start (exit code 1) while `adminTls` is `false` or `adminBindHost` is not a loopback address. Do one of the following before you start it:
+   - Set `adminTls: true` and `adminBindHost: 127.0.0.1` in `config/server.yaml`, and reach the console through an SSH tunnel. This is the recommended setup.
+   - Or start with `-allowLegacyAdminHttp` and `-allowLegacyAdminRemote` for that run while you move to the setup above.
+2. **Existing clients.** Clients of earlier versions authenticate with the shared key only. This version turns that off by default, so every tunnel disconnects until you either:
+   - start the server with `-allowLegacyControlAuth` (or set `allowLegacyControlAuth: true`) for the rollout window, then upgrade the clients with `clientId` and `clientSecret` (see "Mixed-Version Rollout Policy" below), or
+   - upgrade the clients first.
+
+**Values that are adjusted automatically (a warning is logged at startup):**
+
+- **Per-tunnel rate limiting** stays off for every tunnel saved without a `rateLimit` field. The protocol defaults are stored with it (TCP: 30 connections per 60 s, HTTP/HTTPS: 300; a 10-minute ban when exceeded), so you only switch it on per tunnel in the admin console. New tunnels start with it on.
+- **Session idle TTL** stays off (`sessionTtlMs: 0`) when the file has no `sessionTtlMs`. New installations close a session after one hour without traffic; set `sessionTtlMs` (1000–3600000 ms) to turn it on. Long idle SSH or database connections without keepalive are closed when it is on. A `PUT /api/serverOption` call that omits `sessionTtlMs` sets it back to one hour; the admin console always sends the current value.
+- **Server buffer** `-1` or `0` ("unlimited" in earlier versions) becomes the default 8 MiB. An unlimited buffer can exhaust the memory of a small server; data keeps flowing with backpressure once a session is open.
+
+**Other changes to be aware of:**
+
+- HTTP tunnels reject a request whose header block is larger than 64 KiB (earlier: 8 MiB) with `431`.
+
 ## HTTP Tunnel CORS Policy
 
 `replaceAccessControlAllowOrigin` is a compatibility policy flag, not a security hotfix.

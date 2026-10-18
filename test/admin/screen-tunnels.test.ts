@@ -593,3 +593,25 @@ test("U5-06 레이트 리밋 스위치를 끈 뒤 프로토콜을 바꿔도 꺼�
         await app.close();
     }
 }, 120_000);
+
+// #182 — 이전 버전에서 넘어와 꺼진 채 보존된 레이트 리밋(customized:false)은 프로토콜만 바꿔도 켜지면 안 된다.
+test("#182 이전 버전에서 넘어와 꺼져 있던 레이트 리밋은 프로토콜을 바꿔도 꺼진 채로 남고 값만 새 기본값이 된다", async () => {
+    const app = await startAdminApp({fixture: "with-tunnels"});
+    try {
+        await app.serverOption({tunnelingOptions: [{
+            forwardPort: 20001, protocol: "tcp", destinationAddress: "127.0.0.1", destinationPort: 9,
+            tls: false, keepAlive: 0, inactiveOnStartup: false, bufferLimitOnServer: 8, bufferLimitOnClient: 8, allowedClientNames: [],
+            rateLimit: {enabled: false, windowMs: 60000, maxConnections: 30, banMs: 600000, customized: false},
+        }]});
+        await app.page.goto(`${app.url}#/tunnels/20001`);
+        const toggle = app.page.locator('[aria-label="Rate limit enabled"]');
+        await toggle.waitFor({state: "visible", timeout: 10_000});
+        expect(await toggle.getAttribute("aria-checked")).toBe("false");
+        await app.page.locator("#select-protocol").selectOption("http");
+        expect(await toggle.getAttribute("aria-checked")).toBe("false");
+        expect(await app.page.locator("#input-rate-max").inputValue()).toBe("300");
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, 120_000);
