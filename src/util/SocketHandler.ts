@@ -174,19 +174,28 @@ class SocketHandler {
         this._pressureReliefEventList.push(event);
     }
 
-    public pauseRead(): void {
+    /**
+     * 읽기를 멈춘 주체(사유). 출력 배압·하류 배압·대역폭 제한이 같은 소켓을 멈추므로, 모든 사유가 풀려야 다시 읽는다.
+     * 예전에는 한 주체의 resumeRead 가 다른 주체의 일시정지까지 풀어 대역폭 제한과 배압이 무력화됐다(#169).
+     */
+    private readonly _pauseReasons = new Set<string>();
+
+    public pauseRead(reason: string = 'external'): void {
         if(this.isEnd()) {
             return;
         }
+        this._pauseReasons.add(reason);
         try {
             this._socket.pause();
         } catch {}
     }
 
-    public resumeRead(): void {
+    public resumeRead(reason: string = 'external'): void {
         if(this.isEnd()) {
             return;
         }
+        this._pauseReasons.delete(reason);
+        if(this._pauseReasons.size > 0) return;
         try {
             this._socket.resume();
         } catch {}
@@ -566,7 +575,6 @@ class SocketHandler {
             this._waitQueue.pushBack({buffer: data, length: data.length, cacheID: -1, onWriteComplete: onWriteComplete});
         }
 
-        this.updateInputPressure();
 
         this.sendPopDataRecursive2();
 
@@ -757,7 +765,6 @@ class SocketHandler {
     }
 
     private maybeNotifyDrainOrPressureRelief(): void {
-        this.updateInputPressure();
         if(!this.isBackpressured) {
             this.callPressureReliefEvent();
         }
@@ -791,16 +798,6 @@ class SocketHandler {
         return nextLocal <= this.effectiveFileCacheLimitBytes() && nextGlobal <= policy.fileCacheGlobalLimitBytes;
     }
 
-    private updateInputPressure(): void {
-        if(this.isBackpressured) {
-            this.pauseRead();
-        } else if(this.resolveBackpressureLimitBytes() > 0) {
-            const {low} = computeWatermarkBytes(this.resolveBackpressureLimitBytes());
-            if(this._waitQueueBytes <= low) {
-                this.resumeRead();
-            }
-        }
-    }
 
 
 
