@@ -43,6 +43,8 @@
     let disablePassword = $state('');
     let disableError = $state('');
     let codesOpen = $state(false);
+    // 새 복구 코드를 저장했다는 확인. 서버는 이미 옛 코드를 무효화했으므로 확인 전에는 닫지 않는다.
+    let codesSaved = $state(false);
     let codesPassword = $state('');
     let codesError = $state('');
     let newCodes = $state<string[]>([]);
@@ -95,13 +97,19 @@
             newCodes = [];
             codesPassword = '';
             codesError = '';
+            codesSaved = false;
             void run(async () => { await loadMe(); });
         }
     });
-
-    // 3단계(복구 코드 저장)에서는 Escape 로 닫히지 않게 캡처 단계에서 막는다(Modal 을 고치지 않는다).
+    // 해제 모달을 어떤 경로로 닫아도 입력한 비밀번호를 상태에 남기지 않는다.
     $effect(() => {
-        if(!enrollOpen || enrollStep !== 3) return;
+        if(!disableOpen) disablePassword = '';
+    });
+
+    // 3단계(복구 코드 저장)와 새 복구 코드를 보이는 동안에는 Escape 로 닫히지 않게 캡처 단계에서 막는다(Modal 을 고치지 않는다).
+    $effect(() => {
+        const showingCodes = (enrollOpen && enrollStep === 3) || (codesOpen && newCodes.length > 0);
+        if(!showingCodes) return;
         const block = (e: KeyboardEvent) => { if(e.key === 'Escape') e.stopPropagation(); };
         window.addEventListener('keydown', block, true);
         return () => window.removeEventListener('keydown', block, true);
@@ -299,7 +307,7 @@
     {/snippet}
 </Modal>
 
-<Modal bind:open={codesOpen} title="New recovery codes" class="mfa-codes-modal">
+<Modal bind:open={codesOpen} title="New recovery codes" closeOnOverlay={newCodes.length === 0} class="mfa-codes-modal">
     {#if newCodes.length === 0}
         <Field label="Password" for="mfa-codes-password" error={codesError || undefined}>
             <TextInput id="mfa-codes-password" type="password" autocomplete="current-password" bind:value={codesPassword} />
@@ -309,13 +317,15 @@
             {#each newCodes as recovery (recovery)}<li class="mono">{recovery}</li>{/each}
         </ul>
         <div style="margin-top: var(--s-3);"><span id="mfa-copy-codes"><Button size="sm" onclick={() => copy(newCodes.join('\n'))}>Copy all</Button></span></div>
+        <p style="margin: var(--s-3) 0 0;">Your previous codes no longer work. Each new code works once.</p>
+        <Checkbox id="mfa-codes-saved" label="I saved these codes" bind:checked={codesSaved} />
     {/if}
     {#snippet footer()}
         {#if newCodes.length === 0}
             <Button onclick={() => (codesOpen = false)}>Cancel</Button>
             <span id="mfa-codes-generate"><Button variant="primary" disabled={pending} onclick={() => { void generateCodes(); }}>Generate</Button></span>
         {:else}
-            <span id="mfa-codes-done"><Button variant="primary" onclick={() => (codesOpen = false)}>Done</Button></span>
+            <span id="mfa-codes-done"><Button variant="primary" disabled={!codesSaved} onclick={() => (codesOpen = false)}>Done</Button></span>
         {/if}
     {/snippet}
 </Modal>

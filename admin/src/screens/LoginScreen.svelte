@@ -84,6 +84,8 @@
             if(result.success && result.mfaRequired && result.mfaTicket) {
                 // 비밀번호는 맞았다. 쿠키 없이 티켓만 왔으므로 코드 단계로 넘어간다.
                 ticket = result.mfaTicket;
+                // 2단계로 넘어가면 1단계 비밀번호는 더 쓰지 않는다. 처음부터 다시 할 때는 새로 입력한다.
+                password = '';
                 message = '';
                 return;
             }

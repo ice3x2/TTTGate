@@ -120,6 +120,12 @@ test("복구 코드를 재발급하면 이전 목록과 모두 다르고, 틀린
     const second = await codesModal.locator("#mfa-recovery-codes li").allTextContents();
     expect(second).toHaveLength(10);
     for(const code of second) expect(first).not.toContain(code);
+    // #156 — 서버는 이미 옛 코드를 무효화했다. 새 코드를 보인 뒤에는 Escape·바깥 클릭으로 닫히지 않고, 저장 확인 뒤에만 닫힌다.
+    await page.keyboard.press("Escape");
+    await page.locator(".modal-overlay").click({position: {x: 5, y: 5}});
+    expect(await codesModal.isVisible()).toBe(true);
+    expect(await page.locator("#mfa-codes-done button").isDisabled()).toBe(true);
+    await page.locator("#mfa-codes-saved").check();
     await page.locator("#mfa-codes-done button").click();
     await codesModal.waitFor({state: "detached"});
     // 세션은 그대로다(401 이 세션 만료로 처리되지 않았다).
