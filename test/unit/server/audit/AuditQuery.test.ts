@@ -238,6 +238,26 @@ describe("AuditQuery", () => {
         expect(AuditQuery.decodeCursor(encodeRaw({file: fileOf("2026-09-10"), offset: 5, total: 4}))).toBeUndefined();
     });
 
+    // #148 — 본인 이벤트가 적은 사용자의 조회가 매번 보존 기간 전체를 훑지 않게, 한 번에 훑는 줄 수에 상한을 둔다.
+    it("훑은 줄이 상한에 닿으면 채우지 못했어도 커서를 돌려주고, 커서로 이어 가면 끝까지 간다", async () => {
+        const capped = new AuditQuery(dir, {maxScanLines: 5});
+        const first = await capped.query({limit: 500, userId: "nobody"});
+        expect(first.events).toEqual([]);
+        expect(first.nextCursor).toBeDefined();
+        let cursor = first.nextCursor;
+        let pages = 1;
+        while(cursor !== undefined && pages < 20) {
+            const page = await capped.query({limit: 500, userId: "nobody", cursor});
+            cursor = page.nextCursor;
+            pages++;
+        }
+        expect(cursor).toBeUndefined();
+        expect(pages).toBeGreaterThan(2);
+        // 상한 안에서 limit 을 채우면 지금처럼 그 자리에서 끝난다.
+        const filled = await capped.query({limit: 3});
+        expect(filled.events).toHaveLength(3);
+    });
+
     it("디렉터리가 없으면 빈 결과다", async () => {
         const missing = new AuditQuery(path.join(dir, "missing"));
         const page = await missing.query({limit: 10});

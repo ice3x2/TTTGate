@@ -12,6 +12,9 @@ const logger = LoggerFactory.getLogger('server', 'AuditQuery');
 
 const AUDIT_FILE_PATTERN = /^audit-\d{4}-\d{2}-\d{2}\.jsonl$/;
 
+/** 한 번의 조회가 훑는 줄 수의 기본 상한. 일반 유저가 반복 조회로 보존 기간 전체를 매번 읽지 않게 한다(#148). */
+const DEFAULT_MAX_SCAN_LINES = 50_000;
+
 export type AuditFilter = {
     from?: number; to?: number;          // epoch ms, 닫힌 구간 [from, to]
     userId?: string;                     // actor.userId 완전 일치
@@ -38,7 +41,12 @@ const isNonNegativeInt = (value: unknown): value is number =>
 export class AuditQuery {
     private readonly _dir: string;
 
-    public constructor(dir: string) {
+    /** 한 번의 조회가 훑는 줄 수 상한. 넘으면 채우지 못했어도 커서를 돌려준다(#148). */
+    private readonly _maxScanLines: number;
+
+    public constructor(dir: string, options: {maxScanLines?: number} = {}) {
+        // 0 이하면 같은 커서만 계속 돌려주므로 1 이상으로 둔다.
+        this._maxScanLines = Math.max(1, Math.floor(options.maxScanLines ?? DEFAULT_MAX_SCAN_LINES));
         this._dir = dir;
     }
 
@@ -66,6 +74,7 @@ export class AuditQuery {
         const cursor = filter.cursor === undefined ? undefined : AuditQuery.decodeCursor(filter.cursor);
         const files = this.candidateFiles(filter, cursor);
         const events: AuditEvent[] = [];
+        let scanned = 0;
         for(const file of files) {
             const lines = await this.readLines(file);
             if(lines === undefined) continue;
@@ -78,6 +87,10 @@ export class AuditQuery {
             }
             let warned = false;
             for(; index < total; index++) {
+                if(scanned >= this._maxScanLines) {
+                    return {events, nextCursor: AuditQuery.encodeCursor({file, offset: index, total})};
+                }
+                scanned++;
                 const event = parseEvent(lines[index]);
                 if(event === undefined) {
                     if(!warned) {
