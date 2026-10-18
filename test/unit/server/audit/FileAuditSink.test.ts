@@ -207,6 +207,81 @@ describe("FileAuditSink", () => {
         expect(callbackCalled).toBe(true);
     });
 
+    // #142 — 쓰기 오류에서 항목을 버리지 않는다(드롭 금지).
+    it("write 콜백이 오류를 돌려주면 그 항목을 큐에 남기고 새 스트림으로 다시 쓴다", async () => {
+        const failing = createStubStream({invokeCallback: (_call, done) => done()});
+        failing.write = function(chunk: any, cb?: (error?: Error | null) => void): boolean {
+            failing.writeCalls++;
+            cb?.(Object.assign(new Error("ENOSPC: no space left on device"), {code: "ENOSPC"}));
+            return true;
+        };
+        const healthy = createStubStream();
+        const streams = [failing, healthy];
+        const sink = new FileAuditSink({dir, queueSize: 10, retentionDays: 0, openStream: () => streams.shift() ?? healthy});
+
+        await sink.record(eventAt(1_757_548_800_000, {summary: "first"}));
+        await sink.record(eventAt(1_757_548_800_001, {summary: "second"}));
+        await sink.flush();
+
+        expect(failing.writeCalls).toBe(1);
+        expect(healthy.lines.map((line) => JSON.parse(line).summary)).toEqual(["first", "second"]);
+        expect(sink.queueLength).toBe(0);
+    });
+
+    it("감사 디렉터리를 지운 뒤 기록하면 디렉터리를 다시 만들고 항목을 남긴다", async () => {
+        const sink = new FileAuditSink({dir, queueSize: 10, retentionDays: 0});
+        const at = 1_757_548_800_000;
+        await sink.record(eventAt(at, {summary: "before"}));
+        await sink.flush();
+        // 열린 스트림이 같은 이름의 파일을 잡고 있지 않도록 다음 날짜로 쓴다(파일 교체 경로를 탄다).
+        fs.rmSync(dir, {recursive: true, force: true});
+        await sink.record(eventAt(at + 86_400_000, {summary: "after"}));
+        await sink.flush();
+        await sink.close();
+        const file = Path.join(dir, FileAuditSink.fileNameFor(at + 86_400_000));
+        expect(linesOf(file).map((line) => JSON.parse(line).summary)).toEqual(["after"]);
+    });
+
+    it("쓰기가 계속 실패하면 큐가 차서 reserve() 가 false 이고, close 는 정해진 시간 안에 끝난다", async () => {
+        const failing = createStubStream();
+        failing.write = function(_chunk: any, cb?: (error?: Error | null) => void): boolean {
+            failing.writeCalls++;
+            cb?.(new Error("EACCES"));
+            return true;
+        };
+        const sink = new FileAuditSink({dir, queueSize: 3, retentionDays: 0, openStream: () => failing, closeTimeoutMs: 300});
+        for(let i = 0; i < 3; i += 1) {
+            expect(sink.reserve()).toBe(true);
+            await sink.record(eventAt(1_757_548_800_000 + i));
+        }
+        await sleep(50);
+        expect(sink.queueLength).toBe(3);
+        expect(sink.reserve()).toBe(false);
+        const started = Date.now();
+        await sink.close();
+        expect(Date.now() - started).toBeLessThan(5_000);
+    });
+
+    it("close 가 시간 초과로 끝난 뒤 늦게 온 쓰기 실패는 재시도하지 않고 스트림을 다시 열지 않는다", async () => {
+        let held: ((error?: Error | null) => void) | undefined;
+        const stream = createStubStream();
+        stream.write = function(_chunk: any, cb?: (error?: Error | null) => void): boolean {
+            stream.writeCalls++;
+            held = cb;
+            return true;
+        };
+        let opened = 0;
+        const sink = new FileAuditSink({dir, queueSize: 3, retentionDays: 0, openStream: () => { opened++; return stream; }, closeTimeoutMs: 100});
+        await sink.record(eventAt(1_757_548_800_000));
+        await sleep(20);
+        expect(held).toBeDefined();
+        await sink.close();
+        held!(new Error("EIO"));
+        await sleep(600);
+        expect(opened).toBe(1);
+        expect(stream.writeCalls).toBe(1);
+    });
+
     it("detail 의 민감 키만 마스킹하고 입력 객체는 건드리지 않는다", async () => {
         const sink = new FileAuditSink({dir, queueSize: 10, retentionDays: 0});
         const detail = {password: "p", totp: "123456", code: "111111", recoveryCode: "abcd-efgh", note: "x"};

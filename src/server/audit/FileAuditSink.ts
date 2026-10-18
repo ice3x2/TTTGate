@@ -14,6 +14,11 @@ export const auditDirPath = (): string => Path.join(Environment.path.logDir, 'au
 const DAY_MS = 86_400_000;
 const AUDIT_FILE_PATTERN = /^audit-(\d{4})-(\d{2})-(\d{2})\.jsonl$/;
 const DIR_MODE = 0o700;
+/** 쓰기 실패 뒤 재시도 간격. 실패가 이어지면 두 배씩 늘려 상한에서 멈춘다(즉시 재시도로 CPU 를 태우지 않는다). */
+const RETRY_INITIAL_MS = 200;
+const RETRY_MAX_MS = 30_000;
+/** close() 가 남은 큐를 기다리는 상한. 디스크 오류가 이어져도 종료·싱크 교체가 멈추지 않게 한다. */
+const DEFAULT_CLOSE_TIMEOUT_MS = 10_000;
 const FILE_MODE = 0o600;
 
 /**
@@ -38,6 +43,7 @@ export type FileAuditSinkOptions = {
     /** 0 이면 무제한(PRD §12 Q3). 그 외에는 일 수. */
     retentionDays: number;
     openStream?: (path: string) => AuditWriteStream;
+    closeTimeoutMs?: number;
 };
 
 type QueuedLine = {fileName: string; line: string};
@@ -63,11 +69,15 @@ export class FileAuditSink implements AuditSink {
     private _stream?: AuditWriteStream;
     private _streamFileName?: string;
     private _retentionTimer?: NodeJS.Timeout;
+    private _retryTimer?: NodeJS.Timeout;
+    private _retryDelayMs = 0;
+    private readonly _closeTimeoutMs: number;
 
     public constructor(options: FileAuditSinkOptions) {
         this._dir = options.dir;
         this._queueSize = options.queueSize;
         this._retentionDays = options.retentionDays;
+        this._closeTimeoutMs = options.closeTimeoutMs ?? DEFAULT_CLOSE_TIMEOUT_MS;
         this._openStream = options.openStream
             ?? ((path: string) => fs.createWriteStream(path, {flags: 'a', mode: FILE_MODE}));
     }
@@ -170,7 +180,19 @@ export class FileAuditSink implements AuditSink {
             clearInterval(this._retentionTimer);
             this._retentionTimer = undefined;
         }
-        await this.flush();
+        let timer: NodeJS.Timeout | undefined;
+        const timedOut = await Promise.race([
+            this.flush().then(() => false),
+            new Promise<boolean>((resolve) => { timer = setTimeout(() => resolve(true), this._closeTimeoutMs); })
+        ]);
+        clearTimeout(timer);
+        if(timedOut) {
+            logger.error(`audit sink closed with ${this._queue.length} events not written (write keeps failing)`);
+        }
+        if(this._retryTimer !== undefined) {
+            clearTimeout(this._retryTimer);
+            this._retryTimer = undefined;
+        }
         this._closed = true;
         const stream = this._stream;
         this._stream = undefined;
@@ -186,29 +208,78 @@ export class FileAuditSink implements AuditSink {
     private drain(): void {
         if(this._queue.length === 0) {
             this._draining = false;
+            // 닫힌 뒤 선점 칸의 기록을 쓰려고 다시 연 스트림은 여기서 닫는다. 남겨 두면 fd 가 새고 교체된 싱크와 같은 파일에 쓴다.
+            if(this._closed) this.discardStream();
             const waiters = this._flushWaiters.splice(0, this._flushWaiters.length);
             waiters.forEach((waiter) => waiter());
             return;
         }
         const item = this._queue[0];
-        const stream = this.streamFor(item.fileName);
+        let stream: AuditWriteStream;
+        try {
+            stream = this.streamFor(item.fileName);
+        } catch(error) {
+            this.scheduleRetry(error);
+            return;
+        }
         let callbackDone = false;
+        let failed = false;
         let drainPending = false;
         let advanced = false;
         let writeReturned = false;
         const advance = (): void => {
             if(advanced || !callbackDone || drainPending || !writeReturned) return;
             advanced = true;
+            this._retryDelayMs = 0;
             this._queue.shift();
             this.drain();
         };
-        const accepted = stream.write(item.line, () => { callbackDone = true; advance(); });
+        // 콜백의 오류를 보지 않고 shift 하면 디스크 오류(ENOSPC·EACCES) 때 항목이 사라진다(#142).
+        // 실패한 항목은 큐 앞에 남겨 두고 새 스트림으로 다시 쓴다. 일부가 이미 써졌다면 같은 줄이 두 번 남을 수
+        // 있지만, 감사에서는 중복이 유실보다 낫다.
+        const accepted = stream.write(item.line, (error?: Error | null) => {
+            if(error) {
+                if(!failed) { failed = true; this.scheduleRetry(error); }
+                return;
+            }
+            callbackDone = true;
+            advance();
+        });
         writeReturned = true;
         if(!accepted) {
             drainPending = true;
             stream.once('drain', () => { drainPending = false; advance(); });
         }
         advance();
+    }
+
+    /** 스트림을 버리고 디렉터리 확인부터 다시 하도록 표시한 뒤, 백오프 간격 뒤에 drain 을 다시 부른다. */
+    private discardStream(): void {
+        const stream = this._stream;
+        this._stream = undefined;
+        this._streamFileName = undefined;
+        if(stream !== undefined) {
+            try { stream.end(); } catch { /* 이미 오류로 닫힌 스트림이다 */ }
+        }
+    }
+
+    private scheduleRetry(reason: unknown): void {
+        this._dirReady = false;
+        this.discardStream();
+        // close() 가 시간 초과로 끝난 뒤 늦게 온 실패다. 닫힌 싱크는 다시 시도하지 않는다(새 싱크가 같은 파일을 쓴다).
+        if(this._closed) {
+            this._draining = false;
+            logger.error(`audit sink closed; ${this._queue.length} events not written`, reason);
+            return;
+        }
+        if(this._retryTimer !== undefined) return;
+        this._retryDelayMs = this._retryDelayMs === 0 ? RETRY_INITIAL_MS : Math.min(this._retryDelayMs * 2, RETRY_MAX_MS);
+        logger.error(`audit write failed; retrying in ${this._retryDelayMs}ms (${this._queue.length} queued)`, reason);
+        this._retryTimer = setTimeout(() => {
+            this._retryTimer = undefined;
+            this.drain();
+        }, this._retryDelayMs);
+        this._retryTimer.unref?.();
     }
 
     private streamFor(fileName: string): AuditWriteStream {
@@ -221,7 +292,8 @@ export class FileAuditSink implements AuditSink {
         const stream = this._openStream(Path.join(this._dir, fileName));
         stream.on('error', (error: Error) => {
             logger.error(`audit stream error (${fileName})`, error);
-            // 스트림만 버리고 큐는 남긴다. 다음 쓰기에서 같은 파일을 다시 연다.
+            // 스트림만 버리고 큐는 남긴다. 다음 쓰기에서 디렉터리부터 다시 확인하고 같은 파일을 다시 연다.
+            this._dirReady = false;
             if(this._stream === stream) {
                 this._stream = undefined;
                 this._streamFileName = undefined;
