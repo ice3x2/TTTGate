@@ -8,6 +8,7 @@ import {Buffer} from "buffer";
 import LoggerFactory  from "../util/logger/LoggerFactory";
 import {SysInfo} from "../commons/SysMonitor";
 import {timingSafeStringEqual} from "../util/timingSafeStringEqual";
+import {TunnelHandshakePolicyRegistry} from "./TunnelHandshakePolicy";
 const logger = LoggerFactory.getLogger('server', 'ClientHandlerPool');
 
 
@@ -29,6 +30,8 @@ type WaitingQueueState = {
 }
 
 
+type PendingSessionState = {handlerID: number, sessionID: number, openOpt: OpenOpt, available: boolean, bindingToken?: string, openTimer?: NodeJS.Timeout};
+
 class ClientHandlerPool {
 
     private static LAST_DATA_HANDLER_ID : number = 10000;
@@ -48,7 +51,7 @@ class ClientHandlerPool {
     private _waitingDataBufferQueueMap : Map<number, WaitingQueueState> = new Map<number, WaitingQueueState>();
     private _waitingReliefListeners: Map<number, Array<() => void>> = new Map();
     private _bufferSize : number = 0;
-    private _pendingSessionIDMap : Map<number, {handlerID: number, sessionID: number, openOpt: OpenOpt, available: boolean, bindingToken?: string }> = new Map<number, {handlerID: number, sessionID: number, openOpt: OpenOpt,available: boolean, bindingToken?: string }>();
+    private _pendingSessionIDMap : Map<number, PendingSessionState> = new Map<number, PendingSessionState>();
     private _onSessionCloseCallback? : OnSessionCloseCallback;
     private _isSessionOwned? : (sessionID: number) => boolean;
     private _foreignCloseCount = 0;
@@ -338,8 +341,11 @@ class ClientHandlerPool {
             receiveBytes: 0,
             limitBytes: opt.bufferLimit
         });
-        let pendingSessionState = {handlerID, sessionID: sessionID, openOpt: opt, available: true, bindingToken: undefined as string | undefined};
+        let pendingSessionState: PendingSessionState = {handlerID, sessionID: sessionID, openOpt: opt, available: true, bindingToken: undefined};
         this._pendingSessionIDMap.set(sessionID,pendingSessionState);
+        pendingSessionState.openTimer = setTimeout(() => this.expirePendingSession(sessionID, pendingSessionState),
+            TunnelHandshakePolicyRegistry.current().pendingSessionOpenTimeoutMs);
+        pendingSessionState.openTimer.unref?.();
         if(!this._legacyMode) {
             pendingSessionState.bindingToken = createOpaqueToken(24);
         }
@@ -385,7 +391,7 @@ class ClientHandlerPool {
                 this.sendSuccessOpenSessionAck(sessionID);
                 this.flushWaitBuffer(sessionID);
             }
-            this._pendingSessionIDMap.delete(sessionID);
+            this.deletePendingSession(sessionID);
         } else if(packet.cmd == CtrlCmd.CloseSession) {
             const count = packet.readCloseSessionCount(!this._legacyMode && this._capabilities.includes('close-count-safe'));
             if(count.kind === 'invalid') {
@@ -441,7 +447,7 @@ class ClientHandlerPool {
             return true;
         } else {
             this._activatedSessionHandlerMap_.delete(sessionID);
-            this._pendingSessionIDMap.delete(sessionID);
+            this.deletePendingSession(sessionID);
             this.burnWaitBuffer(sessionID);
             this.sendCloseSession(sessionID, 0);
             this.closeSessionAndCallback(sessionID, 0);
@@ -611,7 +617,7 @@ class ClientHandlerPool {
     public terminateSession(sessionID: number) : void {
         let handler = this._activatedSessionHandlerMap_.get(sessionID);
         this._activatedSessionHandlerMap_.delete(sessionID);
-        this._pendingSessionIDMap.delete(sessionID);
+        this.deletePendingSession(sessionID);
         this.burnWaitBuffer(sessionID);
         if(handler) {
             handler.end_();
@@ -639,8 +645,31 @@ class ClientHandlerPool {
     }
 
 
+    private deletePendingSession(sessionID: number) : void {
+        clearTimeout(this._pendingSessionIDMap.get(sessionID)?.openTimer);
+        this._pendingSessionIDMap.delete(sessionID);
+    }
+
+    /**
+     * 열기 기한이 지나도록 데이터 연결·엔드포인트 결과가 오지 않은 세션을 닫는다(#174).
+     * 기한 사이에 같은 세션 ID 가 다시 열렸으면 상태 객체가 달라 건드리지 않는다.
+     */
+    private expirePendingSession(sessionID: number, state: PendingSessionState) : void {
+        if(this._pendingSessionIDMap.get(sessionID) !== state) return;
+        logger.warn(`Closing a session that did not open before the deadline. sessionID=${sessionID}`);
+        const dataHandler = this._activatedSessionHandlerMap_.get(sessionID);
+        // 상태를 지우기 전에 보내야 클라이언트가 받을 종료 패킷이 나간다.
+        this.sendCloseSession(sessionID, 0);
+        this._activatedSessionHandlerMap_.delete(sessionID);
+        this.deletePendingSession(sessionID);
+        this.burnWaitBuffer(sessionID);
+        this.closeSessionAndCallback(sessionID, 0);
+        dataHandler?.destroy();
+    }
+
     public end() : void {
         for(const sessionID of this._waitingDataBufferQueueMap.keys()) this.burnWaitBuffer(sessionID);
+        for(const state of this._pendingSessionIDMap.values()) clearTimeout(state.openTimer);
         this._pendingSessionIDMap.clear();
         // noinspection JSUnusedLocalSymbols
         for(let [key, value] of this._activatedSessionHandlerMap_) {
@@ -691,7 +720,7 @@ class ClientHandlerPool {
             this._activatedSessionHandlerMap_.delete(sessionID);
             handler.destroy();
         }
-        this._pendingSessionIDMap.delete(sessionID);
+        this.deletePendingSession(sessionID);
     }
 
 }

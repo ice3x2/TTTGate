@@ -22,7 +22,9 @@ interface OnSocketEvent {
 // (util/ 은 server/security를 import하지 않는다).
 type AdmitVerdict = {allowed: true} | {allowed: false; reason: string; retryAfterMs?: number; rejectResponse?: Buffer};
 
-interface ServerOption {port: number, tls?: boolean, ca?: string, cert?: string, key?: string, keepAlive?: number, requestClientCert?: boolean, admit?: (remoteAddress: string | undefined) => AdmitVerdict};
+interface ServerOption {port: number, tls?: boolean, ca?: string, cert?: string, key?: string, keepAlive?: number, requestClientCert?: boolean, admit?: (remoteAddress: string | undefined) => AdmitVerdict,
+    /** TLS 핸드셰이크 기한(ms). 핸드셰이크가 끝나기 전 연결은 바인드되지 않아 미인증 기한 밖에 있으므로 따로 끊는다(#174). */
+    handshakeTimeoutMs?: number};
 
 class TCPServer {
 
@@ -88,10 +90,23 @@ class TCPServer {
         this._server = this.createServer();
     }
 
+    private serverTlsOptions(): tls.TlsOptions {
+        const options = TlsOptionsFactoryRegistry.current().createServerTlsOptions(this._options);
+        if(this._options.handshakeTimeoutMs !== undefined) options.handshakeTimeout = this._options.handshakeTimeoutMs;
+        return options;
+    }
+
     private createServer(): net.Server {
         const server = this._options.tls
-            ? tls.createServer(TlsOptionsFactoryRegistry.current().createServerTlsOptions(this._options), this.onBind)
+            ? tls.createServer(this.serverTlsOptions(), this.onBind)
             : net.createServer(this.onBind);
+        if(this._options.tls) {
+            // 핸드셰이크 기한이 지나도 Node 는 tlsClientError 만 내고 TCP 소켓을 그대로 둔다. 직접 닫아야 슬롯이 풀린다(#174).
+            server.on('tlsClientError', (error, socket) => {
+                logger.debug(`TCPServer: TLS client error: ${error.message}`);
+                socket.destroy();
+            });
+        }
         server.on('error', (error) => {
             if(server !== this._server) return;
             this._error = error;

@@ -20,6 +20,8 @@ const MAX_TIMER_DELAY_MS = 2_147_483_647;
 
 // U5-02 / #117 — concurrency-limit 거절을 http/https에서만 명시 응답으로 되돌려준다(#123 (U5-08) 전까지는 발생하지 않는다).
 const HTTP_503 = Buffer.from('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
+/** 외부 TLS 포트의 핸드셰이크 기한(ms). 공개 포트라 인증 기한이 없으므로 브라우저가 충분히 끝낼 시간만 준다(#174). */
+const EXTERNAL_TLS_HANDSHAKE_TIMEOUT_MS = 10_000;
 
 
 
@@ -153,6 +155,8 @@ class ExternalPortServerPool {
                 cert: certInfo?.cert.value,
                 ca: certInfo?.ca.value == '' ? undefined : certInfo?.ca.value,
                 keepAlive: option.keepAlive,
+                // 동시성 상한(admit)은 핸드셰이크가 끝난 뒤에 걸린다. 그 전의 연결이 Node 기본값(120초)까지 남지 않게 한다(#174).
+                handshakeTimeoutMs: EXTERNAL_TLS_HANDSHAKE_TIMEOUT_MS,
                 admit: (addr: string | undefined) => {
                     const protocol = option.protocol ?? 'tcp';
                     const decision = AdmissionController.instance.admit({kind: 'tunnel', port: option.forwardPort, protocol}, addr);

@@ -207,6 +207,10 @@ let _loadClientOption = (cliOptions?: {[key: string]: string}) : ClientOption =>
         Files.writeSync(file, yamlString);
     }
     _printClientOptions(clientOption);
+    if(clientOption.allowLegacyFallback === true) {
+        // 허위 서버가 v1 로 내려 응답하면 공유 키를 그대로 보낸다(#174). 승인된 롤백 기간에만 켠다.
+        logger.warn('allowLegacyFallback is on: a server that answers with the legacy protocol receives the shared key. Use it only during an approved rollback window.');
+    }
     AppCompositionRoot.applyGlobalMemLimitMiB(clientOption.globalMemCacheLimit);
     return clientOption;
 }
