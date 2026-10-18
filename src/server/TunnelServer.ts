@@ -558,6 +558,15 @@ class TunnelServer {
         }
     }
 
+    /** #163: 세션의 터널 데이터 소켓이 배압 상태인지(업로드 방향). */
+    public isSessionBackpressured(sessionID: number) : boolean {
+        return this.findClientHandlerPool(sessionID)?.isSessionBackpressured(sessionID) ?? false;
+    }
+
+    public addSessionPressureReliefListener(sessionID: number, listener: () => void) : void {
+        this.findClientHandlerPool(sessionID)?.addSessionPressureReliefListener(sessionID, listener);
+    }
+
     public pauseSessionSource(sessionID: number) : void {
         this.findClientHandlerPool(sessionID)?.pauseSessionRead(sessionID);
     }
