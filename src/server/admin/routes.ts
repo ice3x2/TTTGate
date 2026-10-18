@@ -76,7 +76,25 @@ export type Route = {
 
 export type RouteHandlers = {[name: string]: (ctx: RouteContext) => Promise<void>};
 
-const tunnelPortOf = (ctx: RouteContext): number => Number(ctx.params.port ?? ctx.body?.forwardPort);
+/**
+ * 경로 세그먼트의 포트. 1–65535 의 십진 표기만 받는다(앞자리 0, 지수, 16진, 소수, 공백은 거절).
+ * 권한 판정(tunnelPortOf)과 핸들러(getNumberInPath)가 이 함수 하나만 쓴다. 둘이 서로 다른 변환을 쓰면
+ * "20.010e3" 처럼 판정은 내 포트, 동작은 남의 포트로 읽히는 표기가 생긴다(#138).
+ */
+export const parsePathPort = (raw: string | undefined): number | undefined => {
+    if(raw === undefined || !/^[1-9]\d{0,4}$/.test(raw)) return undefined;
+    const port = Number(raw);
+    return port <= 65535 ? port : undefined;
+};
+
+/** 경로의 숫자 id. 십진 숫자만 받고, 포트와 같이 앞자리 0 은 받지 않는다("0" 자체는 허용). */
+export const parsePathId = (raw: string | undefined): number | undefined =>
+    raw !== undefined && /^(0|[1-9]\d{0,14})$/.test(raw) ? Number(raw) : undefined;
+
+/** 형식이 틀린 경로 포트는 NaN 이 되어 어느 소유자와도 맞지 않는다. 핸들러는 같은 파싱으로 400 을 낸다. */
+const tunnelPortOf = (ctx: RouteContext): number => ctx.params.port !== undefined
+    ? parsePathPort(ctx.params.port) ?? NaN
+    : Number(ctx.body?.forwardPort);
 
 /** tunnel:* action 의 대상. 소유자는 AuthorizationContext 가 저장소에서 읽어 채운다(#100 U2-08). */
 const tunnelTarget = (ctx: RouteContext): Target => AuthorizationContext.targetOf(tunnelPortOf(ctx));

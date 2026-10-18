@@ -27,7 +27,7 @@ import {DEFAULT_GEO_CONFIG, GeoConfig, TunnelingOption} from "../../types/Tunnel
 import {AdmissionController} from "../security/AdmissionController";
 import {normalizeConnectionSecurity} from "../security/connectionSecurity";
 import {listCountries} from "../security/countries";
-import {auditEventOf, AuditRouteMeta, buildAdminRoutes, isTunnelActivationRequested, Route, RouteContext} from "./routes";
+import {auditEventOf, AuditRouteMeta, buildAdminRoutes, isTunnelActivationRequested, parsePathId, parsePathPort, Route, RouteContext} from "./routes";
 import {rbacRouteHandlers} from "./rbacRoutes";
 import {MfaTicketStore, PendingEnrollmentStore} from "../mfa/MfaTickets";
 import {mfaLoginHandler} from "./mfaLoginRoutes";
@@ -1101,9 +1101,9 @@ class AdminServer {
     }
 
     private getNumberInPath = async (ctx: RouteContext, paramName: string, errorMessage: string ='Invalid port' ) : Promise<number | undefined> => {
-        let numStr = ctx.params[paramName];
-        let num = numStr == undefined ? undefined : parseInt(numStr);
-        if(num == undefined || isNaN(num)) {
+        // 권한 판정과 같은 파싱을 쓴다(#138). parseInt 는 "20.010e3" 을 20 으로 읽어 판정과 어긋난다.
+        const num = paramName === 'port' ? parsePathPort(ctx.params[paramName]) : parsePathId(ctx.params[paramName]);
+        if(num === undefined) {
             this.sendApiFailure(ctx.res, 400, {message:errorMessage});
             return undefined;
         }
@@ -1561,8 +1561,8 @@ class AdminServer {
 
     private onDeleteSecurityBan = async (ctx: RouteContext) => {
         const {res} = ctx;
-        const port = Number(ctx.params.port);
-        if(!Number.isInteger(port) || port < 1 || port > 65535) {
+        const port = parsePathPort(ctx.params.port);
+        if(port === undefined) {
             this.sendApiFailure(res, 400, {message: 'invalid port'});
             return;
         }
