@@ -51,6 +51,8 @@ type Fixture = {
     request: (method: string, target: string, body?: object, headers?: Record<string, string>) => Promise<ApiResponse>;
     login: (body: object) => Promise<LoginResult>;
     freePort: () => Promise<number>;
+    /** #135: JSON 으로 직렬화하지 않은 본문을 그대로 보낸다. */
+    raw: (method: string, target: string, body: string, headers?: Record<string, string>) => Promise<ApiResponse>;
 };
 
 const authOf = (response: ApiResponse): {auth: Auth; sessionKey: string} => {
@@ -97,6 +99,17 @@ const withAuditServer = async (check: (fixture: Fixture) => Promise<void>): Prom
             return {status: response.statusCode, headers: response.headers, body: parsed};
         };
 
+        const raw = async (method: string, target: string, body: string, headers: Record<string, string> = {}): Promise<ApiResponse> => {
+            const response = await httpRequest({
+                port, path: target, method,
+                headers: {"Content-Type": "application/json", "Content-Length": String(Buffer.byteLength(body)), ...headers},
+                body
+            });
+            let parsed: any;
+            try { parsed = JSON.parse(response.body); } catch { parsed = response.body; }
+            return {status: response.statusCode, headers: response.headers, body: parsed};
+        };
+
         const login = async (body: object): Promise<LoginResult> => {
             const response = await request("POST", "/api/login", body);
             if(response.status !== 200) return response;
@@ -116,7 +129,7 @@ const withAuditServer = async (check: (fixture: Fixture) => Promise<void>): Prom
                 auth: bootstrap.auth!, sessionKey: bootstrap.sessionKey!,
                 userId: bootstrap.body.user.id, mustChangePassword: bootstrap.body.mustChangePassword
             },
-            request, login, freePort: getFreePort
+            request, login, freePort: getFreePort, raw
         });
         // #109 K3 확장 — 이 시나리오가 실제로 기록한 type 전수가 상수 목록 안에 있어야 한다.
         expect(sink.allEvents.map((event) => event.type).filter((type) => !AUDIT_EVENT_TYPE_LIST.includes(type))).toEqual([]);
@@ -484,5 +497,58 @@ describe("audit-sink: detail 마스킹은 기록 진입점 한 곳에서만 한�
         expect(f.sink.events).toHaveLength(1);
         expect(f.sink.events[0].detail).toEqual({sessionToken: "[REDACTED]"});
         expect(JSON.stringify(f.sink.events[0])).not.toContain(SESSION_TOKEN_PLAINTEXT);
+    }));
+});
+
+describe("audit-sink: 본문 파싱 단계에서 실패한 CUD 요청(#135)", () => {
+    let bcryptCostBackup: number;
+    beforeAll(() => { bcryptCostBackup = IdentityStore.bcryptCost; IdentityStore.bcryptCost = 4; });
+    afterAll(() => { IdentityStore.bcryptCost = bcryptCostBackup; });
+
+    const rejected = (f: Fixture) => f.sink.events.filter((event) => event.type === "request_body_rejected");
+
+    it("1MiB 를 넘는 본문은 413 이고 실패 이벤트가 경로와 함께 남는다", async () => withAuditServer(async (f) => {
+        const huge = JSON.stringify({username: "x".repeat(1024 * 1024 + 16)});
+        // 서버는 413 을 보낸 뒤 요청을 끊으므로, 클라이언트는 응답 대신 연결 종료를 볼 수도 있다.
+        let status: number | undefined;
+        try { status = (await f.raw("POST", "/api/users", huge, f.admin.auth)).status; } catch { status = undefined; }
+        expect([413, undefined]).toContain(status);
+        for(let i = 0; i < 50 && rejected(f).length === 0; i += 1) await new Promise((resolve) => setTimeout(resolve, 20));
+        expect(rejected(f)).toHaveLength(1);
+        expect(rejected(f)[0]).toMatchObject({
+            outcome: "failure", actor: {userId: f.admin.userId},
+            summary: "request_body_rejected POST /api/users",
+            detail: {method: "POST", path: "/api/users", reason: "too_large"}
+        });
+        expect(rejected(f)[0].target).toBeUndefined();
+    }));
+
+    it("깨진 JSON 은 400 이고 실패 이벤트가 남되 본문 조각은 담지 않는다", async () => withAuditServer(async (f) => {
+        const response = await f.raw("PUT", `/api/users/${f.admin.userId}`, '{"displayName": "secret-fragment', f.admin.auth);
+        expect(response.status).toBe(400);
+        expect(rejected(f)).toHaveLength(1);
+        expect(rejected(f)[0]).toMatchObject({outcome: "failure", detail: {method: "PUT", path: `/api/users/${f.admin.userId}`, reason: "invalid_json"}});
+        expect(JSON.stringify(rejected(f)[0])).not.toContain("secret-fragment");
+    }));
+
+    it("권한이 없는 사용자의 본문 실패는 그 사용자의 CUD 시도로 남기지 않는다", async () => withAuditServer(async (f) => {
+        const created = await f.request("POST", "/api/users", {username: "mallory", role: "regular"}, f.admin.auth);
+        expect(created.status).toBe(201);
+        const first = await f.login({username: "mallory", password: created.body.temporaryPassword});
+        expect((await f.request("PUT", "/api/me/password",
+            {currentPassword: created.body.temporaryPassword, newPassword: "mallory-next-pass"}, first.auth!)).status).toBe(200);
+        const mallory = await f.login({username: "mallory", password: "mallory-next-pass"});
+        f.sink.events.length = 0;
+        const response = await f.raw("POST", "/api/users", '{"username": "broken', mallory.auth!);
+        expect(response.status).toBe(400);
+        expect(rejected(f)).toEqual([]);
+    }));
+
+    it("public 라우트와 GET 라우트에서는 남기지 않는다", async () => withAuditServer(async (f) => {
+        const login = await f.raw("POST", "/api/login", '{"username": "admin", "password": ', {});
+        expect(login.status).toBe(400);
+        const listed = await f.raw("GET", "/api/users", '{"broken', f.admin.auth);
+        expect(listed.status).toBe(200);
+        expect(rejected(f)).toEqual([]);
     }));
 });

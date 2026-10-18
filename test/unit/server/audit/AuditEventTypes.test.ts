@@ -14,14 +14,14 @@ const EXPECTED_TYPES = [
     "tunnel_cert_updated", "tunnel_cert_deleted",
     "server_option_updated", "admin_cert_updated",
     "security_geo_updated", "security_ban_removed",
-    "access_denied", "last_superuser_guard_hit",
+    "access_denied", "last_superuser_guard_hit", "request_body_rejected",
     "conn_limit_hit", "tunnel_autoexpire",
     "audit_retention_pruned"
 ];
 
 describe("AuditEventTypes", () => {
-    it("표의 이름 41 개를 모두 담는다", () => {
-        expect(AUDIT_EVENT_TYPE_LIST).toHaveLength(41);
+    it("표의 이름 42 개를 모두 담는다", () => {
+        expect(AUDIT_EVENT_TYPE_LIST).toHaveLength(42);
         expect([...AUDIT_EVENT_TYPE_LIST].sort()).toEqual([...EXPECTED_TYPES].sort());
     });
 

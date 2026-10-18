@@ -29,6 +29,7 @@ import {normalizeConnectionSecurity} from "../security/connectionSecurity";
 import {listCountries} from "../security/countries";
 import {auditEventOf, AuditRouteMeta, buildAdminRoutes, errorLabelOf, isTunnelActivationRequested, parseActiveTimeout, parsePathId, parsePathPort, Route, RouteContext} from "./routes";
 import {createLoginFailureAuditor} from "./loginFailureAudit";
+import {bodyRejectionEvent, isBodyRejectionAuditable} from "./bodyRejectionAudit";
 import {rbacRouteHandlers} from "./rbacRoutes";
 import {MfaTicketStore, PendingEnrollmentStore} from "../mfa/MfaTickets";
 import {mfaLoginHandler} from "./mfaLoginRoutes";
@@ -309,7 +310,8 @@ class AdminServer {
                ctx.principal = principal;
            }
            if(method === 'POST' || method === 'PUT' || method === 'DELETE') {
-               ctx.body = await AdminServer.readJson(req);
+               // #135: 감사 대상 CUD 의 본문 실패(413·408·400)도 남긴다. 상태를 바꾸지 않으므로 reserve() 없이 흘려보낸다(bodyRejectionAudit.ts).
+               ctx.body = await AdminServer.readJson(req).catch((e) => { if(isBodyRejectionAuditable(ctx, matched.route)) this.emitAudit(bodyRejectionEvent(ctx, method!, pathname, e)); throw e; });
            }
            // 'public' 과 'session' 은 권한 판정 없이 통과한다(세션 존재만으로 충분한 엔드포인트).
            if(matched.route.action !== 'public' && matched.route.action !== 'session') {

@@ -29,7 +29,9 @@ export const AUDIT_EVENT_TYPES = {
     // 가드·런타임
     access_denied: 'access_denied', last_superuser_guard_hit: 'last_superuser_guard_hit',
     conn_limit_hit: 'conn_limit_hit', tunnel_autoexpire: 'tunnel_autoexpire',
-    audit_retention_pruned: 'audit_retention_pruned'
+    audit_retention_pruned: 'audit_retention_pruned',
+    // #135: 본문을 읽다가 실패한 감사 대상 CUD 요청(대상 없음)
+    request_body_rejected: 'request_body_rejected'
 } as const;
 
 export type AuditEventType = keyof typeof AUDIT_EVENT_TYPES;
