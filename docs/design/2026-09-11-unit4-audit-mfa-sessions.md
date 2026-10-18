@@ -43,6 +43,7 @@ PRD §12 미결 질문은 현재 가정대로 간다: Q1 MFA 강제 기본 off, 
 | `security_geo_updated`, `security_ban_removed` | 5 단위 | security |
 | `access_denied` | `authorize` 가 403/404 를 낼 때 | (action 을 `detail.action`) |
 | `last_superuser_guard_hit`(`IdentityStore` 가드가 409 를 낼 때, 단위 2 §4.1), `conn_limit_hit`·`tunnel_autoexpire`(단위 5 §7), `audit_retention_pruned`(2.1) | 가드·런타임 | |
+| `request_body_rejected`(#135) | 감사 대상 CUD 의 본문 읽기 실패(413·408·400). `detail` 은 `method`·`path`·`reason`(`too_large`·`timeout`·`invalid_json`·`unreadable`)만 담고 예외 메시지는 담지 않는다 | (없음) |
 
 2 단위의 `audit-sink.test.ts` 를 확장해 라우트 표의 모든 CUD 항목이 위 표의 타입 중 하나를 내는지 단언한다(K3).
 
