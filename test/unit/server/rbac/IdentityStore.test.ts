@@ -224,6 +224,41 @@ describe("IdentityStore", () => {
         expect(IdentityStore.instance.updateGroup(other.value.id, {name: "Ops"}).success).toBe(true);
     });
 
+    it("#152 updateGroup rejects a stale expectedRevision and bumps the revision on success", () => {
+        IdentityStore.instance.load();
+        const created = IdentityStore.instance.createGroup({name: "Rev"});
+        expect(created.success).toBe(true);
+        if(!created.success) return;
+        const id = created.value.id;
+        expect(IdentityStore.instance.group(id)!.revision ?? 0).toBe(0);
+        const first = IdentityStore.instance.updateGroup(id, {attributes: {max_tunnel_count: 3}}, 0);
+        expect(first.success).toBe(true);
+        expect(IdentityStore.instance.group(id)!.revision).toBe(1);
+        expect(IdentityStore.instance.updateGroup(id, {attributes: {max_tunnel_count: 9}}, 0))
+            .toMatchObject({success: false, status: 409, code: "group_revision_conflict"});
+        expect(IdentityStore.instance.group(id)!.attributes.max_tunnel_count).toBe(3);
+        // expectedRevision 을 주지 않는 호출(이전 API 사용자)은 지금처럼 받는다.
+        expect(IdentityStore.instance.updateGroup(id, {attributes: {max_tunnel_count: 4}}).success).toBe(true);
+        expect(IdentityStore.instance.group(id)!.revision).toBe(2);
+    });
+
+    it("#152 updates a group whose stored attributes miss keys added later, and treats a non-numeric revision as 0", () => {
+        IdentityStore.instance.load();
+        const created = IdentityStore.instance.createGroup({name: "Legacy"});
+        expect(created.success).toBe(true);
+        if(!created.success) return;
+        const parsed = YAML.parse(fs.readFileSync(identityYamlPath(), "utf8"));
+        const stored = parsed.groups.find((group: any) => group.id === created.value.id);
+        delete stored.attributes.rate_limit;
+        stored.revision = "3";
+        fs.writeFileSync(identityYamlPath(), YAML.stringify(parsed));
+        IdentityStore.resetForTest();
+        expect(IdentityStore.instance.load()).toMatchObject({success: true});
+        const updated = IdentityStore.instance.updateGroup(created.value.id, {attributes: {max_tunnel_count: 2}}, 0);
+        expect(updated.success).toBe(true);
+        expect(IdentityStore.instance.group(created.value.id)!.revision).toBe(1);
+    });
+
     it("guards the last active superuser from demotion, disabling, and deletion", async () => {
         IdentityStore.instance.load();
         const onlySuperuser = await IdentityStore.instance.createUser({username: "solo", role: "superuser", password: "solo-password-1", mustChangePassword: false});

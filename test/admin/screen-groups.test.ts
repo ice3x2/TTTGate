@@ -267,6 +267,33 @@ test("한도 칸이 비면 요청 없이 칸마다 오류를 보이고, 0 을 �
     await waitForEdit(page);
 }));
 
+// #152 — 그룹 저장이 전체 덮어쓰기면 낡은 화면이 다른 운영자의 권한 축소를 되돌린다. 바뀐 키만 revision 과 함께 보낸다.
+test("기존 그룹 저장은 바뀐 속성만 expectedRevision 과 함께 보내고, 다른 사람이 먼저 바꿨으면 409 안내를 보인다", () => withGroups(async ({page}) => {
+    await newGroup(page);
+    await page.locator("#group-name").fill("Stale");
+    await button(page, "Create group").click();
+    await waitForEdit(page);
+    const id = new URL(page.url()).hash.split("/").pop()!;
+    await attr(page, "max_tunnel_count").fill("7");
+    const saved = page.waitForRequest((request) => request.method() === "PUT" && new URL(request.url()).pathname === `/api/groups/${id}`);
+    await button(page, "Save").click();
+    const body = (await saved).postDataJSON();
+    expect(body).toEqual({attributes: {max_tunnel_count: 7}, expectedRevision: 0});
+    await page.getByText("Group saved.", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+
+    // 다른 운영자가 먼저 바꾼다.
+    const other = await page.evaluate(async (groupId) => {
+        const csrf = document.cookie.split("; ").find((pair) => pair.startsWith("csrfToken="))?.slice("csrfToken=".length) ?? "";
+        const response = await fetch(`/api/groups/${groupId}`, {method: "PUT", credentials: "same-origin",
+            headers: {"Content-Type": "application/json", "X-CSRF-Token": csrf}, body: JSON.stringify({attributes: {max_tunnel_count: 1}})});
+        return response.status;
+    }, id);
+    expect(other).toBe(200);
+    await attr(page, "max_tunnel_count").fill("8");
+    await button(page, "Save").click();
+    await page.getByText("Someone else changed this group. Reload to see the latest values.", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+}));
+
 test("시간 단위로 나누어떨어지지 않는 기간은 다른 필드만 저장할 때 바뀌지 않는다", () => withGroups(async ({page}) => {
     // API 로 1.5 시간을 넣는다(화면은 시간 단위 입력이라 직접 만들 수 없다).
     const status = await page.evaluate(async (id) => {
@@ -283,6 +310,10 @@ test("시간 단위로 나누어떨어지지 않는 기간은 다른 필드만 �
     await attr(page, "allowed_trusted_clients-client-b").check();
     const saved = page.waitForRequest((request) => request.method() === "PUT" && new URL(request.url()).pathname === `/api/groups/${RBAC_GROUP_FIELD_ID}`);
     await button(page, "Save").click();
-    expect((await saved).postDataJSON().attributes.max_tunnel_duration_ms).toBe(5_400_000);
+    // 바뀐 속성만 보낸다(#152). 기간은 보내지 않으므로 서버 값이 그대로 남는다.
+    expect("max_tunnel_duration_ms" in (await saved).postDataJSON().attributes).toBe(false);
     await page.getByText("Group saved.", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+    const stored = await page.evaluate(async (id) => (await (await fetch(`/api/groups/${id}`, {credentials: "same-origin"})).json()).group.attributes.max_tunnel_duration_ms,
+        RBAC_GROUP_FIELD_ID);
+    expect(stored).toBe(5_400_000);
 }));

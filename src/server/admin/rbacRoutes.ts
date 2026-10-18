@@ -242,7 +242,8 @@ const onUpdateGroup = async (ctx: RouteContext): Promise<void> => {
     if(isFieldProvided(ctx.body, 'attributes')) {
         patch.attributes = ctx.body.attributes;
     }
-    const updated = store.updateGroup(ctx.params.id, patch);
+    const expectedRevision = typeof ctx.body?.expectedRevision === 'number' ? ctx.body.expectedRevision : undefined;
+    const updated = store.updateGroup(ctx.params.id, patch, expectedRevision);
     if(!updated.success) {
         ctx.fail(updated.status, updated.code, updated.message);
         return;

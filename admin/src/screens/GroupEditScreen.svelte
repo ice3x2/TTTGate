@@ -67,10 +67,16 @@
         }
     });
 
+    // 불러온 속성. 저장 때 바뀐 키만 보낸다(#152 — 전체를 덮어쓰면 다른 운영자의 변경이 되돌아간다).
+    let loadedAttrs = $state<GroupAttributes>(clone(DEFAULT_GROUP_ATTRIBUTES));
+    const changedAttributes = (next: GroupAttributes): Partial<GroupAttributes> => Object.fromEntries(
+        Object.entries(next).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify((loadedAttrs as Record<string, unknown>)[key]))) as Partial<GroupAttributes>;
+
     const fill = (value: Group) => {
         group = value;
         name = value.name;
         attrs = clone({...DEFAULT_GROUP_ATTRIBUTES, ...value.attributes});
+        loadedAttrs = clone(attrs);
         // 시간 단위로 나누어떨어지지 않는 값(예: 1.5 시간)도 그대로 보인다. 내림하면 저장 때 정책이 바뀐다.
         durationHours = attrs.max_tunnel_duration_ms / HOUR_MS;
         loadedSnapshot = snapshot(name, attrs);
@@ -131,11 +137,14 @@
             }
             if(!group) return;
             const id = group.id;
-            const patch: {name?: string; attributes: GroupAttributes} = {attributes};
+            const changed = changedAttributes(attributes);
+            const patch: {name?: string; attributes?: Partial<GroupAttributes>; expectedRevision: number} = {expectedRevision: group.revision ?? 0};
+            if(Object.keys(changed).length > 0) patch.attributes = changed;
             if(!isDefaultGroup && name !== group.name) patch.name = name;
             const result = await GroupsCtrl.instance.update(id, patch);
             if(!result.success) {
-                formError = result.message;
+                formError = result.status === 409 && result.code === 'group_revision_conflict'
+                    ? 'Someone else changed this group. Reload to see the latest values.' : result.message;
                 return;
             }
             toast.push({tone: 'pulse', message: 'Group saved.'});

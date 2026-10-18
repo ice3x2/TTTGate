@@ -32,7 +32,7 @@ class GroupsCtrl {
         return adminRequest("/api/groups", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(input)});
     }
 
-    public update(id: string, patch: {name?: string; attributes?: GroupAttributes}): Promise<ApiResult<{group: Group}>> {
+    public update(id: string, patch: {name?: string; attributes?: Partial<GroupAttributes>; expectedRevision?: number}): Promise<ApiResult<{group: Group}>> {
         return adminRequest(`/api/groups/${id}`, {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify(patch)});
     }
 
