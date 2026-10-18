@@ -73,6 +73,7 @@ const LOGIN_ATTEMPT_MAP_LIMIT = 10_000;
 // P5-T3 / REQ-11: JSON 본문 크기 / 타임아웃 상한.
 const ADMIN_JSON_BODY_LIMIT_BYTES = 1 * 1024 * 1024; // 1MiB
 const ADMIN_REQUEST_IDLE_TIMEOUT_MS = 10_000;
+const ADMIN_PROCESSING_IDLE_TIMEOUT_MS = 120_000;
 const ADMIN_HEADERS_TIMEOUT_MS = 15_000;
 const ADMIN_REQUEST_TIMEOUT_MS = 30_000;
 
@@ -320,6 +321,9 @@ class AdminServer {
                // #135: 감사 대상 CUD 의 본문 실패(413·408·400)도 남긴다. 상태를 바꾸지 않으므로 reserve() 없이 흘려보낸다(bodyRejectionAudit.ts).
                ctx.body = await AdminServer.readJson(req).catch((e) => { if(isBodyRejectionAuditable(ctx, matched.route)) this.emitAudit(bodyRejectionEvent(ctx, method!, pathname, e)); throw e; });
            }
+           // 요청 수신은 끝났다. 유휴 기한(REQ-11)은 느린 송신(slowloris)용이므로 여기서 넉넉히 늘린다. 약한 서버에서
+           // 처리가 스왑에 걸려 10초를 넘어도 끊지 않고, 응답을 읽지 않는 클라이언트(slow read)는 여전히 닫는다(#181).
+           try { req.setTimeout(ADMIN_PROCESSING_IDLE_TIMEOUT_MS); } catch {}
            // 'public' 과 'session' 은 권한 판정 없이 통과한다(세션 존재만으로 충분한 엔드포인트).
            if(matched.route.action !== 'public' && matched.route.action !== 'session') {
                const action: Action = typeof matched.route.action === 'function'

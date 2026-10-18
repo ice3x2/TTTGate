@@ -19,7 +19,10 @@ export const createStageLog = (now: () => number = Date.now) => {
     };
 };
 
-export const startAdminBrowser = async (options: {apiOrigin?: string, proxyTarget?: string, preview?: boolean, httpAlias?: boolean} = {}) => {
+const ADMIN_TEST_SERVER_START_TIMEOUT_MS = 60_000;
+
+export const startAdminBrowser = async (options: {apiOrigin?: string, proxyTarget?: string, preview?: boolean, httpAlias?: boolean, startTimeoutMs?: number} = {}) => {
+    const startTimeoutMs = options.startTimeoutMs ?? ADMIN_TEST_SERVER_START_TIMEOUT_MS;
     const server = fork(path.resolve(__dirname, "../../admin/test/server.mjs"), [], {
         stdio: ["ignore", "pipe", "pipe", "ipc"],
         env: {...process.env, ADMIN_TEST_API_ORIGIN: options.apiOrigin,
@@ -62,7 +65,8 @@ export const startAdminBrowser = async (options: {apiOrigin?: string, proxyTarge
             };
             const failed = (error: Error) => finish(new Error(`Admin test server error: ${error.message}; ${diagnostic()}`, {cause: error}));
             const closed = () => finish(new Error(`Admin test server closed before ready: ${diagnostic()}`));
-            const timeout = setTimeout(() => finish(new Error(`Admin test server did not start within 15000ms: ${diagnostic()}`)), 15_000);
+            // 개발 서버 기동은 CPU 부하에서 느려진다(#181). 기동 실패는 여전히 이 기한에서 드러난다.
+            const timeout = setTimeout(() => finish(new Error(`Admin test server did not start within ${startTimeoutMs}ms: ${diagnostic()}`)), startTimeoutMs);
             server.on("message", message); server.once("error", failed); server.once("close", closed);
         });
         browser = await chromium.launch(options.httpAlias ? {

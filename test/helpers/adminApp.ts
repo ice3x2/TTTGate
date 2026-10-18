@@ -35,9 +35,11 @@ export type AdminApp = {
     close(): Promise<void>;
 };
 
-const BACKEND_START_TIMEOUT_MS = 15_000;
+// 부하(CPU 85% 이상)에서도 기동 실패와 느린 기동을 구분할 만큼 둔다(#181).
+const BACKEND_START_TIMEOUT_MS = 60_000;
 const BACKEND_STOP_TIMEOUT_MS = 10_000;
 const CALLS_TIMEOUT_MS = 5_000;
+const FIRST_SCREEN_TIMEOUT_MS = 90_000;
 
 /**
  * login: true(기본)는 admin / ADMIN_TEST_PASSWORD 로, 객체면 그 계정으로 로그인한 뒤 상태 화면까지 기다린다.
@@ -137,7 +139,8 @@ export const startAdminApp = async (options: {fixture?: AdminFixture; login?: bo
         if(shouldLogin) {
             const ok = () => page.getByRole("button", {name: "OK", exact: true}).click();
             const password = page.locator("#login-password");
-            await password.waitFor({state: "visible"});
+            // 첫 화면은 개발 서버가 Svelte 를 처음 컴파일한 뒤에 뜬다. 부하에서 30초를 넘을 수 있다(#181).
+            await password.waitFor({state: "visible", timeout: FIRST_SCREEN_TIMEOUT_MS});
             await page.locator("#login-username").fill(account.username);
             await password.fill(account.password);
             await ok();
@@ -148,7 +151,7 @@ export const startAdminApp = async (options: {fixture?: AdminFixture; login?: bo
                 await ok();
             }
             // 일반 유저는 #/tunnels, 강제 변경 사용자는 #/me/password 에 도착하므로 해시를 고정하지 않는다(U3-01, U3-02).
-            await page.waitForFunction(() => !document.querySelector('#login-password') && document.querySelector('header h1'));
+            await page.waitForFunction(() => !document.querySelector('#login-password') && document.querySelector('header h1'), undefined, {timeout: FIRST_SCREEN_TIMEOUT_MS});
         }
 
         const ownedBrowser = browser;

@@ -2,6 +2,7 @@ import net from "node:net";
 import {once} from "node:events";
 import EndPointClientPool from "../../../src/client/EndPointClientPool";
 import SocketState from "../../../src/util/SocketState";
+import {DEFAULT_TUNNEL_HANDSHAKE_POLICY} from "../../../src/server/TunnelHandshakePolicy";
 
 jest.setTimeout(30_000);
 
@@ -21,7 +22,7 @@ describe("endpoint connect timeout (#179)", () => {
 
     it("defaults below the server's pending-session deadline", () => {
         expect(original).toBeGreaterThan(0);
-        expect(original).toBeLessThan(30_000);
+        expect(original).toBeLessThan(DEFAULT_TUNNEL_HANDSHAKE_POLICY.pendingSessionOpenTimeoutMs);
     });
 
     it("a TLS endpoint that never answers the handshake fails within the connect timeout", async () => {

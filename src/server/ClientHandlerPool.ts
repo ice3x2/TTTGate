@@ -276,6 +276,11 @@ class ClientHandlerPool {
         this._name = name;
     }
 
+    /** 인증된 제어 연결의 원격 주소. 같은 주소의 데이터 연결을 주소별 미인증 상한에서 빼는 데 쓴다(#181). */
+    public get controlRemoteAddress() : string | undefined {
+        return this._controlHandler.socket?.remoteAddress;
+    }
+
     public get id() : number {
         return this._id;
     }

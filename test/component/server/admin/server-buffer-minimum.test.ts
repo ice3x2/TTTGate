@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import net from 'node:net';
-import tls from 'node:tls';
+import {peerFingerprint256} from '../../../helpers/tlsProbe';
 import {once} from 'node:events';
 import {withConfigurationServer} from './configuration-revision-fixture';
 import {getFreePort} from '../../../helpers/network';
@@ -45,11 +45,7 @@ test('invalid compound TLS rename retains exact certificate bytes and native fin
     const option = {forwardPort: port, protocol: 'tcp', destinationAddress: '127.0.0.1', destinationPort: 9, tls: true, keepAlive: 0, bufferLimitOnServer: 1.5};
     expect((await f.request('POST', '/api/tunnelingOption', {...option, certInfo: cert(bundle, 'old'), expectedRevision: f.store.revisionState.currentRevision,
         expectedCertificateRevision: CertificationStore.instance.revisionState.currentRevision})).statusCode).toBe(200);
-    const fingerprint = () => new Promise<string>((resolve, reject) => {
-        const socket = tls.connect({host: '127.0.0.1', port, rejectUnauthorized: false});
-        socket.setTimeout(3000, () => socket.destroy(new Error('Owned fingerprint timeout')));
-        socket.once('error', reject); socket.once('secureConnect', () => { const value = socket.getPeerCertificate().fingerprint256; socket.destroy(); resolve(value); });
-    });
+    const fingerprint = () => peerFingerprint256(port); // 리셋·부하를 견디는 공용 탐침(#181)
     const before = files(f.root.rootDir), identity = await fingerprint();
     const revision = f.store.revisionState, certificateRevision = CertificationStore.instance.revisionState;
     const listener = f.tunnel._externalPortServerPool._portServerMap.get(port);

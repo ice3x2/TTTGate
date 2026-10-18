@@ -103,7 +103,7 @@ Client options:
 - legacy shared-key control auth stays off unless `-allowLegacyControlAuth` is used deliberately
 - client-side `allowLegacyFallback` should remain `false` unless you are in an approved rollback window
 - both legacy switches weaken session binding and key secrecy (see the option list above); turn them off when the rollback window ends
-- unauthenticated tunnel connections, including those still in the TLS handshake, close at the handshake deadline (5 s by default); a session whose data connection does not arrive closes after 30 s
+- unauthenticated tunnel connections, including those still in the TLS handshake, close at the handshake deadline (15 s by default, sized for a 0.5-core server that swaps); a session whose data connection does not arrive closes after 60 s, and the client gives up on an unreachable endpoint after 45 s
 
 Recommended cutover order:
 

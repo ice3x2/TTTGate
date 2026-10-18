@@ -11,6 +11,7 @@ import LoggerFactory  from "../util/logger/LoggerFactory";
 import {AdmissionController} from "./security/AdmissionController";
 import {BandwidthLimiter} from "./security/BandwidthLimiter";
 import {computeWatermarkBytes} from "../util/ResourcePolicy";
+import {rateLimitBucketOf} from "./security/ConnectionRateLimiter";
 
 // #124 (U5-09) 클라이언트→외부 대역폭 큐. 상한(limit)을 넘으면 세션을 닫고, 상단 워터마크에서 터널 소스를 멈춘다.
 type SendQueue = {chunks: Buffer[]; bytes: number; limit: number; timer: NodeJS.Timeout | null; reliefListeners: Array<() => void>};
@@ -20,8 +21,15 @@ const MAX_TIMER_DELAY_MS = 2_147_483_647;
 
 // U5-02 / #117 — concurrency-limit 거절을 http/https에서만 명시 응답으로 되돌려준다(#123 (U5-08) 전까지는 발생하지 않는다).
 const HTTP_503 = Buffer.from('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
-/** 외부 TLS 포트의 핸드셰이크 기한(ms). 공개 포트라 인증 기한이 없으므로 브라우저가 충분히 끝낼 시간만 준다(#174). */
-const EXTERNAL_TLS_HANDSHAKE_TIMEOUT_MS = 10_000;
+/**
+ * 외부 TLS 포트의 핸드셰이크 기한(ms). 공개 포트라 인증 기한이 없으므로 끝낼 시간만 준다(#174).
+ * 느린 모바일 클라이언트와 약한 운영 서버(0.5코어·스왑)를 함께 고려해 20초로 둔다(#181).
+ */
+export const EXTERNAL_TLS_HANDSHAKE_TIMEOUT_MS = 20_000;
+/** 외부 TLS 포트마다 핸드셰이크 중일 수 있는 연결 수의 상한(#181). 동시성 상한(admit)은 핸드셰이크 뒤에 걸린다. */
+const EXTERNAL_MAX_PENDING_TLS_HANDSHAKES = 1024;
+/** 외부 TLS 포트에서 주소 하나(IPv4 하나·IPv6 /64)가 핸드셰이크 중일 수 있는 연결 수(#181). 브라우저는 보통 6개 안팎을 연다. */
+const EXTERNAL_MAX_PENDING_TLS_HANDSHAKES_PER_ADDRESS = 64;
 
 
 
@@ -157,6 +165,9 @@ class ExternalPortServerPool {
                 keepAlive: option.keepAlive,
                 // 동시성 상한(admit)은 핸드셰이크가 끝난 뒤에 걸린다. 그 전의 연결이 Node 기본값(120초)까지 남지 않게 한다(#174).
                 handshakeTimeoutMs: EXTERNAL_TLS_HANDSHAKE_TIMEOUT_MS,
+                maxPendingTlsHandshakes: EXTERNAL_MAX_PENDING_TLS_HANDSHAKES,
+                maxPendingTlsHandshakesPerAddress: EXTERNAL_MAX_PENDING_TLS_HANDSHAKES_PER_ADDRESS,
+                addressBucketOf: rateLimitBucketOf,
                 admit: (addr: string | undefined) => {
                     const protocol = option.protocol ?? 'tcp';
                     const decision = AdmissionController.instance.admit({kind: 'tunnel', port: option.forwardPort, protocol}, addr);

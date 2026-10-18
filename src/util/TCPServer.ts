@@ -24,7 +24,13 @@ type AdmitVerdict = {allowed: true} | {allowed: false; reason: string; retryAfte
 
 interface ServerOption {port: number, tls?: boolean, ca?: string, cert?: string, key?: string, keepAlive?: number, requestClientCert?: boolean, admit?: (remoteAddress: string | undefined) => AdmitVerdict,
     /** TLS 핸드셰이크 기한(ms). 핸드셰이크가 끝나기 전 연결은 바인드되지 않아 미인증 기한 밖에 있으므로 따로 끊는다(#174). */
-    handshakeTimeoutMs?: number};
+    handshakeTimeoutMs?: number,
+    /** TLS 핸드셰이크 중인 연결 수의 상한. 넘는 새 TCP 연결은 바로 닫는다(#181). 미지정이면 상한 없음. */
+    maxPendingTlsHandshakes?: number,
+    /** 같은 주소 버킷이 핸드셰이크 중일 수 있는 연결 수. 주소 하나가 대기 슬롯을 다 차지하지 못하게 한다(#181). */
+    maxPendingTlsHandshakesPerAddress?: number,
+    /** 주소를 버킷으로 묶는 함수(예: IPv4 주소 하나, IPv6 /64). 없으면 주소 그대로 쓴다. */
+    addressBucketOf?: (remoteAddress: string) => string};
 
 class TCPServer {
 
@@ -96,10 +102,61 @@ class TCPServer {
         return options;
     }
 
+    /**
+     * 핸드셰이크가 끝나기 전 연결은 바인드 뒤에 세는 미인증 상한 밖에 있다. 약한 서버(512MB)에서 fd·메모리가
+     * 고갈되지 않게 그 수를 묶는다. secureConnection 의 TLS 소켓은 _parent 로 원래 TCP 소켓을 가리킨다(Node 내부).
+     * 그 대응을 찾지 못해도 TCP 소켓의 close 에서 반드시 줄어든다.
+     */
+    private limitPendingTlsHandshakes(server: tls.Server, max: number): void {
+        // 서버마다 따로 센다. stop() 이 이 서버의 대기 연결을 닫는다.
+        const pending = new Map<net.Socket, string>();
+        const perBucket = new Map<string, number>();
+        const maxPerBucket = this._options.maxPendingTlsHandshakesPerAddress ?? Number.POSITIVE_INFINITY;
+        const bucketOf = this._options.addressBucketOf ?? ((address: string) => address);
+        const release = (raw: net.Socket) => {
+            const bucket = pending.get(raw);
+            if(bucket === undefined) return;
+            pending.delete(raw);
+            const count = (perBucket.get(bucket) ?? 1) - 1;
+            if(count > 0) perBucket.set(bucket, count); else perBucket.delete(bucket);
+        };
+        this._pendingTlsSockets = pending;
+        server.on('connection', (raw: net.Socket) => {
+            const bucket = bucketOf(raw.remoteAddress ?? '');
+            const fromBucket = perBucket.get(bucket) ?? 0;
+            if(pending.size >= max || fromBucket >= maxPerBucket) {
+                this.warnThrottled(`too many pending TLS handshakes on port ${this._options.port}${fromBucket >= maxPerBucket ? ` from ${bucket}` : ''}; closing new connections`);
+                raw.destroy();
+                return;
+            }
+            pending.set(raw, bucket);
+            perBucket.set(bucket, fromBucket + 1);
+            raw.once('close', () => release(raw));
+        });
+        server.on('secureConnection', (secure: tls.TLSSocket) => {
+            const raw = (secure as unknown as {_parent?: net.Socket})._parent;
+            if(raw) release(raw);
+        });
+    }
+
+    private _pendingTlsSockets: Map<net.Socket, string> | undefined;
+    private _lastWarnAt = 0;
+    private _suppressedWarns = 0;
+
+    /** 공격 중에는 거절이 초당 수십 번 난다. 약한 서버의 디스크·CPU 를 지키려고 10초에 한 줄만 남긴다(#181). */
+    private warnThrottled(message: string): void {
+        const now = Date.now();
+        if(now - this._lastWarnAt < 10_000) { this._suppressedWarns++; return; }
+        logger.warn(`TCPServer: ${message}${this._suppressedWarns > 0 ? ` (${this._suppressedWarns} more since the last warning)` : ''}`);
+        this._lastWarnAt = now;
+        this._suppressedWarns = 0;
+    }
+
     private createServer(): net.Server {
         const server = this._options.tls
             ? tls.createServer(this.serverTlsOptions(), this.onBind)
             : net.createServer(this.onBind);
+        if(this._options.tls && this._options.maxPendingTlsHandshakes !== undefined) this.limitPendingTlsHandshakes(server as tls.Server, this._options.maxPendingTlsHandshakes);
         if(this._options.tls) {
             // 핸드셰이크 기한이 지나도 Node 는 tlsClientError 만 내고 TCP 소켓을 그대로 둔다. 직접 닫아야 슬롯이 풀린다(#174).
             server.on('tlsClientError', (error, socket) => {
@@ -202,6 +259,8 @@ class TCPServer {
             this._idHandlerMap.forEach((handler) => {
                handler.destroy();
             });
+            // 핸드셰이크 중인 연결은 핸들러가 아직 없다. 다시 기동한 서버의 계수 밖에 남지 않게 함께 닫는다(#181).
+            this._pendingTlsSockets?.forEach((_bucket, raw) => raw.destroy());
             if(callback) this.onceCompletion(this._server, 'close', callback);
             this._server.close();
         } else if(callback) {

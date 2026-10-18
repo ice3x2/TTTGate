@@ -39,4 +39,4 @@ test.each(['first-bad', 'extra', 'good'])('real tunnel %s response is compared o
         else await expect(harness.sendAndReceive('hello')).rejects.toThrow(/mismatch/i);
         expect(peer.counts).toEqual({connections: 1, requests: 1});
     } finally { await harness.dispose(); }
-}));
+}), 60_000); // 실제 터널 왕복은 평소 3초다. 부하(CPU 85% 이상)에서 7초를 넘겨 기본 5초 기한에 걸렸다(#181).
