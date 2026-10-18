@@ -124,7 +124,8 @@ describe("rbac-tunnel-ownership", () => {
             activeExternalPortServer: jest.fn(async () => true),
             inactiveExternalPortServer: jest.fn(async () => true),
             applyExternalServerCert: jest.fn(async () => true),
-            captureRuntimeState: jest.fn(() => ({external: {}}))
+            captureRuntimeState: jest.fn(() => ({external: {}})),
+            reapplyActiveCaps: jest.fn()
         };
         api = new AdminServer(runtime as any, false);
         const port = await api.listen(0, "127.0.0.1");
@@ -391,6 +392,21 @@ describe("rbac-tunnel-ownership", () => {
         const event = sink.events.find((candidate) => candidate.type === "tunnel_reassigned");
         expect(event).toBeDefined();
         expect(event!.detail).toMatchObject({from: alice.id, to: carol.id});
+    });
+
+    // #137 — 소유자·사용자 그룹·그룹 속성을 바꾸면 활성 중인 터널의 수명 상한을 다시 계산하게 한다.
+    it("#137 소유자 재할당·사용자 그룹 이동·그룹 속성 변경 뒤 활성 터널의 상한을 다시 계산한다", async () => {
+        const revision = () => ServerOptionStore.instance.revisionState.currentRevision;
+        runtime.reapplyActiveCaps.mockClear();
+        expect((await request("PUT", "/api/tunnelingOption/20011/owner", {ownerId: alice.id, expectedRevision: revision()}, superuser)).status).toBe(200);
+        expect(runtime.reapplyActiveCaps).toHaveBeenCalledTimes(1);
+        expect((await request("PUT", `/api/users/${bob.id}`, {groupId: groupTwo}, superuser)).status).toBe(200);
+        expect(runtime.reapplyActiveCaps).toHaveBeenCalledTimes(2);
+        expect((await request("PUT", `/api/groups/${groupTwo}`, {attributes: {max_tunnel_duration_ms: 60_000}}, superuser)).status).toBe(200);
+        expect(runtime.reapplyActiveCaps).toHaveBeenCalledTimes(3);
+        // 원래대로 되돌린다(뒤 테스트가 소유·그룹을 전제로 한다).
+        expect((await request("PUT", "/api/tunnelingOption/20011/owner", {ownerId: carol.id, expectedRevision: revision()}, superuser)).status).toBe(200);
+        expect((await request("PUT", `/api/users/${bob.id}`, {groupId: groupOne}, superuser)).status).toBe(200);
     });
 
     it("재할당의 잘못된 입력과 권한 없는 호출은 거부된다", async () => {

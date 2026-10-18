@@ -46,7 +46,10 @@ type ExternalPortServerStatus = {
     uptime: number,
     active: boolean,
     activeStart: number,
+    /** 실제로 걸린 시간(초). 그룹 상한으로 잘렸으면 상한이다. */
     activeTimeout: number,
+    /** 사용자가 요청한 시간(초, 0=무기한). 재적용·롤백·상한 변경 때 이 값과 현재 상한으로 다시 계산한다(#137). */
+    requestedTimeout?: number,
     rx: number,
     tx: number,
     rejected: {geo: number, rateLimit: number},
@@ -167,7 +170,8 @@ class ExternalPortServerPool {
             portServer.setBundle(OPTION_BUNDLE_KEY, option);
             if(!option.inactiveOnStartup) option.inactiveOnStartup = false;
             this._statusMap.set(option.forwardPort, {port: option.forwardPort, online: false, sessions: 0, rx: 0, tx: 0, uptime: 0,
-                active: !option.inactiveOnStartup, activeTimeout: 0, activeStart: option.inactiveOnStartup? Date.now() : 0,
+                // 켜진 채 기동한 터널도 시작 시각을 둔다. 0 이면 상한을 다시 계산할 때 마감이 과거가 되어 바로 만료된다(#137).
+                active: !option.inactiveOnStartup, activeTimeout: 0, activeStart: Date.now(),
                 rejected: {geo: 0, rateLimit: 0}, bannedIps: 0});
             portServer.start((err?: Error) => {
                 if(err) {
@@ -638,15 +642,27 @@ class ExternalPortServerPool {
             return false;
         }
         status.activeTimeout = timeout;
+        status.requestedTimeout = timeout;
         return true;
     }
 
-    public async active(port: number, timeout?: number) : Promise<boolean> {
+    /**
+     * 켜져 있는 터널의 수명 상한을 다시 계산한다. 시작 시각은 그대로 두므로 연장되지 않는다(#137).
+     * 소유자·사용자 그룹·그룹 속성이 바뀐 뒤 부른다.
+     */
+    public async reapplyActiveCap(port: number) : Promise<void> {
+        const status = this._statusMap.get(port);
+        if(!status || !status.active) return;
+        await this.active(port, status.requestedTimeout ?? status.activeTimeout, {startedAt: status.activeStart});
+    }
+
+    public async active(port: number, timeout?: number, options: {startedAt?: number} = {}) : Promise<boolean> {
         let status = this._statusMap.get(port);
         if(!status) {
             return false;
         }
-        if(timeout == undefined) timeout = status.activeTimeout;
+        if(timeout == undefined) timeout = status.requestedTimeout ?? status.activeTimeout;
+        const requested = timeout;
         // 상한이 있으면 타임아웃 없음(0 이하)과 상한보다 긴 요청을 상한으로 자른다.
         // 상한과 같은 값도 상한 만료로 본다. 재적용(restoreExternalPortStatus)은 이미 잘린 값을 다시 넘기므로,
         // '<' 로 비교하면 옵션을 고쳐 터널을 다시 만든 뒤의 만료가 감사에서 빠진다.
@@ -657,7 +673,9 @@ class ExternalPortServerPool {
         this.clearActiveTimeout(port);
         status.active = true;
         status.activeTimeout = timeout;
-        status.activeStart = Date.now();
+        status.requestedTimeout = requested;
+        // 재적용·롤백·상한 재계산은 원래 시작 시각을 넘긴다. 처음부터 다시 걸면 만료가 계속 미뤄진다(#137).
+        status.activeStart = options.startedAt !== undefined && options.startedAt > 0 ? options.startedAt : Date.now();
         if(timeout > 0){
             this.scheduleExpiry(port, status.activeStart + timeout * 1000, async () => {
                 await this.inactive(port);

@@ -291,7 +291,7 @@ class AdminServer {
                ok: (data, status = 200) => this.sendApiSuccess(res, data, status),
                fail: (status, code, message) => this.sendApiFailure(res, status, {code, message}),
                auditDetail: (patch) => { Object.assign(auditDetailPatch, patch); },
-               mfa: this._mfa,
+               mfa: this._mfa, reapplyTunnelCaps: () => this._tttServer?.reapplyActiveCaps?.(),
                expireSessionCookies: () => this.expireSessionCookies(res)
            };
            if(matched.route.action !== 'public') {
@@ -923,6 +923,7 @@ class AdminServer {
                 return;
             }
             ctx.auditDetail({from, to: resolved.ownerId});
+            ctx.reapplyTunnelCaps?.();
             this.sendApiSuccess(res, {forwardPort: port, owner: ownerViewOf(port), revisionState: commitResult.revisionState});
         });
     }
