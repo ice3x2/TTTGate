@@ -90,7 +90,9 @@ test("cleanup unlink failure retains original publication and restoration failur
         const body = JSON.parse(response.body);
         expect(body.partial).toBe(true);
         expect(body.failedScopes).toContain("configuration-restore");
-        expect(body.message).toContain("publication failure");
+        // 예외 문자열은 응답에 싣지 않고 로그에만 남긴다(#146). 복구 실패 진단은 partial·failedScopes 로 남는다.
+        expect(body.message).toBe("Internal Server Error");
+        expect(response.body).not.toContain("fixture");
     } finally { fs.renameSync = rename; fs.unlinkSync = unlink; }
 }));
 
