@@ -23,9 +23,13 @@
     // 입력 칸은 별도 상태다. 칸을 비워도 기본값이 다시 들어오지 않게, 불러올 때와 Reset 때만 서버 값(없으면 기본값)으로 맞춘다.
     let retentionInput = $state<number | null>(DEFAULT_AUDIT_RETENTION_DAYS);
     let queueInput = $state<number | null>(DEFAULT_AUDIT_QUEUE_SIZE);
+    // 빈 감사 칸 오류. 빈칸은 JSON 에서 빠져 서버 기본값(보존 90일)이 되므로 저장을 막는다.
+    let auditErrors = $state<{retention?: string; queue?: string}>({});
+
     const syncSecurityInputs = () => {
         retentionInput = serverOption.auditRetentionDays ?? DEFAULT_AUDIT_RETENTION_DAYS;
         queueInput = serverOption.auditQueueSize ?? DEFAULT_AUDIT_QUEUE_SIZE;
+        auditErrors = {};
     };
     let serverOption = $state<ServerOption>(ServerOptionCtrl.instance.getCachedServerOption());
     let lastServerOption = $state<ServerOption>(ServerOptionCtrl.instance.getCachedServerOption());
@@ -125,6 +129,11 @@
     };
 
     const apply = async () => {
+        auditErrors = {
+            ...(retentionInput == null ? {retention: 'Enter a number of days. 0 keeps logs forever.'} : {}),
+            ...(queueInput == null ? {queue: 'Enter a queue size.'} : {})
+        };
+        if(Object.keys(auditErrors).length > 0) return;
         try {
             loading = true;
             const result = await ServerOptionCtrl.instance.updateServerOption($state.snapshot(serverOption), snapshotRevision);
@@ -225,11 +234,11 @@
             <div class="form-stack">
                 <Checkbox id="input-mfa-required-superusers" label="Require two-factor for superusers"
                     bind:checked={() => serverOption.mfaRequiredForSuperusers === true, (value) => (serverOption.mfaRequiredForSuperusers = value)} />
-                <Field label="Audit log retention (days)" hint="0 keeps logs forever." for="input-audit-retention-days">
+                <Field label="Audit log retention (days)" hint="0 keeps logs forever." for="input-audit-retention-days" error={auditErrors.retention}>
                     <NumberInput id="input-audit-retention-days" min={0} max={3650} step={1}
                         bind:value={retentionInput} oninput={(value) => (serverOption.auditRetentionDays = value ?? undefined)} />
                 </Field>
-                <Field label="Audit queue size" for="input-audit-queue-size">
+                <Field label="Audit queue size" for="input-audit-queue-size" error={auditErrors.queue}>
                     <NumberInput id="input-audit-queue-size" min={100} max={100000} step={1}
                         bind:value={queueInput} oninput={(value) => (serverOption.auditQueueSize = value ?? undefined)} />
                 </Field>

@@ -290,6 +290,27 @@ describe("U4-09 서버 설정 Security 카드", () => {
             await app.close();
         }
     }, 120_000);
+
+    // 빈 감사 칸은 JSON 에서 빠져 서버 기본값(보존 90일)이 된다. 오래된 감사가 지워지지 않도록 저장을 막는다.
+    test("감사 보존 기간이나 큐 크기 칸이 비면 요청 없이 칸 아래 오류를 보인다", async () => {
+        const app = await startAdminApp({fixture: "password"});
+        try {
+            const {page} = app;
+            await openServerSettings(page);
+            await security(page).waitFor({state: "visible"});
+            let posts = 0;
+            page.on("request", (request) => { if(request.method() === "POST" && new URL(request.url()).pathname === "/api/serverOption") posts++; });
+            await page.locator("#input-audit-retention-days").fill("");
+            await page.locator("#input-audit-queue-size").fill("");
+            await page.getByRole("button", {name: "Apply", exact: true}).click();
+            await security(page).getByText("Enter a number of days. 0 keeps logs forever.", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+            await security(page).getByText("Enter a queue size.", {exact: true}).waitFor({state: "visible"});
+            expect(posts).toBe(0);
+            expect(app.errors).toEqual([]);
+        } finally {
+            await app.close();
+        }
+    }, 120_000);
 });
 
 test("#136 Keep-Alive 는 0 으로 비활성화할 수 있고 음수는 0 으로 올리며, 0 이 그대로 저장된다", async () => {
