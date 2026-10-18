@@ -348,7 +348,8 @@ class TunnelClient {
                     this._legacyMode = false;
                     this._closeCountSafe = syncMeta.protocolVersion === CONTROL_PROTOCOL_V2 && syncMeta.capabilities.includes('close-count-safe') &&
                         DEFAULT_PROTOCOL_V2_CAPABILITIES.includes('close-count-safe');
-                    this.sendAckCtrl(handler, this._id, this._option.key, {
+                    // v2 는 HMAC 증명으로 인증한다. legacy 공유 키는 싣지 않는다(평문·허위 서버로 새지 않게, #161).
+                    this.sendAckCtrl(handler, this._id, '', {
                         protocolVersion: CONTROL_PROTOCOL_V2,
                         capabilities: DEFAULT_PROTOCOL_V2_CAPABILITIES,
                         controlID: this._id,
