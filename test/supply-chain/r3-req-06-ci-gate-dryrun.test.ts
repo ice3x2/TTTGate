@@ -40,9 +40,12 @@ describe("R3-REQ-06 CI supply-chain gate (static)", () => {
         expect(on.pull_request).toBeDefined();
     });
 
-    test("HIGH 차단 게이트 존재 (--audit-level=high)", () => {
+    test("HIGH 차단 게이트 존재 (검토 예외만 통과하는 서버 게이트, #180)", () => {
         const content = fs.readFileSync(workflowPath, "utf8");
-        expect(content).toMatch(/npm audit [^\n]*--audit-level=high/);
+        expect(content).toMatch(/node scripts\/supply-chain-gate\.cjs --server-high-gate/);
+        // 게이트 스크립트가 실제로 HIGH 수준 production 감사를 돈다.
+        const script = fs.readFileSync(path.join(__dirname, "..", "..", "scripts", "supply-chain-gate.cjs"), "utf8");
+        expect(script).toMatch(/"audit", "--omit=dev", "--audit-level=high", "--json"/);
     });
 
     test("CRITICAL 차단 게이트 존재 (--audit-level=critical)", () => {

@@ -49,10 +49,70 @@ const runNpm = (args, cwd = process.cwd()) => spawnSync("npm", args, {
     env: {...process.env, NODE_ENV: "development"},
 });
 
-module.exports = {readAuditReport, readDependencyTree, runNpm};
+/**
+ * #180: 수정 버전이 없어 업그레이드로 풀 수 없고, TTTGate 가 영향받는 API 를 쓰지 않음을 검토한 권고.
+ * 서버 HIGH 게이트는 이 목록의 권고만 통과시킨다. reviewBy 날짜의 UTC 00:00 에 만료되어 다시 막고 재검토를 강제한다.
+ * reviewBy 는 reviewedOn 에서 180일 안이어야 한다(테스트가 지킨다).
+ * 예외의 전제(영향 API 미사용)는 test/supply-chain/reviewed-advisories.test.ts 가 지킨다.
+ */
+const REVIEWED_ADVISORIES = [
+    {
+        id: "GHSA-86w9-cpqp-85rv",
+        package: "node-forge",
+        reviewedOn: "2026-10-19",
+        reviewBy: "2027-01-31",
+        reason: "RSA PKCS#1 v1.5 signature verification flaw. TTTGate only generates certificates and parses PEM with node-forge; " +
+            "it never verifies signatures with it (TLS verification is done by Node/OpenSSL). No patched release exists (<= 1.4.0).",
+    },
+];
 
-if(require.main === module) {
-    if(process.argv[2] !== "--admin-high-report") throw new Error("Expected --admin-high-report");
+const GHSA_PATTERN = /GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}/i;
+const BLOCKING_SEVERITIES = ["high", "critical"];
+
+/**
+ * npm audit 보고서에서 HIGH·CRITICAL 권고를 모아 검토 예외와 대조한다.
+ * 다른 패키지를 가리키는 via(문자열)는 그 패키지의 권고로 따라간다. CRITICAL 은 예외로도 통과하지 않는다.
+ */
+const evaluateHighGate = (report, reviewed = REVIEWED_ADVISORIES, now = Date.now()) => {
+    const blocking = new Set();
+    const accepted = new Set();
+    const vulnerabilities = report.vulnerabilities ?? {};
+    const advisoriesOf = (name, seen = new Set()) => {
+        if(seen.has(name)) return [];
+        seen.add(name);
+        const entry = vulnerabilities[name];
+        if(!isObject(entry) || !Array.isArray(entry.via)) return [];
+        return entry.via.flatMap((via) => typeof via === "string" ? advisoriesOf(via, seen) : isObject(via) ? [via] : []);
+    };
+    for(const [name, entry] of Object.entries(vulnerabilities)) {
+        if(!BLOCKING_SEVERITIES.includes(entry.severity)) continue;
+        const advisories = advisoriesOf(name).filter((advisory) => BLOCKING_SEVERITIES.includes(advisory.severity));
+        // HIGH 이상 항목인데 그 근거 권고를 찾지 못하면(보고서에 없는 패키지를 가리킴) 통과시키지 않는다.
+        if(advisories.length === 0) blocking.add(`${name} (unresolved via)`);
+        for(const advisory of advisories) {
+            if(!BLOCKING_SEVERITIES.includes(advisory.severity)) continue;
+            const id = GHSA_PATTERN.exec(String(advisory.url ?? ""))?.[0];
+            const pkg = advisory.name ?? advisory.dependency ?? name;
+            const label = `${pkg} ${id ?? advisory.title ?? "unknown advisory"}`;
+            const review = id === undefined ? undefined : reviewed.find((item) => item.id.toLowerCase() === id.toLowerCase() && item.package === pkg);
+            if(advisory.severity === "critical" || review === undefined) blocking.add(label);
+            else if(!(Date.parse(review.reviewBy) >= now)) blocking.add(`${label} (review expired ${review.reviewBy})`);
+            else accepted.add(label);
+        }
+    }
+    return {blocking: [...blocking], accepted: [...accepted]};
+};
+
+module.exports = {readAuditReport, readDependencyTree, runNpm, evaluateHighGate, REVIEWED_ADVISORIES};
+
+if(require.main === module && process.argv[2] === "--server-high-gate") {
+    const report = readAuditReport(runNpm(["audit", "--omit=dev", "--audit-level=high", "--json"]));
+    const {blocking, accepted} = evaluateHighGate(report);
+    for(const label of accepted) console.log(`::warning::reviewed advisory accepted until its review date: ${label}`);
+    if(blocking.length) throw new Error(`Unreviewed HIGH/CRITICAL server advisories: ${blocking.join(", ")}`);
+    console.log("No unreviewed server HIGH advisories");
+} else if(require.main === module) {
+    if(process.argv[2] !== "--admin-high-report") throw new Error("Expected --admin-high-report or --server-high-gate");
     const report = readAuditReport(runNpm(["audit", "--audit-level=high", "--json"]));
     const entries = Object.entries(report.vulnerabilities);
     const critical = entries.filter(([, entry]) => entry.severity === "critical").map(([name]) => name);

@@ -1,0 +1,113 @@
+import * as fs from "fs";
+import * as path from "path";
+
+// #180 — 수정 버전이 없는 권고는 검토한 예외로만 HIGH 게이트를 통과시킨다. 그 밖의 HIGH·CRITICAL 과 기한 지난 예외는 막는다.
+const repoRoot = path.resolve(__dirname, "..", "..");
+const gate = require("../../scripts/supply-chain-gate.cjs");
+
+const advisory = (name: string, severity: string, ghsa: string) =>
+    ({source: 1, name, dependency: name, title: `${name} advisory`, url: `https://github.com/advisories/${ghsa}`, severity, range: "*"});
+const reportOf = (vulnerabilities: Record<string, any>) => ({auditReportVersion: 2, vulnerabilities});
+const REVIEWED = [{id: "GHSA-aaaa-bbbb-cccc", package: "forge", reviewBy: "2027-01-31", reason: "unused API"}];
+const NOW = Date.parse("2026-10-19T00:00:00Z");
+
+describe("server HIGH gate with reviewed advisories (#180)", () => {
+    it("passes when every HIGH advisory is reviewed and not expired", () => {
+        const result = gate.evaluateHighGate(reportOf({forge: {name: "forge", severity: "high", via: [advisory("forge", "high", "GHSA-aaaa-bbbb-cccc")]}}), REVIEWED, NOW);
+        expect(result.blocking).toEqual([]);
+        expect(result.accepted).toEqual(["forge GHSA-aaaa-bbbb-cccc"]);
+    });
+
+    it("blocks an unreviewed HIGH advisory, also next to a reviewed one", () => {
+        const result = gate.evaluateHighGate(reportOf({forge: {name: "forge", severity: "high",
+            via: [advisory("forge", "high", "GHSA-aaaa-bbbb-cccc"), advisory("forge", "high", "GHSA-dddd-eeee-ffff")]}}), REVIEWED, NOW);
+        expect(result.blocking).toEqual(["forge GHSA-dddd-eeee-ffff"]);
+    });
+
+    it("blocks a reviewed advisory on another package and any CRITICAL", () => {
+        expect(gate.evaluateHighGate(reportOf({other: {name: "other", severity: "high", via: [advisory("other", "high", "GHSA-aaaa-bbbb-cccc")]}}), REVIEWED, NOW).blocking)
+            .toEqual(["other GHSA-aaaa-bbbb-cccc"]);
+        expect(gate.evaluateHighGate(reportOf({forge: {name: "forge", severity: "critical", via: [advisory("forge", "critical", "GHSA-aaaa-bbbb-cccc")]}}), REVIEWED, NOW).blocking)
+            .toEqual(["forge GHSA-aaaa-bbbb-cccc"]);
+    });
+
+    it("blocks a reviewed advisory after its review date", () => {
+        const later = Date.parse("2027-02-01T00:00:00Z");
+        expect(gate.evaluateHighGate(reportOf({forge: {name: "forge", severity: "high", via: [advisory("forge", "high", "GHSA-aaaa-bbbb-cccc")]}}), REVIEWED, later).blocking)
+            .toEqual(["forge GHSA-aaaa-bbbb-cccc (review expired 2027-01-31)"]);
+    });
+
+    it("resolves transitive entries to the advisories of the packages they point at", () => {
+        const report = reportOf({
+            forge: {name: "forge", severity: "high", via: [advisory("forge", "high", "GHSA-aaaa-bbbb-cccc")]},
+            wrapper: {name: "wrapper", severity: "high", via: ["forge"]},
+        });
+        expect(gate.evaluateHighGate(report, REVIEWED, NOW).blocking).toEqual([]);
+        const bad = reportOf({lib: {name: "lib", severity: "high", via: [advisory("lib", "high", "GHSA-1111-2222-3333")]}, wrap: {name: "wrap", severity: "high", via: ["lib"]}});
+        expect(gate.evaluateHighGate(bad, REVIEWED, NOW).blocking).toEqual(["lib GHSA-1111-2222-3333"]);
+    });
+
+    it("blocks a HIGH entry whose advisories cannot be resolved", () => {
+        expect(gate.evaluateHighGate(reportOf({wrap: {name: "wrap", severity: "high", via: ["missing"]}}), REVIEWED, NOW).blocking)
+            .toEqual(["wrap (unresolved via)"]);
+    });
+
+    it("ignores moderate and low advisories", () => {
+        expect(gate.evaluateHighGate(reportOf({x: {name: "x", severity: "moderate", via: [advisory("x", "moderate", "GHSA-9999-8888-7777")]}}), REVIEWED, NOW).blocking).toEqual([]);
+    });
+
+    it("every reviewed advisory in the repository has an id, package, reason and a future-dated review", () => {
+        expect(gate.REVIEWED_ADVISORIES.length).toBeGreaterThan(0);
+        for(const entry of gate.REVIEWED_ADVISORIES) {
+            expect(entry.id).toMatch(/^GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}$/);
+            expect(typeof entry.package).toBe("string");
+            expect(entry.reason.length).toBeGreaterThan(20);
+            const reviewedOn = Date.parse(entry.reviewedOn);
+            const reviewBy = Date.parse(entry.reviewBy);
+            expect(Number.isFinite(reviewedOn) && Number.isFinite(reviewBy)).toBe(true);
+            // 예외는 길게 두지 않는다. 검토일에서 180일 안에 다시 본다.
+            expect(reviewBy - reviewedOn).toBeGreaterThan(0);
+            expect(reviewBy - reviewedOn).toBeLessThanOrEqual(180 * 86_400_000);
+        }
+    });
+});
+
+describe("node-forge exception stays valid (#180)", () => {
+    // GHSA-86w9-cpqp-85rv 는 node-forge 의 RSA 서명 검증 결함이다. 이 API 를 쓰기 시작하면 예외가 무효가 된다.
+    const sources = (dir: string): string[] => fs.readdirSync(dir, {withFileTypes: true}).flatMap((entry) => {
+        const full = path.join(dir, entry.name);
+        if(entry.isDirectory()) return entry.name === "node_modules" ? [] : sources(full);
+        return /\.(ts|svelte|js|cjs|mjs)$/.test(entry.name) ? [full] : [];
+    });
+
+    const all = () => [...sources(path.join(repoRoot, "src")), ...sources(path.join(repoRoot, "admin", "src"))];
+
+    it("only the reviewed files import node-forge", () => {
+        // 새 파일이 node-forge 를 쓰기 시작하면 예외의 전제를 다시 검토해야 한다.
+        const users = all().filter((file) => /node-forge/.test(fs.readFileSync(file, "utf8")))
+            .map((file) => path.relative(repoRoot, file).split(path.sep).join("/")).sort();
+        expect(users).toEqual([
+            "admin/src/screens/parts/InputCertFile.svelte",
+            "src/commons/CACertGenerator.ts",
+            "src/server/CertificationStore.ts",
+        ]);
+    });
+
+    it("the reviewed files do not use node-forge signature or chain verification", () => {
+        const offenders = all().filter((file) => /node-forge/.test(fs.readFileSync(file, "utf8")))
+            .filter((file) => /\bverify\b|verifyCertificateChain|createCaStore|verifySignature|pkcs7|forge\.tls/.test(fs.readFileSync(file, "utf8")));
+        expect(offenders).toEqual([]);
+    });
+});
+
+describe("ip-address is patched (#180)", () => {
+    it("the lockfile installs ip-address 10.7.1 or later everywhere", () => {
+        const lock = JSON.parse(fs.readFileSync(path.join(repoRoot, "package-lock.json"), "utf8"));
+        const versions = Object.entries<any>(lock.packages ?? {}).filter(([key]) => key.endsWith("node_modules/ip-address")).map(([, meta]) => meta.version as string);
+        expect(versions.length).toBeGreaterThan(0);
+        for(const version of versions) {
+            const [major, minor, patch] = version.split(".").map(Number);
+            expect(major * 1e6 + minor * 1e3 + patch).toBeGreaterThanOrEqual(10 * 1e6 + 7 * 1e3 + 1);
+        }
+    });
+});
