@@ -145,7 +145,8 @@ class IdentityStore {
             return {success: false, message: 'identity.yaml users/groups must be arrays'};
         }
 
-        const groups = (raw.groups as Group[]).map((group) => ({...group}));
+        // 이름은 문자열로 맞춘다. 검증 전에 저장된 숫자 이름이 남아 있으면 목록 정렬(localeCompare)이 500 을 낸다(#172).
+        const groups = (raw.groups as Group[]).map((group) => ({...group, name: typeof group.name === 'string' ? group.name : String(group.name ?? group.id)}));
         const hasSuperuserGroup = groups.some((group) => group.id === SYSTEM_SUPERUSER_GROUP_ID);
         const hasDefaultGroup = groups.some((group) => group.id === DEFAULT_GROUP_ID);
         if(!hasSuperuserGroup || !hasDefaultGroup) {
@@ -181,7 +182,10 @@ class IdentityStore {
             Files.writeAtomicBatchSync([{file: this.identityFile(), data: yamlString, mode: 0o600}]);
             return {success: true};
         } catch(error) {
-            return {success: false, message: error instanceof Error ? error.message : String(error)};
+            // 응답에는 오류 코드만 싣는다. fs 메시지에는 identity.yaml 의 절대 경로가 들어 있다(#172).
+            logger.error('identity.yaml save failed', error);
+            const code = error && typeof error === 'object' ? (error as {code?: unknown}).code : undefined;
+            return {success: false, message: `identity file could not be saved${typeof code === 'string' ? ` (${code})` : ''}`};
         }
     }
 
@@ -429,10 +433,19 @@ class IdentityStore {
         return {success: true, value: undefined};
     }
 
+    /** 대소문자와 앞뒤 공백을 무시하고 같은 이름의 다른 그룹이 있는지(#172). */
+    private groupNameTaken(name: string, exceptId?: string): boolean {
+        const key = name.trim().toLowerCase();
+        return this._data.groups.some((group) => group.id !== exceptId && String(group.name).trim().toLowerCase() === key);
+    }
+
     public createGroup(input: {name: string; attributes?: Partial<GroupAttributes>}): Result<Group> {
         const name = groupNameOf(input.name);
         if(name === undefined) {
             return {success: false, status: 422, code: 'group_name_invalid', message: 'group name is invalid'};
+        }
+        if(this.groupNameTaken(name)) {
+            return {success: false, status: 409, code: 'group_name_taken', message: 'group name is already used'};
         }
         const attributesResult = validateGroupAttributes(input.attributes ?? {}, DEFAULT_GROUP_ATTRIBUTES as GroupAttributes);
         if(!attributesResult.success) {
@@ -462,6 +475,9 @@ class IdentityStore {
         const nextName = patch.name === undefined ? undefined : groupNameOf(patch.name);
         if(patch.name !== undefined && nextName === undefined) {
             return {success: false, status: 422, code: 'group_name_invalid', message: 'group name is invalid'};
+        }
+        if(nextName !== undefined && nextName.toLowerCase() !== String(this._data.groups[index].name).trim().toLowerCase() && this.groupNameTaken(nextName, id)) {
+            return {success: false, status: 409, code: 'group_name_taken', message: 'group name is already used'};
         }
         const group = this._data.groups[index];
         let nextAttributes = group.attributes;
