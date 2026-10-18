@@ -92,6 +92,13 @@ class TunnelServer {
     private _closed : boolean = false;
     private _authTimeouts : Set<NodeJS.Timeout> = new Set<NodeJS.Timeout>();
     private _unauthenticatedHandlerIds: Set<number> = new Set<number>();
+    /** 미인증 연결의 절대 기한 타이머와 원격 주소별 개수(#157). */
+    private _unauthenticatedDeadlines: Map<number, NodeJS.Timeout> = new Map<number, NodeJS.Timeout>();
+    private _unauthenticatedAddressOf: Map<number, string> = new Map<number, string>();
+    private _unauthenticatedPerAddress: Map<string, number> = new Map<string, number>();
+    /** 세션에 아직 붙지 않은 데이터 연결(제어 예산과 따로 센다, #157). */
+    private _pendingDataHandlerIds: Set<number> = new Set<number>();
+    private _pendingDataPerAddress: Map<string, number> = new Map<string, number>();
     private _nextSelectIdx = 0;
     private _onSessionCloseCallback? : OnSessionCloseCallback;
     private _onReceiveDataCallback? : OnReceiveDataCallback;
@@ -276,6 +283,12 @@ class TunnelServer {
                 handlerPool.end();
             });
             this._unauthenticatedHandlerIds.clear();
+            this._unauthenticatedDeadlines.forEach((deadline) => clearTimeout(deadline));
+            this._unauthenticatedDeadlines.clear();
+            this._unauthenticatedAddressOf.clear();
+            this._unauthenticatedPerAddress.clear();
+            this._pendingDataHandlerIds.clear();
+            this._pendingDataPerAddress.clear();
             this._pendingControlHandshakeMap.clear();
             this._identityRegistry.clear();
             // noinspection JSUnusedLocalSymbols
@@ -398,13 +411,27 @@ class TunnelServer {
 
     private onClientHandlerBound = (handler: TunnelHandler) : void => {
         const handshakePolicy = TunnelHandshakePolicyRegistry.current();
-        if(this._unauthenticatedHandlerIds.size >= handshakePolicy.maxUnauthenticatedConnections) {
+        const address = handler.socket.remoteAddress ?? '';
+        const fromAddress = this._unauthenticatedPerAddress.get(address) ?? 0;
+        if(this._unauthenticatedHandlerIds.size >= handshakePolicy.maxUnauthenticatedConnections
+            || fromAddress >= handshakePolicy.maxUnauthenticatedPerAddress) {
             logger.warn(`Rejecting unauthenticated connection because the cap is reached. handler=${handler.id}`);
             handler.destroy();
             return;
         }
         this._unauthenticatedHandlerIds.add(handler.id);
+        this._unauthenticatedAddressOf.set(handler.id, address);
+        this._unauthenticatedPerAddress.set(address, fromAddress + 1);
         handler.setTimeout(handshakePolicy.timeoutMs);
+        // 소켓 타임아웃은 유휴 시간만 잰다. 주기적으로 바이트를 보내면 슬롯을 영원히 차지하므로 바인드 시각 기준으로도 닫는다.
+        const deadline = setTimeout(() => {
+            if(!this._unauthenticatedHandlerIds.has(handler.id) && !this._pendingDataHandlerIds.has(handler.id)) return;
+            logger.warn(`Closing unauthenticated connection at the handshake deadline. handler=${handler.id}`);
+            this.clearUnauthenticatedHandler(handler.id);
+            handler.destroy();
+        }, handshakePolicy.timeoutMs);
+        deadline.unref?.();
+        this._unauthenticatedDeadlines.set(handler.id, deadline);
         handler.handlerType = HandlerType.Unknown;
         (handler as TunnelControlHandler).controlProtocolMode = this._serverOption.controlProtocolMode;
         handler.setBundle(HANDLER_TYPE_BUNDLE_KEY, HandlerType.Unknown);
@@ -469,6 +496,7 @@ class TunnelServer {
                 let dataHandler = handler as TunnelDataHandler;
                 dataHandler.handlerType = HandlerType.Data;
                 dataHandler.dataHandlerState = DataHandlerState.None;
+                if(!this.moveToPendingDataBudget(dataHandler)) return;
             } else {
                 let str = data.toString('utf-8', 0, Math.min(data.length, 64)).trim().replaceAll('\n', '\\n').replaceAll('\r', '\\r');
                 logger.error(`onHandlerEvent - Unknown packet. id: ${handler.id}, addr: ${handler.remoteAddress}:${handler.remotePort}, data: ${str}...`);
@@ -617,6 +645,11 @@ class TunnelServer {
             logger.error(`onHandlerEvent - CtrlPacketStreamer.readCtrlPacketList Fail. ctrlID: ${handler.id}`,e);
             if(handler.handlerType == HandlerType.Control) {
                 logger.error(`onHandlerEvent - CtrlPacketStreamer.readCtrlPacketList Fail. ctrlID: ${handler.id}, ${e}`);
+                // 인증 전이면 pool 이 없다. 그대로 두면 연결이 기한까지 남으므로 바로 닫는다(#157).
+                if(!this._clientHandlerPoolMap.has(handler.id)) {
+                    handler.destroy();
+                    return;
+                }
                 this.destroyClientHandlerPool(handler.id);
                 return;
             } else {
@@ -675,7 +708,9 @@ class TunnelServer {
 
 
     private onReceiveCtrlPacket(handler: TunnelHandler, packet: CtrlPacket) : void  {
-        logger.info('receive ctrl packet - cmd:' + CtrlCmd[packet.cmd] + ', handler id: ' + handler.id + ', remote: ' + handler.remoteAddress + ':' + handler.remotePort);
+        // 인증 전 패킷은 debug 로만 남긴다. 인증 없이 패킷마다 info 로그를 쌓게 하지 않는다(#157).
+        const packetLog = 'receive ctrl packet - cmd:' + CtrlCmd[packet.cmd] + ', handler id: ' + handler.id + ', remote: ' + handler.remoteAddress + ':' + handler.remotePort;
+        if(this._unauthenticatedHandlerIds.has(handler.id)) logger.debug(packetLog); else logger.info(packetLog);
         if(packet.cmd == CtrlCmd.SyncCtrl) {
             let ctrlHandler = handler as TunnelControlHandler;
             ctrlHandler.handlerType = HandlerType.Control;
@@ -870,8 +905,59 @@ class TunnelServer {
         handler.clearTimeout();
     }
 
+    /**
+     * 첫 바이트로 데이터 연결임이 드러나면 제어 예산에서 빼고 데이터 예산으로 옮긴다. 기한 타이머는 그대로 둔다.
+     * 데이터 예산이 차면 그 연결을 닫고 false 를 돌려준다.
+     */
+    private moveToPendingDataBudget(handler: TunnelHandler): boolean {
+        if(!this._unauthenticatedHandlerIds.has(handler.id)) return true;
+        const policy = TunnelHandshakePolicyRegistry.current();
+        const address = this._unauthenticatedAddressOf.get(handler.id) ?? '';
+        const deadline = this._unauthenticatedDeadlines.get(handler.id);
+        this._unauthenticatedDeadlines.delete(handler.id);
+        this.releaseControlBudget(handler.id);
+        const fromAddress = this._pendingDataPerAddress.get(address) ?? 0;
+        if(this._pendingDataHandlerIds.size >= policy.maxPendingDataConnections || fromAddress >= policy.maxPendingDataPerAddress) {
+            if(deadline) clearTimeout(deadline);
+            logger.warn(`Rejecting pending data connection because the cap is reached. handler=${handler.id}`);
+            handler.destroy();
+            return false;
+        }
+        this._pendingDataHandlerIds.add(handler.id);
+        this._unauthenticatedAddressOf.set(handler.id, address);
+        this._pendingDataPerAddress.set(address, fromAddress + 1);
+        if(deadline) this._unauthenticatedDeadlines.set(handler.id, deadline);
+        return true;
+    }
+
+    private releaseControlBudget(handlerID: number): void {
+        if(!this._unauthenticatedHandlerIds.delete(handlerID)) return;
+        const address = this._unauthenticatedAddressOf.get(handlerID);
+        this._unauthenticatedAddressOf.delete(handlerID);
+        if(address === undefined) return;
+        const remaining = (this._unauthenticatedPerAddress.get(address) ?? 1) - 1;
+        if(remaining > 0) this._unauthenticatedPerAddress.set(address, remaining);
+        else this._unauthenticatedPerAddress.delete(address);
+    }
+
     private clearUnauthenticatedHandler(handlerID: number): void {
+        if(this._pendingDataHandlerIds.delete(handlerID)) {
+            const address = this._unauthenticatedAddressOf.get(handlerID) ?? '';
+            this._unauthenticatedAddressOf.delete(handlerID);
+            const remaining = (this._pendingDataPerAddress.get(address) ?? 1) - 1;
+            if(remaining > 0) this._pendingDataPerAddress.set(address, remaining);
+            else this._pendingDataPerAddress.delete(address);
+        }
         this._unauthenticatedHandlerIds.delete(handlerID);
+        const deadline = this._unauthenticatedDeadlines.get(handlerID);
+        if(deadline) clearTimeout(deadline);
+        this._unauthenticatedDeadlines.delete(handlerID);
+        const address = this._unauthenticatedAddressOf.get(handlerID);
+        if(address === undefined) return;
+        this._unauthenticatedAddressOf.delete(handlerID);
+        const remaining = (this._unauthenticatedPerAddress.get(address) ?? 1) - 1;
+        if(remaining > 0) this._unauthenticatedPerAddress.set(address, remaining);
+        else this._unauthenticatedPerAddress.delete(address);
     }
 
     private ensurePendingControlHandshake(handlerID: number): PendingControlHandshake {
