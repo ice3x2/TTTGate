@@ -55,7 +55,7 @@ let app = () => {
         console.log('       -name [name]       : client name');
         console.log('       -clientId [id]     : authenticated client identifier for protocol v2');
         console.log('       -clientSecret [s]  : protocol v2 shared secret');
-        console.log('       -displayName [n]   : display-only client name for protocol v2');
+        console.log('       -displayName [n]   : display-only for protocol v2 (server matches its registered name)');
         console.log('       -key  [key]        : legacy shared key (legacy control auth only)');
         console.log('       -ca [pem]          : trusted CA/server certificate PEM');
         console.log('       -serverName [name] : expected TLS server name');

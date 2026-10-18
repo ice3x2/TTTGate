@@ -106,6 +106,7 @@ class TTTServer {
             }
             if(option.allowedClientNames && option.allowedClientNames.length > 0) {
                 this._allowClientNamesMap.set(option.forwardPort, option.allowedClientNames!);
+                this.warnUnmatchedClientNames(option.forwardPort, option.allowedClientNames!);
             }
         });
     }
@@ -143,6 +144,7 @@ class TTTServer {
         }
         if(option.allowedClientNames && option.allowedClientNames.length > 0) {
             this._allowClientNamesMap.set(option.forwardPort, option.allowedClientNames);
+            this.warnUnmatchedClientNames(option.forwardPort, option.allowedClientNames);
         }
     }
 
@@ -244,6 +246,18 @@ class TTTServer {
             .some(key => key === 'trustedClients'
                 ? !ObjectUtil.canonicalEquals(next.trustedClients ?? [], previous.trustedClients ?? [])
                 : (next as any)[key] !== (previous as any)[key]);
+    }
+
+    /**
+     * v2 클라이언트는 서버에 등록된 표시 이름(없으면 clientId)으로만 이름 제한에 맞춘다(#162). 업그레이드 전에 클라이언트가
+     * 보낸 이름에 맞춰 둔 터널은 그 클라이언트를 더 찾지 못하므로, 등록된 이름과 맞지 않는 항목을 기동·적용 때 알린다.
+     */
+    private warnUnmatchedClientNames(port: number, names: ReadonlyArray<string>): void {
+        const registered = new Set((this._appliedServerOption?.trustedClients ?? []).map((client) => client.displayName || client.clientId));
+        const unmatched = names.filter((name) => !registered.has(name));
+        if(unmatched.length > 0) {
+            logger.warn(`tunnel ${port}: allowedClientNames [${unmatched.join(', ')}] match no registered trusted client name; only legacy clients with these names can serve it`);
+        }
     }
 
     public captureRuntimeState() {
@@ -571,6 +585,7 @@ class TTTServer {
         }
         if(tunnelOption.allowedClientNames && tunnelOption.allowedClientNames.length > 0) {
             this._allowClientNamesMap.set(port, tunnelOption.allowedClientNames);
+            this.warnUnmatchedClientNames(port, tunnelOption.allowedClientNames);
         }
         let lastServerStatus = this._externalPortServerPool.getServerStatus(port);
         await this._externalPortServerPool.stop(port);

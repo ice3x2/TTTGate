@@ -172,6 +172,23 @@ describe("protocol v2 control plane", () => {
         rawClient.destroy();
     });
 
+    // #162 — 터널의 allowedClientNames 는 등록된 표시 이름과 대조한다. 클라이언트가 스스로 보낸 이름을 쓰면 남의 이름을 주장해
+    // 그 이름으로 제한한 터널의 세션을 받을 수 있다.
+    it("uses the registered display name, not the client-claimed one, for the pool name", async () => {
+        await startServer();
+        const rawClient = new RawControlClient("127.0.0.1", serverPort);
+        await rawClient.waitUntilConnected();
+        await completeV2Handshake(rawClient, {clientId: "client-a", clientSecret: "client-secret-a", displayName: "officeA"});
+        await waitFor(() => {
+            if(server.clientStatus().length !== 1) throw new Error("client is not registered yet");
+            return true;
+        }, {timeoutMs: 5000, intervalMs: 25});
+        expect(server.clientStatus()[0]).toMatchObject({clientId: "client-a", name: "Client A"});
+        expect((server.tunnelServer as any).getNextHandlerPool(["officeA"])).toBeNull();
+        expect((server.tunnelServer as any).getNextHandlerPool(["Client A"])).not.toBeNull();
+        rawClient.destroy();
+    });
+
     it("rejects spoofed identity attempts with an invalid proof", async () => {
         await startServer();
 
