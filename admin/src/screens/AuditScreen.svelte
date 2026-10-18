@@ -136,7 +136,8 @@
     </section>
 
     {#if !loading && events.length === 0}
-        <p id="audit-empty">No events in this range.</p>
+        <!-- 서버는 한 번에 훑는 줄 수에 상한을 둔다. 커서가 있으면 아직 다 훑지 않은 것이지 기록이 없는 것이 아니다. -->
+        <p id="audit-empty">{nextCursor ? 'No matching events in the part scanned so far. Load more to keep searching older events.' : 'No events in this range.'}</p>
     {/if}
     <ul id="audit-list" style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-3);">
         {#each events as event, i (i)}
