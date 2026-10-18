@@ -173,7 +173,8 @@ describe("ConnectionRateLimiter", () => {
         expect(limiter.stats(1).bannedIps).toBeLessThanOrEqual(MAX_TRACKED_IPS_PER_PORT);
     });
 
-    it("evicts the oldest tracked IP once MAX_TRACKED_IPS_PER_PORT is exceeded", () => {
+    // #175: 표가 가득 차면 창이 지난 항목만 비운다(활동 중인 버킷은 밀어내지 않는다).
+    it("drops only expired tracked IPs once MAX_TRACKED_IPS_PER_PORT is reached", () => {
         const limiter = new ConnectionRateLimiter();
         limiter.configurePort(1, BASE_CONFIG);
 
@@ -181,7 +182,8 @@ describe("ConnectionRateLimiter", () => {
             limiter.admit(1, `10.0.0.${n}`, n);
         }
 
-        expect(limiter.trackedIps(1)).toBe(MAX_TRACKED_IPS_PER_PORT);
+        // 마지막 항목(시각 MAX)을 넣을 때 창(1000ms)이 지난 항목만 비워 창 안의 1000개만 남는다.
+        expect(limiter.trackedIps(1)).toBe(BASE_CONFIG.windowMs);
 
         const base = MAX_TRACKED_IPS_PER_PORT + 1;
         expect(limiter.admit(1, "10.0.0.0", base)).toEqual({allowed: true});

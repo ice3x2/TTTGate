@@ -487,9 +487,11 @@ class HttpUtil {
      * ws: -> http:, wss: -> https:
      */
     public static wsUrlToHttpUrl(url: string): string {
-        if (url.startsWith('ws://')) {
+        // scheme 은 대소문자를 구분하지 않는다(RFC 3986 §3.1, #175).
+        const lower = url.slice(0, 6).toLowerCase();
+        if (lower.startsWith('ws://')) {
             return 'http://' + url.substring(5);
-        } else if (url.startsWith('wss://')) {
+        } else if (lower.startsWith('wss://')) {
             return 'https://' + url.substring(6);
         }
         return url;
@@ -500,9 +502,10 @@ class HttpUtil {
      * http: -> ws:, https: -> wss:
      */
     public static httpUrlToWsUrl(url: string): string {
-        if (url.startsWith('http://')) {
+        const lower = url.slice(0, 8).toLowerCase();
+        if (lower.startsWith('http://')) {
             return 'ws://' + url.substring(7);
-        } else if (url.startsWith('https://')) {
+        } else if (lower.startsWith('https://')) {
             return 'wss://' + url.substring(8);
         }
         return url;
@@ -512,14 +515,15 @@ class HttpUtil {
      * URL이 WebSocket URL인지 확인합니다.
      */
     public static isWebSocketUrl(url: string): boolean {
-        return url.startsWith('ws://') || url.startsWith('wss://');
+        const lower = url.slice(0, 6).toLowerCase();
+        return lower.startsWith('ws://') || lower.startsWith('wss://');
     }
 
     /**
      * URL이 Secure WebSocket URL인지 확인합니다.
      */
     public static isSecureWebSocketUrl(url: string): boolean {
-        return url.startsWith('wss://');
+        return url.slice(0, 6).toLowerCase() === 'wss://';
     }
 
 }

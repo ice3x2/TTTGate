@@ -254,7 +254,7 @@ class HttpHandler {
             // 웹소켓 URL 처리
             if (webSocket) {
                 // WebSocket URL을 HTTP URL로 변환해서 처리할 필요가 있다면
-                if (requestHeader.path.startsWith('ws://') || requestHeader.path.startsWith('wss://')) {
+                if (HttpUtil.isWebSocketUrl(requestHeader.path)) {
                     const httpUrl = HttpUtil.wsUrlToHttpUrl(requestHeader.path);
                     logger.info(`Converting WebSocket URL: ${requestHeader.path} -> ${httpUrl}`);
                     requestHeader.path = httpUrl;
@@ -281,8 +281,7 @@ class HttpHandler {
 
             // URL이 WSS인지 확인 (Secure WebSocket)
             const isSecureRequest = this._socketHandler.isSecure() ||
-                (header.path.startsWith('wss://') ||
-                    HttpUtil.isSecureWebSocketUrl(header.path));
+                HttpUtil.isSecureWebSocketUrl(header.path);
 
             logger.info(`WebSocket upgrade request detected: ${this._socketHandler.id} (Secure: ${isSecureRequest})`);
 
