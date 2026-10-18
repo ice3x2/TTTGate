@@ -249,6 +249,33 @@ describe("audit-sink: audited() 가 감싼 CUD 라우트", () => {
         expect(f.sink.events[0]).toMatchObject({type: "tunnel_created", outcome: "failure"});
     }));
 
+    // #146 — 예상하지 못한 예외의 문자열(파일 경로 등)이 응답 본문과 감사 detail 로 나가지 않는다.
+    const LEAKY_PATH = "/srv/tttgate-internal/config/identity.yaml";
+    const leakyError = () => Object.assign(new Error(`EACCES: permission denied, open '${LEAKY_PATH}'`), {code: "EACCES"});
+
+    it("#146 GET 핸들러의 예외는 고정 메시지의 500 이고 내부 경로를 싣지 않는다", async () => withAuditServer(async (f) => {
+        const spy = jest.spyOn(IdentityStore.instance, "users").mockImplementation(() => { throw leakyError(); });
+        try {
+            const response = await f.request("GET", "/api/users", {}, f.admin.auth);
+            expect(response.status).toBe(500);
+            expect(JSON.stringify(response.body)).not.toContain("tttgate-internal");
+            expect(response.body.message).toBe("Internal Server Error");
+        } finally { spy.mockRestore(); }
+    }));
+
+    it("#146 감사 대상 라우트의 예외는 detail.error 에 오류 코드만 남긴다", async () => withAuditServer(async (f) => {
+        const spy = jest.spyOn(IdentityStore.instance, "createGroup").mockImplementation(() => { throw leakyError(); });
+        try {
+            const response = await f.request("POST", "/api/groups", {name: "Leaky"}, f.admin.auth);
+            expect(response.status).toBe(500);
+            expect(JSON.stringify(response.body)).not.toContain("tttgate-internal");
+        } finally { spy.mockRestore(); }
+        const event = f.sink.events.find((candidate) => candidate.outcome === "failure");
+        expect(event).toBeDefined();
+        expect(event!.detail).toMatchObject({error: "EACCES"});
+        expect(JSON.stringify(event)).not.toContain("tttgate-internal");
+    }));
+
     it("없는 포트를 지우면 404 응답과 tunnel_deleted failure 가 함께 남는다", async () => withAuditServer(async (f) => {
         const absent = await f.freePort();
         const response = await f.request("DELETE", "/api/tunnelingOption",

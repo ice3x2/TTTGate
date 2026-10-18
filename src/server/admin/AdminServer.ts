@@ -27,7 +27,7 @@ import {DEFAULT_GEO_CONFIG, GeoConfig, TunnelingOption} from "../../types/Tunnel
 import {AdmissionController} from "../security/AdmissionController";
 import {normalizeConnectionSecurity} from "../security/connectionSecurity";
 import {listCountries} from "../security/countries";
-import {auditEventOf, AuditRouteMeta, buildAdminRoutes, isTunnelActivationRequested, Route, RouteContext} from "./routes";
+import {auditEventOf, AuditRouteMeta, buildAdminRoutes, errorLabelOf, isTunnelActivationRequested, Route, RouteContext} from "./routes";
 import {rbacRouteHandlers} from "./rbacRoutes";
 import {MfaTicketStore, PendingEnrollmentStore} from "../mfa/MfaTickets";
 import {mfaLoginHandler} from "./mfaLoginRoutes";
@@ -350,7 +350,7 @@ class AdminServer {
             try {
                 const code = e && typeof e === 'object' ? e.code : undefined;
                 let status = 500;
-                let message = `Internal Server Error: ${e}`;
+                let message = 'Internal Server Error'; // 예외 문자열은 로그에만 남긴다(#146).
                 if(code === 'E_BODY_TOO_LARGE') {
                     status = 413;
                     message = 'Payload Too Large';
@@ -403,7 +403,7 @@ class AdminServer {
         const merged: Record<string, unknown> = {
             ...(meta.detail ?? {}),
             ...auditDetailPatch,
-            ...(failure ? {error: String(failure.error)} : {})
+            ...(failure ? {error: errorLabelOf(failure.error)} : {})
         };
         try {
             await recordAuditEvent(auditEventOf(ctx,
@@ -857,7 +857,8 @@ class AdminServer {
         } catch(error) {
             const failedPaths = (error as {recoveryFailedPaths?: string[]}).recoveryFailedPaths ?? [];
             const failedScopes = [...new Set(failedPaths.map(file => prepared.prepared!.files.some(entry => entry.file.toString() === file) ? 'configuration-restore' : 'certificate-restore'))];
-            this.sendApiFailure(res, 500, {message: `Compound publication failed: ${error}`, partial: failedScopes.length > 0, failedScopes}); return;
+            logger.error('Compound publication failed', error);
+            this.sendApiFailure(res, 500, {message: 'Compound publication failed', partial: failedScopes.length > 0, failedScopes}); return;
         }
         store.publishPreparedServerOption(prepared.prepared);
         if(preparedCertificate) certificates.publishPreparedCertificateChange(preparedCertificate);

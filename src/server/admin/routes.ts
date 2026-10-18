@@ -117,6 +117,16 @@ const tunnelCertAudit = (ctx: RouteContext): AuditRouteMeta => auditMeta(AUDIT_E
  */
 export const isFieldProvided = (body: any, key: string): boolean => body?.[key] !== undefined;
 
+/**
+ * 예상하지 못한 예외를 응답·감사에 남길 때의 이름. 메시지에는 설정·인증서 파일의 절대 경로 같은 내부 정보가 들어 있으므로
+ * 오류 코드(ENOENT 등)나 오류 이름만 쓴다(#146). 상세 내용은 로거에만 남긴다.
+ */
+export const errorLabelOf = (error: unknown): string => {
+    const code = error && typeof error === 'object' ? (error as {code?: unknown}).code : undefined;
+    if(typeof code === 'string' && /^[A-Z][A-Z0-9_]{1,40}$/.test(code)) return code;
+    return error instanceof Error && /^[A-Za-z]{1,40}$/.test(error.name) ? error.name : 'Error';
+};
+
 const pathIdTarget = (kind: AuditTarget['kind']) =>
     (ctx: RouteContext): AuditTarget => ({kind, id: ctx.params.id});
 
