@@ -392,3 +392,27 @@ describe("enforce: 형식이 틀린 입력은 거부 쪽으로 떨어진다", ()
         expect(() => enforce(principalWith(BASE), next as any, "update", CONTEXT)).toThrow(TypeError);
     });
 });
+
+// #147 — 일반 유저가 서버 버퍼를 무제한에 가깝게 잡으면 읽기 배압이 꺼져 서버 메모리를 고갈시킬 수 있다.
+describe("enforce: 서버 버퍼 상한", () => {
+    const capped: EnforceContext = {...CONTEXT, maxServerBufferMiB: 128};
+
+    it("일반 유저는 전역 메모리 캐시 한도를 넘는 bufferLimitOnServer 를 쓸 수 없다", () => {
+        expectFailure(enforce(principalWith(BASE), tunnel({bufferLimitOnServer: 1_000_000_000}), "create", capped), 422, "buffer_limit_exceeded");
+        expectFailure(enforce(principalWith(BASE), tunnel({bufferLimitOnServer: 129}), "update", capped), 422, "buffer_limit_exceeded");
+    });
+
+    it("상한 이내 값과 값이 없는 경우는 허용된다", () => {
+        expect(enforce(principalWith(BASE), tunnel({bufferLimitOnServer: 128}), "create", capped)).toEqual({success: true});
+        expect(enforce(principalWith(BASE), tunnel({}), "create", capped)).toEqual({success: true});
+    });
+
+    it("이미 저장된 값을 그대로 두는 수정은 상한을 넘어도 받는다", () => {
+        expect(enforce(principalWith(BASE), tunnel({bufferLimitOnServer: 512}), "update", {...capped, currentServerBufferMiB: 512})).toEqual({success: true});
+        expectFailure(enforce(principalWith(BASE), tunnel({bufferLimitOnServer: 513}), "update", {...capped, currentServerBufferMiB: 512}), 422, "buffer_limit_exceeded");
+    });
+
+    it("슈퍼유저는 이 상한을 받지 않는다", () => {
+        expect(enforce(principalWith(BASE, "superuser"), tunnel({bufferLimitOnServer: 1_000_000}), "create", capped)).toEqual({success: true});
+    });
+});

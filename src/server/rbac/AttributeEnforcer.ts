@@ -5,7 +5,11 @@ import {TunnelingOption} from "../../types/TunnelingOption";
 export type EnforceMode = 'create' | 'update';
 
 /** enforce 는 저장소를 조회하지 않는다. 호출자가 소유 터널 수와 서버에 등록된 clientId 를 넘긴다. */
-export type EnforceContext = {ownedCount: number; trustedClientIds: string[]};
+/**
+ * maxServerBufferMiB: 일반 유저가 정할 수 있는 bufferLimitOnServer 상한(MiB). 서버 전역 메모리 캐시 한도를 넘으면 그 터널의
+ * 읽기 배압이 사실상 꺼져 다른 사용자의 터널까지 끊을 수 있다(#147). 0 이하이거나 없으면 검사하지 않는다.
+ */
+export type EnforceContext = {ownedCount: number; trustedClientIds: string[]; maxServerBufferMiB?: number; currentServerBufferMiB?: number};
 
 export type EnforceResult = {success: true} | {success: false; status: 403 | 409 | 422; code: string; message: string};
 
@@ -163,6 +167,12 @@ export function enforce(principal: Principal, next: TunnelingOption, mode: Enfor
     const missingProtocol = protocols.find((protocol) => !allowedProtocols.includes(protocol));
     if(missingProtocol !== undefined) {
         return failure(422, 'protocol_not_allowed', `protocol ${missingProtocol} is not in allowed_protocols`);
+    }
+    const maxBuffer = context.maxServerBufferMiB;
+    // 이미 저장된 값을 바꾸지 않는 수정은 받는다. 상한을 낮춘 뒤에도 기존 터널의 다른 항목은 고칠 수 있어야 한다.
+    const unchangedBuffer = context.currentServerBufferMiB !== undefined && next.bufferLimitOnServer === context.currentServerBufferMiB;
+    if(!unchangedBuffer && typeof maxBuffer === 'number' && maxBuffer > 0 && typeof next.bufferLimitOnServer === 'number' && next.bufferLimitOnServer > maxBuffer) {
+        return failure(422, 'buffer_limit_exceeded', `bufferLimitOnServer must be at most ${maxBuffer} MiB`);
     }
     if(!hasNoLegacyClientNames(next.allowedClientNames)) {
         return failure(422, 'legacy_client_names_not_allowed', 'allowedClientNames is not allowed; use allowedClientIds');
