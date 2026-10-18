@@ -54,6 +54,16 @@ class HttpUtil {
     /**
      * HTTP 헤더에서 특정 이름의 헤더 값을 찾음
      */
+    /**
+     * 요청 대상(request-target)의 Host 를 내부 주소로 바꾼다. absolute-form(http://host/...)의 authority 만 바꾸고,
+     * origin-form(/path?query)은 그대로 둔다. path 전체에서 문자열을 바꾸면 query 의 값까지 바뀌었다(#168).
+     */
+    public static rewriteRequestTargetHost(target: string, originHost: string, destination: string): string {
+        const match = /^(https?:\/\/)([^/?#]*)(.*)$/i.exec(target);
+        if(!match || match[2].toLowerCase() !== originHost.toLowerCase()) return target;
+        return `${match[1]}${destination}${match[3]}`;
+    }
+
     public static findHeaderValue(httpHeader: HttpHeader, name: string): string | null {
         let nameValue = HttpUtil.findHeader(httpHeader, name);
         if (nameValue != null) {
