@@ -203,7 +203,7 @@
                 <NumberInput id="group-attr-max_tunnel_count" min={0} max={1000} step={1} disabled={readOnly}
                     bind:value={() => attrs.max_tunnel_count, (value) => (attrs.max_tunnel_count = value as number)} />
             </Field>
-            <Field label="Max tunnel duration (hours)" hint="0 = unlimited" for="group-attr-max_tunnel_duration_ms" error={limitErrors.duration}>
+            <Field label="Max tunnel duration (hours)" hint="0 = unlimited. Also applies to tunnels that are already on: a lower value shortens them now, and a higher value or 0 lets them run again until the time their owners asked for." for="group-attr-max_tunnel_duration_ms" error={limitErrors.duration}>
                 <NumberInput id="group-attr-max_tunnel_duration_ms" min={0} max={8760} step={1} disabled={readOnly}
                     bind:value={() => durationHours, setDuration} />
             </Field>

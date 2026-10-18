@@ -248,7 +248,9 @@ test("한도 칸이 비면 요청 없이 칸마다 오류를 보이고, 0 을 �
     let posts = 0;
     page.on("request", (request) => { if(new URL(request.url()).pathname === "/api/groups" && request.method() === "POST") posts++; });
     // 기간과 동시 연결 칸 모두 0 의 뜻을 알린다.
-    expect(await page.getByText("0 = unlimited", {exact: true}).count()).toBe(2);
+    expect(await page.getByText("0 = unlimited", {exact: true}).count()).toBe(1);
+    // #177: 기간 칸은 상한 변경이 활성 터널에 주는 효과도 알린다.
+    expect(await page.getByText(/^0 = unlimited\. Also applies to tunnels that are already on/).count()).toBe(1);
     await attr(page, "max_tunnel_count").fill("");
     await attr(page, "max_tunnel_duration_ms").fill("");
     await attr(page, "max_concurrent_connections").fill("");

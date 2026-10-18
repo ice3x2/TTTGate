@@ -32,6 +32,11 @@ const lineOf = (event: AuditEvent): string => `${JSON.stringify(event)}\n`;
 
 const summaries = (events: AuditEvent[]): string[] => events.map((event) => event.summary);
 
+// #177: 커서의 offset 은 파일 끝에서부터 소비한 바이트 수, total 은 커서를 만들 때의 파일 크기다.
+const bytesOf = (date: string, indexes: number[]): number =>
+    indexes.reduce((sum, i) => sum + Buffer.byteLength(lineOf(eventOf(date, i))), 0);
+const sizeOf = (date: string, count: number): number => bytesOf(date, [...Array(count).keys()]);
+
 describe("AuditQuery", () => {
     let dir: string;
     let query: AuditQuery;
@@ -65,11 +70,11 @@ describe("AuditQuery", () => {
     it("limit 5 로 세 페이지를 넘기면 커서가 파일 경계를 넘고 합집합이 12건이며 중복이 없다", async () => {
         const first = await query.query({limit: 5});
         expect(summaries(first.events)).toEqual(["2026-09-11#4", "2026-09-11#3", "2026-09-11#2", "2026-09-11#1", "2026-09-11#0"]);
-        expect(first.nextCursor).toBe(AuditQuery.encodeCursor({file: fileOf("2026-09-11"), offset: 5, total: 5}));
+        expect(first.nextCursor).toBe(AuditQuery.encodeCursor({file: fileOf("2026-09-11"), offset: sizeOf("2026-09-11", 5), total: sizeOf("2026-09-11", 5)}));
 
         const second = await query.query({limit: 5, cursor: first.nextCursor});
         expect(summaries(second.events)).toEqual(["2026-09-10#3", "2026-09-10#2", "2026-09-10#1", "2026-09-10#0", "2026-09-09#2"]);
-        expect(second.nextCursor).toBe(AuditQuery.encodeCursor({file: fileOf("2026-09-09"), offset: 1, total: 3}));
+        expect(second.nextCursor).toBe(AuditQuery.encodeCursor({file: fileOf("2026-09-09"), offset: bytesOf("2026-09-09", [2]), total: sizeOf("2026-09-09", 3)}));
 
         const third = await query.query({limit: 5, cursor: second.nextCursor});
         expect(summaries(third.events)).toEqual(["2026-09-09#1", "2026-09-09#0"]);
@@ -83,13 +88,13 @@ describe("AuditQuery", () => {
     it("페이지 사이에 오늘 파일이 append 되어도 이미 본 이벤트를 다시 내지 않고 새 이벤트도 섞지 않는다", async () => {
         const first = await query.query({limit: 2});
         expect(summaries(first.events)).toEqual(["2026-09-11#4", "2026-09-11#3"]);
-        expect(first.nextCursor).toBe(AuditQuery.encodeCursor({file: fileOf("2026-09-11"), offset: 2, total: 5}));
+        expect(first.nextCursor).toBe(AuditQuery.encodeCursor({file: fileOf("2026-09-11"), offset: bytesOf("2026-09-11", [4, 3]), total: sizeOf("2026-09-11", 5)}));
 
         fs.appendFileSync(path.join(dir, fileOf("2026-09-11")), lineOf(eventOf("2026-09-11", 5)) + lineOf(eventOf("2026-09-11", 6)));
 
         const second = await query.query({limit: 2, cursor: first.nextCursor});
         expect(summaries(second.events)).toEqual(["2026-09-11#2", "2026-09-11#1"]);
-        expect(AuditQuery.decodeCursor(second.nextCursor!)).toEqual({file: fileOf("2026-09-11"), offset: 6, total: 7});
+        expect(AuditQuery.decodeCursor(second.nextCursor!)).toEqual({file: fileOf("2026-09-11"), offset: bytesOf("2026-09-11", [6, 5, 4, 3, 2, 1]), total: sizeOf("2026-09-11", 7)});
 
         const rest = await query.query({limit: 500, cursor: second.nextCursor});
         const seen = [...first.events, ...second.events, ...rest.events].map((event) => event.summary);
@@ -100,8 +105,9 @@ describe("AuditQuery", () => {
     });
 
     it("파일이 커서를 만들 때보다 짧아지면 그 파일의 처음부터 다시 읽는다", async () => {
-        // 보정 없이 offset 을 쓰면 7 + (5 - 9) = 3 부터 읽어 2026-09-11#1 이 먼저 나온다.
-        const cursor = AuditQuery.encodeCursor({file: fileOf("2026-09-11"), offset: 7, total: 9});
+        // 보정 없이 쓰면 total - offset 위치(파일 중간)부터 읽어 엉뚱한 줄이 먼저 나온다.
+        const size = sizeOf("2026-09-11", 5);
+        const cursor = AuditQuery.encodeCursor({file: fileOf("2026-09-11"), offset: 100, total: size + 50});
         const page = await query.query({limit: 2, cursor});
         expect(summaries(page.events)).toEqual(["2026-09-11#4", "2026-09-11#3"]);
     });
@@ -120,10 +126,10 @@ describe("AuditQuery", () => {
         expect((await query.query({limit: 500, type: "group_created", outcome: "success"})).events).toEqual([]);
     });
 
-    it("nextCursor.offset 은 필터 통과 건수가 아니라 소비한 라인 수다", async () => {
+    it("nextCursor.offset 은 필터 통과 건수가 아니라 소비한 바이트 수다", async () => {
         const page = await query.query({limit: 2, type: "group_created"});
         expect(summaries(page.events)).toEqual(["2026-09-11#3", "2026-09-11#1"]);
-        expect(AuditQuery.decodeCursor(page.nextCursor!)).toEqual({file: fileOf("2026-09-11"), offset: 4, total: 5});
+        expect(AuditQuery.decodeCursor(page.nextCursor!)).toEqual({file: fileOf("2026-09-11"), offset: bytesOf("2026-09-11", [4, 3, 2, 1]), total: sizeOf("2026-09-11", 5)});
 
         const next = await query.query({limit: 2, type: "group_created", cursor: page.nextCursor});
         expect(summaries(next.events)).toEqual(["2026-09-10#3", "2026-09-10#1"]);
@@ -223,19 +229,22 @@ describe("AuditQuery", () => {
         const encodeRaw = (value: unknown): string => Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
         const valid: AuditCursor = {file: fileOf("2026-09-10"), offset: 2, total: 4};
         expect(AuditQuery.decodeCursor(AuditQuery.encodeCursor(valid))).toEqual(valid);
-        expect(AuditQuery.encodeCursor(valid)).toBe(encodeRaw(valid));
+        expect(AuditQuery.encodeCursor(valid)).toBe(encodeRaw({v: 2, ...valid}));
+        // #177: 줄 단위였던 옛 커서(버전 없음)는 받지 않는다.
+        expect(AuditQuery.decodeCursor(encodeRaw(valid))).toBeUndefined();
+        expect(AuditQuery.decodeCursor(encodeRaw({v: 1, ...valid}))).toBeUndefined();
         expect(AuditQuery.decodeCursor("***")).toBeUndefined();
         expect(AuditQuery.decodeCursor("")).toBeUndefined();
         expect(AuditQuery.decodeCursor(Buffer.from("not json").toString("base64url"))).toBeUndefined();
         expect(AuditQuery.decodeCursor(encodeRaw(null))).toBeUndefined();
-        expect(AuditQuery.decodeCursor(encodeRaw({file: fileOf("2026-09-10"), offset: 2}))).toBeUndefined();
-        expect(AuditQuery.decodeCursor(encodeRaw({file: "evil.jsonl", offset: 0, total: 0}))).toBeUndefined();
-        expect(AuditQuery.decodeCursor(encodeRaw({file: "../audit-2026-09-10.jsonl", offset: 0, total: 0}))).toBeUndefined();
-        expect(AuditQuery.decodeCursor(encodeRaw({file: fileOf("2026-09-10"), offset: -1, total: 4}))).toBeUndefined();
-        expect(AuditQuery.decodeCursor(encodeRaw({file: fileOf("2026-09-10"), offset: 1.5, total: 4}))).toBeUndefined();
-        expect(AuditQuery.decodeCursor(encodeRaw({file: fileOf("2026-09-10"), offset: 1, total: 4.5}))).toBeUndefined();
-        expect(AuditQuery.decodeCursor(encodeRaw({file: fileOf("2026-09-10"), offset: "1", total: 4}))).toBeUndefined();
-        expect(AuditQuery.decodeCursor(encodeRaw({file: fileOf("2026-09-10"), offset: 5, total: 4}))).toBeUndefined();
+        expect(AuditQuery.decodeCursor(encodeRaw({v: 2, file: fileOf("2026-09-10"), offset: 2}))).toBeUndefined();
+        expect(AuditQuery.decodeCursor(encodeRaw({v: 2, file: "evil.jsonl", offset: 0, total: 0}))).toBeUndefined();
+        expect(AuditQuery.decodeCursor(encodeRaw({v: 2, file: "../audit-2026-09-10.jsonl", offset: 0, total: 0}))).toBeUndefined();
+        expect(AuditQuery.decodeCursor(encodeRaw({v: 2, file: fileOf("2026-09-10"), offset: -1, total: 4}))).toBeUndefined();
+        expect(AuditQuery.decodeCursor(encodeRaw({v: 2, file: fileOf("2026-09-10"), offset: 1.5, total: 4}))).toBeUndefined();
+        expect(AuditQuery.decodeCursor(encodeRaw({v: 2, file: fileOf("2026-09-10"), offset: 1, total: 4.5}))).toBeUndefined();
+        expect(AuditQuery.decodeCursor(encodeRaw({v: 2, file: fileOf("2026-09-10"), offset: "1", total: 4}))).toBeUndefined();
+        expect(AuditQuery.decodeCursor(encodeRaw({v: 2, file: fileOf("2026-09-10"), offset: 5, total: 4}))).toBeUndefined();
     });
 
     // #148 — 본인 이벤트가 적은 사용자의 조회가 매번 보존 기간 전체를 훑지 않게, 한 번에 훑는 줄 수에 상한을 둔다.
@@ -270,5 +279,119 @@ describe("AuditQuery", () => {
         fs.writeFileSync(path.join(dir, "notes.jsonl"), lineOf(eventOf("2026-09-12", 1)));
         const page = await query.query({limit: 500});
         expect(page.events).toHaveLength(12);
+    });
+
+    // #177 — 하루 파일 전체를 메모리로 읽지 않는다. 끝에서부터 필요한 만큼만 읽고, 한 요청이 읽는 바이트에 상한을 둔다.
+    describe("streaming from the end of the file (#177)", () => {
+        const writeBig = (date: string, count: number): void => {
+            const fd = fs.openSync(path.join(dir, fileOf(date)), "w");
+            try {
+                let chunk = "";
+                for(let i = 0; i < count; i++) {
+                    chunk += lineOf({...eventOf(date, i), summary: `${date}#${i}`, detail: {pad: "x".repeat(200)}} as AuditEvent);
+                    if(chunk.length > 1 << 20) { fs.writeSync(fd, chunk); chunk = ""; }
+                }
+                fs.writeSync(fd, chunk);
+            } finally { fs.closeSync(fd); }
+        };
+
+        it("a newest-first page of a large file reads only the tail", async () => {
+            writeBig("2026-09-12", 100_000);
+            const size = fs.statSync(path.join(dir, fileOf("2026-09-12"))).size;
+            expect(size).toBeGreaterThan(20 * 1024 * 1024);
+            const page = await query.query({limit: 3});
+            expect(summaries(page.events)).toEqual(["2026-09-12#99999", "2026-09-12#99998", "2026-09-12#99997"]);
+            expect(query.lastQueryBytesRead).toBeLessThan(1024 * 1024);
+            const next = await query.query({limit: 2, cursor: page.nextCursor});
+            expect(summaries(next.events)).toEqual(["2026-09-12#99996", "2026-09-12#99995"]);
+            expect(query.lastQueryBytesRead).toBeLessThan(1024 * 1024);
+        });
+
+        it("stops at the byte cap with a cursor and continues to the end", async () => {
+            const capped = new AuditQuery(dir, {maxScanBytes: 600});
+            const first = await capped.query({limit: 500, userId: "nobody"});
+            expect(first.events).toEqual([]);
+            expect(first.nextCursor).toBeDefined();
+            expect(capped.lastQueryBytesRead).toBeLessThanOrEqual(600 + 64 * 1024);
+            let cursor = first.nextCursor;
+            let pages = 1;
+            while(cursor !== undefined && pages < 50) {
+                cursor = (await capped.query({limit: 500, userId: "nobody", cursor})).nextCursor;
+                pages++;
+            }
+            expect(cursor).toBeUndefined();
+            expect(pages).toBeGreaterThan(2);
+            // 한 줄이 상한보다 길어도 한 줄씩은 나아간다.
+            const tiny = new AuditQuery(dir, {maxScanBytes: 1});
+            const one = await tiny.query({limit: 500});
+            expect(one.events).toHaveLength(1);
+        });
+
+        it("reads CRLF line endings and a last line without a newline", async () => {
+            const lines = [0, 1, 2].map((i) => JSON.stringify(eventOf("2026-09-13", i)));
+            fs.writeFileSync(path.join(dir, fileOf("2026-09-13")), `${lines[0]}\r\n${lines[1]}\r\n${lines[2]}`, "utf8");
+            const page = await query.query({limit: 3});
+            expect(summaries(page.events)).toEqual(["2026-09-13#2", "2026-09-13#1", "2026-09-13#0"]);
+        });
+
+        it("keeps multi-byte UTF-8 characters intact across read chunks", async () => {
+            const name = "감사".repeat(40_000);
+            fs.writeFileSync(path.join(dir, fileOf("2026-09-14")), lineOf({...eventOf("2026-09-14", 0), summary: name}), "utf8");
+            const page = await query.query({limit: 1});
+            expect(page.events[0].summary).toBe(name);
+        });
+    });
+
+    // #177 리뷰 — 조각·줄 상한을 작게 두고 경계를 결정적으로 확인한다.
+    describe("reverse reader boundaries (#177)", () => {
+        const writeRaw = (date: string, content: string | Buffer) => fs.writeFileSync(path.join(dir, fileOf(date)), content);
+
+        it("skips an oversized line and keeps the lines around it, also when it is the first line", async () => {
+            const small = (i: number) => lineOf(eventOf("2026-09-15", i));
+            const big = `${"z".repeat(500)}\n`;
+            writeRaw("2026-09-15", big + small(0) + big + small(1));
+            const warn = jest.spyOn(LoggerFactory.getLogger("server", "AuditQuery"), "warn").mockImplementation(() => undefined);
+            try {
+                const q = new AuditQuery(dir, {readChunkBytes: 16, maxLineBytes: 300});
+                const page = await q.query({limit: 2});
+                expect(summaries(page.events)).toEqual(["2026-09-15#1", "2026-09-15#0"]);
+                const rest = await q.query({limit: 500, cursor: page.nextCursor, to: Date.parse("2026-09-15T23:59:59.999Z"), from: dayStart("2026-09-15")});
+                expect(rest.events).toEqual([]);
+                expect(warn).toHaveBeenCalled();
+            } finally {
+                warn.mockRestore();
+            }
+        });
+
+        it("decodes a multi-byte character split across every possible chunk boundary", async () => {
+            const event = {...eventOf("2026-09-16", 0), summary: "가나다라마바사"};
+            writeRaw("2026-09-16", lineOf(event));
+            for(let chunk = 1; chunk <= 12; chunk++) {
+                const page = await new AuditQuery(dir, {readChunkBytes: chunk}).query({limit: 1});
+                expect(page.events[0].summary).toBe("가나다라마바사");
+            }
+        });
+
+        it("a file of blank lines stops at the byte cap instead of reading to the end", async () => {
+            writeRaw("2026-09-17", "\n".repeat(200_000) + lineOf(eventOf("2026-09-17", 0)));
+            const q = new AuditQuery(dir, {maxScanBytes: 1_000, readChunkBytes: 256});
+            const first = await q.query({limit: 500, userId: "nobody"});
+            expect(q.lastQueryBytesRead).toBeLessThan(5_000);
+            expect(first.nextCursor).toBeDefined();
+        });
+
+        it("continues across blank lines with a cursor without losing or repeating events", async () => {
+            const lines = [0, 1, 2, 3].map((i) => lineOf(eventOf("2026-09-18", i)));
+            writeRaw("2026-09-18", `${lines[0]}\n\n${lines[1]}\n${lines[2]}\n\n\n${lines[3]}`);
+            const q = new AuditQuery(dir, {readChunkBytes: 7});
+            const seen: string[] = [];
+            let cursor: string | undefined;
+            do {
+                const page = await q.query({limit: 1, cursor, from: dayStart("2026-09-18")});
+                seen.push(...summaries(page.events));
+                cursor = page.nextCursor;
+            } while(cursor !== undefined);
+            expect(seen).toEqual(["2026-09-18#3", "2026-09-18#2", "2026-09-18#1", "2026-09-18#0"]);
+        });
     });
 });
