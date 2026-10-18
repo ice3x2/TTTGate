@@ -219,6 +219,8 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
     {method: 'POST', pattern: new RegExp('^/api/users/(?<id>[^/]+)/mfa/reset$'), action: 'user:manage',
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.mfa_reset, pathIdTarget('user')(ctx)), handler: 'onResetUserMfa'},
     {method: 'GET', pattern: new RegExp('^/api/groups$'), action: 'group:manage', handler: 'onListGroups'},
+    // 그룹 편집 화면의 신뢰 클라이언트 선택지(id·표시 이름만, #155).
+    {method: 'GET', pattern: new RegExp('^/api/trustedClients$'), action: 'group:manage', handler: 'onListTrustedClients'},
     {method: 'POST', pattern: new RegExp('^/api/groups$'), action: 'group:manage',
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.group_created, {kind: 'group', id: String(ctx.body?.name)}), handler: 'onCreateGroup'},
     {method: 'GET', pattern: new RegExp('^/api/groups/(?<id>[^/]+)$'), action: 'group:manage', handler: 'onGetGroup'},

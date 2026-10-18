@@ -23,6 +23,7 @@
   import {toast} from "./ui/toast";
   import Shell from "./shell/Shell.svelte";
   import {provideSession} from "./shell/session";
+  import ServerOptionCtrl from "./controller/ServerOptionCtrl";
   import {chrome, defaultHash, SECTION_OF_SCREEN} from "./shell/nav";
   import {navigate, route} from "./router";
   import {clearMe, loadMe, me} from "./me";
@@ -31,7 +32,8 @@
 
   let state = $state<SessionState>('Checking');
 
-  const session = {invalidate() { clearMe(); state = 'Invalid'; }};
+  // 세션이 끝나면 서버 옵션 캐시(비밀값 포함)도 비운다.
+  const session = {invalidate() { clearMe(); ServerOptionCtrl.instance.clearCache(); state = 'Invalid'; }};
   provideSession(session);
 
   // U2-10: 'Valid' 에 들어가면 /api/me 를 읽는다. 읽기 전에는 Loading 이다.
