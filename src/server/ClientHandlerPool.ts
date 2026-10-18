@@ -210,11 +210,11 @@ class ClientHandlerPool {
     }
 
     public pauseSessionRead(sessionID: number) : void {
-        this._activatedSessionHandlerMap_.get(sessionID)?.pauseRead();
+        this._activatedSessionHandlerMap_.get(sessionID)?.pauseRead('downstream');
     }
 
     public resumeSessionRead(sessionID: number) : void {
-        this._activatedSessionHandlerMap_.get(sessionID)?.resumeRead();
+        this._activatedSessionHandlerMap_.get(sessionID)?.resumeRead('downstream');
     }
 
     public pushReceiveBuffer(sessionID: number, data: Buffer) : boolean {

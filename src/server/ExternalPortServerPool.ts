@@ -461,8 +461,8 @@ class ExternalPortServerPool {
                 if(policy) {
                     const wait = this._bandwidth.consume(policy.groupId, policy.bytesPerSecond, data.length, Date.now());
                     if(wait > 0) {
-                        handler.pauseRead();
-                        setTimeout(() => { if(!handler.isBackpressured) handler.resumeRead(); }, wait).unref();
+                        handler.pauseRead('bandwidth');
+                        setTimeout(() => handler.resumeRead('bandwidth'), wait).unref();
                     }
                 }
             } else if (sessionID && (state == SocketState.End || state == SocketState.Closed)) {

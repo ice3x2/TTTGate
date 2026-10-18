@@ -92,11 +92,11 @@ class EndPointClientPool {
     }
 
     public pauseSessionRead(sessionID: number) : void {
-        this._endPointClientMap.get(sessionID)?.pauseRead();
+        this._endPointClientMap.get(sessionID)?.pauseRead('downstream');
     }
 
     public resumeSessionRead(sessionID: number) : void {
-        this._endPointClientMap.get(sessionID)?.resumeRead();
+        this._endPointClientMap.get(sessionID)?.resumeRead('downstream');
     }
 
     public close(id: number, endLength: number) : boolean {
