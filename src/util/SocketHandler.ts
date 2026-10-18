@@ -242,7 +242,11 @@ class SocketHandler {
     public static connect(options: ConnectOpt, event: OnSocketEvent) : SocketHandler {
         let handlerRef: Array<SocketHandler> = [];
         options.keepalive = options.keepalive ?? 60000;
+        let connectTimer: NodeJS.Timeout | undefined;
+        let established = false;
         let connected = () => {
+            established = true;
+            clearTimeout(connectTimer);
             if(handlerRef.length > 0 && handlerRef[0]._state == SocketState.None) {
                 handlerRef[0]._state = SocketState.Connected;
                 event(handlerRef[0], SocketState.Connected);
@@ -260,6 +264,17 @@ class SocketHandler {
         }
         let handler = new SocketHandler(socket, options.port, options.host, options.tls ?? false, event);
         handlerRef.push(handler);
+        if(options.connectTimeout && options.connectTimeout > 0) {
+            // TLS 는 핸드셰이크가 끝나야 connected 가 불린다. 그 전에 기한이 지나면 연결 실패와 같은 경로로 닫는다.
+            // 타이머는 unref 이고, 연결이 끝난 뒤나 이미 닫힌 소켓에서는 아무 일도 하지 않는다(release() 가 리스너를 지워
+            // close 리스너로 해제되지 않을 수 있지만 해가 없다).
+            const limit = options.connectTimeout;
+            connectTimer = setTimeout(() => {
+                if(established) return;
+                socket.destroy(Object.assign(new Error(`connect timed out after ${limit}ms`), {code: 'ETIMEDOUT'}));
+            }, limit);
+            connectTimer.unref?.();
+        }
 
         if(options.timeout && options.timeout > 0) {
             handler.setTimeout(options.timeout);
@@ -354,7 +369,10 @@ class SocketHandler {
 
     private initSocket(socket: net.Socket) : void {
         this._socket = socket;
-        socket.on('connect', ()=> {
+        // TLS 클라이언트 소켓은 TCP 'connect' 가 핸드셰이크보다 먼저 온다. 그때 Connected 를 내면 엔드포인트 세션이
+        // 핸드셰이크 전에 성공으로 알려지고, 핸드셰이크 실패·기한 초과가 FailOfOpenSession 이 되지 못한다(#179).
+        // 서버 쪽 TLS 소켓은 bound() 로 이미 Connected 라 이 이벤트를 쓰지 않는다.
+        socket.on(socket instanceof tls.TLSSocket ? 'secureConnect' : 'connect', ()=> {
             if(this._state != SocketState.Connected) {
                 this._state = SocketState.Connected;
                 this._event(this, SocketState.Connected);
