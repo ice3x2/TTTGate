@@ -71,6 +71,11 @@ const DEFAULT_SESSION_HEARTBEAT_CHECK_INTERVAL_MS = 5_000;
 const MIN_SESSION_TTL_CHECK_INTERVAL_MS = 100;
 const MAX_SESSION_TTL_CHECK_INTERVAL_MS = 60_000;
 
+/** legacy 인증 실패 제한: 주소당 창(1분) 안에 10회 실패하면 창이 끝날 때까지 거절한다(#165). */
+const LEGACY_AUTH_FAILURE_WINDOW_MS = 60_000;
+const LEGACY_AUTH_MAX_FAILURES = 10;
+const LEGACY_AUTH_TRACKED_ADDRESSES = 10_000;
+
 class TunnelServer {
 
     private readonly _serverOption : {port: number, tls: boolean, key: string, controlProtocolMode: ControlProtocolMode, allowLegacyControlAuth: boolean};
@@ -99,6 +104,10 @@ class TunnelServer {
     /** 세션에 아직 붙지 않은 데이터 연결(제어 예산과 따로 센다, #157). */
     private _pendingDataHandlerIds: Set<number> = new Set<number>();
     private _pendingDataPerAddress: Map<string, number> = new Map<string, number>();
+    /** 핸드셰이크를 거절한 제어 연결. 닫힐 때까지 이후 패킷을 버린다(#165 — 한 연결에서 키를 대입하지 못하게). */
+    private _rejectedHandlerIds: Set<number> = new Set<number>();
+    /** 주소별 legacy 인증 실패 기록. 연결을 새로 맺으며 키를 대입하지 못하게 일정 시간 막는다(#165). */
+    private _legacyAuthFailures: Map<string, {count: number; windowStart: number}> = new Map();
     private _nextSelectIdx = 0;
     private _onSessionCloseCallback? : OnSessionCloseCallback;
     private _onReceiveDataCallback? : OnReceiveDataCallback;
@@ -289,6 +298,7 @@ class TunnelServer {
             this._unauthenticatedPerAddress.clear();
             this._pendingDataHandlerIds.clear();
             this._pendingDataPerAddress.clear();
+            this._rejectedHandlerIds.clear();
             this._pendingControlHandshakeMap.clear();
             this._identityRegistry.clear();
             // noinspection JSUnusedLocalSymbols
@@ -712,6 +722,12 @@ class TunnelServer {
         // 인증 전 패킷은 debug 로만 남긴다. 인증 없이 패킷마다 info 로그를 쌓게 하지 않는다(#157).
         const packetLog = 'receive ctrl packet - cmd:' + CtrlCmd[packet.cmd] + ', handler id: ' + handler.id + ', remote: ' + handler.remoteAddress + ':' + handler.remotePort;
         if(this._unauthenticatedHandlerIds.has(handler.id)) logger.debug(packetLog); else logger.info(packetLog);
+        if(this._rejectedHandlerIds.has(handler.id)) return;
+        if((packet.cmd == CtrlCmd.SyncCtrl || packet.cmd == CtrlCmd.AckCtrl) && this._clientHandlerPoolMap.has(handler.id)) {
+            // 인증된 연결의 핸드셰이크 재전송은 무시한다. 새 pool 을 만들면 기존 세션이 고아가 된다(#165).
+            logger.warn(`Ignored ${CtrlCmd[packet.cmd]} on an authenticated control connection. id: ${handler.id}`);
+            return;
+        }
         if(packet.cmd == CtrlCmd.SyncCtrl) {
             let ctrlHandler = handler as TunnelControlHandler;
             ctrlHandler.handlerType = HandlerType.Control;
@@ -775,9 +791,15 @@ class TunnelServer {
                 this.rejectHandshake(ctrlHandler, "Legacy control handshake is not allowed in strict mode");
                 return;
             }
+            const address = ctrlHandler.socket.remoteAddress ?? '';
+            if(this.isLegacyAuthBlocked(address)) {
+                this.rejectHandshake(ctrlHandler, "Too many failed legacy authentications from this address");
+                return;
+            }
             // P3-T4 / REQ-04: legacy auth-key 비교도 상수시간 헬퍼로 교체.
             // 입력은 임의 utf8이며 길이가 고정되지 않으므로 'utf8' 인코딩 사용.
             if(!timingSafeStringEqual(packet.ackKey ?? "", this._key ?? "", "utf8")) {
+                this.recordLegacyAuthFailure(address);
                 this.notMatchedAuthKey(ctrlHandler);
                 return;
             }
@@ -806,14 +828,40 @@ class TunnelServer {
         }
     }
 
+    private isLegacyAuthBlocked(address: string): boolean {
+        const state = this._legacyAuthFailures.get(address);
+        if(!state) return false;
+        if(Date.now() - state.windowStart >= LEGACY_AUTH_FAILURE_WINDOW_MS) {
+            this._legacyAuthFailures.delete(address);
+            return false;
+        }
+        return state.count >= LEGACY_AUTH_MAX_FAILURES;
+    }
+
+    private recordLegacyAuthFailure(address: string): void {
+        const now = Date.now();
+        const state = this._legacyAuthFailures.get(address);
+        if(!state || now - state.windowStart >= LEGACY_AUTH_FAILURE_WINDOW_MS) {
+            if(this._legacyAuthFailures.size >= LEGACY_AUTH_TRACKED_ADDRESSES) {
+                const oldest = this._legacyAuthFailures.keys().next().value;
+                if(oldest !== undefined) this._legacyAuthFailures.delete(oldest);
+            }
+            this._legacyAuthFailures.set(address, {count: 1, windowStart: now});
+            return;
+        }
+        state.count++;
+    }
+
     private notMatchedAuthKey(handler: TunnelControlHandler) : void {
         logger.error(`Authkey is not matched. id: ${handler.id}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
         let packet = CtrlPacket.message(handler.id,{type: 'log', payload: '<Fatal> Authkey is not matched.'});
         handler.sendData(packet.toBuffer());
         this._clientHandlerPoolMap.delete(handler.id);
         this._pendingControlHandshakeMap.delete(handler.id);
+        this._rejectedHandlerIds.add(handler.id);
         const timeoutId = setTimeout(() => {
             handler.destroy();
+            this._rejectedHandlerIds.delete(handler.id);
             this._authTimeouts.delete(timeoutId);
         },1000);
         this._authTimeouts.add(timeoutId);
@@ -980,8 +1028,10 @@ class TunnelServer {
         const packet = CtrlPacket.message(handler.id, {type: "log", payload: `<Fatal> ${reason}`});
         handler.sendData(packet.toBuffer());
         this._pendingControlHandshakeMap.delete(handler.id);
+        this._rejectedHandlerIds.add(handler.id);
         const timeoutId = setTimeout(() => {
             handler.destroy();
+            this._rejectedHandlerIds.delete(handler.id);
             this._authTimeouts.delete(timeoutId);
         }, 250);
         this._authTimeouts.add(timeoutId);
