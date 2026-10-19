@@ -4,9 +4,9 @@
 
 ## 0. 다음 세션의 첫 행동
 
-**구현 이슈는 남아 있지 않다.** 열린 이슈는 0건이다. 에픽 #125 는 52/52 로 닫혔고, 후속 수정 이슈 #130~#184 도 모두 병합하고 닫았다.
+**구현 이슈는 남아 있지 않다.** 에픽 #125 는 52/52 로 닫혔고, 후속 수정 이슈 #130~#189 도 모두 병합하고 닫았다.
 
-다음 일은 **`refactor/admin` → `main` PR 의 CI 결과를 확인하고 병합하는 것**이다. PR 을 연 뒤의 상태는 §3 을 보라.
+다음 일은 **PR #185(`refactor/admin` → `main`)의 CI 결과를 확인하고 병합하는 것**이다. 이 세션이 병합까지 마쳤는지는 `gh pr view 185` 로 확인하라. 상태는 §3 을 보라.
 
 ```powershell
 Set-Location C:\Work\git\_Snoworca\TTTGate
@@ -39,26 +39,33 @@ gh pr checks <PR 번호> --repo ice3x2/TTTGate
 
 1. 재부팅 뒤 상태를 점검했다. 잃은 작업물은 없다.
 2. 커밋하지 않고 남아 있던 문서를 커밋했다: `CLAUDE.md` 의 "작업 진행 방식" 절, 확정 시안 `docs/design/2026-10-15-admin-console-mockup.html`, 2026-10-16 핸드오프, 이 문서.
-3. 쓸모없어진 stash 2개를 지웠다(#182·#120 의 WIP, 두 이슈 모두 병합됨). 빈 워크트리 폴더 `TTTGate-wt\92` 와 `TTTGate-wt\_out` 도 지웠다.
-4. `refactor/admin` → `main` PR 을 열었다.
+3. 쓸모없어진 stash 2개를 지웠다(#182·#120 의 WIP, 두 이슈 모두 병합됨). 지운 커밋은 `8393eaf`(#182)·`328fc50`(#120)이다. 빈 워크트리 폴더 `TTTGate-wt\92`, 테스트 출력 폴더 `TTTGate-wt\_out`(1,689개, 78MB), 폐기한 시안 `docs/design/2026-10-06-rbac-screens-mockup.html` 도 지웠다.
+4. `refactor/admin` → `main` PR #185 를 열었다.
+5. 사용자가 "모두 자동으로 처리" 를 지시했다. 아래 이슈 4건을 등록하고 기존 루프(워크트리 → TDD → 리뷰 → 병합 → 닫기)로 처리했다.
+
+| 이슈 | 내용 | 병합 |
+|---|---|---|
+| #186 | `access_denied` 감사 `detail.status` 추가(403·404 구별) | `bc44262` |
+| #187 | `.gitignore` 에 `.server.state.json` 추가 | `bb88870` |
+| #188 | `Tabs` 부품의 화살표·Home·End 키보드 이동과 roving tabindex | `30acc2c` |
+| #189 | Linux CI 에서 실패하던 플랫폼 의존 테스트 2건 수정 | `d395751` |
 
 ## 3. PR 과 병합
 
-- CI(`code-regression.yml`)는 **PR 과 `main` push 에서만 돈다.** 그래서 `refactor/admin` 의 코드는 이 PR 에서 처음 CI 를 거친다. 실패하면 원인부터 확인하라. §5 의 "부하가 만드는 거짓 실패"일 수 있다.
-- `main` 에만 있는 커밋이 2개 있다. 충돌이 나면 `refactor/admin` 쪽을 기준으로 맞춘다.
-- 병합 방식(merge commit / squash)과 병합 뒤 릴리스 태그는 **사용자가 정한다.** 묻지 않고 병합하지 마라.
+- CI(`code-regression.yml`)는 **PR 과 `main` push 에서만 돈다.** `refactor/admin` 은 PR #185 에서 처음 CI 를 거쳤다.
+- 첫 CI 는 `test:unit` 의 `File.test.ts` 1건에서 실패했고, 그 때문에 `test:component` 는 돌지 않았다. WSL(Linux)에서 `test:component` 를 미리 돌려 같은 종류의 실패를 하나 더 찾아 #189 에서 함께 고쳤다.
+- `main` 에만 있는 커밋 2개는 예전 `develop` PR 병합 커밋이다. 충돌은 없다(`git merge-tree` 로 확인).
+- 병합 방식은 merge commit 이다. 이 저장소가 이슈마다 merge commit 을 남겨 왔기 때문이다. 릴리스 태그와 바이너리 빌드(`build-release*.yml`, 수동 실행)는 이 세션에서 하지 않았다.
 
-## 4. 남아 있는 작은 문제 (이슈로 등록되지 않음)
+## 4. 남아 있는 작은 문제
 
-2026-10-16 문서 §7 "이슈 밖에서 드러난 문제" 6건을 다시 확인했다. 3건은 해결됐다(#136 Keep-Alive, `Button` 의 `id` prop, `unit3.md` 의 버튼 조건). 아래 3건은 남아 있다.
+2026-10-16 문서 §7 "이슈 밖에서 드러난 문제" 6건은 모두 해결됐다. 3건은 그전에 이미 해결됐고(#136 Keep-Alive, `Button` 의 `id` prop, `unit3.md` 의 버튼 조건), 남은 3건은 이번에 #186·#187·#188 로 고쳤다.
 
-1. **`access_denied` 감사에 `status` 가 없다** — `src/server/admin/AdminServer.ts:1778` 의 `detail` 이 `{action, path}` 뿐이다. #109 의 이벤트 표는 `detail.status` 를 요구한다.
-2. **`.gitignore` 누락** — 테스트와 실행이 만드는 `config/.server.state.json` 이 무시 목록에 없다. `config/.key`·`config/server.yaml` 은 이미 있다.
-3. **`admin/src/ui/Tabs.svelte` 에 키보드 이동이 없다** — 감사 화면의 범위 탭에서 화살표 키로 옮겨 갈 수 없다.
+리뷰가 남긴 LOW 는 다음과 같다. 막는 문제는 아니다.
 
-사용자 결정을 기다리는 것이 하나 더 있다.
-
-- **폐기한 시안 `docs/design/2026-10-06-rbac-screens-mockup.html`** — 커밋하지 않은 채 남아 있다. 지울지 묻지 못했다.
+- `Tabs` 의 클릭은 같은 탭을 다시 눌러도 `onchange` 를 부른다. 원래 있던 동작이고, 새로고침 용도로 둔다.
+- `#186` 의 404 테스트는 '남의 터널'이 아니라 '없는 포트'로 404 를 만든다. 판정기의 같은 `NOT_FOUND` 분기를 지난다.
+- `test/component/server/ProtocolV2.test.ts` 의 "rejects legacy handshakes from an address that keeps failing" 이 WSL 에서 전체 실행 직후 두 번 실패했다. 그 뒤 단독 실행 4번은 모두 통과했다. 부하로 보이지만 확정하지 못했다. CI 에서 실패하면 다시 조사하라.
 
 ## 5. 함정
 
@@ -73,6 +80,17 @@ git diff --ignore-all-space --ignore-cr-at-eol --stat
 ```
 
 WSL 에서 커밋해야 하면 `git -c core.autocrlf=input add <파일>` 로 올려라. 그냥 `git add` 하면 CRLF 가 저장소에 들어간다.
+
+Windows git 으로 만든 워크트리(`TTTGate-wt\<번호>`)는 WSL git 이 다루지 못한다. git 명령은 `powershell.exe` 로 실행하라.
+
+### Windows 에서만 통과하는 테스트를 조심하라
+
+지금까지 전체 테스트는 Windows 에서만 돌렸고 CI 는 Linux 다. #189 에서 두 가지를 겪었다.
+
+- Windows 에서만 금지되는 파일 이름(`<` 등)으로 실패를 만드는 테스트
+- 1024 미만 포트를 실제로 여는 테스트. Linux 에서는 root 가 아니면 열 수 없다
+
+WSL 에서 Linux 쪽을 미리 확인할 수 있다. 단위·컴포넌트 테스트는 그대로 돈다. `admin/node_modules` 의 `esbuild`·`rollup` 이 Windows 용이라 관리자 화면 테스트(Playwright)는 WSL 에서 돌지 않는다. 컴포넌트 테스트 가운데 프로세스를 띄우는 것은 먼저 `npx tsc -b` 로 `build/` 를 만들어야 한다. 공급망 테스트(`npm ls`)는 Windows 에서 설치한 `node_modules` 의 extraneous 패키지 때문에 WSL 에서 실패한다. CI 는 `npm ci` 로 깨끗하게 설치하므로 해당하지 않는다.
 
 ### `reports/` 는 커밋하지 마라
 
