@@ -18,6 +18,19 @@ Standalone binaries embed Node.js 24 and do not require a separate Node install.
 Build them with the locked `@yao-pkg/pkg` tool through `npm run pkg`; the supported
 targets are Linux x64/ARM64, Windows x64/ARM64 and Alpine x64.
 
+### Memory on a Small Server
+
+The server keeps its in-memory buffers inside fixed process-wide budgets, so a 512 MB instance is enough:
+
+| Budget | Default | What happens at the limit |
+|---|---|---|
+| Socket memory buffers (`globalMemCacheLimit`) | 128 MiB | Further data spills to the file cache on disk |
+| Waiting queues of sessions that are still opening | 64 MiB for all clients, 32 MiB per client | Sources pause at 75 %; a session that would exceed a limit is closed |
+| Bandwidth-limit queues (groups with a `rate_limit` preset) | 64 MiB for all sessions | Sessions with a queue pause their source at 75 % and resume at 50 % |
+| HTTP body rewriting (`rewriteHostInTextBody`) | 32 MiB reserved at a time | Further responses are passed through without rewriting until a rewrite finishes |
+
+The Node.js runtime itself uses about 60–100 MB. Body rewriting holds the decompressed body and a copy while it works, so its peak is about three times the reserved amount. Pending TLS handshakes (up to 1,024 per port) and per-connection header buffers (64 KiB) come on top. Together the worst case stays around 450 MB; keep swap enabled on a 512 MB instance for short peaks. These budgets are built-in defaults and are not set in `server.yaml`.
+
 ## Runtime Config Files
 
 - server runtime config: `config/server.yaml`

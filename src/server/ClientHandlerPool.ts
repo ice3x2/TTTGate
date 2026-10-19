@@ -209,23 +209,26 @@ class ClientHandlerPool {
 
         let sendData = sendWaitPacketQueue.popFront();
         while(sendData != undefined) {
+            // 보내는 중 세션이 닫히면 burn 이 남은 대기열을 한꺼번에 뺀다. 먼저 빼 두어야 이 청크를 두 번 빼지 않는다(#183).
+            this.releaseQueueBytes(waitQueue, 'send', sendData.length);
             try {
                 handler.sendData(sendData);
             } catch (error) {
                 logger.error(`flushWaitBuffer: sendData failed for sessionID: ${sessionID}`, error);
             }
-            this.releaseQueueBytes(waitQueue, 'send', sendData.length);
+            if(this._waitingDataBufferQueueMap.get(sessionID) !== waitQueue) return;
             sendData = sendWaitPacketQueue.popFront();
         }
 
         let receiveData = receiveWaitPacketQueue.popFront();
         while(receiveData != undefined) {
+            this.releaseQueueBytes(waitQueue, 'receive', receiveData.length);
             try {
                 this._onDataReceiveCallback?.(sessionID, receiveData);
             } catch (error) {
                 logger.error(`flushWaitBuffer: receive callback failed for sessionID: ${sessionID}`, error);
             }
-            this.releaseQueueBytes(waitQueue, 'receive', receiveData.length);
+            if(this._waitingDataBufferQueueMap.get(sessionID) !== waitQueue) return;
             receiveData = receiveWaitPacketQueue.popFront();
         }
         this._waitingDataBufferQueueMap.delete(sessionID);
@@ -417,6 +420,8 @@ class ClientHandlerPool {
         if(queue) {
             this._waitingDataBufferQueueMap.delete(sessionID);
             this.releaseWaitingListeners(sessionID);
+            const burned = Math.min(this._bufferSize, queue.sendBytes + queue.receiveBytes);
+            ClientHandlerPool.GlobalWaitingBytes = Math.max(0, ClientHandlerPool.GlobalWaitingBytes - burned);
             this._bufferSize -= queue.sendBytes + queue.receiveBytes;
             this._bufferSize = Math.max(0, this._bufferSize);
             queue.send.clear();
@@ -476,7 +481,14 @@ class ClientHandlerPool {
      */
     public isSessionBackpressured(sessionID: number) : boolean {
         const waiting = this._waitingDataBufferQueueMap.get(sessionID);
-        if(waiting) return waiting.limitBytes > 0 && waiting.sendBytes >= computeWatermarkBytes(waiting.limitBytes).high;
+        if(waiting) {
+            if(waiting.limitBytes > 0 && waiting.sendBytes >= computeWatermarkBytes(waiting.limitBytes).high) return true;
+            // 이 풀(클라이언트)의 대기열이나 전체 대기열이 예산의 상단에 이르면 원천 읽기를 멈춘다. 상한에 닿아 세션을
+            // 닫기 전에 멈추게 한다(#183).
+            const policy = ResourcePolicyRegistry.current();
+            if(policy.defaultPoolQueueLimitBytes > 0 && this._bufferSize >= computeWatermarkBytes(policy.defaultPoolQueueLimitBytes).high) return true;
+            return policy.globalPoolQueueLimitBytes > 0 && ClientHandlerPool.GlobalWaitingBytes >= computeWatermarkBytes(policy.globalPoolQueueLimitBytes).high;
+        }
         return this._activatedSessionHandlerMap_.get(sessionID)?.isBackpressured ?? false;
     }
 
@@ -672,7 +684,17 @@ class ClientHandlerPool {
         dataHandler?.destroy();
     }
 
+    /** 모든 클라이언트 풀의 대기열 합(바이트). */
+    public static get globalWaitingQueueBytes() : number {
+        return ClientHandlerPool.GlobalWaitingBytes;
+    }
+
+    private static GlobalWaitingBytes = 0;
+
     public end() : void {
+        // 풀이 끝나면 이 풀의 대기열은 버려진다. 전체 합에서도 뺀다(#183).
+        ClientHandlerPool.GlobalWaitingBytes = Math.max(0, ClientHandlerPool.GlobalWaitingBytes - this._bufferSize);
+        this._bufferSize = 0;
         for(const sessionID of this._waitingDataBufferQueueMap.keys()) this.burnWaitBuffer(sessionID);
         for(const state of this._pendingSessionIDMap.values()) clearTimeout(state.openTimer);
         this._pendingSessionIDMap.clear();
@@ -693,11 +715,14 @@ class ClientHandlerPool {
         const sessionBytes = queue.sendBytes + queue.receiveBytes;
         const overSession = sessionLimit > 0 && sessionBytes + bytes > sessionLimit;
         const overPool = policy.defaultPoolQueueLimitBytes > 0 && this._bufferSize + bytes > policy.defaultPoolQueueLimitBytes;
-        if(overSession || overPool) {
-            logger.warn(`Closing session ${sessionID} due to waiting queue overflow. overSession=${overSession}, overPool=${overPool}`);
+        // 풀마다의 상한은 클라이언트 수만큼 곱해진다. 프로세스 전체 합으로도 묶는다(#183).
+        const overGlobal = policy.globalPoolQueueLimitBytes > 0 && ClientHandlerPool.GlobalWaitingBytes + bytes > policy.globalPoolQueueLimitBytes;
+        if(overSession || overPool || overGlobal) {
+            logger.warn(`Closing session ${sessionID} due to waiting queue overflow. overSession=${overSession}, overPool=${overPool}, overGlobal=${overGlobal}`);
             this.terminateWaitingSession(sessionID);
             return false;
         }
+        ClientHandlerPool.GlobalWaitingBytes += bytes;
         this._bufferSize += bytes;
         if(target === 'send') {
             queue.sendBytes += bytes;
@@ -708,6 +733,8 @@ class ClientHandlerPool {
     }
 
     private releaseQueueBytes(queue: WaitingQueueState, target: 'send' | 'receive', bytes: number): void {
+        const released = Math.min(this._bufferSize, bytes);
+        ClientHandlerPool.GlobalWaitingBytes = Math.max(0, ClientHandlerPool.GlobalWaitingBytes - released);
         this._bufferSize = Math.max(0, this._bufferSize - bytes);
         if(target === 'send') {
             queue.sendBytes = Math.max(0, queue.sendBytes - bytes);

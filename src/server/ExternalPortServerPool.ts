@@ -10,7 +10,7 @@ import {clearInterval} from "timers";
 import LoggerFactory  from "../util/logger/LoggerFactory";
 import {AdmissionController} from "./security/AdmissionController";
 import {BandwidthLimiter} from "./security/BandwidthLimiter";
-import {computeWatermarkBytes} from "../util/ResourcePolicy";
+import {computeWatermarkBytes, ResourcePolicyRegistry} from "../util/ResourcePolicy";
 import {rateLimitBucketOf} from "./security/ConnectionRateLimiter";
 
 // #124 (U5-09) 클라이언트→외부 대역폭 큐. 상한(limit)을 넘으면 세션을 닫고, 상단 워터마크에서 터널 소스를 멈춘다.
@@ -304,6 +304,11 @@ class ExternalPortServerPool {
 
     public addSessionPressureReliefListener(id: number, listener: () => void) : void {
         const queue = this._sendQueues.get(id);
+        if(this.isGlobalQueuePressured(id) && !(queue && this.isOwnQueuePressured(id))) {
+            // 전체 대역폭 큐가 예산 하단 아래로 비면 부른다(#183).
+            this._globalReliefListeners.add(listener);
+            return;
+        }
         if(queue && this.isQueuePressured(id)) {
             // 대역폭 큐가 하단 워터마크 아래로 비면 drain 이 부른다.
             queue.reliefListeners.push(listener);
@@ -316,9 +321,36 @@ class ExternalPortServerPool {
     }
 
     private isQueuePressured(id: number): boolean {
+        return this.isOwnQueuePressured(id) || this.isGlobalQueuePressured(id);
+    }
+
+    private isOwnQueuePressured(id: number): boolean {
         const queue = this._sendQueues.get(id);
         return queue !== undefined && queue.bytes >= computeWatermarkBytes(queue.limit).high;
     }
+
+    /**
+     * 세션별 상한(기본 8MiB)은 세션 수만큼 곱해져 512MB 서버의 메모리를 넘을 수 있다(#183). 모든 대역폭 큐의 합이
+     * 전체 예산의 상단에 이르면 대역폭 정책이 걸린 세션의 원천 읽기를 멈춘다. 데이터를 버리지 않는다.
+     */
+    private isGlobalQueuePressured(id: number): boolean {
+        const budget = ResourcePolicyRegistry.current().globalBandwidthQueueLimitBytes;
+        if(budget <= 0 || this._queuedBandwidthBytes < computeWatermarkBytes(budget).high) return false;
+        // 자기 큐가 있는 세션만 멈춘다. 큐가 없는 세션은 메모리를 쓰지 않으므로 느린 그룹 때문에 멈추지 않는다.
+        return this._sendQueues.has(id);
+    }
+
+    private releaseQueuedBandwidthBytes(bytes: number): void {
+        this._queuedBandwidthBytes = Math.max(0, this._queuedBandwidthBytes - bytes);
+        const budget = ResourcePolicyRegistry.current().globalBandwidthQueueLimitBytes;
+        if(this._globalReliefListeners.size === 0 || (budget > 0 && this._queuedBandwidthBytes > computeWatermarkBytes(budget).low)) return;
+        const listeners = [...this._globalReliefListeners];
+        this._globalReliefListeners.clear();
+        for(const listener of listeners) listener();
+    }
+
+    private _queuedBandwidthBytes = 0;
+    private _globalReliefListeners: Set<() => void> = new Set();
 
     public send(id: number, data: Buffer) : boolean {
         let handler = this._handlerMap.get(id);
@@ -374,6 +406,7 @@ class ExternalPortServerPool {
     private enqueue(id: number, handler: EndpointHandler | EndpointHttpHandler, queue: SendQueue, data: Buffer): boolean {
         queue.chunks.push(data);
         queue.bytes += data.length;
+        this._queuedBandwidthBytes += data.length;
         if(queue.bytes > queue.limit) {
             this.clearSendQueue(id);
             this.closeIfSatisfiedLength(handler, true);
@@ -400,7 +433,10 @@ class ExternalPortServerPool {
         while(queue.chunks.length > 0) {
             const head = queue.chunks.shift()!;
             queue.bytes -= head.length;
+            this.releaseQueuedBandwidthBytes(head.length);
             this.writeToHandler(handler, head);
+            // 쓰는 중 핸들러가 닫혀 큐가 정리되었으면 남은 청크를 다시 빼지 않는다(#183).
+            if(this._sendQueues.get(id) !== queue) return;
             this.notifyQueueRelief(queue);
             const next = queue.chunks[0];
             if(next === undefined) break;
@@ -429,6 +465,9 @@ class ExternalPortServerPool {
         if(!queue) return;
         if(queue.timer) clearTimeout(queue.timer);
         this._sendQueues.delete(id);
+        this.releaseQueuedBandwidthBytes(queue.bytes);
+        queue.bytes = 0;
+        queue.chunks.length = 0;
     }
 
     private onSendDataCallback = (handler: SocketHandler,success: boolean) : void => {
@@ -733,6 +772,7 @@ class ExternalPortServerPool {
             this._sessionCleanupIntervalID = null;
         }
         this._activeTimeoutMap.forEach((_, port) => this.clearActiveTimeout(port));
+        this._globalReliefListeners.clear();
         logger.info(`closeAll`);
         let callbackCount = this._portServerMap.size;
         if(callbackCount == 0) return;

@@ -345,6 +345,10 @@ class HttpHandler {
                                    HttpUtil.isTextContentType(header) && HttpUtil.canRewriteTextEncoding(header) &&
                                    (header.contentLength !== 0 || header.chunked);
 
+        if(this._isReplaceHostInBody && header.contentLength <= MAX_BUFFER_SIZE && !this.reserveRewrite(header.contentLength > 0 ? header.contentLength : MAX_BUFFER_SIZE)) {
+            // 재작성은 본문 전체를 메모리에 모은다. 전체 예산을 넘으면 이 응답은 고치지 않고 그대로 보낸다(#183).
+            this._isReplaceHostInBody = false;
+        }
         if(this._isReplaceHostInBody && header.contentLength > MAX_BUFFER_SIZE) {
             this._inputRejected = false;
             this._rejectionSent = true;
@@ -552,7 +556,39 @@ class HttpHandler {
         this._socketHandler.destroy();
     }
 
+    /** 재작성 예약. 동시에 재작성하는 응답들의 본문 합을 프로세스 전체 예산으로 묶는다(#183). */
+    private reserveRewrite(bytes: number): boolean {
+        this.releaseRewrite();
+        const budget = ResourcePolicyRegistry.current().globalHttpRewriteBytes;
+        if(budget > 0 && HttpHandler.GlobalRewriteReserved + bytes > budget) {
+            const now = Date.now();
+            if(now - HttpHandler.LastRewriteBypassWarnAt >= 10_000) {
+                HttpHandler.LastRewriteBypassWarnAt = now;
+                logger.warn(`HTTP body rewrite skipped for a response because the process-wide rewrite budget is in use`);
+            }
+            return false;
+        }
+        HttpHandler.GlobalRewriteReserved += bytes;
+        this._rewriteReservation = bytes;
+        return true;
+    }
+
+    private releaseRewrite(): void {
+        HttpHandler.GlobalRewriteReserved = Math.max(0, HttpHandler.GlobalRewriteReserved - this._rewriteReservation);
+        this._rewriteReservation = 0;
+    }
+
+    /** 재작성을 위해 예약된 바이트 합. */
+    public static get globalRewriteReservedBytes(): number {
+        return HttpHandler.GlobalRewriteReserved;
+    }
+
+    private static GlobalRewriteReserved = 0;
+    private static LastRewriteBypassWarnAt = 0;
+    private _rewriteReservation = 0;
+
     private release(): void {
+        this.releaseRewrite();
         this.clearHeaderDeadline();
         this._released = true;
         this.onOutputProgress = undefined;
@@ -586,6 +622,7 @@ class HttpHandler {
                     this._currentHttpHeader = null;
                     this._bodyBuffer = Buffer.alloc(0);
                     this._isReplaceHostInBody = false;
+                    this.releaseRewrite();
                     return;
                 }
                 throw error;
@@ -606,7 +643,9 @@ class HttpHandler {
             this._currentHttpHeader = null;
             this._bodyBuffer = Buffer.alloc(0);
             this._isReplaceHostInBody = false;
+            this.releaseRewrite();
         } catch (err) {
+            this.releaseRewrite();
             logger.error('Error replacing host in body', err);
             this._socketHandler.destroy();
         }
