@@ -1,0 +1,141 @@
+{
+  "requirement": "REQ-04",
+  "generatedAt": "2026-09-07T15:38:30.092Z",
+  "conditions": "^Windows^ x64^ workstation^ on^ Node^ 24.16.0;^ packaging^ and^ this^ lane^ Jest^ processes^ finished;^ other^ OS^ and^ user^ processes^ were^ not^ isolated;^ default^ CPU^ scheduling^ and^ frequency^ settings^",
+  "node": "v24.16.0",
+  "v8": "13.6.233.17-node.49",
+  "platform": "win32",
+  "arch": "x64",
+  "cpu": "AMD Ryzen 9 5950X 16-Core Processor            ",
+  "cpuCount": 32,
+  "loadAverage": null,
+  "execArgv": [],
+  "nodeOptions": "",
+  "coverage": false,
+  "iterations": 100000,
+  "warmup": 5000,
+  "samples": 12,
+  "order": [
+    "AB",
+    "BA",
+    "AB",
+    "BA",
+    "AB",
+    "BA",
+    "AB",
+    "BA",
+    "AB",
+    "BA",
+    "AB",
+    "BA"
+  ],
+  "thresholdPercent": 7,
+  "sensitivityMinimumPercent": 7,
+  "groups": {
+    "target": {
+      "earlySamplesNs": [
+        66565500,
+        69678300,
+        74578800,
+        177938800,
+        115209800,
+        74240500,
+        71838500,
+        79573800,
+        89811400,
+        129864900,
+        107166700,
+        99099900
+      ],
+      "lateSamplesNs": [
+        70340100,
+        84654300,
+        72658100,
+        98667700,
+        116087500,
+        104678500,
+        69869000,
+        106480800,
+        94731600,
+        88157000,
+        93227300,
+        126387100
+      ]
+    },
+    "noise": {
+      "earlySamplesNs": [
+        73076800,
+        66053600,
+        67909000,
+        142161900,
+        120268500,
+        90471400,
+        73382500,
+        78163300,
+        87779100,
+        112462100,
+        113404100,
+        133262400
+      ],
+      "lateSamplesNs": [
+        75163600,
+        77014400,
+        75797400,
+        235717100,
+        98289100,
+        80392400,
+        74962300,
+        108555100,
+        89780700,
+        105150300,
+        125047300,
+        193412200
+      ]
+    },
+    "sensitivity": {
+      "earlySamplesNs": [
+        950900,
+        910200,
+        929900,
+        2173700,
+        1634700,
+        1003100,
+        924300,
+        948400,
+        1692100,
+        1507600,
+        1420800,
+        900500
+      ],
+      "lateSamplesNs": [
+        14756900,
+        16276300,
+        15961900,
+        25005600,
+        16613900,
+        16018100,
+        17569900,
+        14054100,
+        17888700,
+        24560900,
+        21451500,
+        23634500
+      ]
+    }
+  },
+  "note": "Finite macro-bias experiment, not proof of constant-time behavior; host conditions are operator supplied.",
+  "cpuUsageBefore": {
+    "user": 62000,
+    "system": 46000
+  },
+  "cpuUsageAfter": {
+    "user": 4812000,
+    "system": 203000
+  },
+  "status": "fail",
+  "biasPercent": {
+    "target": 9.881787986628991,
+    "noise": 5.221093445093258,
+    "sensitivity": 94.28384205383836
+  }
+}

@@ -184,11 +184,13 @@ class SysMonitor {
             });
         });
 
+        // 일부 환경(컨테이너·제한된 /proc)에서는 os.cpus() 가 빈 배열이다(#164).
+        const cpus = os.cpus();
         let status : SysInfo = {
             cpuInfo: {
-                model: os.cpus()[0].model,
-                speed: os.cpus()[0].speed,
-                cores: os.cpus().length,
+                model: cpus[0]?.model ?? 'unknown',
+                speed: cpus[0]?.speed ?? 0,
+                cores: cpus.length,
             },
             ram: os.totalmem(),
             osInfo: {

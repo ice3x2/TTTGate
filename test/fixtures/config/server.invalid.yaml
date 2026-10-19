@@ -1,0 +1,11 @@
+key: hello-TTTGate
+adminPort: 9300
+adminBindHost: 127.0.0.1
+adminTls: true
+port: 9126
+tls: false
+keepAlive: 0
+tunnelingOptions:
+  - forwardPort: 99999
+    protocol: tcp
+    destinationAddress: ""

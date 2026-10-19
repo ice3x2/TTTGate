@@ -5,11 +5,12 @@ import {Buffer} from "buffer";
 import EndPointClientPool from "./EndPointClientPool";
 import {OpenOpt} from "../commons/CtrlPacket";
 import LoggerFactory from "../util/logger/LoggerFactory";
+import {TTTClientRuntimeRegistry} from "./TTTClientRuntime";
+import {redactSecrets} from "../util/SecretRedactor";
+
+type ClientOwner = {client: TunnelClient; pool: EndPointClientPool};
 
 const logger = LoggerFactory.getLogger('client', 'TTTClient');
-
-
-const RECONNECT_INTERVAL : number = 5000;
 
 
 class TTTClient {
@@ -18,6 +19,10 @@ class TTTClient {
     private _tunnelClient: TunnelClient;
     private _tryConnectState : boolean = false;
     private _isOnline : boolean = false;
+    private _stopped : boolean = false;
+    private _reconnectTimer : NodeJS.Timeout | undefined;
+    private _owner: ClientOwner | undefined;
+    private _cancelReconnect: (() => void) | undefined;
 
     private constructor(clientOption: ClientOption) {
         this._clientOption = clientOption;
@@ -28,41 +33,96 @@ class TTTClient {
         return new TTTClient(clientOption);
     }
 
+    private isCurrentOwner(owner: ClientOwner): boolean {
+        return !this._stopped && this._owner === owner;
+    }
+
+    private retireOwner(): void {
+        const owner = this._owner;
+        this._owner = undefined;
+        owner?.pool.dispose();
+        owner?.client.destroy();
+    }
+
+    private cancelReconnect(): void {
+        const cancel = this._cancelReconnect;
+        this._cancelReconnect = undefined;
+        this._reconnectTimer = undefined;
+        cancel?.();
+    }
+
     public start() {
-        this._endPointClientPool = new EndPointClientPool();
-        this._tunnelClient = TunnelClient.create(this._clientOption);
-        this._tunnelClient.onCtrlStateCallback = this.onCtrlStateCallback;
-        this._tunnelClient.onConnectEndPointCallback = this.onSessionOpenCallback;
-        this._tunnelClient.onReceiveDataCallback = this.onSessionSendCallback;
-        this._tunnelClient.onEndPointCloseCallback = this.onSessionCloseCallback;
-        this._endPointClientPool.onEndPointClientStateChangeCallback = this.onEndPointClientStateChangeCallback;
-        this._endPointClientPool.onEndPointTerminateCallback = this.onEndPointTerminateCallback;
-        logger.info(` try connect to ${this._clientOption.host}:${this._clientOption.port}`);
-        logger.info(` option: ${JSON.stringify(this._clientOption)}`)
+        this.cancelReconnect();
+        this.retireOwner();
+        const owner: ClientOwner = {pool: new EndPointClientPool(), client: TunnelClient.create(this._clientOption)};
+        this._owner = owner;
+        this._endPointClientPool = owner.pool;
+        this._tunnelClient = owner.client;
+        owner.client.onCtrlStateCallback = (client, state, error) => {
+            if(this.isCurrentOwner(owner) && client === owner.client) this.onCtrlStateCallback(client, state, error);
+        };
+        owner.client.onConnectEndPointCallback = (id, opt) => {
+            if(this.isCurrentOwner(owner)) this.onSessionOpenCallback(id, opt);
+        };
+        owner.client.onReceiveDataCallback = (id, data) => {
+            if(this.isCurrentOwner(owner)) this.onSessionSendCallback(id, data);
+        };
+        owner.client.onEndPointCloseCallback = (id, length) => {
+            if(this.isCurrentOwner(owner)) this.onSessionCloseCallback(id, length);
+        };
+        owner.pool.onEndPointClientStateChangeCallback = (id, state, bundle) => {
+            if(this.isCurrentOwner(owner)) this.onEndPointClientStateChangeCallback(id, state, bundle);
+        };
+        owner.pool.onEndPointTerminateCallback = (id, mode) => {
+            if(this.isCurrentOwner(owner)) this.onEndPointTerminateCallback(id, mode);
+        };
+        this._stopped = false;
+        this._isOnline = false;
         this._tryConnectState = true;
-        this._tunnelClient.connect();
+        logger.info(` try connect to ${this._clientOption.host}:${this._clientOption.port}`);
+        logger.info(` option: ${JSON.stringify(redactSecrets(this._clientOption))}`);
+        owner.client.connect();
     }
 
     private onCtrlStateCallback = (client: TunnelClient, state: ConnectionState, error? : Error ) : void => {
+        if(!this._owner || !this.isCurrentOwner(this._owner) || client !== this._owner.client) return;
         if(state == 'closed') {
+            if(this._stopped) {
+                return;
+            }
             if(!this._isOnline && !this._tryConnectState) {
                 return;
             }
             this._tryConnectState = false;
             this._isOnline = false;
             logger.error(`Connection closed.`, error);
-            this._endPointClientPool.closeAll();
-            logger.info(`Try reconnect after ${RECONNECT_INTERVAL}ms`)
-            setTimeout(() => {
+            this.retireOwner();
+            const runtime = TTTClientRuntimeRegistry.current();
+            const reconnectInterval = runtime.reconnectIntervalMs;
+            logger.info(`Try reconnect after ${reconnectInterval}ms`)
+            const timer = runtime.scheduler.setTimeout(() => {
+                if(this._stopped || this._reconnectTimer !== timer) return;
+                this._reconnectTimer = undefined;
+                this._cancelReconnect = undefined;
                 this.start();
                 logger.info(`Try reconnect to ${this._clientOption.host}:${this._clientOption.port}`);
-                logger.info(`Option: ${JSON.stringify(this._clientOption)}`);
-            },RECONNECT_INTERVAL);
+                logger.info(`Option: ${JSON.stringify(redactSecrets(this._clientOption))}`);
+            }, reconnectInterval);
+            this._reconnectTimer = timer;
+            this._cancelReconnect = () => runtime.scheduler.clearTimeout(timer);
         } else if(state == 'connected') {
             logger.info(` connection established.`);
             this._isOnline = true;
             this._tryConnectState = false;
         }
+    }
+
+    public stop(): void {
+        this._stopped = true;
+        this._tryConnectState = false;
+        this._isOnline = false;
+        this.cancelReconnect();
+        this.retireOwner();
     }
 
     private onSessionOpenCallback = (id: number, opt: OpenOpt) : void => {
@@ -78,10 +138,15 @@ class TTTClient {
 
     private onSessionSendCallback = (id: number, data: Buffer) : void => {
         this._endPointClientPool.send(id, data);
+        // #130: 업로드 방향의 배압. 목적지가 느리면 그 세션의 터널 데이터 소켓 읽기를 멈추고, 풀리면 다시 읽는다(#129 와 대칭).
+        if(this._endPointClientPool.isSessionBackpressured(id)) {
+            this._tunnelClient.pauseSessionSource(id);
+            this._endPointClientPool.addSessionPressureReliefListener(id, () => this._tunnelClient.resumeSessionSource(id));
+        }
     }
 
-    private onEndPointTerminateCallback = (sessionID: number) : void => {
-        this._tunnelClient.terminateEndPointSession(sessionID);
+    private onEndPointTerminateCallback = (sessionID: number, mode?: 'graceful' | 'abort') : void => {
+        this._tunnelClient.terminateEndPointSession(sessionID, mode);
     }
 
 
@@ -89,9 +154,25 @@ class TTTClient {
         if(state == SocketState.Connected) {
             this._tunnelClient.syncEndpointSession(sessionID);
         } else if(state == SocketState.End || /*state == SocketState.Error ||*/ state == SocketState.Closed) {
-            this._tunnelClient.closeEndPointSession(sessionID, bundle!.receiveLength);
+            if (!bundle) {
+                logger.error(`onEndPointClientStateChangeCallback - bundle is undefined for sessionID: ${sessionID}, state: ${state}`);
+                this._tunnelClient.closeEndPointSession(sessionID, 0);
+            } else {
+                this._tunnelClient.closeEndPointSession(sessionID, bundle.receiveLength);
+            }
         } else if(state == SocketState.Receive) {
-            this._tunnelClient.sendData(sessionID,bundle?.data!);
+            if (!bundle || !bundle.data) {
+                logger.error(`onEndPointClientStateChangeCallback - bundle or data is undefined for sessionID: ${sessionID}, state: ${state}`);
+                return;
+            }
+            this._tunnelClient.sendData(sessionID, bundle.data);
+            // 이슈 #129 대응 누락분: 터널 데이터 소켓이 배압 상태가 되면 목적지 소켓 읽기를 멈춰
+            // EndPointClientPool이 무제한으로 데이터를 밀어넣다 파일 캐시 한도 초과로 destroy()
+            // 되는 것을 막는다(서버 쪽 TTTServer.onSessionDataReceived와 대칭 구조).
+            if(this._tunnelClient.isSessionBackpressured(sessionID)) {
+                this._endPointClientPool.pauseSessionRead(sessionID);
+                this._tunnelClient.addSessionPressureReliefListener(sessionID, () => this._endPointClientPool.resumeSessionRead(sessionID));
+            }
         }
     }
 

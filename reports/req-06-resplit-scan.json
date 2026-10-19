@@ -1,0 +1,50 @@
+{
+  "req_id": "REQ-06",
+  "title": "HTTP header CRLF/NUL injection + obs-fold 제거 + response splitting 재검사 증거",
+  "generated_at": "2026-04-21",
+  "source_test": "test/security/req-06-crlf-injection.test.ts",
+  "plan_task": "P4-T2",
+  "plan_file": "docs/plans/plan-remediation-r1.md",
+  "plan_rationale": "계획 문서는 req-06-header-injection.test.ts + req-10-response-splitting.test.ts 2개 파일을 상정했으나, 실제 구현은 REQ-06/REQ-10을 통합 검증하는 단일 파일 req-06-crlf-injection.test.ts로 귀결되었다. 까칠 리뷰어 원칙 '계획을 고쳐라'에 따라 계획 문서 P4-T2 테스트 파일 기록을 실제에 맞추어 정정한다.",
+  "test_execution": {
+    "command": "npx jest test/security/req-06-crlf-injection.test.ts",
+    "numTotalTests": 7,
+    "numPassedTests": 7,
+    "numFailedTests": 0,
+    "cases": [
+      "(a) 헤더 값 CR/LF 포함 → 400",
+      "(b) 헤더 name 비-token 문자 → 400",
+      "(c) path CR/LF/NUL → 400",
+      "(d) obs-fold (SP/HTAB 시작 continuation) → 400",
+      "(e) convertHttpHeaderToBuffer 재직렬화 시 \\r\\n 주입 → 예외 (response splitting 차단)",
+      "(f) 정상 헤더 재직렬화 결과의 CR/LF 위치 무결성"
+    ]
+  },
+  "obs_fold_removal_grep": {
+    "pattern": "continuation|fold|multi-line",
+    "source": "src/server/http/HttpPipe.ts",
+    "result": "obs-fold 허용 로직은 제거되었고, 남은 참조는 차단(throw)에 한정됨.",
+    "matches": [
+      {
+        "file": "src/server/http/HttpPipe.ts",
+        "line": 785,
+        "kind": "comment",
+        "text": "REQ-06: obs-fold (헤더 multi-line continuation, RFC 7230 §3.2.4 deprecated) 차단."
+      },
+      {
+        "file": "src/server/http/HttpPipe.ts",
+        "line": 788,
+        "kind": "throw",
+        "text": "throw new Error('400 Bad Request: obs-fold (multi-line header) not allowed (REQ-06)')"
+      }
+    ],
+    "accepts_obs_fold": false
+  },
+  "response_splitting_scan": {
+    "target_helper": "HttpUtil.convertHttpHeaderToBuffer",
+    "scan_strategy": "재직렬화 시 모든 header value/name에 대해 CR/LF/NUL 재검사 → 발견 시 throw.",
+    "injection_findings": 0
+  },
+  "severity_findings": [],
+  "summary": "REQ-06/REQ-10 통합 테스트 7건 모두 PASS. obs-fold 허용 로직 부재. 재직렬화 경로 CR/LF 인젝션 0건."
+}

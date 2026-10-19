@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# U1-10 / #92: 옛 빌드 부산물이 다시 추적되지 않게 한다
+src/main.js
+src/main.js.map

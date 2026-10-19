@@ -1,0 +1,188 @@
+name: Build Binaries and Create Draft Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.11b)'
+        required: true
+        type: string
+      release_title:
+        description: 'Release title'
+        required: false
+        type: string
+        default: ''
+      build_binaries:
+        description: 'Build platform binaries'
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+
+    strategy:
+      matrix:
+        node-version: [24.x]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+
+    - name: Validate release version
+      run: node scripts/validate-release-version.cjs "$RELEASE_VERSION"
+
+    - name: Install dependencies (root)
+      run: npm ci
+
+    - name: Install dependencies (admin)
+      run: |
+        cd admin
+        npm ci
+
+    - name: Build project
+      env:
+        BUILD_BINARIES: ${{ inputs.build_binaries }}
+      run: |
+        if [ "$BUILD_BINARIES" = "true" ]; then
+          npm run dist
+        else
+          npm run dist -- --skip-binaries
+        fi
+
+    - name: Create source distribution archive
+      run: node scripts/archive-source.cjs "$RELEASE_VERSION"
+
+    - name: Archive platform binaries
+      if: ${{ inputs.build_binaries }}
+      run: node scripts/archive-binaries.cjs "$RELEASE_VERSION"
+
+    - name: Generate release notes
+      id: release_notes
+      run: |
+        echo "## TTTGate $RELEASE_VERSION" > release_notes.md
+        echo "" >> release_notes.md
+
+        # Get the latest tag
+        git fetch --tags
+        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+        if [ -n "$LATEST_TAG" ]; then
+          echo "### 📋 Changes since $LATEST_TAG" >> release_notes.md
+          echo "" >> release_notes.md
+          git log $LATEST_TAG..HEAD --pretty=format:"- %s (%h)" >> release_notes.md
+        else
+          echo "### 🚀 Initial Release" >> release_notes.md
+          echo "" >> release_notes.md
+          git log --pretty=format:"- %s (%h)" -10 >> release_notes.md
+        fi
+
+        echo "" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "### 📦 Available Downloads" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "#### Source Distribution" >> release_notes.md
+        echo "- \`TTTGate-$RELEASE_VERSION-dist.tar.gz\` - Node.js source distribution (tar.gz)" >> release_notes.md
+        echo "- \`TTTGate-$RELEASE_VERSION-dist.zip\` - Node.js source distribution (zip)" >> release_notes.md
+
+        if [ "${{ inputs.build_binaries }}" = "true" ]; then
+          echo "" >> release_notes.md
+          echo "#### Platform Binaries" >> release_notes.md
+          echo "- \`TTTGate-$RELEASE_VERSION-linux-x64.tar.gz\` - Linux x64 binary" >> release_notes.md
+          echo "- \`TTTGate-$RELEASE_VERSION-linux-arm64.tar.gz\` - Linux ARM64 binary" >> release_notes.md
+          echo "- \`TTTGate-$RELEASE_VERSION-win-x64.zip\` - Windows x64 binary" >> release_notes.md
+          echo "- \`TTTGate-$RELEASE_VERSION-win-arm64.zip\` - Windows ARM64 binary" >> release_notes.md
+          echo "- \`TTTGate-$RELEASE_VERSION-alpine-x64.tar.gz\` - Alpine Linux x64 binary" >> release_notes.md
+        fi
+
+        echo "" >> release_notes.md
+        echo "### 🛠️ Build Information" >> release_notes.md
+        echo "- **Node Version:** ${{ matrix.node-version }}" >> release_notes.md
+        echo "- **Build Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> release_notes.md
+        echo "- **Commit:** \`${{ github.sha }}\`" >> release_notes.md
+        echo "- **Branch:** \`${{ github.ref_name }}\`" >> release_notes.md
+
+        echo "" >> release_notes.md
+        echo "### 📖 Installation & Usage" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "#### From Source Distribution" >> release_notes.md
+        echo '```bash' >> release_notes.md
+        echo "# Download and extract" >> release_notes.md
+        echo "tar -xzf TTTGate-$RELEASE_VERSION-dist.tar.gz" >> release_notes.md
+        echo "# OR" >> release_notes.md
+        echo "unzip TTTGate-$RELEASE_VERSION-dist.zip" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "# Run as server" >> release_notes.md
+        echo "npm install --omit=dev" >> release_notes.md
+        echo "node app.js server -adminPort 9300" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "# Run as client" >> release_notes.md
+        echo "node app.js client -addr <server_address>" >> release_notes.md
+        echo '```' >> release_notes.md
+
+        if [ "${{ inputs.build_binaries }}" = "true" ]; then
+          echo "" >> release_notes.md
+          echo "#### From Binary" >> release_notes.md
+          echo '```bash' >> release_notes.md
+          echo "# Linux/Alpine" >> release_notes.md
+          echo "tar -xzf TTTGate-$RELEASE_VERSION-linux-x64.tar.gz" >> release_notes.md
+          echo "./bin/TTTGate-linux-x64 server -adminPort 9300" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "# Windows" >> release_notes.md
+          echo "# Extract the zip file and run:" >> release_notes.md
+          echo "bin/TTTGate-win-x64.exe server -adminPort 9300" >> release_notes.md
+          echo '```' >> release_notes.md
+        fi
+
+        echo "" >> release_notes.md
+        echo "### 📌 Requirements" >> release_notes.md
+        echo "- Node.js 24+ (for source distribution)" >> release_notes.md
+        echo "- Supported platforms: Linux, Windows, Alpine Linux (x64/ARM64)" >> release_notes.md
+
+    - name: List build artifacts
+      run: |
+        echo "=== Build artifacts ==="
+        ls -la TTTGate-*.* 2>/dev/null || echo "No release files found"
+        echo ""
+        echo "=== Dist directory contents ==="
+        ls -la dist/ | head -20
+
+    - name: Select and validate release files
+      id: release_files
+      env:
+        BUILD_BINARIES: ${{ inputs.build_binaries }}
+      run: |
+        files=("TTTGate-$RELEASE_VERSION-dist.tar.gz" "TTTGate-$RELEASE_VERSION-dist.zip")
+        if [ "$BUILD_BINARIES" = "true" ]; then
+          files+=("TTTGate-$RELEASE_VERSION-linux-x64.tar.gz" "TTTGate-$RELEASE_VERSION-linux-arm64.tar.gz" "TTTGate-$RELEASE_VERSION-win-x64.zip" "TTTGate-$RELEASE_VERSION-win-arm64.zip" "TTTGate-$RELEASE_VERSION-alpine-x64.tar.gz")
+        fi
+        for file in "${files[@]}"; do
+          test -f "$file" && test -s "$file" || exit 1
+        done
+        {
+          echo 'files<<EOF'
+          printf '%s\n' "${files[@]}"
+          echo 'EOF'
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Create Draft Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ inputs.version }}
+        name: ${{ inputs.release_title || inputs.version }}
+        body_path: release_notes.md
+        draft: true
+        prerelease: false
+        fail_on_unmatched_files: true
+        files: ${{ steps.release_files.outputs.files }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

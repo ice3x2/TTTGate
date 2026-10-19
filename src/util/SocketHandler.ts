@@ -7,13 +7,12 @@ import Path from "path";
 import Dequeue from "./Dequeue";
 import Errors from "./Errors";
 import {FileCache} from "./FileCache";
+import {QueueLimiterRegistry} from "./QueueLimiter";
+import {computeWatermarkBytes, ResourcePolicyRegistry} from "./ResourcePolicy";
+import {TlsOptionsFactoryRegistry} from "./TlsOptionsFactory";
 
 import LoggerFactory  from "../util/logger/LoggerFactory";
-const logger = LoggerFactory.getLogger('', 'SocketHandler');
-
-
-const MIN_KEEP_ALIVE : number = 500;
-
+const logger = LoggerFactory.getLogger('socket', 'SocketHandler');
 interface OnSocketEvent {
     (handler: SocketHandler, state: SocketState, data?: any) : void;
 }
@@ -27,6 +26,7 @@ const EMPTY_BUFFER = Buffer.alloc(0);
 
 type WaitItem = {
     buffer: Buffer;
+    length: number;
     cacheID : FileCacheRecordID;
     onWriteComplete : OnWriteComplete | undefined;
 }
@@ -38,6 +38,7 @@ class SocketHandler {
 
     private static MaxGlobalMemoryBufferSize: number = 1024 * 1024 * 128; // 128MB
     private static GlobalMemoryBufferSize: number = 0;
+    private static GlobalFileCacheSize: number = 0;
 
     private static FileCacheDirPath : string = Path.join(process.cwd(),"cache");
 
@@ -63,12 +64,18 @@ class SocketHandler {
     private _endWaitingState = false;
 
     private _event: OnSocketEvent;
+    private _onOwnerTerminal?: (handler: SocketHandler) => void;
 
 
     private _memoryBufferSize: number = 0;
     private _memBufferSizeLimit: number = -1;
+    private _fileCacheBufferSize: number = 0;
+    private _waitQueueBytes: number = 0;
+    private _inFlightWriteCount: number = 0;
     private _isFullNativeBuffer : boolean = false;
     private _inRunWriteBuffer : boolean = false;
+    private _pressureReliefEventList : Array<(handler: SocketHandler) => void> = [];
+    private _timeoutHandler?: () => void;
 
 
     public get isServer() : boolean {
@@ -109,6 +116,10 @@ class SocketHandler {
         return SocketHandler.MaxGlobalMemoryBufferSize;
     }
 
+    public static get globalFileCacheSize(): number {
+        return SocketHandler.GlobalFileCacheSize;
+    }
+
     public static set GlobalMemCacheLimit(limit: number) {
         SocketHandler.MaxGlobalMemoryBufferSize = limit;
         logger.info(`set GlobalMemCacheLimit(${limit / 1024 / 1024}MiB)`);
@@ -118,17 +129,76 @@ class SocketHandler {
         this._memBufferSizeLimit = size;
     }
 
+    public get bufferSizeLimit(): number {
+        return this._memBufferSizeLimit;
+    }
+
+    public get pendingWriteBytes(): number {
+        return this._waitQueueBytes;
+    }
+
+    public get pendingFileCacheBytes(): number {
+        return this._fileCacheBufferSize;
+    }
+
+    public get isBackpressured(): boolean {
+        const limit = this.resolveBackpressureLimitBytes();
+        if(limit <= 0) {
+            return false;
+        }
+        return this._waitQueueBytes >= computeWatermarkBytes(limit).high;
+    }
+
+    public get isOutputDrained(): boolean {
+        return this._waitQueue.isEmpty() && this._waitQueueBytes <= 0 && this._inFlightWriteCount === 0 && this._fileCacheBufferSize <= 0;
+    }
+
     /**
      * 버퍼가 비워졌을 때 한 번만 호출되는 이벤트 리스너를 등록한다.
      * 만약 버퍼가 비어있는 상태라면 즉시 호출된다.
      * @param event
      */
     public addOnceDrainListener(event: OnDrainEvent) : void {
-        if(this._waitQueue.isEmpty() || this.isEnd()) {
+        if(this.isOutputDrained || this.isEnd()) {
             event(this, true);
             return;
         }
         this._drainEventList.push(event);
+    }
+
+    public addOncePressureReliefListener(event: (handler: SocketHandler) => void): void {
+        if(!this.isBackpressured || this.isEnd()) {
+            event(this);
+            return;
+        }
+        this._pressureReliefEventList.push(event);
+    }
+
+    /**
+     * 읽기를 멈춘 주체(사유). 출력 배압·하류 배압·대역폭 제한이 같은 소켓을 멈추므로, 모든 사유가 풀려야 다시 읽는다.
+     * 예전에는 한 주체의 resumeRead 가 다른 주체의 일시정지까지 풀어 대역폭 제한과 배압이 무력화됐다(#169).
+     */
+    private readonly _pauseReasons = new Set<string>();
+
+    public pauseRead(reason: string = 'external'): void {
+        if(this.isEnd()) {
+            return;
+        }
+        this._pauseReasons.add(reason);
+        try {
+            this._socket.pause();
+        } catch {}
+    }
+
+    public resumeRead(reason: string = 'external'): void {
+        if(this.isEnd()) {
+            return;
+        }
+        this._pauseReasons.delete(reason);
+        if(this._pauseReasons.size > 0) return;
+        try {
+            this._socket.resume();
+        } catch {}
     }
 
     /**
@@ -139,17 +209,32 @@ class SocketHandler {
         if (this._socket && !this.isEnd()) {
             try {
                 this._socket.setTimeout(timeout);
-
-                // 타임아웃 이벤트가 이미 등록되어 있지 않으면 등록
-                if (!this._socket.listenerCount('timeout')) {
-                    this._socket.once('timeout', () => {
-                        logger.info(`Socket ${this._id} timed out after ${timeout}ms`);
-                        this.end_();
-                    });
+                if(this._timeoutHandler) {
+                    this._socket.off('timeout', this._timeoutHandler);
                 }
+                this._timeoutHandler = () => {
+                    logger.info(`Socket ${this._id} timed out after ${timeout}ms`);
+                    this.end_();
+                };
+                this._socket.on('timeout', this._timeoutHandler);
             } catch (e) {
                 logger.error(`Error setting socket timeout: ${e}`);
             }
+        }
+    }
+
+    public clearTimeout(): void {
+        if(!this._socket) {
+            return;
+        }
+        try {
+            this._socket.setTimeout(0);
+            if(this._timeoutHandler) {
+                this._socket.off('timeout', this._timeoutHandler);
+            }
+            this._timeoutHandler = undefined;
+        } catch (e) {
+            logger.error(`Error clearing socket timeout: ${e}`);
         }
     }
 
@@ -157,7 +242,11 @@ class SocketHandler {
     public static connect(options: ConnectOpt, event: OnSocketEvent) : SocketHandler {
         let handlerRef: Array<SocketHandler> = [];
         options.keepalive = options.keepalive ?? 60000;
+        let connectTimer: NodeJS.Timeout | undefined;
+        let established = false;
         let connected = () => {
+            established = true;
+            clearTimeout(connectTimer);
             if(handlerRef.length > 0 && handlerRef[0]._state == SocketState.None) {
                 handlerRef[0]._state = SocketState.Connected;
                 event(handlerRef[0], SocketState.Connected);
@@ -167,14 +256,25 @@ class SocketHandler {
         let socket : net.Socket;
         // noinspection PointlessBooleanExpressionJS
         if(options.tls && options.tls === true) {
-            let option = {port: options.port, host: options.host, allowHalfOpen: false ,keepAlive: options.keepalive > 0, keepAliveInitialDelay: Math.max(options.keepalive, MIN_KEEP_ALIVE) ,noDelay: true, rejectUnauthorized: false};
+            let option = TlsOptionsFactoryRegistry.current().createClientSocketOptions(options) as tls.ConnectionOptions;
             socket = tls.connect(option, connected);
         } else {
-            let option = {port: options.port, host: options.host, allowHalfOpen: false ,keepAlive: options.keepalive > 0, keepAliveInitialDelay: Math.max(options.keepalive, MIN_KEEP_ALIVE),noDelay: true, rejectUnauthorized: false};
+            let option = TlsOptionsFactoryRegistry.current().createClientSocketOptions(options) as net.NetConnectOpts;
             socket = net.connect(option, connected);
         }
         let handler = new SocketHandler(socket, options.port, options.host, options.tls ?? false, event);
         handlerRef.push(handler);
+        if(options.connectTimeout && options.connectTimeout > 0) {
+            // TLS 는 핸드셰이크가 끝나야 connected 가 불린다. 그 전에 기한이 지나면 연결 실패와 같은 경로로 닫는다.
+            // 타이머는 unref 이고, 연결이 끝난 뒤나 이미 닫힌 소켓에서는 아무 일도 하지 않는다(release() 가 리스너를 지워
+            // close 리스너로 해제되지 않을 수 있지만 해가 없다).
+            const limit = options.connectTimeout;
+            connectTimer = setTimeout(() => {
+                if(established) return;
+                socket.destroy(Object.assign(new Error(`connect timed out after ${limit}ms`), {code: 'ETIMEDOUT'}));
+            }, limit);
+            connectTimer.unref?.();
+        }
 
         if(options.timeout && options.timeout > 0) {
             handler.setTimeout(options.timeout);
@@ -184,12 +284,12 @@ class SocketHandler {
         return handler;
     }
 
-    public static bound(options: {socket: net.Socket, port: number, addr: string, tls: boolean, keepAlive: number }, event: OnSocketEvent) : SocketHandler {
+    public static bound(options: {socket: net.Socket, port: number, addr: string, tls: boolean, keepAlive: number }, event: OnSocketEvent, onOwnerTerminal?: (handler: SocketHandler) => void) : SocketHandler {
         options.socket.setNoDelay(true);
         if(options.keepAlive > 0) {
             options.socket.setKeepAlive(true, options.keepAlive);
         }
-        let handler = new SocketHandler(options.socket, options.port, options.addr, options.tls, event);
+        let handler = new SocketHandler(options.socket, options.port, options.addr, options.tls, event, onOwnerTerminal);
         handler._state = SocketState.Connected;
         handler._isServer = true;
 
@@ -200,13 +300,14 @@ class SocketHandler {
         return this._socket.localAddress ?? '';
     }
 
-    private constructor(socket: Socket, port: number, addr: string,  tls: boolean,event: OnSocketEvent) {
+    private constructor(socket: Socket, port: number, addr: string,  tls: boolean,event: OnSocketEvent, onOwnerTerminal?: (handler: SocketHandler) => void) {
         this._port = port;
         this._addr = addr;
         this._tls = tls;
         this._socket = socket;
 
         this._event = event;
+        this._onOwnerTerminal = onOwnerTerminal;
         this.initSocket(socket);
     }
 
@@ -242,8 +343,19 @@ class SocketHandler {
         return this._state == SocketState.Closed || this._state == SocketState.End; /* || this._state == SocketState.Error; */
     }
 
+    private notifyOwnerTerminal(): void {
+        const callback = this._onOwnerTerminal;
+        this._onOwnerTerminal = undefined;
+        callback?.(this);
+    }
+
     public isSecure() : boolean {
         return this._tls;
+    }
+
+    /** TLS 이고 상대가 낸 클라이언트 인증서가 서버의 ca 로 검증되었는지(mtls-strict, #159). */
+    public isClientCertificateVerified() : boolean {
+        return this._tls && (this._socket as unknown as {authorized?: boolean}).authorized === true;
     }
 
     public get state() : SocketState {
@@ -257,7 +369,10 @@ class SocketHandler {
 
     private initSocket(socket: net.Socket) : void {
         this._socket = socket;
-        socket.on('connect', ()=> {
+        // TLS 클라이언트 소켓은 TCP 'connect' 가 핸드셰이크보다 먼저 온다. 그때 Connected 를 내면 엔드포인트 세션이
+        // 핸드셰이크 전에 성공으로 알려지고, 핸드셰이크 실패·기한 초과가 FailOfOpenSession 이 되지 못한다(#179).
+        // 서버 쪽 TLS 소켓은 bound() 로 이미 Connected 라 이 이벤트를 쓰지 않는다.
+        socket.on(socket instanceof tls.TLSSocket ? 'secureConnect' : 'connect', ()=> {
             if(this._state != SocketState.Connected) {
                 this._state = SocketState.Connected;
                 this._event(this, SocketState.Connected);
@@ -277,10 +392,11 @@ class SocketHandler {
             }
         });
         socket.on('close', ()=> {
-            this.callAllDrainEvent(this._waitQueue.isEmpty())
+            this.callAllDrainEvent(this.isOutputDrained);
             if(this._state != SocketState.Closed /* && this._state != SocketState.Error*/) {
                 this._breakBufferFlush = !this._waitQueue.isEmpty();
                 this._state = SocketState.Closed;
+                this.notifyOwnerTerminal();
                 this._event(this, SocketState.Closed);
             }
             this.release();
@@ -299,9 +415,10 @@ class SocketHandler {
             if(!this.isEnd()) {
                 this._state = SocketState.End;
                 this._breakBufferFlush = !this._waitQueue.isEmpty();
+                this.notifyOwnerTerminal();
                 this._event(this, SocketState.End);
                 //23.10.19 수정
-                this._waitQueue.clear();
+                this.clearWaitQueue();
             }
 
         });
@@ -313,23 +430,28 @@ class SocketHandler {
             logger.error(Errors.toString(error));
         }
         this._breakBufferFlush = !this._waitQueue.isEmpty();
-        this.callAllDrainEvent(this._waitQueue.isEmpty())
+        this.callAllDrainEvent(this.isOutputDrained);
         if(this._state != SocketState.Closed) {
             this._state = SocketState.Closed;
+            this.notifyOwnerTerminal();
             this._event(this, SocketState.Closed, error);
         }
-        this.release();
+        this.release(error);
     }
 
-    private release() : void {
-        this.clearWaitQueue();
+    private release(error?: Error) : void {
+        this.clearWaitQueue(error);
+        this.clearTimeout();
         this._socket.removeAllListeners();
         this._state = SocketState.Closed;
         this._socket.destroy();
         this._event = ()=>{};
         this._bundle.clear();
         this._waitQueue.clear();
-        this._fileCache?.delete();
+        this._fileCache?.deleteSync();
+        this.resetFileCacheUsage();
+        this._waitQueueBytes = 0;
+        this._inFlightWriteCount = 0;
         this.resetBufferSize();
     }
 
@@ -338,6 +460,14 @@ class SocketHandler {
         this._memoryBufferSize = 0;
         if (SocketHandler.GlobalMemoryBufferSize < 0) {
             SocketHandler.GlobalMemoryBufferSize = 0;
+        }
+    }
+
+    private resetFileCacheUsage(): void {
+        SocketHandler.GlobalFileCacheSize -= this._fileCacheBufferSize;
+        this._fileCacheBufferSize = 0;
+        if(SocketHandler.GlobalFileCacheSize < 0) {
+            SocketHandler.GlobalFileCacheSize = 0;
         }
     }
 
@@ -359,7 +489,7 @@ class SocketHandler {
         if(this._endWaitingState || this.isEnd()) {
             return;
         }
-        if(!this._waitQueue.isEmpty()) {
+        if(!this.isOutputDrained) {
             this._endWaitingState = true;
             return;
         }
@@ -372,28 +502,33 @@ class SocketHandler {
         }
         this._socket.end();
         this._state = SocketState.End;
+        this.notifyOwnerTerminal();
         this._event?.(this, SocketState.End);
-        this._waitQueue.clear();
+        this.clearWaitQueue();
     }
 
 
     public destroy() : void {
-        if(this._fileCache) {
-            this._fileCache.delete();
-        }
         if(this._state == SocketState.Closed /*|| this._state == SocketState.Error*/) {
             return;
         }
-        this.callAllDrainEvent(this._waitQueue.isEmpty());
+        this.clearTimeout();
+        this.callAllDrainEvent(this.isOutputDrained);
         this._socket.removeAllListeners();
         this._socket.destroy();
 
 
         this._state = SocketState.Closed;
+        this.notifyOwnerTerminal();
         this._event(this, SocketState.Closed);
 
         this._event = ()=>{};
         this._bundle.clear();
+        this.clearWaitQueue();
+        this._fileCache?.deleteSync();
+        this.resetFileCacheUsage();
+        this._waitQueueBytes = 0;
+        this._inFlightWriteCount = 0;
         this.resetBufferSize();
     }
 
@@ -403,6 +538,9 @@ class SocketHandler {
     }
 
     private isOverMemoryBufferSize(size: number) : boolean {
+        if(this._memBufferSizeLimit < 0) {
+            return false;
+        }
         return (this._memoryBufferSize + size > this._memBufferSizeLimit);
     }
 
@@ -414,21 +552,45 @@ class SocketHandler {
             return;
         }
 
-        if(this._memBufferSizeLimit > 0 && ((this.isOverMemoryBufferSize(data.length) || SocketHandler.isOverGlobalMemoryBufferSize(data.length)))) {
+        if(data.length === 0) {
+            onWriteComplete?.(this, true);
+            return;
+        }
+
+        if(QueueLimiterRegistry.current().shouldSpillToFile({
+            incomingSize: data.length,
+            localBufferedBytes: this._memoryBufferSize,
+            localBufferedLimit: this._memBufferSizeLimit,
+            globalBufferedBytes: SocketHandler.GlobalMemoryBufferSize,
+            globalBufferedLimit: SocketHandler.MaxGlobalMemoryBufferSize
+        })) {
             if(!this._fileCache) {
                 this._fileCache = FileCache.create(SocketHandler.FileCacheDirPath);
             }
-
-            let record = this._fileCache.writeSync(data);
-            // todo : 파일 캐시 실패시 처리
-            /**if(record.id == -1) {
-                return false;
-            }*/
-
-            this._waitQueue.pushBack({buffer: EMPTY_BUFFER, cacheID: record.id, onWriteComplete: onWriteComplete});
+            if(!this.canWriteToFileCache(data.length)) {
+                logger.warn(`Socket ${this._id} exceeded file cache budget. Closing connection.`);
+                onWriteComplete?.(this, false, new Error("File cache quota exceeded"));
+                this.destroy();
+                return;
+            }
+            try {
+                let record = this._fileCache.writeSync(data);
+                if(record.id < 0) {
+                    throw new Error("File cache write failed");
+                }
+                this.appendFileCacheUsage(data.length);
+                this._waitQueueBytes += data.length;
+                this._waitQueue.pushBack({buffer: EMPTY_BUFFER, length: data.length, cacheID: record.id, onWriteComplete: onWriteComplete});
+            } catch (error) {
+                logger.error(`Failed to spill socket ${this._id} buffer to file cache`, error);
+                onWriteComplete?.(this, false, error as Error);
+                this.destroy();
+                return;
+            }
         } else  {
             this.appendUsageMemoryBufferSize(data.length);
-            this._waitQueue.pushBack({buffer: data, cacheID: -1, onWriteComplete: onWriteComplete});
+            this._waitQueueBytes += data.length;
+            this._waitQueue.pushBack({buffer: data, length: data.length, cacheID: -1, onWriteComplete: onWriteComplete});
         }
 
 
@@ -445,6 +607,15 @@ class SocketHandler {
         }
     }
 
+    private callPressureReliefEvent(): void {
+        while(this._pressureReliefEventList.length > 0) {
+            const event = this._pressureReliefEventList.shift();
+            if(event) {
+                event(this);
+            }
+        }
+    }
+
 
     private sendPopDataRecursive2(force: boolean = false) : void {
         if(this._inRunWriteBuffer && !force) {
@@ -453,96 +624,60 @@ class SocketHandler {
         this._inRunWriteBuffer = true;
         let waitItem = undefined;
         do {
-            waitItem = this.popBufferSync();
+            try {
+                waitItem = this.popBufferSync();
+            } catch (error) {
+                this._inRunWriteBuffer = false;
+                this.procError(error as Error);
+                return;
+            }
             if(!waitItem) {
                 this._inRunWriteBuffer = false;
                 // 종료 대기 상태고, 버퍼 큐가 비어있으면 소켓을 종료한다.
-                if(this._endWaitingState) {
+                if(this._endWaitingState && this._inFlightWriteCount === 0) {
                     this._socket.end();
                 }
-                this.callAllDrainEvent(true);
+                this.maybeNotifyDrainOrPressureRelief();
                 return;
             }
             if(this.isEnd()) {
-                waitItem.onWriteComplete?.(this, false);
+                this.failWaitItem(waitItem);
                 return;
             }
-            let length = waitItem.buffer.length;
-            let isFileCache = waitItem.cacheID != -1;
+            let length = waitItem.length;
             if(length == 0) {
                 this.procError(new Error(" sendPopDataRecursive() - buffer length is zero."));
                 return;
             }
             let onWriteComplete = waitItem.onWriteComplete;
+            const currentWaitItem = waitItem;
+            this._inFlightWriteCount++;
             this.writeBuffer(waitItem.buffer, (client, success, err) => {
-
+                this._inFlightWriteCount = Math.max(0, this._inFlightWriteCount - 1);
                 onWriteComplete?.(client, success, err);
                 if(!success) {
+                    this.completeWaitItem(currentWaitItem, currentWaitItem.cacheID == -1);
                     this._inRunWriteBuffer = false;
-                    this.callAllDrainEvent(this._waitQueue.isEmpty())
+                    this.maybeNotifyDrainOrPressureRelief();
                     return;
                 }
                 this._sendLength += length;
-                if(!isFileCache) {
-                    this.appendUsageMemoryBufferSize(-length);
-                }
+                this.completeWaitItem(currentWaitItem, currentWaitItem.cacheID == -1);
+                this.maybeNotifyDrainOrPressureRelief();
             });
         } while (waitItem && !this._isFullNativeBuffer)
     }
 
-    // noinspection JSUnusedLocalSymbols
-    private sendPopDataRecursive() : void {
-        if(this._inRunWriteBuffer) {
-            return;
-        }
-        this._inRunWriteBuffer = true;
 
-
-
-
-        let waitItem = this.popBufferSync();
-        if(!waitItem) {
-            this._inRunWriteBuffer = false;
-            // 종료 대기 상태고, 버퍼 큐가 비어있으면 소켓을 종료한다.
-            if(this._endWaitingState) {
-                this._socket.end();
-            }
-            this.callAllDrainEvent(true);
-            return;
-        }
-        if(this.isEnd()) {
-            waitItem.onWriteComplete?.(this, false);
-            return;
-        }
-        let length = waitItem.buffer.length;
-        let isFileCache = waitItem.cacheID != -1;
-        if(length == 0) {
-            this.procError(new Error(" sendPopDataRecursive() - buffer length is zero."));
-            return;
-        }
-        this.writeBuffer(waitItem.buffer, (client, success, err) => {
-            waitItem!.onWriteComplete?.(client, success, err);
-
-            if(!success) {
-                this.callAllDrainEvent(this._waitQueue.isEmpty())
-                return;
-            }
-            this._sendLength += length;
-            if(!isFileCache) {
-                this.appendUsageMemoryBufferSize(-length);
-            }
-        });
-    }
-
-
-    private clearWaitQueue() : void {
+    private clearWaitQueue(error?: Error) : void {
         let waitItem = this._waitQueue.popFront()
         while(waitItem) {
-            waitItem.onWriteComplete?.(this, false);
+            this.completeWaitItem(waitItem, waitItem.cacheID == -1);
+            waitItem.onWriteComplete?.(this, false, error);
             waitItem = this._waitQueue.popFront();
         }
         this._waitQueue.clear();
-        this.appendUsageMemoryBufferSize(-this._memoryBufferSize);
+        this.maybeNotifyDrainOrPressureRelief();
     }
 
     public isConnected() : boolean {
@@ -583,9 +718,6 @@ class SocketHandler {
 
 
     private appendUsageMemoryBufferSize(size: number) : void {
-        if(this._memBufferSizeLimit < 0) {
-            return;
-        }
         this._memoryBufferSize += size;
         if(this._memoryBufferSize < 0) {
             this._memoryBufferSize = 0;
@@ -599,21 +731,91 @@ class SocketHandler {
         }
     }
 
+    private appendFileCacheUsage(size: number): void {
+        this._fileCacheBufferSize += size;
+        if(this._fileCacheBufferSize < 0) {
+            this._fileCacheBufferSize = 0;
+        }
+        SocketHandler.GlobalFileCacheSize += size;
+        if(SocketHandler.GlobalFileCacheSize < 0) {
+            SocketHandler.GlobalFileCacheSize = 0;
+        }
+    }
+
 
 
     private popBufferSync() : WaitItem | undefined {
-        let waitItem = this._waitQueue.popFront();
+        // Failed cached reads stay queued for failure callbacks and drain accounting.
+        let waitItem = this._waitQueue.front();
         if(!waitItem) {
             return undefined;
         }
-        if(waitItem.cacheID != -1 && this._fileCache) {
+        if(waitItem.cacheID != -1) {
             let buffer = this._fileCache?.readSync(waitItem.cacheID);
-            this._fileCache?.remove(waitItem.cacheID);
-            waitItem.buffer = buffer ?? EMPTY_BUFFER;
-            return waitItem;
+            if(!buffer || buffer.length !== waitItem.length) {
+                throw new Error(`File cache read failed for record ${waitItem.cacheID}`);
+            }
+            this._fileCache!.remove(waitItem.cacheID);
+            this.appendFileCacheUsage(-waitItem.length);
+            waitItem.buffer = buffer;
         }
+        this._waitQueue.popFront();
         return waitItem;
     }
+
+    private completeWaitItem(waitItem: WaitItem, releaseMemoryBuffer: boolean): void {
+        this._waitQueueBytes -= waitItem.length;
+        if(this._waitQueueBytes < 0) {
+            this._waitQueueBytes = 0;
+        }
+        if(waitItem.cacheID != -1 && this._fileCache && waitItem.buffer === EMPTY_BUFFER) {
+            this._fileCache.remove(waitItem.cacheID);
+            this.appendFileCacheUsage(-waitItem.length);
+        }
+        if(releaseMemoryBuffer) {
+            this.appendUsageMemoryBufferSize(-waitItem.length);
+        }
+    }
+
+    private failWaitItem(waitItem: WaitItem): void {
+        this.completeWaitItem(waitItem, waitItem.cacheID == -1);
+        waitItem.onWriteComplete?.(this, false);
+    }
+
+    private maybeNotifyDrainOrPressureRelief(): void {
+        if(!this.isBackpressured) {
+            this.callPressureReliefEvent();
+        }
+        if(this.isOutputDrained) {
+            if(this._endWaitingState && !this.isEnd()) {
+                this._socket.end();
+            }
+            this.callAllDrainEvent(true);
+        }
+    }
+
+    private resolveBackpressureLimitBytes(): number {
+        if(this._memBufferSizeLimit <= 0) {
+            return -1;
+        }
+        return this._memBufferSizeLimit;
+    }
+
+    private effectiveFileCacheLimitBytes(): number {
+        const policy = ResourcePolicyRegistry.current();
+        if(this._memBufferSizeLimit > 0) {
+            return Math.max(policy.fileCachePerHandlerLimitBytes, this._memBufferSizeLimit * 4);
+        }
+        return policy.fileCachePerHandlerLimitBytes;
+    }
+
+    private canWriteToFileCache(size: number): boolean {
+        const policy = ResourcePolicyRegistry.current();
+        const nextLocal = this._fileCacheBufferSize + size;
+        const nextGlobal = SocketHandler.GlobalFileCacheSize + size;
+        return nextLocal <= this.effectiveFileCacheLimitBytes() && nextGlobal <= policy.fileCacheGlobalLimitBytes;
+    }
+
 
 
 

@@ -1,10 +1,14 @@
 import {SocketHandler} from "../util/SocketHandler";
 import {CtrlCmd, CtrlPacket, OpenOpt} from "../commons/CtrlPacket";
+import {createOpaqueToken} from "../commons/ProtocolV2";
 import Dequeue from "../util/Dequeue";
+import {computeWatermarkBytes, ResourcePolicyRegistry} from "../util/ResourcePolicy";
 import {DataHandlerState, TunnelControlHandler, TunnelDataHandler} from "../types/TunnelHandler";
 import {Buffer} from "buffer";
 import LoggerFactory  from "../util/logger/LoggerFactory";
 import {SysInfo} from "../commons/SysMonitor";
+import {timingSafeStringEqual} from "../util/timingSafeStringEqual";
+import {TunnelHandshakePolicyRegistry} from "./TunnelHandshakePolicy";
 const logger = LoggerFactory.getLogger('server', 'ClientHandlerPool');
 
 
@@ -17,22 +21,40 @@ interface OnDataReceiveCallback {
     (sessionID: number,data: Buffer) : void;
 }
 
+type WaitingQueueState = {
+    send: Dequeue<Buffer>;
+    receive: Dequeue<Buffer>;
+    sendBytes: number;
+    receiveBytes: number;
+    limitBytes: number;
+}
+
+
+type PendingSessionState = {handlerID: number, sessionID: number, openOpt: OpenOpt, available: boolean, bindingToken?: string, openTimer?: NodeJS.Timeout};
 
 class ClientHandlerPool {
 
     private static LAST_DATA_HANDLER_ID : number = 10000;
+    private _legacyHandlerCursor: number = 10000;
     private readonly _createTime : number = Date.now();
     private readonly _remoteAddress : string = '';
     private readonly _id : number;
     private readonly _controlHandler: TunnelControlHandler;
     private _name : string = '';
+    private _clientId : string = '';
+    private _protocolVersion: number = 1;
+    private _capabilities: Array<string> = [];
+    private _legacyMode: boolean = true;
 
     // 열린 핸들러 맵. 세션ID를 키로 사용한다.
     private _activatedSessionHandlerMap_ : Map<number, TunnelDataHandler> = new Map<number, TunnelDataHandler>();
-    private _waitingDataBufferQueueMap : Map<number,{send: Dequeue<Buffer>, receive: Dequeue<Buffer>}> = new Map<number, {send: Dequeue<Buffer>, receive: Dequeue<Buffer>}>();
+    private _waitingDataBufferQueueMap : Map<number, WaitingQueueState> = new Map<number, WaitingQueueState>();
+    private _waitingReliefListeners: Map<number, Array<() => void>> = new Map();
     private _bufferSize : number = 0;
-    private _pendingSessionIDMap : Map<number, {handlerID: number, sessionID: number, openOpt: OpenOpt, available: boolean }> = new Map<number, {handlerID: number, sessionID: number, openOpt: OpenOpt,available: boolean }>();
+    private _pendingSessionIDMap : Map<number, PendingSessionState> = new Map<number, PendingSessionState>();
     private _onSessionCloseCallback? : OnSessionCloseCallback;
+    private _isSessionOwned? : (sessionID: number) => boolean;
+    private _foreignCloseCount = 0;
     private _onDataReceiveCallback? : OnDataReceiveCallback;
 
     private _sysInfo: SysInfo =  {
@@ -67,6 +89,16 @@ class ClientHandlerPool {
 
 
 
+    /**
+     * 이 pool 의 클라이언트에게 배정된 세션인지 묻는다. TunnelServer 가 세션→제어 연결 매핑으로 판정해 넣는다.
+     * 세션 ID 는 서버 전체에서 순차로 매기므로, 확인하지 않으면 한 클라이언트가 남의 세션을 닫을 수 있다(#158).
+     * pool 의 맵이 아니라 서버 매핑으로 묻는 이유: 데이터 소켓이 먼저 끊기면 맵은 이미 비지만, 뒤이어 오는
+     * 소유자의 CloseSession·FailOfOpenSession 이 외부 연결을 닫아야 한다.
+     */
+    public set isSessionOwned(predicate: (sessionID: number) => boolean) {
+        this._isSessionOwned = predicate;
+    }
+
     public set onSessionCloseCallback(callback: OnSessionCloseCallback) {
         this._onSessionCloseCallback = callback;
     }
@@ -99,15 +131,36 @@ class ClientHandlerPool {
      * @private
      */
     private closeSessionAndCallback(sessionID: number, endLength: number) : void {
+        if(this._isSessionOwned && !this._isSessionOwned(sessionID)) {
+            // 인증된 클라이언트가 패킷마다 로그를 남기게 하지 않도록 처음과 100번째마다만 남긴다.
+            if(this._foreignCloseCount++ % 100 === 0) {
+                logger.warn(`Ignored a session close for a session this client does not own: sessionID=${sessionID} (count=${this._foreignCloseCount})`);
+            }
+            return;
+        }
         this._onSessionCloseCallback?.(sessionID,endLength);
     }
 
     public putNewDataHandler(dataHandler: TunnelDataHandler) : void {
-        let pendingDataState = Array.from(this._pendingSessionIDMap.values()).find((value) => {
-          return value.handlerID == dataHandler.handlerID;
-        });
-        if(!pendingDataState) {
+        let pendingDataState = this._pendingSessionIDMap.get(dataHandler.sessionID ?? -1);
+        if(!pendingDataState || pendingDataState.handlerID !== dataHandler.handlerID) {
             logger.error(`putNewDataHandler: invalid handlerID: ${dataHandler.handlerID}`);
+            // Terminal cleanup must not trust an unadmitted session claim.
+            dataHandler.sessionID = undefined;
+            dataHandler.endImmediate();
+            return;
+        }
+        // P7-T2 / REQ-21: bindingToken 은 인증 자격 증명(세션 바인딩 토큰)이므로 상수시간 비교.
+        if(pendingDataState.bindingToken && !timingSafeStringEqual(
+            pendingDataState.bindingToken,
+            dataHandler.bindingToken ?? "",
+            "utf8"
+        )) {
+            // 틀린 토큰을 보낸 연결만 닫는다. 열리던 정상 세션은 그대로 두어 진짜 데이터 연결을 기다린다(#160).
+            // 여기서 세션까지 실패시키면 추측한 ID 만으로 인증 없이 남의 세션을 끊을 수 있다.
+            // handlerID 는 순차값 그대로 둔다. v2 는 24바이트 바인딩 토큰이 보호하고, 토큰이 없는 legacy 는 명시적 opt-in 이다.
+            logger.error(`putNewDataHandler: binding token mismatch for sessionID: ${pendingDataState.sessionID}`);
+            dataHandler.sessionID = undefined;
             dataHandler.endImmediate();
             return;
         }
@@ -115,7 +168,13 @@ class ClientHandlerPool {
         this._activatedSessionHandlerMap_.set(pendingDataState.sessionID, dataHandler);
         dataHandler.dataHandlerState = DataHandlerState.ConnectingEndPoint;
         dataHandler.sessionID = pendingDataState.sessionID;
-        this.sendConnectEndPointPacket(dataHandler.handlerID!, dataHandler.sessionID, pendingDataState.openOpt);
+        if (!dataHandler.handlerID) {
+            logger.error(`putNewDataHandler: handlerID is undefined for sessionID: ${dataHandler.sessionID}`);
+            this._activatedSessionHandlerMap_.delete(pendingDataState.sessionID);
+            dataHandler.endImmediate();
+            return;
+        }
+        this.sendConnectEndPointPacket(dataHandler.handlerID, dataHandler.sessionID, pendingDataState.openOpt);
     }
 
     public isSessionOpened(sessionID: number) : boolean {
@@ -131,8 +190,8 @@ class ClientHandlerPool {
      * @private
      */
     private flushWaitBuffer(sessionID: number) : void {
-        let handler = this._activatedSessionHandlerMap_.get(sessionID)!;
-        if(handler == undefined || handler.dataHandlerState != DataHandlerState.OnlineSession) {
+        let handler = this._activatedSessionHandlerMap_.get(sessionID);
+        if(!handler || handler.dataHandlerState != DataHandlerState.OnlineSession) {
             logger.error(`flushWaitBuffer: invalid sessionID: ${sessionID}`);
             if(handler) {
                 handler.setBufferSizeLimit(-1);
@@ -147,19 +206,41 @@ class ClientHandlerPool {
         }
         let sendWaitPacketQueue = waitQueue.send;
         let receiveWaitPacketQueue = waitQueue.receive;
+
         let sendData = sendWaitPacketQueue.popFront();
         while(sendData != undefined) {
-            handler.sendData(sendData);
-            this._bufferSize -= sendData.length;
+            // 보내는 중 세션이 닫히면 burn 이 남은 대기열을 한꺼번에 뺀다. 먼저 빼 두어야 이 청크를 두 번 빼지 않는다(#183).
+            this.releaseQueueBytes(waitQueue, 'send', sendData.length);
+            try {
+                handler.sendData(sendData);
+            } catch (error) {
+                logger.error(`flushWaitBuffer: sendData failed for sessionID: ${sessionID}`, error);
+            }
+            if(this._waitingDataBufferQueueMap.get(sessionID) !== waitQueue) return;
             sendData = sendWaitPacketQueue.popFront();
         }
+
         let receiveData = receiveWaitPacketQueue.popFront();
         while(receiveData != undefined) {
-            this._onDataReceiveCallback?.(sessionID, receiveData);
-            this._bufferSize -= receiveData.length;
+            this.releaseQueueBytes(waitQueue, 'receive', receiveData.length);
+            try {
+                this._onDataReceiveCallback?.(sessionID, receiveData);
+            } catch (error) {
+                logger.error(`flushWaitBuffer: receive callback failed for sessionID: ${sessionID}`, error);
+            }
+            if(this._waitingDataBufferQueueMap.get(sessionID) !== waitQueue) return;
             receiveData = receiveWaitPacketQueue.popFront();
         }
         this._waitingDataBufferQueueMap.delete(sessionID);
+        this.releaseWaitingListeners(sessionID);
+    }
+
+    public pauseSessionRead(sessionID: number) : void {
+        this._activatedSessionHandlerMap_.get(sessionID)?.pauseRead('downstream');
+    }
+
+    public resumeSessionRead(sessionID: number) : void {
+        this._activatedSessionHandlerMap_.get(sessionID)?.resumeRead('downstream');
     }
 
     public pushReceiveBuffer(sessionID: number, data: Buffer) : boolean {
@@ -173,7 +254,9 @@ class ClientHandlerPool {
             logger.error(`pushReceiveBuffer: invalid sessionID: ${sessionID}`);
             return false;
         }
-        this._bufferSize += data.length;
+        if(!this.reserveQueueBytes(sessionID, queue, data.length, 'receive')) {
+            return false;
+        }
         queue.receive.pushBack(data);
         return true;
     }
@@ -196,6 +279,11 @@ class ClientHandlerPool {
         this._name = name;
     }
 
+    /** 인증된 제어 연결의 원격 주소. 같은 주소의 데이터 연결을 주소별 미인증 상한에서 빼는 데 쓴다(#181). */
+    public get controlRemoteAddress() : string | undefined {
+        return this._controlHandler.socket?.remoteAddress;
+    }
+
     public get id() : number {
         return this._id;
     }
@@ -204,18 +292,71 @@ class ClientHandlerPool {
         return this._name;
     }
 
+    public get clientId(): string {
+        return this._clientId;
+    }
+
+    public get protocolVersion(): number {
+        return this._protocolVersion;
+    }
+
+    public get capabilities(): Array<string> {
+        return [...this._capabilities];
+    }
+
+    public get legacyMode(): boolean {
+        return this._legacyMode;
+    }
+
     public getAllSessionIDs() : Array<number> {
         return [... Array.from(this._pendingSessionIDMap.keys()), ... Array.from(this._activatedSessionHandlerMap_.keys())];
+    }
+
+    public setAuthenticatedIdentity(identity: {clientId: string, displayName: string, protocolVersion: number, capabilities: Array<string>, legacy: boolean}): void {
+        this._clientId = identity.clientId;
+        this._name = identity.displayName;
+        this._protocolVersion = identity.protocolVersion;
+        this._capabilities = [...identity.capabilities];
+        this._legacyMode = identity.legacy;
+    }
+
+    private allocateLegacyHandlerID(): number | undefined {
+        const used = new Set(Array.from(this._pendingSessionIDMap.values(), pending => pending.handlerID));
+        for(const handler of this._activatedSessionHandlerMap_.values()) {
+            if(handler.handlerID !== undefined) used.add(handler.handlerID);
+        }
+        for(let scanned = 0; scanned < 65535; scanned++) {
+            this._legacyHandlerCursor = this._legacyHandlerCursor % 65535 + 1;
+            if(!used.has(this._legacyHandlerCursor)) return this._legacyHandlerCursor;
+        }
+        return undefined;
     }
 
     public sendConnectEndPoint(sessionID: number, opt : OpenOpt) : void {
         if(this._waitingDataBufferQueueMap.has(sessionID)) {
             return;
         }
-        this._waitingDataBufferQueueMap.set(sessionID,{send: new Dequeue<Buffer>(), receive: new Dequeue<Buffer>()});
-        let pendingSessionState = {handlerID: 0, sessionID: sessionID, openOpt: opt, available: true};
+        const handlerID = this._legacyMode ? this.allocateLegacyHandlerID() : ++ClientHandlerPool.LAST_DATA_HANDLER_ID;
+        if(handlerID === undefined) {
+            logger.warn(`No legacy data handler ID available for sessionID: ${sessionID}`);
+            this.closeSessionAndCallback(sessionID, 0);
+            return;
+        }
+        this._waitingDataBufferQueueMap.set(sessionID,{
+            send: new Dequeue<Buffer>(),
+            receive: new Dequeue<Buffer>(),
+            sendBytes: 0,
+            receiveBytes: 0,
+            limitBytes: opt.bufferLimit
+        });
+        let pendingSessionState: PendingSessionState = {handlerID, sessionID: sessionID, openOpt: opt, available: true, bindingToken: undefined};
         this._pendingSessionIDMap.set(sessionID,pendingSessionState);
-        pendingSessionState.handlerID = ++ClientHandlerPool.LAST_DATA_HANDLER_ID;
+        pendingSessionState.openTimer = setTimeout(() => this.expirePendingSession(sessionID, pendingSessionState),
+            TunnelHandshakePolicyRegistry.current().pendingSessionOpenTimeoutMs);
+        pendingSessionState.openTimer.unref?.();
+        if(!this._legacyMode) {
+            pendingSessionState.bindingToken = createOpaqueToken(24);
+        }
         this.sendNewDataHandler(pendingSessionState.handlerID, sessionID);
     }
 
@@ -227,13 +368,23 @@ class ClientHandlerPool {
     public delegateReceivePacketOfControlHandler(handler: TunnelControlHandler, packet: CtrlPacket) : void {
         logger.info(`Received a packet from the control handler. cmd: ${CtrlCmd[packet.cmd]} sessionID: ${packet.sessionID}`)
         if(packet.cmd == CtrlCmd.Message) {
-            let message = CtrlPacket.getMessageFromPacket(packet);
+            const metadata = packet.messageMetaResult;
+            if(metadata.kind !== 'valid') {
+                logger.warn(`Invalid Message metadata for session ${packet.sessionID}`);
+                return;
+            }
+            const message = metadata.value;
             if(message.type == 'sysinfo') {
                 this._sysInfo = message.payload as SysInfo;
             }
         }
         else if(packet.cmd == CtrlCmd.SuccessOfOpenSession || packet.cmd == CtrlCmd.FailOfOpenSession) {
-            let handlerID = packet.ID;
+            const metadata = packet.handlerWideIdMetaResult;
+            if(metadata.kind === 'invalid') {
+                logger.warn(`Invalid ${CtrlCmd[packet.cmd]} metadata for session ${packet.sessionID}: ${metadata.reason}`);
+                return;
+            }
+            const handlerID = (metadata.kind === 'valid' ? metadata.value.handlerID : undefined) ?? packet.ID;
             let sessionID = packet.sessionID;
             logger.info(`Attempt to connect data handler: sessionID${packet.sessionID}  ${packet.cmd == CtrlCmd.SuccessOfOpenSession ? '<Success>' : '<Fail>'}`);
             let connected = packet.cmd == CtrlCmd.SuccessOfOpenSession;
@@ -248,11 +399,17 @@ class ClientHandlerPool {
                 this.sendSuccessOpenSessionAck(sessionID);
                 this.flushWaitBuffer(sessionID);
             }
-            this._pendingSessionIDMap.delete(sessionID);
+            this.deletePendingSession(sessionID);
         } else if(packet.cmd == CtrlCmd.CloseSession) {
+            const count = packet.readCloseSessionCount(!this._legacyMode && this._capabilities.includes('close-count-safe'));
+            if(count.kind === 'invalid') {
+                logger.error(`E_CLOSE_COUNT_INVALID direction=server sessionID=${packet.sessionID} handlerID=${packet.ID}`);
+                this._controlHandler.destroy();
+                return;
+            }
             let handlerID = packet.ID;
             let sessionID = packet.sessionID;
-            let endLength = packet.waitReceiveLength;
+            let endLength = count.value.count;
 
             this.releaseSession_(handlerID,sessionID,endLength);
         }
@@ -262,16 +419,15 @@ class ClientHandlerPool {
         let queue = this._waitingDataBufferQueueMap.get(sessionID);
         if(queue) {
             this._waitingDataBufferQueueMap.delete(sessionID);
-            let data = queue.receive.popFront();
-            while(data != undefined) {
-                this._bufferSize -= data.length;
-                data = queue.receive.popFront();
-            }
-            data = queue.send.popFront();
-            while(data != undefined) {
-                this._bufferSize -= data.length;
-                data = queue.send.popFront();
-            }
+            this.releaseWaitingListeners(sessionID);
+            const burned = Math.min(this._bufferSize, queue.sendBytes + queue.receiveBytes);
+            ClientHandlerPool.GlobalWaitingBytes = Math.max(0, ClientHandlerPool.GlobalWaitingBytes - burned);
+            this._bufferSize -= queue.sendBytes + queue.receiveBytes;
+            this._bufferSize = Math.max(0, this._bufferSize);
+            queue.send.clear();
+            queue.receive.clear();
+            queue.sendBytes = 0;
+            queue.receiveBytes = 0;
         }
     }
 
@@ -292,14 +448,16 @@ class ClientHandlerPool {
             connected = false;
         }
         if(connected) {
-            if(pendingState) {
-                dataHandler!.setBufferSizeLimit(pendingState.openOpt.bufferLimit);
+            if(pendingState && dataHandler) {
+                dataHandler.setBufferSizeLimit(pendingState.openOpt.bufferLimit);
             }
-            dataHandler!.dataHandlerState = DataHandlerState.OnlineSession;
+            if (dataHandler) {
+                dataHandler.dataHandlerState = DataHandlerState.OnlineSession;
+            }
             return true;
         } else {
             this._activatedSessionHandlerMap_.delete(sessionID);
-            this._pendingSessionIDMap.delete(sessionID);
+            this.deletePendingSession(sessionID);
             this.burnWaitBuffer(sessionID);
             this.sendCloseSession(sessionID, 0);
             this.closeSessionAndCallback(sessionID, 0);
@@ -317,10 +475,52 @@ class ClientHandlerPool {
      * @param sessionID
      * @param data
      */
+    /**
+     * 세션이 열리는 중이면 대기 큐가 상단 워터마크에 닿았는지, 열렸으면 데이터 소켓이 배압 상태인지(#163).
+     * 세션이 열리기 전에 들어온 업로드가 대기 큐 한도를 넘으면 세션이 닫히므로 이때도 외부 소켓을 멈춰야 한다.
+     */
+    public isSessionBackpressured(sessionID: number) : boolean {
+        const waiting = this._waitingDataBufferQueueMap.get(sessionID);
+        if(waiting) {
+            if(waiting.limitBytes > 0 && waiting.sendBytes >= computeWatermarkBytes(waiting.limitBytes).high) return true;
+            // 이 풀(클라이언트)의 대기열이나 전체 대기열이 예산의 상단에 이르면 원천 읽기를 멈춘다. 상한에 닿아 세션을
+            // 닫기 전에 멈추게 한다(#183).
+            const policy = ResourcePolicyRegistry.current();
+            if(policy.defaultPoolQueueLimitBytes > 0 && this._bufferSize >= computeWatermarkBytes(policy.defaultPoolQueueLimitBytes).high) return true;
+            return policy.globalPoolQueueLimitBytes > 0 && ClientHandlerPool.GlobalWaitingBytes >= computeWatermarkBytes(policy.globalPoolQueueLimitBytes).high;
+        }
+        return this._activatedSessionHandlerMap_.get(sessionID)?.isBackpressured ?? false;
+    }
+
+    public addSessionPressureReliefListener(sessionID: number, listener: () => void) : void {
+        if(this._waitingDataBufferQueueMap.has(sessionID)) {
+            const listeners = this._waitingReliefListeners.get(sessionID) ?? [];
+            listeners.push(listener);
+            this._waitingReliefListeners.set(sessionID, listeners);
+            return;
+        }
+        this._activatedSessionHandlerMap_.get(sessionID)?.addOncePressureReliefListener(() => listener());
+    }
+
+    /** 대기 큐가 비워졌거나(세션 열림) 버려졌을 때(세션 실패) 멈춰 둔 외부 소켓을 다시 읽게 한다. */
+    private releaseWaitingListeners(sessionID: number) : void {
+        const listeners = this._waitingReliefListeners.get(sessionID);
+        if(!listeners) return;
+        this._waitingReliefListeners.delete(sessionID);
+        listeners.forEach((listener) => listener());
+    }
+
     public sendBuffer(sessionID: number, data: Buffer) : boolean  {
         if(this._waitingDataBufferQueueMap.has(sessionID)) {
-            this._waitingDataBufferQueueMap.get(sessionID)!.send.pushBack(data);
-            this._bufferSize += data.length;
+            let waitingQueue = this._waitingDataBufferQueueMap.get(sessionID);
+            if (!waitingQueue) {
+                logger.error(`sendBuffer: no waiting queue for sessionID: ${sessionID}`);
+                return false;
+            }
+            if(!this.reserveQueueBytes(sessionID, waitingQueue, data.length, 'send')) {
+                return false;
+            }
+            waitingQueue.send.pushBack(data);
         }
         else {
             let handler = this._activatedSessionHandlerMap_.get(sessionID);
@@ -343,9 +543,9 @@ class ClientHandlerPool {
                 handlerID = pendingState.handlerID;
             }
         } else {
-            handlerID = handler.handlerID!;
+            handlerID = handler.handlerID ?? 0;
         }
-        this._controlHandler.sendData(CtrlPacket.resultOfOpenSessionAck(handlerID, sessionID).toBuffer());
+        this._controlHandler.sendData(CtrlPacket.resultOfOpenSessionAck(handlerID, sessionID, {handlerID}).toBuffer());
     }
 
 
@@ -355,7 +555,15 @@ class ClientHandlerPool {
      * @param waitForLength
      */
     public sendCloseSession(sessionID: number, waitForLength : number) : void {
-        let handler = this._activatedSessionHandlerMap_.get(sessionID);
+        const handler = this._activatedSessionHandlerMap_.get(sessionID);
+        const allowLargeCount = !this._legacyMode && this._capabilities.includes('close-count-safe');
+        if(!Number.isSafeInteger(waitForLength) || waitForLength < 0 || (waitForLength > 0xffffffff && !allowLargeCount)) {
+            const category = !Number.isSafeInteger(waitForLength) || waitForLength < 0 ? 'E_CLOSE_COUNT_INVALID' : 'E_CLOSE_COUNT_UNSUPPORTED';
+            const handlerID = handler?.handlerID ?? this._pendingSessionIDMap.get(sessionID)?.handlerID ?? 0;
+            logger.error(`${category} direction=server sessionID=${sessionID} handlerID=${handlerID} count=${waitForLength} negotiated=${allowLargeCount}`);
+            this._controlHandler.destroy();
+            return;
+        }
         if(handler == undefined) {
             let pendingState = this._pendingSessionIDMap.get(sessionID);
             if(pendingState) {
@@ -368,7 +576,8 @@ class ClientHandlerPool {
 
         logger.info(`Sends a session close request - sessionID: ${sessionID}`);
         // noinspection JSUnusedLocalSymbols
-        this._controlHandler.sendData(CtrlPacket.closeSession(handler == undefined ? 0 : handler!.handlerID ?? 0, sessionID, waitForLength).toBuffer(), (socketHandler, success, err) => {
+        const fullHandlerID = handler == undefined ? 0 : (handler.handlerID ?? 0);
+        this._controlHandler.sendData(CtrlPacket.closeSession(fullHandlerID, sessionID, waitForLength, {handlerID: fullHandlerID}, allowLargeCount).toBuffer(), (socketHandler, success, err) => {
             if(!success) {
                 return;
             }
@@ -406,7 +615,11 @@ class ClientHandlerPool {
      * @private
      */
     private sendNewDataHandler(dataHandlerID: number, sessionId: number) : void {
-        let packet = CtrlPacket.newDataHandler(dataHandlerID, sessionId).toBuffer();
+        const pendingState = this._pendingSessionIDMap.get(sessionId);
+        let packet = CtrlPacket.newDataHandler(dataHandlerID, sessionId, {
+            handlerID: dataHandlerID,
+            bindingToken: pendingState?.bindingToken
+        }).toBuffer();
         logger.info(`Requests to open a new data handler - sessionID:${sessionId}`);
         // noinspection JSUnusedLocalSymbols
         this._controlHandler.sendData(packet, (handler, success, err) => {
@@ -421,8 +634,8 @@ class ClientHandlerPool {
     public terminateSession(sessionID: number) : void {
         let handler = this._activatedSessionHandlerMap_.get(sessionID);
         this._activatedSessionHandlerMap_.delete(sessionID);
-        this._pendingSessionIDMap.delete(sessionID);
-        this._waitingDataBufferQueueMap.delete(sessionID);
+        this.deletePendingSession(sessionID);
+        this.burnWaitBuffer(sessionID);
         if(handler) {
             handler.end_();
         }
@@ -449,7 +662,42 @@ class ClientHandlerPool {
     }
 
 
+    private deletePendingSession(sessionID: number) : void {
+        clearTimeout(this._pendingSessionIDMap.get(sessionID)?.openTimer);
+        this._pendingSessionIDMap.delete(sessionID);
+    }
+
+    /**
+     * 열기 기한이 지나도록 데이터 연결·엔드포인트 결과가 오지 않은 세션을 닫는다(#174).
+     * 기한 사이에 같은 세션 ID 가 다시 열렸으면 상태 객체가 달라 건드리지 않는다.
+     */
+    private expirePendingSession(sessionID: number, state: PendingSessionState) : void {
+        if(this._pendingSessionIDMap.get(sessionID) !== state) return;
+        logger.warn(`Closing a session that did not open before the deadline. sessionID=${sessionID}`);
+        const dataHandler = this._activatedSessionHandlerMap_.get(sessionID);
+        // 상태를 지우기 전에 보내야 클라이언트가 받을 종료 패킷이 나간다.
+        this.sendCloseSession(sessionID, 0);
+        this._activatedSessionHandlerMap_.delete(sessionID);
+        this.deletePendingSession(sessionID);
+        this.burnWaitBuffer(sessionID);
+        this.closeSessionAndCallback(sessionID, 0);
+        dataHandler?.destroy();
+    }
+
+    /** 모든 클라이언트 풀의 대기열 합(바이트). */
+    public static get globalWaitingQueueBytes() : number {
+        return ClientHandlerPool.GlobalWaitingBytes;
+    }
+
+    private static GlobalWaitingBytes = 0;
+
     public end() : void {
+        // 풀이 끝나면 이 풀의 대기열은 버려진다. 전체 합에서도 뺀다(#183).
+        ClientHandlerPool.GlobalWaitingBytes = Math.max(0, ClientHandlerPool.GlobalWaitingBytes - this._bufferSize);
+        this._bufferSize = 0;
+        for(const sessionID of this._waitingDataBufferQueueMap.keys()) this.burnWaitBuffer(sessionID);
+        for(const state of this._pendingSessionIDMap.values()) clearTimeout(state.openTimer);
+        this._pendingSessionIDMap.clear();
         // noinspection JSUnusedLocalSymbols
         for(let [key, value] of this._activatedSessionHandlerMap_) {
             value.onSocketEvent = function () {};
@@ -459,6 +707,52 @@ class ClientHandlerPool {
         this._controlHandler.onSocketEvent = function () {};
         this._controlHandler.endImmediate();
         this._onSessionCloseCallback = undefined;
+    }
+
+    private reserveQueueBytes(sessionID: number, queue: WaitingQueueState, bytes: number, target: 'send' | 'receive'): boolean {
+        const policy = ResourcePolicyRegistry.current();
+        const sessionLimit = queue.limitBytes > 0 ? queue.limitBytes : -1;
+        const sessionBytes = queue.sendBytes + queue.receiveBytes;
+        const overSession = sessionLimit > 0 && sessionBytes + bytes > sessionLimit;
+        const overPool = policy.defaultPoolQueueLimitBytes > 0 && this._bufferSize + bytes > policy.defaultPoolQueueLimitBytes;
+        // 풀마다의 상한은 클라이언트 수만큼 곱해진다. 프로세스 전체 합으로도 묶는다(#183).
+        const overGlobal = policy.globalPoolQueueLimitBytes > 0 && ClientHandlerPool.GlobalWaitingBytes + bytes > policy.globalPoolQueueLimitBytes;
+        if(overSession || overPool || overGlobal) {
+            logger.warn(`Closing session ${sessionID} due to waiting queue overflow. overSession=${overSession}, overPool=${overPool}, overGlobal=${overGlobal}`);
+            this.terminateWaitingSession(sessionID);
+            return false;
+        }
+        ClientHandlerPool.GlobalWaitingBytes += bytes;
+        this._bufferSize += bytes;
+        if(target === 'send') {
+            queue.sendBytes += bytes;
+        } else {
+            queue.receiveBytes += bytes;
+        }
+        return true;
+    }
+
+    private releaseQueueBytes(queue: WaitingQueueState, target: 'send' | 'receive', bytes: number): void {
+        const released = Math.min(this._bufferSize, bytes);
+        ClientHandlerPool.GlobalWaitingBytes = Math.max(0, ClientHandlerPool.GlobalWaitingBytes - released);
+        this._bufferSize = Math.max(0, this._bufferSize - bytes);
+        if(target === 'send') {
+            queue.sendBytes = Math.max(0, queue.sendBytes - bytes);
+        } else {
+            queue.receiveBytes = Math.max(0, queue.receiveBytes - bytes);
+        }
+    }
+
+    private terminateWaitingSession(sessionID: number): void {
+        this.burnWaitBuffer(sessionID);
+        this.sendCloseSession(sessionID, 0);
+        this.closeSessionAndCallback(sessionID, 0);
+        const handler = this._activatedSessionHandlerMap_.get(sessionID);
+        if(handler) {
+            this._activatedSessionHandlerMap_.delete(sessionID);
+            handler.destroy();
+        }
+        this.deletePendingSession(sessionID);
     }
 
 }

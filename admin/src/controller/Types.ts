@@ -19,6 +19,12 @@ type ServerOption = {
     tls: boolean;
     globalMemCacheLimit: number;
     keepAlive: number;
+    /** U4-09: 서버 설정 Security 카드. */
+    mfaRequiredForSuperusers?: boolean;
+    auditRetentionDays?: number;
+    auditQueueSize?: number;
+    /** U3-04: 그룹 속성의 신뢰 클라이언트 선택지. clientSecret 은 타입에 넣지 않는다. */
+    trustedClients?: Array<{clientId: string; displayName?: string}>;
 }
 
 type VersionInfo = {
@@ -90,3 +96,58 @@ interface ClientStatus {
 
 
 export {type PemData,type ServerOption,type CertInfo,type SysInfo, type NetworkInfo, type Usage, type NetworkInterface,type ClientStatus, type VersionInfo}
+
+// ---- U3-01: RBAC 화면이 쓰는 서버 응답 형태(단위 2 §3·§5.2). ----
+export type Role = 'superuser' | 'regular';
+export type UserStatus = 'active' | 'disabled';
+export type UserView = {id: string; username: string; displayName: string; role: Role; status: UserStatus;
+    groupId: string; groupName: string; mustChangePassword: boolean; migratedFromLegacyAdmin: boolean;
+    createdAt: number; updatedAt: number;
+    /** U4-04 가 더한 필드. */
+    mfaEnabled?: boolean};
+export type TunnelProtocolName = 'TCP' | 'HTTP' | 'HTTPS' | 'HTTP_REWRITE';
+export type GroupAttributes = {
+    tunnel_crud: 'none' | 'read_only' | 'full';
+    max_tunnel_count: number;
+    max_tunnel_duration_ms: number;
+    allowed_port_range: Array<{from: number; to: number}>;
+    allowed_protocols: TunnelProtocolName[];
+    max_concurrent_connections: number;
+    allowed_trusted_clients: string[];
+    http_tunnel_rewrite_permissions: {cors: boolean; host: boolean; header: boolean; body: boolean};
+    admin_ui_section_access: Array<'tunnels' | 'my_audit' | 'my_profile' | 'my_sessions'>;
+    tunnel_visibility: 'private' | 'group_read';
+    rate_limit: 'unlimited' | '1MB/s' | '10MB/s' | '100MB/s';
+};
+export type Group = {id: string; name: string; system: boolean; attributes: GroupAttributes; revision?: number};
+/** U3-04: 단위 2 §3 기본값. 새 그룹 폼의 초기값이자 system:superuser 의 표시용 값이다. */
+export const DEFAULT_GROUP_ATTRIBUTES: GroupAttributes = {
+    tunnel_crud: 'full',
+    max_tunnel_count: 10,
+    max_tunnel_duration_ms: 0,
+    allowed_port_range: [],
+    allowed_protocols: [],
+    max_concurrent_connections: 100,
+    allowed_trusted_clients: [],
+    http_tunnel_rewrite_permissions: {cors: false, host: false, header: false, body: false},
+    admin_ui_section_access: ['tunnels', 'my_audit', 'my_profile', 'my_sessions'],
+    tunnel_visibility: 'private',
+    rate_limit: 'unlimited',
+};
+export type MeResponse = {user: UserView; group: {id: string; name: string; attributes: GroupAttributes};
+    sections: string[]; migrationBanner: boolean;
+    /** U4-09: 본인 MFA 상태와 슈퍼유저 강제 등록 게이트. */
+    mfa?: {enabled: boolean; recoveryCodesRemaining: number}; mustEnrollMfa?: boolean};
+export type ApiFailure = {success: false; status: number; message: string; code?: string};
+/** U5-06: 국가 필터·차단 목록·터널 레이트 리밋. */
+export type GeoConfig = {mode: 'off' | 'allow' | 'deny'; countries: string[]; applyToAdmin: boolean; unknownPolicy: 'allow' | 'deny'};
+export type CountryEntry = {code: string; name: string};
+export type BanEntry = {port: number; ip: string; country?: string; bannedUntil: number; hits: number};
+export type RateLimitOption = {enabled: boolean; windowMs: number; maxConnections: number; banMs: number; customized: boolean};
+/** U4-06: GET /api/audit 의 이벤트 한 건. */
+export type AuditEventView = {at: number; actor: {userId: string; username?: string; role?: string}; sessionIdHash?: string; ip?: string;
+    type: string; target?: {kind: string; id: string}; outcome: 'success' | 'failure'; summary: string; detail?: Record<string, unknown>};
+export type AuditQueryInput = {from?: number; to?: number; userId?: string; type?: string; outcome?: 'success' | 'failure'; limit?: number; cursor?: string};
+/** U4-06: GET /api/sessions·/api/me/sessions 의 세션 한 건. */
+export type SessionView = {id: string; userId: string; username: string; createdAt: number; lastSeenAt: number; ip: string; userAgent: string; current: boolean};
+export type ApiResult<T> = ({success: true} & T) | ApiFailure;

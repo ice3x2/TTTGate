@@ -1,0 +1,50 @@
+{
+  "archives": [
+    {
+      "archive": "TTTGate-v-issue68-verification-dist.tar.gz",
+      "bytes": 273016,
+      "sha256": "d8911cb7d38daceb111b890528adead4e9b969fe1f59e8baf5992b9ce27fd1b4",
+      "verifiedSourceFiles": 141,
+      "binDirectory": true,
+      "appSha256": "fd014a7d0caf08133842f355e52768df600c78a76dd2a63b6fd8b4d013e98b1c",
+      "manifestSha256": "407ccfcba8b135d23331a5aa8829155029696503e3802a2df6ffdb1f3bc81723",
+      "htmlSha256": "3cd60681b807d1b02526c7fdd7cb5927948403f67410248fef00f4ba026f7b52"
+    },
+    {
+      "archive": "TTTGate-v-issue68-verification-dist.zip",
+      "bytes": 339014,
+      "sha256": "85eab306726adf07e02e0e06c44f33c90b31a0ef8a2ca83c6a43a5b4458ebeca",
+      "verifiedSourceFiles": 141,
+      "binDirectory": true,
+      "appSha256": "fd014a7d0caf08133842f355e52768df600c78a76dd2a63b6fd8b4d013e98b1c",
+      "manifestSha256": "407ccfcba8b135d23331a5aa8829155029696503e3802a2df6ffdb1f3bc81723",
+      "htmlSha256": "3cd60681b807d1b02526c7fdd7cb5927948403f67410248fef00f4ba026f7b52"
+    }
+  ],
+  "runtime": {
+    "directory": "C:\\Users\\beom\\AppData\\Local\\Temp\\tttgate-source68-Qaye5R",
+    "node": "v24.16.0",
+    "usageExit": 0,
+    "adminPort": 63945,
+    "controlPort": 63946,
+    "serverPid": 156324,
+    "htmlStatus": 200,
+    "htmlMatches": true,
+    "pidFileExists": true,
+    "assets": [
+      {
+        "path": "/assets/index-B9NDUBpW.js",
+        "status": 200,
+        "bytes": 472904,
+        "sha256": "6f2195721253b83ad773c6c6636fd443ab24f871eaaa1cf0042c9ec504043fcb"
+      },
+      {
+        "path": "/assets/index-CTOWaF2j.css",
+        "status": 200,
+        "bytes": 11903,
+        "sha256": "b988c6fa2ad4e674e80e030b3366461e68097d057758c446ec1a839a939c1235"
+      }
+    ],
+    "allowance": "explicit test-only -allowLegacyAdminHttp with loopback; production defaults unchanged"
+  }
+}

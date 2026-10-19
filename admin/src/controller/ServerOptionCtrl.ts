@@ -1,22 +1,23 @@
-import { type ServerOption } from "./Types";
+import { type ServerOption, type CertInfo, type ApiResult } from "./Types";
 import type {TunnelingStatus, Options} from "./Options";
 import InvalidSession from "./InvalidSession";
+import {adminRequest} from "./AdminRequest";
 
+
+export type ConfigurationSnapshot<T> = {value: T, readonly revision: number};
+export type ConfigurationResult = {success: boolean, message: string, code?: string, revisionState?: {currentRevision: number}, certificateRevisionState?: {currentRevision: number}};
+
+/** 서버 옵션을 아직 읽지 않았거나 세션이 끝났을 때의 빈 값. */
+const emptyServerOption = (): ServerOption => ({
+    key: '', adminPort: 0, adminTls: false, port: 0, tls: false, globalMemCacheLimit: 128, keepAlive: 0
+});
 
 class ServerOptionCtrl {
 
 
     private static _instance : ServerOptionCtrl;
     private _severOptionHash : string = '';
-    private _serverOption : ServerOption = {
-        key: '',
-        adminPort: 0,
-        adminTls: false,
-        port: 0,
-        tls: false,
-        globalMemCacheLimit: 128,
-        keepAlive: 0
-    }
+    private _serverOption : ServerOption = emptyServerOption();
     private _tunnelingOptions : Array<Options> = [];
 
     private constructor() {
@@ -32,11 +33,18 @@ class ServerOptionCtrl {
         return ServerOptionCtrl._instance;
     }
 
+    /** 로그아웃·세션 만료 때 캐시한 서버 옵션(서버 키·clientSecret 포함)과 터널 목록을 비운다. */
+    public clearCache() : void {
+        this._serverOption = emptyServerOption();
+        this._tunnelingOptions = [];
+        this._severOptionHash = '';
+    }
+
     public getCachedServerOption() : ServerOption {
         return this._serverOption;
     }
 
-    public async getServerOption() : Promise<ServerOption> {
+    public async getServerOption() : Promise<ConfigurationSnapshot<ServerOption>> {
         let res = await fetch("/api/serverOption", {
             method: "GET",
             credentials: "same-origin"
@@ -47,11 +55,11 @@ class ServerOptionCtrl {
             throw new InvalidSession();
         }
         this._serverOption = json['serverOption'];
-        return this._serverOption;
+        return {value: this._serverOption, revision: json.revisionState.currentRevision};
     }
 
 
-    public async getTunnelingOption() : Promise<Array<Options>> {
+    public async getTunnelingOption() : Promise<ConfigurationSnapshot<Array<Options>>> {
         let res = await fetch("/api/tunnelingOption", {
             method: "GET",
             credentials: "same-origin"
@@ -61,7 +69,7 @@ class ServerOptionCtrl {
             throw new InvalidSession();
         }
         this._tunnelingOptions = json['tunnelingOptions'];
-        return this._tunnelingOptions;
+        return {value: this._tunnelingOptions, revision: json.revisionState.currentRevision};
     }
 
     public async checkChangeServerOption(oldServerOptions: ServerOption, newServerOption: ServerOption) : Promise<boolean> {
@@ -128,52 +136,50 @@ class ServerOptionCtrl {
     }
 
 
-    public async updateServerOption(serverOption: ServerOption) : Promise<{success: boolean, message: string, updated: boolean, updates: object}> {
-        let res = await fetch("/api/serverOption", {
+    public async updateServerOption(serverOption: ServerOption, expectedRevision: number) : Promise<ConfigurationResult & {updated: boolean, updates: object}> {
+        return adminRequest("/api/serverOption", {
             method: "POST",
             credentials: "same-origin",
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(serverOption)
+            body: JSON.stringify({...serverOption, expectedRevision})
         });
-        let json = await res.json();
-        if(!json || res.status == 401) {
-            throw new InvalidSession();
-        }
-        return json;
     }
 
-    public async updateTunnelingOption(tunnelingOption : Options) : Promise<{success: boolean, message: string}> {
-        let res = await fetch("/api/tunnelingOption", {
+    public async updateTunnelingOption(tunnelingOption : Options, expectedRevision: number,
+        compound: {certInfo?: CertInfo, expectedCertificateRevision?: number, previousForwardPort?: number} = {}) : Promise<ConfigurationResult> {
+        const option: Record<string, unknown> = {...tunnelingOption};
+        // ownerId·owner·editable 은 목록 응답이 실어 준 값이다. 소유자 변경은 reassignOwner 만 하므로 저장 본문에서 뺀다.
+        // 남겨 두면 화면을 연 시점의 ownerId 가 실려, 같은 화면에서 바꾼 소유자가 저장 때 되돌아간다.
+        for(const name of ['certInfo', 'certificateRevision', 'originalCertificateRevision', 'originalForwardPort', 'previousForwardPort', 'expectedCertificateRevision', 'isSync', 'updatable', 'allowedClientNamesQuery', 'activeTimeout', 'ownerId', 'owner', 'editable']) delete option[name];
+        return adminRequest("/api/tunnelingOption", {
             method: "POST",
             credentials: "same-origin",
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(tunnelingOption)
+            body: JSON.stringify({...option, ...compound, expectedRevision})
         });
-        let json = await res.json();
-        if(!json || res.status == 401) {
-            throw new InvalidSession();
-        }
-        return json;
     }
 
-    public async removeTunnelingOption(tunnelingOption : Options | {forwardPort: number}) : Promise<{success: boolean, message: string, forwardPort: number}> {
-        let res = await fetch("/api/tunnelingOption", {
+    /** U3-06: 슈퍼유저의 터널 소유자 변경. 저장과 별개로 즉시 커밋된다. */
+    public reassignOwner(port: number, ownerId: string, expectedRevision: number)
+        : Promise<ApiResult<{forwardPort: number; owner: {id: string; username?: string}; revisionState: {currentRevision: number}}>> {
+        return adminRequest(`/api/tunnelingOption/${port}/owner`, {
+            method: "PUT", headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ownerId, expectedRevision})
+        });
+    }
+
+    public async removeTunnelingOption(tunnelingOption : Options | {forwardPort: number}, expectedRevision: number) : Promise<ConfigurationResult & {forwardPort: number}> {
+        return adminRequest("/api/tunnelingOption", {
             method: "DELETE",
             credentials: "same-origin",
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(tunnelingOption)
+            body: JSON.stringify({...tunnelingOption, expectedRevision})
         });
-        let json = await res.json();
-        if(!json || res.status == 401) {
-            throw new InvalidSession();
-        }
-        return json;
     }
 
 
@@ -192,7 +198,7 @@ class ServerOptionCtrl {
     public async activeExternalPortServer(active: boolean, port: number, timeout?: number) : Promise<{success: boolean, message: string}> {
 
         timeout = timeout ?? 0;
-        let res = await fetch(`/api/tunneling/active/${port}`, {
+        return adminRequest(`/api/tunneling/active/${port}`, {
             method: "POST",
             credentials: "same-origin",
             headers: {
@@ -200,11 +206,6 @@ class ServerOptionCtrl {
             },
             body: JSON.stringify({active: active,timeout: timeout})
         });
-        let json = await res.json();
-        if(!json || res.status == 401) {
-            throw new InvalidSession();
-        }
-        return json;
     }
 
 
