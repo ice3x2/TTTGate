@@ -7,6 +7,7 @@ import {CertificationStore} from "../../../../src/server/CertificationStore";
 import {BOOTSTRAP_TOKEN_FILE_NAME, IdentityMigration} from "../../../../src/server/rbac/IdentityMigration";
 import {IdentityStore} from "../../../../src/server/rbac/IdentityStore";
 import {AuditEvent, AuditSink, AuditSinkRegistry} from "../../../../src/server/audit/AuditSink";
+import UsablePortChecker from "../../../../src/util/UsablePortChecker";
 import {getFreePort} from "../../../helpers/network";
 import {httpRequest} from "../../../helpers/http";
 import {applyTestRoot, cleanupTestRoot, createTestRoot, TestRoot} from "../../../helpers/runtime";
@@ -275,7 +276,11 @@ describe("rbac-tunnel-ownership", () => {
 
     it("경로 포트는 판정과 동작이 같은 값으로 읽고, 숫자가 아닌 표기는 거절한다", async () => {
         // 피해 터널: 슈퍼유저 소유 20. alice 는 20010 을 소유한다. Number("20.010e3") 는 20010, parseInt 는 20 이다.
+        // 생성 API 는 포트를 실제로 열어 본다. 1024 미만은 Linux 에서 root 가 아니면 열 수 없으므로
+        // 런타임과 같이 이 검사도 대신한다(#189). 이 테스트가 보는 것은 경로 포트 파싱이다.
+        const usable = jest.spyOn(UsablePortChecker, "check").mockResolvedValueOnce(true);
         const victim = await request("POST", "/api/tunnelingOption", tunnelBody(20), superuser);
+        usable.mockRestore();
         expect(victim.status).toBe(200);
         const touched = (): number[] => [
             ...runtime.activeExternalPortServer.mock.calls, ...runtime.inactiveExternalPortServer.mock.calls,
