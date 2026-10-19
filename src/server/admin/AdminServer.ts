@@ -1775,7 +1775,9 @@ class AdminServer {
         // 읽지 않은 본문이 남은 연결은 재사용하지 않는다. 남겨 두면 idle timeout 까지 소켓을 붙잡는다.
         if(beforeBody && ctx.req.method !== 'GET') ctx.res.setHeader('Connection', 'close');
         this.emitAudit(auditEventOf(ctx, {
-            type: AUDIT_EVENT_TYPES.access_denied, summary: `access_denied ${action}`, detail: {action, path: truncateAuditValue(pathname)}
+            // 상태 코드는 403(권한 없음)과 404(대상 숨김)를 가른다. code 는 민감 키라 status 로 담는다(#186).
+            type: AUDIT_EVENT_TYPES.access_denied, summary: `access_denied ${action}`,
+            detail: {action, path: truncateAuditValue(pathname), status: decision.status}
         }, 'failure'));
         this.sendApiFailure(ctx.res, decision.status, {
             code: decision.code,

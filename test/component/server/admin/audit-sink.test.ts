@@ -444,8 +444,18 @@ describe("audit-sink: audited() 밖의 이벤트", () => {
         expect(f.sink.events).toHaveLength(1);
         expect(f.sink.events[0]).toMatchObject({
             type: "access_denied", outcome: "failure", actor: {username: "bob"},
-            detail: {action: "server:manage", path: "/api/serverOption"}
+            detail: {action: "server:manage", path: "/api/serverOption", status: 403}
         });
+
+        // #186 대상을 숨기는 거부(404)도 응답과 같은 상태 코드로 남아 403 과 구별된다.
+        f.sink.events.length = 0;
+        const hidden = await f.request("POST", "/api/tunneling/active/65000", {}, regular.auth);
+        expect(hidden.status).toBe(404);
+        expect(f.sink.events).toHaveLength(1);
+        expect(f.sink.events[0]).toMatchObject({
+            type: "access_denied", detail: {action: "tunnel:activate", path: "/api/tunneling/active/65000", status: 404}
+        });
+        expect(f.sink.events[0].detail).not.toHaveProperty("code");
     }));
 
     it("마지막 슈퍼유저 가드가 409 를 낼 때 last_superuser_guard_hit 를 남긴다", async () => withAuditServer(async (f) => {
