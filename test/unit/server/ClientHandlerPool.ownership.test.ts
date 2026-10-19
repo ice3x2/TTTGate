@@ -3,6 +3,7 @@ import {ClientHandlerPool} from "../../../src/server/ClientHandlerPool";
 import {SocketHandler} from "../../../src/util/SocketHandler";
 import {CtrlPacket} from "../../../src/commons/CtrlPacket";
 import {applyTestRoot, cleanupTestRoot, createTestRoot, TestRoot} from "../../helpers/runtime";
+import {cleanupCreatedInstances} from "../../helpers/createdInstances";
 
 class FastWritableSocket extends EventEmitter {
     public remoteAddress = "127.0.0.1";
@@ -53,6 +54,8 @@ const parsed = (packet: CtrlPacket): CtrlPacket => {
     if(!result.packet) throw new Error(`fixture packet did not parse: ${result.error}`);
     return result.packet;
 };
+
+cleanupCreatedInstances(ClientHandlerPool, (pool) => pool.end());
 
 describe("ClientHandlerPool session ownership", () => {
     let testRoot: TestRoot;

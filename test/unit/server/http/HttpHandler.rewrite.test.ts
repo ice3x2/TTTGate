@@ -3,6 +3,7 @@ import HttpHandler from "../../../../src/server/http/HttpHandler";
 import HttpUtil from "../../../../src/server/http/HttpUtil";
 import {ResourcePolicyRegistry} from "../../../../src/util/ResourcePolicy";
 import {TunnelingOption} from "../../../../src/types/TunnelingOption";
+import {cleanupCreatedInstances} from "../../../helpers/createdInstances";
 
 type MockSocketHandler = {
     id: number;
@@ -82,6 +83,8 @@ const parseChunkedBody = (response: Buffer): {header: string, body: Buffer} => {
         body: Buffer.concat(chunks)
     };
 };
+
+cleanupCreatedInstances(HttpHandler, (handler) => handler.destroy());
 
 describe("HttpHandler rewrite guardrails", () => {
     afterEach(() => {

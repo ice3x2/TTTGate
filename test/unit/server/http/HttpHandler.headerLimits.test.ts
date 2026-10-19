@@ -1,6 +1,7 @@
 import HttpHandler from "../../../../src/server/http/HttpHandler";
 import SocketState from "../../../../src/util/SocketState";
 import {TunnelingOption} from "../../../../src/types/TunnelingOption";
+import {cleanupCreatedInstances} from "../../../helpers/createdInstances";
 
 // #166 — 헤더 상한을 넘으면 431, 첫 헤더가 기한 안에 오지 않으면 408 로 닫는다.
 type MockSocketHandler = {
@@ -67,6 +68,8 @@ const setup = () => {
     const written = () => Buffer.concat(socketHandler.writes).toString("latin1");
     return {socketHandler, handler, feed, written};
 };
+
+cleanupCreatedInstances(HttpHandler, (handler) => handler.destroy());
 
 describe("HttpHandler request head limits", () => {
     afterEach(() => { jest.useRealTimers(); });
