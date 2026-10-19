@@ -82,6 +82,73 @@ test("타입·결과 필터는 서버에 다시 묻고, 상세는 펼치고 접�
     expect(await page.locator("#audit-empty").textContent()).toBe("No events in this range.");
 }));
 
+test("#188 기간 탭은 선택 탭만 Tab 순서에 두고, 화살표·Home·End 로 옮겨 가며 매번 다시 묻는다", () => withApp({fixture: "rbac"}, async ({page}) => {
+    await page.goto(`${page.url().split("#")[0]}#/audit`);
+    await events(page).first().waitFor({state: "visible", timeout: 10_000});
+    const tabs = page.locator("#audit-range [role=tab]");
+    const state = () => tabs.evaluateAll((items) => items.map((item) => ({
+        label: item.textContent?.trim(), selected: item.getAttribute("aria-selected"),
+        tabindex: item.getAttribute("tabindex"), focused: item === document.activeElement
+    })));
+    const only = (label: string) => ["24h", "7d", "30d", "All"].map((name) => ({
+        label: name, selected: String(name === label), tabindex: name === label ? "0" : "-1", focused: name === label
+    }));
+    const DAY = 86_400_000;
+    const RANGE: Record<string, number | undefined> = {"24h": DAY, "7d": 7 * DAY, "30d": 30 * DAY, "All": undefined};
+    const listed: string[] = [];
+    page.on("request", (request) => {
+        const url = new URL(request.url());
+        if(url.pathname === "/api/audit") listed.push(url.searchParams.get("from") ?? "");
+    });
+    // 버블 단계의 window 리스너는 탭의 핸들러 다음에 돌아 defaultPrevented 를 그대로 본다.
+    await page.evaluate(() => {
+        (window as any).__keys = [];
+        window.addEventListener("keydown", (event) => (window as any).__keys.push(event.defaultPrevented));
+    });
+    const lastPrevented = () => page.evaluate(() => (window as any).__keys.at(-1) as boolean);
+    const isRange = (from: string, label: string) => {
+        const expected = RANGE[label];
+        return expected === undefined ? from === "" : from !== "" && Math.abs(Date.now() - Number(from) - expected) < 60_000;
+    };
+    /** 다루는 키는 그 기간으로 /api/audit 를 정확히 한 번 다시 묻고 기본 동작을 막는다. All 은 from 이 없다. */
+    const press = async (key: string, label: string) => {
+        listed.length = 0;
+        await page.keyboard.press(key);
+        for(const deadline = Date.now() + 10_000; listed.length === 0 && Date.now() < deadline;) await page.waitForTimeout(50);
+        await page.waitForTimeout(300);
+        expect(listed).toHaveLength(1);
+        expect(isRange(listed[0], label)).toBe(true);
+        expect(await lastPrevented()).toBe(true);
+        expect(await state()).toEqual(only(label));
+    };
+    /** 선택이 그대로면 다시 묻지 않는다. prevented 는 그 키의 기본 동작을 막았는지다. */
+    const still = async (key: string, label: string, prevented: boolean) => {
+        listed.length = 0;
+        await page.keyboard.press(key);
+        await page.waitForTimeout(300);
+        expect(listed).toEqual([]);
+        expect(await lastPrevented()).toBe(prevented);
+        expect(await state()).toEqual(only(label));
+    };
+
+    const initial = await state();
+    expect(initial.map(({tabindex, selected}) => ({tabindex, selected}))).toEqual(only("7d").map(({tabindex, selected}) => ({tabindex, selected})));
+    await tabs.nth(1).focus();
+    await press("ArrowRight", "30d");
+    await press("ArrowRight", "All");
+    await press("ArrowRight", "24h");
+    await press("ArrowLeft", "All");
+    await press("Home", "24h");
+    await still("Home", "24h", true);
+    await press("End", "All");
+    await still("End", "All", true);
+
+    // 다루지 않는 키와 수정키 조합은 막지도, 선택을 바꾸지도 않는다.
+    await still("ArrowDown", "All", false);
+    await still("Shift+ArrowLeft", "All", false);
+    await still("Control+Home", "All", false);
+}));
+
 test("50 건씩 읽고 Load more 로 나머지를 뒤에 붙인다", () => withApp({fixture: "rbac"}, async (app) => {
     await app.seedAudit(60);
     await app.page.goto(`${app.url}#/audit`);
