@@ -215,11 +215,24 @@ describe("File", () => {
     it("rename returns false and leaves the source in place when the final filesystem rename fails", () => {
         const source = new File(root, "final-src.txt");
         fs.writeFileSync(source.toString(), "x");
-        const invalidDestination = path.join(root, "bad<name.txt");
-
-        expect(source.rename(invalidDestination)).toBe(false);
+        const destination = path.join(root, "final-dst.txt");
+        // 플랫폼에 따라 쓸 수 없는 이름(예: Windows 의 '<')에 기대지 않고 마지막 rename 만 실패시킨다(#189).
+        // File.ts 는 require('fs') 를 쓰므로 같은 모듈 객체에 건다.
+        const rename = jest.spyOn(require("fs") as typeof fs, "renameSync").mockImplementationOnce(() => {
+            throw Object.assign(new Error("EXDEV: cross-device link not permitted"), {code: "EXDEV"});
+        });
+        const log = jest.spyOn(console, "log").mockImplementation(() => undefined);
+        try {
+            expect(source.rename(destination)).toBe(false);
+            expect(rename).toHaveBeenCalledTimes(1);
+            expect(rename).toHaveBeenCalledWith(source.toString(), destination);
+        } finally {
+            rename.mockRestore();
+            log.mockRestore();
+        }
 
         expect(source.toString()).toBe(path.join(root, "final-src.txt"));
         expect(fs.existsSync(source.toString())).toBe(true);
+        expect(fs.existsSync(destination)).toBe(false);
     });
 });
