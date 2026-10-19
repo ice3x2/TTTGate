@@ -31,6 +31,28 @@ The server keeps its in-memory buffers inside fixed process-wide budgets, so a 5
 
 The Node.js runtime itself uses about 60–100 MB. Body rewriting holds the decompressed body and a copy while it works, so its peak is about three times the reserved amount. Pending TLS handshakes (up to 1,024 per port) and per-connection header buffers (64 KiB) come on top. Together the worst case stays around 450 MB; keep swap enabled on a 512 MB instance for short peaks. These budgets are built-in defaults and are not set in `server.yaml`.
 
+**Kernel socket buffers.** Linux also charges TCP socket buffers to the server process. When receivers read slowly, the kernel can hold up to the `tcp_rmem`/`tcp_wmem` maximum per socket (by default 6 MiB / 4 MiB), which is outside the budgets above. On a 512 MB instance, cap them:
+
+```
+# /etc/sysctl.d/90-tttgate.conf
+net.ipv4.tcp_rmem = 4096 131072 1048576
+net.ipv4.tcp_wmem = 4096 16384 1048576
+```
+
+Apply with `sudo sysctl --system`. This keeps throughput for normal links and stops slow readers from filling memory.
+
+**Measured on a 512 MB / 0.5-core limit** (cgroup v2: `MemoryMax=512M`, `MemorySwapMax=4G`, `CPUQuota=50%`, default kernel socket buffers, loopback):
+
+| Load | Result | Server memory peak |
+|---|---|---|
+| 200 concurrent connections, 256 KiB round trip each | 200/200, p95 4.2 s | 69 MiB |
+| 3,000 short connections, 50 at a time | 3,000/3,000, p95 119 ms | 76 MiB |
+| 4 parallel 100 MiB streams | 4/4 intact, 3.4 s each | 142 MiB |
+| Client restart during load | tunnel back after 133 ms, 3,000/3,000 | 142 MiB |
+| 50 connections × 20 MiB with the reader paused for 5 s | 50/50, no OOM | 512 MiB (process heap 135 MiB, kernel socket buffers 501 MiB), 113 MiB swap |
+
+The last case is what the socket buffer cap above prevents.
+
 ## Runtime Config Files
 
 - server runtime config: `config/server.yaml`
