@@ -49,7 +49,6 @@ class Sentinel {
     private makeDevPathList() {
         this._executePath = 'node';
         let root = Path.join(process.argv[1],'..','..')
-        //this._argvList = [Path.join(root, 'node_modules', 'ts-node-dev', 'lib', 'bin.js'), '--project', Path.join(root, 'tsconfig.json'), process.argv[1]]
         this._argvList = [Path.join(root, 'node_modules', 'ts-node', 'dist', 'bin.js'), '--project', Path.join(root, 'tsconfig.json'), process.argv[1]]
         this._argvList = [...this._argvList, ...process.argv.slice(2)];
 

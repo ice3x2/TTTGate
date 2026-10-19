@@ -9,11 +9,11 @@ TTTGate는 내부 네트워크에 대한 외부 접근을 용이하게 하는 �
 ## 개발 환경 및 기술 스택
 
 ### 핵심 기술
-- **백엔드**: Node.js 18+ / TypeScript 5.1+
-- **프론트엔드**: Svelte 4 + Vite 4
-- **테스팅**: Jest (설정되어 있으나 테스트 파일 없음)
+- **백엔드**: Node.js 24+ / TypeScript 5.9+
+- **프론트엔드**: Svelte 5 + Vite 6
+- **테스팅**: Jest 30 + ts-jest (단위·컴포넌트·관리자·E2E 테스트가 `test/` 에 있음)
 - **패키징**: pkg (크로스 플랫폼 바이너리)
-- **개발 도구**: ts-node-dev (핫 리로드)
+- **개발 도구**: `node --watch` + ts-node (파일이 바뀌면 다시 시작)
 
 ### 지원 플랫폼
 - Linux (x64, arm64)
@@ -117,7 +117,7 @@ TTTGate/
 - **SysMonitor.ts**: 시스템 모니터링
 
 #### 5. 관리자 웹 인터페이스 (`admin/`)
-- **Svelte 4** 기반 SPA
+- **Svelte 5** 기반 SPA
 - **Vite** 번들러 사용
 - API 프록시: `/api` → `localhost:9300/api`
 - TypeScript 지원 활성화
@@ -250,7 +250,7 @@ type ClientOption = {
 - HTTP 헤더 및 바디 리라이팅 기능
 
 ### 개발 시 주의사항
-- **no test files**: Jest는 설정되어 있지만 테스트 파일이 없음
+- **tests**: 전체 테스트가 길다. CI 는 단위·컴포넌트·E2E 를 작업별로 나눠 돈다(`.github/workflows/code-regression.yml`)
 - **memory management**: 대용량 파일 전송 시 메모리 제한 고려
 - **cross-platform**: 다양한 OS/아키텍처 지원 필요
 - **binary packaging**: pkg를 사용한 실행 파일 생성 시 경로 처리 주의
