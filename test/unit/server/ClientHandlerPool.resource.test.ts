@@ -2,6 +2,7 @@ import {EventEmitter} from "events";
 import {ClientHandlerPool} from "../../../src/server/ClientHandlerPool";
 import {SocketHandler} from "../../../src/util/SocketHandler";
 import {applyTestRoot, cleanupTestRoot, createTestRoot, TestRoot} from "../../helpers/runtime";
+import {cleanupCreatedInstances} from "../../helpers/createdInstances";
 
 class FastWritableSocket extends EventEmitter {
     public remoteAddress = "127.0.0.1";
@@ -44,6 +45,8 @@ class FastWritableSocket extends EventEmitter {
         return this;
     }
 }
+
+cleanupCreatedInstances(ClientHandlerPool, (pool) => pool.end());
 
 describe("ClientHandlerPool queue containment", () => {
     let testRoot: TestRoot;
