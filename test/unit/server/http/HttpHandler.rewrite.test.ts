@@ -135,4 +135,32 @@ describe("HttpHandler rewrite guardrails", () => {
         expect(inflatedBody).not.toContain("public.example");
         expect(socketHandler.destroy).not.toHaveBeenCalled();
     });
+
+    // #183 — 재작성은 본문 전체를 메모리에 모은다. 동시에 재작성하는 응답의 합을 전체 예산으로 묶고, 넘으면 그대로 보낸다.
+    it("passes a response through unchanged when the process-wide rewrite budget is in use, and frees it afterwards", () => {
+        ResourcePolicyRegistry.configure({globalHttpRewriteBytes: 200});
+        const option: TunnelingOption = {forwardPort: 8080, protocol: "http", destinationAddress: "internal.example", destinationPort: 80, keepAlive: 0,
+            httpOption: {rewriteHostInTextBody: true}};
+        const bodyText = "http://internal.example/" + "b".repeat(126);
+        const headerOf = (length: number) => Buffer.from(`HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${length}\r\n\r\n`, "utf-8");
+        const first = createMockSocketHandler();
+        const firstHandler = HttpHandler.create(first as any, option);
+        (firstHandler as any)._originHost = "public.example";
+        // 첫 응답은 본문이 아직 다 오지 않아 예약(150B)을 잡고 있다.
+        firstHandler.sendData(Buffer.concat([headerOf(150), Buffer.from(bodyText.slice(0, 50))]));
+        expect(HttpHandler.globalRewriteReservedBytes).toBe(150);
+
+        const second = createMockSocketHandler();
+        const secondHandler = HttpHandler.create(second as any, option);
+        (secondHandler as any)._originHost = "public.example";
+        secondHandler.sendData(Buffer.concat([headerOf(150), Buffer.from(bodyText)]));
+        const passed = Buffer.concat(second.writes).toString("utf-8");
+        expect(passed).toContain("internal.example");
+        expect(passed.toLowerCase()).not.toContain("transfer-encoding: chunked");
+
+        firstHandler.sendData(Buffer.from(bodyText.slice(50)));
+        const rewritten = parseChunkedBody(Buffer.concat(first.writes)).body.toString("utf-8");
+        expect(rewritten).toContain("public.example");
+        expect(HttpHandler.globalRewriteReservedBytes).toBe(0);
+    });
 });
