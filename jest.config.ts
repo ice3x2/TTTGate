@@ -15,7 +15,8 @@ const config: Config = {
             "ts-jest",
             {
                 diagnostics: true,
-                isolatedModules: true
+                // ts-jest 29.4 는 isolatedModules 옵션을 tsconfig 에서 읽는다(#192). 루트 tsconfig 는 빌드용이라 false 다.
+                tsconfig: "<rootDir>/tsconfig.jest.json"
             }
         ]
     },
