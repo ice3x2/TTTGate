@@ -4,6 +4,10 @@ import {withConfigurationServer} from "./configuration-revision-fixture";
 import {getFreePort} from "../../../helpers/network";
 import {CertificationStore} from "../../../../src/server/CertificationStore";
 
+// 픽스처가 매번 TLS 인증서·서버·로그인을 준비해 테스트 하나가 4~5초 걸린다. 같은 픽스처를 쓰는 다른 파일처럼
+// 기본 5초보다 넉넉히 둔다. 시간 초과가 나면 정리 전에 다음 테스트가 시작되고 남은 서버가 jest 종료를 막는다(#192).
+jest.setTimeout(60_000);
+
 test("stale same-row no-op rejects and valid config-only save does not advance certificate revision", async () => withConfigurationServer(async f => {
     const port = await getFreePort();
     const option = {forwardPort: port, protocol: "tcp", tls: false, destinationAddress: "127.0.0.1", destinationPort: 9};
