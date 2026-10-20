@@ -103,8 +103,10 @@ test("상태 화면은 1초마다 다시 읽고 화면을 떠나면 폴링을 �
         });
         await waitForGauges(app.page);
 
+        // 1초 간격 폴링을 정확히 2초 창으로 세면 경계에서 1번만 잡힌다(#199). 2번이 보일 때까지 최대 3.5초 기다린다.
         const beforePolling = requests;
-        await app.page.waitForTimeout(2_000);
+        const pollingDeadline = Date.now() + 3_500;
+        while(requests - beforePolling < 2 && Date.now() < pollingDeadline) await app.page.waitForTimeout(100);
         expect(requests - beforePolling).toBeGreaterThanOrEqual(2);
 
         await app.page.evaluate(() => { location.hash = "#/server"; });
