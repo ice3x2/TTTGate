@@ -164,13 +164,19 @@ describe("Sentinel", () => {
             return lines;
         };
 
+        // 앱(execute)의 spawn 직후 sentinel 을 띄우므로 두 자식이 저널에 쓰는 순서는 보장되지 않는다(#195). mode 로 나눈다.
+        const byMode = (pair: string[]) => {
+            const records = pair.map((line) => JSON.parse(line));
+            expect(records.map((record) => record.mode).sort()).toEqual(["execute", "sentinel"]);
+            return {execute: records.find((record) => record.mode === "execute"), sentinel: records.find((record) => record.mode === "sentinel")};
+        };
+
         expect(Sentinel.create(false).start()).toBe(true);
 
         let lines = await readJournalLines(2);
         expect(lines.length).toBe(2);
 
-        const first = JSON.parse(lines[0]);
-        const second = JSON.parse(lines[1]);
+        const {execute: first, sentinel: second} = byMode(lines);
         expect(first.mode).toBe("execute");
         expect(first.appPid).toBe("0");
         expect(first.argv).toEqual(["server", "-daemon"]);
@@ -188,8 +194,7 @@ describe("Sentinel", () => {
 
         lines = await readJournalLines(4);
         expect(lines.length).toBe(4);
-        const third = JSON.parse(lines[2]);
-        const fourth = JSON.parse(lines[3]);
+        const {execute: third, sentinel: fourth} = byMode(lines.slice(2));
         expect(third.mode).toBe("execute");
         expect(fourth.mode).toBe("sentinel");
 
