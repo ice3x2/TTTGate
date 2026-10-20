@@ -22,6 +22,8 @@ const config: Config = {
     },
     moduleFileExtensions: ["ts", "tsx", "js", "json"],
     testEnvironment: "node",
+    // node-forge 가 jest 안에서 느린 곱셈(am1)을 고르지 않게 navigator 를 지운다(#194).
+    setupFiles: ["<rootDir>/test/setup/forgeBigInteger.ts"],
     // coverage 인프라 — `npm run test:coverage`에서 실행.
     collectCoverageFrom: ["src/**/*.ts", "!src/**/*.d.ts"],
     coverageDirectory: "<rootDir>/coverage",
