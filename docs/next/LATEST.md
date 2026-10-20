@@ -1,6 +1,6 @@
 # 최신 핸드오프
 
-`C:\Work\git\_Snoworca\TTTGate\docs\next\2026-10-19-release-to-main.md` — 2026-10-19 작성 · `refactor/admin` 을 `main` 에 병합했다(PR #185, `6a295dc`). 에픽 #125(52/52)와 후속 이슈 #130~#191 은 모두 닫혔다. 열린 이슈는 #192(개발 의존성 경고) 하나다. 첫 행동은 `main` CI 결과 확인이다
+`C:\Work\git\_Snoworca\TTTGate\docs\next\2026-10-19-release-to-main.md` — 2026-10-20 갱신 · 열린 이슈·PR·Dependabot 경고가 모두 0건이다. `refactor/admin` 은 `main` 에 병합됐다(PR #185 `6a295dc`, PR #193 `137e4a9`). node-forge 검토 예외의 재검토 기한은 2027-01-31 이다
 
 **함정 전체 목록은 2026-10-16 문서 §6 에, 확정 결정 11건·루프 절차는 2026-09-15 문서에 있다.**
 

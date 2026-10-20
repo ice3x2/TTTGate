@@ -1,28 +1,31 @@
-# 핸드오프 — `refactor/admin` 을 `main` 으로 병합한 뒤
+# 핸드오프 — `refactor/admin` 을 `main` 으로 병합한 뒤 (열린 일 없음)
 
 작성 2026-10-19 · 이 문서는 `docs/next/2026-10-16-wave8-audit-store.md` 를 대신한다. 그 문서의 "다음 행동(#120 재구현)"은 이미 끝났으므로 따르지 마라. 함정 목록(§6)은 지금도 유효하다.
 
 ## 0. 다음 세션의 첫 행동
 
-**`refactor/admin` 은 `main` 에 병합됐다.** PR #185, 병합 커밋 `6a295dc`. 에픽 #125(52/52)와 후속 이슈 #130~#191 은 모두 닫혔다.
+**남은 일이 없다.** 열린 이슈·PR·Dependabot 경고가 모두 0건이다(2026-10-20 기준).
 
-열린 이슈는 **#192 하나**다. 병합 뒤 Dependabot 이 다시 계산한 경고 88건을 정리하는 일이다. 운영 의존성 쪽 새 위험은 없고(§4), 급하지 않다.
+- `refactor/admin` 은 `main` 에 두 번 병합됐다: PR #185(`6a295dc`, 에픽 #125 와 #130~#191), PR #193(`137e4a9`, #192 개발 의존성 정리와 jest 30).
+- 남은 운영 의존성 경고 `node-forge` GHSA-86w9-cpqp-85rv 2건은 수정 버전이 없어 '감수 가능한 위험'으로 닫았다. #180 의 검토 예외(`scripts/supply-chain-gate.cjs`)에 **재검토 기한 2027-01-31** 이 있다. 그 전에 node-forge 새 버전이 나오면 올려라.
 
-먼저 `main` 의 CI 결과를 확인하라. 이 문서를 쓸 때 `main` push 의 CI(실행 39243797336)가 돌고 있었다. 같은 커밋 내용이 PR 에서는 모두 통과했다.
+새 작업을 시작하기 전에 상태를 확인하라.
 
 ```powershell
 Set-Location C:\Work\git\_Snoworca\TTTGate
 gh run list --repo ice3x2/TTTGate --branch main --limit 3
-gh issue view 192 --repo ice3x2/TTTGate
+gh issue list --repo ice3x2/TTTGate --state open
+gh api "repos/ice3x2/TTTGate/dependabot/alerts?state=open" --jq length
 ```
 
 ## 1. 현재 상태
 
 | 항목 | 값 |
 |---|---|
-| `main` | `6a295dc` — PR #185 병합 커밋 |
+| `main` | `137e4a9` — PR #193 병합 커밋 |
 | `refactor/admin` | `main` 과 같은 커밋에서 이 문서를 커밋한 상태(원격 반영) |
-| 열린 이슈 | #192 (개발 의존성 경고) |
+| 열린 이슈·PR·Dependabot 경고 | 0 · 0 · 0 |
+| 테스트 도구 | jest 30, ts-jest 29.4, `tsconfig.jest.json` |
 | 남은 워크트리·작업 브랜치·stash | 없음 |
 | 릴리스 태그·바이너리 | 만들지 않았다. `build-release*.yml` 은 수동 실행(`workflow_dispatch`)이다 |
 
@@ -37,7 +40,7 @@ gh issue view 192 --repo ice3x2/TTTGate
    - 약한 서버(0.5코어·512MB) 기한 조정(#181)과 그 결과 문서(#184)
 3. **통합 정리 커밋 2건** — `d7244db`, `f809727`. 여러 브랜치를 병합하면서 어긋난 테스트를 맞췄다.
 
-## 2. 이 세션(2026-10-19)이 한 일
+## 2. 이 세션(2026-10-19~20)이 한 일
 
 1. 재부팅 뒤 상태를 점검했다. 잃은 작업물은 없었다. 직전 세션은 #184 를 닫은 직후에 끊겼다.
 2. 커밋하지 않고 남아 있던 문서를 커밋했다: `CLAUDE.md` 의 "작업 진행 방식" 절, 확정 시안 `docs/design/2026-10-15-admin-console-mockup.html`, 2026-10-16 핸드오프, 이 문서.
@@ -53,7 +56,8 @@ gh issue view 192 --repo ice3x2/TTTGate
 | #190 | 정리하지 않은 기한 타이머 때문에 `test:unit` 이 전부 통과해도 종료 코드 1 | `9ddd99f` |
 | #191 | CI 의 컴포넌트 테스트를 별도 작업(90분)으로 분리 | `2d9c336` |
 
-5. 병합 뒤 Dependabot 경고를 확인하고 #192 로 등록했다(§4).
+5. 병합 뒤 Dependabot 경고를 확인하고 #192 로 등록했다.
+6. 사용자가 "#192 도 자동으로, 모든 이슈를 해결" 을 지시했다. #192 를 처리하고 PR #193 으로 `main` 에 병합했다(§4).
 
 ## 3. CI 에서 드러난 것 — PR #185
 
@@ -68,16 +72,21 @@ gh issue view 192 --repo ice3x2/TTTGate
 
 #189 를 처리하면서 WSL 에서 `test:component` 를 미리 돌려 같은 종류의 결함(1024 미만 포트)을 하나 더 찾아 함께 고쳤다.
 
-## 4. 남아 있는 것
+## 4. #192 — 개발 의존성 정리 (PR #193)
 
-### #192 — 개발 의존성 경고
-
-| 범위 | 결과 |
+| 조치 | 해소한 경고 |
 |---|---|
-| 루트·admin 운영 의존성(`npm audit --omit=dev`) | 각각 high 1 — `node-forge`(수정 버전 없음, #180 의 검토 예외) |
-| 루트 전체 | 46건 — 모두 개발 의존성. 상당수가 jest 30·vite 8 메이저 업그레이드로만 고쳐진다 |
+| 루트에서 쓰지 않는 `vite` ^4 제거 | vite·esbuild·postcss·nanoid |
+| `nodemon` 제거, `ts-node-dev` → `node --watch --require ts-node/register` | chokidar → braces |
+| jest·@types/jest 30, ts-jest 29.4, `@types/picomatch`(jest 30 타입 누락 보완) | jest 29 계열 |
+| `overrides.argparse` ^2.0.1 (js-yaml 3 은 argparse 를 CLI 에서만 씀) | sprintf-js |
+| admin `npm audit fix` | devalue, source-map-js |
 
-메이저 업그레이드는 테스트 도구 자체를 바꾸므로 단계를 나눠 전체 테스트와 CI 로 확인하라.
+ts-jest 29.4 는 `isolatedModules` 옵션을 tsconfig 에서 읽는다. 루트 `tsconfig.json` 은 빌드용이라 `false` 이고, 이를 `true` 로 바꾸면 타입 재수출 85곳에서 TS1205 가 난다. 그래서 jest 전용 `tsconfig.jest.json` 을 두었다. `jest.config.ts` 와 `test/fixtures/artifact-sandbox.cjs` 가 이것을 쓴다.
+
+jest 30 으로 바꾸자 `compound-admission-controls.test.ts` 가 시간 초과로 실패했다. 이 파일만 기본 5초 제한이었고 테스트당 4~5초가 걸렸다. 시간 초과 뒤에는 정리 전에 다음 테스트가 시작되어 두 번째도 실패했고, CI 에서는 jest 가 종료하지 못해 90분에 취소됐다. 60초로 고쳤다(`81ff0c7`).
+
+## 5. 남아 있는 것
 
 ### 리뷰가 남긴 LOW (막는 문제 아님)
 
@@ -86,9 +95,10 @@ gh issue view 192 --repo ice3x2/TTTGate
 
 ### 확정하지 못한 것
 
-- `test/component/server/ProtocolV2.test.ts` 의 "rejects legacy handshakes from an address that keeps failing" 이 WSL 에서 전체 실행 직후 두 번 실패했다. 그 뒤 단독 실행 4번과 CI 는 모두 통과했다. 부하로 보지만 확정하지 못했다. 다시 실패하면 조사하라.
+- `test/component/server/ProtocolV2.test.ts` 의 "rejects legacy handshakes from an address that keeps failing" 은 **WSL(Linux)에서 `test:component` 전체를 한 프로세스로 돌릴 때** 실패한다(jest 29·30 모두, 세 번). 매번 10번째 시도의 연결이 3초 안에 닫히지 않는다. 단독 실행과 GitHub CI 에서는 모두 통과했다. 서버는 인증 실패 1초 뒤 연결을 닫는데, 긴 실행에서 이벤트 루프가 2초 넘게 밀리는 것으로 보지만 확정하지 못했다. CI 에서 실패하면 그때 원인을 파고들어라.
+- `test/component/client/client-owner.test.ts` 의 "old upper tunnel-send cannot alter a real scheduled replacement" 도 같은 WSL 전체 실행에서 한 번 실패했다(픽스처의 3초 기한, `Missing NewDataHandler`). CI 에서는 통과했다.
 
-## 5. 함정
+## 6. 함정
 
 2026-10-16 문서 §6 이 원본이다. 이번에 새로 확인한 것만 적는다.
 
@@ -119,19 +129,28 @@ WSL 에서 Linux 쪽을 미리 확인할 수 있다.
 - 공급망 테스트(`npm ls`)는 Windows 에서 설치한 `node_modules` 의 extraneous 패키지 때문에 WSL 에서 실패한다. CI 는 `npm ci` 로 설치하므로 해당하지 않는다.
 - WSL 에서 테스트를 돌리면 메인 작업 트리의 `reports/` 가 다시 쓰인다. 끝나면 되돌려라.
 
+### 이 PC 의 npm 은 기본으로 개발 의존성을 뺀다
+
+Windows npm 사용자 설정에 `omit=dev` 가 있다. `npm ci`·`npm install`·`npm audit` 에 **`--include=dev` 를 붙여라.** 빼면 jest 없이 설치되고 감사도 운영 의존성만 본다. 2026-10-20 에 이것 때문에 처음 설치를 다시 했다.
+
+### jest 30 은 WSL 에서 Windows 용 `node_modules` 로 돌지 않는다
+
+jest 30 의 모듈 해석기(`unrs-resolver`)는 플랫폼별 네이티브 바이너리를 쓴다. Windows 에서 설치한 `node_modules` 로 WSL 에서 jest 를 돌리면 `Module ts-jest in the transform option was not found` 가 난다. Linux 쪽을 확인하려면 WSL 의 Linux 경로(예: scratchpad)에 저장소를 복제하고 그 안에서 `npm ci --include=dev` 로 따로 설치해 돌려라. 이번에 그렇게 해서 `test:component` 를 31분에 돌렸다.
+
 ### `reports/` 는 커밋하지 마라
 
 `npm run lint` 와 일부 테스트가 `reports/*.json` 의 시각·수치를 다시 쓴다. 커밋 전에 `git checkout -- reports/` 로 되돌려라.
 
 ### 테스트 시간
 
-Windows 전체 테스트는 약 78분이다. CI 는 작업별로 단위 13분, 컴포넌트 30분, E2E 17분이다. 다른 작업과 병행하면 타임아웃과 `ECONNRESET` 으로 거짓 실패가 난다. 실패한 묶음만 단독으로 다시 돌려 판정하라. PowerShell 에서 출력은 파일로 받아라.
+Windows 에서 CI 와 같은 다섯 묶음을 차례로 돌리면 약 70분이다(단위 17, 컴포넌트 34, 관리자 16, E2E 1, 브라우저 1). CI 는 작업별로 단위 18분, 컴포넌트 30분, E2E 15분이다. PowerShell 의 `*>` 는 출력 파일을 UTF-16 으로 쓴다. WSL 에서 읽으려면 `iconv -f UTF-16LE -t UTF-8` 로 바꿔라. 다른 작업과 병행하면 타임아웃과 `ECONNRESET` 으로 거짓 실패가 난다. 실패한 묶음만 단독으로 다시 돌려 판정하라. PowerShell 에서 출력은 파일로 받아라.
 
-## 6. 관련 문서
+## 7. 관련 문서
 
 - 이전 핸드오프: `C:\Work\git\_Snoworca\TTTGate\docs\next\2026-10-16-wave8-audit-store.md` — §6 함정 목록
 - 확정 결정 11건·루프 절차의 원본: `C:\Work\git\_Snoworca\TTTGate\docs\next\2026-09-15-wave8-admin-rbac.md`
 - 화면 시안(확정): `C:\Work\git\_Snoworca\TTTGate\docs\design\2026-10-15-admin-console-mockup.html`
 - 업그레이드 안내: `C:\Work\git\_Snoworca\TTTGate\docs\guide\MIGRATION.md`
 - 프로젝트 지침: `C:\Work\git\_Snoworca\TTTGate\CLAUDE.md` — 서브에이전트는 최대 한 개, 모든 작업은 직렬
-- 에픽: https://github.com/ice3x2/TTTGate/issues/125 · 병합 PR: https://github.com/ice3x2/TTTGate/pull/185
+- 공급망 검토 예외: `C:\Work\git\_Snoworca\TTTGate\scripts\supply-chain-gate.cjs` 의 `REVIEWED_ADVISORIES`
+- 에픽: https://github.com/ice3x2/TTTGate/issues/125 · 병합 PR: https://github.com/ice3x2/TTTGate/pull/185 , https://github.com/ice3x2/TTTGate/pull/193
