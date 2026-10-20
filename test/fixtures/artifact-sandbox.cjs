@@ -30,7 +30,7 @@ if(process.argv[2] === 'prepare') {
             }
         }
     }
-    ['src', ...tests, 'scripts/lint-auth-compare.mjs', 'tsconfig.json', 'tsconfig.jest.json', 'package.json', 'test/fixtures/artifact-observer.cjs'].forEach(add);
+    ['src', ...tests, 'scripts/lint-auth-compare.mjs', 'tsconfig.json', 'tsconfig.jest.json', 'package.json', 'test/fixtures/artifact-observer.cjs', 'test/setup/forgeBigInteger.ts'].forEach(add);
     const manifest = [...files].sort().map(relative => {
         const source = path.join(repository, relative), destination = path.join(workspace, relative);
         fs.mkdirSync(path.dirname(destination), {recursive: true}); fs.copyFileSync(source, destination);
@@ -39,7 +39,7 @@ if(process.argv[2] === 'prepare') {
     const dependencies = path.join(repository, 'node_modules');
     const config = {rootDir: workspace, testEnvironment: path.join(dependencies, 'jest-environment-node/build/index.js'),
         transform: {'^.+\\.ts$': [path.join(dependencies, 'ts-jest'), {diagnostics: true, tsconfig: path.join(workspace, 'tsconfig.jest.json')}]},
-        modulePaths: [dependencies], moduleFileExtensions: ['ts', 'tsx', 'js', 'json'],
+        setupFiles: [path.join(workspace, 'test/setup/forgeBigInteger.ts')], modulePaths: [dependencies], moduleFileExtensions: ['ts', 'tsx', 'js', 'json'],
         setupFilesAfterEnv: [path.join(workspace, 'test/fixtures/artifact-observer.cjs')], cacheDirectory: path.join(root, 'jest-cache')};
     fs.writeFileSync(path.join(root, 'jest.json'), JSON.stringify(config));
     fs.writeFileSync(path.join(evidence, 'manifest.json'), JSON.stringify({root, evidence, workspace,
