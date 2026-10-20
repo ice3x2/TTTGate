@@ -5,7 +5,7 @@
  * 검증 항목:
  *  1. 10,000개 토큰 생성 시 중복 0건
  *  2. 모든 토큰이 hex 정규식과 매치(2*length 길이)
- *  3. 바이트 분포 카이제곱 p > 0.01 (균등성 근사 검사)
+ *  3. 바이트 분포 카이제곱 p > 0.01 (균등성 근사 검사, 독립 표본 최대 3회)
  *  4. IdentityRegistry.issueBindingToken 또한 예측 가능 시드(Math.random)와
  *     분리되어 있는지 — 두 번 호출 결과가 서로 다름을 확인(통계적 충돌 확률 ~0)
  *
@@ -40,6 +40,21 @@ function chiSquareBytes(bytes: Buffer): { chi2: number; n: number } {
     return { chi2, n: bytes.length };
 }
 
+/**
+ * 독립 표본으로 최대 attempts 번 검정해 처음 통과한 시도에서 멈춘다(#198).
+ * p=0.01 검정을 한 번만 하면 정상 CSPRNG 도 약 1% 확률로 실패한다. 세 번 모두 넘을 확률은 약 10^-6 이고,
+ * 편향된 생성기는 64만 바이트 표본에서 매번 크게 벗어나므로 검출력은 유지된다.
+ */
+function resampledChi2(sample: () => number, critical: number, attempts = 3): { chi2s: number[]; pass: boolean } {
+    const chi2s: number[] = [];
+    for (let i = 0; i < attempts; i++) {
+        const chi2 = sample();
+        chi2s.push(chi2);
+        if (chi2 <= critical) return { chi2s, pass: true };
+    }
+    return { chi2s, pass: false };
+}
+
 describe("REQ-01 createOpaqueToken (CSPRNG)", () => {
     it("10000개 토큰 중복 0건 + hex 정규식 매치", () => {
         const N = 10000;
@@ -58,26 +73,36 @@ describe("REQ-01 createOpaqueToken (CSPRNG)", () => {
         const N = 20000;
         const LEN = 32;
         // 모든 토큰을 이어붙여 한 바이트 스트림으로 카이제곱 분석
-        const parts: Buffer[] = [];
-        for (let i = 0; i < N; i++) {
-            parts.push(Buffer.from(createOpaqueToken(LEN), "hex"));
-        }
-        const all = Buffer.concat(parts);
-        const { chi2, n } = chiSquareBytes(all);
+        const sample = (): number => {
+            const parts: Buffer[] = [];
+            for (let i = 0; i < N; i++) {
+                parts.push(Buffer.from(createOpaqueToken(LEN), "hex"));
+            }
+            return chiSquareBytes(Buffer.concat(parts)).chi2;
+        };
         // df=255 p=0.01 critical value ≈ 310.457
         // (CSPRNG은 평균 255 근처)
         const P01_CRITICAL = 310.457;
+        const result = resampledChi2(sample, P01_CRITICAL);
         writeReport("req-01-chi2.json", {
             generatedAt: new Date().toISOString(),
             N,
             tokenLengthBytes: LEN,
-            totalBytes: n,
-            chi2,
+            totalBytes: N * LEN,
+            chi2: result.chi2s[result.chi2s.length - 1],
+            attempts: result.chi2s,
             df: 255,
             p01Critical: P01_CRITICAL,
-            pass: chi2 <= P01_CRITICAL
+            pass: result.pass
         });
-        expect(chi2).toBeLessThanOrEqual(P01_CRITICAL);
+        expect(result.pass).toBe(true);
+    });
+
+    it("재표본 판정은 처음 통과한 시도에서 멈추고, 모든 시도가 넘으면 실패한다", () => {
+        const sequence = (values: number[]) => { let i = 0; return () => values[i++]; };
+        expect(resampledChi2(sequence([250]), 310)).toEqual({chi2s: [250], pass: true});
+        expect(resampledChi2(sequence([320, 260, 999]), 310)).toEqual({chi2s: [320, 260], pass: true});
+        expect(resampledChi2(sequence([320, 330, 340, 250]), 310)).toEqual({chi2s: [320, 330, 340], pass: false});
     });
 
     it("IdentityRegistry.issueBindingToken 은 CSPRNG으로 비예측 값 생성", () => {
