@@ -4,9 +4,9 @@
 
 ## 0. 다음 세션의 첫 행동
 
-**남은 일이 없다.** 열린 이슈·PR·Dependabot 경고가 모두 0건이다(2026-10-20 기준).
+**남은 일이 없다.** 열린 이슈·PR·Dependabot 경고가 모두 0건이다(2026-10-21 기준).
 
-- `refactor/admin` 은 `main` 에 두 번 병합됐다: PR #185(`6a295dc`, 에픽 #125 와 #130~#191), PR #193(`137e4a9`, #192 개발 의존성 정리와 jest 30).
+- `refactor/admin` 은 `main` 에 세 번 병합됐다: PR #185(`6a295dc`, 에픽 #125 와 #130~#191), PR #193(`137e4a9`, #192 개발 의존성 정리와 jest 30), PR #196(`dc6a0a3`, 테스트 불안정 해소 #194·#195·#197~#199).
 - 남은 운영 의존성 경고 `node-forge` GHSA-86w9-cpqp-85rv 2건은 수정 버전이 없어 '감수 가능한 위험'으로 닫았다. #180 의 검토 예외(`scripts/supply-chain-gate.cjs`)에 **재검토 기한 2027-01-31** 이 있다. 그 전에 node-forge 새 버전이 나오면 올려라.
 
 새 작업을 시작하기 전에 상태를 확인하라.
@@ -22,10 +22,10 @@ gh api "repos/ice3x2/TTTGate/dependabot/alerts?state=open" --jq length
 
 | 항목 | 값 |
 |---|---|
-| `main` | `137e4a9` — PR #193 병합 커밋 |
+| `main` | `dc6a0a3` — PR #196 병합 커밋 |
 | `refactor/admin` | `main` 과 같은 커밋에서 이 문서를 커밋한 상태(원격 반영) |
 | 열린 이슈·PR·Dependabot 경고 | 0 · 0 · 0 |
-| 테스트 도구 | jest 30, ts-jest 29.4, `tsconfig.jest.json` |
+| 테스트 도구 | jest 30, ts-jest 29.4, `tsconfig.jest.json`, `test/setup/forgeBigInteger.ts`(setupFiles) |
 | 남은 워크트리·작업 브랜치·stash | 없음 |
 | 릴리스 태그·바이너리 | 만들지 않았다. `build-release*.yml` 은 수동 실행(`workflow_dispatch`)이다 |
 
@@ -40,7 +40,7 @@ gh api "repos/ice3x2/TTTGate/dependabot/alerts?state=open" --jq length
    - 약한 서버(0.5코어·512MB) 기한 조정(#181)과 그 결과 문서(#184)
 3. **통합 정리 커밋 2건** — `d7244db`, `f809727`. 여러 브랜치를 병합하면서 어긋난 테스트를 맞췄다.
 
-## 2. 이 세션(2026-10-19~20)이 한 일
+## 2. 이 세션(2026-10-19~21)이 한 일
 
 1. 재부팅 뒤 상태를 점검했다. 잃은 작업물은 없었다. 직전 세션은 #184 를 닫은 직후에 끊겼다.
 2. 커밋하지 않고 남아 있던 문서를 커밋했다: `CLAUDE.md` 의 "작업 진행 방식" 절, 확정 시안 `docs/design/2026-10-15-admin-console-mockup.html`, 2026-10-16 핸드오프, 이 문서.
@@ -58,6 +58,7 @@ gh api "repos/ice3x2/TTTGate/dependabot/alerts?state=open" --jq length
 
 5. 병합 뒤 Dependabot 경고를 확인하고 #192 로 등록했다.
 6. 사용자가 "#192 도 자동으로, 모든 이슈를 해결" 을 지시했다. #192 를 처리하고 PR #193 으로 `main` 에 병합했다(§4).
+7. 사용자가 "WSL 에서만 실패하는 테스트 2건도 원인 찾아 고치라" 고 지시했다. 근본 원인을 찾아 #194 로 고치고, 검증 중 드러난 #195·#197~#199 와 함께 PR #196 으로 병합했다(§5).
 
 ## 3. CI 에서 드러난 것 — PR #185
 
@@ -93,10 +94,14 @@ jest 30 으로 바꾸자 `compound-admission-controls.test.ts` 가 시간 초과
 - `Tabs` 의 클릭은 같은 탭을 다시 눌러도 `onchange` 를 부른다. 원래 있던 동작이고 새로고침 용도로 둔다.
 - #186 의 404 테스트는 '남의 터널'이 아니라 '없는 포트'로 404 를 만든다. 판정기의 같은 `NOT_FOUND` 분기를 지난다.
 
-### 확정하지 못한 것
+### 해결한 테스트 불안정 (#194·#195·#197~#199, PR #196)
 
-- `test/component/server/ProtocolV2.test.ts` 의 "rejects legacy handshakes from an address that keeps failing" 은 **WSL(Linux)에서 `test:component` 전체를 한 프로세스로 돌릴 때** 실패한다(jest 29·30 모두, 세 번). 매번 10번째 시도의 연결이 3초 안에 닫히지 않는다. 단독 실행과 GitHub CI 에서는 모두 통과했다. 서버는 인증 실패 1초 뒤 연결을 닫는데, 긴 실행에서 이벤트 루프가 2초 넘게 밀리는 것으로 보지만 확정하지 못했다. CI 에서 실패하면 그때 원인을 파고들어라.
-- `test/component/client/client-owner.test.ts` 의 "old upper tunnel-send cannot alter a real scheduled replacement" 도 같은 WSL 전체 실행에서 한 번 실패했다(픽스처의 3초 기한, `Missing NewDataHandler`). CI 에서는 통과했다.
+WSL 에서만 실패하던 `ProtocolV2`·`client-owner` 를 계측으로 조사해 근본 원인을 찾았다.
+
+- **#194 근본 원인**: jest 의 node 환경은 Node 21+ 의 전역 `navigator` 를 복사하고, node-forge 의 `jsbn` 은 `navigator` 가 있으면 곱셈 `am1` 을 고른다. jest 의 격리 환경에서 `am1` 은 약 40배 느려(RSA 서명 3번 70ms → 3,895ms) 인증서를 만들거나 확인하는 테스트마다 이벤트 루프가 1.5~10초 멈췄다. 여기에 WSL VM 의 주기적 정지가 겹치면 3초 기한 단언이 실패했다. `setupFiles` 에서 `navigator` 를 지워 `am3` 를 쓰게 했다. **운영 런타임(일반 Node)은 영향이 없다.**
+- 효과: 2초 넘게 멈춘 스위트 50/109 → 0. CI 단위 18분 → 약 4분, 컴포넌트 30분 → 약 7분. Windows 단위 17분 → 4분.
+- 빨라진 뒤 드러난 기존 불안정도 고쳤다: Sentinel 저널 순서 경쟁(#195), `getFreePort` 의 임시 포트 경쟁으로 인한 `EADDRINUSE`(#197), REQ-01 카이제곱 검정의 1% 우연 실패(#198), 상태 화면 폴링 2초 창 경계(#199).
+
 
 ## 6. 함정
 
@@ -137,13 +142,17 @@ Windows npm 사용자 설정에 `omit=dev` 가 있다. `npm ci`·`npm install`·
 
 jest 30 의 모듈 해석기(`unrs-resolver`)는 플랫폼별 네이티브 바이너리를 쓴다. Windows 에서 설치한 `node_modules` 로 WSL 에서 jest 를 돌리면 `Module ts-jest in the transform option was not found` 가 난다. Linux 쪽을 확인하려면 WSL 의 Linux 경로(예: scratchpad)에 저장소를 복제하고 그 안에서 `npm ci --include=dev` 로 따로 설치해 돌려라. 이번에 그렇게 해서 `test:component` 를 31분에 돌렸다.
 
+### 이 PC 의 WSL 은 약 33초마다 0.6~1.5초 멈춘다
+
+테스트와 무관한 프로세스로 측정한 VM 전체 정지다. 저장소에서 고칠 대상이 아니다. 수 초 단위 기한을 단언하는 테스트를 새로 쓸 때는 고정 창 대신 "조건이 보일 때까지 넉넉한 기한 안에서 기다림" 으로 써라(#199 참조). 테스트 안에서 이벤트 루프 지연을 재려면 `perf_hooks.monitorEventLoopDelay` 를 `--setupFilesAfterEnv` 로 거는 방법이 이번에 쓸모 있었다.
+
 ### `reports/` 는 커밋하지 마라
 
 `npm run lint` 와 일부 테스트가 `reports/*.json` 의 시각·수치를 다시 쓴다. 커밋 전에 `git checkout -- reports/` 로 되돌려라.
 
 ### 테스트 시간
 
-Windows 에서 CI 와 같은 다섯 묶음을 차례로 돌리면 약 70분이다(단위 17, 컴포넌트 34, 관리자 16, E2E 1, 브라우저 1). CI 는 작업별로 단위 18분, 컴포넌트 30분, E2E 15분이다. PowerShell 의 `*>` 는 출력 파일을 UTF-16 으로 쓴다. WSL 에서 읽으려면 `iconv -f UTF-16LE -t UTF-8` 로 바꿔라. 다른 작업과 병행하면 타임아웃과 `ECONNRESET` 으로 거짓 실패가 난다. 실패한 묶음만 단독으로 다시 돌려 판정하라. PowerShell 에서 출력은 파일로 받아라.
+Windows 에서 CI 와 같은 다섯 묶음을 차례로 돌리면 약 28분이다(단위 4, 컴포넌트 7, 관리자 15, E2E 1, 브라우저 1). CI 는 작업별로 단위 약 4분, 컴포넌트 약 7분, E2E 약 13분이다(#194 이후). PowerShell 의 `*>` 는 출력 파일을 UTF-16 으로 쓴다. WSL 에서 읽으려면 `iconv -f UTF-16LE -t UTF-8` 로 바꿔라. 다른 작업과 병행하면 타임아웃과 `ECONNRESET` 으로 거짓 실패가 난다. 실패한 묶음만 단독으로 다시 돌려 판정하라. PowerShell 에서 출력은 파일로 받아라.
 
 ## 7. 관련 문서
 
