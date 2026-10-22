@@ -61,6 +61,11 @@ class EnrollmentRegistry {
         }
     }
 
+    /** 발급한 코드를 모두 무효로 한다(#221 — 제어 포트의 TLS·모드가 바뀔 때). 실패 기록은 둔다. */
+    public revokeAll(): void {
+        this._pending.clear();
+    }
+
     public clear(): void {
         this._pending.clear();
         this._failures.clear();
