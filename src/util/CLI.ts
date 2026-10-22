@@ -41,6 +41,7 @@ class CLI {
     private static findMode(items: string[]): number {
         for(let i = 0; i < items.length; i++) {
             const item = items[i];
+            if(item.length === 0) continue;
             if(!optionToken(item)) {
                 return KNOWN_MODES.has(item as CliMode) ? i : -1;
             }
@@ -64,7 +65,8 @@ class CLI {
     }
 
     public static parseCommandLine(argv?: string[]): ParsedCommandLine {
-        const items = CLI.normalizeArgs(argv).filter(item => item.length > 0);
+        // 빈 토큰(비어 있는 셸 변수)도 자리를 지킨다. 지우면 값 옵션이 다음 옵션을 값으로 삼킨다.
+        const items = CLI.normalizeArgs(argv);
         const modeIndex = CLI.findMode(items);
         const mode: CliMode = modeIndex >= 0 ? items[modeIndex] as CliMode : "none";
         const result: ParsedCommandLine = {mode, command: [], positionals: [], options: {}, errors: []};
@@ -75,6 +77,7 @@ class CLI {
         for(let i = 0; i < items.length; i++) {
             if(i === modeIndex) continue;
             const item = items[i];
+            if(item.length === 0) continue;
             if(!optionToken(item)) {
                 loose.push(item);
                 continue;
@@ -97,12 +100,10 @@ class CLI {
                     value = items[++i];
                 }
                 result.options[name] = value;
-            } else if(inlineValue !== undefined) {
-                result.options[name] = inlineValue;
-            } else if(i + 1 < items.length) {
-                result.options[name] = items[++i];
             } else {
-                result.errors.push(`option '-${name}' needs a value`);
+                const value = inlineValue ?? (i + 1 < items.length ? items[++i] : undefined);
+                if(value === undefined || value.length === 0) result.errors.push(`option '-${name}' needs a value`);
+                else result.options[name] = value;
             }
             given.push({def, token: item.split("=")[0]});
         }

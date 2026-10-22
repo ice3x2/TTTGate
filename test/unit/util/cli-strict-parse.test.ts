@@ -27,6 +27,13 @@ describe("CLI.parseCommandLine values (#203)", () => {
         expect(parsed.errors).toEqual([expect.stringContaining("-clientSecret")]);
     });
 
+    test("REQ-4 an empty value (an unset shell variable) is an error and does not swallow the next option", () => {
+        const parsed = CLI.parseCommandLine(["client", "-clientSecret", "", "-tls"]);
+        expect(parsed.errors).toEqual([expect.stringContaining("-clientSecret")]);
+        expect(parsed.options.tls).toBe("");
+        expect(CLI.parseCommandLine(["client", "-clientSecret=", "-tls"]).errors).toEqual([expect.stringContaining("-clientSecret")]);
+    });
+
     test("REQ-5 a token in a value position is never the mode", () => {
         const parsed = CLI.parseCommandLine(["-name", "server", "client"]);
         expect(parsed.errors).toEqual([]);

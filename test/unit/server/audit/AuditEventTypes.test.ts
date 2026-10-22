@@ -16,12 +16,15 @@ const EXPECTED_TYPES = [
     "security_geo_updated", "security_ban_removed",
     "access_denied", "last_superuser_guard_hit", "request_body_rejected",
     "conn_limit_hit", "tunnel_autoexpire",
-    "audit_retention_pruned"
+    "audit_retention_pruned",
+    // #212 신뢰 클라이언트·등록
+    "trusted_client_created", "trusted_client_deleted", "trusted_client_secret_rotated",
+    "enrollment_code_issued", "client_enrolled", "client_enroll_failed"
 ];
 
 describe("AuditEventTypes", () => {
-    it("표의 이름 42 개를 모두 담는다", () => {
-        expect(AUDIT_EVENT_TYPE_LIST).toHaveLength(42);
+    it("표의 이름 48 개를 모두 담는다", () => {
+        expect(AUDIT_EVENT_TYPE_LIST).toHaveLength(48);
         expect([...AUDIT_EVENT_TYPE_LIST].sort()).toEqual([...EXPECTED_TYPES].sort());
     });
 

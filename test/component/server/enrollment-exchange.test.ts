@@ -94,10 +94,16 @@ describe("trusted client enrollment and hot update", () => {
         await waitFor(() => { if(!onlineIds().includes("edge")) throw new Error("not online"); return true; }, {timeoutMs: 15_000, intervalMs: 50});
     });
 
-    test("REQ-7 a wrong code is rejected without telling why", async () => {
+    test("REQ-7 a wrong code is rejected without telling why; throttled attempts are not audited and leave no state", async () => {
         await start();
         expect(await requestEnrollment({host: "127.0.0.1", port, code: "0000-0000-0000"}))
             .toMatchObject({ok: false, category: "rejected"});
+        for(let n = 0; n < 10; n++) await requestEnrollment({host: "127.0.0.1", port, code: "0000-0000-0000"});
+        expect(await requestEnrollment({host: "127.0.0.1", port, code: "0000-0000-0000"})).toMatchObject({ok: false, category: "throttled"});
+        await waitFor(() => { if((server.tunnelServer as any)._rejectedHandlerIds.size !== 0) throw new Error("rejected ids remain"); return true; },
+            {timeoutMs: 5000, intervalMs: 50});
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        expect(sink.events.filter((event) => event.type === "client_enroll_failed")).toHaveLength(10);
     });
 
     test("REQ-8 no code is issued while the control port is plain text or strict mTLS, or for an unknown client", async () => {

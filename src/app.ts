@@ -50,9 +50,9 @@ let app = () => {
         return;
     }
 
-    console.log(renderVersion());
     let startType = parsedCli.mode;
     if(startType == 'none') {
+        console.log(renderVersion());
         console.log(renderHelp('none', false));
         return;
     }
@@ -71,6 +71,8 @@ let app = () => {
         return;
     }
 
+    // join·config 의 출력은 스크립트가 읽을 수 있어야 하므로 배너는 실행 모드에서만 찍는다.
+    console.log(renderVersion());
     let sentinel : Sentinel = Sentinel.create(Environment.devMode);
 
     if(startType == 'stop') {

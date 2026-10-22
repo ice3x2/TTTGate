@@ -10,6 +10,8 @@ const MIN_ENROLLMENT_TTL_MS = 60_000;
 const MAX_ENROLLMENT_TTL_MS = 24 * 3600_000;
 const MAX_ENROLLMENT_FAILURES = 10;
 const FAILURE_WINDOW_MS = 15 * 60_000;
+/** 실패를 기록하는 주소 묶음 수의 상한. 넘으면 가장 오래된 기록부터 버린다(인증 전 요청으로 메모리를 늘리지 못하게). */
+const MAX_TRACKED_FAILURE_BUCKETS = 10_000;
 
 type PendingEnrollment = {clientId: string, keys: EnrollmentKeys, expiresAt: number};
 type TakeResult = {ok: true, clientId: string, keys: EnrollmentKeys} | {ok: false, reason: "rejected" | "throttled"};
@@ -35,8 +37,7 @@ class EnrollmentRegistry {
     public take(lookup: string, remoteAddress: string): TakeResult {
         const now = this._now();
         const bucket = rateLimitBucketOf(remoteAddress || "unknown");
-        const failures = this._failures.get(bucket);
-        if(failures && now - failures.since > FAILURE_WINDOW_MS) this._failures.delete(bucket);
+        this.pruneFailures(now);
         if((this._failures.get(bucket)?.count ?? 0) >= MAX_ENROLLMENT_FAILURES) return {ok: false, reason: "throttled"};
 
         const pending = this._pending.get(lookup);
@@ -45,6 +46,9 @@ class EnrollmentRegistry {
             const current = this._failures.get(bucket) ?? {count: 0, since: now};
             current.count++;
             this._failures.set(bucket, current);
+            while(this._failures.size > MAX_TRACKED_FAILURE_BUCKETS) {
+                this._failures.delete(this._failures.keys().next().value!);
+            }
             this.pruneExpired(now);
             return {ok: false, reason: "rejected"};
         }
@@ -60,6 +64,14 @@ class EnrollmentRegistry {
     public clear(): void {
         this._pending.clear();
         this._failures.clear();
+    }
+
+    /** 창이 지난 실패 기록을 지운다. Map 은 넣은 순서라 앞에서부터 보다가 아직 유효한 기록에서 멈춘다. */
+    private pruneFailures(now: number): void {
+        for(const [bucket, failures] of this._failures) {
+            if(now - failures.since <= FAILURE_WINDOW_MS) break;
+            this._failures.delete(bucket);
+        }
     }
 
     private pruneExpired(now: number): void {

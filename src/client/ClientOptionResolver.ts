@@ -211,7 +211,8 @@ const resolveClientOption = (input: ResolveClientOptionInput): ResolveClientOpti
         }
     }
     if(has("keepAlive")) {
-        option.keepAlive = Math.floor(parseInt(cli.keepAlive));
+        if(!/^\d+$/.test(cli.keepAlive.trim())) return cliFail(`-keepAlive '${cli.keepAlive}' must be 0 (off) or a positive integer in ms`);
+        option.keepAlive = Number(cli.keepAlive.trim());
         sources.keepAlive = "command line";
     }
     if(has("bufferLimit")) {
@@ -251,6 +252,8 @@ const resolveClientOption = (input: ResolveClientOptionInput): ResolveClientOpti
     for(const field of PEM_FIELDS) {
         const pemInput = pemInputs[field];
         if(!pemInput) continue;
+        // TLS 를 쓰지 않으면 client.yaml 의 PEM 은 쓰이지 않는다. 위에서 경고했으니 파일을 읽지 않는다.
+        if(!option.tls) continue;
         const trimmed = pemInput.value.trim();
         if(trimmed.startsWith("-----BEGIN")) {
             if(!PEM_BLOCK[field].test(trimmed)) return fileFail(`${field}: the PEM text has no ${PEM_KIND[field]} block`);
@@ -279,7 +282,12 @@ const resolveClientOption = (input: ResolveClientOptionInput): ResolveClientOpti
     // 7. -save 로 저장할 값: 사용자가 준 표기 그대로, insecure 필드·displayName 제외(#201·#209·#210, REQ-02)
     const saveOption: {[key: string]: unknown} = {...option};
     for(const field of PEM_FIELDS) {
-        if(pemInputs[field]) saveOption[field] = pemInputs[field]!.value;
+        const pemInput = pemInputs[field];
+        if(!pemInput) continue;
+        // 명령줄의 상대 경로는 작업 디렉터리 기준이고 client.yaml 은 config/ 기준이다. 다음 실행에서도 같은 파일을 찾게
+        // 명령줄에서 온 경로는 절대 경로로 저장한다. PEM 본문과 client.yaml 에서 온 값은 그대로 둔다.
+        const trimmed = pemInput.value.trim();
+        saveOption[field] = pemInput.baseDir === cwd && !trimmed.startsWith("-----BEGIN") ? Path.resolve(cwd, trimmed) : pemInput.value;
     }
     for(const name of INSECURE_FIELD_NAMES) delete saveOption[name];
     return {ok: true, option, saveOption, notices, sources};

@@ -82,6 +82,8 @@ describe("CLI entrypoint (process boundary)", () => {
             fs.writeFileSync(path.join(root, "config", "client.yaml"), YAML.stringify({host: "gw.example.com", clientSecret: "yaml-secret"}));
             const result = await run(["client", "config", "show", "-addr", "tls://gw2:9300", "-clientId", "edge"]);
             expect(result.code).toBe(0);
+            // 기계로 읽는 출력이므로 버전 배너를 붙이지 않는다.
+            expect(result.stdout.split(/\r?\n/)[0]).not.toMatch(/^TTTGate v/);
             expect(result.stdout).toMatch(/host: gw2 +\(command line\)/);
             expect(result.stdout).toMatch(/tls: true +\(command line\)/);
             expect(result.stdout).toMatch(/clientSecret: \(hidden\) +\(client\.yaml\)/);
@@ -139,6 +141,21 @@ describe("CLI entrypoint (process boundary)", () => {
             expect(client.code).toBe(2);
             expect(fs.existsSync(path.join(root, "config", "client.yaml"))).toBe(false);
             expect(binFiles()).toEqual([]);
+        });
+
+        test("REQ-1 a server.yaml that breaks the admin security policy fails in the parent with 1", async () => {
+            fs.writeFileSync(path.join(root, "config", "server.yaml"), YAML.stringify({key: "k", port: 9126, adminPort: 9300,
+                adminTls: false, adminBindHost: "127.0.0.1", tunnelingOptions: []}));
+            const result = await run(["server", "-daemon"]);
+            expect(result.code).toBe(1);
+            expect(result.stderr).toContain("admin TLS is disabled");
+            expect(binFiles()).toEqual([]);
+        });
+
+        test("a server option error does not print 'server started'", async () => {
+            const result = await run(["server", "-adminPort", "70000"]);
+            expect(result.code).toBe(1);
+            expect(result.stdout).not.toContain("server started");
         });
 
         test("REQ-5 a sentinel whose app left the config error marker stops and removes the pid files", async () => {

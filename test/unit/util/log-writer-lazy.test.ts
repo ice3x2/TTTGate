@@ -55,6 +55,13 @@ describe("lazy log files (#208 REQ-6a) and flush (#207 REQ-4)", () => {
             logger.error("after flush");
             await LoggerFactory.flush();
             expect(read()).toContain("after flush");
+
+            // 리뷰 L1: flush 가 끝나기 전에 남긴 로그도 잃지 않는다.
+            const pending = LoggerFactory.flush();
+            logger.error("during flush");
+            await pending;
+            await LoggerFactory.flush();
+            expect(read()).toContain("during flush");
         } finally {
             LoggerFactory.updateConfig(original);
             await LoggerFactory.flush();

@@ -59,4 +59,13 @@ describe("EnrollmentRegistry", () => {
         now += 15 * 60_000 + 1;
         expect(registry.take("0".repeat(64), "203.0.113.9")).toEqual({ok: false, reason: "rejected"});
     });
+
+    test("failure records of other addresses are dropped after the window and stay bounded", async () => {
+        const registry = new EnrollmentRegistry(clock);
+        for(let n = 0; n < 50; n++) registry.take("0".repeat(64), `10.1.${n}.1`);
+        expect((registry as any)._failures.size).toBe(50);
+        now += 15 * 60_000 + 1;
+        registry.take("0".repeat(64), "10.9.9.9");
+        expect((registry as any)._failures.size).toBe(1);
+    });
 });

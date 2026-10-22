@@ -71,19 +71,26 @@ const validateServerCliOptions = (cliOptions: {[key: string]: string}): {ok: tru
     }
     const yamlFile = Path.join(Environment.path.configDir, 'server.yaml');
     if(fs.existsSync(yamlFile)) {
+        let parsed: any;
         try {
-            YAML.parse(fs.readFileSync(yamlFile, 'utf-8'));
+            parsed = YAML.parse(fs.readFileSync(yamlFile, 'utf-8'));
         } catch (e) {
             return {ok: false, exitCode: 1, message: `cannot parse ${yamlFile}: ${(e as Error).message}`};
+        }
+        // 가장 흔한 기동 실패인 관리자 보안 정책도 부모에서 본다. 명령줄 허용 플래그를 그대로 반영한다.
+        if(parsed && typeof parsed === 'object') {
+            const decision = evaluateAdminSecurityPolicy({...parsed, adminTls: parsed.adminTls === true},
+                buildAdminSecurityAllowancesFromCliOptions(cliOptions));
+            if(!decision.allowed) return {ok: false, exitCode: 1, message: formatAdminSecurityPolicyErrors(decision)};
         }
     }
     return {ok: true};
 };
 
-const applyStartupOptions = (cliOptions: {[key: string]: string}, serverOptionStore: ServerOptionStore): boolean => {
+const applyStartupOptions = async (cliOptions: {[key: string]: string}, serverOptionStore: ServerOptionStore): Promise<boolean> => {
     const valid = validateServerCliOptions(cliOptions);
     if(!valid.ok) {
-        void exitWithConfigError(valid.exitCode, valid.message, logger);
+        await exitWithConfigError(valid.exitCode, valid.message, logger);
         return false;
     }
     if(cliOptions["adminPort"]) {
@@ -122,7 +129,7 @@ let ServerApp : {start(options?: {[key: string]: string}) : Promise<void>} = {
             return;
         }
         await certStore.load();
-        if(!applyStartupOptions(cliOptions, serverOptionStore)) return;
+        if(!await applyStartupOptions(cliOptions, serverOptionStore)) return;
         const policyDecision = evaluateAdminSecurityPolicy(serverOptionStore.serverOption);
         if(!policyDecision.allowed) {
             await exitWithConfigError(1, formatAdminSecurityPolicyErrors(policyDecision), logger);

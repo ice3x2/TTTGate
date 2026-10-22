@@ -52,7 +52,9 @@ const _saveClientOption = (saveOption: {[key: string]: unknown}): string => {
     const sanitized = {...saveOption};
     for(const name of INSECURE_FIELD_NAMES) delete sanitized[name];
     const file = new File(Environment.path.configDir, CLIENT_OPTION_FILE_NAME);
-    Files.writeSync(file, YAML.stringify(sanitized));
+    fs.mkdirSync(Environment.path.configDir, {recursive: true});
+    // 처음부터 0600 으로 만든다(쓴 뒤 chmod 하면 그 사이 비밀값이 0644 로 보인다). 기존 파일은 아래 chmod 가 맞춘다.
+    fs.writeFileSync(file.toString(), YAML.stringify(sanitized), {encoding: "utf-8", mode: 0o600});
     if(process.platform !== "win32") {
         try {
             fs.chmodSync(file.toString(), 0o600);

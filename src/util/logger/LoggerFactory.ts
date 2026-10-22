@@ -54,9 +54,9 @@ class LoggerFactory {
     public static async flush(): Promise<void> {
         const writers = [...new Set(this._logWriterMap.values())];
         this._logWriterMap.clear();
-        await Promise.all(writers.map(writer => writer.endAsync()));
-        // writer 는 첫 기록 때 파일을 열므로 새로 만들어도 부작용이 없다.
+        // 새 writer 로 먼저 바꾼다. 끝내는 동안 들어온 로그는 새 writer 가 받는다(첫 기록 때 파일을 열므로 부작용이 없다).
         this.newLogWriters(this._loggerConfig);
+        await Promise.all(writers.map(writer => writer.endAsync()));
     }
 
     public static getLogger(name: string, module?: string) : Logger {

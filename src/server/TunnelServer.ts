@@ -918,10 +918,18 @@ class TunnelServer {
                 response = {ok: false, reason: taken.ok ? "rejected" : taken.reason};
             }
         }
-        this._enrollment?.onEvent({success: response.ok, clientId, address, reason: response.ok ? undefined : response.reason});
+        // 제한에 걸린 요청과 등록을 받지 않는 서버의 요청은 감사하지 않는다. 인증 전 연결로 감사 큐를 채우지 못하게 한다.
+        if(response.ok || response.reason === "rejected") {
+            this._enrollment?.onEvent({success: response.ok, clientId, address, reason: response.ok ? undefined : response.reason});
+        }
         this._rejectedHandlerIds.add(handler.id);
         handler.sendData(CtrlPacket.createEnrollResponse(response).toBuffer(), () => {
-            setTimeout(() => handler.destroy(), 250);
+            const timer = setTimeout(() => {
+                this._authTimeouts.delete(timer);
+                this._rejectedHandlerIds.delete(handler.id);
+                handler.destroy();
+            }, 250);
+            this._authTimeouts.add(timer);
         });
     }
 

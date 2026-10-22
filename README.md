@@ -157,7 +157,7 @@ Client options:
   - `-serverName <name>`: expected TLS server name.
   - `-cert <path|pem>`, `-privateKey <path|pem>`: client certificate and key for mutual TLS.
 - Run
-  - `-save`: save the resolved options to `config/client.yaml`. The file keeps the paths you gave, not the file contents. On Linux the file mode is 0600.
+  - `-save`: save the resolved options to `config/client.yaml`. The file keeps paths, not file contents. A relative path from the command line is saved as an absolute path, so the next start finds the same file. On Linux the file mode is 0600.
   - `-daemon`: run in the background with process monitoring.
 - Tuning
   - `-keepAlive <ms>`: control connection TCP keepalive interval.
@@ -186,6 +186,7 @@ A daemon whose app stops with a configuration error is not restarted. The reason
 **Changes in the client command line and trusted clients:**
 
 - The control port certificate is now stored in `cert/control.cert.pem` and kept across restarts. Its only name is `tttgate-control`. Clients that pin it use `serverName: tttgate-control`. `client join` sets both for you.
+  - The certificate is valid for one year. The server makes a new one at start when fewer than 30 days remain. After that, every client must enroll again (or pin the new certificate), so restart the server at a planned time before the year ends.
 - Trusted clients can no longer be changed through `POST /api/serverOption`. Use `/api/trustedClients` or the **Trusted clients** screen. `GET /api/serverOption` shows `********` in place of client secrets. Sending the masked list back keeps the stored secrets.
 - Adding or removing a trusted client no longer restarts the control listener. Only the removed client, or a client whose secret was renewed, is disconnected.
 - The client stops with an error for options it does not know (exit code 2), and for a `-ca`, `-cert`, `-privateKey` or `-clientSecretFile` file that it cannot read (exit code 78). Check your service scripts.

@@ -70,9 +70,19 @@ describe("#201 -ca / -cert / -privateKey accept a path or PEM text", () => {
         expect(fail(resolve({cert: "client.key"})).exitCode).toBe(78);
     });
 
-    test("REQ-5 -save keeps what the user gave (the path), not the file contents", () => {
+
+    test("REQ-5 a relative command-line path is saved as an absolute path so the next start finds it", () => {
         fs.writeFileSync(path.join(cwd, "ca.pem"), CA_PEM);
-        expect(ok(resolve({ca: "ca.pem"})).saveOption.ca).toBe("ca.pem");
+        const result = ok(resolve({ca: "ca.pem"}));
+        expect(result.saveOption.ca).toBe(path.join(cwd, "ca.pem"));
+        expect(ok(resolve({ca: CA_PEM})).saveOption.ca).toBe(CA_PEM);
+    });
+
+    test("an unused client.yaml PEM file (tls false) only warns", () => {
+        writeYaml({host: "gw", tls: false, ca: "missing.pem"});
+        const result = ok(resolve());
+        expect(result.option.tls).toBe(false);
+        expect(warnings(result).join("\n")).toContain("ca");
     });
 
     test("REQ-6 errors about the private key never include its contents", () => {
@@ -257,4 +267,13 @@ describe("client.yaml insecure gate keeps working", () => {
         expect(accepted.option.allowInsecureTls).toBe(true);
         expect("allowInsecureTls" in accepted.saveOption).toBe(false);
     });
+
+describe("-keepAlive (epic #216: a bad command-line value fails with 2)", () => {
+    test.each(["abc", "10abc", "-1", "1.5"])("rejects %s", (value) => {
+        expect(fail(resolve({keepAlive: value})).exitCode).toBe(2);
+    });
+    test.each(["0", "15000"])("accepts %s", (value) => {
+        expect(ok(resolve({keepAlive: value})).option.keepAlive).toBe(Number(value));
+    });
+});
 });

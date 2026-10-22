@@ -17,8 +17,14 @@ const SERVER_CA_FILE_NAME = "server-ca.pem";
 
 type JoinIo = {configDir: string, out: (line: string) => void, err: (line: string) => void};
 
-const restrictToOwner = (file: string): void => {
-    if(process.platform !== "win32") fs.chmodSync(file, 0o600);
+/** 권한을 0600 으로 맞춘다. chmod 를 지원하지 않는 파일 시스템(CIFS 등)에서는 경고만 남긴다. */
+const restrictToOwner = (file: string, io: JoinIo): void => {
+    if(process.platform === "win32") return;
+    try {
+        fs.chmodSync(file, 0o600);
+    } catch (e) {
+        io.err(`warning: cannot restrict ${file} to 0600 (${(e as NodeJS.ErrnoException).code ?? (e as Error).message}). It holds the client secret.`);
+    }
 };
 
 const runClientJoin = async (addr: string, options: {[key: string]: string}, io: JoinIo): Promise<number> => {
@@ -62,7 +68,7 @@ const runClientJoin = async (addr: string, options: {[key: string]: string}, io:
         if(fs.existsSync(yamlFile)) {
             const backup = `${yamlFile}.bak`;
             fs.copyFileSync(yamlFile, backup);
-            restrictToOwner(backup);
+            restrictToOwner(backup, io);
         }
         fs.writeFileSync(caFile, payload.ca, {encoding: "utf-8", mode: 0o644});
         const clientYaml = {
@@ -75,7 +81,7 @@ const runClientJoin = async (addr: string, options: {[key: string]: string}, io:
             ca: SERVER_CA_FILE_NAME
         };
         fs.writeFileSync(yamlFile, YAML.stringify(clientYaml), {encoding: "utf-8", mode: 0o600});
-        restrictToOwner(yamlFile);
+        restrictToOwner(yamlFile, io);
     } catch (e) {
         io.err(`cannot write the client settings in ${io.configDir}: ${(e as NodeJS.ErrnoException).code ?? (e as Error).message}`);
         return 78;

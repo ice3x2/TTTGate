@@ -23,13 +23,14 @@ describe("-save (#201 REQ-5, #209 REQ-5·6, #210 REQ-4)", () => {
     });
     const yamlPath = () => path.join(root, "config", "client.yaml");
 
-    test("writes the CA path, the secret from a file, and name only", () => {
+    test("writes the CA path as an absolute path, the secret from a file, and name only", () => {
         process.chdir(root);
         fs.writeFileSync(path.join(root, "ca.pem"), CA_PEM);
         fs.writeFileSync(path.join(root, "secret.txt"), "s3cret\n");
         __testInternals.loadClientOption({save: "", addr: "tls://gw:9300", ca: "ca.pem", clientSecretFile: "secret.txt", displayName: "edge"});
         const saved = YAML.parse(fs.readFileSync(yamlPath(), "utf-8"));
-        expect(saved).toMatchObject({host: "gw", port: 9300, tls: true, ca: "ca.pem", clientSecret: "s3cret", name: "edge"});
+        // 명령줄 상대 경로는 다음 실행에서도 같은 파일을 찾도록 절대 경로로 저장한다(리뷰 M3).
+        expect(saved).toMatchObject({host: "gw", port: 9300, tls: true, ca: path.resolve(process.cwd(), "ca.pem"), clientSecret: "s3cret", name: "edge"});
         expect(saved.displayName).toBeUndefined();
         expect(saved.clientSecretFile).toBeUndefined();
     });
