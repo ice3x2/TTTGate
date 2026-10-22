@@ -31,6 +31,25 @@
     let enrollFor = $state('');
     let enrollCode = $state<EnrollmentCodeView | undefined>();
     let deleteOpen = $state(false);
+    /**
+     * 등록 창을 연 버튼. 코드를 받는 동안 버튼이 비활성이 되어 포커스가 본문으로 빠지므로, 창이 기억한 곳 대신
+     * 이 버튼으로 포커스를 돌려준다(이슈 213 REQ-6, 이슈 225).
+     */
+    let returnFocusTo: HTMLElement | null = null;
+    let enrollWasOpen = false;
+    $effect(() => {
+        if(enrollOpen) {
+            enrollWasOpen = true;
+        } else if(enrollWasOpen) {
+            enrollWasOpen = false;
+            const target = returnFocusTo;
+            returnFocusTo = null;
+            if(target) queueMicrotask(() => target.focus());
+        }
+    });
+    const rememberTrigger = (e?: Event): void => {
+        if(e?.currentTarget instanceof HTMLElement) returnFocusTo = e.currentTarget;
+    };
     let rotateOpen = $state(false);
     let target = $state('');
 
@@ -172,7 +191,7 @@
             <Field label="Display name (optional)" for="client-new-name">
                 <TextInput id="client-new-name" bind:value={newName} />
             </Field>
-            <span id="client-create"><Button variant="primary" disabled={pending || newId.trim() === ''} onclick={() => { void create(); }}>Add client</Button></span>
+            <span id="client-create"><Button variant="primary" disabled={pending || newId.trim() === ''} onclick={(e) => { rememberTrigger(e); void create(); }}>Add client</Button></span>
         </div>
     </Card>
 
@@ -200,9 +219,9 @@
                         </div>
                         <div style="display: flex; flex-wrap: wrap; gap: var(--s-2);">
                             {#if tls}
-                                <Button size="sm" class="client-code" disabled={pending} onclick={() => { void issue(client.clientId); }}>Enrollment code</Button>
+                                <Button size="sm" class="client-code" disabled={pending} onclick={(e) => { rememberTrigger(e); void issue(client.clientId); }}>Enrollment code</Button>
                             {/if}
-                            <Button size="sm" class="client-rotate" disabled={pending} onclick={() => { target = client.clientId; rotateOpen = true; }}>New secret</Button>
+                            <Button size="sm" class="client-rotate" disabled={pending} onclick={(e) => { rememberTrigger(e); target = client.clientId; rotateOpen = true; }}>New secret</Button>
                             <Button variant="danger" size="sm" class="client-delete" disabled={pending} onclick={() => { target = client.clientId; deleteOpen = true; }}>Delete</Button>
                         </div>
                     </div>

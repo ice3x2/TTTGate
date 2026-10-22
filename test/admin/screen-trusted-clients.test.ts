@@ -98,3 +98,66 @@ test("REQ-1 delete is refused while a tunnel or group allows the client, and wor
     await page.keyboard.press("Enter");
     await rowOf(page, "temp-1").waitFor({state: "detached", timeout: 10_000});
 }));
+
+// #225 화면의 나머지 흐름
+const commandText = async (page: Page) => (await page.locator(".enroll-modal #enroll-command").textContent())?.trim() ?? "";
+
+test("#225 an existing row issues a code; the command uses the address as typed and Esc returns focus to the button", () => withApp({fixture: "rbac"}, async (app) => {
+    const {page} = app;
+    await app.serverOption({tls: true, port: 9126});
+    await openClients(page);
+    await page.locator("#clients-address").fill("");
+
+    await rowOf(page, "client-a").locator(".client-code").click();
+    await page.locator(".enroll-modal").waitFor({state: "visible"});
+    const first = await commandText(page);
+    expect(first).toMatch(/^TTTGate client join <server-address>:9126 --code \S+$/);
+
+    await page.keyboard.press("Escape");
+    await page.locator(".enroll-modal").waitFor({state: "hidden"});
+    expect(await page.evaluate(() => {
+        const active = document.activeElement as HTMLElement | null;
+        return active?.classList.contains("client-code") ? active.closest(".client-row")?.getAttribute("data-client-id") : null;
+    })).toBe("client-a");
+
+    await page.locator("#clients-address").fill("gw.example.com");
+    await rowOf(page, "client-a").locator(".client-code").click();
+    await page.locator(".enroll-modal").waitFor({state: "visible"});
+    const second = await commandText(page);
+    expect(second).toMatch(/^TTTGate client join gw\.example\.com:9126 --code \S+$/);
+    expect(second.split(" ").pop()).not.toBe(first.split(" ").pop());
+}));
+
+test("#225 after expiry, Issue new code shows a new, live command", () => withApp({fixture: "rbac"}, async (app) => {
+    const {page} = app;
+    await app.serverOption({tls: true, port: 9126});
+    await openClients(page);
+    await page.locator("#clients-address").fill("gw.example.com");
+    await rowOf(page, "client-a").locator(".client-code").click();
+    const before = await commandText(page);
+    await page.evaluate(() => { const real = Date.now; (window as any).__realNow = real; Date.now = () => real() + 2 * 3600_000; });
+    await page.locator("#enroll-reissue button").waitFor({state: "visible", timeout: 5000});
+    // 재발급 응답의 만료 시각은 진짜 시계 기준이다. 화면 시계를 되돌린 뒤 누른다.
+    await page.evaluate(() => { Date.now = (window as any).__realNow; });
+    await page.locator("#enroll-reissue button").click();
+    await page.waitForFunction((old) => document.querySelector("#enroll-command")?.textContent?.trim() !== old, before, {timeout: 5000});
+    expect(await page.locator(".enroll-modal #enroll-command.expired").count()).toBe(0);
+    expect(await page.locator("#enroll-copy").count()).toBe(1);
+}));
+
+test("#225 New secret asks for confirmation, then shows a fresh enrollment command", () => withApp({fixture: "rbac"}, async (app) => {
+    const {page} = app;
+    await app.serverOption({tls: true, port: 9126});
+    await openClients(page);
+    await rowOf(page, "client-b").locator(".client-rotate").click();
+    const confirm = page.locator(".rotate-client-modal");
+    await confirm.waitFor({state: "visible"});
+    expect(await confirm.textContent()).toContain("client-b");
+    await page.locator("#confirm-rotate-client button").click();
+    await page.getByText(/New secret for client-b/).waitFor({state: "visible", timeout: 10_000});
+    await page.locator(".enroll-modal").waitFor({state: "visible"});
+    expect(await commandText(page)).toMatch(/--code \S+$/);
+    const calls = await app.calls();
+    expect(calls.filter((call) => call.method === "issueEnrollmentCode").length).toBeGreaterThanOrEqual(1);
+}));
+
