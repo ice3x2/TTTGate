@@ -8,6 +8,8 @@ export const NAV: ReadonlyArray<NavItem> = [
     {hash: '#/status',  title: 'Status',          screen: 'status',  section: 'status'},
     {hash: '#/tunnels', title: 'Tunnels',         screen: 'tunnels', section: 'tunnels'},
     {hash: '#/server',  title: 'Server settings', screen: 'server',  section: 'server'},
+    // #213: 신뢰 클라이언트 관리. 자격 증명을 만드는 화면이라 서버 설정과 같은 섹션(server:manage)이다.
+    {hash: '#/clients', title: 'Trusted clients', screen: 'clients', section: 'server'},
     {hash: '#/users',   title: 'Users',           screen: 'users',   section: 'users'},
     {hash: '#/groups',  title: 'Groups',          screen: 'groups',  section: 'groups'},
     {hash: '#/security', title: 'Security',   screen: 'security', section: 'security'},
@@ -21,7 +23,7 @@ export const SECTION_OF_SCREEN: Record<Screen, Section | null> = {
     status: 'status', tunnels: 'tunnels', 'tunnel-edit': 'tunnels', server: 'server',
     users: 'users', 'user-edit': 'users', groups: 'groups', 'group-edit': 'groups',
     me: 'me', 'me-password': null, denied: null,
-    audit: 'audit', sessions: 'sessions', security: 'security',
+    audit: 'audit', sessions: 'sessions', security: 'security', clients: 'server',
 };
 
 export function visibleNav(sections: string[]): NavItem[] {

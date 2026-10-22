@@ -151,3 +151,8 @@ export type AuditQueryInput = {from?: number; to?: number; userId?: string; type
 /** U4-06: GET /api/sessions·/api/me/sessions 의 세션 한 건. */
 export type SessionView = {id: string; userId: string; username: string; createdAt: number; lastSeenAt: number; ip: string; userAgent: string; current: boolean};
 export type ApiResult<T> = ({success: true} & T) | ApiFailure;
+
+/** #213 신뢰 클라이언트 목록 항목. 비밀값은 서버가 내보내지 않는다. */
+export type TrustedClientView = {clientId: string; displayName?: string};
+/** #213 등록 코드. expiresAt 은 epoch ms, controlPort 는 명령에 넣을 제어 포트다. */
+export type EnrollmentCodeView = {code: string; expiresAt: number; controlPort: number};

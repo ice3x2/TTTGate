@@ -99,6 +99,14 @@ const stub = {
         record("applyServerOption", args);
         return OK();
     },
+    // #213: 등록 코드 발급. 실제 TTTServer 와 같은 판정(TLS·등록 여부)을 저장소 값으로 흉내 낸다.
+    async issueEnrollmentCode(clientId: string, ttlMs?: number) {
+        record("issueEnrollmentCode", [clientId, ttlMs]);
+        const option = ServerOptionStore.instance.serverOption;
+        if(option.tls !== true) return {ok: false, reason: "tls-required"};
+        if(!(option.trustedClients ?? []).some((client) => client.clientId === clientId)) return {ok: false, reason: "unknown-client"};
+        return {ok: true, code: "7Q4K-M2XP-AB01", expiresAt: Date.now() + clockOffset + (ttlMs ?? 15 * 60_000)};
+    },
     async applyTunnelingOption(...args: unknown[]) {
         record("applyTunnelingOption", args);
         return OK();
