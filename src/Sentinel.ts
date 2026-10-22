@@ -2,9 +2,9 @@ import { spawn } from 'child_process';
 import Path from "path";
 import {clearInterval} from "timers";
 import Environment from "./Environment";
-const find = require('find-process');
 
 import LoggerFactory  from "./util/logger/LoggerFactory";
+import {clearConfigErrorMarker, hasConfigErrorMarker} from "./util/ConfigExit";
 const logger = LoggerFactory.getLogger('boot', 'Sentinel');
 
 
@@ -49,7 +49,6 @@ class Sentinel {
     private makeDevPathList() {
         this._executePath = 'node';
         let root = Path.join(process.argv[1],'..','..')
-        //this._argvList = [Path.join(root, 'node_modules', 'ts-node-dev', 'lib', 'bin.js'), '--project', Path.join(root, 'tsconfig.json'), process.argv[1]]
         this._argvList = [Path.join(root, 'node_modules', 'ts-node', 'dist', 'bin.js'), '--project', Path.join(root, 'tsconfig.json'), process.argv[1]]
         this._argvList = [...this._argvList, ...process.argv.slice(2)];
 
@@ -128,6 +127,8 @@ class Sentinel {
 
 
     private boot() {
+        // #207 REQ-6: 이전 실행의 설정 오류 표시가 남아 있으면 고친 설정으로 다시 띄워도 sentinel 이 바로 끝난다.
+        clearConfigErrorMarker();
         let appPID = Sentinel.readPIDFile('app');
         let sentinelPID = Sentinel.readPIDFile('sentinel');
         let foregroundPID = Sentinel.readPIDFile('foreground');
@@ -203,6 +204,22 @@ class Sentinel {
         fs.writeFileSync(Path.join(Environment.path.binDir, `.pid_${type}`), pid.toString() + '\n', {encoding: 'utf-8', flag: 'a'});
     }
 
+    /** 신호 0 으로 PID 가 살아 있는지 본다. EPERM 은 살아 있지만 권한이 없는 경우다. */
+    public static isProcessAlive(pid: number): boolean {
+        if(!Number.isSafeInteger(pid) || pid <= 0) return false;
+        try {
+            process.kill(pid, 0);
+            return true;
+        } catch (e) {
+            return (e as NodeJS.ErrnoException).code === 'EPERM';
+        }
+    }
+
+    /** 앱이 사라졌을 때 다시 띄울지(#207). 앱이 설정 오류 표시를 남겼으면 띄우지 않는다. */
+    public static shouldRestartApp(): boolean {
+        return !hasConfigErrorMarker();
+    }
+
     public runSentinel() {
         this.startScanPid(parseInt(process.env.APP_PID!));
     }
@@ -216,10 +233,19 @@ class Sentinel {
 
     private startScanPid(pid: number) {
         let intervalID = setInterval(() => {
-            find('pid', pid).then((list: Array<any>) => {
-                if(list.length == 0) {
+            // PID 가 살아 있는지만 본다. 프로세스 표 조회(find-process)는 Windows 에서 WMI 를 거쳐 멈출 수 있다(#207).
+            Promise.resolve(Sentinel.isProcessAlive(pid)).then((alive: boolean) => {
+                if(!alive) {
                     logger.warn('App not found. pid:' + pid);
                     clearInterval(intervalID);
+                    if(!Sentinel.shouldRestartApp()) {
+                        // #207 REQ-5: 설정 오류로 끝난 앱은 다시 띄워도 같은 오류로 끝난다. PID 파일을 지우고 멈춘다.
+                        logger.error('App stopped with a configuration error. Not restarting. Fix the configuration and start again.');
+                        Sentinel.deletePIDFile('app');
+                        Sentinel.deletePIDFile('sentinel');
+                        LoggerFactory.flush().finally(() => process.exit(0));
+                        return;
+                    }
                     setTimeout(() => {
                         logger.info('Restart app');
                         this.restartApp();
@@ -227,12 +253,9 @@ class Sentinel {
                 }
             }).catch((err: any) => {
                 logger.error('Error on find process: ' + pid, err);
-                logger.info('Stop app')
-                process.kill(process.pid, 'SIGTERM');
                 logger.info('Stop sentinel')
                 clearInterval(intervalID);
-                process.kill(1);
-                return;
+                process.exit(1);
             });
         }, 3000);
 

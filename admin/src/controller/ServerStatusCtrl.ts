@@ -34,8 +34,7 @@ class ServerStatusCtrl {
         if(!json || res.status == 401) {
             throw new InvalidSession();
         }
-        this._sysInfoCache = json.system;
-        return json;
+        return json.sysUsage;
 
     }
 
@@ -64,8 +63,8 @@ class ServerStatusCtrl {
         if(!json || res.status == 401) {
             throw new InvalidSession();
         }
-        this._sysInfoCache = json.system;
-        return json;
+        this._sysInfoCache = json.sysInfo;
+        return json.sysInfo;
     }
 
     public async getClientSysInfo(id: number) : Promise<SysInfo> {
@@ -86,10 +85,10 @@ class ServerStatusCtrl {
             throw new Error(json.message);
         }
 
-        sysInfo = json as SysInfo;
+        sysInfo = json.sysInfo as SysInfo;
 
         this._clientSysInfoCache.set(id, sysInfo);
-        return json;
+        return sysInfo;
     }
 
 
@@ -102,8 +101,7 @@ class ServerStatusCtrl {
         if(!json || res.status == 401) {
             throw new InvalidSession();
         }
-        this._sysInfoCache = json.system;
-        return json;
+        return json.statuses;
     }
 
 }

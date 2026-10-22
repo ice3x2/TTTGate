@@ -38,7 +38,12 @@ class CACertGenerator {
         cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 1);
 
         cert.setSubject([{ name: 'commonName', value: options.commonName }]);
-        cert.setExtensions([{ name: 'basicConstraints', cA: true }]);
+        const extensions: any[] = [{ name: 'basicConstraints', cA: true }];
+        if(Array.isArray(options.altNames) && options.altNames.length > 0) {
+            // type 2 = dNSName. 클라이언트가 고정 서버 이름으로 검증할 수 있게 한다(#212).
+            extensions.push({ name: 'subjectAltName', altNames: options.altNames.map((value: string) => ({ type: 2, value })) });
+        }
+        cert.setExtensions(extensions);
 
         cert.setIssuer(cert.subject.attributes);
         cert.sign(keyPair.privateKey, forge.md.sha256.create());

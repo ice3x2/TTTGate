@@ -1,135 +1,107 @@
-@import url('https://fonts.googleapis.com/css2?family=Ubuntu:wght@300&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Ubuntu:ital,wght@0,300;1,300&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Ubuntu:ital,wght@0,300;0,400;1,300&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Ubuntu:ital,wght@0,300;0,400;1,300;1,400&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Ubuntu:ital,wght@0,300;0,400;0,500;1,300;1,500&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Ubuntu:ital,wght@0,300;0,400;0,500;0,700;1,300;1,500&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Ubuntu:ital,wght@0,300;0,400;0,500;0,700;1,300;1,500;1,700&display=swap');
-
-
 :root {
-  line-height: 1.5;
-  font-weight: 400;
+  /* ── Surfaces · cool white (B&W family) ───────────────────── */
+  --bg-0: #FFFFFF;     /* page · pure white */
+  --bg-1: #FAFBFC;     /* panel · whisper cool */
+  --bg-2: #FFFFFF;     /* card · pure */
+  --bg-3: #F3F5F9;     /* raised / alt surface */
+  --bg-mute: #EEF0F5;  /* inset · inputs */
 
-  color-scheme: light dark;
-  color: #222;
-  font-family: 'Ubuntu', sans-serif;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
+  --line-0: #ECEEF3;   /* hairline · blue-tinted gray */
+  --line-1: #D7DBE4;   /* border */
+  --line-2: #8A94A3;   /* emphasis */
+
+  /* ── Ink · cool graphite (blue undertone) ─────────────────── */
+  --ink-0: #0E1218;    /* near-black · slight blue */
+  --ink-1: #363D47;
+  --ink-2: #6A7381;
+  --ink-3: #A8B0BD;
+
+  /* ── Signal palette · red-ink doctrine (light-tuned) ──────── */
+  --signal:      #A53424;              /* brick red · brand · text · stroke */
+  --signal-fill: #C24A36;              /* brighter vermillion · button / LED */
+  --signal-glow: rgba(165,52,36,.14);
+  --signal-dim:  #E3B6AE;
+
+  --pulse:       #1A7F5E;              /* pine green · active / healthy */
+  --pulse-fill:  #27A584;
+  --pulse-glow:  rgba(26,127,94,.14);
+  --pulse-dim:   #9AD2BE;
+
+  --alarm:       #7A0D04;              /* deep blood red · destructive */
+  --alarm-fill:  #B21208;
+  --alarm-glow:  rgba(122,13,4,.18);
+  --alarm-dim:   #D8A69F;
+
+  --trace:       #1E4F8A;              /* ink navy · info / link */
+  --trace-glow:  rgba(30,79,138,.14);
+  --trace-dim:   #A0B6D2;
+
+  --warn:        #B5580E;              /* burnt orange · degraded */
+
+  /* ── Type ─────────────────────────────────────────────────── */
+  --ff-display: "Noto Serif", Georgia, "Times New Roman", serif;
+  --ff-ui: "Noto Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --ff-mono: "JetBrains Mono", ui-monospace, "SF Mono", Consolas, monospace;
+
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+  --fs-2xl: 28px;
+  --fs-3xl: 40px;
+  --fs-4xl: 64px;
+  --fs-hero: 104px;
+
+  --lh-tight: 1.12;
+  --lh-snug:  1.32;
+  --lh-body:  1.55;
+
+  /* ── Space ────────────────────────────────────────────────── */
+  --s-1: 4px;   --s-2: 8px;   --s-3: 12px;  --s-4: 16px;
+  --s-5: 20px;  --s-6: 24px;  --s-7: 32px;  --s-8: 40px;
+  --s-9: 48px;  --s-10: 64px; --s-11: 96px; --s-12: 128px;
+
+  /* ── Radii ────────────────────────────────────────────────── */
+  --r-0: 0;   --r-1: 2px;  --r-2: 4px;  --r-3: 8px;
+
+  /* ── Motion ───────────────────────────────────────────────── */
+  --ease-out: cubic-bezier(.2,.8,.2,1);
+  --ease-in:  cubic-bezier(.6,0,.8,.2);
+  --dur-1: 120ms;
+  --dur-2: 220ms;
+  --dur-3: 420ms;
+  --dur-4: 680ms;
+  --ink-on-signal: #FFF5F0;
 }
 
-div {
-  box-sizing: border-box;
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
-}
+@font-face { font-family: "Noto Serif"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("./assets/fonts/noto-serif-latin-400.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Noto Serif"; font-style: normal; font-weight: 600; font-display: swap;
+  src: url("./assets/fonts/noto-serif-latin-600.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Noto Sans"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("./assets/fonts/noto-sans-latin-400.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Noto Sans"; font-style: normal; font-weight: 500; font-display: swap;
+  src: url("./assets/fonts/noto-sans-latin-500.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Noto Sans"; font-style: normal; font-weight: 700; font-display: swap;
+  src: url("./assets/fonts/noto-sans-latin-700.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("./assets/fonts/jetbrains-mono-latin-400.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 500; font-display: swap;
+  src: url("./assets/fonts/jetbrains-mono-latin-500.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 
-h2.title {
-  margin: 0 0 20px 0;
-  padding: 0;
-  font-size: 20pt;
-  color: #333;
-}
-
-input {
-  height: 24px;
-  border-radius: 5px;
-  border: 1px solid #ccc;
-  margin: 0;
-}
-
-select {
-  height: 28px;
-  border-radius: 5px;
-  border: 1px solid #ccc;
-  background: white;
-  margin: 0;
-}
-
-input::file-selector-button {
-  height: 22px;
-  font-size: 11px;
-  margin: 1px;
-  border-radius: 5px;
-  border: 1px solid #999;
-  background: #eee;
-}
-
-input::file-selector-button:hover {
-  border: 1px solid #777;
-  background: #999;
-  color: #fff;
-}
-
-input::file-selector-button:active {
-  border: 1px solid #555;
-  background: #444;
-  color: #fff;
-}
-
-button {
-  cursor: pointer;
-  height: 28px;
-  border-radius: 5px;
-  border: 1px solid #999;
-  margin: 0;
-  background: #eee;
-}
-
-button:hover:enabled {
-  border: 1px solid #777;
-  background: #999;
-  color: #fff;
-}
-
-button:active:enabled {
-    border: 1px solid #555;
-    background: #444;
-    color: #fff;
-}
-
-
-
-.input-box {
-  display:block;
-  margin-bottom: 20px;
-}
-.check-box {
-  display:block;
-  margin-top: 5px;
-  margin-bottom: 5px;
-  position: relative;
-  height: 20px
-}
-
-.form-label {
-  display: block;
-  font-size: 14px;
-  color: #333;
-}
-
-
-
-
-input {
-  width: calc(100% - 10px);
-}
-
-
-.round-box {
-  max-width: 540px;
-  display: inline-block;
-  margin-left: 5px;
-  width: calc(100% - 10px);
-  background: #fdfdfd;
-  border-radius: 5px;
-  padding: 10px;
-  border: 1px solid #bbb;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-}
-
+/* ── Reset ──────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg-0); color: var(--ink-0); font: var(--fs-md) / var(--lh-body) var(--ff-ui); }
+img, svg { max-width: 100%; display: block; }
+button, input, select, textarea { font: inherit; color: inherit; }
+h1, h2, h3, h4 { font-family: var(--ff-display); line-height: var(--lh-tight); margin: 0; }
+.mono { font-family: var(--ff-mono); font-variant-numeric: tabular-nums; }

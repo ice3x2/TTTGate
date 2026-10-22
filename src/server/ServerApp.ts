@@ -2,93 +2,144 @@ import TTTServer from "./TTTServer";
 import ServerOptionStore from "./ServerOptionStore";
 import AdminServer from "./admin/AdminServer";
 import {CertificationStore, CertInfo} from "./CertificationStore";
-import {ServerOption} from "../types/TunnelingOption";
-import ObjectUtil from "../util/ObjectUtil";
+import {DEFAULT_AUDIT_QUEUE_SIZE, DEFAULT_AUDIT_RETENTION_DAYS, DEFAULT_GEO_CONFIG, ServerOption} from "../types/TunnelingOption";
+import {AdmissionController} from "./security/AdmissionController";
 import CLI from "../util/CLI";
 import Files from "../util/Files";
 import File from "../util/File";
 import Environment from "../Environment";
-import { SocketHandler } from  "../util/SocketHandler";
-import Errors from "../util/Errors";
 import LoggerFactory  from "../util/logger/LoggerFactory";
+import AppCompositionRoot from "../bootstrap/AppCompositionRoot";
+import {shouldResetServerState} from "./ServerCliOptions";
+import {redactSecrets} from "../util/SecretRedactor";
+import {exitWithConfigError} from "../util/ConfigExit";
+import * as fs from "fs";
+import * as Path from "path";
+import YAML from "yaml";
+import {IdentityMigration} from "./rbac/IdentityMigration";
+import {AuditSinkRegistry} from "./audit/AuditSink";
+import {auditDirPath, FileAuditSink} from "./audit/FileAuditSink";
+import {
+    AdminSecurityPolicyRegistry,
+    buildAdminSecurityAllowancesFromCliOptions,
+    evaluateAdminSecurityPolicy,
+    formatAdminSecurityPolicyErrors,
+    trustedProxyHopsCliWarning
+} from "./AdminSecurityPolicy";
+
 const logger = LoggerFactory.getLogger('server', 'ServerApp');
 
 let adminServer : AdminServer;
-let oldOption : ServerOption;
-let oldAdminCertInfo : CertInfo;
 let tttServer : TTTServer;
 
+const startService = async (serverOption: ServerOption, adminCertInfo: CertInfo) => {
+    const identity = await IdentityMigration.runAtStartup();
+    if(identity.kind === 'legacy-fallback') {
+        logger.error(`identity store unavailable (${identity.reason}); continuing with legacy admin key only`);
+    }
+    AppCompositionRoot.applyGlobalMemLimitMiB(serverOption.globalMemCacheLimit ?? 128);
+    logger.info("Start service with option: " + JSON.stringify(redactSecrets(serverOption), null, 2));
+    AdmissionController.instance.configureGeo(serverOption.connectionSecurity?.geo ?? DEFAULT_GEO_CONFIG);
+    tttServer = TTTServer.create(serverOption);
+    // 감사 싱크는 AdminServer 보다 먼저 등록해 첫 요청의 감사 이벤트도 파일에 남게 한다.
+    const auditSink = new FileAuditSink({
+        dir: auditDirPath(),
+        queueSize: serverOption.auditQueueSize ?? DEFAULT_AUDIT_QUEUE_SIZE,
+        retentionDays: serverOption.auditRetentionDays ?? DEFAULT_AUDIT_RETENTION_DAYS
+    });
+    auditSink.startRetentionTimer();
+    AuditSinkRegistry.set(auditSink);
+    adminServer = new AdminServer(tttServer, serverOption.adminTls === true, adminCertInfo);
+    await adminServer.listen(serverOption.adminPort!, serverOption.adminBindHost);
+    await tttServer.start();
+    ServerOptionStore.instance.markLastKnownGood();
+    CertificationStore.instance.markLastKnownGood();
+}
 
-
-let onServerOptionUpdate = async (newOption: ServerOption) => {
-
-    await adminServer.close();
-    await tttServer.close();
-    try {
-        await startService(newOption, CertificationStore.instance.getAdminCert());
-        oldOption = ObjectUtil.cloneDeep(newOption);
-    } catch (err) {
-        logger.error('onServerOptionUpdate failed to start server. Reverting to old option',err);
-        console.error(Errors.toString(err));
-        if(newOption != oldOption) {
-            let serverOptionStore = ServerOptionStore.instance;
-            serverOptionStore.onServerOptionUpdateCallback = undefined;
-            serverOptionStore.updateServerOption(ObjectUtil.cloneDeep(oldOption));
-            serverOptionStore.onServerOptionUpdateCallback = onServerOptionUpdate;
-            await CertificationStore.instance.updateAdminServerCert(ObjectUtil.cloneDeep(oldAdminCertInfo));
-            await startService(oldOption, oldAdminCertInfo);
+/**
+ * 부작용 없이 서버 명령줄 값과 server.yaml 구문을 검사한다(#207). 데몬 부모가 자식을 띄우기 전에 부른다.
+ * 서버의 값 오류는 호환을 위해 종료 코드 1 을 유지한다(에픽 #216 공통 표).
+ */
+const validateServerCliOptions = (cliOptions: {[key: string]: string}): {ok: true} | {ok: false, exitCode: 1, message: string} => {
+    if(cliOptions["adminPort"]) {
+        const port = parseInt(cliOptions["adminPort"]);
+        if(isNaN(port) || port <= 0 || port > 65535) return {ok: false, exitCode: 1, message: 'Invalid admin port number (1 ~ 65535)'};
+    }
+    if(cliOptions["keepAlive"]) {
+        const keepAlive = parseInt(cliOptions["keepAlive"]);
+        if(isNaN(keepAlive) || keepAlive < 0) return {ok: false, exitCode: 1, message: 'Invalid keep alive time'};
+    }
+    const yamlFile = Path.join(Environment.path.configDir, 'server.yaml');
+    if(fs.existsSync(yamlFile)) {
+        let parsed: any;
+        try {
+            parsed = YAML.parse(fs.readFileSync(yamlFile, 'utf-8'));
+        } catch (e) {
+            return {ok: false, exitCode: 1, message: `cannot parse ${yamlFile}: ${(e as Error).message}`};
+        }
+        // 가장 흔한 기동 실패인 관리자 보안 정책도 부모에서 본다. 명령줄 허용 플래그를 그대로 반영한다.
+        if(parsed && typeof parsed === 'object') {
+            const decision = evaluateAdminSecurityPolicy({...parsed, adminTls: parsed.adminTls === true},
+                buildAdminSecurityAllowancesFromCliOptions(cliOptions));
+            if(!decision.allowed) return {ok: false, exitCode: 1, message: formatAdminSecurityPolicyErrors(decision)};
         }
     }
+    return {ok: true};
+};
+
+const applyStartupOptions = async (cliOptions: {[key: string]: string}, serverOptionStore: ServerOptionStore): Promise<boolean> => {
+    const valid = validateServerCliOptions(cliOptions);
+    if(!valid.ok) {
+        await exitWithConfigError(valid.exitCode, valid.message, logger);
+        return false;
+    }
+    if(cliOptions["adminPort"]) {
+        let port = parseInt(cliOptions["adminPort"]);
+        let serverOption = serverOptionStore.serverOption;
+        serverOption.adminPort = port;
+        serverOptionStore.updateServerOption(serverOption);
+    }
+    if(cliOptions["keepAlive"]) {
+        let keepAlive = parseInt(cliOptions["keepAlive"]);
+        let serverOption = serverOptionStore.serverOption;
+        serverOption.keepAlive = keepAlive;
+        serverOptionStore.updateServerOption(serverOption);
+    }
+    if(cliOptions["allowLegacyControlAuth"] != undefined) {
+        let serverOption = serverOptionStore.serverOption;
+        serverOption.allowLegacyControlAuth = cliOptions["allowLegacyControlAuth"] == "" || cliOptions["allowLegacyControlAuth"].toLowerCase() != "false";
+        serverOptionStore.updateServerOption(serverOption);
+    }
+    return true;
 }
 
-let startService = async (serverOption: ServerOption, adminCertInfo: CertInfo) => {
-    SocketHandler.GlobalMemCacheLimit = (serverOption.globalMemCacheLimit ?? 128) * 1024 * 1024;
-    logger.info("Start service with option: " + JSON.stringify(serverOption, null, 2));
-    tttServer = TTTServer.create(serverOption);
-    adminServer = new AdminServer(tttServer, serverOption.adminTls === true, adminCertInfo);
-    await adminServer.listen(serverOption.adminPort!);
-    await tttServer.start();
-}
-
-
-let ServerApp : {start() : Promise<void>} = {
-    start : async (): Promise<void> => {
-
-        let options = CLI.readSimpleOptions();
-        let serverOptionStore = ServerOptionStore.instance;
-        let certStore = CertificationStore.instance;
-        if(options['reset'] != undefined && (options['reset'] == '' || options['reset'].toLowerCase() == 'false')) {
+let ServerApp : {start(options?: {[key: string]: string}) : Promise<void>} = {
+    start : async (options?: {[key: string]: string}): Promise<void> => {
+        let cliOptions = options ?? CLI.parseCommandLine().options;
+        AdminSecurityPolicyRegistry.configure(buildAdminSecurityAllowancesFromCliOptions(cliOptions));
+        let {serverOptionStore, certStore} = AppCompositionRoot.serverStores();
+        if(shouldResetServerState(cliOptions)) {
             Files.deleteAll(new File(Environment.path.configDir));
             serverOptionStore.reset();
             await certStore.reset();
         }
+        const loaded = serverOptionStore.readServerOption();
+        if(!loaded.success) {
+            await exitWithConfigError(1, loaded.message, logger);
+            return;
+        }
         await certStore.load();
-        if(options['adminPort']) {
-            let port = parseInt(options['adminPort']);
-            if(isNaN(port) || port <= 0 || port > 65535) {
-                console.error('Invalid admin port number (1 ~ 65535)');
-                process.exit(1);
-            }
-            let serverOption = serverOptionStore.serverOption;
-            serverOption.adminPort = port;
-            serverOptionStore.updateServerOption(serverOption);
+        if(!await applyStartupOptions(cliOptions, serverOptionStore)) return;
+        const policyDecision = evaluateAdminSecurityPolicy(serverOptionStore.serverOption);
+        if(!policyDecision.allowed) {
+            await exitWithConfigError(1, formatAdminSecurityPolicyErrors(policyDecision), logger);
+            return;
         }
-        if(options['keepAlive']) {
-            let keepAlive = parseInt(options['keepAlive']);
-            if(isNaN(keepAlive) || keepAlive < 0) {
-                console.error('Invalid keep alive time');
-                process.exit(1);
-            }
-            let serverOption = serverOptionStore.serverOption;
-            serverOption.keepAlive = keepAlive;
-            serverOptionStore.updateServerOption(serverOption);
-        }
-
-        process.nextTick(() => {
-            serverOptionStore.onServerOptionUpdateCallback = onServerOptionUpdate;
+        const hopsWarning = trustedProxyHopsCliWarning(cliOptions);
+        [...policyDecision.warnings, ...(hopsWarning ? [hopsWarning] : [])].forEach((warning) => {
+            logger.warn(warning);
+            console.warn(warning);
         });
-        oldOption = ObjectUtil.cloneDeep(serverOptionStore.serverOption);
-        oldAdminCertInfo = ObjectUtil.cloneDeep(certStore.getAdminCert());
         try {
             await startService(serverOptionStore.serverOption, certStore.getAdminCert());
         } catch (e) {
@@ -96,17 +147,7 @@ let ServerApp : {start() : Promise<void>} = {
             process.exit(1);
         }
     }
-
 }
 
 export default ServerApp;
-
-
-
-
-
-
-
-
-
-
+export {validateServerCliOptions};

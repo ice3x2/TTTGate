@@ -4,6 +4,7 @@ import HttpHandler from "../server/http/HttpHandler";
 
 type EndPointInfo =  {
     closeWait? : boolean;
+    closeInitiated?: boolean;
     lastSendTime? : number;
     endLength? : number;
     sessionID? : number;

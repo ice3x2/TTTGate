@@ -7,35 +7,63 @@ import zlib from "zlib";
 class HttpUtil {
     // 압축 관련 상수
     private static readonly MAX_UNCOMPRESSED_SIZE = 100 * 1024 * 1024; // 100MB
+    public static readonly DECOMPRESS_LIMIT_ERROR_CODE = "HTTP_DECOMPRESS_LIMIT_EXCEEDED";
     
     /**
      * HTTP 헤더를 버퍼로 변환
+     *
+     * REQ-06/REQ-10: 재직렬화 직전 모든 name/value/path/statusText에 CR/LF/NUL이
+     * 포함되지 않는지 재검증한다. (rewriteHostInTextBody 등 치환 경로가
+     * 악의적 입력으로 CRLF 를 새로 생성했을 때 response splitting 을 차단.)
      */
     public static convertHttpHeaderToBuffer(header: HttpRequestHeader | HttpResponseHeader): Buffer {
+        const INJECT_RE = /[\r\n\0]/;
         let lines: Array<string> = [];
-        
+
         // 첫 번째 줄 생성
         if (header.type == MessageType.Request) {
+            if (INJECT_RE.test(header.path)) {
+                throw new Error('HTTP header re-serialization aborted: CR/LF/NUL in request path (REQ-10)');
+            }
+            if (INJECT_RE.test(header.version)) {
+                throw new Error('HTTP header re-serialization aborted: CR/LF/NUL in request version (REQ-10)');
+            }
             lines.push(`${HttpMethod[header.method]} ${header.path} ${header.version}`);
         } else {
+            if (INJECT_RE.test(header.version) || INJECT_RE.test(header.statusText)) {
+                throw new Error('HTTP header re-serialization aborted: CR/LF/NUL in response status line (REQ-10)');
+            }
             lines.push(`${header.version} ${header.status} ${header.statusText}`);
         }
-        
+
         // 헤더 필드 추가
         for (let i = 0; i < header.headers.length; i++) {
             let nameValue = header.headers[i];
+            if (INJECT_RE.test(nameValue.name) || INJECT_RE.test(nameValue.value)) {
+                throw new Error(`HTTP header re-serialization aborted: CR/LF/NUL in header '${nameValue.name}' (REQ-10)`);
+            }
             lines.push(`${nameValue.name}: ${nameValue.value}`);
         }
-        
+
         // 헤더 종료 표시 추가
         lines.push("\r\n");
-        
+
         return Buffer.from(lines.join("\r\n"));
     }
 
     /**
      * HTTP 헤더에서 특정 이름의 헤더 값을 찾음
      */
+    /**
+     * 요청 대상(request-target)의 Host 를 내부 주소로 바꾼다. absolute-form(http://host/...)의 authority 만 바꾸고,
+     * origin-form(/path?query)은 그대로 둔다. path 전체에서 문자열을 바꾸면 query 의 값까지 바뀌었다(#168).
+     */
+    public static rewriteRequestTargetHost(target: string, originHost: string, destination: string): string {
+        const match = /^(https?:\/\/)([^/?#]*)(.*)$/i.exec(target);
+        if(!match || match[2].toLowerCase() !== originHost.toLowerCase()) return target;
+        return `${match[1]}${destination}${match[3]}`;
+    }
+
     public static findHeaderValue(httpHeader: HttpHeader, name: string): string | null {
         let nameValue = HttpUtil.findHeader(httpHeader, name);
         if (nameValue != null) {
@@ -92,6 +120,28 @@ class HttpUtil {
     /**
      * HTTP 헤더가 텍스트 컨텐츠 타입인지 확인
      */
+    public static canRewriteTextEncoding(header: HttpHeader): boolean {
+        const types = HttpUtil.findHeaders(header, "Content-Type");
+        const encodings = HttpUtil.findHeaders(header, "Content-Encoding");
+        if(types.length > 1 || encodings.length > 1) return false;
+        if(encodings.length === 1 && !["identity", "gzip", "deflate", "br"].includes(encodings[0].value.trim().toLowerCase())) return false;
+        let charsetSeen = false;
+        for(const parameter of (types[0]?.value ?? '').split(';').slice(1)) {
+            const equals = parameter.indexOf('=');
+            const name = (equals < 0 ? parameter : parameter.slice(0, equals)).trim().toLowerCase();
+            if(name !== 'charset') continue;
+            if(charsetSeen || equals < 0) return false;
+            charsetSeen = true;
+            let value = parameter.slice(equals + 1).trim();
+            if(value.startsWith('"') || value.startsWith("'")) {
+                if(value.length < 2 || value.at(-1) !== value[0]) return false;
+                value = value.slice(1, -1);
+            }
+            if(value.toLowerCase() !== 'utf-8') return false;
+        }
+        return true;
+    }
+
     public static isTextContentType(httpHeader: HttpHeader): boolean {
         let contentType = HttpUtil.findHeader(httpHeader, "Content-Type");
         
@@ -127,7 +177,7 @@ class HttpUtil {
     /**
      * HTTP 바디를 압축 해제
      */
-    public static uncompressBody(contentEncoding: string | null, body: Buffer): Buffer {
+    public static uncompressBody(contentEncoding: string | null, body: Buffer, maxOutputLength: number = HttpUtil.MAX_UNCOMPRESSED_SIZE): Buffer {
         if (!contentEncoding || body.length === 0) {
             return body;
         }
@@ -135,14 +185,19 @@ class HttpUtil {
         contentEncoding = contentEncoding.toLowerCase();
         try {
             if (contentEncoding.includes("gzip")) {
-                return HttpUtil.gunzip(body);
+                return HttpUtil.gunzip(body, maxOutputLength);
             } else if (contentEncoding.includes("deflate")) {
-                return HttpUtil.inflate(body);
+                return HttpUtil.inflate(body, maxOutputLength);
             } else if (contentEncoding.includes("br")) {
-                return HttpUtil.brotliDecompress(body);
+                return HttpUtil.brotliDecompress(body, maxOutputLength);
             }
         } catch (err) {
-            console.error(`Error decompressing ${contentEncoding} content:`, err);
+            if(HttpUtil.isDecompressionLimitError(err)) {
+                const limitError = new Error("HTTP body rewrite decompress limit exceeded");
+                (limitError as Error & {code?: string}).code = HttpUtil.DECOMPRESS_LIMIT_ERROR_CODE;
+                throw limitError;
+            }
+            throw err;
         }
         
         return body;
@@ -200,15 +255,16 @@ class HttpUtil {
     /**
      * gzip 압축 해제
      */
-    public static gunzip(body: Buffer): Buffer {
+    public static gunzip(body: Buffer, maxOutputLength: number = HttpUtil.MAX_UNCOMPRESSED_SIZE): Buffer {
         try {
             return zlib.gunzipSync(body, {
-                finishFlush: zlib.constants.Z_SYNC_FLUSH
+                finishFlush: zlib.constants.Z_SYNC_FLUSH,
+                maxOutputLength
             });
         } catch (err) {
             // 만약 gunzip에 실패하면 inflate로 시도 (일부 잘못된 구현이 있을 수 있음)
             try {
-                return zlib.inflateSync(body);
+                return zlib.inflateSync(body, {maxOutputLength});
             } catch (innerErr) {
                 throw err; // 원래 에러 전달
             }
@@ -218,15 +274,16 @@ class HttpUtil {
     /**
      * deflate 압축 해제
      */
-    public static inflate(body: Buffer): Buffer {
+    public static inflate(body: Buffer, maxOutputLength: number = HttpUtil.MAX_UNCOMPRESSED_SIZE): Buffer {
         try {
             return zlib.inflateSync(body, {
-                finishFlush: zlib.constants.Z_SYNC_FLUSH
+                finishFlush: zlib.constants.Z_SYNC_FLUSH,
+                maxOutputLength
             });
         } catch (err) {
             // 일부 구현은 zlib 헤더를 포함하지 않을 수 있으므로 raw inflate 시도
             try {
-                return zlib.inflateRawSync(body);
+                return zlib.inflateRawSync(body, {maxOutputLength});
             } catch (innerErr) {
                 throw err; // 원래 에러 전달
             }
@@ -236,8 +293,19 @@ class HttpUtil {
     /**
      * Brotli 압축 해제
      */
-    public static brotliDecompress(body: Buffer): Buffer {
-        return zlib.brotliDecompressSync(body);
+    public static brotliDecompress(body: Buffer, maxOutputLength: number = HttpUtil.MAX_UNCOMPRESSED_SIZE): Buffer {
+        return zlib.brotliDecompressSync(body, {maxOutputLength});
+    }
+
+    public static isDecompressionLimitError(error: unknown): boolean {
+        if(!(error instanceof Error)) {
+            return false;
+        }
+        if((error as Error & {code?: string}).code === HttpUtil.DECOMPRESS_LIMIT_ERROR_CODE) {
+            return true;
+        }
+        const message = error.message.toLowerCase();
+        return message.includes('maxoutputlength') || message.includes('buffer too large') || message.includes('cannot create a buffer larger');
     }
 
     /**
@@ -419,9 +487,11 @@ class HttpUtil {
      * ws: -> http:, wss: -> https:
      */
     public static wsUrlToHttpUrl(url: string): string {
-        if (url.startsWith('ws://')) {
+        // scheme 은 대소문자를 구분하지 않는다(RFC 3986 §3.1, #175).
+        const lower = url.slice(0, 6).toLowerCase();
+        if (lower.startsWith('ws://')) {
             return 'http://' + url.substring(5);
-        } else if (url.startsWith('wss://')) {
+        } else if (lower.startsWith('wss://')) {
             return 'https://' + url.substring(6);
         }
         return url;
@@ -432,9 +502,10 @@ class HttpUtil {
      * http: -> ws:, https: -> wss:
      */
     public static httpUrlToWsUrl(url: string): string {
-        if (url.startsWith('http://')) {
+        const lower = url.slice(0, 8).toLowerCase();
+        if (lower.startsWith('http://')) {
             return 'ws://' + url.substring(7);
-        } else if (url.startsWith('https://')) {
+        } else if (lower.startsWith('https://')) {
             return 'wss://' + url.substring(8);
         }
         return url;
@@ -444,14 +515,15 @@ class HttpUtil {
      * URL이 WebSocket URL인지 확인합니다.
      */
     public static isWebSocketUrl(url: string): boolean {
-        return url.startsWith('ws://') || url.startsWith('wss://');
+        const lower = url.slice(0, 6).toLowerCase();
+        return lower.startsWith('ws://') || lower.startsWith('wss://');
     }
 
     /**
      * URL이 Secure WebSocket URL인지 확인합니다.
      */
     public static isSecureWebSocketUrl(url: string): boolean {
-        return url.startsWith('wss://');
+        return url.slice(0, 6).toLowerCase() === 'wss://';
     }
 
 }

@@ -1,0 +1,109 @@
+name: Supply Chain Audit
+
+on:
+  pull_request:
+    branches: [main, refactor/safecode]
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'admin/package.json'
+      - 'admin/package-lock.json'
+      - '.github/workflows/supply-chain-audit.yml'
+  push:
+    branches: [main]
+  schedule:
+    # 매주 월요일 00:00 UTC — SBOM 및 누적 advisory 감지
+    - cron: '0 0 * * 1'
+  workflow_dispatch: {}
+
+jobs:
+  audit-runtime:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    name: Runtime audit (server production chain)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install (include dev for lockfile integrity)
+        run: npm ci --no-audit --no-fund
+        env:
+          NODE_ENV: development
+
+      - name: Online production audit regression
+        run: npx jest --runInBand --runTestsByPath test/supply-chain/r3-req-03-critical-fixed.test.ts test/supply-chain/r3-req-04-medium-cleared.test.ts
+        env:
+          SUPPLY_CHAIN_ONLINE: "1"
+
+      - name: Audit production tree (CRITICAL gate)
+        run: npm audit --omit=dev --audit-level=critical
+        env:
+          NODE_ENV: development
+
+      - name: Audit production tree (HIGH gate, reviewed advisories only)
+        # npm audit --omit=dev --audit-level=high 결과를 검토 예외(scripts/supply-chain-gate.cjs)와 대조한다(#180).
+        run: node scripts/supply-chain-gate.cjs --server-high-gate
+        env:
+          NODE_ENV: development
+
+      - name: crypto-js 서버 체인 미포함 확인
+        run: npx jest --runInBand --runTestsByPath test/supply-chain/r3-req-02-crypto-js-removed.test.ts # R3-REQ-02
+        env:
+          NODE_ENV: development
+
+  audit-admin:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    name: Admin audit (frontend chain)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: admin/package-lock.json
+
+      - name: Install admin deps
+        working-directory: admin
+        run: npm ci --no-audit --no-fund
+        env:
+          NODE_ENV: development
+
+      - name: Audit admin (CRITICAL gate)
+        working-directory: admin
+        run: npm audit --audit-level=critical
+
+      - name: Audit admin (HIGH report; command errors fail)
+        working-directory: admin
+        run: node ../scripts/supply-chain-gate.cjs --admin-high-report
+
+  tests:
+    name: Supply-chain regression tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+        env:
+          NODE_ENV: development
+
+      - name: Build
+        run: npm run build
+        env:
+          NODE_ENV: development
+
+      - name: R3 supply-chain tests
+        run: npx jest test/supply-chain/ --detectOpenHandles
+        env:
+          NODE_ENV: development

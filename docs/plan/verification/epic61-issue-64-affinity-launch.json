@@ -1,0 +1,16 @@
+{
+    "allowedAffinityHex":  "FFFFFFFF",
+    "chosenAffinityHex":  "1",
+    "observedChild":  {
+                          "pid":  114204,
+                          "affinityHex":  "1",
+                          "priority":  "Normal"
+                      },
+    "scriptSha256":  "85ED47DF91921824DF5B692B76897725187DB0D6379BF5CCE00D432BCD705A25",
+    "helperSha256":  "E626B7B9E76DFFD05FAB177F50A803501362B1D63323CA640ED40A048E210A0D",
+    "nativeExitCode":  null,
+    "command":  "/d /c start \"\" /b /wait /normal /affinity 1 node scripts/timing-safe-string-equal-bench.cjs --conditions \"Shared Windows workstation; lowest permitted CPU affinity mask 1; normal priority; no other agent test install build packaging work; host not exclusive\" --output-dir results/timing",
+    "generatedAt":  "2026-09-07T16:03:15.5248071Z",
+    "stdoutPath":  "C:\\Work\\git\\_Snoworca\\TTTGate-epic61-node24\\results\\timing\\affinity-launch-a86b58f9-7b54-4d35-8cf0-1190737d8e33.stdout.txt",
+    "stderrPath":  "C:\\Work\\git\\_Snoworca\\TTTGate-epic61-node24\\results\\timing\\affinity-launch-a86b58f9-7b54-4d35-8cf0-1190737d8e33.stderr.txt"
+}

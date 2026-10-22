@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>UI kit fixture</title></head>
+<body>
+<div id="fixture"></div>
+<script type="module">
+    import {mount} from 'svelte';
+    import UiFixture from './UiFixture.svelte';
+    mount(UiFixture, {target: document.getElementById('fixture')});
+</script>
+</body>
+</html>

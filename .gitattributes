@@ -1,0 +1,11 @@
+# Preserve the original bytes of intentionally retained timing evidence.
+docs/plan/verification/epic61-issue-64-first-experiment.json -text
+docs/plan/verification/epic61-issue-64-default-affinity.json -text
+docs/plan/verification/epic61-issue-64-single-cpu-affinity.json -text
+docs/plan/verification/epic61-issue-64-affinity-launch.json -text
+docs/plan/verification/epic61-issue-64-affinity-launch.stdout.txt -text
+docs/plan/verification/epic61-issue-64-affinity-launch.stderr.txt -text
+
+docs/plan/srs/TTTGate.md -text
+docs/plan/srs/TTTGate.items.jsonl -text
+docs/plan/traceability/references/plan-remediation-r1.md -text

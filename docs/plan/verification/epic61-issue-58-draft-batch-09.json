@@ -1,0 +1,2354 @@
+{
+  "artifactKind": "bounded-semantic-draft",
+  "batch": {
+    "number": 9,
+    "firstOrdinal": 201,
+    "lastOrdinal": 225,
+    "count": 25
+  },
+  "status": "candidate; independent semantic review pending",
+  "sourceManifest": {
+    "path": "docs/plan/srs/TTTGate.md",
+    "markdownSha256": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+    "sidecarPath": "docs/plan/srs/TTTGate.items.jsonl",
+    "sidecarSha256": "364071a1f67e07501e7277e15ebdac057eb17ae8e6c2e076a3a550d916625657"
+  },
+  "sourceCheckpoint": {
+    "head": "e64c968de67172e65b93dc8ed1e9980330e246da",
+    "mode": "read-only source/test inspection"
+  },
+  "execution": {
+    "testsRun": false,
+    "validatorRun": false,
+    "buildRun": false,
+    "evidence": []
+  },
+  "inventoryPolicy": "Exactly original201..225; no canonical publication, no requirement removal or runtime verified promotion. Config credential files are named only and never read.",
+  "rows": [
+    {
+      "originalOrdinal": 201,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-PORT-CHECKER-001"
+      },
+      "category": "functional_req",
+      "title": "사용 가능 포트 탐색",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 813,
+        "exactHeading": "##### FR-PORT-CHECKER-001 — 사용 가능 포트 탐색",
+        "sidecarId": "FR-PORT-CHECKER-001"
+      },
+      "originalRecord": {
+        "id": "FR-PORT-CHECKER-001",
+        "type": "functional_req",
+        "title": "사용 가능 포트 탐색",
+        "description": "UsablePortChecker.check/checkPorts/findUsablePort/findUsablePorts/findUsedPorts. 0~65535 범위 검증.",
+        "source": [
+          "src/util/UsablePortChecker.ts:1-74"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "UsablePortChecker.check/checkPorts/findUsablePort/findUsablePorts/findUsedPorts. 0~65535 범위 검증.",
+        "clauses": [
+          {
+            "id": "FR-PORT-CHECKER-001::c1",
+            "text": "Check one port for availability.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-PORT-CHECKER-001::c2",
+            "text": "Filter a supplied port list for availability.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-PORT-CHECKER-001::c3",
+            "text": "Find the first usable port in a range.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-PORT-CHECKER-001::c4",
+            "text": "Find usable ports up to an optional count.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-PORT-CHECKER-001::c5",
+            "text": "Find used ports in a range.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-PORT-CHECKER-001::c6",
+            "text": "Validate the original stated 0..65535 port range.",
+            "sourceRef": "description",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/UsablePortChecker.ts",
+            "line": 9,
+            "symbol": "public static async check",
+            "exactSource": "    public static async check(port: number) : Promise<boolean> {",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-PORT-CHECKER-001::c1",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "FR-PORT-CHECKER-001::c2",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "FR-PORT-CHECKER-001::c3",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "FR-PORT-CHECKER-001::c4",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "FR-PORT-CHECKER-001::c5",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "FR-PORT-CHECKER-001::c6",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Original0-inclusive wording differs from check rejecting !port, including0. No behavior test or confirmed new defect; semantic disposition required.",
+        "approvedContext": []
+      }
+    },
+    {
+      "originalOrdinal": 202,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "IF-PUBSUB-001"
+      },
+      "category": "interface",
+      "title": "PubSub 토픽 브로커",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1755,
+        "exactHeading": "##### IF-PUBSUB-001 — PubSub 토픽 브로커",
+        "sidecarId": "IF-PUBSUB-001"
+      },
+      "originalRecord": {
+        "id": "IF-PUBSUB-001",
+        "type": "interface",
+        "title": "PubSub 토픽 브로커",
+        "description": "싱글톤 + create(). tickPublish(setTimeout 0) 옵션. 내부 이벤트 브로드캐스트용.",
+        "source": [
+          "src/util/PubSub.ts:1-40"
+        ],
+        "confidence": 0.9,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "싱글톤 + create(). tickPublish(setTimeout 0) 옵션. 내부 이벤트 브로드캐스트용.",
+        "clauses": [
+          {
+            "id": "IF-PUBSUB-001::c1",
+            "text": "Provide a singleton broker and independent create() instances.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-PUBSUB-001::c2",
+            "text": "Publish by topic to subscribers.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-PUBSUB-001::c3",
+            "text": "Support optional setTimeout(0) tick delivery.",
+            "sourceRef": "description",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/PubSub.ts",
+            "line": 33,
+            "symbol": "public publish",
+            "exactSource": "    public publish(topic: string, message: any) {",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "IF-PUBSUB-001::c1",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "IF-PUBSUB-001::c2",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "IF-PUBSUB-001::c3",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 203,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "IF-DEQUEUE-001"
+      },
+      "category": "interface",
+      "title": "Dequeue<T>",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1683,
+        "exactHeading": "##### IF-DEQUEUE-001 — Dequeue<T>",
+        "sidecarId": "IF-DEQUEUE-001"
+      },
+      "originalRecord": {
+        "id": "IF-DEQUEUE-001",
+        "type": "interface",
+        "title": "Dequeue<T>",
+        "description": "pushBack/pushFront/popFront/remove(filter)/clear. SocketHandler waitQueue/WaitBufferState 에서 사용.",
+        "source": [
+          "src/util/Dequeue.ts:1-30",
+          "src/util/SocketHandler.ts:7-56"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "pushBack/pushFront/popFront/remove(filter)/clear. SocketHandler waitQueue/WaitBufferState 에서 사용.",
+        "clauses": [
+          {
+            "id": "IF-DEQUEUE-001::c1",
+            "text": "pushBack and pushFront enqueue on their respective ends.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-DEQUEUE-001::c2",
+            "text": "popFront removes from the front.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-DEQUEUE-001::c3",
+            "text": "remove(filter) removes matching items.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-DEQUEUE-001::c4",
+            "text": "clear empties the queue.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-DEQUEUE-001::c5",
+            "text": "Serve SocketHandler waitQueue and WaitBufferState consumers.",
+            "sourceRef": "description",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/Dequeue.ts",
+            "line": 11,
+            "symbol": "public pushBack",
+            "exactSource": "    public pushBack(item: T) : void {",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "IF-DEQUEUE-001::c1",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "IF-DEQUEUE-001::c2",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "IF-DEQUEUE-001::c3",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "IF-DEQUEUE-001::c4",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "IF-DEQUEUE-001::c5",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 204,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "IF-BUFFER-IO-001"
+      },
+      "category": "interface",
+      "title": "BufferReader / BufferWriter",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1627,
+        "exactHeading": "##### IF-BUFFER-IO-001 — BufferReader / BufferWriter",
+        "sidecarId": "IF-BUFFER-IO-001"
+      },
+      "originalRecord": {
+        "id": "IF-BUFFER-IO-001",
+        "type": "interface",
+        "title": "BufferReader / BufferWriter",
+        "description": "공통 바이너리 I/O. readInt/UInt 8/16/32/64, Float/Double, LE/BE 명시 접미사 제공. readString(UInt16 length prefix).",
+        "source": [
+          "src/util/BufferReader.ts:1-194",
+          "src/util/BufferWriter.ts:1-50"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "공통 바이너리 I/O. readInt/UInt 8/16/32/64, Float/Double, LE/BE 명시 접미사 제공. readString(UInt16 length prefix).",
+        "clauses": [
+          {
+            "id": "IF-BUFFER-IO-001::c1",
+            "text": "Sequential binary readers/writers support signed and unsigned 8/16/32/64-bit values.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-BUFFER-IO-001::c2",
+            "text": "Support Float and Double values.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-BUFFER-IO-001::c3",
+            "text": "Handle LE/BE platform endianness.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-BUFFER-IO-001::c4",
+            "text": "readString consumes a UInt16 length prefix.",
+            "sourceRef": "description",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/BufferReader.ts",
+            "line": 64,
+            "symbol": "public readString",
+            "exactSource": "    public readString(): string {",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          },
+          {
+            "path": "src/util/BufferWriter.ts",
+            "line": 49,
+            "symbol": "public writeString",
+            "exactSource": "    public writeString(str : string) : void {",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "IF-BUFFER-IO-001::c1",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "IF-BUFFER-IO-001::c2",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "IF-BUFFER-IO-001::c3",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "IF-BUFFER-IO-001::c4",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 205,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "IF-OPTIONAL-001"
+      },
+      "category": "interface",
+      "title": "Optional<T>",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1747,
+        "exactHeading": "##### IF-OPTIONAL-001 — Optional<T>",
+        "sidecarId": "IF-OPTIONAL-001"
+      },
+      "originalRecord": {
+        "id": "IF-OPTIONAL-001",
+        "type": "interface",
+        "title": "Optional<T>",
+        "description": "Java 유사 Optional. empty/of/ofNullable.",
+        "source": [
+          "src/util/Optional.ts:1-20"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "Java 유사 Optional. empty/of/ofNullable.",
+        "clauses": [
+          {
+            "id": "IF-OPTIONAL-001::c1",
+            "text": "Provide empty, of and ofNullable Optional construction.",
+            "sourceRef": "description",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/Optional.ts",
+            "line": 11,
+            "symbol": "public static empty",
+            "exactSource": "    public static empty<T>(): Optional<T> {",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "IF-OPTIONAL-001::c1",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Java-like does not imply full java.util.Optional equivalence: current ofNullable checks null, not undefined. Only original constructors are retained; no runtime equivalence inferred.",
+        "approvedContext": []
+      }
+    },
+    {
+      "originalOrdinal": 206,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "IF-OBJECT-UTIL-UTIL-001"
+      },
+      "category": "interface",
+      "title": "ObjectUtil.findUpdates",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1739,
+        "exactHeading": "##### IF-OBJECT-UTIL-UTIL-001 — ObjectUtil.findUpdates",
+        "sidecarId": "IF-OBJECT-UTIL-UTIL-001"
+      },
+      "originalRecord": {
+        "id": "IF-OBJECT-UTIL-UTIL-001",
+        "type": "interface",
+        "title": "ObjectUtil.findUpdates",
+        "description": "설정 diff 계산. 관리자 설정 업데이트 시 사용 추정.",
+        "source": [
+          "src/util/ObjectUtil.ts:1-20"
+        ],
+        "confidence": 0.8,
+        "inferred": true,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "설정 diff 계산. 관리자 설정 업데이트 시 사용 추정.",
+        "clauses": [
+          {
+            "id": "IF-OBJECT-UTIL-UTIL-001::c1",
+            "text": "findUpdates computes a recursive deep difference.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-OBJECT-UTIL-UTIL-001::c2",
+            "text": "Use differences for server configuration updates and logging.",
+            "sourceRef": "description",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/ObjectUtil.ts",
+            "line": 15,
+            "symbol": "public static findUpdates",
+            "exactSource": "    public static findUpdates<T extends object>(originValue: T, newValue: T) :  UpdateInfo {",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "IF-OBJECT-UTIL-UTIL-001::c1",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "IF-OBJECT-UTIL-UTIL-001::c2",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 207,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "IF-CONSTRUCTOR-CONSUMER-001"
+      },
+      "category": "interface",
+      "title": "ConstructorConsumerHandler<T>",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1675,
+        "exactHeading": "##### IF-CONSTRUCTOR-CONSUMER-001 — ConstructorConsumerHandler<T>",
+        "sidecarId": "IF-CONSTRUCTOR-CONSUMER-001"
+      },
+      "originalRecord": {
+        "id": "IF-CONSTRUCTOR-CONSUMER-001",
+        "type": "interface",
+        "title": "ConstructorConsumerHandler<T>",
+        "description": "큐 기반 순차 소비자. stackCutter(기본 100000) 로 재귀 스택 방지.",
+        "source": [
+          "src/util/ConstructorConsumerHandler.ts:1-30"
+        ],
+        "confidence": 0.9,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "큐 기반 순차 소비자. stackCutter(기본 100000) 로 재귀 스택 방지.",
+        "clauses": [
+          {
+            "id": "IF-CONSTRUCTOR-CONSUMER-001::c1",
+            "text": "Consume queued items synchronously.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-CONSTRUCTOR-CONSUMER-001::c2",
+            "text": "Default stackCutter count is100000.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "IF-CONSTRUCTOR-CONSUMER-001::c3",
+            "text": "Cut excessive recursion through the stackCutter mechanism.",
+            "sourceRef": "description",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/util/ConstructorConsumerHandler.ts",
+            "line": 21,
+            "symbol": "_stackCutterCount",
+            "exactSource": "    private _stackCutterCount : number = 100000;",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "IF-CONSTRUCTOR-CONSUMER-001::c1",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "IF-CONSTRUCTOR-CONSUMER-001::c2",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "IF-CONSTRUCTOR-CONSUMER-001::c3",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 208,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "CONSTR-BUILD-TARGETS-001"
+      },
+      "category": "constraint",
+      "title": "pkg 빌드 타겟",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1977,
+        "exactHeading": "#### CONSTR-BUILD-TARGETS-001 — pkg 빌드 타겟",
+        "sidecarId": "CONSTR-BUILD-TARGETS-001"
+      },
+      "originalRecord": {
+        "id": "CONSTR-BUILD-TARGETS-001",
+        "type": "constraint",
+        "title": "pkg 빌드 타겟",
+        "description": "node18-linux-x64/arm64, node18-win-x64/arm64, node18-alpine-x64. pkg.scripts='build/**/*.js', outputPath='dist/bin/', --no-bytecode --public-packages '*' --public.",
+        "source": [
+          "package.json:9-19",
+          "package.json:26-27"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "constraint_type": "build"
+      },
+      "acceptance": {
+        "originalDescription": "node18-linux-x64/arm64, node18-win-x64/arm64, node18-alpine-x64. pkg.scripts='build/**/*.js', outputPath='dist/bin/', --no-bytecode --public-packages '*' --public.",
+        "clauses": [
+          {
+            "id": "CONSTR-BUILD-TARGETS-001::c1",
+            "text": "Original target topology is node18 Linux x64/arm64, Windows x64/arm64 and Alpine x64.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-BUILD-TARGETS-001::c2",
+            "text": "pkg scripts select build/**/*.js.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-BUILD-TARGETS-001::c3",
+            "text": "pkg outputPath is dist/bin/.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-BUILD-TARGETS-001::c4",
+            "text": "Use --no-bytecode, --public-packages * and --public.",
+            "sourceRef": "description",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "package.json",
+            "line": 11,
+            "symbol": "\"targets\"",
+            "exactSource": "    \"targets\": [",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "CONSTR-BUILD-TARGETS-001::c1",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "CONSTR-BUILD-TARGETS-001::c2",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "CONSTR-BUILD-TARGETS-001::c3",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "CONSTR-BUILD-TARGETS-001::c4",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Node24 five-target platform replaces original Node18 target topology under approved63; preserve original target clause.",
+        "approvedContext": [
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/63",
+            "ledger": "docs/plan/verification/epic61-issue-63.md"
+          },
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/65",
+            "ledger": "docs/plan/verification/epic61-issue-65.md"
+          },
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/69",
+            "ledger": "docs/plan/verification/epic61-issue-69.md"
+          }
+        ]
+      }
+    },
+    {
+      "originalOrdinal": 209,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "CONSTR-NODE-VERSION-001"
+      },
+      "category": "constraint",
+      "title": "Node 18+ 필수",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2169,
+        "exactHeading": "#### CONSTR-NODE-VERSION-001 — Node 18+ 필수",
+        "sidecarId": "CONSTR-NODE-VERSION-001"
+      },
+      "originalRecord": {
+        "id": "CONSTR-NODE-VERSION-001",
+        "type": "constraint",
+        "title": "Node 18+ 필수",
+        "description": "pkg target 이 node18 계열로만 구성되어 있어 Node 18 이상 런타임 가정.",
+        "source": [
+          "package.json:11-17"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "constraint_type": "platform"
+      },
+      "acceptance": {
+        "originalDescription": "pkg target 이 node18 계열로만 구성되어 있어 Node 18 이상 런타임 가정.",
+        "clauses": [
+          {
+            "id": "CONSTR-NODE-VERSION-001::c1",
+            "text": "Original platform inference requires Node18 or later from node18 targets.",
+            "sourceRef": "description",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "package.json",
+            "line": 12,
+            "symbol": "\"node24",
+            "exactSource": "      \"node24-linux-arm64\",",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "CONSTR-NODE-VERSION-001::c1",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current minimum Node>=24.0.0 is the approved63 policy; original Node18 inference is historical, not current acceptance.",
+        "approvedContext": [
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/63",
+            "ledger": "docs/plan/verification/epic61-issue-63.md"
+          }
+        ]
+      }
+    },
+    {
+      "originalOrdinal": 210,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "CONSTR-BUILD-PIPELINE-001"
+      },
+      "category": "constraint",
+      "title": "deploy.js 배포 파이프라인",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 1969,
+        "exactHeading": "#### CONSTR-BUILD-PIPELINE-001 — deploy.js 배포 파이프라인",
+        "sidecarId": "CONSTR-BUILD-PIPELINE-001"
+      },
+      "originalRecord": {
+        "id": "CONSTR-BUILD-PIPELINE-001",
+        "type": "constraint",
+        "title": "deploy.js 배포 파이프라인",
+        "description": "1) dist/dist.js rimraf 정리 2) admin build 3) admin/dist → dist/web 4) tsc -b 5) build/src → dist.js, admin/dist → dist.js/web, package-build.json → dist.js/package.json 6) npm run pkg.",
+        "source": [
+          "deploy.js:1-35"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "constraint_type": "build"
+      },
+      "acceptance": {
+        "originalDescription": "1) dist/dist.js rimraf 정리 2) admin build 3) admin/dist → dist/web 4) tsc -b 5) build/src → dist.js, admin/dist → dist.js/web, package-build.json → dist.js/package.json 6) npm run pkg.",
+        "clauses": [
+          {
+            "id": "CONSTR-BUILD-PIPELINE-001::c1",
+            "text": "Preserve original ordered build pipeline as a whole: remove dist/dist.js, build admin, copy web, tsc -b, stage build/src and package-build.json, then npm run pkg.",
+            "sourceRef": "description",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "deploy.js",
+            "line": 28,
+            "symbol": "const gates",
+            "exactSource": "    const gates = [",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "CONSTR-BUILD-PIPELINE-001::c1",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Approved44 adds installation/type/full-test gates before outputs and final production admin build;68/69 align source/native assets. Keep original pipeline ordering as a pending specification difference.",
+        "approvedContext": [
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/44",
+            "ledger": "docs/plan/verification/epic61-issue-44.md"
+          },
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/68",
+            "ledger": "docs/plan/verification/epic61-issue-68.md"
+          },
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/69",
+            "ledger": "docs/plan/verification/epic61-issue-69.md"
+          }
+        ]
+      }
+    },
+    {
+      "originalOrdinal": 211,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "CONSTR-SCRIPT-DEV-001"
+      },
+      "category": "constraint",
+      "title": "dev 스크립트 구성",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2201,
+        "exactHeading": "#### CONSTR-SCRIPT-DEV-001 — dev 스크립트 구성",
+        "sidecarId": "CONSTR-SCRIPT-DEV-001"
+      },
+      "originalRecord": {
+        "id": "CONSTR-SCRIPT-DEV-001",
+        "type": "constraint",
+        "title": "dev 스크립트 구성",
+        "description": "npm scripts: server='tsnd --respawn src/app.ts server -dev', client='tsnd --respawn src/app.ts client -dev', build='tsc -b', test='jest --detectOpenHandles --forceExit', lint='node scripts/lint-auth-compare.mjs src --strict', smoke='node scripts/smoke.mjs'.",
+        "source": [
+          "package.json:20-31"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "constraint_type": "build"
+      },
+      "acceptance": {
+        "originalDescription": "npm scripts: server='tsnd --respawn src/app.ts server -dev', client='tsnd --respawn src/app.ts client -dev', build='tsc -b', test='jest --detectOpenHandles --forceExit', lint='node scripts/lint-auth-compare.mjs src --strict', smoke='node scripts/smoke.mjs'.",
+        "clauses": [
+          {
+            "id": "CONSTR-SCRIPT-DEV-001::c1",
+            "text": "Provide the described server/client tsnd respawn development commands.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-SCRIPT-DEV-001::c2",
+            "text": "Provide tsc -b build.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-SCRIPT-DEV-001::c3",
+            "text": "Original test command contains jest --detectOpenHandles --forceExit.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-SCRIPT-DEV-001::c4",
+            "text": "Provide strict auth-comparison lint and smoke commands.",
+            "sourceRef": "description",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "package.json",
+            "line": 10,
+            "symbol": "\"scripts\"",
+            "exactSource": "    \"scripts\": \"build/**/*.js\",",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "CONSTR-SCRIPT-DEV-001::c1",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "CONSTR-SCRIPT-DEV-001::c2",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "CONSTR-SCRIPT-DEV-001::c3",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "CONSTR-SCRIPT-DEV-001::c4",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Approved49 removes forceExit; original test command must not be restored to satisfy historical wording.",
+        "approvedContext": [
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/49",
+            "ledger": "docs/plan/verification/epic61-issue-49.md"
+          }
+        ]
+      }
+    },
+    {
+      "originalOrdinal": 212,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "CONSTR-DEPS-OVERRIDE-001"
+      },
+      "category": "constraint",
+      "title": "form-data override ^4.0.4",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2121,
+        "exactHeading": "#### CONSTR-DEPS-OVERRIDE-001 — form-data override ^4.0.4",
+        "sidecarId": "CONSTR-DEPS-OVERRIDE-001"
+      },
+      "originalRecord": {
+        "id": "CONSTR-DEPS-OVERRIDE-001",
+        "type": "constraint",
+        "title": "form-data override ^4.0.4",
+        "description": "공급망 픽스드 pin. supply-chain 라운드에서 지정됨.",
+        "source": [
+          "package.json:65-67"
+        ],
+        "confidence": 0.9,
+        "inferred": false,
+        "phase_added": 2,
+        "constraint_type": "build"
+      },
+      "acceptance": {
+        "originalDescription": "공급망 픽스드 pin. supply-chain 라운드에서 지정됨.",
+        "clauses": [
+          {
+            "id": "CONSTR-DEPS-OVERRIDE-001::c1",
+            "text": "Override form-data to ^4.0.4 for supply-chain mitigation.",
+            "sourceRef": "description",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "package.json",
+            "line": 69,
+            "symbol": "\"form-data\"",
+            "exactSource": "    \"form-data\": \"^4.0.4\"",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "CONSTR-DEPS-OVERRIDE-001::c1",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 213,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "VER-LINT-AUTH-001"
+      },
+      "category": "verification",
+      "title": "lint-auth-compare 검증",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2485,
+        "exactHeading": "#### VER-LINT-AUTH-001 — lint-auth-compare 검증",
+        "sidecarId": "VER-LINT-AUTH-001"
+      },
+      "originalRecord": {
+        "id": "VER-LINT-AUTH-001",
+        "type": "verification",
+        "title": "lint-auth-compare 검증",
+        "description": "authKey|proof|token|secret|hmac|bindingToken|challengeNonce|sessionId 식별자가 ===/!==/==/!= 로 비교되는 라인을 감지. false positive 필터: undefined/null/true/false/숫자/Enum.Member, 문자열 리터럴 제외. `lint-auth-compare-allow` 주석 화이트리스트. STRICT=1 또는 --strict 시 위반 존재하면 exit 1, 그 외 exit 0. reports/auth-compare.json 출력, --report-dir 로 재지정.",
+        "source": [
+          "scripts/lint-auth-compare.mjs:1-231"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "authKey|proof|token|secret|hmac|bindingToken|challengeNonce|sessionId 식별자가 ===/!==/==/!= 로 비교되는 라인을 감지. false positive 필터: undefined/null/true/false/숫자/Enum.Member, 문자열 리터럴 제외. `lint-auth-compare-allow` 주석 화이트리스트. STRICT=1 또는 --strict 시 위반 존재하면 exit 1, 그 외 exit 0. reports/auth-compare.json 출력, --report-dir 로 재지정.",
+        "clauses": [
+          {
+            "id": "VER-LINT-AUTH-001::c1",
+            "text": "Detect authKey/proof/token/secret/hmac/bindingToken/challengeNonce/sessionId comparisons using equality/inequality operators.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "VER-LINT-AUTH-001::c2",
+            "text": "Exclude listed sentinel, enum-member and string-literal comparisons from false positives.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "VER-LINT-AUTH-001::c3",
+            "text": "Honor lint-auth-compare-allow comments.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "VER-LINT-AUTH-001::c4",
+            "text": "Strict mode with violations exits1; warn mode exits0.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "VER-LINT-AUTH-001::c5",
+            "text": "Write reports/auth-compare.json and permit --report-dir override.",
+            "sourceRef": "description",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "scripts/lint-auth-compare.mjs",
+            "line": 28,
+            "symbol": "const AUTH_TOKEN_RE",
+            "exactSource": "const AUTH_TOKEN_RE = /\\b(authKey|proof|token|secret|hmac|bindingToken|challengeNonce|sessionId)\\b/i;",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "VER-LINT-AUTH-001::c1",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "VER-LINT-AUTH-001::c2",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "VER-LINT-AUTH-001::c3",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "VER-LINT-AUTH-001::c4",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "VER-LINT-AUTH-001::c5",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Strict environment is LINT_AUTH_COMPARE_STRICT=1 in current scanner, not an arbitrary STRICT variable. Public-format comments43 are qualified exceptions, not secret comparison relaxation.",
+        "approvedContext": [
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/43",
+            "ledger": "docs/plan/verification/epic61-issue-43.md"
+          },
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/59",
+            "ledger": "docs/plan/verification/epic61-issue-59.md"
+          }
+        ]
+      }
+    },
+    {
+      "originalOrdinal": 214,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "VER-SMOKE-001"
+      },
+      "category": "verification",
+      "title": "smoke.mjs 배포 스모크",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2501,
+        "exactHeading": "#### VER-SMOKE-001 — smoke.mjs 배포 스모크",
+        "sidecarId": "VER-SMOKE-001"
+      },
+      "originalRecord": {
+        "id": "VER-SMOKE-001",
+        "type": "verification",
+        "title": "smoke.mjs 배포 스모크",
+        "description": "hard cap 30s. 임시 cwd 에 server.yaml 기록 후 `node build/src/app.js server` 기동. 동적 포트(adminPort, ttServerPort) 사용. 검증 항목: (1) admin TLS handshake, (2) TTT control port TCP reach, (a) /api/serverOptionHash 401/403, (b) /api/serverOption 외부 Origin POST 403, (c) cert fingerprint 2회 동일, (d) CL/TE smuggling 거부, (e) Vary:Origin 헤더 + 외부 Origin ACAO 미반영.",
+        "source": [
+          "scripts/smoke.mjs:1-448"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "hard cap 30s. 임시 cwd 에 server.yaml 기록 후 `node build/src/app.js server` 기동. 동적 포트(adminPort, ttServerPort) 사용. 검증 항목: (1) admin TLS handshake, (2) TTT control port TCP reach, (a) /api/serverOptionHash 401/403, (b) /api/serverOption 외부 Origin POST 403, (c) cert fingerprint 2회 동일, (d) CL/TE smuggling 거부, (e) Vary:Origin 헤더 + 외부 Origin ACAO 미반영.",
+        "clauses": [
+          {
+            "id": "VER-SMOKE-001::c1",
+            "text": "Apply a30-second smoke hard cap.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "VER-SMOKE-001::c2",
+            "text": "Use owned temporary cwd, server.yaml, built server entrypoint and allocated admin/control ports.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "VER-SMOKE-001::c3",
+            "text": "Check admin native TLS handshake and control TCP reachability.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "VER-SMOKE-001::c4",
+            "text": "Check unauthenticated serverOptionHash401/403 and external-Origin POST403.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "VER-SMOKE-001::c5",
+            "text": "Check stable certificate fingerprint across two observations.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "VER-SMOKE-001::c6",
+            "text": "Reject CL/TE smuggling.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "VER-SMOKE-001::c7",
+            "text": "Assert Vary:Origin and no external-Origin ACAO reflection.",
+            "sourceRef": "description",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "scripts/smoke.mjs",
+            "line": 33,
+            "symbol": "const HARD_CAP_MS",
+            "exactSource": "const HARD_CAP_MS = 30_000;",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "VER-SMOKE-001::c1",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "VER-SMOKE-001::c2",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "VER-SMOKE-001::c3",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "VER-SMOKE-001::c4",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "VER-SMOKE-001::c5",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "VER-SMOKE-001::c6",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "VER-SMOKE-001::c7",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 215,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "CONSTR-SMOKE-HARDCAP-001"
+      },
+      "category": "constraint",
+      "title": "smoke hard cap 30s",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2217,
+        "exactHeading": "#### CONSTR-SMOKE-HARDCAP-001 — smoke hard cap 30s",
+        "sidecarId": "CONSTR-SMOKE-HARDCAP-001"
+      },
+      "originalRecord": {
+        "id": "CONSTR-SMOKE-HARDCAP-001",
+        "type": "constraint",
+        "title": "smoke hard cap 30s",
+        "description": "HARD_CAP_MS=30_000; 초과 시 hardcap timer 가 finalize(1).",
+        "source": [
+          "scripts/smoke.mjs:33-34",
+          "scripts/smoke.mjs:439-443"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "constraint_type": "build"
+      },
+      "acceptance": {
+        "originalDescription": "HARD_CAP_MS=30_000; 초과 시 hardcap timer 가 finalize(1).",
+        "clauses": [
+          {
+            "id": "CONSTR-SMOKE-HARDCAP-001::c1",
+            "text": "Define HARD_CAP_MS=30000.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "CONSTR-SMOKE-HARDCAP-001::c2",
+            "text": "Hard-cap timer calls finalize(1) when exceeded.",
+            "sourceRef": "description",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "scripts/smoke.mjs",
+            "line": 33,
+            "symbol": "const HARD_CAP_MS",
+            "exactSource": "const HARD_CAP_MS = 30_000;",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "CONSTR-SMOKE-HARDCAP-001::c1",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "CONSTR-SMOKE-HARDCAP-001::c2",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Current global timer uses HARD_CAP_MS+2000, while elapsed checkpoints enforce HARD_CAP_MS. Original single30-second hard-cap wording needs explicit timer/checkpoint disposition, not a fabricated timing result.",
+        "approvedContext": []
+      }
+    },
+    {
+      "originalOrdinal": 216,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "CONSTR-SMOKE-TEARDOWN-001"
+      },
+      "category": "constraint",
+      "title": "smoke Windows taskkill",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2225,
+        "exactHeading": "#### CONSTR-SMOKE-TEARDOWN-001 — smoke Windows taskkill",
+        "sidecarId": "CONSTR-SMOKE-TEARDOWN-001"
+      },
+      "originalRecord": {
+        "id": "CONSTR-SMOKE-TEARDOWN-001",
+        "type": "constraint",
+        "title": "smoke Windows taskkill",
+        "description": "win32 에서는 SIGTERM 대신 `taskkill /T /F /PID` 동기 실행으로 자식 프로세스 정리. 그 외 플랫폼은 SIGTERM.",
+        "source": [
+          "scripts/smoke.mjs:386-413"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "constraint_type": "platform"
+      },
+      "acceptance": {
+        "originalDescription": "win32 에서는 SIGTERM 대신 `taskkill /T /F /PID` 동기 실행으로 자식 프로세스 정리. 그 외 플랫폼은 SIGTERM.",
+        "clauses": [
+          {
+            "id": "CONSTR-SMOKE-TEARDOWN-001::c1",
+            "text": "On Windows terminate the started child tree through taskkill /T /F /PID; use SIGTERM elsewhere.",
+            "sourceRef": "description",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "scripts/smoke.mjs",
+            "line": 393,
+            "symbol": "spawnSync(\"taskkill\"",
+            "exactSource": "                    const res = spawnSync(\"taskkill\", [\"/T\", \"/F\", \"/PID\", String(child.pid)], {",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "CONSTR-SMOKE-TEARDOWN-001::c1",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Static taskkill /T /F /PID location is not evidence that current PID/commandline/ownership checks satisfy AGENTS Process Termination Safety. No termination is executed or authorized by this mapping.",
+        "approvedContext": []
+      }
+    },
+    {
+      "originalOrdinal": 217,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "DATA-CONFIG-PATHS-001"
+      },
+      "category": "data_model",
+      "title": "config/ 디렉터리 자산",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3031,
+        "exactHeading": "#### DATA-CONFIG-PATHS-001 — config/ 디렉터리 자산",
+        "sidecarId": "DATA-CONFIG-PATHS-001"
+      },
+      "originalRecord": {
+        "id": "DATA-CONFIG-PATHS-001",
+        "type": "data_model",
+        "title": "config/ 디렉터리 자산",
+        "description": "server.yaml, client.yaml, .bootstrap-token, .key(admin password hash), server.sample.yaml, client.sample.yaml.",
+        "source": [
+          "config/README.md:1-13"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "fields": [
+          {
+            "name": "server.yaml",
+            "type": "yaml",
+            "desc": "ServerOption"
+          },
+          {
+            "name": "client.yaml",
+            "type": "yaml",
+            "desc": "ClientOption"
+          },
+          {
+            "name": ".bootstrap-token",
+            "type": "text",
+            "desc": "Admin 초기화 1회성 토큰"
+          },
+          {
+            "name": ".key",
+            "type": "text",
+            "desc": "Admin bcrypt 비밀번호 해시"
+          }
+        ]
+      },
+      "acceptance": {
+        "originalDescription": "server.yaml, client.yaml, .bootstrap-token, .key(admin password hash), server.sample.yaml, client.sample.yaml.",
+        "clauses": [
+          {
+            "id": "DATA-CONFIG-PATHS-001::c1",
+            "text": "Maintain server.yaml, client.yaml, .bootstrap-token, .key and sample YAML asset paths.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "DATA-CONFIG-PATHS-001::field:server.yaml",
+            "text": {
+              "name": "server.yaml",
+              "type": "yaml",
+              "desc": "ServerOption"
+            },
+            "sourceRef": "fields.server.yaml",
+            "state": "unverified"
+          },
+          {
+            "id": "DATA-CONFIG-PATHS-001::field:client.yaml",
+            "text": {
+              "name": "client.yaml",
+              "type": "yaml",
+              "desc": "ClientOption"
+            },
+            "sourceRef": "fields.client.yaml",
+            "state": "unverified"
+          },
+          {
+            "id": "DATA-CONFIG-PATHS-001::field:.bootstrap-token",
+            "text": {
+              "name": ".bootstrap-token",
+              "type": "text",
+              "desc": "Admin 초기화 1회성 토큰"
+            },
+            "sourceRef": "fields..bootstrap-token",
+            "state": "unverified"
+          },
+          {
+            "id": "DATA-CONFIG-PATHS-001::field:.key",
+            "text": {
+              "name": ".key",
+              "type": "text",
+              "desc": "Admin bcrypt 비밀번호 해시"
+            },
+            "sourceRef": "fields..key",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "config/README.md",
+            "line": 3,
+            "symbol": "server.yaml",
+            "exactSource": "- Server runtime file: `config/server.yaml`",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "DATA-CONFIG-PATHS-001::c1",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "DATA-CONFIG-PATHS-001::field:server.yaml",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "DATA-CONFIG-PATHS-001::field:client.yaml",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "DATA-CONFIG-PATHS-001::field:.bootstrap-token",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "DATA-CONFIG-PATHS-001::field:.key",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 218,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "BR-CLI-SAVE-001"
+      },
+      "category": "business_rule",
+      "title": "--save 시 insecure 필드 제거",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3367,
+        "exactHeading": "#### BR-CLI-SAVE-001 — --save 시 insecure 필드 제거",
+        "sidecarId": "BR-CLI-SAVE-001"
+      },
+      "originalRecord": {
+        "id": "BR-CLI-SAVE-001",
+        "type": "business_rule",
+        "title": "--save 시 insecure 필드 제거",
+        "description": "ClientApp._loadClientOption 에서 --save 플래그가 주어지면 normalizationClientOption 결과에서 allowInsecureTls/allowLegacyFallback 을 삭제한 복사본을 YAML 로 기록.",
+        "source": [
+          "src/client/ClientApp.ts:204-216"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "rule_statement": "--save MUST strip insecure/legacy fields before writing YAML."
+      },
+      "acceptance": {
+        "originalDescription": "ClientApp._loadClientOption 에서 --save 플래그가 주어지면 normalizationClientOption 결과에서 allowInsecureTls/allowLegacyFallback 을 삭제한 복사본을 YAML 로 기록.",
+        "clauses": [
+          {
+            "id": "BR-CLI-SAVE-001::c1",
+            "text": "When save is requested serialize the normalized client option copy.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-CLI-SAVE-001::c2",
+            "text": "Strip allowInsecureTls before YAML write.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-CLI-SAVE-001::c3",
+            "text": "Strip allowLegacyFallback before YAML write.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-CLI-SAVE-001::rule_statement",
+            "text": "--save MUST strip insecure/legacy fields before writing YAML.",
+            "sourceRef": "rule_statement",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/ClientApp.ts",
+            "line": 196,
+            "symbol": "if(argv[\"save\"]",
+            "exactSource": "    if(argv[\"save\"] != undefined && (argv[\"save\"] == \"\" || argv[\"save\"].toLowerCase() != \"false\")) {",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          }
+        ]
+      },
+      "verification": [
+        {
+          "testPath": "test/unit/client/req-02-insecure-tls-yaml.test.ts",
+          "caseLine": 40,
+          "exactTitle": "REQ-02 allowInsecureTls/allowLegacyFallback YAML gate (1) -save 시 insecure 필드가 YAML에 기록되지 않는다",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "BR-CLI-SAVE-001::c2",
+            "BR-CLI-SAVE-001::c3"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 54,
+              "text": "expect(parsed.allowInsecureTls).toBeUndefined();"
+            },
+            {
+              "line": 55,
+              "text": "expect(parsed.allowLegacyFallback).toBeUndefined();"
+            }
+          ],
+          "state": "candidate",
+          "technique": "source-read-candidate",
+          "rationale": "Actual loader/save writes owned YAML and checks both fields absent; not all normalization or native startup behavior.",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "BR-CLI-SAVE-001::c1",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "BR-CLI-SAVE-001::c2",
+          "reason": "Exact assertion candidate covers the stated concrete inputs only; full clause breadth and authentic non-skipped execution remain unverified."
+        },
+        {
+          "clauseRef": "BR-CLI-SAVE-001::c3",
+          "reason": "Exact assertion candidate covers the stated concrete inputs only; full clause breadth and authentic non-skipped execution remain unverified."
+        },
+        {
+          "clauseRef": "BR-CLI-SAVE-001::rule_statement",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 219,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "FR-CLI-APPLY-GLOBAL-MEM-001"
+      },
+      "category": "functional_req",
+      "title": "Global mem limit 적용",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 447,
+        "exactHeading": "##### FR-CLI-APPLY-GLOBAL-MEM-001 — Global mem limit 적용",
+        "sidecarId": "FR-CLI-APPLY-GLOBAL-MEM-001"
+      },
+      "originalRecord": {
+        "id": "FR-CLI-APPLY-GLOBAL-MEM-001",
+        "type": "functional_req",
+        "title": "Global mem limit 적용",
+        "description": "ClientApp.start 초기 기본 128MiB 적용 후 clientOption.globalMemCacheLimit 재적용. AppCompositionRoot.applyGlobalMemLimitMiB 경유.",
+        "source": [
+          "src/client/ClientApp.ts:218",
+          "src/client/ClientApp.ts:226-229"
+        ],
+        "confidence": 0.95,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "ClientApp.start 초기 기본 128MiB 적용 후 clientOption.globalMemCacheLimit 재적용. AppCompositionRoot.applyGlobalMemLimitMiB 경유.",
+        "clauses": [
+          {
+            "id": "FR-CLI-APPLY-GLOBAL-MEM-001::c1",
+            "text": "Apply initial default128MiB global memory limit during ClientApp startup.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "FR-CLI-APPLY-GLOBAL-MEM-001::c2",
+            "text": "Then apply loaded clientOption.globalMemCacheLimit via AppCompositionRoot.",
+            "sourceRef": "description",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/ClientApp.ts",
+            "line": 218,
+            "symbol": "AppCompositionRoot.applyGlobalMemLimitMiB(128)",
+            "exactSource": "        AppCompositionRoot.applyGlobalMemLimitMiB(128);",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          },
+          {
+            "path": "src/bootstrap/AppCompositionRoot.ts",
+            "line": 23,
+            "symbol": "applyGlobalMemLimitMiB(",
+            "exactSource": "    applyGlobalMemLimitMiB(limitMiB: number = 128): void {",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "FR-CLI-APPLY-GLOBAL-MEM-001::c1",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "FR-CLI-APPLY-GLOBAL-MEM-001::c2",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Public global setter and normalizer/getter tests do not prove ClientApp startup ordering or unlimited -1 behavior; keep40 unresolved.",
+        "approvedContext": [
+          {
+            "issue": "https://github.com/ice3x2/TTTGate/issues/40",
+            "ledger": "docs/plan/verification/epic61-issue-40-research.md",
+            "approvalState": "policy decision pending; no implementation approval"
+          }
+        ]
+      }
+    },
+    {
+      "originalOrdinal": 220,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "ASM-APP-BOOTSTRAP-001"
+      },
+      "category": "assumption",
+      "title": "AppCompositionRoot 의존",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 279,
+        "exactHeading": "#### ASM-APP-BOOTSTRAP-001 — AppCompositionRoot 의존",
+        "sidecarId": "ASM-APP-BOOTSTRAP-001"
+      },
+      "originalRecord": {
+        "id": "ASM-APP-BOOTSTRAP-001",
+        "type": "assumption",
+        "title": "AppCompositionRoot 의존",
+        "description": "클라이언트 시작 시 AppCompositionRoot.applyGlobalMemLimitMiB 를 통해 SocketHandler.GlobalMemCacheLimit 를 설정한다고 가정. 실제 정의는 src/bootstrap (Agent 1 범위).",
+        "source": [
+          "src/client/ClientApp.ts:10",
+          "src/client/ClientApp.ts:218"
+        ],
+        "confidence": 0.85,
+        "inferred": true,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "클라이언트 시작 시 AppCompositionRoot.applyGlobalMemLimitMiB 를 통해 SocketHandler.GlobalMemCacheLimit 를 설정한다고 가정. 실제 정의는 src/bootstrap (Agent 1 범위).",
+        "clauses": [
+          {
+            "id": "ASM-APP-BOOTSTRAP-001::c1",
+            "text": "Client initialization assumes AppCompositionRoot.applyGlobalMemLimitMiB configures SocketHandler.GlobalMemCacheLimit.",
+            "sourceRef": "description",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/bootstrap/AppCompositionRoot.ts",
+            "line": 23,
+            "symbol": "applyGlobalMemLimitMiB(",
+            "exactSource": "    applyGlobalMemLimitMiB(limitMiB: number = 128): void {",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "ASM-APP-BOOTSTRAP-001::c1",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 221,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "ASM-SENTINEL-EXT-001"
+      },
+      "category": "assumption",
+      "title": "Sentinel/daemon 외부 정의",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 287,
+        "exactHeading": "#### ASM-SENTINEL-EXT-001 — Sentinel/daemon 외부 정의",
+        "sidecarId": "ASM-SENTINEL-EXT-001"
+      },
+      "originalRecord": {
+        "id": "ASM-SENTINEL-EXT-001",
+        "type": "assumption",
+        "title": "Sentinel/daemon 외부 정의",
+        "description": "smoke.mjs 와 app.ts 에서 Sentinel 의 foreground PID 파일 bin/.pid_foreground 를 쓰는 것으로 언급되나 실제 구현은 Agent 1 담당(src/Sentinel.ts).",
+        "source": [
+          "scripts/smoke.mjs:233-236"
+        ],
+        "confidence": 0.9,
+        "inferred": true,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "smoke.mjs 와 app.ts 에서 Sentinel 의 foreground PID 파일 bin/.pid_foreground 를 쓰는 것으로 언급되나 실제 구현은 Agent 1 담당(src/Sentinel.ts).",
+        "clauses": [
+          {
+            "id": "ASM-SENTINEL-EXT-001::c1",
+            "text": "Sentinel provides daemon/foreground process behavior and bin/.pid_foreground referenced by app/smoke.",
+            "sourceRef": "description",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/Sentinel.ts",
+            "line": 74,
+            "symbol": "writeForegroundPID",
+            "exactSource": "            Sentinel.writeForegroundPID();",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          },
+          {
+            "path": "scripts/smoke.mjs",
+            "line": 234,
+            "symbol": "pid_foreground",
+            "exactSource": "    // Sentinel.writeForegroundPID 가 bin/.pid_foreground 를 기록 — 런타임 모드에서 경로 필요",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "ASM-SENTINEL-EXT-001::c1",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 222,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "OOS-AGENT1-REF-001"
+      },
+      "category": "out_of_scope",
+      "title": "서버/공통 프로토콜은 Agent 1 범위",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3595,
+        "exactHeading": "#### OOS-AGENT1-REF-001 — 서버/공통 프로토콜은 Agent 1 범위",
+        "sidecarId": "OOS-AGENT1-REF-001"
+      },
+      "originalRecord": {
+        "id": "OOS-AGENT1-REF-001",
+        "type": "out_of_scope",
+        "title": "서버/공통 프로토콜은 Agent 1 범위",
+        "description": "CtrlPacket, ProtocolV2(buildHandshakeProof, CONTROL_PROTOCOL_V2, DEFAULT_PROTOCOL_V2_CAPABILITIES), DataStatePacket, SystemInfoProvider 는 참조만 하며 본 chunk 에서는 제약/인터페이스 수준으로만 기록.",
+        "source": [
+          "src/client/TunnelClient.ts:1-14"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "CtrlPacket, ProtocolV2(buildHandshakeProof, CONTROL_PROTOCOL_V2, DEFAULT_PROTOCOL_V2_CAPABILITIES), DataStatePacket, SystemInfoProvider 는 참조만 하며 본 chunk 에서는 제약/인터페이스 수준으로만 기록.",
+        "clauses": [
+          {
+            "id": "OOS-AGENT1-REF-001::c1",
+            "text": "Original chunk boundary lists CtrlPacket, ProtocolV2, DataStatePacket and SystemInfoProvider as referenced server/common interfaces; this is not a whole-project requirement exemption.",
+            "sourceRef": "description",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/TunnelClient.ts",
+            "line": 1,
+            "symbol": "import",
+            "exactSource": "import {SocketHandler} from \"../util/SocketHandler\";",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "OOS-AGENT1-REF-001::c1",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        }
+      ],
+      "specificationDisposition": {
+        "state": "pending",
+        "description": "Original out_of_scope denotes an analysis chunk boundary only; all366 original requirements remain in scope for58.",
+        "approvedContext": []
+      }
+    },
+    {
+      "originalOrdinal": 223,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "GLOSS-WAITBUFFER-001"
+      },
+      "category": "glossary",
+      "title": "WaitBuffer",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2723,
+        "exactHeading": "#### GLOSS-WAITBUFFER-001 — WaitBuffer",
+        "sidecarId": "GLOSS-WAITBUFFER-001"
+      },
+      "originalRecord": {
+        "id": "GLOSS-WAITBUFFER-001",
+        "type": "glossary",
+        "title": "WaitBuffer",
+        "description": "TunnelClient 에서 데이터 핸들러가 OnlineSession 이 되기 전에 도착한 서버→엔드포인트 바이트를 임시로 보관하는 per-session queue. bufferSizeLimit 및 defaultPoolQueueLimitBytes 이중 한도.",
+        "source": [
+          "src/client/TunnelClient.ts:49-53",
+          "src/client/TunnelClient.ts:601-651"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "TunnelClient 에서 데이터 핸들러가 OnlineSession 이 되기 전에 도착한 서버→엔드포인트 바이트를 임시로 보관하는 per-session queue. bufferSizeLimit 및 defaultPoolQueueLimitBytes 이중 한도.",
+        "clauses": [
+          {
+            "id": "GLOSS-WAITBUFFER-001::c1",
+            "text": "Before OnlineSession retain endpoint bytes in a per-session wait queue.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "GLOSS-WAITBUFFER-001::c2",
+            "text": "Bound the wait queue by bufferSizeLimit or defaultPoolQueueLimitBytes.",
+            "sourceRef": "description",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/TunnelClient.ts",
+            "line": 74,
+            "symbol": "_waitBufferQueueMap",
+            "exactSource": "    private _waitBufferQueueMap : Map<number, WaitBufferState> = new Map<number, WaitBufferState>();",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "GLOSS-WAITBUFFER-001::c1",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "GLOSS-WAITBUFFER-001::c2",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 224,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "GLOSS-HANDLERTYPE-001"
+      },
+      "category": "glossary",
+      "title": "HandlerType",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 2593,
+        "exactHeading": "#### GLOSS-HANDLERTYPE-001 — HandlerType",
+        "sidecarId": "GLOSS-HANDLERTYPE-001"
+      },
+      "originalRecord": {
+        "id": "GLOSS-HANDLERTYPE-001",
+        "type": "glossary",
+        "title": "HandlerType",
+        "description": "터널 핸들러의 역할 구분. Control(제어 채널) / Data(세션별 데이터 채널) / Unknown.",
+        "source": [
+          "src/types/TunnelHandler.ts:20-24"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2
+      },
+      "acceptance": {
+        "originalDescription": "터널 핸들러의 역할 구분. Control(제어 채널) / Data(세션별 데이터 채널) / Unknown.",
+        "clauses": [
+          {
+            "id": "GLOSS-HANDLERTYPE-001::c1",
+            "text": "HandlerType distinguishes Control, Data and Unknown roles as one enum topology.",
+            "sourceRef": "description",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/TunnelClient.ts",
+            "line": 44,
+            "symbol": "enum HandlerType",
+            "exactSource": "enum HandlerType {",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          }
+        ]
+      },
+      "verification": [],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "GLOSS-HANDLERTYPE-001::c1",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        }
+      ],
+      "specificationDisposition": null
+    },
+    {
+      "originalOrdinal": 225,
+      "key": {
+        "sourceHash": "651898fa44ac7c3e037c4cc3706837062105871c7b8f41f92c66f728842b149d",
+        "originalId": "BR-CLI-CONNECT-RACE-001"
+      },
+      "category": "business_rule",
+      "title": "connectDataHandler race 방지",
+      "source": {
+        "markdownPath": "docs/plan/srs/TTTGate.md",
+        "headingLine": 3327,
+        "exactHeading": "#### BR-CLI-CONNECT-RACE-001 — connectDataHandler race 방지",
+        "sidecarId": "BR-CLI-CONNECT-RACE-001"
+      },
+      "originalRecord": {
+        "id": "BR-CLI-CONNECT-RACE-001",
+        "type": "business_rule",
+        "title": "connectDataHandler race 방지",
+        "description": "SocketHandler.connect 가 Connected 이벤트를 동기 실행할 수 있으므로 handlerID/sessionID/bindingToken 을 Connected 콜백 내부에서 즉시 주입하고, post-connect fallback 으로 한 번 더 idempotent 주입. waitBufferQueueMap 을 Initializing 시점에 선할당하여 'Online 이전 도착 send' 유실 방지.",
+        "source": [
+          "src/client/TunnelClient.ts:379-433"
+        ],
+        "confidence": 1,
+        "inferred": false,
+        "phase_added": 2,
+        "rule_statement": "Connected 콜백 안에서 핸들러 식별자를 반드시 세팅하고 대기 큐를 선할당한다."
+      },
+      "acceptance": {
+        "originalDescription": "SocketHandler.connect 가 Connected 이벤트를 동기 실행할 수 있으므로 handlerID/sessionID/bindingToken 을 Connected 콜백 내부에서 즉시 주입하고, post-connect fallback 으로 한 번 더 idempotent 주입. waitBufferQueueMap 을 Initializing 시점에 선할당하여 'Online 이전 도착 send' 유실 방지.",
+        "clauses": [
+          {
+            "id": "BR-CLI-CONNECT-RACE-001::c1",
+            "text": "Initialize handlerID/sessionID/bindingToken inside the Connected callback before return.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-CLI-CONNECT-RACE-001::c2",
+            "text": "Keep post-connect fallback assignment idempotent.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-CLI-CONNECT-RACE-001::c3",
+            "text": "Preallocate waitBufferQueueMap while Initializing so pre-Online sends have a queue.",
+            "sourceRef": "description",
+            "state": "unverified"
+          },
+          {
+            "id": "BR-CLI-CONNECT-RACE-001::rule_statement",
+            "text": "Connected 콜백 안에서 핸들러 식별자를 반드시 세팅하고 대기 큐를 선할당한다.",
+            "sourceRef": "rule_statement",
+            "state": "unverified"
+          }
+        ]
+      },
+      "implementation": {
+        "state": "located",
+        "links": [
+          {
+            "path": "src/client/TunnelClient.ts",
+            "line": 371,
+            "symbol": "connectDataHandler(",
+            "exactSource": "                    this.connectDataHandler(value?.handlerID ?? packet.ID, packet.sessionID, value?.bindingToken);",
+            "rationale": "Read source location only; not runtime or complete acceptance evidence."
+          }
+        ]
+      },
+      "verification": [
+        {
+          "testPath": "test/unit/client/req-14-connect-race.test.ts",
+          "caseLine": 45,
+          "exactTitle": "REQ-14 TunnelClient.connectDataHandler race handler.handlerID/sessionID/bindingToken 100/100 defined on immediate accept",
+          "parameters": [],
+          "assertedClauseRefs": [
+            "BR-CLI-CONNECT-RACE-001::c1"
+          ],
+          "assertionAnchors": [
+            {
+              "line": 102,
+              "text": "expect(defined).toBe(N);"
+            }
+          ],
+          "state": "candidate",
+          "technique": "source-read-candidate",
+          "rationale": "Actual immediate accept with delegating map.set captures100 identities; no control handshake and no direct assertion of fallback idempotence or pre-Online queued payload.",
+          "evidence": []
+        }
+      ],
+      "contextTests": [],
+      "legacyAliases": [],
+      "status": "candidate",
+      "review": {
+        "state": "unreviewed",
+        "reviewer": null
+      },
+      "evidence": [],
+      "gaps": [
+        {
+          "clauseRef": "BR-CLI-CONNECT-RACE-001::c1",
+          "reason": "Exact assertion candidate covers the stated concrete inputs only; full clause breadth and authentic non-skipped execution remain unverified."
+        },
+        {
+          "clauseRef": "BR-CLI-CONNECT-RACE-001::c2",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "BR-CLI-CONNECT-RACE-001::c3",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        },
+        {
+          "clauseRef": "BR-CLI-CONNECT-RACE-001::rule_statement",
+          "reason": "No direct complete assertion mapped in this bounded read. Source/module use is not verification; exact assertion and non-skipped execution evidence remain pending."
+        }
+      ],
+      "specificationDisposition": null
+    }
+  ]
+}

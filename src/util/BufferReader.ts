@@ -92,18 +92,21 @@ class BufferReader {
         return value;
     }
 
+    // BE 기본 메서드 (R2-REQ-02): 공식 Node.js Buffer BE API로 환원.
+    // NF-01: readInt8/readUInt8은 readIntLE/readUIntLE 위임 체인을 제거하고 직접 호출.
     public readInt8(): number {
-        return this.readIntLE(1);
+        const bytes = this.readBytes(1);
+        return bytes.readInt8(0);
     }
 
     public readInt16(): number {
         const bytes = this.readBytes(2);
-        return bytes[0] * 256 + bytes[1];
+        return bytes.readInt16BE(0);
     }
 
     public readInt32(): number {
         const bytes = this.readBytes(4);
-        return bytes[0] * Math.pow(256, 3) + bytes[1] * Math.pow(256, 2) + bytes[2] * 256 + bytes[3];
+        return bytes.readInt32BE(0);
     }
 
     public readFloat(): number {
@@ -117,17 +120,39 @@ class BufferReader {
     }
 
     public readUInt8(): number {
-        return this.readUIntLE(1);
+        const bytes = this.readBytes(1);
+        return bytes.readUInt8(0);
     }
 
     public readUInt16(): number {
         const bytes = this.readBytes(2);
-        return bytes[0] * 256 + bytes[1];
+        return bytes.readUInt16BE(0);
     }
 
     public readUInt32(): number {
         const bytes = this.readBytes(4);
         return bytes.readUInt32BE(0);
+    }
+
+    // 명시적 LE suffix 메서드 (R2-REQ-02).
+    public readInt16LE(): number {
+        const bytes = this.readBytes(2);
+        return bytes.readInt16LE(0);
+    }
+
+    public readInt32LE(): number {
+        const bytes = this.readBytes(4);
+        return bytes.readInt32LE(0);
+    }
+
+    public readUInt16LE(): number {
+        const bytes = this.readBytes(2);
+        return bytes.readUInt16LE(0);
+    }
+
+    public readUInt32LE(): number {
+        const bytes = this.readBytes(4);
+        return bytes.readUInt32LE(0);
     }
 
     public readUInt64(): BigInt {

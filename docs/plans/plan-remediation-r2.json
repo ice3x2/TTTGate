@@ -1,0 +1,277 @@
+{
+  "spec": "docs/srs/backend-remediation-round2.md",
+  "mode": "Normal",
+  "planner": "Opus x1",
+  "plan_revision": 3,
+  "phase_count": 3,
+  "task_count": 9,
+  "mock_policy": "forbidden",
+  "test_naming": "test/**/r2-req-XX-<kebab>.test.ts",
+  "round_2_notes": {
+    "F-01": {
+      "severity": "HIGH",
+      "resolution": "P2-T3 범위를 CtrlPacket.ts의 JSON.parse 6곳(line 107/213/220/232/238/318) 전부로 확장. 공용 헬퍼 safeJsonParse<T>(data, assertFn) 도입 — reviver 고정 적용(__proto__/constructor/prototype drop) + 직후 assertFn 호출. 각 메타 getter에 assertXMeta 호출 의무화.",
+      "affects": ["P2-T3", "P2-T6"]
+    },
+    "F-02": {
+      "severity": "HIGH",
+      "resolution": "Phase 1 DoD 재정의 — 'BE 기본 메서드(readInt8/16/32, readUInt8/16/32 및 Writer 대칭) 구현 블록 내부에 Math.pow(256 0건'으로 한정. 명시적 LE suffix(readUIntLE/readIntLE) 경로는 LE 의미 보존 목적으로 기존 구현 유지 허용.",
+      "affects": ["P1 DoD"]
+    },
+    "F-03": {
+      "severity": "MEDIUM",
+      "resolution": "리스크 R8 신설 — 핫패스 assertXMeta 성능 리스크. O(필드수) 경량 검사(typeof + 길이 상한)만, 깊은 순회/재귀 금지. CTRL_META_DEEP_VALIDATE=1 환경변수로만 deep validate. < 5% 오버헤드 목표.",
+      "affects": ["§6 R8"]
+    },
+    "F-04": {
+      "severity": "MEDIUM",
+      "resolution": "리스크 R1 보강 — 현행 readInt16/UInt16/UInt32 이미 BE이므로 실바이트 변경 위험 낮음. DataStatePacket은 Buffer.*BE 직접 사용하여 BufferReader 영향 밖. BufferWriter 대칭 환원 시 호출부 의도 확인 필수. P1-T2 전수 grep 대상: src/client/**, src/server/**, src/commons/**, src/util/**.",
+      "affects": ["§6 R1", "P1-T2"]
+    },
+    "F-05": {
+      "severity": "LOW",
+      "resolution": "SPEC의 '***'는 예시이며, 코드 구현 기준은 SecretRedactor.REDACTED_VALUE = '[REDACTED]' 상수 재사용. P3-T1 주석에 명시.",
+      "affects": ["P3-T1", "P3 DoD"]
+    },
+    "F-06_evaluator1_low": {
+      "severity": "LOW",
+      "resolution": "P1-T1/T2에 verify_files 필드 추가(읽기 전용 grep 대상). JSON root의 'round: 1' → 'plan_revision: 2'로 정명.",
+      "affects": ["P1-T1", "P1-T2", "JSON root schema"]
+    }
+  },
+  "round_3_notes": {
+    "NF-01_evaluator1_medium": {
+      "severity": "MEDIUM",
+      "source": "평가자1",
+      "finding": "readInt8()은 readIntLE(1) 위임, readUInt8()은 readUIntLE(1) 위임. 위임 체인 내 Math.pow 잔존 가능.",
+      "resolution": "P1-T1 구현 주의사항에 readInt8/readUInt8 구현을 Buffer.readInt8(0)/Buffer.readUInt8(0) 직접 호출로 교체(readIntLE/readUIntLE 위임 제거) 명시. P1 DoD에 'readInt8/UInt8 블록에 readIntLE|readUIntLE 위임 호출 grep 0건' 추가.",
+      "affects": ["P1-T1", "P1 DoD"]
+    },
+    "NF-03_evaluator2_medium": {
+      "severity": "MEDIUM",
+      "source": "평가자2",
+      "finding": "P2-T6 테스트에 handlerWideIdMeta line 232 블록 3개 CtrlCmd 중 SuccessOfOpenSessionAck 누락. 기존 계획은 3경로를 FailOpen/SuccessOpen/CloseSession(line 238)로 나열해 SuccessOfOpenSessionAck를 놓침.",
+      "resolution": "P2-T6에 line 232 블록의 3개 CtrlCmd(FailOfOpenSession, SuccessOfOpenSession, SuccessOfOpenSessionAck)와 line 238의 CloseSession, 총 4개 CtrlCmd 케이스 명시. P2-T3 scope_note 레이블도 정정.",
+      "affects": ["P2-T3", "P2-T6"]
+    },
+    "NF-04_evaluator2_medium": {
+      "severity": "MEDIUM",
+      "source": "평가자2",
+      "finding": "parseOpenData(line 303-309)는 BufferReader 바이너리 파싱이며 JSON.parse가 없음. assertOpenOptMeta 가드는 dead code/불필요.",
+      "resolution": "P2-T3 가드 목록에서 assertOpenOptMeta 제거. 5개 가드로 축소(assertMessageMeta, assertSyncCtrlAckMeta, assertNewDataHandlerMeta, assertHandlerWideIdMeta, assertAckCtrlV2Meta). 6곳 JSON.parse ↔ 5 guard 매핑(line 232/238은 동일 assertHandlerWideIdMeta 공유) 명시.",
+      "affects": ["P2-T3", "P2-T6", "P2 DoD"]
+    },
+    "NF-02_evaluator1_low": {
+      "severity": "LOW",
+      "source": "평가자1",
+      "finding": "onOverflow 미주입 시 기본 동작(throw) 검증 테스트 누락.",
+      "resolution": "P2-T5에 onOverflow 미주입 인스턴스에 초과 입력 시 RangeError throw 케이스 1건 추가.",
+      "affects": ["P2-T5"]
+    },
+    "NF-03_evaluator1_low": {
+      "severity": "LOW",
+      "source": "평가자1",
+      "finding": "fromBuffer 내 this.HEADER_LEN static 참조 오류 dead path 잔존 가능.",
+      "resolution": "P2-T1 설명에 'fromBuffer 내 this.HEADER_LEN static 참조 — CtrlPacket.HEADER_LEN static 참조 또는 MAX_PAYLOAD_SIZE 비교식 단일화로 제거' 주석 추가.",
+      "affects": ["P2-T1"]
+    }
+  },
+  "phases": [
+    {
+      "id": "P1",
+      "title": "BufferReader/BufferWriter 엔디언 일관화",
+      "reqs": ["R2-REQ-02"],
+      "depends_on": [],
+      "tasks": [
+        {
+          "id": "P1-T1",
+          "files": ["src/util/BufferReader.ts"],
+          "verify_files": ["src/commons/CtrlPacket.ts", "src/commons/DataStatePacket.ts"],
+          "summary": "BE 기본 메서드 6종(readInt8/16/32, readUInt8/16/32)을 Buffer.*BE API로 환원. readUIntLE/readIntLE LE 경로는 유지. *LE suffix 명시 메서드 신설.",
+          "nf01_note": "NF-01 반영: readInt8은 Buffer.readInt8(0), readUInt8은 Buffer.readUInt8(0)로 직접 호출. 기존 readIntLE(1)/readUIntLE(1) 위임 체인 제거하여 1바이트 경로에서 Math.pow 잔존 가능성 0."
+        },
+        {
+          "id": "P1-T2",
+          "files": ["src/util/BufferWriter.ts"],
+          "verify_files": ["src/client/**", "src/server/**", "src/commons/**", "src/util/**"],
+          "summary": "대칭으로 writeInt/UInt 기본 BE 통일, *LE suffix 추가. 호출부 전수 grep(4개 디렉터리)으로 LE 의존 검출."
+        },
+        {
+          "id": "P1-T3",
+          "files": ["test/util/r2-req-02-buffer-endian.test.ts"],
+          "summary": "BE/LE round-trip + 교차 엔디언 실패 + CtrlPacket/DataStatePacket hex 스냅샷 회귀"
+        }
+      ],
+      "dod": [
+        "BE 기본 메서드 6종(readInt8/16/32, readUInt8/16/32 및 Writer 대칭) 구현 블록 내 Math.pow(256 grep 0건 (LE suffix 경로 대상 외)",
+        "(NF-01) readInt8 / readUInt8 구현 블록에 readIntLE|readUIntLE 위임 호출 grep 0건",
+        "BE 기본 메서드가 Buffer.read*BE(또는 1바이트는 Buffer.readInt8/readUInt8) 단일 호출로 환원",
+        "신규 테스트 PASS (≥3)",
+        "npm run build / lint 0 error",
+        "smoke 5체크 PASS",
+        "verify_files 4개 디렉터리 grep 결과 커밋 메시지 기록"
+      ]
+    },
+    {
+      "id": "P2",
+      "title": "CtrlPacket 페이로드 한도 + Streamer 상한 + 메타 JSON 스키마",
+      "reqs": ["R2-REQ-01", "R2-REQ-03", "R2-REQ-04"],
+      "depends_on": ["P1"],
+      "tasks": [
+        {
+          "id": "P2-T1",
+          "files": ["src/commons/CtrlPacket.ts"],
+          "summary": "MAX_PAYLOAD_SIZE를 순수 페이로드 한도로 정정(line 264), 송신 toBuffer 가드 추가",
+          "nf03_eval1_note": "NF-03(eval1) 반영: fromBuffer 내 this.HEADER_LEN static 참조 오류를 CtrlPacket.HEADER_LEN static 참조 또는 MAX_PAYLOAD_SIZE 단일화로 제거."
+        },
+        {
+          "id": "P2-T2",
+          "files": ["src/commons/CtrlPacket.ts"],
+          "summary": "CtrlPacketStreamer maxPendingBytes 상한 + onOverflow 콜백(하위호환 옵션, 미주입 시 기본 RangeError throw), Buffer.concat 전 선판정"
+        },
+        {
+          "id": "P2-T3",
+          "files": ["src/commons/CtrlPacket.ts", "src/commons/CtrlMetaGuards.ts"],
+          "summary": "safeJsonParse<T>(data, assertFn) 공용 헬퍼(reviver 고정) 도입. CtrlPacket.ts JSON.parse 6곳(line 107/213/220/232/238/318) 전부 safeJsonParse로 치환. 가드는 5종(Message/SyncCtrlAck/NewDataHandler/HandlerWideId/AckCtrlV2) — line 232/238은 동일 HandlerWideId 가드 공유. 가드는 O(필드수) 경량 검사.",
+          "scope_note_F01_NF04": "6곳 JSON.parse ↔ 5 guard 매핑: line 107 getMessageFromPacket → assertMessageMeta, 213 syncCtrlAckMeta → assertSyncCtrlAckMeta, 220 newDataHandlerMeta → assertNewDataHandlerMeta, 232 handlerWideIdMeta(FailOfOpenSession/SuccessOfOpenSession/SuccessOfOpenSessionAck 3 CtrlCmd 공용) → assertHandlerWideIdMeta, 238 handlerWideIdMeta(CloseSession) → assertHandlerWideIdMeta, 318 parseAckCtrlData → assertAckCtrlV2Meta. parseOpenData(line 303-309)는 BufferReader 바이너리 파싱이므로 가드 대상 아님 — assertOpenOptMeta 제거(NF-04)."
+        },
+        {
+          "id": "P2-T4",
+          "files": ["test/commons/r2-req-01-ctrl-payload-limit.test.ts"],
+          "summary": "64000 정상/64001 거부/송신 throw/경계 거부"
+        },
+        {
+          "id": "P2-T5",
+          "files": ["test/commons/r2-req-03-streamer-overflow.test.ts"],
+          "summary": "헤더 조각 반복 feed overflow 시 콜백 + 큐 비움, onOverflow 미주입 인스턴스에서 RangeError throw 경로(NF-02), 정상 분할 회귀"
+        },
+        {
+          "id": "P2-T6",
+          "files": ["test/commons/r2-req-04-meta-schema.test.ts"],
+          "summary": "5개 getter 경로 × 4개 handlerWideIdMeta CtrlCmd 케이스(FailOfOpenSession/SuccessOfOpenSession/SuccessOfOpenSessionAck/CloseSession) 각각에 __proto__ 오염 미오염 + 필드 누락 거부 + 타입 불일치 거부 + 정상 통과. SuccessOfOpenSessionAck 포함(NF-03 eval2)."
+        }
+      ],
+      "dod": [
+        "MAX_PAYLOAD_SIZE + HEADER_LEN 표현 0건 + fromBuffer this.HEADER_LEN dead 참조 제거",
+        "maxPendingBytes 상수 존재 + overflow 콜백 경로 + 기본 throw 경로 둘 다 PASS",
+        "CtrlMetaGuards.ts 존재 + safeJsonParse 헬퍼 존재 + CtrlPacket.ts 내 직접 JSON.parse 잔존 0건 grep + 5개 가드(Message/SyncCtrlAck/NewDataHandler/HandlerWideId/AckCtrlV2) export + 6↔5 매핑 주석 포함",
+        "handlerWideIdMeta 경로 4개 CtrlCmd(FailOpen/SuccessOpen/SuccessOpenAck/CloseSession) 각각 prototype pollution 음성 PASS",
+        "회귀 전수 PASS + smoke PASS"
+      ]
+    },
+    {
+      "id": "P3",
+      "title": "Errors redact 통합 + ResourcePolicy 엄격 모드",
+      "reqs": ["R2-REQ-05", "R2-REQ-06"],
+      "depends_on": ["P2"],
+      "tasks": [
+        {
+          "id": "P3-T1",
+          "files": ["src/util/SecretRedactor.ts"],
+          "summary": "redactSecretString 신규: Authorization/PEM/key=/token=/secret=/bcrypt/hex64+ 패턴. 치환은 기존 REDACTED_VALUE='[REDACTED]' 재사용 (SPEC '***'는 예시, 코드 기준 '[REDACTED]')."
+        },
+        {
+          "id": "P3-T2",
+          "files": ["src/util/Errors.ts"],
+          "summary": "toString/serialize 결과에 redactSecretString 적용, stack 포함 전 필드 redact"
+        },
+        {
+          "id": "P3-T3",
+          "files": ["src/util/logger/LoggerFactory.ts"],
+          "summary": "로거 최종 write 전 post-processor 훅으로 문자열 redact + 구조화 payload 객체 redact"
+        },
+        {
+          "id": "P3-T4",
+          "files": ["src/util/ResourcePolicy.ts"],
+          "summary": "clampRatio/normalizeByteLimit 부적합 입력 시 logger.warn, RESOURCE_POLICY_STRICT / configureStrict 시 RangeError"
+        },
+        {
+          "id": "P3-T5",
+          "files": ["test/util/r2-req-05-errors-redact.test.ts"],
+          "summary": "Errors.toString 및 logger 경로에서 5가지 비밀 패턴 원본 미노출 negative tests, 치환 토큰 '[REDACTED]' 검증"
+        },
+        {
+          "id": "P3-T6",
+          "files": ["test/util/r2-req-06-resource-policy-strict.test.ts"],
+          "summary": "기본 모드 WARN + strict throw + env 경로 (jest.isolateModules 사용, Mock 아님)"
+        }
+      ],
+      "dod": [
+        "5가지 패턴 원본 미포함 assertion PASS, 치환 토큰 '[REDACTED]'",
+        "strict throw + 기본 WARN PASS",
+        "lint/build/smoke 전수 PASS",
+        "coverage threshold 60 유지, CtrlMetaGuards.ts 포함"
+      ]
+    }
+  ],
+  "req_mapping": {
+    "R2-REQ-01": ["P2-T1", "P2-T4"],
+    "R2-REQ-02": ["P1-T1", "P1-T2", "P1-T3"],
+    "R2-REQ-03": ["P2-T2", "P2-T5"],
+    "R2-REQ-04": ["P2-T3", "P2-T6"],
+    "R2-REQ-05": ["P3-T1", "P3-T2", "P3-T3", "P3-T5"],
+    "R2-REQ-06": ["P3-T4", "P3-T6"]
+  },
+  "req_coverage": "6/6",
+  "severity_distribution": {
+    "HIGH": ["R2-REQ-01", "R2-REQ-02"],
+    "MEDIUM": ["R2-REQ-03", "R2-REQ-04", "R2-REQ-05"],
+    "LOW": ["R2-REQ-06"]
+  },
+  "residual_findings": {
+    "CRITICAL": 0,
+    "HIGH": 0,
+    "MEDIUM": 0,
+    "LOW": 0,
+    "note": "Round 3에서 잔존 MEDIUM 3건(NF-01/NF-03-eval2/NF-04) + LOW 2건(NF-02/NF-03-eval1) 전부 반영 완료."
+  },
+  "risks": [
+    {
+      "id": "R1",
+      "desc": "엔디언 변경이 기존 프로토콜 bytes 변경 (F-04 보강)",
+      "mitigation": "현행 readInt16/UInt16/UInt32 이미 BE라 바이트 변경 위험 낮음. DataStatePacket은 Buffer.*BE 직접 사용으로 영향 밖. BufferWriter 대칭 환원 시 src/client/**, src/server/**, src/commons/**, src/util/** 전수 grep으로 LE 의존 호출부 검출. hex 스냅샷 회귀 + 실 소켓 smoke 필수."
+    },
+    {
+      "id": "R2",
+      "desc": "페이로드 한도 재정의가 경계 근처 트래픽 거부",
+      "mitigation": "SPEC 기준 정상이며 운영 가이드/릴리스 노트 명시"
+    },
+    {
+      "id": "R3",
+      "desc": "Streamer overflow 콜백 API 브레이킹",
+      "mitigation": "ctor 옵션 파라미터(기본 throw) 하위호환. P2-T5에서 기본 throw 경로 명시 테스트(NF-02)."
+    },
+    {
+      "id": "R4",
+      "desc": "메타 스키마 가드가 v1 메타 거부",
+      "mitigation": "v2 존재 시만 assertAckCtrlV2Meta 호출, fallback try/catch 유지. 5개 가드 각각 기존 시그니처(null 또는 throw) 준수."
+    },
+    {
+      "id": "R5",
+      "desc": "redact 정규식 과매칭",
+      "mitigation": "hex 임계값 64자로 git SHA 오탐 차단"
+    },
+    {
+      "id": "R6",
+      "desc": "strict 모드로 운영 크래시",
+      "mitigation": "명시적 opt-in, 기본 WARN"
+    },
+    {
+      "id": "R7",
+      "desc": "jest.isolateModules 사용의 Mock 원칙 회색지대",
+      "mitigation": "모듈 캐시 분리이며 함수 대체 아님을 주석/계획서에 명시"
+    },
+    {
+      "id": "R8",
+      "desc": "assertXMeta 가드가 핫패스에서 매 수신마다 필드 순회 → 성능 영향 (F-03)",
+      "mitigation": "O(필드수) 경량 검사(typeof + 문자열 길이 상한)만. 깊은 순회/재귀/정규식 금지. 기본 필드 ≤ 8. CTRL_META_DEEP_VALIDATE=1 env일 때만 deep validate. 마이크로 벤치 10k parse 기준 < 5% 오버헤드 목표."
+    }
+  ],
+  "preconditions": {
+    "base_branch": "refactor/safecode HEAD",
+    "existing_tests": 197,
+    "build": "npm run build 0 error",
+    "lint": "npm run lint 0 error",
+    "smoke": "node scripts/smoke.mjs 5 checks PASS"
+  }
+}

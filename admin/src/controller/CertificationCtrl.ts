@@ -1,5 +1,6 @@
 import {type CertInfo} from "./Types";
 import InvalidSession from "./InvalidSession";
+import {adminRequest} from "./AdminRequest";
 
 
 class CertificationCtrl {
@@ -15,7 +16,7 @@ class CertificationCtrl {
     }
 
     public async updateAdminCert(cert: CertInfo) : Promise<{success: boolean, message: string}>  {
-        let res = await fetch("/api/adminCert", {
+        return adminRequest("/api/adminCert", {
             method: "POST",
             credentials: "same-origin",
             headers: {
@@ -23,10 +24,6 @@ class CertificationCtrl {
             },
             body: JSON.stringify({certInfo: cert})
         });
-        if(res.status == 401) {
-            throw new InvalidSession();
-        }
-        return await res.json();
     }
 
     public async loadAdminCert() : Promise<CertInfo>  {
@@ -41,7 +38,7 @@ class CertificationCtrl {
         return json['certInfo'];
     }
 
-    public async loadExternalServerCert(port: number) : Promise<CertInfo> {
+    public async loadExternalServerCert(port: number) : Promise<{value: CertInfo, revision: number}> {
         let res = await fetch(`/api/externalCert/${port}`, {
             method: "GET",
             credentials: "same-origin"
@@ -50,11 +47,11 @@ class CertificationCtrl {
         if(res.status == 401) {
             throw new InvalidSession();
         }
-        return json['certInfo'];
+        return {value: json['certInfo'], revision: json.revisionState.currentRevision};
     }
 
     public async updateExternalServerCert(port: number, cert: CertInfo) : Promise<{success: boolean, message: string}> {
-        let res = await fetch(`/api/externalCert/${port}`, {
+        return adminRequest(`/api/externalCert/${port}`, {
             method: "POST",
             credentials: "same-origin",
             headers: {
@@ -62,21 +59,15 @@ class CertificationCtrl {
             },
             body: JSON.stringify({certInfo: cert})
         });
-        if(res.status == 401) {
-            throw new InvalidSession();
-        }
-        return await res.json();
     }
 
-    public async deleteExternalServerCert(port: number) : Promise<{success: boolean, message: string}> {
-        let res = await fetch(`/api/externalCert/${port}`, {
+    public async deleteExternalServerCert(port: number, expectedCertificateRevision: number) : Promise<{success: boolean, message: string}> {
+        return adminRequest(`/api/externalCert/${port}`, {
             method: "DELETE",
-            credentials: "same-origin"
+            credentials: "same-origin",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({expectedCertificateRevision})
         });
-        if(res.status == 401) {
-            throw new InvalidSession();
-        }
-        return await res.json();
     }
 
 }

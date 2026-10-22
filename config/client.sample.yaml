@@ -1,0 +1,19 @@
+# Copy to config/client.yaml before first start.
+# Secure-by-default clients should use protocol v2 identity and explicit TLS trust.
+
+key: "legacy-shared-key-only-if-server-allows-legacy-control-auth"
+host: "example.com"
+port: 9126
+tls: true
+# Name for legacy connections and local logs. A v2 server shows the name registered for clientId.
+name: "client-a"
+clientId: "client-a"
+# Or give the secret with TTTGATE_CLIENT_SECRET or -clientSecretFile instead of storing it here.
+clientSecret: "replace-with-the-same-secret-configured-on-the-server"
+# A file path (relative paths start at this config/ directory) or PEM text.
+ca: "/absolute/path/to/server-ca.pem"
+serverName: "example.com"
+allowLegacyFallback: false
+allowInsecureTls: false
+globalMemCacheLimit: 128
+keepAlive: 0

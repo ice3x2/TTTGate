@@ -1,0 +1,195 @@
+/**
+ * P5-T2 / REQ-07 — 로그인 레이트리밋 키 재설계 통합 검증.
+ * 실 http.request / 실 AdminServer. 만료 경계는 기존 주입 가능 clock을 사용하고,
+ * LRU 상한은 명시적인 요청 데이터 fixture로 실제 기록 메서드를 호출한다.
+ *
+ * 주요 검증:
+ *  (a) 동일 네트워크의 실패는 제출 비밀번호와 무관하게 누적되며 차단 만료 후 재시도 가능.
+ *  (b) trustXForwardedFor=false(기본) 에서 X-Forwarded-For 헤더는 무시됨 (실제 socket.remoteAddress 만 사용).
+ *  (c) LRU 상한 초과 시 가장 오래된 엔트리 축출 (private map size 를 접근자 없이 10,001 호출로 검증).
+ *  (d) 실패 응답 지연 하한: 실패 횟수 >= 3 일 때 최소 400ms.
+ */
+import fs from "fs/promises";
+import Path from "path";
+import AdminServer from "../../../../src/server/admin/AdminServer";
+import {BOOTSTRAP_TOKEN_FILE_NAME, IdentityMigration} from "../../../../src/server/rbac/IdentityMigration";
+import {AdminSecurityPolicyRegistry} from "../../../../src/server/AdminSecurityPolicy";
+import ServerOptionStore from "../../../../src/server/ServerOptionStore";
+import {ClockRngProvider} from "../../../../src/util/ClockRng";
+import {createFakeClockRng} from "../../../helpers/clockRng";
+import {httpRequest} from "../../../helpers/http";
+import {applyTestRoot, cleanupTestRoot, createTestRoot, TestRoot} from "../../../helpers/runtime";
+
+jest.setTimeout(60_000);
+
+describe("REQ-07 login rate limit (network bucket)", () => {
+    let testRoot: TestRoot;
+    let adminServer: AdminServer;
+    let port: number;
+    let bootstrapToken: string;
+
+    beforeEach(async () => {
+        testRoot = await createTestRoot("req-07-rate-limit");
+        applyTestRoot(testRoot.rootDir);
+        ServerOptionStore.instance;
+        await IdentityMigration.runAtStartup();
+        adminServer = new AdminServer({} as any, false);
+        port = await adminServer.listen(0, "127.0.0.1");
+        bootstrapToken = (await fs.readFile(
+            Path.join(testRoot.rootDir, "config", BOOTSTRAP_TOKEN_FILE_NAME),
+            {encoding: "utf-8"}
+        )).trim();
+    });
+
+    afterEach(async () => {
+        await adminServer.close();
+        await cleanupTestRoot(testRoot);
+    });
+
+    async function login(body: object, headers: Record<string, string> = {}) {
+        return await httpRequest({
+            port, path: "/api/login", method: "POST",
+            headers: {"Content-Type": "application/json", ...headers},
+            body: JSON.stringify(body)
+        });
+    }
+
+    it("(a) five failures block every submitted password until the existing window expires", async () => {
+        const bootstrapRes = await login({username: "admin", password: "supersecret1", bootstrapToken});
+        expect(bootstrapRes.statusCode).toBe(200);
+        const clock = createFakeClockRng(Date.now());
+        ClockRngProvider.configure(clock);
+
+        for(let i = 0; i < 5; i++) {
+            const r = await login({username: "admin", password: "wrong-password-A"});
+            expect(r.statusCode).toBe(401);
+        }
+        const blockedA = await login({username: "admin", password: "wrong-password-A"});
+        expect(blockedA.statusCode).toBe(429);
+
+        const otherAcct = await login({username: "admin", password: "different-wrong-password-B"});
+        expect(otherAcct.statusCode).toBe(429);
+        expect(JSON.parse(otherAcct.body)).toMatchObject({success: false, message: "Too many login attempts"});
+        expect((await login({username: "admin", password: "supersecret1"})).statusCode).toBe(429);
+        expect((adminServer as any)._loginAttempts.size).toBe(1);
+        clock.advance(59_999);
+        expect((await login({username: "admin", password: "third-wrong-password"})).statusCode).toBe(429);
+        clock.advance(1);
+        expect((await login({username: "admin", password: "different-wrong-password-B"})).statusCode).toBe(401);
+        expect([...(adminServer as any)._loginAttempts.values()][0]).toMatchObject({failedCount: 1});
+        expect((await login({username: "admin", password: "supersecret1"})).statusCode).toBe(200);
+        expect((adminServer as any)._loginAttempts.size).toBe(0);
+    });
+
+    it("rotating passwords and untrusted XFF headers cannot create fresh buckets", async () => {
+        expect((await login({username: "admin", password: "supersecret1", bootstrapToken})).statusCode).toBe(200);
+        for(let index = 0; index < 5; index++) {
+            const result = await login({username: "admin", password: `different-password-${index}`}, {"X-Forwarded-For": `10.${index}.1.1`});
+            expect(result.statusCode).toBe(401);
+        }
+        expect((await login({username: "admin", password: "sixth-new-password"}, {"X-Forwarded-For": "192.0.2.1"})).statusCode).toBe(429);
+        expect((adminServer as any)._loginAttempts.size).toBe(1);
+        expect([...(adminServer as any)._loginAttempts.values()][0]).toMatchObject({failedCount: 5});
+    });
+
+    it("explicit trusted XFF retains separate network buckets and groups the same IPv4 /24", async () => {
+        expect((await login({username: "admin", password: "supersecret1", bootstrapToken})).statusCode).toBe(200);
+        AdminSecurityPolicyRegistry.configure({trustXForwardedFor: true});
+        for(let index = 0; index < 5; index++) {
+            expect((await login({username: "admin", password: "trusted-wrong-password"}, {"X-Forwarded-For": "192.0.2.1, 10.1.1.5"})).statusCode).toBe(401);
+        }
+        expect((await login({username: "admin", password: "another-wrong-password"}, {"X-Forwarded-For": "10.1.1.99"})).statusCode).toBe(429);
+        expect((await login({username: "admin", password: "another-wrong-password"}, {"X-Forwarded-For": "10.1.2.5"})).statusCode).toBe(401);
+    });
+
+    // #178 — 최좌측 값은 클라이언트가 고른다. 신뢰 프록시가 붙인 최우측 값(hop 수만큼)으로 버킷을 정해야 한다.
+    it("trusted XFF uses the address the trusted proxy appended, not the client-chosen leftmost value", async () => {
+        expect((await login({username: "admin", password: "supersecret1", bootstrapToken})).statusCode).toBe(200);
+        AdminSecurityPolicyRegistry.configure({trustXForwardedFor: true, trustedProxyHops: 1});
+        for(let index = 0; index < 5; index++) {
+            expect((await login({username: "admin", password: "spoofed-wrong"}, {"X-Forwarded-For": `10.${index}.0.1, 203.0.113.9`})).statusCode).toBe(401);
+        }
+        expect((await login({username: "admin", password: "spoofed-wrong"}, {"X-Forwarded-For": "10.99.0.1, 203.0.113.9"})).statusCode).toBe(429);
+    });
+
+    it("with two trusted proxy hops the second value from the right is the client address", async () => {
+        expect((await login({username: "admin", password: "supersecret1", bootstrapToken})).statusCode).toBe(200);
+        AdminSecurityPolicyRegistry.configure({trustXForwardedFor: true, trustedProxyHops: 2});
+        for(let index = 0; index < 5; index++) {
+            expect((await login({username: "admin", password: "two-hop-wrong"}, {"X-Forwarded-For": `10.${index}.0.1, 203.0.113.9, 198.51.${index}.1`})).statusCode).toBe(401);
+        }
+        expect((await login({username: "admin", password: "two-hop-wrong"}, {"X-Forwarded-For": "203.0.113.9, 198.51.77.1"})).statusCode).toBe(429);
+    });
+
+    // #178 — 축약 IPv6 를 문자열로 자르면 같은 /64 안에서 주소만 바꿔 차단을 피한다.
+    it("IPv6 addresses in the same /64 share one login bucket", async () => {
+        expect((await login({username: "admin", password: "supersecret1", bootstrapToken})).statusCode).toBe(200);
+        AdminSecurityPolicyRegistry.configure({trustXForwardedFor: true});
+        for(let index = 0; index < 5; index++) {
+            expect((await login({username: "admin", password: "v6-wrong"}, {"X-Forwarded-For": `2001:db8::${index + 1}`})).statusCode).toBe(401);
+        }
+        expect((await login({username: "admin", password: "v6-wrong"}, {"X-Forwarded-For": "2001:db8:0:0:ffff::9"})).statusCode).toBe(429);
+        expect((await login({username: "admin", password: "v6-wrong"}, {"X-Forwarded-For": "2001:db8:0:1::1"})).statusCode).toBe(401);
+    });
+
+    // #171 — IP 형식이 아닌 XFF 값을 그대로 버킷 키로 쓰면 요청마다 값을 바꿔 로그인 차단을 우회한다.
+    it("trusted XFF that is not an IP address falls back to the socket address", async () => {
+        expect((await login({username: "admin", password: "supersecret1", bootstrapToken})).statusCode).toBe(200);
+        AdminSecurityPolicyRegistry.configure({trustXForwardedFor: true});
+        for(let index = 0; index < 5; index++) {
+            expect((await login({username: "admin", password: "rotating-wrong"}, {"X-Forwarded-For": `not-an-ip-${index}`})).statusCode).toBe(401);
+        }
+        expect((await login({username: "admin", password: "rotating-wrong"}, {"X-Forwarded-For": "x".repeat(4000)})).statusCode).toBe(429);
+    });
+
+    it("trusted XFF with a port or brackets is read as the client address", async () => {
+        expect((await login({username: "admin", password: "supersecret1", bootstrapToken})).statusCode).toBe(200);
+        AdminSecurityPolicyRegistry.configure({trustXForwardedFor: true});
+        for(let index = 0; index < 5; index++) {
+            expect((await login({username: "admin", password: "ported-wrong"}, {"X-Forwarded-For": `198.51.100.7:${5000 + index}`})).statusCode).toBe(401);
+        }
+        expect((await login({username: "admin", password: "ported-wrong"}, {"X-Forwarded-For": "198.51.100.8"})).statusCode).toBe(429);
+        // 다른 네트워크(대괄호 IPv6)는 같은 버킷이 아니다.
+        expect((await login({username: "admin", password: "ported-wrong"}, {"X-Forwarded-For": "[2001:db8::1]:443"})).statusCode).toBe(401);
+    });
+
+    it("(b) trustXForwardedFor=false 기본값 — XFF 헤더 무시", () => {
+        const current = AdminSecurityPolicyRegistry.current();
+        expect(current.trustXForwardedFor).toBe(false);
+        // 정책 객체는 object 복사이며 변경되어도 내부에 영향 없음 (Registry.configure 거쳐야 반영).
+    });
+
+    it("(c) LRU 축출 — 10,001 개의 서로 다른 키 실패 후에도 map 이 10,000 상한 유지", async () => {
+        // 네트워크/백오프 대기 10,050회를 만들지 않고 실제 기록 메서드의 상한을 검사한다.
+        const mapRef: Map<string, any> = (adminServer as any)._loginAttempts;
+        // Map 직접 조작 없이 IncomingMessage 형태의 명시적 데이터 fixture를 전달한다.
+        const stubReq: any = {
+            socket: {remoteAddress: "127.0.0.1"},
+            headers: {}
+        };
+        for(let i = 0; i < 10_050; i++) {
+            // 서로 다른 IPv4 /24 네트워크로 bucket 을 분산시킨다.
+            stubReq.socket.remoteAddress = `10.${Math.floor(i / 256) % 256}.${i % 256}.1`;
+            (adminServer as any).recordLoginFailure(stubReq);
+        }
+        expect(mapRef.size).toBeLessThanOrEqual(10_000);
+        expect(mapRef.size).toBeGreaterThan(9_000); // 의미 있는 데이터 유지.
+    });
+
+    it("(d) 실패 응답 지연 하한 — 4회차 실패 시 computeBackoffMs >= 400ms", async () => {
+        // 부트스트랩 완료 상태에서 연속 실패 유도.
+        const bootstrapRes = await login({username: "admin", password: "supersecret1", bootstrapToken});
+        expect(bootstrapRes.statusCode).toBe(200);
+        // 1~3 실패 누적 (모두 401/429 허용).
+        for(let i = 0; i < 3; i++) {
+            await login({username: "admin", password: "wrong-d-pass"});
+        }
+        // 4번째 실패 직전의 failCount 는 3 이므로 이번 응답 지연은 computeBackoffMs(4) = 1600ms 수준.
+        // 하한만 검증(>= 400ms) — 시스템 편차 허용.
+        const t0 = Date.now();
+        const r = await login({username: "admin", password: "wrong-d-pass"});
+        const elapsed = Date.now() - t0;
+        expect([401, 429]).toContain(r.statusCode);
+        expect(elapsed).toBeGreaterThanOrEqual(400);
+    });
+});

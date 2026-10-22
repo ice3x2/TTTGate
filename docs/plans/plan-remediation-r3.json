@@ -1,0 +1,78 @@
+{
+  "plan_id": "plan-remediation-r3",
+  "spec_path": "docs/srs/backend-remediation-round3.md",
+  "mode": "Normal",
+  "plan_revision": 2,
+  "phase_count": 4,
+  "task_count": 16,
+  "req_coverage": "6/6",
+  "phases": [
+    {
+      "id": "phase-1",
+      "name": "crypto-js 제거",
+      "severity_driver": "CRITICAL",
+      "depends_on": [],
+      "reqs": ["R3-REQ-02", "R3-REQ-03(form-data 부분)"],
+      "tasks": [
+        {"id": "P1-T1", "file": "src/server/admin/AdminServer.ts", "action": "SHA512 → Node crypto"},
+        {"id": "P1-T2", "file": "src/server/admin/SessionStore.ts", "action": "SHA512 → Node crypto"},
+        {"id": "P1-T3", "file": "src/server/CertificationStore.ts", "action": "SHA512 → Node crypto"},
+        {"id": "P1-T4", "file": "admin/src/**", "action": "admin 체인 fixed 상태 재확인(npm ls) + 버전 고정"},
+        {"id": "P1-T5", "file": "package.json", "action": "crypto-js uninstall + lockfile 재생성"},
+        {"id": "P1-T6", "file": "test/supply-chain/r3-req-02-crypto-js-removed.test.ts", "action": "신규 테스트"},
+        {"id": "P1-T7", "file": "package.json", "action": "form-data ^4.0.4 이상 고정 (Revision 2 신규)"},
+        {"id": "P1-T8", "file": "test/supply-chain/r3-req-03-form-data.test.ts", "action": "boundary uniqueness negative (Revision 2 신규)"}
+      ]
+    },
+    {
+      "id": "phase-2",
+      "name": "node-forge 업그레이드 + form-data/@babel",
+      "severity_driver": "HIGH+CRITICAL",
+      "depends_on": ["phase-1"],
+      "reqs": ["R3-REQ-01", "R3-REQ-03"],
+      "tasks": [
+        {"id": "P2-T1", "file": "package.json, admin/package.json", "action": "node-forge ^1.3.1"},
+        {"id": "P2-T2", "file": "package-lock.json", "action": "재생성"},
+        {"id": "P2-T3", "file": "package.json 전이", "action": "npm audit fix"},
+        {"id": "P2-T4", "file": "src/commons/CACertGenerator.ts", "action": "API 호환성 회귀 검증"},
+        {"id": "P2-T5", "file": "test/supply-chain/r3-req-01-node-forge.test.ts", "action": "신규 테스트"},
+        {"id": "P2-T6", "file": "test/supply-chain/r3-req-03-critical-fixed.test.ts", "action": "신규 테스트"}
+      ]
+    },
+    {
+      "id": "phase-3",
+      "name": "런타임 MEDIUM 정리",
+      "severity_driver": "MEDIUM",
+      "depends_on": ["phase-2"],
+      "reqs": ["R3-REQ-04"],
+      "tasks": [
+        {"id": "P3-T1", "file": "package.json", "action": "yaml 업그레이드"},
+        {"id": "P3-T2", "file": "package.json 전이", "action": "lodash/qs/nanoid/js-yaml 업데이트"},
+        {"id": "P3-T3", "file": "admin/package.json", "action": "lodash admin 체인"},
+        {"id": "P3-T4", "file": "test/supply-chain/r3-req-04-medium-cleared.test.ts", "action": "신규 테스트"}
+      ]
+    },
+    {
+      "id": "phase-4",
+      "name": "빌드타임 의존성 + CI 게이트",
+      "severity_driver": "LOW+MEDIUM",
+      "depends_on": ["phase-3"],
+      "reqs": ["R3-REQ-05", "R3-REQ-06"],
+      "tasks": [
+        {"id": "P4-T1", "file": "admin/package.json", "action": "vite/svelte/rollup 최신화"},
+        {"id": "P4-T2", "file": "admin/vite.config.ts", "action": "vite 5 마이그레이션 검증"},
+        {"id": "P4-T3", "file": ".github/workflows/supply-chain-audit.yml", "action": "CI 게이트 신규"},
+        {"id": "P4-T4", "file": "test/supply-chain/r3-req-06-ci-gate-dryrun.test.ts", "action": "신규 정적 검증"}
+      ]
+    }
+  ],
+  "spec_mapping": {
+    "R3-REQ-01": ["P2-T1", "P2-T4", "P2-T5"],
+    "R3-REQ-02": ["P1-T1", "P1-T2", "P1-T3", "P1-T4", "P1-T5", "P1-T6"],
+    "R3-REQ-03": ["P1-T7", "P1-T8", "P2-T3", "P2-T6"],
+    "R3-REQ-04": ["P3-T1", "P3-T2", "P3-T3", "P3-T4"],
+    "R3-REQ-05": ["P4-T1", "P4-T2"],
+    "R3-REQ-06": ["P4-T3", "P4-T4"]
+  },
+  "residual_findings": {"critical": 0, "high": 0, "medium": 0, "low": 0}
+}

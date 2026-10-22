@@ -1,4 +1,4 @@
-import {ClientOption, DEFAULT_KEY} from "../types/TunnelingOption";
+import {ClientOption} from "../types/TunnelingOption";
 import TunnelNames from "./TunnelNames";
 import TTTClient from "./TTTClient";
 import File from "../util/File";
@@ -6,138 +6,100 @@ import Environment from "../Environment";
 import YAML from "yaml";
 import Files from "../util/Files";
 import CLI from "../util/CLI";
-import {SocketHandler} from "../util/SocketHandler";
 import LoggerFactory  from "../util/logger/LoggerFactory";
+import AppCompositionRoot from "../bootstrap/AppCompositionRoot";
+import {ClockRngProvider} from "../util/ClockRng";
+import {redactSecrets} from "../util/SecretRedactor";
+import {exitWithConfigError} from "../util/ConfigExit";
+import {
+    CLIENT_OPTION_FILE_NAME,
+    INSECURE_FIELD_NAMES,
+    resolveClientOption,
+    ResolveClientOptionResult
+} from "./ClientOptionResolver";
+import * as fs from "fs";
 const logger = LoggerFactory.getLogger('client', 'ClientApp');
 
-const CLIENT_OPTION_FILE_NAME = "client.yaml";
-
-
+/** client.yaml 의 insecure 필드를 --yes-insecure 없이 읽으면 이 코드로 끝난다(P3-T3 / REQ-02). */
+const INSECURE_YAML_EXIT_CODE = 78;
 
 let _printClientOptions = (clientOption: ClientOption) : void => {
     let options = '';
-    let obj = clientOption as any;
+    let obj = redactSecrets(clientOption) as any;
     for(let key in obj) {
         options += `\t\t\t  -${key}: ${obj[key]} \n`;
     }
     logger.info(`Client options: \n${options}`);
 }
 
+const randomTunnelName = (): string => TunnelNames[Math.floor(ClockRngProvider.current().random() * TunnelNames.length)];
 
-let _loadClientOptionFromFile = () : ClientOption | undefined => {
+/**
+ * 부작용 없이 옵션을 해석하고 검증한다(#207). 데몬 부모가 자식을 띄우기 전에 부른다.
+ * 파일을 쓰거나 프로세스를 끝내지 않는다.
+ */
+const resolveClientCliOptions = (cliOptions: {[key: string]: string}): ResolveClientOptionResult =>
+    resolveClientOption({
+        cli: cliOptions,
+        env: process.env,
+        configDir: Environment.path.configDir,
+        cwd: process.cwd(),
+        defaultName: randomTunnelName
+    });
 
-    let file = new File(Environment.path.configDir, CLIENT_OPTION_FILE_NAME);
-    if(file.canRead()) {
-        let yamlString = Files.toStringSync(file);
-        if(yamlString == undefined || yamlString.length == 0) return undefined;
-        let clientOption = YAML.parse(yamlString);
-        return clientOption as ClientOption;
-    }
-    return undefined;
-}
-
-
-
-let normalizationClientOption = (clientOption: ClientOption) : ClientOption => {
-    if(clientOption.key == undefined) {
-        clientOption.key = DEFAULT_KEY;
-    }
-    if(clientOption.host == undefined) {
-        clientOption.host = "localhost";
-    }
-    if(clientOption.port == undefined) {
-        clientOption.port = 9126;
-    }
-    if(clientOption.tls == undefined) {
-        clientOption.tls = false;
-    }
-    if(clientOption.name == undefined) {
-        clientOption.name = TunnelNames[Math.floor(Math.random() * TunnelNames.length)];
-    }
-    return clientOption;
-}
-
-let _loadClientOption = () : ClientOption => {
-
-    let clientOption : ClientOption = {
-        key: DEFAULT_KEY,
-        host: "localhost",
-        port: 9126,
-        tls: false,
-        name: TunnelNames[Math.floor(Math.random() * TunnelNames.length)],
-        globalMemCacheLimit: 128,
-        keepAlive: 0
-    }
-    let savedOption = _loadClientOptionFromFile();
-    if(savedOption) {
-        clientOption = normalizationClientOption(savedOption);
-    }
-
-    let argv = CLI.readSimpleOptions();
-    if(argv["key"]) {
-        clientOption.key = argv["key"];
-    }
-    if(argv["addr"]) {
-        let addr = argv["addr"];
-        let addrSplit = addr.split(":");
-        if(addrSplit.length == 2) {
-            clientOption.host = addrSplit[0];
-            clientOption.port = parseInt(addrSplit[1]);
-            if(isNaN(clientOption.port)){
-                throw new Error("port is not number.");
-            } else if(clientOption.port <= 0 || clientOption.port > 65535) {
-                throw new Error("port is out of range. (1 ~ 65535)");
-            }
-        } else {
-            clientOption.host = addr;
+/** -save: 사용자가 준 표기 그대로 저장하고, 비밀값이 들어 있으므로 POSIX 에서는 0600 으로 둔다(#209 REQ-6). */
+const _saveClientOption = (saveOption: {[key: string]: unknown}): string => {
+    const sanitized = {...saveOption};
+    for(const name of INSECURE_FIELD_NAMES) delete sanitized[name];
+    const file = new File(Environment.path.configDir, CLIENT_OPTION_FILE_NAME);
+    fs.mkdirSync(Environment.path.configDir, {recursive: true});
+    // 처음부터 0600 으로 만든다(쓴 뒤 chmod 하면 그 사이 비밀값이 0644 로 보인다). 기존 파일은 아래 chmod 가 맞춘다.
+    fs.writeFileSync(file.toString(), YAML.stringify(sanitized), {encoding: "utf-8", mode: 0o600});
+    if(process.platform !== "win32") {
+        try {
+            fs.chmodSync(file.toString(), 0o600);
+        } catch (e) {
+            logger.warn(`cannot restrict permissions of ${file.toString()} to 0600`, e);
         }
     }
-    if(argv["keepAlive"]) {
-        clientOption.keepAlive = Math.floor(parseInt(argv["keepAlive"]));
-        if(isNaN(clientOption.keepAlive)){
-            console.warn(`keepAlive '${argv["keepAlive"]}' is not number.`);
-            clientOption.keepAlive = -1;
-        }
-        else if(clientOption.keepAlive < 0) {
-            console.warn(`keepAlive is disabled. (keepAlive: ${clientOption.keepAlive})`);
-            clientOption.keepAlive = -1;
-        }
+    return file.toString();
+};
+
+/**
+ * 옵션을 해석하고, 알림을 남기고, -save 를 처리한다. 설정 오류면 공통 종료 함수로 끝내고 undefined 를 돌려준다.
+ */
+let _loadClientOption = (cliOptions?: {[key: string]: string}) : ClientOption | undefined => {
+    const argv = cliOptions ?? CLI.parseCommandLine().options;
+    const result = resolveClientCliOptions(argv);
+    if(!result.ok) {
+        void exitWithConfigError(result.exitCode, result.message, logger);
+        return undefined;
     }
-    if(argv["tls"] != undefined && (argv["tls"] == "" || argv["tls"].toLowerCase() != "false")) {
-        clientOption.tls = true;
+    for(const notice of result.notices) {
+        if(notice.level === "warn") logger.warn(notice.message);
+        else logger.info(notice.message);
     }
-    if(argv["name"]) {
-        clientOption.name = argv["name"];
-    }
-    if(argv["bufferLimit"]) {
-        clientOption.globalMemCacheLimit = Math.floor(parseInt(argv["bufferLimit"]));
-        if(isNaN(clientOption.globalMemCacheLimit)){
-            console.warn(`bufferLimit '${argv["bufferLimit"]}' is not number.`);
-            clientOption.globalMemCacheLimit = 238;
-        }
-        else if(clientOption.globalMemCacheLimit < -1) {
-            console.warn(`bufferLimit '${argv["bufferLimit"]}' is less than -1.`);
-            clientOption.globalMemCacheLimit = -1;
-        } else if(clientOption.globalMemCacheLimit > 1048576) {
-            clientOption.globalMemCacheLimit = 1048576
-        }
-    }
+    const clientOption = result.option;
     if(argv["save"] != undefined && (argv["save"] == "" || argv["save"].toLowerCase() != "false")) {
-        let file = new File(Environment.path.configDir, CLIENT_OPTION_FILE_NAME);
-        let yamlString = YAML.stringify(clientOption);
-        Files.writeSync(file, yamlString);
+        _saveClientOption(result.saveOption);
     }
     _printClientOptions(clientOption);
-    SocketHandler.GlobalMemCacheLimit = clientOption.globalMemCacheLimit * 1024 * 1024;
+    if(clientOption.allowLegacyFallback === true) {
+        // 허위 서버가 v1 로 내려 응답하면 공유 키를 그대로 보낸다(#174). 승인된 롤백 기간에만 켠다.
+        logger.warn('allowLegacyFallback is on: a server that answers with the legacy protocol receives the shared key. Use it only during an approved rollback window.');
+    }
+    AppCompositionRoot.applyGlobalMemLimitMiB(clientOption.globalMemCacheLimit);
     return clientOption;
 }
 
 
-let ClientApp : { start() : void} = {
+let ClientApp : { start(options?: {[key: string]: string}) : void} = {
 
-    start() {
-        SocketHandler.GlobalMemCacheLimit = 128 * 1024 * 1024;
-        let tttClient = TTTClient.create(_loadClientOption());
+    start(options?: {[key: string]: string}) {
+        AppCompositionRoot.applyGlobalMemLimitMiB(128);
+        const clientOption = _loadClientOption(options);
+        if(!clientOption) return;
+        let tttClient = TTTClient.create(clientOption);
 
         tttClient.start();
 
@@ -147,5 +109,12 @@ let ClientApp : { start() : void} = {
 
 
 export default ClientApp;
-
-
+export {resolveClientCliOptions, _saveClientOption as saveClientOptionFile};
+// P3-T3 / REQ-02: 테스트 전용 익스포트. 런타임 경로에서는 사용하지 않는다.
+// (production 임포터는 default export만 참조)
+export const __testInternals = {
+    loadClientOption: _loadClientOption,
+    INSECURE_FIELD_NAMES,
+    INSECURE_YAML_EXIT_CODE,
+    CLIENT_OPTION_FILE_NAME
+};

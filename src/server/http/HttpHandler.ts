@@ -1,8 +1,9 @@
 import {SocketHandler} from "../../util/SocketHandler";
 import {CustomHeader, HttpOption, TunnelingOption} from "../../types/TunnelingOption";
-import {HttpHeader, HttpPipe, HttpRequestHeader, HttpResponseHeader, MessageType, ParseState} from "./HttpPipe";
+import {HttpHeader, HttpMethod, HttpPipe, HttpRequestHeader, HttpResponseHeader, MessageType} from "./HttpPipe";
 import HttpUtil from "./HttpUtil";
 import SocketState from "../../util/SocketState";
+import {ResourcePolicyRegistry} from "../../util/ResourcePolicy";
 
 import LoggerFactory from "../../util/logger/LoggerFactory";
 let logger = LoggerFactory.getLogger('server', 'HttpHandler');
@@ -14,17 +15,25 @@ interface OnSocketEvent {
 // 청크 데이터 처리 크기
 const CHUNK_SIZE: number = 8 * 1024; // 8KB로 증가
 const MAX_BUFFER_SIZE: number = 16 * 1024 * 1024; // 16MB
+const MAX_PENDING_REQUESTS = 128;
+/** 연결 뒤 첫 요청 헤더를 다 받을 때까지의 기한. 헤더를 조금씩 보내 연결을 붙잡는 요청을 408 로 닫는다(#166). */
+const REQUEST_HEADER_DEADLINE_MS = 30_000;
+type RequestContext = Readonly<{host: string, origin: string, method: HttpMethod, webSocket: boolean}>;
 
 class HttpHandler {
     private readonly _socketHandler: SocketHandler;
-    private _currentHttpPipe: HttpPipe = new HttpPipe();
+    private readonly _requestPipe: HttpPipe = HttpPipe.createHttpRequestPipe();
+    private readonly _responsePipe: HttpPipe = new HttpPipe();
+    private readonly _pendingRequests: RequestContext[] = [];
     private _isUpgrade: boolean = false;
+    private _inputRejected = false;
+    private _rejectionSent = false;
     private _originHost: string = "";
-    private _httpMessageType: MessageType = MessageType.Request;
     private _currentHttpHeader: HttpRequestHeader | HttpResponseHeader | null = null;
     private _event: OnSocketEvent | null = null;
 
     private _isReplaceHostInBody: boolean = false;
+    private _responseHasBody: boolean = true;
     private _bodyBuffer: Buffer = Buffer.alloc(0);
     private _originAddress: string = "";
 
@@ -34,6 +43,28 @@ class HttpHandler {
     private _receiveLength: number = 0;
     private _bufLength: number = 0;
     private _sendLength: number = 0;
+    private _responseInputEnded = false;
+    private _released = false;
+    public onOutputProgress?: () => void;
+
+    public get responseInputLength(): number { return this._bufLength; }
+    public get responseInputEnded(): boolean { return this._responseInputEnded; }
+
+    // #124 (U5-09) 대역폭 집행이 외부→클라이언트 방향 읽기를 잠시 멈춘다. 감싼 SocketHandler 에 위임한다.
+    public pauseRead(reason?: string): void { this._socketHandler.pauseRead(reason); }
+    public resumeRead(reason?: string): void { this._socketHandler.resumeRead(reason); }
+
+    public endResponseInput(): void {
+        if(this._responseInputEnded || this._released) return;
+        this._responseInputEnded = true;
+        this._responsePipe.endInput();
+        if(this._released) return;
+        this._socketHandler.addOnceDrainListener((_handler, success) => {
+            if(!success || this._released || this._socketHandler.isEnd()) return;
+            this._sendLength = this._bufLength;
+            setImmediate(() => { if(!this._released) this.onOutputProgress?.(); });
+        });
+    }
 
     private _leftBufferStateInEnd: boolean = false;
     private _isWebSocket: boolean = false;
@@ -59,6 +90,18 @@ class HttpHandler {
         return this._keepAlive;
     }
 
+    public get isOutputDrained(): boolean {
+        return this._socketHandler.isOutputDrained;
+    }
+
+    public get isBackpressured(): boolean {
+        return this._socketHandler.isBackpressured;
+    }
+
+    public addOncePressureReliefListener(listener: () => void): void {
+        this._socketHandler.addOncePressureReliefListener(() => listener());
+    }
+
     public static create(socketHandler: SocketHandler, tunnelOption: TunnelingOption): HttpHandler {
         let handler = new HttpHandler(socketHandler);
         handler._option = !tunnelOption.httpOption ? handler._option : tunnelOption.httpOption!;
@@ -67,7 +110,7 @@ class HttpHandler {
             handler._option.rewriteHostInTextBody = true;
         }
         if (handler._option.replaceAccessControlAllowOrigin == undefined) {
-            handler._option.replaceAccessControlAllowOrigin = true;
+            handler._option.replaceAccessControlAllowOrigin = false;
         }
 
         handler._destinationAddress = tunnelOption.destinationAddress;
@@ -90,17 +133,35 @@ class HttpHandler {
         this._socketHandler.deleteBundle(key);
     }
 
+    private _headerDeadline?: NodeJS.Timeout;
+
     private constructor(socketHandler: SocketHandler) {
         this._socketHandler = socketHandler;
         socketHandler.onSocketEvent = this.onSocketEventFromSocketHandler;
-        this._currentHttpPipe.onHeaderCallback = this.onHttpHeader;
-        this._currentHttpPipe.onDataCallback = this.onHttpBody;
-        this._currentHttpPipe.onEndCallback = this.onHttpMessageEnd;
-        this._currentHttpPipe.onErrorCallback = this.onHttpMessageError;
+        this._responsePipe.reset(MessageType.Response);
+        this._requestPipe.onHeaderCallback = this.onHttpHeader;
+        this._requestPipe.onRequestRejected = () => {
+            this._inputRejected = true;
+            this.sendRequestRejectionIfReady();
+        };
+        this._requestPipe.onDataCallback = data => {
+            if(this._socketHandler.isEnd()) return false;
+            this.callEvent(SocketState.Receive, data);
+            return true;
+        };
+        this._requestPipe.onEndCallback = () => this._requestPipe.reset(MessageType.Request, true);
+        this._requestPipe.onErrorCallback = this.onRequestMessageError;
+        this._headerDeadline = setTimeout(() => this.rejectRequestHead(408, 'Request Timeout'), REQUEST_HEADER_DEADLINE_MS);
+        this._headerDeadline.unref?.();
+        this._responsePipe.onHeaderCallback = this.onHttpHeader;
+        this._responsePipe.onDataCallback = this.onHttpBody;
+        this._responsePipe.onEndCallback = this.onHttpMessageEnd;
+        this._responsePipe.onErrorCallback = this.onHttpMessageError;
     }
 
     private onSocketEventFromSocketHandler = (handler: SocketHandler, state: SocketState, data?: any): void => {
         if (state == SocketState.Receive && !this._socketHandler.isEnd()) {
+            if(this._inputRejected || this._rejectionSent) return;
             if (this._isUpgrade || this._isWebSocket) {
                 // 웹소켓이나 다른 프로토콜로 업그레이드된 경우
                 this.callEvent(SocketState.Receive, data);
@@ -114,22 +175,10 @@ class HttpHandler {
                 return;
             }
             
-            // 새로운 HTTP 메시지를 시작할 때 파이프 초기화
-            if (this._currentHttpPipe.messageType == MessageType.Response && 
-                (this._currentHttpPipe as any)._state === ParseState.END) {
-                this._currentHttpPipe.reset(MessageType.Request);
-                this._httpMessageType = MessageType.Request;
-            }
-            
-            this._currentHttpPipe.write(data);
+            this._requestPipe.write(data);
         } else {
-            if(this._isWebSocket) {
-                return;
-            }
-
-
             if (this._socketHandler.isEnd() || SocketState.End == state || SocketState.Closed == state) {
-                this._leftBufferStateInEnd = this._currentHttpPipe.bufferSize > 0;
+                this._leftBufferStateInEnd = this._requestPipe.bufferSize > 0 || this._responsePipe.bufferSize > 0;
                 this._sendLength = this._bufLength;
                 this.release();
             }
@@ -141,7 +190,30 @@ class HttpHandler {
     }
 
     private onHttpHeader = (header: HttpRequestHeader | HttpResponseHeader): void => {
-        this._currentHttpHeader = header;
+        if(header.type === MessageType.Request) {
+            this.clearHeaderDeadline();
+            if(this._pendingRequests.length >= MAX_PENDING_REQUESTS) {
+                logger.error(`HTTP pending request limit exceeded: ${MAX_PENDING_REQUESTS}`);
+                this.destroy();
+                return;
+            }
+            this._pendingRequests.push(Object.freeze({host: this.findHostFromHeader(header),
+                origin: HttpUtil.findHeaderValue(header, "Origin") ?? "", method: header.method,
+                webSocket: this.checkWebSocketUpgrade(header)}));
+        } else {
+            if(this._inputRejected && header.status === 101 && header.upgrade) {
+                this.destroy();
+                return;
+            }
+            this._currentHttpHeader = header;
+            const context = this._pendingRequests[0];
+            if(context) {
+                this._originHost = context.host;
+                this._originAddress = context.origin;
+            }
+            this._responseHasBody = context?.method !== HttpMethod.HEAD && header.status >= 200 && header.status !== 204 && header.status !== 304;
+            this._responsePipe.setBodyForbidden(!this._responseHasBody);
+        }
         
         // Keep-Alive 처리
         if (header.keepAlive) {
@@ -170,32 +242,26 @@ class HttpHandler {
     }
 
     private manipulateRequestHeader(header: HttpRequestHeader): void {
-        this._originAddress = "";
-        this._originHost = this.findHostFromHeader(header);
+        const originHost = this.findHostFromHeader(header);
 
         // 웹소켓 요청인지 확인
-        this.checkWebSocketUpgrade(header);
+        const webSocket = this._pendingRequests[this._pendingRequests.length - 1]?.webSocket === true;
 
-        if (this._originHost != "") {
-            this.replaceHostInHeader(header, this._originHost, this._destinationAddress);
+        if (originHost != "") {
+            this.replaceHostInHeader(header, originHost, this._destinationAddress);
             let requestHeader = header;
 
             // 웹소켓 URL 처리
-            if (this._isWebSocket) {
+            if (webSocket) {
                 // WebSocket URL을 HTTP URL로 변환해서 처리할 필요가 있다면
-                if (requestHeader.path.startsWith('ws://') || requestHeader.path.startsWith('wss://')) {
+                if (HttpUtil.isWebSocketUrl(requestHeader.path)) {
                     const httpUrl = HttpUtil.wsUrlToHttpUrl(requestHeader.path);
                     logger.info(`Converting WebSocket URL: ${requestHeader.path} -> ${httpUrl}`);
                     requestHeader.path = httpUrl;
                 }
             }
 
-            requestHeader.path = requestHeader.path.replaceAll(this._originHost, this._destinationAddress);
-        }
-
-        let origin = HttpUtil.findHeaderValue(header, "Origin");
-        if (origin != null) {
-            this._originAddress = origin;
+            requestHeader.path = HttpUtil.rewriteRequestTargetHost(requestHeader.path, originHost, this._destinationAddress);
         }
 
         this.appendCustomHeader(header, this._option.customRequestHeaders);
@@ -203,7 +269,7 @@ class HttpHandler {
         this.callEvent(SocketState.Receive, headerBuffer)
     }
 
-    private checkWebSocketUpgrade(header: HttpRequestHeader): void {
+    private checkWebSocketUpgrade(header: HttpRequestHeader): boolean {
         // Connection과 Upgrade 헤더 값 가져오기
         const connection = HttpUtil.findHeaderValue(header, "Connection");
         const upgrade = HttpUtil.findHeaderValue(header, "Upgrade");
@@ -213,12 +279,9 @@ class HttpHandler {
             connection.toLowerCase().includes('upgrade') &&
             upgrade.toLowerCase().includes('websocket')) {
 
-            this._isWebSocket = true;
-
             // URL이 WSS인지 확인 (Secure WebSocket)
             const isSecureRequest = this._socketHandler.isSecure() ||
-                (header.path.startsWith('wss://') ||
-                    HttpUtil.isSecureWebSocketUrl(header.path));
+                HttpUtil.isSecureWebSocketUrl(header.path);
 
             logger.info(`WebSocket upgrade request detected: ${this._socketHandler.id} (Secure: ${isSecureRequest})`);
 
@@ -231,7 +294,9 @@ class HttpHandler {
             } else {
                 logger.warn(`Incomplete WebSocket headers: key=${wsKey}, version=${wsVersion}`);
             }
+            return true;
         }
+        return false;
     }
 
     private callEvent(state: SocketState, data?: any): void {
@@ -245,6 +310,7 @@ class HttpHandler {
         // 업그레이드 응답인지 확인 (웹소켓 핸드셰이크 완료)
         if (header.status === 101 && header.upgrade) {
             this._isUpgrade = true;
+            this._isWebSocket = this._pendingRequests[0]?.webSocket === true;
 
             // 웹소켓인 경우 별도 처리
             if (this._isWebSocket) {
@@ -275,9 +341,26 @@ class HttpHandler {
         this.replaceLocationInResponseHeaderAt3XX(header);
         this.removeDomainInSetCookie(<HttpResponseHeader>header);
         
-        this._isReplaceHostInBody = this._option.rewriteHostInTextBody == true && 
-                                   HttpUtil.isTextContentType(header) && 
-                                   (header.contentLength > 0 || header.chunked);
+        this._isReplaceHostInBody = this._responseHasBody && this._option.rewriteHostInTextBody == true &&
+                                   HttpUtil.isTextContentType(header) && HttpUtil.canRewriteTextEncoding(header) &&
+                                   (header.contentLength !== 0 || header.chunked);
+
+        if(this._isReplaceHostInBody && header.contentLength <= MAX_BUFFER_SIZE && !this.reserveRewrite(header.contentLength > 0 ? header.contentLength : MAX_BUFFER_SIZE)) {
+            // 재작성은 본문 전체를 메모리에 모은다. 전체 예산을 넘으면 이 응답은 고치지 않고 그대로 보낸다(#183).
+            this._isReplaceHostInBody = false;
+        }
+        if(this._isReplaceHostInBody && header.contentLength > MAX_BUFFER_SIZE) {
+            this._inputRejected = false;
+            this._rejectionSent = true;
+            this._responsePipe.reset(MessageType.Response);
+            this._pendingRequests.length = 0;
+            this._bodyBuffer = Buffer.alloc(0);
+            this._socketHandler.sendData(Buffer.from("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"), (_handler, success) => {
+                if(!success) this.destroy();
+            });
+            this._socketHandler.end_();
+            return;
+        }
         
         this.changeModeOfReplaceHostInBodyInResponseHeader(header);
         
@@ -292,9 +375,10 @@ class HttpHandler {
         }
         
         let headerBuffer = HttpUtil.convertHttpHeaderToBuffer(header);
+        const inputLength = this._bufLength - this._responsePipe.bufferSize;
         this._socketHandler.sendData(headerBuffer, (client, success) => {
             if (success) {
-                this._sendLength = this._bufLength;
+                this._sendLength = inputLength;
             }
         });
     }
@@ -326,7 +410,7 @@ class HttpHandler {
     }
 
     private changeModeOfReplaceHostInBodyInResponseHeader(header: HttpResponseHeader): void {
-        this._currentHttpPipe.setDeliverPureData(this._isReplaceHostInBody);
+        this._responsePipe.setDeliverPureData(this._isReplaceHostInBody);
         
         if (this._isReplaceHostInBody) {
             HttpUtil.removeHeader(header, "Content-Length");
@@ -343,7 +427,7 @@ class HttpHandler {
     }
 
     private replaceHostInHeader(header: HttpHeader, host: string, replaceHost: string): void {
-        for (let nameValue of header.headers) {
+        for (let nameValue of HttpUtil.findHeaders(header, "Host")) {
             if (nameValue.value.indexOf(host) > -1) {
                 nameValue.value = nameValue.value.replace(host, replaceHost);
             }
@@ -367,16 +451,16 @@ class HttpHandler {
             // 최대 버퍼 크기 점검
             if (this._bodyBuffer.length + data.length > MAX_BUFFER_SIZE) {
                 logger.error(`Body buffer size would exceed maximum (${this._bodyBuffer.length + data.length} > ${MAX_BUFFER_SIZE})`);
+                this.destroy();
                 return false;
             }
             this._bodyBuffer = Buffer.concat([this._bodyBuffer, data]);
         }
-        else if (this._httpMessageType == MessageType.Request) {
-            this.callEvent(SocketState.Receive, data);
-        } else {
+        else {
+            const inputLength = this._bufLength - this._responsePipe.bufferSize;
             this._socketHandler.sendData(data, (client, success) => {
                 if (success) {
-                    this._sendLength = this._bufLength;
+                    this._sendLength = inputLength;
                 }
             });
         }
@@ -384,39 +468,73 @@ class HttpHandler {
     }
 
     private onHttpMessageEnd = (): void => {
+        if(this._socketHandler.isEnd() || this._rejectionSent) return;
+        const status = (this._currentHttpHeader as HttpResponseHeader | null)?.status;
         if (this._isReplaceHostInBody) {
             this.replaceAndSendHostInBody();
         }
+        if(status !== undefined && status >= 200) this._pendingRequests.shift();
+        this._currentHttpHeader = null;
+        this._responsePipe.reset(MessageType.Response, true);
+        this.sendRequestRejectionIfReady();
+    }
 
-        if (this._httpMessageType == MessageType.Request) {
-            this._currentHttpPipe.reset(MessageType.Response);
-            this._httpMessageType = MessageType.Response;
-        } else {
-            this._currentHttpPipe.reset(MessageType.Request);
-            this._httpMessageType = MessageType.Request;
+    private sendRequestRejectionIfReady(): void {
+        if(!this._inputRejected || this._rejectionSent || this._pendingRequests.length > 0 || this._socketHandler.isEnd()) return;
+        this._rejectionSent = true;
+        this._responsePipe.reset(MessageType.Response);
+        this._socketHandler.sendData(Buffer.from("HTTP/1.1 400 Bad Request\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"), (_handler, success) => {
+            if(!success) this.destroy();
+        });
+        this._socketHandler.end_();
+    }
+
+    private clearHeaderDeadline(): void {
+        if(this._headerDeadline) clearTimeout(this._headerDeadline);
+        this._headerDeadline = undefined;
+    }
+
+    /** 요청 헤더 단계의 거절. 상태 줄만 보내고 닫는다. 인증 없는 경로라 로그는 debug 로만 남긴다(#166). */
+    private rejectRequestHead(status: number, reason: string): void {
+        this.clearHeaderDeadline();
+        if(this._rejectionSent || this._released || this._socketHandler.isEnd()) return;
+        this._rejectionSent = true;
+        logger.debug(`HTTP request rejected before the header: ${status} ${reason}`);
+        this._socketHandler.sendData(Buffer.from(`HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`), (_handler, success) => {
+            if(!success) this.destroy();
+        });
+        this._socketHandler.end_();
+    }
+
+    private onRequestMessageError = (error: Error): void => {
+        if(/^Header too large/.test(error.message) && this._pendingRequests.length === 0) {
+            this.rejectRequestHead(431, 'Request Header Fields Too Large');
+            return;
         }
+        logger.debug(`HTTP request parse error: ${error.message}`);
+        this.destroy();
     }
 
     private onHttpMessageError = (error: Error): void => {
-        this._bodyBuffer = Buffer.alloc(0);
-        this._isReplaceHostInBody = false;
-        this._httpMessageType = MessageType.Request;
-        this._currentHttpPipe.reset(MessageType.Request);
         logger.error('HTTP Message parse Error', error);
-        this._socketHandler.destroy();
+        this.destroy();
     }
 
     public sendData(data: Buffer): void {
-        if (this._socketHandler.isEnd()) {
+        if(this._responseInputEnded || this._released) {
+            if(!this._released && data.length > 0) this.destroy();
+            return;
+        }
+        if (this._rejectionSent || this._socketHandler.isEnd()) {
             return;
         }
         
         if (this._isUpgrade) {
             this._bufLength += data.length;
-
+            const inputLength = this._bufLength;
             this._socketHandler.sendData(data, (client, success) => {
                 if (success) {
-                    this._sendLength = this._bufLength;
+                    this._sendLength = inputLength;
                 } else {
                     logger.warn(`Failed to send WebSocket data: ${data.length} bytes`);
                 }
@@ -424,13 +542,8 @@ class HttpHandler {
             return;
         }
         
-        if (this._httpMessageType == MessageType.Request) {
-            this._currentHttpPipe.reset(MessageType.Response);
-            this._httpMessageType = MessageType.Response;
-        }
-        
         this._bufLength += data.length;
-        this._currentHttpPipe.write(data);
+        this._responsePipe.write(data);
     }
 
     public end_(): void {
@@ -443,9 +556,49 @@ class HttpHandler {
         this._socketHandler.destroy();
     }
 
+    /** 재작성 예약. 동시에 재작성하는 응답들의 본문 합을 프로세스 전체 예산으로 묶는다(#183). */
+    private reserveRewrite(bytes: number): boolean {
+        this.releaseRewrite();
+        const budget = ResourcePolicyRegistry.current().globalHttpRewriteBytes;
+        if(budget > 0 && HttpHandler.GlobalRewriteReserved + bytes > budget) {
+            const now = Date.now();
+            if(now - HttpHandler.LastRewriteBypassWarnAt >= 10_000) {
+                HttpHandler.LastRewriteBypassWarnAt = now;
+                logger.warn(`HTTP body rewrite skipped for a response because the process-wide rewrite budget is in use`);
+            }
+            return false;
+        }
+        HttpHandler.GlobalRewriteReserved += bytes;
+        this._rewriteReservation = bytes;
+        return true;
+    }
+
+    private releaseRewrite(): void {
+        HttpHandler.GlobalRewriteReserved = Math.max(0, HttpHandler.GlobalRewriteReserved - this._rewriteReservation);
+        this._rewriteReservation = 0;
+    }
+
+    /** 재작성을 위해 예약된 바이트 합. */
+    public static get globalRewriteReservedBytes(): number {
+        return HttpHandler.GlobalRewriteReserved;
+    }
+
+    private static GlobalRewriteReserved = 0;
+    private static LastRewriteBypassWarnAt = 0;
+    private _rewriteReservation = 0;
+
     private release(): void {
-        this._currentHttpPipe.reset(MessageType.Request);
-        this._httpMessageType = MessageType.Request;
+        this.releaseRewrite();
+        this.clearHeaderDeadline();
+        this._released = true;
+        this.onOutputProgress = undefined;
+        this._inputRejected = false;
+        this._rejectionSent = false;
+        this._requestPipe.reset(MessageType.Request);
+        this._responsePipe.reset(MessageType.Response);
+        this._pendingRequests.length = 0;
+        this._currentHttpHeader = null;
+        this._isReplaceHostInBody = false;
         this._isUpgrade = false;
         this._isWebSocket = false;
         this._keepAlive = false;
@@ -455,9 +608,25 @@ class HttpHandler {
     private replaceAndSendHostInBody(): void {
         try {
             let encoding = HttpUtil.findHeaderValue(this._currentHttpHeader!, "Content-Encoding");
-            
-            // 압축 해제
-            this._bodyBuffer = HttpUtil.uncompressBody(encoding, this._bodyBuffer);
+            const originalBody = this._bodyBuffer;
+            try {
+                this._bodyBuffer = HttpUtil.uncompressBody(
+                    encoding,
+                    this._bodyBuffer,
+                    ResourcePolicyRegistry.current().httpRewriteDecompressLimitBytes
+                );
+            } catch (error) {
+                if(HttpUtil.isDecompressionLimitError(error) || (error as Error & {code?: string}).code === HttpUtil.DECOMPRESS_LIMIT_ERROR_CODE || error instanceof RangeError) {
+                    logger.warn(`Bypassing HTTP body rewrite because the inflated body exceeded the configured limit.`);
+                    this.sendChunkedData(originalBody);
+                    this._currentHttpHeader = null;
+                    this._bodyBuffer = Buffer.alloc(0);
+                    this._isReplaceHostInBody = false;
+                    this.releaseRewrite();
+                    return;
+                }
+                throw error;
+            }
             
             let body = this._bodyBuffer.toString();
             body = this.modifyUrlsInBody(body, this._destinationAddress, this._originHost);
@@ -474,7 +643,9 @@ class HttpHandler {
             this._currentHttpHeader = null;
             this._bodyBuffer = Buffer.alloc(0);
             this._isReplaceHostInBody = false;
+            this.releaseRewrite();
         } catch (err) {
+            this.releaseRewrite();
             logger.error('Error replacing host in body', err);
             this._socketHandler.destroy();
         }
@@ -501,9 +672,10 @@ class HttpHandler {
         }
         
         // 청크 종료 표시 (0 길이 청크)
+        const inputLength = this._bufLength - this._responsePipe.bufferSize;
         this._socketHandler.sendData(Buffer.from("0\r\n\r\n"), (client, success) => {
             if (success) {
-                this._sendLength = this._bufLength;
+                this._sendLength = inputLength;
             }
         });
     }

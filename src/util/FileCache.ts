@@ -26,6 +26,14 @@ class FileCache {
 
     private _deleted : boolean = false;
 
+    public get cacheSize(): number {
+        return this._cacheSize;
+    }
+
+    public get filePath(): string {
+        return this._filePath;
+    }
+
 
     private findEmptyBlock(length: number) : CacheRecord | null {
         for(let i = 0; i < this._emptyBlocks.length; i++) {
@@ -106,6 +114,7 @@ class FileCache {
         let length = buffer.length;
 
         if(block != null) {
+            block.id = this._lastId++;
             block.length = length;
             if(length < block.capacity) {
                 buffer = Buffer.concat([buffer, Buffer.allocUnsafe(block.capacity - buffer.length)]);
@@ -139,7 +148,14 @@ class FileCache {
             return undefined;
         }
         let buffer = Buffer.allocUnsafe(block.length);
-        fs.readSync(this._fileDescriptor, buffer, 0, block.length, block.position);
+        let offset = 0;
+        while(offset < block.length) {
+            const bytesRead = fs.readSync(this._fileDescriptor, buffer, offset, block.length - offset, block.position + offset);
+            if(bytesRead === 0) {
+                throw new Error(`Incomplete file cache record ${id}: read ${offset} of ${block.length} bytes`);
+            }
+            offset += bytesRead;
+        }
         return buffer;
     }
 
@@ -161,17 +177,26 @@ class FileCache {
     }
 
     public delete() : void {
-        if(this._deleted || this._fileDescriptor == -1)  {
+        this.deleteSync();
+    }
+
+    public deleteSync() : void {
+        if(this._deleted)  {
             return;
         }
         this._deleted = true;
         this._cacheMap = new Map<number, CacheRecord>();
         this._emptyBlocks = [];
         this._cacheSize = 0;
-        fs.close(this._fileDescriptor, () => {
+        if(this._fileDescriptor != -1) {
+            try {
+                fs.closeSync(this._fileDescriptor);
+            } catch {}
             this._fileDescriptor = -1;
-            fs.unlink(this._filePath, () => {});
-        });
+        }
+        try {
+            fs.unlinkSync(this._filePath);
+        } catch {}
     }
 
 

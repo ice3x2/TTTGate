@@ -1,0 +1,35 @@
+# Copy to config/server.yaml before first start.
+# The admin console binds to 127.0.0.1 with TLS enabled by default.
+
+key: "legacy-shared-key-only-if-you-explicitly-enable-allowLegacyControlAuth"
+adminPort: 9300
+adminBindHost: "127.0.0.1"
+adminTls: true
+port: 9126
+tls: false
+controlProtocolMode: "mixed"
+allowLegacyControlAuth: false
+trustedClients:
+  - clientId: "client-a"
+    clientSecret: "replace-with-a-long-random-secret"
+    displayName: "Client A"
+globalMemCacheLimit: 128
+keepAlive: 10000
+tunnelingOptions:
+  - forwardPort: 18080
+    protocol: "http"
+    destinationAddress: "127.0.0.1"
+    destinationPort: 8080
+    allowedClientIds:
+      - "client-a"
+    inactiveOnStartup: false
+    tls: false
+    bufferLimitOnServer: 8
+    bufferLimitOnClient: 8
+    keepAlive: -1
+    httpOption:
+      rewriteHostInTextBody: false
+      replaceAccessControlAllowOrigin: false
+      customRequestHeaders: []
+      customResponseHeaders: []
+      bodyRewriteRules: []
