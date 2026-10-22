@@ -5,6 +5,7 @@ import * as os from "os";
 import * as path from "path";
 import YAML from "yaml";
 import {getFreePort, spawnProcess, SpawnedProcess, waitUntil} from "../helpers/smokeProcess";
+import {stopDaemon} from "../helpers/daemonCleanup";
 
 const APP_JS = path.resolve(__dirname, "../../build/src/app.js");
 
@@ -26,10 +27,10 @@ describe("CLI entrypoint (process boundary)", () => {
                 await child.waitForExit(5000).catch(() => undefined);
             }
         }
-        // -daemon 테스트가 띄운 자식이 남지 않게 한다.
-        const stop = spawnProcess(process.execPath, [APP_JS, "stop"], {cwd: root});
-        await stop.waitForExit(15_000).catch(() => undefined);
+        // -daemon 테스트가 띄운 자식이 남지 않게 한다. 기록된 PID 가 끝났는지 확인하고, 남으면 끝낸 뒤 실패로 알린다(#227).
+        const leftover = await stopDaemon(APP_JS, root);
         fs.rmSync(root, {recursive: true, force: true});
+        expect(leftover).toEqual([]);
     });
 
     const run = async (args: string[], env: {[key: string]: string} = {}, timeoutMs = 20_000) => {
