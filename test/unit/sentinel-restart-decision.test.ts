@@ -29,4 +29,13 @@ describe("Sentinel restart decision (#207)", () => {
         expect(fs.existsSync(configErrorMarkerPath())).toBe(false);
         expect(() => clearConfigErrorMarker()).not.toThrow();
     });
+
+    test("isProcessAlive answers from the pid alone (no process table query)", async () => {
+        expect(Sentinel.isProcessAlive(process.pid)).toBe(true);
+        const {spawnSync} = require("child_process");
+        const gone = spawnSync(process.execPath, ["-e", "0"]);
+        expect(Sentinel.isProcessAlive(gone.pid)).toBe(false);
+        expect(Sentinel.isProcessAlive(0)).toBe(false);
+        expect(Sentinel.isProcessAlive(Number.NaN)).toBe(false);
+    });
 });

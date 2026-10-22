@@ -2,7 +2,6 @@ import { spawn } from 'child_process';
 import Path from "path";
 import {clearInterval} from "timers";
 import Environment from "./Environment";
-const find = require('find-process');
 
 import LoggerFactory  from "./util/logger/LoggerFactory";
 import {clearConfigErrorMarker, hasConfigErrorMarker} from "./util/ConfigExit";
@@ -205,6 +204,17 @@ class Sentinel {
         fs.writeFileSync(Path.join(Environment.path.binDir, `.pid_${type}`), pid.toString() + '\n', {encoding: 'utf-8', flag: 'a'});
     }
 
+    /** 신호 0 으로 PID 가 살아 있는지 본다. EPERM 은 살아 있지만 권한이 없는 경우다. */
+    public static isProcessAlive(pid: number): boolean {
+        if(!Number.isSafeInteger(pid) || pid <= 0) return false;
+        try {
+            process.kill(pid, 0);
+            return true;
+        } catch (e) {
+            return (e as NodeJS.ErrnoException).code === 'EPERM';
+        }
+    }
+
     /** 앱이 사라졌을 때 다시 띄울지(#207). 앱이 설정 오류 표시를 남겼으면 띄우지 않는다. */
     public static shouldRestartApp(): boolean {
         return !hasConfigErrorMarker();
@@ -223,8 +233,9 @@ class Sentinel {
 
     private startScanPid(pid: number) {
         let intervalID = setInterval(() => {
-            find('pid', pid).then((list: Array<any>) => {
-                if(list.length == 0) {
+            // PID 가 살아 있는지만 본다. 프로세스 표 조회(find-process)는 Windows 에서 WMI 를 거쳐 멈출 수 있다(#207).
+            Promise.resolve(Sentinel.isProcessAlive(pid)).then((alive: boolean) => {
+                if(!alive) {
                     logger.warn('App not found. pid:' + pid);
                     clearInterval(intervalID);
                     if(!Sentinel.shouldRestartApp()) {
