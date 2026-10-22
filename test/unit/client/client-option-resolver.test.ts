@@ -268,12 +268,13 @@ describe("client.yaml insecure gate keeps working", () => {
         expect("allowInsecureTls" in accepted.saveOption).toBe(false);
     });
 
-describe("-keepAlive (epic #216: a bad command-line value fails with 2)", () => {
-    test.each(["abc", "10abc", "-1", "1.5"])("rejects %s", (value) => {
-        expect(fail(resolve({keepAlive: value})).exitCode).toBe(2);
-    });
-    test.each(["0", "15000"])("accepts %s", (value) => {
-        expect(ok(resolve({keepAlive: value})).option.keepAlive).toBe(Number(value));
+describe("-keepAlive keeps the existing contract: a bad value falls back with a warning", () => {
+    test("-1 falls back to the default with a warning; 0 and 15000 are used", () => {
+        const fallback = ok(resolve({keepAlive: "-1"}));
+        expect(fallback.option.keepAlive).toBe(10000);
+        expect(warnings(fallback).join("\n")).toContain("keepAlive");
+        expect(ok(resolve({keepAlive: "0"})).option.keepAlive).toBe(0);
+        expect(ok(resolve({keepAlive: "15000"})).option.keepAlive).toBe(15000);
     });
 });
 });

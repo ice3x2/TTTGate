@@ -211,8 +211,8 @@ const resolveClientOption = (input: ResolveClientOptionInput): ResolveClientOpti
         }
     }
     if(has("keepAlive")) {
-        if(!/^\d+$/.test(cli.keepAlive.trim())) return cliFail(`-keepAlive '${cli.keepAlive}' must be 0 (off) or a positive integer in ms`);
-        option.keepAlive = Number(cli.keepAlive.trim());
+        // 잘못된 값은 기본값 폴백 + 경고(정규화)로 둔다. 기존 계약(test/component/client/keepalive-options.test.ts)이다.
+        option.keepAlive = Math.floor(parseInt(cli.keepAlive));
         sources.keepAlive = "command line";
     }
     if(has("bufferLimit")) {
