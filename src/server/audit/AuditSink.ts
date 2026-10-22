@@ -8,7 +8,7 @@ const logger = LoggerFactory.getLogger('server', 'AuditSink');
 /** 행위자. 사용자 요청이 아닌 내부 가드가 남기는 이벤트는 'system' 을 쓴다. */
 export type AuditActor = {userId: string; username: string; role?: Role} | {userId: 'system'};
 
-export type AuditTargetKind = 'user' | 'group' | 'tunnel' | 'server' | 'session' | 'security';
+export type AuditTargetKind = 'user' | 'group' | 'tunnel' | 'server' | 'session' | 'security' | 'trusted_client';
 
 export type AuditTarget = {kind: AuditTargetKind; id: string};
 

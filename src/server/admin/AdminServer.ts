@@ -23,7 +23,7 @@ import {AdminSecurityPolicyRegistry, clientAddressFromForwardedFor, evaluateAdmi
 import {timingSafeStringEqual} from "../../util/timingSafeStringEqual";
 import {computeBackoffMs} from "./loginBackoff";
 import crypto from "crypto";
-import {DEFAULT_GEO_CONFIG, GeoConfig, TunnelingOption} from "../../types/TunnelingOption";
+import {DEFAULT_GEO_CONFIG, GeoConfig, TrustedClient, TunnelingOption} from "../../types/TunnelingOption";
 import {AdmissionController} from "../security/AdmissionController";
 import {rateLimitBucketOf} from "../security/ConnectionRateLimiter";
 import {normalizeConnectionSecurity} from "../security/connectionSecurity";
@@ -33,6 +33,7 @@ import {createLoginFailureAuditor} from "./loginFailureAudit";
 import {bodyRejectionEvent, isBodyRejectionAuditable} from "./bodyRejectionAudit";
 import {truncateAuditValue} from "./auditValue";
 import {rbacRouteHandlers} from "./rbacRoutes";
+import {keepTrustedClients, maskTrustedClientSecrets, trustedClientRouteHandlers} from "./trustedClientRoutes";
 import {MfaTicketStore, PendingEnrollmentStore} from "../mfa/MfaTickets";
 import {mfaLoginHandler} from "./mfaLoginRoutes";
 import {auditRouteHandlers} from "./auditRoutes";
@@ -201,6 +202,13 @@ class AdminServer {
             onGetSecurityCountries: this.onGetSecurityCountries,
             // U2-06 / #98: 사용자·그룹 핸들러는 rbacRoutes.ts 가 갖는다(AdminServer.ts 를 2,000줄 아래로 유지).
             ...rbacRouteHandlers,
+            // #212: 신뢰 클라이언트 관리. 저장·적용은 서버 옵션과 같은 커밋·되돌리기 경로를 쓴다.
+            ...trustedClientRouteHandlers({
+                tttServer: () => this._tttServer,
+                mutateConfiguration: (res, payload, operation) => this.mutateConfiguration(res, payload, operation),
+                commitTrustedClients: (res, store, next) => this.commitTrustedClients(res, store, next),
+                sendFailure: (res, status, payload) => this.sendApiFailure(res, status, payload)
+            }),
             // U4-02 / #110: 감사 조회. 422 본문에 status 를 담아야 하므로 sendApiFailure 를 넘긴다.
             ...auditRouteHandlers(new AuditQuery(auditDirPath()), (res, status, payload) => this.sendApiFailure(res, status, payload))
         });
@@ -581,11 +589,46 @@ class AdminServer {
         });
     }
 
+    /** 신뢰 클라이언트 목록만 바꿔 저장하고 적용한다(#212). 실패하면 응답을 보내고 undefined 를 돌려준다. */
+    private async commitTrustedClients(res: ServerResponse, store: ServerOptionStore, next: TrustedClient[]): Promise<object | undefined> {
+        const current = store.serverOption;
+        const prepared = store.prepareServerOption({...ObjectUtil.cloneDeep(current), trustedClients: next});
+        if(!prepared.success || !prepared.serverOption) {
+            this.sendApiFailure(res, 400, {message: prepared.message || 'Invalid trusted clients'});
+            return undefined;
+        }
+        const committedBefore = store.captureCommittedState();
+        const runtimeBefore = this._tttServer?.captureRuntimeState?.();
+        const commit = store.commitPreparedServerOption(prepared.serverOption, {markLastKnownGood: true, pendingRestartScopes: []});
+        if(!commit.success) {
+            store.recordRollback('trusted client commit failed', ['server-option']);
+            this.sendApiFailure(res, 500, {message: 'Unable to commit trusted clients.', revisionState: store.revisionState});
+            return undefined;
+        }
+        const runtime = typeof (this._tttServer as any)?.applyServerOption == 'function'
+            ? await this._tttServer!.applyServerOption(prepared.serverOption, current) : undefined;
+        if(runtime && !runtime.success) {
+            const failures = await this.restoreConfigurationBaseline(committedBefore, runtimeBefore);
+            this.sendApiFailure(res, 500, {message: 'Unable to apply trusted clients.', failedScopes: [...runtime.failedScopes, ...failures]});
+            return undefined;
+        }
+        return commit.revisionState;
+    }
+
     private onUpdateServerOption = async (ctx: RouteContext) => {
         const {res} = ctx;
         const requestedServerOption = ctx.body;
         await this.mutateConfiguration(res, requestedServerOption, async (serverOptionStore) => {
             let currentServerOption = serverOptionStore.serverOption;
+            // #212 REQ-10: 신뢰 클라이언트는 /api/trustedClients 로만 바꾼다. 화면이 받은 값(비밀값은 가림)을 그대로 되돌려
+            // 보내거나 아예 빼면 지금 값을 유지하고, 다른 값을 보내면 거부한다.
+            const keptTrustedClients = keepTrustedClients(requestedServerOption.trustedClients, currentServerOption.trustedClients ?? []);
+            if(!keptTrustedClients) {
+                this.sendApiFailure(res, 400, {code: 'TRUSTED_CLIENTS_READ_ONLY',
+                    message: 'trustedClients cannot be changed with the server option. Use /api/trustedClients.', updated: false});
+                return;
+            }
+            requestedServerOption.trustedClients = keptTrustedClients;
             let prepareResult = serverOptionStore.prepareServerOption(ObjectUtil.cloneDeep(requestedServerOption));
             if(!prepareResult.success || !prepareResult.serverOption) {
                 this.sendApiFailure(res, 400, {message: prepareResult.message || 'Invalid server option', updated: false});
@@ -1482,6 +1525,8 @@ class AdminServer {
             const cloned = ObjectUtil.cloneDeep(store.serverOption) as any;
             const { tunnelingOptions: _omit, ...pureServerOption } = cloned;
             void _omit;
+            // #212 REQ-9: 신뢰 클라이언트 비밀값은 내보내지 않는다.
+            pureServerOption.trustedClients = maskTrustedClientSecrets(pureServerOption.trustedClients ?? []);
             this.sendApiSuccess(res, {serverOption: pureServerOption, revisionState: store.revisionState});
         });
     }

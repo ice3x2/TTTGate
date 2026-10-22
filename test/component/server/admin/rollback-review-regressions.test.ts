@@ -45,12 +45,14 @@ test.each(["allowedClientIds", "allowedClientNames"])("memory-only failed apply 
     const apply = f.tunnel.applyServerOption, limit = SocketHandler.maxGlobalMemoryBufferSize;
     try {
         const initial = await f.snapshot();
-        expect((await f.request("POST", "/api/serverOption", {...initial.serverOption,
-            trustedClients: [{clientId: "allowed", clientSecret: "rollback-client-secret", displayName: "allowed"}], expectedRevision: initial.revisionState.currentRevision})).statusCode).toBe(200);
+        // #212: 신뢰 클라이언트는 /api/trustedClients 로 만든다. 비밀값은 서버가 만든다.
+        expect((await f.request("POST", "/api/trustedClients", {clientId: "allowed", displayName: "allowed",
+            expectedRevision: initial.revisionState.currentRevision})).statusCode).toBe(201);
+        const clientSecret = f.store.serverOption.trustedClients.find((client: any) => client.clientId === "allowed").clientSecret;
         const port = await addPort(f, {destinationPort: echo.port, [field]: ["allowed"]});
         expect((await f.request("POST", `/api/tunneling/active/${port}`, {active: true, timeout: 0})).statusCode).toBe(200);
         client = TTTClient.create({host: "127.0.0.1", port: f.tunnel.tunnelServer.port, key: f.store.serverOption.key,
-            tls: false, name: "allowed", clientId: "allowed", clientSecret: "rollback-client-secret", displayName: "allowed", keepAlive: 0, globalMemCacheLimit: 128});
+            tls: false, name: "allowed", clientId: "allowed", clientSecret, displayName: "allowed", keepAlive: 0, globalMemCacheLimit: 128});
         client.start();
         await waitFor(() => { if(f.tunnel.clientStatus().length !== 1) throw new Error("client pending"); return true; }, {timeoutMs: 5000, intervalMs: 20});
         const payload = Buffer.from("ACL baseline roundtrip");

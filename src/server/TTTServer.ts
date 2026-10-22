@@ -1,5 +1,6 @@
 import {ExternalPortServerPool, ExternalPortServerStatus } from "./ExternalPortServerPool";
 import {TunnelServer, ClientStatus} from "./TunnelServer";
+import {EnrollmentRegistry} from "./EnrollmentRegistry";
 import {ConnectionSecurityOption, DEFAULT_AUDIT_QUEUE_SIZE, DEFAULT_AUDIT_RETENTION_DAYS, DEFAULT_GEO_CONFIG, ServerOption, TunnelingOption, resolveSessionTtlMs} from "../types/TunnelingOption";
 import SocketState from "../util/SocketState";
 import {CertInfo, CertificationStore} from "./CertificationStore";
@@ -46,6 +47,8 @@ class TTTServer {
     private _sessions : Set<number> = new Set<number>();
     private _allowClientNamesMap : Map<number, Array<string>> = new Map<number, Array<string>>();
     private _allowClientIdsMap : Map<number, Array<string>> = new Map<number, Array<string>>();
+    /** 발급한 등록 코드(#212). 제어 서버를 다시 만들어도 유지한다. */
+    private readonly _enrollment = new EnrollmentRegistry();
 
 
     public static create(serverOption: ServerOption) : TTTServer {
@@ -78,6 +81,28 @@ class TTTServer {
             return bytesPerSecond > 0 ? {groupId: owner.groupId, bytesPerSecond} : undefined;
         };
         this.syncAllowedClientMaps(serverOption);
+    }
+
+    private onEnrollmentEvent = (event: {success: boolean, clientId?: string, address: string, reason?: string}): void => {
+        const type = event.success ? AUDIT_EVENT_TYPES.client_enrolled : AUDIT_EVENT_TYPES.client_enroll_failed;
+        recordAuditEvent({at: Date.now(), actor: {userId: 'system'}, type,
+            target: {kind: 'trusted_client', id: event.clientId ?? 'unknown'}, outcome: event.success ? 'success' : 'failure',
+            summary: `${type} ${event.clientId ?? ''}`.trim(),
+            detail: {address: event.address, ...(event.reason ? {reason: event.reason} : {})}})
+            .catch((error) => logger.error(`${type} audit failed`, error));
+    }
+
+    /**
+     * 신뢰 클라이언트의 등록 코드를 발급한다(#212 REQ-4·REQ-8). 제어 연결이 TLS 가 아니거나 mtls-strict 면 발급하지 않는다:
+     * 평문으로는 비밀값을 보내지 않고, strict 는 클라이언트 인증서 없는 등록 연결을 받지 않는다.
+     */
+    public async issueEnrollmentCode(clientId: string, ttlMs?: number): Promise<{ok: true, code: string, expiresAt: number} | {ok: false, reason: 'tls-required' | 'strict-mode' | 'unknown-client'}> {
+        const applied = this._appliedServerOption;
+        if(applied.tls !== true) return {ok: false, reason: 'tls-required'};
+        if(applied.controlProtocolMode === 'mtls-strict') return {ok: false, reason: 'strict-mode'};
+        if(!(applied.trustedClients ?? []).some((client) => client.clientId === clientId)) return {ok: false, reason: 'unknown-client'};
+        const issued = await this._enrollment.issue(clientId, ttlMs);
+        return {ok: true, ...issued};
     }
 
     private onConcurrencyDenied = (port: number, denial: ConcurrencyDenial, now: number): void => {
@@ -130,6 +155,7 @@ class TTTServer {
         const ttl = resolveSessionTtlMs(serverOption.sessionTtlMs);
         if(ttl.success) tunnelServer.configureSessionTtl(ttl.ttlMs);
         this.bindTunnelServerCallbacks(tunnelServer);
+        tunnelServer.configureEnrollment(this._enrollment, this.onEnrollmentEvent);
         return tunnelServer;
     }
 
@@ -249,10 +275,19 @@ class TTTServer {
     }
 
     private controlOptionsChanged(next: ServerOption, previous: ServerOption): boolean {
-        return ['port', 'tls', 'key', 'keepAlive', 'controlProtocolMode', 'allowLegacyControlAuth', 'trustedClients']
-            .some(key => key === 'trustedClients'
-                ? !ObjectUtil.canonicalEquals(next.trustedClients ?? [], previous.trustedClients ?? [])
-                : (next as any)[key] !== (previous as any)[key]);
+        // trustedClients 는 제어 서버를 다시 만들지 않고 바꾼다(#212 REQ-3). 그래서 여기서 보지 않는다.
+        return ['port', 'tls', 'key', 'keepAlive', 'controlProtocolMode', 'allowLegacyControlAuth']
+            .some(key => (next as any)[key] !== (previous as any)[key]);
+    }
+
+    private trustedClientsChanged(next: ServerOption, previous: ServerOption): boolean {
+        return !ObjectUtil.canonicalEquals(next.trustedClients ?? [], previous.trustedClients ?? []);
+    }
+
+    /** 신뢰 클라이언트를 제자리에서 바꾼다. 지워졌거나 비밀값이 바뀐 클라이언트만 끊긴다. */
+    private applyTrustedClients(next: ServerOption): void {
+        const disconnected = this._tunnelServer.updateTrustedClients(next.trustedClients ?? []);
+        if(disconnected.length > 0) logger.info(`trusted clients changed; disconnected: ${disconnected.join(', ')}`);
     }
 
     /** 켜져 있는 모든 외부 포트의 수명 상한을 다시 계산한다(#137 — 소유자·그룹·그룹 속성 변경 뒤). */
@@ -293,6 +328,9 @@ class TTTServer {
                 this._appliedServerOption = ObjectUtil.cloneDeep(state.serverOption);
                 this._dirtyControl = false;
             } catch(error) { logger.error('control runtime restore failed', error); failures.push('tunnel-control-restore'); }
+        } else if(this.trustedClientsChanged(this._appliedServerOption, state.serverOption)) {
+            this.applyTrustedClients(state.serverOption);
+            this._appliedServerOption.trustedClients = ObjectUtil.cloneDeep(state.serverOption.trustedClients ?? []);
         }
         try { this._tunnelServer.configureSessionTtl(state.sessionTtlPolicy.ttlMs, state.sessionTtlPolicy.checkIntervalMs); }
         catch(error) { logger.error('session TTL restore failed', error); failures.push('session-ttl-restore'); }
@@ -383,6 +421,7 @@ class TTTServer {
         const requiresTunnelRestart = this.controlOptionsChanged(nextOption, previousOption);
 
         if(!requiresTunnelRestart) {
+            if(this.trustedClientsChanged(nextOption, previousOption)) this.applyTrustedClients(nextOption);
             this._tunnelServer.configureSessionTtl(ttl.ttlMs);
             this.syncAllowedClientMaps(nextOption);
             this.recordAppliedServerOption(nextOption, false);
@@ -607,6 +646,7 @@ class TTTServer {
     }
 
     public async close() : Promise<void> {
+        this._enrollment.clear();
         await this._externalPortServerPool.stopAll();
         await this._tunnelServer.close();
     }

@@ -73,6 +73,26 @@ export function validateSyncCtrlAckMeta(obj: unknown): string | undefined {
     }
 }
 
+/** #212: 조회값은 scrypt 유도값 32바이트의 hex 다. */
+export function validateEnrollRequestMeta(obj: unknown): string | undefined {
+    if(!isPlainObject(obj)) return "EnrollRequestMeta: not object";
+    if(obj.protocol !== "tttgate-enroll-v1") return "EnrollRequestMeta.protocol invalid";
+    if(typeof obj.lookup !== "string" || !/^[0-9a-f]{64}$/.test(obj.lookup)) return "EnrollRequestMeta.lookup invalid";
+}
+
+export function validateEnrollResponseMeta(obj: unknown): string | undefined {
+    if(!isPlainObject(obj)) return "EnrollResponseMeta: not object";
+    if(obj.ok === true) {
+        if(!isStringCapped(obj.nonce, 64)) return "EnrollResponseMeta.nonce invalid";
+        if(!isStringCapped(obj.ciphertext, 60000)) return "EnrollResponseMeta.ciphertext invalid";
+        if(!isStringCapped(obj.tag, 64)) return "EnrollResponseMeta.tag invalid";
+        return undefined;
+    }
+    if(obj.ok !== false || !["rejected", "throttled", "unavailable"].includes(obj.reason as string)) {
+        return "EnrollResponseMeta.reason invalid";
+    }
+}
+
 export function assertSyncCtrlAckMeta(obj: unknown): asserts obj is SyncCtrlAckMeta {
     const reason = validateSyncCtrlAckMeta(obj);
     if(reason) throw new Error(reason);

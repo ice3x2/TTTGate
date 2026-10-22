@@ -8,7 +8,7 @@ import {AUDIT_EVENT_TYPE_LIST, isAuditEventType} from "../audit/AuditEventTypes"
 
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 500;
-const TARGET_KINDS: readonly AuditTargetKind[] = ['user', 'group', 'tunnel', 'server', 'session', 'security'];
+const TARGET_KINDS: readonly AuditTargetKind[] = ['user', 'group', 'tunnel', 'server', 'session', 'security', 'trusted_client'];
 /** Date 가 표현할 수 있는 epoch ms 의 한계(ECMAScript 시간 값 범위). 밖이면 파일 날짜를 계산할 수 없다. */
 const MAX_EPOCH_MS = 8.64e15;
 

@@ -3,7 +3,7 @@ import BufferReader from "../util/BufferReader";
 import ConnectOpt from "../util/ConnectOpt";
 import Dequeue from "../util/Dequeue";
 import LoggerFactory from "../util/logger/LoggerFactory";
-import {AckCtrlV2Meta, CloseSessionMeta, HandlerWideIdMeta, NewDataHandlerMeta, SyncCtrlAckMeta} from "./ProtocolV2";
+import {AckCtrlV2Meta, CloseSessionMeta, EnrollRequestMeta, EnrollResponseMeta, HandlerWideIdMeta, NewDataHandlerMeta, SyncCtrlAckMeta} from "./ProtocolV2";
 import {
     assertAckCtrlV2Meta,
     assertHandlerWideIdMeta,
@@ -11,7 +11,8 @@ import {
     assertNewDataHandlerMeta,
     assertSyncCtrlAckMeta,
     safeJsonParse, readJsonMeta, MetaResult, MessageMeta,
-    validateMessageMeta, validateSyncCtrlAckMeta, validateNewDataHandlerMeta, validateHandlerWideIdMeta, validateCloseSessionMeta
+    validateMessageMeta, validateSyncCtrlAckMeta, validateNewDataHandlerMeta, validateHandlerWideIdMeta, validateCloseSessionMeta,
+    validateEnrollRequestMeta, validateEnrollResponseMeta
 } from "./CtrlMetaGuards";
 
 
@@ -49,6 +50,9 @@ enum CtrlCmd {
     SuccessOfOpenSession,
     SuccessOfOpenSessionAck,
     Message,
+    // #212: 등록 교환. 기존 번호가 바뀌지 않게 NonExistent 바로 앞에만 붙인다.
+    EnrollRequest,
+    EnrollResponse,
     NonExistent
 
 }
@@ -104,6 +108,20 @@ class CtrlPacket {
         return packet;
     }
 
+
+    public static createEnrollRequest(meta: EnrollRequestMeta) : CtrlPacket {
+        let packet = new CtrlPacket();
+        packet._cmd = CtrlCmd.EnrollRequest;
+        packet._data = Buffer.from(JSON.stringify(meta), "utf-8");
+        return packet;
+    }
+
+    public static createEnrollResponse(meta: EnrollResponseMeta) : CtrlPacket {
+        let packet = new CtrlPacket();
+        packet._cmd = CtrlCmd.EnrollResponse;
+        packet._data = Buffer.from(JSON.stringify(meta), "utf-8");
+        return packet;
+    }
 
     public static message(id: number, message: { type: string, payload: object | string }) : CtrlPacket {
         let packet = new CtrlPacket();
@@ -328,6 +346,16 @@ class CtrlPacket {
     public get syncCtrlAckMetaResult(): MetaResult<SyncCtrlAckMeta> {
         if(this._cmd !== CtrlCmd.SyncCtrlAck || this._data.length === 0) return {kind: 'absent'};
         return readJsonMeta(this._data, validateSyncCtrlAckMeta);
+    }
+
+    public get enrollRequestMetaResult(): MetaResult<EnrollRequestMeta> {
+        if(this._cmd !== CtrlCmd.EnrollRequest || this._data.length === 0) return {kind: 'absent'};
+        return readJsonMeta(this._data, validateEnrollRequestMeta);
+    }
+
+    public get enrollResponseMetaResult(): MetaResult<EnrollResponseMeta> {
+        if(this._cmd !== CtrlCmd.EnrollResponse || this._data.length === 0) return {kind: 'absent'};
+        return readJsonMeta(this._data, validateEnrollResponseMeta);
     }
 
     public get newDataHandlerMetaResult(): MetaResult<NewDataHandlerMeta> {

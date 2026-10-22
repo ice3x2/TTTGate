@@ -31,7 +31,14 @@ import {TunnelHandshakePolicyRegistry} from "./TunnelHandshakePolicy";
 import {timingSafeStringEqual} from "../util/timingSafeStringEqual";
 import LoggerFactory  from "../util/logger/LoggerFactory";
 import {SysInfo} from "../commons/SysMonitor";
+import {EnrollmentRegistry} from "./EnrollmentRegistry";
+import {sealEnrollmentPayload} from "../commons/Enrollment";
+import {EnrollmentPayload, EnrollResponseMeta} from "../commons/ProtocolV2";
+import {CONTROL_CERT_SERVER_NAME} from "./CertificationStore";
 const logger = LoggerFactory.getLogger('server', 'TunnelServer');
+
+/** 등록 교환 결과(#212 REQ-11 감사). 코드·비밀값은 담지 않는다. */
+type OnEnrollmentEvent = (event: {success: boolean, clientId?: string, address: string, reason?: string}) => void;
 
 interface OnReceiveDataCallback {
     (id : number, data: Buffer) : void;
@@ -115,6 +122,9 @@ class TunnelServer {
     private _nextSelectIdx = 0;
     private _onSessionCloseCallback? : OnSessionCloseCallback;
     private _onReceiveDataCallback? : OnReceiveDataCallback;
+    /** 등록 교환(#212). 응답에 담을 제어 인증서와, 코드를 기억하는 레지스트리. */
+    private readonly _controlCertPem: string;
+    private _enrollment?: {registry: EnrollmentRegistry, onEvent: OnEnrollmentEvent};
 
 
     public set onSessionCloseCallback(value: OnSessionCloseCallback) {
@@ -129,6 +139,7 @@ class TunnelServer {
     private constructor(option:{port: number, tls: boolean, key: string, keepAlive: number, controlProtocolMode: ControlProtocolMode, allowLegacyControlAuth: boolean, trustedClients?: Array<{clientId: string, clientSecret: string, displayName?: string}>}, certInfo: CertInfo) {
         this._serverOption = option;
         this._key = option.key;
+        this._controlCertPem = certInfo.cert.value;
         this._identityRegistry = new IdentityRegistry(option.trustedClients ?? []);
         let tcpServerOption : ServerOption = {
             port: option.port,
@@ -866,6 +877,8 @@ class TunnelServer {
                 capabilities: [],
                 legacy: true
             });
+        } else if(packet.cmd == CtrlCmd.EnrollRequest && !this._clientHandlerPoolMap.has(handler.id)) {
+            this.handleEnrollRequest(handler, packet);
         } else {
             let ctrlID = handler.id;
             let clientHandlerPool = this._clientHandlerPoolMap.get(ctrlID);
@@ -876,6 +889,57 @@ class TunnelServer {
             }
             clientHandlerPool.delegateReceivePacketOfControlHandler(handler as TunnelControlHandler, packet);
         }
+    }
+
+    public configureEnrollment(registry: EnrollmentRegistry, onEvent: OnEnrollmentEvent): void {
+        this._enrollment = {registry, onEvent};
+    }
+
+    /**
+     * 등록 교환(#212 REQ-5~REQ-8). 인증 전 연결에서만 받는다. 응답을 보내고 연결을 닫는다.
+     * 연결은 끝까지 미인증으로 남아 인증 전 단계의 기한·연결 수 제한을 그대로 받는다.
+     */
+    private handleEnrollRequest(handler: TunnelHandler, packet: CtrlPacket): void {
+        const address = handler.remoteAddress;
+        const meta = packet.enrollRequestMetaResult;
+        let response: EnrollResponseMeta;
+        let clientId: string | undefined;
+        if(!this._enrollment || !this._serverOption.tls) {
+            response = {ok: false, reason: "unavailable"};
+        } else {
+            const taken = this._enrollment.registry.take(meta.kind === "valid" ? meta.value.lookup : "", address);
+            const trusted = taken.ok ? this._identityRegistry.findTrustedClient(taken.clientId) : undefined;
+            if(taken.ok && trusted) {
+                clientId = trusted.clientId;
+                const payload: EnrollmentPayload = {clientId: trusted.clientId, clientSecret: trusted.clientSecret,
+                    serverName: CONTROL_CERT_SERVER_NAME, tls: true, ca: this._controlCertPem};
+                response = {ok: true, ...sealEnrollmentPayload(taken.keys, payload)};
+            } else {
+                response = {ok: false, reason: taken.ok ? "rejected" : taken.reason};
+            }
+        }
+        this._enrollment?.onEvent({success: response.ok, clientId, address, reason: response.ok ? undefined : response.reason});
+        this._rejectedHandlerIds.add(handler.id);
+        handler.sendData(CtrlPacket.createEnrollResponse(response).toBuffer(), () => {
+            setTimeout(() => handler.destroy(), 250);
+        });
+    }
+
+    /**
+     * 신뢰 클라이언트 목록을 제어 서버를 다시 시작하지 않고 바꾼다(#212 REQ-3).
+     * 지워졌거나 비밀값이 바뀐 클라이언트의 연결만 끊는다. 끊은 clientId 목록을 돌려준다.
+     */
+    public updateTrustedClients(trustedClients: Array<{clientId: string, clientSecret: string, displayName?: string}>): string[] {
+        const affected = new Set(this._identityRegistry.replaceTrustedClients(trustedClients));
+        const disconnected: string[] = [];
+        for(const [ctrlID, pool] of [...this._clientHandlerPoolMap]) {
+            if(pool.clientId && affected.has(pool.clientId)) {
+                disconnected.push(pool.clientId);
+                this.destroyClientHandlerPool(ctrlID);
+            }
+        }
+        affected.forEach((clientId) => this._enrollment?.registry.revokeClient(clientId));
+        return disconnected;
     }
 
     private isLegacyAuthBlocked(address: string): boolean {
@@ -1096,4 +1160,4 @@ class TunnelServer {
 
 }
 
-export { TunnelServer, ClientStatus};
+export { TunnelServer, ClientStatus, OnEnrollmentEvent};

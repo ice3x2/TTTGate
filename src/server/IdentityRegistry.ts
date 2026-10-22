@@ -32,6 +32,23 @@ class IdentityRegistry {
         });
     }
 
+    /**
+     * 신뢰 클라이언트 목록을 바꾼다(#212 REQ-3 핫 갱신). 지워졌거나 비밀값이 바뀐 clientId 목록을 돌려준다.
+     * 그 클라이언트의 바인딩 토큰은 여기서 무효로 한다. 연결 정리는 호출자가 한다.
+     */
+    public replaceTrustedClients(trustedClients: Array<TrustedClient>): string[] {
+        const next = new Map(trustedClients.map((client) => [client.clientId, {...client}] as const));
+        const affected: string[] = [];
+        this._trustedClientMap.forEach((previous, clientId) => {
+            const current = next.get(clientId);
+            if(!current || current.clientSecret !== previous.clientSecret) affected.push(clientId);
+        });
+        this._trustedClientMap.clear();
+        next.forEach((client, clientId) => this._trustedClientMap.set(clientId, client));
+        affected.forEach((clientId) => this.revokeClientTokens(clientId));
+        return affected;
+    }
+
     public findTrustedClient(clientId: string): TrustedClient | undefined {
         const trustedClient = this._trustedClientMap.get(clientId);
         if(!trustedClient) {

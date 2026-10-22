@@ -269,6 +269,16 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
     {method: 'GET', pattern: new RegExp('^/api/groups$'), action: 'group:manage', handler: 'onListGroups'},
     // 그룹 편집 화면의 신뢰 클라이언트 선택지(id·표시 이름만, #155).
     {method: 'GET', pattern: new RegExp('^/api/trustedClients$'), action: 'group:manage', handler: 'onListTrustedClients'},
+    // #212 신뢰 클라이언트 관리·등록 코드. 자격 증명을 만드는 일이라 그룹 관리보다 높은 server:manage 를 요구한다.
+    {method: 'POST', pattern: new RegExp('^/api/trustedClients$'), action: 'server:manage',
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.trusted_client_created, {kind: 'trusted_client', id: truncateAuditValue(String(ctx.body?.clientId))}),
+        handler: 'onCreateTrustedClient'},
+    {method: 'DELETE', pattern: new RegExp('^/api/trustedClients/(?<id>[^/]+)$'), action: 'server:manage',
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.trusted_client_deleted, pathIdTarget('trusted_client')(ctx)), handler: 'onDeleteTrustedClient'},
+    {method: 'POST', pattern: new RegExp('^/api/trustedClients/(?<id>[^/]+)/secret$'), action: 'server:manage',
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.trusted_client_secret_rotated, pathIdTarget('trusted_client')(ctx)), handler: 'onRotateTrustedClientSecret'},
+    {method: 'POST', pattern: new RegExp('^/api/trustedClients/(?<id>[^/]+)/enrollmentCode$'), action: 'server:manage',
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.enrollment_code_issued, pathIdTarget('trusted_client')(ctx)), handler: 'onIssueEnrollmentCode'},
     {method: 'POST', pattern: new RegExp('^/api/groups$'), action: 'group:manage',
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.group_created, {kind: 'group', id: truncateAuditValue(String(ctx.body?.name))}), handler: 'onCreateGroup'},
     {method: 'GET', pattern: new RegExp('^/api/groups/(?<id>[^/]+)$'), action: 'group:manage', handler: 'onGetGroup'},

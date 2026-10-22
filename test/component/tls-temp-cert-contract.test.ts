@@ -39,7 +39,8 @@ test.each(['default-CN-rejection', 'localhost-SAN-echo'] as const)('native TLS c
         const x509 = new X509Certificate(certificate.cert.value);
         const commonName = x509.subject.split('\n').find(line => line.startsWith('CN='))?.slice(3);
         facts.commonName = commonName;
-        expect(commonName).toBe(mode === 'default-CN-rejection' ? 'Testing CA - DO NOT TRUST' : 'localhost');
+        // #212: 기본 제어 인증서는 고정 이름 tttgate-control 하나만 담는다. 다른 이름(localhost)으로는 검증되지 않는다.
+        expect(commonName).toBe(mode === 'default-CN-rejection' ? 'tttgate-control' : 'localhost');
         if(mode === 'localhost-SAN-echo') {
             expect(x509.subjectAltName).toContain('DNS:localhost');
             expect(x509.subjectAltName).toContain('IP Address:127.0.0.1');
@@ -59,7 +60,7 @@ test.each(['default-CN-rejection', 'localhost-SAN-echo'] as const)('native TLS c
         const exchange = new Promise<void>((finish, reject) => {
             timeout = setTimeout(() => reject(new Error('Owned native TLS exchange deadline exceeded')), 10_000);
             client = tls.connect({host: '127.0.0.1', port: (server!.address() as net.AddressInfo).port,
-                ca: certificate.cert.value, servername: commonName, rejectUnauthorized: true});
+                ca: certificate.cert.value, servername: mode === 'default-CN-rejection' ? 'localhost' : commonName, rejectUnauthorized: true});
             sockets.add(client);
             client.once('error', error => { facts.errorCode = (error as NodeJS.ErrnoException).code; reject(error); });
             client.once('secureConnect', () => {

@@ -32,6 +32,26 @@ type HandlerWideIdMeta = {
 
 type CloseSessionMeta = HandlerWideIdMeta & {waitReceiveLength?: number};
 
+/** #212·#214 등록 교환. 클라이언트는 코드에서 유도한 조회값만 보낸다(코드 원문은 보내지 않는다). */
+type EnrollRequestMeta = {
+    protocol: "tttgate-enroll-v1";
+    lookup: string;
+};
+
+/** 성공이면 봉인한 응답, 실패면 사유. 사유는 코드 없음·만료·소진을 구분하지 않는다. */
+type EnrollResponseMeta =
+    | {ok: true; nonce: string; ciphertext: string; tag: string}
+    | {ok: false; reason: "rejected" | "throttled" | "unavailable"};
+
+/** 봉인 안의 내용(클라이언트가 client.yaml 로 바꾼다). */
+type EnrollmentPayload = {
+    clientId: string;
+    clientSecret: string;
+    serverName: string;
+    tls: true;
+    ca: string;
+};
+
 const CONTROL_PROTOCOL_V2 = 2;
 const CONTROL_PROTOCOL_V1 = 1;
 const DEFAULT_PROTOCOL_V2_CAPABILITIES: Array<ProtocolCapability> = [
@@ -67,6 +87,9 @@ const createOpaqueToken = (length: number = 32): string => {
 export {
     CloseSessionMeta,
     AckCtrlV2Meta,
+    EnrollRequestMeta,
+    EnrollResponseMeta,
+    EnrollmentPayload,
     CONTROL_PROTOCOL_V1,
     CONTROL_PROTOCOL_V2,
     ControlProtocolMode,
