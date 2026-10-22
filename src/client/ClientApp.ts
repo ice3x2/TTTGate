@@ -18,6 +18,7 @@ import {
     ResolveClientOptionResult
 } from "./ClientOptionResolver";
 import * as fs from "fs";
+import {isFlagOn} from "../server/ServerCliOptions";
 const logger = LoggerFactory.getLogger('client', 'ClientApp');
 
 /** client.yaml 의 insecure 필드를 --yes-insecure 없이 읽으면 이 코드로 끝난다(P3-T3 / REQ-02). */
@@ -80,7 +81,7 @@ let _loadClientOption = (cliOptions?: {[key: string]: string}) : ClientOption | 
         else logger.info(notice.message);
     }
     const clientOption = result.option;
-    if(argv["save"] != undefined && (argv["save"] == "" || argv["save"].toLowerCase() != "false")) {
+    if(isFlagOn(argv, "save")) {
         _saveClientOption(result.saveOption);
     }
     _printClientOptions(clientOption);

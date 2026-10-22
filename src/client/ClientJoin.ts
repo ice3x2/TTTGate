@@ -6,6 +6,7 @@ import {normalizeEnrollmentCode} from "../commons/Enrollment";
 import {DEFAULT_CLIENT_PORT} from "../types/TunnelingOption";
 import {requestEnrollment} from "./ClientEnrollment";
 import {CLIENT_OPTION_FILE_NAME} from "./ClientOptionResolver";
+import {isFlagOn} from "../server/ServerCliOptions";
 
 /**
  * TTTGate client join <addr> --code <code> [--force] (#214).
@@ -47,7 +48,7 @@ const runClientJoin = async (addr: string, options: {[key: string]: string}, io:
         return 2;
     }
     const yamlFile = Path.join(io.configDir, CLIENT_OPTION_FILE_NAME);
-    const force = options["force"] !== undefined && options["force"].toLowerCase() !== "false";
+    const force = isFlagOn(options, "force");
     if(fs.existsSync(yamlFile) && !force) {
         io.err(`${yamlFile} already exists. Run again with --force to replace it (the old file is kept as ${CLIENT_OPTION_FILE_NAME}.bak).`);
         return 78;
