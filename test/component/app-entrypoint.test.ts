@@ -60,8 +60,9 @@ describe("app.ts entrypoint (in-process)", () => {
             });
 
             expect(logs.some((line) => line.startsWith("TTTGate v"))).toBe(true);
-            expect(logs).toContain("Usage: TTTGate [server|client] [options]");
-            expect(logs[logs.length - 1]).toBe("    stop: stop server or client");
+            // #208: 사용법은 정의 표에서 만든 한 덩어리로 출력한다.
+            expect(logs[logs.length - 1]).toContain("Usage: TTTGate <server|client|stop> [options]");
+            expect(logs[logs.length - 1]).toContain("TTTGate client --help");
         } finally {
             logSpy?.mockRestore();
             LoggerFactory?.updateConfig(LoggerConfig.create(root.rootDir));
@@ -125,7 +126,7 @@ describe("app.ts entrypoint (process boundary)", () => {
         const exitCode = await child.waitForExit(10_000);
 
         expect(exitCode).toBe(0);
-        expect(child.readChannel().stdout).toContain("Usage: TTTGate [server|client] [options]");
+        expect(child.readChannel().stdout).toContain("Usage: TTTGate <server|client|stop> [options]");
     });
 
     test("server mode with adminTls:true boots, answers /api/version, and stops cleanly on SIGTERM", async () => {

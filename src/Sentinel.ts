@@ -5,6 +5,7 @@ import Environment from "./Environment";
 const find = require('find-process');
 
 import LoggerFactory  from "./util/logger/LoggerFactory";
+import {clearConfigErrorMarker, hasConfigErrorMarker} from "./util/ConfigExit";
 const logger = LoggerFactory.getLogger('boot', 'Sentinel');
 
 
@@ -127,6 +128,8 @@ class Sentinel {
 
 
     private boot() {
+        // #207 REQ-6: 이전 실행의 설정 오류 표시가 남아 있으면 고친 설정으로 다시 띄워도 sentinel 이 바로 끝난다.
+        clearConfigErrorMarker();
         let appPID = Sentinel.readPIDFile('app');
         let sentinelPID = Sentinel.readPIDFile('sentinel');
         let foregroundPID = Sentinel.readPIDFile('foreground');
@@ -202,6 +205,11 @@ class Sentinel {
         fs.writeFileSync(Path.join(Environment.path.binDir, `.pid_${type}`), pid.toString() + '\n', {encoding: 'utf-8', flag: 'a'});
     }
 
+    /** 앱이 사라졌을 때 다시 띄울지(#207). 앱이 설정 오류 표시를 남겼으면 띄우지 않는다. */
+    public static shouldRestartApp(): boolean {
+        return !hasConfigErrorMarker();
+    }
+
     public runSentinel() {
         this.startScanPid(parseInt(process.env.APP_PID!));
     }
@@ -219,6 +227,14 @@ class Sentinel {
                 if(list.length == 0) {
                     logger.warn('App not found. pid:' + pid);
                     clearInterval(intervalID);
+                    if(!Sentinel.shouldRestartApp()) {
+                        // #207 REQ-5: 설정 오류로 끝난 앱은 다시 띄워도 같은 오류로 끝난다. PID 파일을 지우고 멈춘다.
+                        logger.error('App stopped with a configuration error. Not restarting. Fix the configuration and start again.');
+                        Sentinel.deletePIDFile('app');
+                        Sentinel.deletePIDFile('sentinel');
+                        LoggerFactory.flush().finally(() => process.exit(0));
+                        return;
+                    }
                     setTimeout(() => {
                         logger.info('Restart app');
                         this.restartApp();

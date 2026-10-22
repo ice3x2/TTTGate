@@ -27,6 +27,7 @@ class LogWriter {
     private _isUnwritable : boolean = false;
     private _waitEnd : boolean = false;
     private _isEnd : boolean = false;
+    private _endWaiters : Array<() => void> = [];
 
 
     public static create(writeConfig: WriteConfig) : LogWriter {
@@ -46,8 +47,11 @@ class LogWriter {
 
     private init() {
         this._todayDate = new Date().getDate();
+    }
 
-        if(this._fileWrite) {
+    /** 파일은 첫 기록 때 연다(#208). 도움말처럼 아무것도 기록하지 않는 실행은 logs/ 를 만들지 않는다. */
+    private ensureStream() {
+        if(this._fileWrite && !this._logFileStream && !this._isUnwritable && !this._isEnd) {
             this._filePath = this.makeLogFilePath();
             this.sweepOldFiles();
             this._logFileStream = fs.createWriteStream(this._filePath, {flags: 'a'});
@@ -128,6 +132,7 @@ class LogWriter {
 
      public pushMessage(message: LogMessage) {
         message.day = Date.now();
+        this.ensureStream();
 
         if (this._isUnwritable && this._fileWrite) {
             if (this._consoleWrite) {
@@ -222,9 +227,27 @@ class LogWriter {
 
     private close() {
         this._logMessageQueue = [];
-        this._logFileStream?.end();
         this._isEnd = true;
+        const waiters = this._endWaiters.splice(0);
+        const stream = this._logFileStream;
+        if(!stream || stream.destroyed || stream.closed) {
+            stream?.end();
+            waiters.forEach(resolve => resolve());
+            return;
+        }
+        stream.end(() => waiters.forEach(resolve => resolve()));
+    }
 
+    /** 쌓인 기록을 모두 파일에 쓰고 스트림을 닫은 뒤 끝나는 end()(#207). 종료 직전 로그가 잘리지 않게 한다. */
+    public endAsync(): Promise<void> {
+        if(this._isEnd) {
+            const stream = this._logFileStream;
+            if(!stream || stream.closed || stream.writableFinished) return Promise.resolve();
+            return new Promise(resolve => stream.once('finish', () => resolve()));
+        }
+        const done = new Promise<void>(resolve => this._endWaiters.push(resolve));
+        this.end();
+        return done;
     }
 
 }

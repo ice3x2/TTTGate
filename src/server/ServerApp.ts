@@ -12,6 +12,10 @@ import LoggerFactory  from "../util/logger/LoggerFactory";
 import AppCompositionRoot from "../bootstrap/AppCompositionRoot";
 import {shouldResetServerState} from "./ServerCliOptions";
 import {redactSecrets} from "../util/SecretRedactor";
+import {exitWithConfigError} from "../util/ConfigExit";
+import * as fs from "fs";
+import * as Path from "path";
+import YAML from "yaml";
 import {IdentityMigration} from "./rbac/IdentityMigration";
 import {AuditSinkRegistry} from "./audit/AuditSink";
 import {auditDirPath, FileAuditSink} from "./audit/FileAuditSink";
@@ -52,23 +56,44 @@ const startService = async (serverOption: ServerOption, adminCertInfo: CertInfo)
     CertificationStore.instance.markLastKnownGood();
 }
 
-const applyStartupOptions = (cliOptions: {[key: string]: string}, serverOptionStore: ServerOptionStore): void => {
+/**
+ * 부작용 없이 서버 명령줄 값과 server.yaml 구문을 검사한다(#207). 데몬 부모가 자식을 띄우기 전에 부른다.
+ * 서버의 값 오류는 호환을 위해 종료 코드 1 을 유지한다(에픽 #216 공통 표).
+ */
+const validateServerCliOptions = (cliOptions: {[key: string]: string}): {ok: true} | {ok: false, exitCode: 1, message: string} => {
+    if(cliOptions["adminPort"]) {
+        const port = parseInt(cliOptions["adminPort"]);
+        if(isNaN(port) || port <= 0 || port > 65535) return {ok: false, exitCode: 1, message: 'Invalid admin port number (1 ~ 65535)'};
+    }
+    if(cliOptions["keepAlive"]) {
+        const keepAlive = parseInt(cliOptions["keepAlive"]);
+        if(isNaN(keepAlive) || keepAlive < 0) return {ok: false, exitCode: 1, message: 'Invalid keep alive time'};
+    }
+    const yamlFile = Path.join(Environment.path.configDir, 'server.yaml');
+    if(fs.existsSync(yamlFile)) {
+        try {
+            YAML.parse(fs.readFileSync(yamlFile, 'utf-8'));
+        } catch (e) {
+            return {ok: false, exitCode: 1, message: `cannot parse ${yamlFile}: ${(e as Error).message}`};
+        }
+    }
+    return {ok: true};
+};
+
+const applyStartupOptions = (cliOptions: {[key: string]: string}, serverOptionStore: ServerOptionStore): boolean => {
+    const valid = validateServerCliOptions(cliOptions);
+    if(!valid.ok) {
+        void exitWithConfigError(valid.exitCode, valid.message, logger);
+        return false;
+    }
     if(cliOptions["adminPort"]) {
         let port = parseInt(cliOptions["adminPort"]);
-        if(isNaN(port) || port <= 0 || port > 65535) {
-            console.error('Invalid admin port number (1 ~ 65535)');
-            process.exit(1);
-        }
         let serverOption = serverOptionStore.serverOption;
         serverOption.adminPort = port;
         serverOptionStore.updateServerOption(serverOption);
     }
     if(cliOptions["keepAlive"]) {
         let keepAlive = parseInt(cliOptions["keepAlive"]);
-        if(isNaN(keepAlive) || keepAlive < 0) {
-            console.error('Invalid keep alive time');
-            process.exit(1);
-        }
         let serverOption = serverOptionStore.serverOption;
         serverOption.keepAlive = keepAlive;
         serverOptionStore.updateServerOption(serverOption);
@@ -78,6 +103,7 @@ const applyStartupOptions = (cliOptions: {[key: string]: string}, serverOptionSt
         serverOption.allowLegacyControlAuth = cliOptions["allowLegacyControlAuth"] == "" || cliOptions["allowLegacyControlAuth"].toLowerCase() != "false";
         serverOptionStore.updateServerOption(serverOption);
     }
+    return true;
 }
 
 let ServerApp : {start(options?: {[key: string]: string}) : Promise<void>} = {
@@ -92,19 +118,15 @@ let ServerApp : {start(options?: {[key: string]: string}) : Promise<void>} = {
         }
         const loaded = serverOptionStore.readServerOption();
         if(!loaded.success) {
-            logger.error(loaded.message);
-            console.error(loaded.message);
-            process.exitCode = 1;
+            await exitWithConfigError(1, loaded.message, logger);
             return;
         }
         await certStore.load();
-        applyStartupOptions(cliOptions, serverOptionStore);
+        if(!applyStartupOptions(cliOptions, serverOptionStore)) return;
         const policyDecision = evaluateAdminSecurityPolicy(serverOptionStore.serverOption);
         if(!policyDecision.allowed) {
-            const message = formatAdminSecurityPolicyErrors(policyDecision);
-            logger.error(message);
-            console.error(message);
-            process.exit(1);
+            await exitWithConfigError(1, formatAdminSecurityPolicyErrors(policyDecision), logger);
+            return;
         }
         const hopsWarning = trustedProxyHopsCliWarning(cliOptions);
         [...policyDecision.warnings, ...(hopsWarning ? [hopsWarning] : [])].forEach((warning) => {
@@ -121,3 +143,4 @@ let ServerApp : {start(options?: {[key: string]: string}) : Promise<void>} = {
 }
 
 export default ServerApp;
+export {validateServerCliOptions};
