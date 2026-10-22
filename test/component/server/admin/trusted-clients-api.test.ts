@@ -80,7 +80,7 @@ describe("trusted client admin API", () => {
         expect((await f.request("POST", `/api/trustedClients/nobody/secret`, {expectedRevision: await revision(f)})).statusCode).toBe(404);
     }));
 
-    test("REQ-4/8 enrollment codes need TLS on the control port and are audited without the code", async () => withConfigurationServer(async f => {
+    test("REQ-4/8 enrollment codes need TLS on the control port and name the control port", async () => withConfigurationServer(async f => {
         await f.request("POST", "/api/trustedClients", {clientId: "edge-1", expectedRevision: await revision(f)});
         const plain = await f.request("POST", `/api/trustedClients/edge-1/enrollmentCode`, {});
         expect(plain.statusCode).toBe(409);
