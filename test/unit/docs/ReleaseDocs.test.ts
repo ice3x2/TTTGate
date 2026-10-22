@@ -25,6 +25,8 @@ describe("release documentation and sample config alignment", () => {
             allowLegacyFallback: false,
             allowInsecureTls: false
         });
+        // #210: displayName 은 name 의 폐기 예정 별칭이다. 샘플에 두면 시작할 때마다 경고가 난다.
+        expect(clientSample.displayName).toBeUndefined();
     });
 
     it("documents the runtime config paths, bootstrap token, and rollout policy in README", () => {

@@ -88,6 +88,9 @@ Server options:
 - `-allowLegacyControlAuth`: allow legacy shared-key control authentication for one process run. **Risk:** legacy data connections carry no binding token, so anyone who guesses a data handler ID can take over a session and read or inject external user traffic. The server logs a warning at startup while this is on.
 - `-reset [true|false]`: delete persisted server state only when explicitly `true`.
 - `-daemon`: run with process monitoring.
+- `-requireCsrfHeader false`: turn off the CSRF header check of the admin API. **Risk:** other web pages can send admin requests with the session cookie.
+
+`TTTGate server --help` lists the common options. `--help-advanced` adds the legacy and risky options.
 
 ### First Admin Login
 
@@ -97,31 +100,57 @@ Use that token when setting the first admin password through the admin API/UI. T
 ## Client Startup
 
 1. Prepare `config/client.yaml` from `config/client.sample.yaml`.
-2. Set `clientId` and `clientSecret` to a trusted client registered on the server.
-3. Configure `ca` and `serverName` when the control listener uses TLS.
+2. Set `clientId` to a trusted client registered on the server. Give its secret in one of these ways (first match wins):
+   1. `-clientSecret <secret>`. Not recommended: other users of the host can read command lines.
+   2. `-clientSecretFile <path>`: the file holds only the secret.
+   3. The `TTTGATE_CLIENT_SECRET` environment variable.
+   4. `clientSecret` in `config/client.yaml`.
+3. When the control listener uses TLS, set `ca` and `serverName`.
 4. Start the client:
 
 ```shell
-./TTTGate-linux-x64 client -addr example.com:9126
+TTTGATE_CLIENT_SECRET=... ./TTTGate-linux-x64 client -addr tls://example.com:9126 -clientId client-a -ca /etc/tttgate/ca.pem
 ```
+
+`TTTGate client --help` lists the options in groups. `--help-advanced` adds the legacy and risky options.
 
 Client options:
 
-- `-addr [host:port]`: server address.
-- `-tls`: enable TLS on the control connection.
-- `-name [name]`: local display name.
-- `-clientId [id]`: protocol v2 client identifier.
-- `-clientSecret [secret]`: protocol v2 shared secret.
-- `-displayName [name]`: display-only name announced to the server.
-- `-ca [pem]`: CA or pinned server certificate PEM path.
-- `-serverName [name]`: expected TLS server name.
-- `-allowLegacyFallback`: allow v1 fallback only when the server explicitly enables legacy auth. **Risk:** a fake server can answer with the legacy protocol and receive the shared key. The client logs a warning at startup while this is on.
-- `-allowInsecureTls`: disable certificate verification. Keep this off outside break-glass scenarios.
-- `-key [key]`: legacy shared key. Only used with explicit legacy control auth.
-- `-keepAlive [ms]`: control connection TCP keepalive interval.
-- `-bufferLimit [MiB]`: global memory buffer limit.
-- `-save`: persist the resolved client config to `config/client.yaml`.
-- `-daemon`: run with process monitoring.
+- Connection
+  - `-addr <host:port>`: server address. The port is optional. IPv6 addresses go in brackets: `[2001:db8::7]:9126`. A `tls://` or `tcp://` prefix selects the transport.
+  - `-tls`: use TLS on the control connection.
+- Identity
+  - `-clientId <id>`: protocol v2 client identifier.
+  - `-clientSecret <secret>`, `-clientSecretFile <path>`: protocol v2 shared secret (see step 2).
+  - `-name <name>`: client name for legacy connections and local logs. A v2 server always shows the name registered for the `clientId`. `-displayName` is a deprecated alias.
+- TLS trust (each of these turns TLS on)
+  - `-ca <path|pem>`: trusted CA or pinned server certificate, as a file path or PEM text. A relative path on the command line is relative to the working directory. A relative path in `client.yaml` is relative to the `config/` directory.
+  - `-serverName <name>`: expected TLS server name.
+  - `-cert <path|pem>`, `-privateKey <path|pem>`: client certificate and key for mutual TLS.
+- Run
+  - `-save`: save the resolved options to `config/client.yaml`. The file keeps the paths you gave, not the file contents. On Linux the file mode is 0600.
+  - `-daemon`: run in the background with process monitoring.
+- Tuning
+  - `-keepAlive <ms>`: control connection TCP keepalive interval.
+  - `-bufferLimit <MiB>`: memory buffer limit, `-1` (no limit) or 16–1048576.
+- Legacy and risky (shown by `--help-advanced`)
+  - `-allowLegacyFallback`: allow v1 fallback only when the server explicitly enables legacy auth. **Risk:** a fake server can answer with the legacy protocol and receive the shared key. The client logs a warning at startup while this is on.
+  - `-allowInsecureTls`: disable certificate verification. Keep this off outside break-glass scenarios.
+  - `-key <key>`: legacy shared key. Only used with explicit legacy control auth.
+  - `--yes-insecure`: accept `allowInsecureTls` or `allowLegacyFallback` written in `client.yaml` for this run.
+
+### Command-line errors and exit codes
+
+The program checks the whole command line before it starts anything. An unknown option stops the program and names the closest option, for example `unknown option '-adr'. Did you mean '-addr'?`. With `-daemon`, the program checks the options and `client.yaml` before it starts the background processes, so the errors show in your terminal.
+
+| Code | Meaning |
+|---|---|
+| 0 | Normal end, help, version |
+| 1 | Error while running. Server option errors also use 1 |
+| 2 | Command-line error: unknown option or mode, missing or bad value, options that conflict |
+| 78 | Configuration file error: insecure fields in `client.yaml`, a CA, certificate, key or secret file that is missing or not valid |
+
+A daemon whose app stops with a configuration error is not restarted. The reason is in `logs/`. Fix the configuration and start again.
 
 ## Upgrading an Existing Server
 
