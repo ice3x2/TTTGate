@@ -95,6 +95,11 @@ class CLI {
                 continue;
             }
             if(def.kind === "flag") {
+                if(inlineValue !== undefined && inlineValue.length > 0 && !BOOLEAN_WORD.test(inlineValue)) {
+                    // #218: 플래그 값은 진릿값 단어만 받는다. 그 밖의 값을 참으로 읽지 않는다.
+                    result.errors.push(`option '-${name}' takes no value or one of true, false, 1, 0, yes, no, on, off (got '${inlineValue}')`);
+                    continue;
+                }
                 let value = inlineValue ?? "";
                 if(inlineValue === undefined && !def.exactToken && i + 1 < items.length && BOOLEAN_WORD.test(items[i + 1])) {
                     value = items[++i];

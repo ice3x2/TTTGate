@@ -10,7 +10,7 @@ import File from "../util/File";
 import Environment from "../Environment";
 import LoggerFactory  from "../util/logger/LoggerFactory";
 import AppCompositionRoot from "../bootstrap/AppCompositionRoot";
-import {shouldResetServerState} from "./ServerCliOptions";
+import {legacyControlAuthFromCli, shouldResetServerState} from "./ServerCliOptions";
 import {redactSecrets} from "../util/SecretRedactor";
 import {exitWithConfigError} from "../util/ConfigExit";
 import * as fs from "fs";
@@ -105,9 +105,10 @@ const applyStartupOptions = async (cliOptions: {[key: string]: string}, serverOp
         serverOption.keepAlive = keepAlive;
         serverOptionStore.updateServerOption(serverOption);
     }
-    if(cliOptions["allowLegacyControlAuth"] != undefined) {
+    const legacyControlAuth = legacyControlAuthFromCli(cliOptions);
+    if(legacyControlAuth !== undefined) {
         let serverOption = serverOptionStore.serverOption;
-        serverOption.allowLegacyControlAuth = cliOptions["allowLegacyControlAuth"] == "" || cliOptions["allowLegacyControlAuth"].toLowerCase() != "false";
+        serverOption.allowLegacyControlAuth = legacyControlAuth;
         serverOptionStore.updateServerOption(serverOption);
     }
     return true;

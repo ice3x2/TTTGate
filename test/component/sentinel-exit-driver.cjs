@@ -13,7 +13,7 @@ let lookups = 0;
 process.kill = (pid, signal) => {
     if(signal === 0) {
         record({kind: "lookup", lookupKind: "pid", pid});
-        if(mode === "gone") throw Object.assign(new Error("no such process"), {code: "ESRCH"});
+        if(mode === "gone" || mode === "gone-restart") throw Object.assign(new Error("no such process"), {code: "ESRCH"});
         lookups++;
         if(lookups === 2) setImmediate(() => process.exit(0));
         return true;
@@ -25,7 +25,15 @@ process.on("exit", (code) => record({kind: "exit", code}));
 setTimeout(() => {
     record({kind: "watchdog"});
     process.exit(90);
-}, 8000).unref();
+}, 15000).unref();
+
+// #222: 다시 띄우기는 실제 프로세스를 만들지 않고 기록만 한다.
+const childProcess = require("node:child_process");
+childProcess.spawn = (command, args, options) => {
+    record({kind: "exec", mode: options && options.env && options.env.EXECUTE_MODE});
+    setImmediate(() => process.exit(0));
+    return {pid: 424242, unref() {}, on() { return this; }, once() { return this; }};
+};
 
 if(rootDir) require("../../src/Environment").default.configure({rootDir});
 process.env.APP_PID = String(process.pid);

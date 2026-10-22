@@ -5,6 +5,7 @@ import * as os from "os";
 import * as path from "path";
 import YAML from "yaml";
 import {getFreePort, spawnProcess, SpawnedProcess, waitUntil} from "../helpers/smokeProcess";
+import {stopDaemon} from "../helpers/daemonCleanup";
 
 const APP_JS = path.resolve(__dirname, "../../build/src/app.js");
 
@@ -26,10 +27,10 @@ describe("CLI entrypoint (process boundary)", () => {
                 await child.waitForExit(5000).catch(() => undefined);
             }
         }
-        // -daemon 테스트가 띄운 자식이 남지 않게 한다.
-        const stop = spawnProcess(process.execPath, [APP_JS, "stop"], {cwd: root});
-        await stop.waitForExit(15_000).catch(() => undefined);
+        // -daemon 테스트가 띄운 자식이 남지 않게 한다. 기록된 PID 가 끝났는지 확인하고, 남으면 끝낸 뒤 실패로 알린다(#227).
+        const leftover = await stopDaemon(APP_JS, root);
         fs.rmSync(root, {recursive: true, force: true});
+        expect(leftover).toEqual([]);
     });
 
     const run = async (args: string[], env: {[key: string]: string} = {}, timeoutMs = 20_000) => {
@@ -96,7 +97,33 @@ describe("CLI entrypoint (process boundary)", () => {
             fs.writeFileSync(path.join(root, "config", "client.yaml"), YAML.stringify({host: "gw", allowInsecureTls: true}));
             const result = await run(["client", "config", "show"]);
             expect(result.code).toBe(0);
-            expect(result.stdout + result.stderr).toContain("allowInsecureTls");
+            // #226 REQ-2: 경고(stderr)만이 아니라 값 줄(stdout)이 나와야 한다.
+            expect(result.stdout).toMatch(/^allowInsecureTls: true +\(client\.yaml\)$/m);
+            expect(result.stderr).toContain("REFUSE-INSECURE-YAML");
+        });
+
+        test("#226 REQ-1 config show names the environment, file, inferred and default sources", async () => {
+            const fromEnv = await run(["client", "config", "show", "-serverName", "gw"], {TTTGATE_CLIENT_SECRET: "env-secret-value"});
+            expect(fromEnv.code).toBe(0);
+            expect(fromEnv.stdout).toMatch(/^clientSecret: \(hidden\) +\(environment\)$/m);
+            expect(fromEnv.stdout).toMatch(/^tls: true +\(inferred\)$/m);
+            expect(fromEnv.stdout).toMatch(/^keepAlive: 10000 +\(default\)$/m);
+            expect(fromEnv.stdout).not.toContain("env-secret-value");
+
+            fs.writeFileSync(path.join(root, "secret.txt"), "file-secret-value\n");
+            const fromFile = await run(["client", "config", "show", "-clientSecretFile", "secret.txt"], {TTTGATE_CLIENT_SECRET: "env-secret-value"});
+            expect(fromFile.code).toBe(0);
+            expect(fromFile.stdout).toMatch(/^clientSecret: \(hidden\) +\(file\)$/m);
+            expect(fromFile.stdout).not.toContain("file-secret-value");
+        });
+
+        test("#226 REQ-3 config show and config save end with the epic exit codes", async () => {
+            expect((await run(["client", "config", "show", "-bufferLimit", "abc"])).code).toBe(2);
+            expect((await run(["client", "config", "show", "-ca", "missing.pem"])).code).toBe(78);
+            expect((await run(["client", "config", "save", "-ca", "missing.pem"])).code).toBe(78);
+            expect((await run(["client", "config", "save", "-addr", "host:x"])).code).toBe(2);
+            expect(fs.existsSync(path.join(root, "config", "client.yaml"))).toBe(false);
+            expect(fs.existsSync(path.join(root, "logs"))).toBe(false);
         });
 
         test("config save writes client.yaml without connecting", async () => {

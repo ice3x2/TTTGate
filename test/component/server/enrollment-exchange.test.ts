@@ -102,8 +102,13 @@ describe("trusted client enrollment and hot update", () => {
         expect(await requestEnrollment({host: "127.0.0.1", port, code: "0000-0000-0000"})).toMatchObject({ok: false, category: "throttled"});
         await waitFor(() => { if((server.tunnelServer as any)._rejectedHandlerIds.size !== 0) throw new Error("rejected ids remain"); return true; },
             {timeoutMs: 5000, intervalMs: 50});
-        await new Promise((resolve) => setTimeout(resolve, 200));
-        expect(sink.events.filter((event) => event.type === "client_enroll_failed")).toHaveLength(10);
+        // #227: 고정 대기 대신 조건으로 기다린다. 감사 여부는 응답을 보내기 전에 정해지므로, 제한 응답을 받은 뒤에는
+        // 제한 사유의 감사가 새로 생길 수 없다.
+        const failed = () => sink.events.filter((event) => event.type === "client_enroll_failed");
+        await waitFor(() => { if(failed().length < 10) throw new Error(`audit pending: ${failed().length}`); return true; },
+            {timeoutMs: 5000, intervalMs: 25});
+        expect(failed()).toHaveLength(10);
+        expect(failed().filter((event) => (event.detail as {reason?: string} | undefined)?.reason !== "rejected")).toEqual([]);
     });
 
     test("REQ-8 no code is issued while the control port is plain text or strict mTLS, or for an unknown client", async () => {

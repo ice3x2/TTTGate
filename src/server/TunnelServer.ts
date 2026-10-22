@@ -904,7 +904,9 @@ class TunnelServer {
         const meta = packet.enrollRequestMetaResult;
         let response: EnrollResponseMeta;
         let clientId: string | undefined;
-        if(!this._enrollment || !this._serverOption.tls) {
+        // #221: 발급 때뿐 아니라 교환 때도 모드를 본다. strict 는 TLS 계층이 먼저 막지만 그 한 겹에만 기대지 않는다.
+        // 코드를 소진하지 않고 답한다.
+        if(!this._enrollment || !this._serverOption.tls || this._serverOption.controlProtocolMode === "mtls-strict") {
             response = {ok: false, reason: "unavailable"};
         } else {
             const taken = this._enrollment.registry.take(meta.kind === "valid" ? meta.value.lookup : "", address);

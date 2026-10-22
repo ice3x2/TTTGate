@@ -13,7 +13,7 @@ import {
     normalizationClientOption
 } from "../types/TunnelingOption";
 import {parseServerAddress} from "../util/AddressParser";
-import {normalizeBooleanOption} from "../server/ServerCliOptions";
+import {isFlagOn, normalizeBooleanOption} from "../server/ServerCliOptions";
 
 /**
  * 클라이언트 옵션 해석(#201·#202·#205·#206·#209·#210·#211).
@@ -117,7 +117,7 @@ const resolveClientOption = (input: ResolveClientOptionInput): ResolveClientOpti
         const insecure = INSECURE_FIELD_NAMES.filter(name =>
             Object.prototype.hasOwnProperty.call(raw, name) && isTruthyInsecureValue(raw[name]));
         if(insecure.length > 0) {
-            const accepted = has("yes-insecure") || has("yesInsecure");
+            const accepted = isFlagOn(cli, "yes-insecure", "yesInsecure");
             const message = `REFUSE-INSECURE-YAML: client.yaml contains insecure field(s) [${insecure.join(",")}]. ` +
                 `Persisted insecure flags are forbidden. ` +
                 (accepted ? `Override accepted via --yes-insecure.`

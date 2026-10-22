@@ -280,6 +280,13 @@ class TTTServer {
             .some(key => (next as any)[key] !== (previous as any)[key]);
     }
 
+    /** 제어 포트의 TLS 나 모드가 바뀌면 발급한 등록 코드는 의미가 없으므로 모두 무효로 한다(#221 REQ-2). */
+    private revokeEnrollmentsIfModeChanged(next: ServerOption, previous: ServerOption): void {
+        if((next.tls === true) !== (previous.tls === true) || (next.controlProtocolMode ?? "mixed") !== (previous.controlProtocolMode ?? "mixed")) {
+            this._enrollment.revokeAll();
+        }
+    }
+
     private trustedClientsChanged(next: ServerOption, previous: ServerOption): boolean {
         return !ObjectUtil.canonicalEquals(next.trustedClients ?? [], previous.trustedClients ?? []);
     }
@@ -319,6 +326,7 @@ class TTTServer {
 
     public async restoreRuntimeState(state: ReturnType<TTTServer['captureRuntimeState']>): Promise<string[]> {
         const failures: string[] = [];
+        this.revokeEnrollmentsIfModeChanged(state.serverOption, this._appliedServerOption);
         if(this._dirtyControl || this.controlOptionsChanged(this._appliedServerOption, state.serverOption)) {
             try {
                 await this._tunnelServer.close();
@@ -419,6 +427,7 @@ class TTTServer {
         }
 
         const requiresTunnelRestart = this.controlOptionsChanged(nextOption, previousOption);
+        this.revokeEnrollmentsIfModeChanged(nextOption, previousOption);
 
         if(!requiresTunnelRestart) {
             if(this.trustedClientsChanged(nextOption, previousOption)) this.applyTrustedClients(nextOption);
