@@ -48,7 +48,7 @@ const resolveClientCliOptions = (cliOptions: {[key: string]: string}): ResolveCl
     });
 
 /** -save: 사용자가 준 표기 그대로 저장하고, 비밀값이 들어 있으므로 POSIX 에서는 0600 으로 둔다(#209 REQ-6). */
-const _saveClientOption = (saveOption: {[key: string]: unknown}): void => {
+const _saveClientOption = (saveOption: {[key: string]: unknown}): string => {
     const sanitized = {...saveOption};
     for(const name of INSECURE_FIELD_NAMES) delete sanitized[name];
     const file = new File(Environment.path.configDir, CLIENT_OPTION_FILE_NAME);
@@ -60,6 +60,7 @@ const _saveClientOption = (saveOption: {[key: string]: unknown}): void => {
             logger.warn(`cannot restrict permissions of ${file.toString()} to 0600`, e);
         }
     }
+    return file.toString();
 };
 
 /**
@@ -106,7 +107,7 @@ let ClientApp : { start(options?: {[key: string]: string}) : void} = {
 
 
 export default ClientApp;
-export {resolveClientCliOptions};
+export {resolveClientCliOptions, _saveClientOption as saveClientOptionFile};
 // P3-T3 / REQ-02: 테스트 전용 익스포트. 런타임 경로에서는 사용하지 않는다.
 // (production 임포터는 default export만 참조)
 export const __testInternals = {

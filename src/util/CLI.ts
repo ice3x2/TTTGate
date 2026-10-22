@@ -1,4 +1,4 @@
-import {CliMode, CliOptionDef, findCliOption, suggestCliOption} from "./CliSpec";
+import {CliMode, CliOptionDef, findCliOption, optionAllowedInCommand, suggestCliOption} from "./CliSpec";
 
 type ParsedCommandLine = {
     mode: CliMode;
@@ -20,8 +20,15 @@ const MODELESS_OPTIONS = new Set(["h", "help", "help-advanced", "version"]);
  * 하위 명령 정의(#215). key 는 모드, 값은 하위 명령 경로와 받을 위치 인자 수.
  * 하위 명령이 없는 모드에서 남는 위치 인자는 오류다(#203 REQ-6).
  */
-type CliCommandDef = {path: string[], positionals: number};
-const COMMANDS: {[mode: string]: CliCommandDef[]} = {};
+type CliCommandDef = {path: string[], positionals: number, positionalName?: string};
+const COMMANDS: {[mode: string]: CliCommandDef[]} = {
+    client: [
+        {path: ["run"], positionals: 0},
+        {path: ["join"], positionals: 1, positionalName: "<addr>"},
+        {path: ["config", "show"], positionals: 0},
+        {path: ["config", "save"], positionals: 0}
+    ]
+};
 
 const optionToken = (item: string): boolean => item.startsWith("-") && item.length > 1;
 
@@ -63,6 +70,7 @@ class CLI {
         const result: ParsedCommandLine = {mode, command: [], positionals: [], options: {}, errors: []};
         const commands = COMMANDS[mode] ?? [];
         const loose: string[] = [];
+        const given: Array<{def: CliOptionDef, token: string}> = [];
 
         for(let i = 0; i < items.length; i++) {
             if(i === modeIndex) continue;
@@ -96,11 +104,7 @@ class CLI {
             } else {
                 result.errors.push(`option '-${name}' needs a value`);
             }
-            if(mode === "none" ? !MODELESS_OPTIONS.has(name) : !def.modes.includes(mode)) {
-                result.errors.push(mode === "none"
-                    ? `option '-${name}' needs a mode (server, client or stop)`
-                    : `option '-${name}' is not available in ${mode} mode`);
-            }
+            given.push({def, token: item.split("=")[0]});
         }
 
         if(modeIndex < 0 && loose.length > 0) {
@@ -117,8 +121,21 @@ class CLI {
             result.positionals = rest.slice(0, matched.positionals);
             rest = rest.slice(matched.positionals);
         }
+        if(matched && result.positionals.length < matched.positionals) {
+            result.errors.push(`${mode} ${matched.path.join(" ")} needs ${matched.positionalName ?? "an argument"}`);
+        }
         for(const extra of rest) {
             result.errors.push(`unexpected argument '${extra}'`);
+        }
+        const commandKey = result.command.join(" ");
+        for(const {def, token} of given) {
+            if(mode === "none" ? !MODELESS_OPTIONS.has(def.name) : !def.modes.includes(mode)) {
+                result.errors.push(mode === "none"
+                    ? `option '${token}' needs a mode (server, client or stop)`
+                    : `option '${token}' is not available in ${mode} mode`);
+            } else if(mode !== "none" && !optionAllowedInCommand(def, commandKey)) {
+                result.errors.push(`option '${token}' is not available in '${mode}${commandKey ? " " + commandKey : ""}'`);
+            }
         }
         return result;
     }

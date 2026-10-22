@@ -77,6 +77,42 @@ describe("CLI entrypoint (process boundary)", () => {
         });
     });
 
+    describe("client commands (#214, #215)", () => {
+        test("config show prints values with their source, hides secrets and writes nothing", async () => {
+            fs.writeFileSync(path.join(root, "config", "client.yaml"), YAML.stringify({host: "gw.example.com", clientSecret: "yaml-secret"}));
+            const result = await run(["client", "config", "show", "-addr", "tls://gw2:9300", "-clientId", "edge"]);
+            expect(result.code).toBe(0);
+            expect(result.stdout).toMatch(/host: gw2 +\(command line\)/);
+            expect(result.stdout).toMatch(/tls: true +\(command line\)/);
+            expect(result.stdout).toMatch(/clientSecret: \(hidden\) +\(client\.yaml\)/);
+            expect(result.stdout).not.toContain("yaml-secret");
+            expect(binFiles()).toEqual([]);
+            expect(fs.existsSync(path.join(root, "logs"))).toBe(false);
+        });
+
+        test("REQ-6 config show reports insecure client.yaml fields instead of failing with 78", async () => {
+            fs.writeFileSync(path.join(root, "config", "client.yaml"), YAML.stringify({host: "gw", allowInsecureTls: true}));
+            const result = await run(["client", "config", "show"]);
+            expect(result.code).toBe(0);
+            expect(result.stdout + result.stderr).toContain("allowInsecureTls");
+        });
+
+        test("config save writes client.yaml without connecting", async () => {
+            const result = await run(["client", "config", "save", "-addr", "gw:9300", "-clientId", "edge"]);
+            expect(result.code).toBe(0);
+            expect(YAML.parse(fs.readFileSync(path.join(root, "config", "client.yaml"), "utf-8"))).toMatchObject({host: "gw", port: 9300, clientId: "edge"});
+            expect(binFiles()).toEqual([]);
+        });
+
+        test("client run is the same as client; join without --code and join with -daemon fail with 2 and spawn nothing", async () => {
+            const help = await run(["client", "run", "--help"]);
+            expect(help.code).toBe(0);
+            expect((await run(["client", "join", "127.0.0.1:1"])).code).toBe(2);
+            expect((await run(["client", "join", "127.0.0.1:1", "--code", "0000-0000-0000", "-daemon"])).code).toBe(2);
+            expect(binFiles()).toEqual([]);
+        });
+    });
+
     describe("-daemon validates before spawning (#207)", () => {
         test("REQ-1 a bad command-line value exits with 2 and spawns nothing", async () => {
             const result = await run(["client", "-daemon", "-bufferLimit", "abc"]);

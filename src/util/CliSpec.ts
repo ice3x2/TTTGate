@@ -23,8 +23,19 @@ type CliOptionDef = {
     aliasOf?: string;
     risk?: string;
     exactToken?: boolean;
-    /** 클라이언트 하위 명령 중 이 옵션을 받는 것. 없으면 run 계열(run, 하위 명령 없음)만 받는다. */
+    /**
+     * 이 옵션을 받는 하위 명령(#215). 공백으로 이은 경로이고 ''는 하위 명령 없음이다.
+     * 없으면 실행·설정 계열('', run, config show, config save)에서 받는다. 도움말 옵션과 -dev 는 어디서나 받는다.
+     */
     commands?: ReadonlyArray<string>;
+};
+
+const RUN_FAMILY_COMMANDS: ReadonlyArray<string> = ["", "run", "config show", "config save"];
+
+/** 옵션을 이 하위 명령에서 받는지. */
+const optionAllowedInCommand = (def: CliOptionDef, command: string): boolean => {
+    if(def.group === "help" || def.name === "dev") return true;
+    return (def.commands ?? RUN_FAMILY_COMMANDS).includes(command);
 };
 
 const ALL_MODES: ReadonlyArray<CliMode> = ["server", "client", "stop", "none"];
@@ -38,7 +49,7 @@ const CLI_OPTIONS: ReadonlyArray<CliOptionDef> = [
     {name: "version", kind: "flag", modes: ALL_MODES, group: "help", help: "Print the version"},
 
     // 공통
-    {name: "daemon", kind: "flag", modes: ["server", "client"], group: "run", exactToken: true,
+    {name: "daemon", kind: "flag", modes: ["server", "client"], group: "run", exactToken: true, commands: ["", "run"],
         help: "Run in the background with process monitoring"},
     {name: "dev", kind: "flag", modes: RUN_MODES, group: "run", exactToken: true, hidden: true,
         help: "Development mode (paths relative to the source tree)"},
@@ -87,7 +98,12 @@ const CLI_OPTIONS: ReadonlyArray<CliOptionDef> = [
         help: "Client certificate for mutual TLS (file path or PEM text). Turns TLS on"},
     {name: "privateKey", kind: "string", modes: ["client"], group: "tls", valueName: "path|pem",
         help: "Private key of -cert (file path or PEM text). Turns TLS on"},
-    {name: "save", kind: "flag", modes: ["client"], group: "run", help: "Save the resolved options to config/client.yaml"},
+    {name: "save", kind: "flag", modes: ["client"], group: "run", commands: ["", "run"], help: "Save the resolved options to config/client.yaml"},
+    // client join(#214)
+    {name: "code", kind: "string", modes: ["client"], group: "run", valueName: "code", commands: ["join"],
+        help: "Enrollment code from the admin console (client join)"},
+    {name: "force", kind: "flag", modes: ["client"], group: "run", commands: ["join"],
+        help: "Replace an existing config/client.yaml (the old file is kept as client.yaml.bak)"},
     {name: "bufferLimit", kind: "number", modes: ["client"], group: "tuning", valueName: "MiB",
         help: "Memory buffer limit: -1 (no limit) or 16..1048576"},
     {name: "key", kind: "string", modes: ["client"], group: "identity", valueName: "key",
@@ -137,4 +153,4 @@ const suggestCliOption = (name: string, mode: CliMode): string | undefined => {
     return best?.name;
 };
 
-export {CLI_OPTIONS, CliOptionDef, CliMode, CliValueKind, CliGroup, findCliOption, suggestCliOption, editDistance};
+export {CLI_OPTIONS, CliOptionDef, CliMode, CliValueKind, CliGroup, findCliOption, suggestCliOption, editDistance, optionAllowedInCommand};

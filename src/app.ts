@@ -5,6 +5,8 @@ import Sentinel from "./Sentinel";
 import AppCompositionRoot from "./bootstrap/AppCompositionRoot";
 import CLI, {ParsedCommandLine} from "./util/CLI";
 import {renderHelp, renderVersion} from "./util/CliHelp";
+import {runClientJoin} from "./client/ClientJoin";
+import {saveClientConfig, showClientConfig} from "./client/ClientConfigCommand";
 
 AppCompositionRoot.configureLogger();
 
@@ -52,6 +54,20 @@ let app = () => {
     let startType = parsedCli.mode;
     if(startType == 'none') {
         console.log(renderHelp('none', false));
+        return;
+    }
+
+    // #214·#215: join·config 는 설정만 다루고 끝난다. Sentinel·PID 파일을 건드리지 않는다.
+    const command = parsedCli.command.join(" ");
+    if(startType == 'client' && command !== '' && command !== 'run') {
+        const io = {out: (line: string) => console.log(line), err: (line: string) => { process.stderr.write(line + "\n"); }};
+        if(command === 'join') {
+            runClientJoin(parsedCli.positionals[0], options, {configDir: Environment.path.configDir, ...io})
+                .then((code) => { process.exitCode = code; })
+                .catch((error) => { io.err(String(error)); process.exitCode = 1; });
+        } else {
+            process.exitCode = command === 'config show' ? showClientConfig(options, io) : saveClientConfig(options, io);
+        }
         return;
     }
 
