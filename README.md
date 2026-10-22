@@ -67,7 +67,7 @@ The old repository-root `config.yaml` is no longer used.
 
 1. Build or extract the release bundle.
 2. Prepare `config/server.yaml` from `config/server.sample.yaml`.
-3. Replace placeholder secrets in `trustedClients`.
+3. Replace placeholder secrets in `trustedClients`, or remove them and add clients in the admin console (**Trusted clients**).
 4. Start the server:
 
 ```shell
@@ -98,6 +98,35 @@ On a fresh install, the server writes a one-time bootstrap token to `config/.boo
 Use that token when setting the first admin password through the admin API/UI. The token is deleted after the first successful password setup.
 
 ## Client Startup
+
+### Enroll with a code (recommended)
+
+The control port must use TLS (`tls: true` in `config/server.yaml`).
+
+1. In the admin console, open **Trusted clients**, add the client, and copy the command it shows. You can also press **Enrollment code** on an existing client. The code works once and expires after 15 minutes.
+2. On the client host, run the command:
+
+```shell
+./TTTGate-linux-x64 client join gw.example.com:9126 --code 7Q4K-M2XP-AB01
+```
+
+`client join` writes `config/client.yaml` (mode 0600) and `config/server-ca.pem`, then stops. It does not overwrite an existing `client.yaml` unless you add `--force`; the old file is kept as `client.yaml.bak`.
+
+3. Start the client. No options are needed:
+
+```shell
+./TTTGate-linux-x64 client          # or: client -daemon
+```
+
+The code never travels over the network. The client derives a lookup value and a key from it, and the server seals its answer with that key. If another host is in the middle, the answer does not open, and `client join` writes nothing.
+
+Other client commands:
+
+- `client config show`: print the resolved options and where each value comes from. Secrets are hidden.
+- `client config save [options]`: save options to `config/client.yaml` without connecting.
+- `client run [options]`: the same as `client [options]`.
+
+### Set up by hand
 
 1. Prepare `config/client.yaml` from `config/client.sample.yaml`.
 2. Set `clientId` to a trusted client registered on the server. Give its secret in one of these ways (first match wins):
@@ -153,6 +182,13 @@ The program checks the whole command line before it starts anything. An unknown 
 A daemon whose app stops with a configuration error is not restarted. The reason is in `logs/`. Fix the configuration and start again.
 
 ## Upgrading an Existing Server
+
+**Changes in the client command line and trusted clients:**
+
+- The control port certificate is now stored in `cert/control.cert.pem` and kept across restarts. Its only name is `tttgate-control`. Clients that pin it use `serverName: tttgate-control`. `client join` sets both for you.
+- Trusted clients can no longer be changed through `POST /api/serverOption`. Use `/api/trustedClients` or the **Trusted clients** screen. `GET /api/serverOption` shows `********` in place of client secrets. Sending the masked list back keeps the stored secrets.
+- Adding or removing a trusted client no longer restarts the control listener. Only the removed client, or a client whose secret was renewed, is disconnected.
+- The client stops with an error for options it does not know (exit code 2), and for a `-ca`, `-cert`, `-privateKey` or `-clientSecretFile` file that it cannot read (exit code 78). Check your service scripts.
 
 Read this before you replace a running server with this version.
 
