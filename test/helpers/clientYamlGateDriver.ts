@@ -28,6 +28,8 @@ function main() {
     }
     // 가이드: 실제 코드 경로를 타지만 TTTClient.start()는 부르지 않는다.
     const opt = __testInternals.loadClientOption(cliOptions);
+    // 설정 오류면 공통 종료 함수(#207)가 로그를 쓴 뒤 78 로 끝낸다. 여기서는 기다리기만 한다.
+    if(!opt) return;
     // yes-insecure 경로에서 여기까지 오면 YAML의 플래그가 normalize되어 있음.
     process.stdout.write(JSON.stringify({
         ok: true,

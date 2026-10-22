@@ -215,6 +215,13 @@ const DEFAULT_CLIENT_PORT = 9126;
 const DEFAULT_CLIENT_KEEP_ALIVE = 10000;
 const DEFAULT_CLIENT_MEM_LIMIT_MIB = 128;
 const MIN_CLIENT_MEM_LIMIT_MIB = 16;
+/** 클라이언트 메모리 버퍼 상한(MiB, #206). 명령줄과 client.yaml 이 함께 쓴다. -1 은 제한 없음. */
+const MAX_CLIENT_MEM_LIMIT_MIB = 1048576;
+
+/** -1(제한 없음) 또는 16..1048576 의 정수인지 본다(#206). */
+const isValidClientMemLimit = (value: unknown): value is number =>
+    typeof value === "number" && Number.isInteger(value)
+    && (value === -1 || (value >= MIN_CLIENT_MEM_LIMIT_MIB && value <= MAX_CLIENT_MEM_LIMIT_MIB));
 
 const defaultWarn: NormalizationClientOptionWarner = (msg: string): void => {
     try { console.warn(msg); } catch { /* noop */ }
@@ -281,8 +288,8 @@ const normalizationClientOption = (clientOption: ClientOption, warn: Normalizati
             warn(`normalizationClientOption: globalMemCacheLimit invalid (got: ${rawMem}). Falling back to ${DEFAULT_CLIENT_MEM_LIMIT_MIB}.`);
         }
         out.globalMemCacheLimit = DEFAULT_CLIENT_MEM_LIMIT_MIB;
-    } else if(rawMem !== -1 && rawMem < MIN_CLIENT_MEM_LIMIT_MIB) {
-        warn(`normalizationClientOption: globalMemCacheLimit below minimum ${MIN_CLIENT_MEM_LIMIT_MIB}MiB (got: ${rawMem}). Falling back to ${DEFAULT_CLIENT_MEM_LIMIT_MIB}.`);
+    } else if(!isValidClientMemLimit(rawMem)) {
+        warn(`normalizationClientOption: globalMemCacheLimit must be -1 or an integer within ${MIN_CLIENT_MEM_LIMIT_MIB}..${MAX_CLIENT_MEM_LIMIT_MIB} MiB (got: ${rawMem}). Falling back to ${DEFAULT_CLIENT_MEM_LIMIT_MIB}.`);
         out.globalMemCacheLimit = DEFAULT_CLIENT_MEM_LIMIT_MIB;
     }
 
@@ -311,6 +318,8 @@ export {
     DEFAULT_CLIENT_KEEP_ALIVE,
     DEFAULT_CLIENT_MEM_LIMIT_MIB,
     MIN_CLIENT_MEM_LIMIT_MIB,
+    MAX_CLIENT_MEM_LIMIT_MIB,
+    isValidClientMemLimit,
     RateLimitOption,
     RATE_LIMIT_RANGE,
     defaultRateLimit,

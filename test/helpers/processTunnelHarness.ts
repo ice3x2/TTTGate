@@ -236,10 +236,11 @@ export async function createProcessTunnelHarness(options: ProcessTunnelOptions):
                 APP_JS, "client",
                 "-addr", `127.0.0.1:${tunnelPort}`,
                 "-clientId", clientIds[index],
-                "-clientSecret", `e2e-secret-${index}`,
                 "-name", clientIds[index]
             ], {
                 cwd: clientRootDirs[index],
+                // #209: 권장 경로대로 비밀값을 환경 변수로 넘긴다(명령줄은 프로세스 목록에 보인다).
+                env: {TTTGATE_CLIENT_SECRET: `e2e-secret-${index}`},
                 logPrefix: VERBOSE ? `e2e-client-${index}` : undefined
             });
             allSpawnedClients.push(proc);

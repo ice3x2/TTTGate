@@ -355,7 +355,8 @@ class TunnelClient {
                         capabilities: DEFAULT_PROTOCOL_V2_CAPABILITIES,
                         controlID: this._id,
                         clientId: this._option.clientId,
-                        displayName: this._option.displayName || this._option.name,
+                        // #210: 이름은 -name 하나다. v2 서버는 이 값을 표시 이름으로 쓰지 않고 등록된 이름을 쓴다(#162).
+                        displayName: this._option.name,
                         proof: buildHandshakeProof(this._option.clientSecret, this._option.clientId, this._id, syncMeta.challengeNonce)
                     });
                     continue;
