@@ -537,6 +537,8 @@ class TunnelServer {
             logger.error('sendSyncCtrlAck: ctrlHandler is null');
             return;
         }
+        // 이미 닫힌 연결에 대기 항목을 만들면 지울 종료 이벤트가 다시 오지 않는다(#247).
+        if (ctrlHandler.isEnd()) return;
         const handshakeMeta: SyncCtrlAckMeta = {
             protocolVersion: CONTROL_PROTOCOL_V2,
             capabilities: DEFAULT_PROTOCOL_V2_CAPABILITIES,
@@ -761,6 +763,8 @@ class TunnelServer {
             return;
         }
         for(let i = 0, len = packetList.length; i < len; i++) {
+            // 앞 패킷을 처리하다 연결이 닫혔으면 같은 묶음의 나머지는 처리하지 않는다(#247).
+            if(handler.isEnd()) break;
             let packet = packetList[i];
             this.onReceiveCtrlPacket(handler, packet);
         }
@@ -1042,6 +1046,8 @@ class TunnelServer {
             this.onReceiveAllHandler(handler, data);
         } else {
             this.clearUnauthenticatedHandler(handler.id);
+            // 핸드셰이크를 마치지 못하고 닫힌 제어 연결의 대기 항목. 아래 풀 정리는 풀이 없으면 바로 돌아가므로 여기서 지운다(#247).
+            this._pendingControlHandshakeMap.delete(handler.id);
             let handlerType = (handler as TunnelHandler).handlerType;
             if(handlerType == HandlerType.Unknown || handlerType == undefined) {
                 return;
