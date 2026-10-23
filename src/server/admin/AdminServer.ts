@@ -1427,7 +1427,16 @@ class AdminServer {
         const sessionKey = await SessionStore.instance.newSession(userId, {
             ip: this.getClientAddress(req),
             userAgent: typeof userAgent == 'string' ? userAgent : undefined,
-            mustEnrollMfa
+            mustEnrollMfa,
+            // #250: 세션 상한에 닿아 끝낸 세션을 감사 로그에 남긴다. 사용자 요청이 아니므로 행위자는 system 이고,
+            // 원인이 된 로그인은 detail.triggeredBy 에 남긴다. ip 도 그 로그인의 주소다(끝난 세션의 주소가 아니다).
+            onEvicted: (evicted, reason) => this.emitAudit({
+                at: this.now(), actor: {userId: 'system'},
+                ip: this.getClientAddress(req), type: AUDIT_EVENT_TYPES.session_killed,
+                target: {kind: 'session', id: SessionStore.sessionIdOf(evicted.key)},
+                outcome: 'success', summary: `${AUDIT_EVENT_TYPES.session_killed} ${SessionStore.sessionIdOf(evicted.key)}`,
+                detail: {userId: evicted.userId, reason, triggeredBy: userId}
+            })
         });
         // P5-T4 / REQ-12: 로그인 성공 시 CSRF 쿠키도 함께 발급 (double-submit).
         const csrfToken = crypto.randomBytes(32).toString('hex');

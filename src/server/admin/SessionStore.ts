@@ -1,5 +1,11 @@
 import {ClockRngProvider} from "../../util/ClockRng";
 import crypto, {createHash} from "crypto";
+import LoggerFactory from "../../util/logger/LoggerFactory";
+
+const logger = LoggerFactory.getLogger('server', 'SessionStore');
+
+/** 상한 때문에 세션을 끝낸 이유(#250). 감사 로그 detail.reason 에 그대로 쓴다. */
+export type SessionEvictReason = 'per_user_limit' | 'total_limit';
 
 export type Session = {
     key: string;
@@ -14,10 +20,19 @@ export type Session = {
 }
 
 const DEFAULT_TIMEOUT = 1000 * 60 * 60 * 12; // 12 hours
+/**
+ * 사용자당·전체 활성 세션 수의 상한(#250). 로그인할 때마다 세션이 하나 생기고 12시간(쓸 때마다 늘어남) 남으므로,
+ * 상한이 없으면 같은 계정으로 로그인을 되풀이해 메모리를 늘릴 수 있다. 넘으면 가장 오래 쓰지 않은 세션부터 끝낸다.
+ */
+const MAX_SESSIONS_PER_USER = 20;
+const MAX_SESSIONS_TOTAL = 10_000;
+/** 세션에 보관하는 User-Agent 의 최대 길이(#250). 헤더는 16KiB 까지 올 수 있다. */
+const MAX_USER_AGENT_LENGTH = 512;
 
 class SessionStore {
     private static _instance: SessionStore;
     private _sessions: Map<string, Session> = new Map<string, Session>();
+    private _limits = {perUser: MAX_SESSIONS_PER_USER, total: MAX_SESSIONS_TOTAL};
 
     private constructor() {
     }
@@ -33,6 +48,12 @@ class SessionStore {
         SessionStore._instance = undefined as any;
     }
 
+    /** 시험에서 상한을 줄인다(resetForTest 로 기본값으로 돌아간다). */
+    public configureLimitsForTest(limits: {perUser: number; total: number}): void {
+        if(!(limits.perUser >= 1 && limits.total >= 1)) throw new Error(`SessionStore: invalid session limits ${JSON.stringify(limits)}`);
+        this._limits = {...limits};
+    }
+
     private now(): number {
         return ClockRngProvider.current().now();
     }
@@ -45,8 +66,30 @@ class SessionStore {
         return createHash('sha256').update(key).digest('hex').slice(0, 16);
     }
 
-    public async newSession(userId: string, meta: {ip: string; userAgent?: string; mustEnrollMfa?: boolean}): Promise<string> {
+    /**
+     * 새 세션을 만든다. 사용자당·전체 상한에 닿았으면 가장 오래 쓰지 않은 세션부터 끝내고 onEvicted 로 알린다(#250).
+     * 전체 상한은 superuser 세션도 끝낼 수 있다. 활성 계정이 500 개를 넘어야 닿는 값이라 따로 보호하지 않는다.
+     */
+    public async newSession(userId: string, meta: {ip: string; userAgent?: string; mustEnrollMfa?: boolean;
+        onEvicted?: (session: Session, reason: SessionEvictReason) => void}): Promise<string> {
         const now = this.now();
+        // 상한을 셀 때 끝난 세션은 빼야 한다.
+        this.sweepSession();
+        const evict = (candidates: Session[], keep: number, reason: SessionEvictReason) => {
+            if(candidates.length <= keep) return;
+            candidates.sort((left, right) => left.lastSeenAt - right.lastSeenAt);
+            for(const session of candidates.slice(0, candidates.length - keep)) {
+                this._sessions.delete(session.key);
+                try {
+                    meta.onEvicted?.({...session}, reason);
+                } catch (err) {
+                    // 알림이 실패해도 로그인은 계속한다. 세션은 이미 끝났다.
+                    logger.warn(`SessionStore: onEvicted failed (${reason})`, err);
+                }
+            }
+        };
+        evict(Array.from(this._sessions.values()).filter((session) => session.userId === userId), this._limits.perUser - 1, 'per_user_limit');
+        evict(Array.from(this._sessions.values()), this._limits.total - 1, 'total_limit');
         const sessionKey = crypto.randomBytes(64).toString("hex");
         this._sessions.set(sessionKey, {
             key: sessionKey,
@@ -55,7 +98,7 @@ class SessionStore {
             lastSeenAt: now,
             timeout: now + DEFAULT_TIMEOUT,
             ip: meta.ip,
-            userAgent: meta.userAgent,
+            userAgent: meta.userAgent?.slice(0, MAX_USER_AGENT_LENGTH),
             mustEnrollMfa: meta.mustEnrollMfa === true
         });
         return sessionKey;
@@ -171,4 +214,4 @@ class SessionStore {
 }
 
 export default SessionStore;
-export { DEFAULT_TIMEOUT };
+export { DEFAULT_TIMEOUT, MAX_SESSIONS_PER_USER, MAX_SESSIONS_TOTAL, MAX_USER_AGENT_LENGTH };

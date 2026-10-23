@@ -205,6 +205,25 @@ describe("sessions-api", () => {
         expect((await request("GET", "/api/me", {}, admin)).status).toBe(401);
     });
 
+    // #250 — 사용자당 세션 상한(20)을 넘는 로그인은 가장 오래 쓰지 않은 세션을 끝내고 감사 로그에 남긴다.
+    it("로그인이 사용자당 세션 상한을 넘으면 가장 오래 쓰지 않은 세션을 끝내고 감사 로그에 남긴다", async () => {
+        // 앞 테스트가 남긴 세션과 섞이지 않게 alice 의 세션을 비우고 시작한다.
+        SessionStore.instance.removeSessionsOfUser(aliceId);
+        const first = await login("alice", USER_PASSWORD, "limit-0");
+        const firstId = sessionOf((await request("GET", "/api/me/sessions", {}, first)).body.sessions, "limit-0").id;
+        for(let n = 1; n < 20; n++) await login("alice", USER_PASSWORD, `limit-${n}`);
+        const before = sink.events.length;
+        await login("alice", USER_PASSWORD, "limit-20");
+        expect((await request("GET", "/api/me", {}, first)).status).toBe(401);
+        const killed = sink.events.slice(before).filter((event) => event.type === "session_killed");
+        expect(killed.length).toBe(1);
+        expect(killed[0].target).toEqual({kind: "session", id: firstId});
+        expect(killed[0].summary).toBe(`session_killed ${firstId}`);
+        // 상한이 끝낸 세션은 사용자 요청이 아니므로 행위자는 system 이고, 원인이 된 로그인은 detail 에 남긴다.
+        expect(killed[0].actor).toEqual({userId: "system"});
+        expect(killed[0].detail).toEqual({userId: aliceId, reason: "per_user_limit", triggeredBy: aliceId});
+    });
+
     it("세션이 없으면 다섯 경로 모두 401 이다", async () => {
         for(const [method, target] of [["GET", "/api/sessions"], ["DELETE", "/api/sessions/0000000000000000"],
             ["DELETE", `/api/users/${aliceId}/sessions`], ["GET", "/api/me/sessions"], ["POST", "/api/me/sessions/logout-others"]]) {
