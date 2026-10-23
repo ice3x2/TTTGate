@@ -537,8 +537,9 @@ class TunnelServer {
             logger.error('sendSyncCtrlAck: ctrlHandler is null');
             return;
         }
-        // 이미 닫힌 연결에 대기 항목을 만들면 지울 종료 이벤트가 다시 오지 않는다(#247).
-        if (ctrlHandler.isEnd()) return;
+        // 이미 닫혔거나 종료를 요청한 연결에 대기 항목을 만들면 지울 종료 이벤트가 다시 오지 않거나
+        // 보내기가 실패한다(#247, #260).
+        if (ctrlHandler.isEnding) return;
         const handshakeMeta: SyncCtrlAckMeta = {
             protocolVersion: CONTROL_PROTOCOL_V2,
             capabilities: DEFAULT_PROTOCOL_V2_CAPABILITIES,
@@ -550,7 +551,8 @@ class TunnelServer {
         let sendBuffer = CtrlPacket.createSyncCtrlAck(ctrlHandler.id, handshakeMeta).toBuffer();
         ctrlHandler.sendData(sendBuffer, (handler_, success, err) => {
             if(!success) {
-                logger.error(`sendSyncAndSyncSyncCmd Fail - id:${ctrlHandler.id}, remote:(${ctrlHandler.socket.remoteAddress})${ctrlHandler.socket.remotePort}, ${err}`);
+                // 인증 전 연결이므로 debug 로 남긴다(#166).
+                logger.debug(`sendSyncAndSyncSyncCmd Fail - id:${ctrlHandler.id}, remote:(${ctrlHandler.socket.remoteAddress})${ctrlHandler.socket.remotePort}, ${err}`);
                 ctrlHandler.destroy();
                 return;
             }
@@ -763,8 +765,8 @@ class TunnelServer {
             return;
         }
         for(let i = 0, len = packetList.length; i < len; i++) {
-            // 앞 패킷을 처리하다 연결이 닫혔으면 같은 묶음의 나머지는 처리하지 않는다(#247).
-            if(handler.isEnd()) break;
+            // 앞 패킷을 처리하다 연결이 닫혔거나 종료를 요청했으면 같은 묶음의 나머지는 처리하지 않는다(#247, #260).
+            if(handler.isEnding) break;
             let packet = packetList[i];
             this.onReceiveCtrlPacket(handler, packet);
         }
@@ -921,7 +923,9 @@ class TunnelServer {
             let ctrlID = handler.id;
             let clientHandlerPool = this._clientHandlerPoolMap.get(ctrlID);
             if(!clientHandlerPool) {
-                logger.error(`onHandlerEvent - Not Found ClientHandlerPool. id: ${ctrlID}`);
+                // 인증 전 연결은 누구나 보낼 수 있으므로 debug 로 남긴다(#166, #260).
+                const message = `onHandlerEvent - Not Found ClientHandlerPool. id: ${ctrlID}`;
+                if(this._unauthenticatedHandlerIds.has(ctrlID)) logger.debug(message); else logger.error(message);
                 handler.end_();
                 return;
             }

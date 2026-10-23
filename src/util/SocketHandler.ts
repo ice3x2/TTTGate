@@ -13,6 +13,11 @@ import {TlsOptionsFactoryRegistry} from "./TlsOptionsFactory";
 
 import LoggerFactory  from "../util/logger/LoggerFactory";
 const logger = LoggerFactory.getLogger('socket', 'SocketHandler');
+/**
+ * 리스너를 모두 지운 뒤에도 Node 는 진행 중이던 쓰기의 오류를 'error' 로 늦게 내보낼 수 있다.
+ * 리스너가 없으면 처리되지 않은 예외로 프로세스가 끝나므로, 닫은 소켓에는 이것만 남긴다(#260).
+ */
+const IGNORE_LATE_SOCKET_ERROR = () => {};
 interface OnSocketEvent {
     (handler: SocketHandler, state: SocketState, data?: any) : void;
 }
@@ -343,6 +348,11 @@ class SocketHandler {
         return this._state == SocketState.Closed || this._state == SocketState.End; /* || this._state == SocketState.Error; */
     }
 
+    /** 종료를 요청했거나(end_()) 이미 끝난 연결. 이 상태에서는 더 보낼 수 없다(#260). */
+    public get isEnding() : boolean {
+        return this._endWaitingState || this.isEnd();
+    }
+
     private notifyOwnerTerminal(): void {
         const callback = this._onOwnerTerminal;
         this._onOwnerTerminal = undefined;
@@ -443,6 +453,7 @@ class SocketHandler {
         this.clearWaitQueue(error);
         this.clearTimeout();
         this._socket.removeAllListeners();
+        this._socket.on('error', IGNORE_LATE_SOCKET_ERROR);
         this._state = SocketState.Closed;
         this._socket.destroy();
         this._event = ()=>{};
@@ -489,11 +500,13 @@ class SocketHandler {
         if(this._endWaitingState || this.isEnd()) {
             return;
         }
-        if(!this.isOutputDrained) {
-            this._endWaitingState = true;
-            return;
+        // 종료를 요청했음을 출력이 비어 있어도 표시한다. 이 뒤의 sendData 는 소켓에 쓰지 않고 실패한다.
+        // 표시하지 않으면 end() 뒤의 쓰기가 ERR_STREAM_WRITE_AFTER_END 로 실패한다(#260).
+        const drained = this.isOutputDrained;
+        this._endWaitingState = true;
+        if(drained) {
+            this._socket.end();
         }
-        this._socket.end();
     }
 
     public endImmediate() : void {
@@ -515,6 +528,7 @@ class SocketHandler {
         this.clearTimeout();
         this.callAllDrainEvent(this.isOutputDrained);
         this._socket.removeAllListeners();
+        this._socket.on('error', IGNORE_LATE_SOCKET_ERROR);
         this._socket.destroy();
 
 

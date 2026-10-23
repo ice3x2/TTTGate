@@ -80,6 +80,28 @@ describe("pending control handshakes are released when the connection closes (#2
         } finally { warn.mockRestore(); }
     });
 
+    // #260 — 종료를 요청한 연결(Message 로 end_())에는 SyncCtrlAck 를 보내지 않고 대기 항목도 만들지 않는다.
+    // 인증 없는 입력마다 error 로그를 남기지도 않는다(#166: 인증 없는 경로는 debug).
+    test("a SyncCtrl that follows a Message in the same chunk is ignored without a pending handshake, and the Message leaves no error log", async () => {
+        const error = jest.spyOn(LoggerFactory.getLogger("server", "TunnelServer"), "error");
+        const ensure = jest.spyOn((server as any)._tunnelServer, "ensurePendingControlHandshake");
+        try {
+            const chunk = Buffer.concat([CtrlPacket.message(0, {type: "x", payload: "y"}), CtrlPacket.createSyncCtrl()].map((packet) => packet.toBuffer()));
+            for(let n = 0; n < 10; n++) {
+                await new Promise<void>((resolve) => {
+                    const socket = net.createConnection({host: "127.0.0.1", port});
+                    socket.on("error", () => {});
+                    socket.once("connect", () => socket.write(chunk));
+                    socket.once("close", () => resolve());
+                    setTimeout(() => socket.destroy(), 500);
+                });
+            }
+            expect(ensure).not.toHaveBeenCalled();
+            expect(error.mock.calls.map((call) => String(call[0])).filter((message) => message.includes("Not Found ClientHandlerPool"))).toEqual([]);
+            expect(pendingCount()).toBe(0);
+        } finally { error.mockRestore(); ensure.mockRestore(); }
+    });
+
     // REQ-1 — 한 번에 온 패킷 묶음 안에서 연결이 닫혀도, 뒤따르는 SyncCtrl 이 대기 항목을 다시 만들지 않는다.
     test("SyncCtrl packets that follow a close within the same chunk do not recreate a pending handshake", async () => {
         const chunk = Buffer.concat([CtrlPacket.createSyncCtrl(), CtrlPacket.message(0, {type: "x", payload: "y"}),
