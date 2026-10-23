@@ -13,12 +13,24 @@ const isAlive = (pid: number): boolean => {
     }
 };
 
+/** PID 파일 한 줄의 pid. 새 형식은 JSON 한 줄({"pid": …})이고 예전 형식은 숫자만 있다(#256). */
+const pidOfLine = (line: string): number => {
+    const text = line.trim();
+    // 운영 코드(Sentinel.readPIDFile)와 같게 읽는다: 숫자 줄은 parseInt, JSON 줄은 숫자 pid 만.
+    if(!text.startsWith("{")) return parseInt(text, 10);
+    try {
+        const pid = (JSON.parse(text) as {pid?: unknown}).pid;
+        return typeof pid === "number" ? pid : NaN;
+    } catch { return NaN; }
+};
+
 /** rootDir/bin 의 PID 파일에 적힌 PID 들(테스트가 띄운 데몬 프로세스). */
 const recordedDaemonPids = (rootDir: string): number[] => PID_FILES
     .map((name) => path.join(rootDir, "bin", name))
     .filter((file) => fs.existsSync(file))
-    .flatMap((file) => fs.readFileSync(file, "utf-8").split(/\s+/))
-    .map((value) => Number(value))
+    .flatMap((file) => fs.readFileSync(file, "utf-8").split("\n"))
+    .filter((line) => line.trim() !== "")
+    .map(pidOfLine)
     .filter((pid) => Number.isSafeInteger(pid) && pid > 0 && pid !== process.pid);
 
 /**
