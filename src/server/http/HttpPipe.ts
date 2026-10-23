@@ -74,6 +74,14 @@ enum ReadResult {
     End
 }
 
+/** chunk 크기 줄 검사 단계(#246). 크기 숫자 → 공백·탭 → ';' 확장 순서로만 나아간다. */
+enum SizeLinePhase {
+    Start,
+    Digits,
+    Blank,
+    Extension
+}
+
 const MAX_RECURSIVE_CALL_LEVEL = 1000;
 // 헤더 상한. 인증 없는 외부 연결이 연결마다 이만큼 쌓을 수 있으므로 일반 서버 수준(64KiB)으로 둔다(#166).
 const MAX_HEADER_SIZE = 64 * 1024;
@@ -101,6 +109,13 @@ class HttpPipe {
     private _onHeaderCallback?: OnHeader;
     private _requestRejected = false;
     private _inputEnded = false;
+    /** 파싱 오류가 난 뒤의 입력은 버린다. 같은 오류를 쓰기마다 다시 알리지 않는다(#246). */
+    private _failed = false;
+    /** 크기 줄에서 이미 검사한 바이트 수, 크기 숫자의 끝, 검사 단계, 앞 빈 줄을 넘겼는지(#246). */
+    private _sizeLineScanned = 0;
+    private _sizeLineDigits = 0;
+    private _sizeLinePhase: SizeLinePhase = SizeLinePhase.Start;
+    private _sizeLineLeadingCrlfSkipped = false;
     private _onRequestRejected?: (reason: 'duplicate-host') => void;
 
     public set onRequestRejected(callback: (reason: 'duplicate-host') => void) {
@@ -159,6 +174,8 @@ class HttpPipe {
         this._contentLengthRead = 0;
         this._trailerHeaders = [];
         this._header = null;
+        this._failed = false;
+        this.resetChunkedSizeLineScan();
     }
 
     private rewriteBufferIfNeed(): void {
@@ -168,7 +185,7 @@ class HttpPipe {
     }
 
     public write(buffer: Buffer): void {
-        if(this._requestRejected || this._inputEnded) return;
+        if(this._requestRejected || this._inputEnded || this._failed) return;
         try {
             this._buffer = Buffer.concat([this._buffer, buffer]);
             if(this._state === ParseState.END) return;
@@ -273,6 +290,7 @@ class HttpPipe {
                 this.rewriteBufferIfNeed();
             }
         } catch (err: Error | any) {
+            this._failed = true;
             if (err instanceof Error) {
                 this._onErrorCallback?.(err);
             } else {
@@ -545,31 +563,32 @@ class HttpPipe {
     }
 
     private readChunkedSize(): ReadResult {
-        // 개행을 찾음
-        let idx = this._buffer.indexOf(CRLF_BUFFER);
-        
-        // 첫 번째 개행이 비어있으면 건너뜀 (이전 청크의 끝부분일 수 있음)
-        if (idx === 0) {
+        // 앞의 빈 줄(CRLF)은 한 번만 넘긴다(앞 청크 끝의 CRLF 를 너그럽게 받던 동작). 두 번째부터는 아래 검사에서 오류다(#246).
+        if (!this._sizeLineLeadingCrlfSkipped && this._sizeLineScanned === 0 &&
+            this._buffer.length >= 2 && this._buffer[0] === 13 && this._buffer[1] === 10) {
             this._buffer = this._buffer.subarray(2);
-            idx = this._buffer.indexOf(CRLF_BUFFER);
+            this._sizeLineLeadingCrlfSkipped = true;
         }
-        
-        if (idx === 0) {
-            return ReadResult.Closed;
-        }
+        // 검사한 바이트에는 CR 이 없으므로 CRLF 는 검사한 위치부터 찾는다.
+        let idx = this._buffer.indexOf(CRLF_BUFFER, this._sizeLineScanned);
         
         if (idx < 0) {
+            // #246: CRLF 를 기다리는 동안에도 길이와 바이트를 본다. 상한이 없으면 줄바꿈 없이 보내는 만큼 메모리를 쓴다.
+            // 줄 끝 CR 은 CRLF 의 일부이므로 길이에 넣지 않는다. 경계가 TCP 분할에 따라 달라지지 않게 한다.
+            const pendingLength = this._buffer.length - (this._buffer[this._buffer.length - 1] === 0x0d ? 1 : 0);
+            if (pendingLength > this._maxHeaderSize) {
+                throw new Error(`400 Bad Request: chunked size line too large: more than ${this._maxHeaderSize} bytes without CRLF (#246)`);
+            }
+            this.scanChunkedSizeLine(this._buffer.length, false);
             return ReadResult.End; // 아직 완전한 chunked 크기가 없음
         }
+        if (idx > this._maxHeaderSize) {
+            throw new Error(`400 Bad Request: chunked size line too large: ${idx} bytes exceeds limit of ${this._maxHeaderSize} bytes (#246)`);
+        }
+        this.scanChunkedSizeLine(idx, true);
         
         let chunkedSizeBuffer = this._buffer.subarray(0, idx);
-        let sizeText = chunkedSizeBuffer.toString().trim();
-        
-        // 청크 크기에서 확장 부분 제거 (';' 이후 내용 무시)
-        const semicolonIndex = sizeText.indexOf(';');
-        if (semicolonIndex !== -1) {
-            sizeText = sizeText.substring(0, semicolonIndex).trim();
-        }
+        let sizeText = chunkedSizeBuffer.toString('latin1', 0, this._sizeLineDigits);
 
         // REQ-13: chunked size 엄격 파싱.
         // parseInt('0xFF', 16) === 0 (prefix를 0으로 파싱), parseInt('-1', 16) === -1,
@@ -581,7 +600,12 @@ class HttpPipe {
         }
 
         this._chunkedSize = parseInt(sizeText, 16);
+        // 2^53 이상은 Number 로 정확히 셀 수 없다. 받으면 터널과 백엔드가 청크 경계를 다르게 본다(#246).
+        if (!Number.isSafeInteger(this._chunkedSize)) {
+            throw new Error(`400 Bad Request: chunked size too large '${sizeText.length > 32 ? sizeText.slice(0, 32) + '...' : sizeText}' (#246)`);
+        }
         this._chunkedSizeRead = 0;
+        this.resetChunkedSizeLineScan();
         
         if (!this._deliverPureData) {
             let sendSuccess = this._onDataCallback && this._onDataCallback?.(chunkedSizeBuffer);
@@ -598,6 +622,58 @@ class HttpPipe {
         this._buffer = this._buffer.subarray(idx + 2);
         
         return ReadResult.Continue;
+    }
+
+    /**
+     * #246 — 크기 줄의 바이트를 검사한다. 이미 본 바이트(_sizeLineScanned)는 다시 보지 않으므로,
+     * 1바이트씩 도착해도 검사 비용이 줄 길이에 비례한다. CRLF 를 기다리는 동안과 줄이 완성된 뒤 모두 같은 규칙을 쓴다.
+     * RFC 9112: chunk-size = 1*HEXDIG, 그 뒤 BWS(공백·탭)와 ';' 확장이 올 수 있다.
+     * - 크기 앞에는 아무것도 올 수 없다. 공백·탭은 크기와 ';' 사이에만 온다.
+     * - 확장에는 제어 문자(탭 제외)가 올 수 없다. 단독 LF·NUL 이 백엔드로 그대로 가면 청크 경계를 달리 읽을 수 있다.
+     * - CR 은 줄 끝(CRLF)에서만 온다. 줄이 아직 완성되지 않았으면 마지막 바이트의 CR 은 다음 쓰기에서 다시 본다.
+     * - 빈 줄은 readChunkedSize 의 크기 토큰 검사(REQ-13)에서 오류가 된다.
+     * 오류 메시지의 '400' 은 분류를 위한 표기다. 실제로는 응답 없이 연결을 닫는다(HttpHandler.onRequestMessageError·onHttpMessageError).
+     * @param end 검사할 끝 위치(완성된 줄이면 CRLF 의 위치)
+     * @param complete 줄이 CRLF 로 끝났는지
+     */
+    private scanChunkedSizeLine(end: number, complete: boolean): void {
+        const buffer = this._buffer;
+        for (let n = this._sizeLineScanned; n < end; n++) {
+            const c = buffer[n];
+            if (c === 0x0d && !complete && n === end - 1) break;
+            const hex = (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x46) || (c >= 0x61 && c <= 0x66);
+            const blank = c === 0x20 || c === 0x09;
+            let valid: boolean;
+            switch (this._sizeLinePhase) {
+                case SizeLinePhase.Start:
+                    valid = hex;
+                    if (hex) this._sizeLinePhase = SizeLinePhase.Digits;
+                    break;
+                case SizeLinePhase.Digits:
+                    valid = hex || blank || c === 0x3b;
+                    if (blank) this._sizeLinePhase = SizeLinePhase.Blank;
+                    else if (c === 0x3b) this._sizeLinePhase = SizeLinePhase.Extension;
+                    break;
+                case SizeLinePhase.Blank:
+                    valid = blank || c === 0x3b;
+                    if (c === 0x3b) this._sizeLinePhase = SizeLinePhase.Extension;
+                    break;
+                default:
+                    valid = (c >= 0x20 && c !== 0x7f) || c === 0x09;
+            }
+            if (!valid) {
+                throw new Error(`400 Bad Request: invalid byte 0x${c.toString(16)} in chunked size line (#246)`);
+            }
+            if (this._sizeLinePhase === SizeLinePhase.Digits) this._sizeLineDigits = n + 1;
+            this._sizeLineScanned = n + 1;
+        }
+    }
+
+    private resetChunkedSizeLineScan(): void {
+        this._sizeLineScanned = 0;
+        this._sizeLineDigits = 0;
+        this._sizeLinePhase = SizeLinePhase.Start;
+        this._sizeLineLeadingCrlfSkipped = false;
     }
 
     private readChunkedData(): ReadResult {
@@ -858,6 +934,8 @@ class HttpPipe {
             this.write(EMPTY_BUFFER);
         }
         this._inputEnded = true;
+        // 이미 오류를 알린 파이프(위에서 남은 바이트를 처리하다 난 오류 포함)는 다시 알리지 않는다(#246).
+        if(this._failed) return;
         if(this._state === ParseState.UNKNOWN_LENGTH_BODY) {
             this.setEnd();
         } else if(this._state !== ParseState.UPGRADE && this._state !== ParseState.END &&
