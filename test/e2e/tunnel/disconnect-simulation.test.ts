@@ -1,8 +1,10 @@
 import http from "http";
 import {WebSocket} from "ws";
 import {startTargetService, TargetService} from "../target/targetService";
-import {createProcessTunnelHarness, ProcessTunnelHarness} from "../../helpers/processTunnelHarness";
+import {createProcessTunnelHarness, formatTail, ProcessTunnelHarness} from "../../helpers/processTunnelHarness";
 import {waitUntil} from "../../helpers/smokeProcess";
+import net from "net";
+import {once} from "events";
 
 jest.setTimeout(180_000);
 
@@ -132,5 +134,67 @@ describe("disconnect simulation (process boundary)", () => {
         try {
             expect(await echoOnce(again, "after")).toBe("after");
         } finally { again.close(); }
+    });
+
+});
+
+// #230 — 반쯤 열린 연결: 연결은 열어 둔 채 전달만 멈추는 프록시를 서버와 클라이언트 사이에 둔다.
+describe("half-open control connection (process boundary, #230)", () => {
+    const ENV = {TTTGATE_HEARTBEAT_INTERVAL_MS: "300", TTTGATE_HEARTBEAT_TIMEOUT_MS: "1500"};
+    const previous: {[key: string]: string | undefined} = {};
+    let target: TargetService;
+    let harness: ProcessTunnelHarness;
+    let proxy: net.Server;
+    const sockets = new Set<net.Socket>();
+    let blackhole = false;
+
+    beforeEach(() => {
+        for(const [key, value] of Object.entries(ENV)) { previous[key] = process.env[key]; process.env[key] = value; }
+    });
+    afterEach(async () => {
+        try { await harness?.dispose(); } finally {
+            await target?.close();
+            sockets.forEach((socket) => socket.destroy());
+            await new Promise<void>((resolve) => proxy ? proxy.close(() => resolve()) : resolve());
+            for(const key of Object.keys(ENV)) { if(previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key]; }
+        }
+    });
+
+    test("both processes detect a blackholed control connection and the client reconnects once the path heals", async () => {
+        target = await startTargetService();
+        harness = await createProcessTunnelHarness({tunnels: [{protocol: "http", destinationPort: target.port}], startClient: false});
+        const forwardPort = harness.tunnels[0].forwardPort;
+        proxy = net.createServer((inbound) => {
+            const outbound = net.connect(harness.tunnelPort, "127.0.0.1");
+            for(const socket of [inbound, outbound]) { sockets.add(socket); socket.on("error", () => {}); socket.on("close", () => sockets.delete(socket)); }
+            inbound.on("data", (chunk) => { if(!blackhole) outbound.write(chunk); });
+            outbound.on("data", (chunk) => { if(!blackhole) inbound.write(chunk); });
+            inbound.on("close", () => outbound.destroy());
+            outbound.on("close", () => inbound.destroy());
+        });
+        proxy.listen(0, "127.0.0.1");
+        await once(proxy, "listening");
+        await harness.startClient(0, {connectPort: (proxy.address() as net.AddressInfo).port});
+        await harness.waitForTunnelOnline(forwardPort);
+        const firstId = async () => ((await harness.adminRequest("/api/clientStatus")).json?.statuses ?? [])[0]?.id;
+        const first = await firstId();
+        expect(first).toBeDefined();
+
+        blackhole = true;
+        // 서버: 정해진 시간(1.5초) 안에 그 클라이언트를 뺀다.
+        await waitUntil(async () => (await firstId()) === undefined ? true : undefined, {timeoutMs: 15_000, intervalMs: 200, label: "server dropped the client"})
+            .catch((error) => { throw new Error(`${error.message}\nCLIENT:\n${formatTail(harness.clients[0], 25)}\nSERVER:\n${formatTail(harness.server, 25)}`); });
+        // 클라이언트: 끊김을 알아채고 다시 연결을 시도한다.
+        await waitUntil(async () => harness.clients[0].readChannel().stdout.includes("heartbeat timed out") ? true : undefined,
+            {timeoutMs: 15_000, intervalMs: 200, label: "client detected the timeout"});
+        expect(harness.clients[0].child.exitCode).toBeNull();
+
+        // 길이 복구되면(블랙홀 해제·남은 연결 정리) 다시 연결되어 터널이 동작한다.
+        blackhole = false;
+        sockets.forEach((socket) => socket.destroy());
+        await waitUntil(async () => { const id = await firstId(); return id !== undefined && id !== first ? true : undefined; },
+            {timeoutMs: 30_000, intervalMs: 200, label: "client reconnected"});
+        await harness.waitForTunnelOnline(forwardPort);
+        expect(await getText(forwardPort, "/custom-response")).toEqual({status: 200, body: "original-body"});
     });
 });

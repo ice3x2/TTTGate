@@ -35,6 +35,7 @@ import {EnrollmentRegistry} from "./EnrollmentRegistry";
 import {sealEnrollmentPayload} from "../commons/Enrollment";
 import {EnrollmentPayload, EnrollResponseMeta} from "../commons/ProtocolV2";
 import {CONTROL_CERT_SERVER_NAME} from "./CertificationStore";
+import {heartbeatKindOf, HeartbeatPolicyRegistry} from "../commons/Heartbeat";
 const logger = LoggerFactory.getLogger('server', 'TunnelServer');
 
 /** 등록 교환 결과(#212 REQ-11 감사). 코드·비밀값은 담지 않는다. */
@@ -103,6 +104,8 @@ class TunnelServer {
     private _sessionTtlMs : number = DEFAULT_SESSION_TTL_MS;
     private _sessionTtlCheckIntervalMs : number = DEFAULT_SESSION_HEARTBEAT_CHECK_INTERVAL_MS;
     private _sessionTtlTimer : NodeJS.Timeout | undefined;
+    /** #230: heartbeat 를 지원하는 클라이언트 중 조용해진 제어 연결을 찾는 타이머. */
+    private _heartbeatTimer : NodeJS.Timeout | undefined;
     // P6-T1 개선 1회차 / F3: close() 진입 후 dispatch 된 TTL 콜백 race 가드.
     private _closed : boolean = false;
     private _authTimeouts : Set<NodeJS.Timeout> = new Set<NodeJS.Timeout>();
@@ -199,6 +202,7 @@ class TunnelServer {
                     this.isRunning = true;
                     this._closed = false;
                     this.startSessionTtlTimer();
+                    this.startHeartbeatTimer();
                     resolve();
                 }
             });
@@ -233,6 +237,33 @@ class TunnelServer {
         // node unref → test 프로세스 종료 방해 방지.
         if(this._sessionTtlTimer && typeof (this._sessionTtlTimer as any).unref === "function") {
             (this._sessionTtlTimer as any).unref();
+        }
+    }
+
+    private startHeartbeatTimer() : void {
+        if(this._heartbeatTimer || this._closed) return;
+        const policy = HeartbeatPolicyRegistry.current();
+        this._heartbeatTimer = setInterval(() => this.expireSilentControls(policy.timeoutMs), policy.intervalMs);
+        this._heartbeatTimer.unref?.();
+    }
+
+    private stopHeartbeatTimer() : void {
+        if(this._heartbeatTimer) clearInterval(this._heartbeatTimer);
+        this._heartbeatTimer = undefined;
+    }
+
+    /**
+     * #230 REQ-2: heartbeat 를 알린 클라이언트가 timeoutMs 동안 아무 제어 패킷도 보내지 않으면 반쯤 열린 연결로 보고 정리한다.
+     * heartbeat 를 모르는 클라이언트(REQ-3)는 건드리지 않는다.
+     */
+    private expireSilentControls(timeoutMs: number) : void {
+        if(this._closed || !this.isRunning) return;
+        const now = Date.now();
+        for(const [ctrlID, pool] of [...this._clientHandlerPoolMap]) {
+            if(pool.supportsHeartbeat && now - pool.lastControlReceiveAt > timeoutMs) {
+                logger.warn(`Control connection of ${pool.clientId ?? ctrlID} sent nothing for ${now - pool.lastControlReceiveAt}ms. Closing it as half-open.`);
+                this.destroyClientHandlerPool(ctrlID);
+            }
         }
     }
 
@@ -314,6 +345,7 @@ class TunnelServer {
         // P6-T1 개선 1회차 / F3: 후속 TTL 콜백 race 방지 플래그.
         this._closed = true;
         this.stopSessionTtlTimer();
+        this.stopHeartbeatTimer();
         this._sessionLastActivityMs.clear();
         return new Promise((resolve) => {
             // 모든 auth timeout 정리
@@ -781,7 +813,9 @@ class TunnelServer {
     private onReceiveCtrlPacket(handler: TunnelHandler, packet: CtrlPacket) : void  {
         // 인증 전 패킷은 debug 로만 남긴다. 인증 없이 패킷마다 info 로그를 쌓게 하지 않는다(#157).
         const packetLog = 'receive ctrl packet - cmd:' + CtrlCmd[packet.cmd] + ', handler id: ' + handler.id + ', remote: ' + handler.remoteAddress + ':' + handler.remotePort;
-        if(this._unauthenticatedHandlerIds.has(handler.id)) logger.debug(packetLog); else logger.info(packetLog);
+        // #230: heartbeat 는 몇 초마다 오므로 로그를 남기지 않는다.
+        if(heartbeatKindOf(packet)) { /* no log */ }
+        else if(this._unauthenticatedHandlerIds.has(handler.id)) logger.debug(packetLog); else logger.info(packetLog);
         if(this._rejectedHandlerIds.has(handler.id)) return;
         if((packet.cmd == CtrlCmd.SyncCtrl || packet.cmd == CtrlCmd.AckCtrl) && this._clientHandlerPoolMap.has(handler.id)) {
             // 인증된 연결의 핸드셰이크 재전송은 무시한다. 새 pool 을 만들면 기존 세션이 고아가 된다(#165).

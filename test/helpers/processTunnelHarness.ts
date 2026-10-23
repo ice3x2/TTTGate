@@ -68,7 +68,8 @@ export type ProcessTunnelHarness = {
     stopClient(index?: number): Promise<void>;
     /** #231: 클라이언트 프로세스를 SIGKILL 로 즉시 죽인다. 서버가 그 클라이언트를 목록에서 뺄 때까지 기다리지 않는다. */
     killClient(index?: number): Promise<void>;
-    startClient(index?: number): Promise<void>;
+    /** connectPort: 서버 대신 이 포트로 연결한다(#230 — 사이에 프록시를 둘 때). */
+    startClient(index?: number, options?: {connectPort?: number}): Promise<void>;
     dispose(): Promise<void>;
 };
 
@@ -244,10 +245,10 @@ export async function createProcessTunnelHarness(options: ProcessTunnelOptions):
             return proc;
         };
 
-        const spawnClient = (index: number): SpawnedProcess => {
+        const spawnClient = (index: number, connectPort: number = tunnelPort): SpawnedProcess => {
             const proc = spawnProcess(process.execPath, [
                 APP_JS, "client",
-                "-addr", `127.0.0.1:${tunnelPort}`,
+                "-addr", `127.0.0.1:${connectPort}`,
                 "-clientId", clientIds[index],
                 "-name", clientIds[index]
             ], {
@@ -419,12 +420,12 @@ export async function createProcessTunnelHarness(options: ProcessTunnelOptions):
             await forceKill(proc);
         };
 
-        const startClient = async (index: number = 0): Promise<void> => {
+        const startClient = async (index: number = 0, options: {connectPort?: number} = {}): Promise<void> => {
             const existing = clientProcesses[index];
             if(existing && existing.child.exitCode === null && existing.child.signalCode === null) {
                 throw new Error("Client is already running");
             }
-            clientProcesses[index] = spawnClient(index);
+            clientProcesses[index] = spawnClient(index, options.connectPort);
             await waitForClientOnline();
         };
 

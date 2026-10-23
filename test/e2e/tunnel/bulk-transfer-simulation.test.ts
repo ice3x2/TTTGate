@@ -11,7 +11,7 @@ import {CONTROL_CERT_SERVER_NAME} from "../../../src/server/CertificationStore";
 jest.setTimeout(300_000);
 
 const RSS_LIMIT_MIB = 256;
-const sha256 = (data: Buffer | crypto.Hash) => (data instanceof Buffer ? crypto.createHash("sha256").update(data) : data).digest("hex");
+const sha256 = (data: Buffer): string => crypto.createHash("sha256").update(data).digest("hex");
 
 /** 받은 바이트를 해시만 남기며 읽는다. pause·resume 으로 읽는 속도를 정할 수 있다. */
 const download = (port: number, urlPath: string) => {

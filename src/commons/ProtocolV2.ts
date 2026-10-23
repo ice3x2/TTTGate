@@ -2,7 +2,7 @@ import {createHmac} from "crypto";
 import {ClockRngProvider} from "../util/ClockRng";
 
 type ControlProtocolMode = "legacy" | "mixed" | "mtls-strict";
-type ProtocolCapability = "protocol-v2" | "proof-of-possession" | "client-identity" | "data-bind-token" | "wide-id" | "close-count-safe";
+type ProtocolCapability = "protocol-v2" | "proof-of-possession" | "client-identity" | "data-bind-token" | "wide-id" | "close-count-safe" | "heartbeat";
 
 type SyncCtrlAckMeta = {
     protocolVersion: number;
@@ -60,7 +60,9 @@ const DEFAULT_PROTOCOL_V2_CAPABILITIES: Array<ProtocolCapability> = [
     "client-identity",
     "data-bind-token",
     "wide-id",
-    "close-count-safe"
+    "close-count-safe",
+    // #230: 제어 연결 heartbeat. 양쪽이 알렸을 때만 시간 초과를 적용한다.
+    "heartbeat"
 ];
 
 const buildHandshakeProof = (secret: string, clientId: string, handlerId: number, challengeNonce: string): string => {
