@@ -14,6 +14,9 @@ const readPidFile = (name: "app" | "sentinel" | "foreground"): string | undefine
     if(!fs.existsSync(filePath)) return undefined;
     return fs.readFileSync(filePath, "utf-8");
 };
+/** PID 파일의 pid 들(#256: 한 줄에 JSON 항목 하나). */
+const pidsIn = (name: "app" | "sentinel" | "foreground"): number[] =>
+    (readPidFile(name) ?? "").split("\n").filter((line) => line.trim() !== "").map((line) => JSON.parse(line).pid);
 
 const waitUntilProcessGone = async (pid: number, timeoutMs: number): Promise<void> => {
     const deadline = Date.now() + timeoutMs;
@@ -73,15 +76,16 @@ describe("Sentinel", () => {
         await cleanupTestRoot(root);
     });
 
-    test("without -daemon, start() returns false and appends the caller's pid to the foreground pid file", () => {
+    // #256: 덧붙이지 않고 덮어쓴다. 다시 시작해도 항목은 하나다.
+    test("without -daemon, start() returns false and records only the caller's pid in the foreground pid file", () => {
         process.argv = [process.execPath, "app.js", "server"];
         delete process.env.EXECUTE_MODE;
 
         expect(Sentinel.create(false).start()).toBe(false);
-        expect(readPidFile("foreground")).toBe(`${process.pid}\n`);
+        expect(pidsIn("foreground")).toEqual([process.pid]);
 
         expect(Sentinel.create(false).start()).toBe(false);
-        expect(readPidFile("foreground")).toBe(`${process.pid}\n${process.pid}\n`);
+        expect(pidsIn("foreground")).toEqual([process.pid]);
     });
 
     test("devMode create() builds the dev execute path without touching pid files, and start() still writes the foreground pid", () => {
@@ -91,7 +95,7 @@ describe("Sentinel", () => {
         const sentinel = Sentinel.create(true);
         expect(sentinel).toBeInstanceOf(Sentinel);
         expect(sentinel.start()).toBe(false);
-        expect(readPidFile("foreground")).toBe(`${process.pid}\n`);
+        expect(pidsIn("foreground")).toEqual([process.pid]);
     });
 
     test("stop() skips signalling its own pid and rewrites the pid file with that same pid", () => {
@@ -99,7 +103,7 @@ describe("Sentinel", () => {
 
         Sentinel.stop();
 
-        expect(readPidFile("foreground")).toBe(`${process.pid}\n`);
+        expect(pidsIn("foreground")).toEqual([process.pid]);
     });
 
     test("isDaemonMode/hasExecuteMode/isSentinelMode reflect argv and EXECUTE_MODE independently", () => {
@@ -129,7 +133,8 @@ describe("Sentinel", () => {
     });
 
     test("stop() kills only the pid recorded in the app pid file and clears every pid file", async () => {
-        const child = spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], {stdio: "ignore"});
+        // 예전 형식 항목은 실행 파일과(Linux 는) 실행 인자에 이 앱의 진입 스크립트가 있어야 TTTGate 로 본다(#256). 실제 데몬처럼 넘긴다.
+        const child = spawn(process.execPath, ["-e", "setInterval(()=>{},1000)", process.argv[1]], {stdio: "ignore"});
         spawnedChildren.push(child);
         await new Promise<void>((resolve, reject) => {
             child.once("spawn", () => resolve());
@@ -177,14 +182,16 @@ describe("Sentinel", () => {
         expect(lines.length).toBe(2);
 
         const {execute: first, sentinel: second} = byMode(lines);
+        // 아래 단언이 실패해도 afterEach 가 자식을 정리하도록 바로 등록한다.
+        spawnedChildren.push({pid: first.pid} as ChildProcess, {pid: second.pid} as ChildProcess);
         expect(first.mode).toBe("execute");
         expect(first.appPid).toBe("0");
         expect(first.argv).toEqual(["server", "-daemon"]);
         expect(second.mode).toBe("sentinel");
         expect(second.appPid).toBe(String(first.pid));
 
-        expect(readPidFile("app")).toBe(`${first.pid}\n`);
-        expect(readPidFile("sentinel")).toBe(`${second.pid}\n`);
+        expect(pidsIn("app")).toEqual([first.pid]);
+        expect(pidsIn("sentinel")).toEqual([second.pid]);
 
         // Boot again while the previous pair is still registered: exercises boot()'s
         // "already running" restart branch, which tears down the previous
@@ -195,14 +202,12 @@ describe("Sentinel", () => {
         lines = await readJournalLines(4);
         expect(lines.length).toBe(4);
         const {execute: third, sentinel: fourth} = byMode(lines.slice(2));
+        spawnedChildren.push({pid: third.pid} as ChildProcess, {pid: fourth.pid} as ChildProcess);
         expect(third.mode).toBe("execute");
         expect(fourth.mode).toBe("sentinel");
 
         await waitUntilProcessGone(first.pid, 5000);
         await waitUntilProcessGone(second.pid, 5000);
-
-        spawnedChildren.push({pid: third.pid} as ChildProcess);
-        spawnedChildren.push({pid: fourth.pid} as ChildProcess);
 
         Sentinel.stop();
 
