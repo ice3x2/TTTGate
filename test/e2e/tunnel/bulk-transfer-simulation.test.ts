@@ -13,8 +13,8 @@ jest.setTimeout(300_000);
 const RSS_LIMIT_MIB = 256;
 const sha256 = (data: Buffer): string => crypto.createHash("sha256").update(data).digest("hex");
 
-/** 받은 바이트를 해시만 남기며 읽는다. pause·resume 으로 읽는 속도를 정할 수 있다. */
-const download = (port: number, urlPath: string) => {
+/** 받은 바이트를 해시만 남기며 읽는다. pause·resume 으로 읽는 속도를 정할 수 있다. onChunk 는 조각을 받을 때마다 불린다. */
+const download = (port: number, urlPath: string, onChunk?: (received: number) => void) => {
     const hash = crypto.createHash("sha256");
     let received = 0;
     let response: http.IncomingMessage | undefined;
@@ -22,7 +22,7 @@ const download = (port: number, urlPath: string) => {
     const done = new Promise<{status: number, length: number, sha256: string, complete: boolean}>((resolve) => { settle = resolve; });
     const req = http.get({host: "127.0.0.1", port, path: urlPath, agent: false}, (res) => {
         response = res;
-        res.on("data", (chunk: Buffer) => { received += chunk.length; hash.update(chunk); });
+        res.on("data", (chunk: Buffer) => { received += chunk.length; hash.update(chunk); onChunk?.(received); });
         const finish = () => settle({status: res.statusCode ?? 0, length: received, sha256: hash.digest("hex"), complete: res.complete});
         res.once("end", finish);
         res.once("close", () => { if(!res.complete) finish(); });
@@ -131,10 +131,11 @@ describe("bulk transfer simulation (process boundary)", () => {
     test("#240 a slow reader (about 1MiB/s) completes intact, stays within the memory bound and does not block other requests", async () => {
         const port = await start();
         const watch = rssWatch([harness.server.child.pid!, harness.clients[0].child.pid!]);
-        const slow = download(port, "/big?mb=32");
-        await waitUntil(async () => slow.started() ? true : undefined, {timeoutMs: 15_000, label: "slow response started"});
-        // 초당 약 1MiB: 100ms 마다 읽기를 잠깐 열었다 닫는다.
+        // 초당 약 1MiB: 100ms 마다 읽을 수 있는 양을 늘리고, 넘으면 받는 즉시 멈춘다(#248: 멈추지 않으면 터널 속도로 다 읽는다).
         let allowance = 0;
+        const startedAt = Date.now();
+        const slow = download(port, "/big?mb=32", (received) => { if(received >= allowance) slow.pause(); });
+        await waitUntil(async () => slow.started() ? true : undefined, {timeoutMs: 15_000, label: "slow response started"});
         const throttle = setInterval(() => {
             allowance += 100 * 1024;
             if(slow.received() < allowance) slow.resume(); else slow.pause();
@@ -146,6 +147,8 @@ describe("bulk transfer simulation (process boundary)", () => {
             expect(other).toMatchObject({status: 200, length: 1048576, complete: true});
             const result = await slow.done;
             expect(result).toMatchObject({status: 200, length: 32 * 1048576, sha256: bigPayloadDigest(32), complete: true});
+            // 실제로 느리게 읽었는지(32MiB 에 약 32초). 읽는 속도 조절이 무너지면 몇 초 안에 끝난다.
+            expect(Date.now() - startedAt).toBeGreaterThan(20_000);
         } finally {
             clearInterval(throttle);
         }

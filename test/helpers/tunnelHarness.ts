@@ -38,6 +38,8 @@ type TunnelHarness = {
     dispose(): Promise<void>;
     // P6-T1 개선 1회차 / REQ-09 E2E 테스트용 진단 접근자.
     getServer(): TTTServer | undefined;
+    /** 진단 접근자(#248). clientId 를 주지 않으면 첫 클라이언트. */
+    getClient(clientId?: string): TTTClient | undefined;
 }
 
 const createTunnelHarness = async (options: TunnelHarnessOptions = {}): Promise<TunnelHarness> => {
@@ -186,7 +188,8 @@ const createTunnelHarness = async (options: TunnelHarnessOptions = {}): Promise<
             if(!received.equals(expected)) throw new Error('Echo payload mismatch');
             return received;
         },
-        collectResourceStats, shutdown: shutdownHarness, dispose, getServer: () => server
+        collectResourceStats, shutdown: shutdownHarness, dispose, getServer: () => server,
+        getClient: (clientId?: string) => (clientId === undefined ? owners[0] : owners.find(o => o.spec.clientId === clientId))?.client
     };
     } catch(error) { try { await dispose(); } catch(cleanup) { throw new AggregateError([error, cleanup], 'Harness creation and cleanup failed'); } throw error; }
 };
