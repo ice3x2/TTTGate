@@ -28,6 +28,16 @@ describe("loginFailureAudit", () => {
         expect(events.filter((event) => event !== undefined)).toHaveLength(4);
     });
 
+    // #251 — 동시 처리 상한 429 는 차단과 다르다. blocked 로 적지 않고, 차단 감사의 1분 칸도 먼저 차지하지 않는다.
+    it("동시 처리 상한 429 는 reason 으로 구분하고 차단 감사 칸을 따로 쓴다", () => {
+        const audit = createLoginFailureAuditor();
+        const limited = audit({username: "admin"}, "10.0.0.1", "v4:10.0.0.0/24", 429, NOW, "concurrency_limit");
+        expect(limited!.detail).toEqual({username: "admin", reason: "concurrency_limit"});
+        expect(audit({username: "admin"}, "10.0.0.1", "v4:10.0.0.0/24", 429, NOW + 1, "concurrency_limit")).toBeUndefined();
+        const blocked = audit({username: "admin"}, "10.0.0.1", "v4:10.0.0.0/24", 429, NOW + 2);
+        expect(blocked!.detail).toEqual({username: "admin", blocked: true});
+    });
+
     it("차단이 아닌 실패는 지금처럼 요청마다 남는다", () => {
         const audit = createLoginFailureAuditor();
         const events = Array.from({length: 3}, () => audit({username: "admin"}, "127.0.0.1", "v4:127.0.0.0/24", 401, NOW));

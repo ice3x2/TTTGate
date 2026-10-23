@@ -4,7 +4,7 @@ import ServerOptionStore from "../ServerOptionStore";
 import SessionStore, {Session} from "./SessionStore";
 import {IdentityStore} from "../rbac/IdentityStore";
 import {IdentityMigration, LEGACY_ADMIN_USERNAME} from "../rbac/IdentityMigration";
-import {Role, validatePassword, validateUsername} from "../rbac/IdentityTypes";
+import {MAX_PASSWORD_LENGTH, Role, validatePassword, validateUsername} from "../rbac/IdentityTypes";
 import {createHash} from "node:crypto";
 
 import {CertificationStore, CertInfo, PemData} from "../CertificationStore";
@@ -70,6 +70,9 @@ const LOGIN_BLOCK_MS = 60_000;
 const LOGIN_MAX_FAILURES = 5;
 // P5-T2 / REQ-07: 실패 카운터 LRU 상한 (메모리 무제한 방지).
 const LOGIN_ATTEMPT_MAP_LIMIT = 10_000;
+// #251: 한 차단 버킷에서 동시에 처리하는 로그인 수(/api/login 과 /api/login/mfa 합계). 넘는 요청은 bcrypt 없이 429 를 받는다.
+// 버킷은 IPv4 /24·IPv6 /64 이므로 같은 NAT 뒤의 사용자들은 칸을 나눠 쓴다. 실패 차단도 같은 단위다.
+const LOGIN_MAX_IN_FLIGHT = LOGIN_MAX_FAILURES;
 
 // P5-T3 / REQ-11: JSON 본문 크기 / 타임아웃 상한.
 const ADMIN_JSON_BODY_LIMIT_BYTES = 1 * 1024 * 1024; // 1MiB
@@ -106,6 +109,8 @@ class AdminServer {
     private _bindHost: string = '';
     private _tttServer : TTTServer | undefined;
     private _loginAttempts: Map<string, LoginAttemptState> = new Map<string, LoginAttemptState>();
+    /** #251: 차단 버킷별로 지금 처리 중인 로그인 수. 처리 중인 요청이 있는 버킷만 남는다. */
+    private readonly _loginInFlight = new Map<string, number>();
     private readonly _loginFailureAudit = createLoginFailureAuditor();
     // P3-T5 / REQ-08: hot-apply를 위해 현재 TLS 옵션을 보존.
     private _currentTlsOptions: { key: string, cert: string, ca?: string } | undefined;
@@ -162,14 +167,14 @@ class AdminServer {
 
         this._routes = buildAdminRoutes({
             onLogin: this.onLogin,
-            onLoginMfa: mfaLoginHandler(this._mfa.tickets, {
+            onLoginMfa: this.inLoginSlot(mfaLoginHandler(this._mfa.tickets, {
                 isBlocked: (req) => this.isLoginBlocked(req),
                 fail: async (req) => { this.recordLoginFailure(req); await this.delayFailedLogin(req); },
                 issueSession: (req, res, user) => this.completeLogin(req, res, user.id,
                     {id: user.id, username: user.username, displayName: user.displayName, role: user.role}, user.mustChangePassword),
                 sendFailure: (res, status, payload) => this.sendApiFailure(res, status, payload),
                 emitAudit: (event) => this.emitAudit(event)
-            }),
+            })),
             onGetVersion: this.onGetVersion,
             onLogout: this.onLogout,
             onGetValidateSession: this.onGetValidateSession,
@@ -1308,17 +1313,17 @@ class AdminServer {
     }
 
     private onLogin = async (ctx: RouteContext) => {
-        await this.performLogin(ctx);
+        const limited = await this.performLogin(ctx);
         // 성공은 completeLogin 이 남긴다(새 세션 해시를 그곳에서만 알 수 있다).
         if(ctx.res.statusCode === 200) return;
         // username 이 없으면 'admin' 으로 적지 않는다(별칭은 #102 에서 지웠다). 형식·429 처리는 loginFailureAudit 에 있다(#139).
-        const event = this._loginFailureAudit(ctx.body, ctx.ip, this.buildLoginAttemptKey(ctx.req), ctx.res.statusCode, this.now());
+        const event = this._loginFailureAudit(ctx.body, ctx.ip, this.buildLoginAttemptKey(ctx.req), ctx.res.statusCode, this.now(), limited);
         if(event) this.emitAudit(event);
     }
 
-    private performLogin = async (ctx: RouteContext) => {
+    /** 동시 처리 상한 때문에 429 를 보냈으면 'concurrency_limit' 을 돌려준다(감사에서 차단과 구분한다). */
+    private performLogin = async (ctx: RouteContext): Promise<'concurrency_limit' | undefined> => {
         const {req, res} = ctx;
-        const json: any = ctx.body;
         // 단일 관리자 암호이므로 제출 값과 무관하게 네트워크 버킷으로 집계한다.
         // 본문 검증보다 먼저 판정한다 — 차단된 IP가 형식 오류로 401을 받아 백오프를
         // 우회하거나, 차단 상태를 401/429로 구분당하지 않게 한다.
@@ -1326,7 +1331,44 @@ class AdminServer {
             this.sendApiFailure(res, 429, {message: 'Too many login attempts'});
             return;
         }
+        return await this.runInLoginSlot(req, res, () => this.performLoginInSlot(ctx)) ? undefined : 'concurrency_limit';
+    }
 
+    /**
+     * #251: 차단은 실패가 기록된 뒤에야 걸린다. 그 전에 동시에 몰린 요청이 모두 bcrypt 대기열과 실패 지연에 쌓이지 않게
+     * 버킷마다 동시 처리 수를 센다. 칸이 없으면 429 를 보내고 false 다. 칸은 응답(실패 지연 포함)이 끝나면 돌려준다.
+     */
+    private async runInLoginSlot(req: IncomingMessage, res: ServerResponse, handler: () => Promise<void>): Promise<boolean> {
+        const bucket = this.buildLoginAttemptKey(req);
+        const inFlight = this._loginInFlight.get(bucket) ?? 0;
+        if(inFlight >= LOGIN_MAX_IN_FLIGHT) {
+            this.sendApiFailure(res, 429, {code: 'login_concurrency_limit', message: 'Too many login attempts'});
+            return false;
+        }
+        this._loginInFlight.set(bucket, inFlight + 1);
+        try {
+            await handler();
+        } finally {
+            const left = (this._loginInFlight.get(bucket) ?? 1) - 1;
+            if(left > 0) this._loginInFlight.set(bucket, left); else this._loginInFlight.delete(bucket);
+        }
+        return true;
+    }
+
+    /** /api/login 과 같은 순서로 차단을 먼저 보고, 그다음 동시 처리 칸을 잡는다. */
+    private inLoginSlot(handler: (ctx: RouteContext) => Promise<void>): (ctx: RouteContext) => Promise<void> {
+        return async (ctx) => {
+            if(this.isLoginBlocked(ctx.req)) {
+                this.sendApiFailure(ctx.res, 429, {message: 'Too many login attempts'});
+                return;
+            }
+            await this.runInLoginSlot(ctx.req, ctx.res, () => handler(ctx));
+        };
+    }
+
+    private performLoginInSlot = async (ctx: RouteContext) => {
+        const {req, res} = ctx;
+        const json: any = ctx.body;
         // #102 (U2-10): 로그인 본문은 {username, password} 하나다. 옛 {key} 별칭과 username 기본값('admin')은 지웠다.
         const password = (typeof json?.['password'] == 'string' ? json['password'] : '').trim();
         const bootstrapToken = typeof json?.['bootstrapToken'] == 'string' ? json['bootstrapToken'] : undefined;
@@ -1376,6 +1418,15 @@ class AdminServer {
             await this.completeLogin(req, res, result.user.id, {
                 id: result.user.id, username: result.user.username, displayName: result.user.displayName, role: result.user.role
             }, result.user.mustChangePassword);
+            return;
+        }
+
+        if(password.length > MAX_PASSWORD_LENGTH) {
+            // #251: 긴 비밀번호로 bcrypt 비용을 키우지 못하게 검증 없이 실패로 처리한다. 실패 횟수에도 넣는다.
+            // 길이는 저장 정책(validatePassword)과 같게 앞뒤 공백을 뺀 값으로 센다.
+            this.recordLoginFailure(req);
+            await this.delayFailedLogin(req);
+            this.sendApiFailure(res, 401);
             return;
         }
 

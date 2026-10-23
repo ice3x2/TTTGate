@@ -6,6 +6,7 @@ import {IdentityMigration} from "../../../../src/server/rbac/IdentityMigration";
 import {IdentityStore} from "../../../../src/server/rbac/IdentityStore";
 import {createTestRoot, applyTestRoot, cleanupTestRoot} from "../../../helpers/runtime";
 import {httpRequest} from "../../../helpers/http";
+import {AuditEvent, AuditSinkRegistry} from "../../../../src/server/audit/AuditSink";
 
 jest.setTimeout(60_000);
 
@@ -17,6 +18,16 @@ type Fixture = {
     rootDir: string;
     request: (method: string, target: string, body?: object, headers?: Record<string, string>) => Promise<ApiResponse>;
     loginAs: (body: object) => Promise<ApiResponse & {auth?: Auth}>;
+    api: AdminServer;
+};
+
+/** 조건이 참이 될 때까지 기다린다. 시간 안에 참이 되지 않으면 실패한다. */
+const waitUntil = async (condition: () => boolean, timeoutMs: number, label: string): Promise<void> => {
+    const deadline = Date.now() + timeoutMs;
+    while(!condition()) {
+        if(Date.now() > deadline) throw new Error(`waitUntil timed out: ${label}`);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+    }
 };
 
 /**
@@ -66,7 +77,7 @@ const withServer = async (
             return {...response, auth};
         };
 
-        await check({port, rootDir: root.rootDir, request, loginAs});
+        await check({port, rootDir: root.rootDir, request, loginAs, api});
     } finally {
         try { await api?.close(); } finally { await cleanupTestRoot(root); }
     }
@@ -488,6 +499,138 @@ describe("rbac-login: #96 권한 결정기 · 비밀번호 변경 게이트 · /
                 {Cookie: auth.Cookie, "x-csrf-token": auth["X-CSRF-Token"]});
             expect(changed.status).toBe(503);
             expect(changed.body).toMatchObject({success: false, code: "identity_store_unavailable"});
+        });
+    });
+
+    // #251 REQ-1 / AC-1 — 한 IP 에서 동시에 몰린 로그인은 상한(5)만 bcrypt 까지 간다. 나머지는 바로 429 다.
+    // verifyPassword 를 게이트에 묶어 다섯 건이 끝나지 않은 채로 둔다. 그래야 기존 차단(실패 5회)이 대신 429 를 주는 일이 없다.
+    it("concurrent logins from one IP run verifyPassword at most five times and the rest get 429", async () => {
+        await withServer(setupBcryptAccount("routes-password"), async ({loginAs}) => {
+            const store = IdentityStore.instance;
+            const original = store.verifyPassword.bind(store);
+            let release!: () => void;
+            const gate = new Promise<void>((resolve) => { release = resolve; });
+            const verify = jest.spyOn(store, "verifyPassword").mockImplementation(async (username, password) => {
+                await gate;
+                return original(username, password);
+            });
+            const events: AuditEvent[] = [];
+            AuditSinkRegistry.set({reserve: () => true, record: async (event) => { events.push(event); }});
+            try {
+                const limited: ApiResponse[] = [];
+                const pending = Array.from({length: 50}, () => loginAs({username: "admin", password: "wrong-password"})
+                    .then((response) => { if(response.status === 429) limited.push(response); return response; }));
+                await waitUntil(() => limited.length === 45, 20_000, "45 requests limited");
+                expect(verify).toHaveBeenCalledTimes(5);
+                expect(limited.every((response) => response.body?.code === "login_concurrency_limit")).toBe(true);
+                // 상한 429 는 차단이 아니라 reason 으로 감사한다(버킷당 1분 1건).
+                await waitUntil(() => events.some((event) => event.type === "login_failure"), 5_000, "login_failure audit");
+                const failures = events.filter((event) => event.type === "login_failure");
+                expect(failures).toHaveLength(1);
+                expect(failures[0].detail).toEqual({username: "admin", reason: "concurrency_limit"});
+                release();
+                const responses = await Promise.all(pending);
+                expect(responses.filter((response) => response.status === 401)).toHaveLength(5);
+                expect(verify).toHaveBeenCalledTimes(5);
+            } finally {
+                release();
+                verify.mockRestore();
+                AuditSinkRegistry.reset();
+            }
+        });
+    });
+
+    // #251 REQ-1 — 2단계 로그인(/api/login/mfa)도 같은 버킷의 동시 처리 칸을 쓴다.
+    // 실패 지연을 게이트에 묶어 다섯 건을 붙잡아 둔다. 실패 기록은 막아 버킷이 차단되지 않게 한다.
+    // 그래야 여섯째 요청의 429 가 차단이 아니라 동시 처리 상한에서 온 것임을 code 로 가릴 수 있다.
+    it("/api/login/mfa shares the per-bucket concurrency limit", async () => {
+        await withServer(setupBcryptAccount("routes-password"), async ({request, api}) => {
+            let release!: () => void;
+            const gate = new Promise<void>((resolve) => { release = resolve; });
+            const delay = jest.spyOn(api as any, "delayFailedLogin").mockImplementation(() => gate);
+            const record = jest.spyOn(api as any, "recordLoginFailure").mockImplementation(() => undefined);
+            try {
+                const held = Array.from({length: 5}, () => request("POST", "/api/login/mfa", {mfaTicket: "nope", code: "123456"}));
+                await waitUntil(() => delay.mock.calls.length === 5, 20_000, "five MFA failures held");
+                const sixth = await request("POST", "/api/login/mfa", {mfaTicket: "nope", code: "123456"});
+                expect(sixth.status).toBe(429);
+                expect(sixth.body?.code).toBe("login_concurrency_limit");
+                // 비밀번호 로그인도 같은 칸을 센다.
+                const password = await request("POST", "/api/login", {username: "admin", password: "routes-password"});
+                expect(password.status).toBe(429);
+                expect(password.body?.code).toBe("login_concurrency_limit");
+                release();
+                expect((await Promise.all(held)).map((response) => response.status)).toEqual([401, 401, 401, 401, 401]);
+            } finally {
+                release();
+                delay.mockRestore();
+                record.mockRestore();
+            }
+        });
+    });
+
+    // #251 REQ-3 — 차단된 버킷은 칸이 차 있어도 두 경로 모두 차단 429(code 없음)를 받는다. 확인 순서가 같아야 한다.
+    it("a blocked bucket gets the plain blocked 429 on both login routes even when the slots are full", async () => {
+        await withServer(setupBcryptAccount("routes-password"), async ({request, api}) => {
+            let release!: () => void;
+            const gate = new Promise<void>((resolve) => { release = resolve; });
+            const delay = jest.spyOn(api as any, "delayFailedLogin").mockImplementation(() => gate);
+            try {
+                // 실패 다섯 건이 기록되어 버킷이 차단되고, 지연에 묶여 칸 다섯 개를 붙잡는다.
+                const held = Array.from({length: 5}, () => request("POST", "/api/login/mfa", {mfaTicket: "nope", code: "123456"}));
+                await waitUntil(() => delay.mock.calls.length === 5, 20_000, "five MFA failures held");
+                for(const [target, body] of [["/api/login/mfa", {mfaTicket: "nope", code: "123456"}], ["/api/login", {username: "admin", password: "routes-password"}]] as const) {
+                    const response = await request("POST", target, body);
+                    expect({target, status: response.status, code: response.body?.code}).toEqual({target, status: 429, code: undefined});
+                }
+                release();
+                await Promise.all(held);
+            } finally {
+                release();
+                delay.mockRestore();
+            }
+        });
+    });
+
+    // #251 REQ-3 — 동시 처리 칸은 요청이 끝나면 돌아온다. 앞선 요청이 끝난 뒤의 로그인은 정상으로 처리한다.
+    it("frees the concurrency slots after the requests finish", async () => {
+        await withServer(setupBcryptAccount("routes-password"), async ({loginAs}) => {
+            const first = await Promise.all(Array.from({length: 4}, () => loginAs({username: "admin", password: "wrong-password"})));
+            expect(first.map((response) => response.status)).toEqual([401, 401, 401, 401]);
+            const ok = await loginAs({username: "admin", password: "routes-password"});
+            expect(ok.status).toBe(200);
+            // 성공으로 실패 횟수가 지워졌으므로 다시 다섯 번 동시 처리가 가능하다.
+            const again = await Promise.all(Array.from({length: 5}, () => loginAs({username: "admin", password: "wrong-password"})));
+            expect(again.map((response) => response.status)).toEqual([401, 401, 401, 401, 401]);
+        });
+    });
+
+    // #251 REQ-2 / AC-2 — 너무 긴 비밀번호는 bcrypt 없이 실패로 처리하고 실패 횟수에 넣는다.
+    it("rejects an over-long password with 401 without running verifyPassword and counts it as a failure", async () => {
+        await withServer(setupBcryptAccount("routes-password"), async ({loginAs}) => {
+            const verify = jest.spyOn(IdentityStore.instance, "verifyPassword");
+            try {
+                for(let i = 0; i < 5; i++) {
+                    expect((await loginAs({username: "admin", password: "a".repeat(2000)})).status).toBe(401);
+                }
+                expect(verify).not.toHaveBeenCalled();
+                expect((await loginAs({username: "admin", password: "routes-password"})).status).toBe(429);
+            } finally {
+                verify.mockRestore();
+            }
+        });
+    });
+
+    // #251 REQ-2 — 경계: 최대 길이(1024자) 비밀번호는 평소대로 검증한다.
+    it("verifies a password of exactly the maximum length as usual", async () => {
+        await withServer(setupBcryptAccount("routes-password"), async ({loginAs}) => {
+            const verify = jest.spyOn(IdentityStore.instance, "verifyPassword");
+            try {
+                expect((await loginAs({username: "admin", password: "a".repeat(1024)})).status).toBe(401);
+                expect(verify).toHaveBeenCalledTimes(1);
+            } finally {
+                verify.mockRestore();
+            }
         });
     });
 });

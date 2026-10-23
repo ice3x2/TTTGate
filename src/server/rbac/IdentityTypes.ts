@@ -62,6 +62,11 @@ export const SYSTEM_SUPERUSER_GROUP_NAME = 'Superusers';
 export const DEFAULT_GROUP_ID = 'default';
 export const MIGRATED_OWNER_ID = 'system:migrated';
 export const MIN_PASSWORD_LENGTH = 8;
+/**
+ * #251: 비밀번호 최대 길이(앞뒤 공백을 뺀 길이). 로그인은 이보다 긴 값을 bcrypt 없이 거부하므로 저장할 때도 막는다.
+ * bcrypt 는 앞 72바이트만 보지만, 긴 암호문(passphrase)을 그대로 붙여 넣는 사용자를 위해 넉넉히 둔다.
+ */
+export const MAX_PASSWORD_LENGTH = 1024;
 
 const ALLOWED_PROTOCOLS: readonly AllowedProtocol[] = ['TCP', 'HTTP', 'HTTPS', 'HTTP_REWRITE'];
 const ADMIN_UI_SECTIONS: readonly AdminUiSection[] = ['tunnels', 'my_audit', 'my_profile', 'my_sessions'];
@@ -135,6 +140,9 @@ export function validateDisplayName(value: unknown): {success: true; value: stri
 export function validatePassword(value: unknown): {success: true; value: string} | ValidationFailure {
     if(typeof value !== 'string' || value.trim().length < MIN_PASSWORD_LENGTH) {
         return invalid('password_too_short', `password must be at least ${MIN_PASSWORD_LENGTH} characters`);
+    }
+    if(value.trim().length > MAX_PASSWORD_LENGTH) {
+        return invalid('password_too_long', `password must be at most ${MAX_PASSWORD_LENGTH} characters`);
     }
     return {success: true, value: value.trim()};
 }
