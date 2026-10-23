@@ -12,6 +12,7 @@ import {ResourcePolicyRegistry} from "../util/ResourcePolicy";
 import LoggerFactory  from "../util/logger/LoggerFactory";
 import {SystemInfoProviderRegistry} from "../commons/SystemInfoProvider";
 import {sysinfoMessagePacket} from "./sysinfoPacket";
+import {HEARTBEAT_CAPABILITY, heartbeatKindOf, heartbeatPacket, HeartbeatPolicyRegistry} from "../commons/Heartbeat";
 const logger = LoggerFactory.getLogger('client', 'TunnelClient');
 
 
@@ -76,6 +77,10 @@ class TunnelClient {
     private _waitBufferBytesTotal: number = 0;
     private _protocolVersion: number = 1;
     private _legacyMode: boolean = true;
+    /** #230: 서버가 heartbeat 를 알렸는지, ping 타이머, 마지막으로 제어 패킷을 받은 시각. */
+    private _serverHeartbeat = false;
+    private _heartbeatTimer: NodeJS.Timeout | undefined;
+    private _lastControlReceiveAt = 0;
     private _closeCountSafe = false;
 
 
@@ -172,6 +177,7 @@ class TunnelClient {
 
 
     private failHandshake(err?: Error) : void {
+        this.stopHeartbeat();
         this._closeCountSafe = false;
         this._state = CtrlState.None
         this._ctrlHandler?.end_();
@@ -291,6 +297,7 @@ class TunnelClient {
 
     private closeControlHandler(handler: SocketHandler, error?: Error): void {
         if(handler !== this._ctrlHandler) return;
+        this.stopHeartbeat();
         this._closeCountSafe = false;
         this._state = CtrlState.None;
         this._ctrlHandler = undefined;
@@ -327,6 +334,7 @@ class TunnelClient {
             logger.error(`onReceiveFromCtrlHandler - packetStreamer is undefined for handler: ${handler.id}`);
             return;
         }
+        this._lastControlReceiveAt = Date.now();
         const result = handler.packetStreamer.readCtrlPacketResult(data);
         if(result.error) {
             logger.error(`Control protocol ${result.error.kind} failure; closing current connection`);
@@ -334,6 +342,8 @@ class TunnelClient {
             return;
         }
         for(let packet of result.packets) {
+            // #230: heartbeat 는 몇 초마다 오므로 패킷마다 로그를 남기지 않는다.
+            if(heartbeatKindOf(packet)) continue;
             logger.info(`onReceiveFromCtrlHandler - cmd:${CtrlCmd[packet.cmd]}, sessionID:${packet.sessionID}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
             if(this._state == CtrlState.Syncing && packet.cmd == CtrlCmd.SyncCtrlAck) {
                 const metadata = packet.syncCtrlAckMetaResult;
@@ -343,12 +353,15 @@ class TunnelClient {
                 }
                 const syncMeta = metadata.kind === 'valid' ? metadata.value : undefined;
                 this._closeCountSafe = false;
+                this._serverHeartbeat = false;
                 this._id = syncMeta?.controlID ?? packet.ID;
                 if(syncMeta && this._option.clientId && this._option.clientSecret) {
                     this._protocolVersion = syncMeta.protocolVersion;
                     this._legacyMode = false;
                     this._closeCountSafe = syncMeta.protocolVersion === CONTROL_PROTOCOL_V2 && syncMeta.capabilities.includes('close-count-safe') &&
                         DEFAULT_PROTOCOL_V2_CAPABILITIES.includes('close-count-safe');
+                    this._serverHeartbeat = syncMeta.capabilities.includes(HEARTBEAT_CAPABILITY) &&
+                        DEFAULT_PROTOCOL_V2_CAPABILITIES.includes(HEARTBEAT_CAPABILITY);
                     // v2 는 HMAC 증명으로 인증한다. legacy 공유 키는 싣지 않는다(평문·허위 서버로 새지 않게, #161).
                     this.sendAckCtrl(handler, this._id, '', {
                         protocolVersion: CONTROL_PROTOCOL_V2,
@@ -614,6 +627,7 @@ class TunnelClient {
             this._state = CtrlState.Connected;
             this._onCtrlStateCallback?.(this, 'connected');
             this.sendClientSysinfo(ctrlHandler, id);
+            if(!this._legacyMode && this._serverHeartbeat) this.startHeartbeat(ctrlHandler, id);
         });
     }
 
@@ -748,7 +762,37 @@ class TunnelClient {
         return false;
     }
 
+    /**
+     * #230: intervalMs 마다 ping 을 보내고, timeoutMs 동안 아무 제어 패킷도 받지 못하면 연결을 끊는다.
+     * 끊으면 기존 'closed' 흐름을 따라 TTTClient 가 다시 연결한다.
+     */
+    private startHeartbeat(handler: TunnelControlHandler, id: number): void {
+        this.stopHeartbeat();
+        const policy = HeartbeatPolicyRegistry.current();
+        this._lastControlReceiveAt = Date.now();
+        this._heartbeatTimer = setInterval(() => {
+            if(handler !== this._ctrlHandler || this._state !== CtrlState.Connected) {
+                this.stopHeartbeat();
+                return;
+            }
+            const silentMs = Date.now() - this._lastControlReceiveAt;
+            if(silentMs > policy.timeoutMs) {
+                logger.warn(`Control connection heartbeat timed out (no packet for ${silentMs}ms). Closing to reconnect.`);
+                this.closeControlHandler(handler, new Error("Control connection heartbeat timed out"));
+                return;
+            }
+            handler.sendData(heartbeatPacket(id, "ping"));
+        }, policy.intervalMs);
+        this._heartbeatTimer.unref?.();
+    }
+
+    private stopHeartbeat(): void {
+        if(this._heartbeatTimer) clearInterval(this._heartbeatTimer);
+        this._heartbeatTimer = undefined;
+    }
+
     public destroy(): void {
+        this.stopHeartbeat();
         this._closeCountSafe = false;
         this._state = CtrlState.None;
         this._ctrlHandler?.destroy();

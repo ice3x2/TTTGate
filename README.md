@@ -189,6 +189,7 @@ A daemon whose app stops with a configuration error is not restarted. The reason
   - The certificate is valid for one year. The server makes a new one at start when fewer than 30 days remain. After that, every client must enroll again (or pin the new certificate), so restart the server at a planned time before the year ends.
 - Trusted clients can no longer be changed through `POST /api/serverOption`. Use `/api/trustedClients` or the **Trusted clients** screen. `GET /api/serverOption` shows `********` in place of client secrets. Sending the masked list back keeps the stored secrets.
 - Adding or removing a trusted client no longer restarts the control listener. Only the removed client, or a client whose secret was renewed, is disconnected.
+- The control connection now has a heartbeat. A client pings every 10 seconds, and either side closes the control connection after 30 seconds without any control packet. The client then reconnects. This finds connections that are cut without a FIN or RST (a pulled cable, an expired NAT entry). The heartbeat is used only when both sides support it, so older servers and clients work as before.
 - The client stops with an error for options it does not know (exit code 2), and for a `-ca`, `-cert`, `-privateKey` or `-clientSecretFile` file that it cannot read (exit code 78). Check your service scripts.
 
 Read this before you replace a running server with this version.

@@ -62,8 +62,14 @@ export type ProcessTunnelHarness = {
     waitForClientOnline(timeoutMs?: number): Promise<void>;
     waitForTunnelOnline(forwardPort: number, timeoutMs?: number): Promise<void>;
     restartServer(patch?: {serverOptionExtra?: Partial<ServerOption>}): Promise<void>;
+    /** #232: 서버 프로세스를 SIGKILL 로 즉시 죽인다(정리 기회 없음). 다시 띄우려면 startServer. */
+    killServer(): Promise<void>;
+    startServer(): Promise<void>;
     stopClient(index?: number): Promise<void>;
-    startClient(index?: number): Promise<void>;
+    /** #231: 클라이언트 프로세스를 SIGKILL 로 즉시 죽인다. 서버가 그 클라이언트를 목록에서 뺄 때까지 기다리지 않는다. */
+    killClient(index?: number): Promise<void>;
+    /** connectPort: 서버 대신 이 포트로 연결한다(#230 — 사이에 프록시를 둘 때). */
+    startClient(index?: number, options?: {connectPort?: number}): Promise<void>;
     dispose(): Promise<void>;
 };
 
@@ -91,6 +97,14 @@ const makeRootLayout = async (rootDir: string): Promise<void> => {
     for(const sub of ["config", "bin", "logs", path.join("cache", "server"), path.join("cache", "client"), "cert"]) {
         await fs.promises.mkdir(path.join(rootDir, sub), {recursive: true});
     }
+};
+
+/** SIGKILL 로 즉시 끝낸다. Windows 에서는 TerminateProcess 와 같다. */
+const forceKill = async (proc: SpawnedProcess): Promise<void> => {
+    if(proc.child.exitCode !== null || proc.child.signalCode !== null) return;
+    proc.kill("SIGKILL");
+    await proc.waitForExit(10000);
+    if(proc.child.exitCode === null && proc.child.signalCode === null) throw new Error(`Process did not die: pid ${proc.pid}`);
 };
 
 const terminate = async (proc: SpawnedProcess): Promise<void> => {
@@ -231,10 +245,10 @@ export async function createProcessTunnelHarness(options: ProcessTunnelOptions):
             return proc;
         };
 
-        const spawnClient = (index: number): SpawnedProcess => {
+        const spawnClient = (index: number, connectPort: number = tunnelPort): SpawnedProcess => {
             const proc = spawnProcess(process.execPath, [
                 APP_JS, "client",
-                "-addr", `127.0.0.1:${tunnelPort}`,
+                "-addr", `127.0.0.1:${connectPort}`,
                 "-clientId", clientIds[index],
                 "-name", clientIds[index]
             ], {
@@ -400,13 +414,23 @@ export async function createProcessTunnelHarness(options: ProcessTunnelOptions):
             }, {timeoutMs: 20000, intervalMs: 200, label: `stopClient(${index})`});
         };
 
-        const startClient = async (index: number = 0): Promise<void> => {
+        const killClient = async (index: number = 0): Promise<void> => {
+            const proc = clientProcesses[index];
+            if(!proc || proc.child.exitCode !== null || proc.child.signalCode !== null) return;
+            await forceKill(proc);
+        };
+
+        const startClient = async (index: number = 0, options: {connectPort?: number} = {}): Promise<void> => {
             const existing = clientProcesses[index];
             if(existing && existing.child.exitCode === null && existing.child.signalCode === null) {
                 throw new Error("Client is already running");
             }
-            clientProcesses[index] = spawnClient(index);
+            clientProcesses[index] = spawnClient(index, options.connectPort);
             await waitForClientOnline();
+        };
+
+        const killServer = async (): Promise<void> => {
+            await forceKill(currentServer);
         };
 
         const restartServer = async (patch: {serverOptionExtra?: Partial<ServerOption>} = {}): Promise<void> => {
@@ -415,6 +439,11 @@ export async function createProcessTunnelHarness(options: ProcessTunnelOptions):
                 Object.assign(serverOption, patch.serverOptionExtra);
                 await writeServerYaml();
             }
+            await startServer();
+        };
+
+        const startServer = async (): Promise<void> => {
+            if(currentServer.child.exitCode === null && currentServer.child.signalCode === null) throw new Error("Server is already running");
             const deadline = Date.now() + 20000;
             for(;;) {
                 currentServer = spawnServer();
@@ -468,7 +497,10 @@ export async function createProcessTunnelHarness(options: ProcessTunnelOptions):
             waitForClientOnline: adminAccessEnabled ? waitForClientOnline : disabledFn("waitForClientOnline"),
             waitForTunnelOnline: adminAccessEnabled ? waitForTunnelOnline : disabledFn("waitForTunnelOnline"),
             restartServer,
+            killServer,
+            startServer,
             stopClient,
+            killClient,
             startClient,
             dispose
         };

@@ -2,7 +2,11 @@ import http from "http";
 import net from "net";
 import {createHash} from "crypto";
 import {WebSocket} from "ws";
+
 import {startTargetService, TargetService, bigPayloadChunk, bigPayloadDigest} from "./targetService";
+
+/** 타이머(단조 시계)와 측정 시계의 밀리초 반올림 차이(#243). */
+const SLOW_TOLERANCE_MS = 2;
 
 jest.setTimeout(30_000);
 
@@ -112,18 +116,19 @@ describe("targetService", () => {
     });
 
     test("GET /slow?ms=300 waits at least 300ms before responding", async () => {
-        const start = Date.now();
+        // #243: 단조 시계로 재고, 밀리초 반올림 오차만큼(2ms) 허용한다.
+        const start = performance.now();
         const res = await rawRequest({port: target.port, path: "/slow?ms=300"});
-        expect(Date.now() - start).toBeGreaterThanOrEqual(300);
+        expect(performance.now() - start).toBeGreaterThanOrEqual(300 - SLOW_TOLERANCE_MS);
         expect(res.body.toString("utf-8")).toBe("slow-done");
     });
 
     test("GET /slow honors the configured default delay", async () => {
         const other = await startTargetService({slowDelayMs: 150});
         try {
-            const start = Date.now();
+            const start = performance.now();
             await rawRequest({port: other.port, path: "/slow"});
-            expect(Date.now() - start).toBeGreaterThanOrEqual(150);
+            expect(performance.now() - start).toBeGreaterThanOrEqual(150 - SLOW_TOLERANCE_MS);
         } finally {
             await other.close();
         }

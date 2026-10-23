@@ -9,6 +9,7 @@ import LoggerFactory  from "../util/logger/LoggerFactory";
 import {SysInfo} from "../commons/SysMonitor";
 import {timingSafeStringEqual} from "../util/timingSafeStringEqual";
 import {TunnelHandshakePolicyRegistry} from "./TunnelHandshakePolicy";
+import {HEARTBEAT_CAPABILITY, heartbeatKindOf, heartbeatPacket} from "../commons/Heartbeat";
 const logger = LoggerFactory.getLogger('server', 'ClientHandlerPool');
 
 
@@ -44,6 +45,7 @@ class ClientHandlerPool {
     private _clientId : string = '';
     private _protocolVersion: number = 1;
     private _capabilities: Array<string> = [];
+    private _lastControlReceiveAt = Date.now();
     private _legacyMode: boolean = true;
 
     // 열린 핸들러 맵. 세션ID를 키로 사용한다.
@@ -365,7 +367,23 @@ class ClientHandlerPool {
      * @param handler
      * @param packet
      */
+    /** #230: 이 풀의 제어 연결에서 마지막으로 패킷을 받은 시각. */
+    public get lastControlReceiveAt(): number {
+        return this._lastControlReceiveAt;
+    }
+
+    public get supportsHeartbeat(): boolean {
+        return !this._legacyMode && this._capabilities.includes(HEARTBEAT_CAPABILITY);
+    }
+
     public delegateReceivePacketOfControlHandler(handler: TunnelControlHandler, packet: CtrlPacket) : void {
+        this._lastControlReceiveAt = Date.now();
+        const heartbeat = heartbeatKindOf(packet);
+        if(heartbeat) {
+            // 패킷마다 로그를 남기지 않는다. ping 에는 바로 pong 으로 답한다.
+            if(heartbeat === "ping") handler.sendData(heartbeatPacket(packet.ID, "pong"));
+            return;
+        }
         logger.info(`Received a packet from the control handler. cmd: ${CtrlCmd[packet.cmd]} sessionID: ${packet.sessionID}`)
         if(packet.cmd == CtrlCmd.Message) {
             const metadata = packet.messageMetaResult;
