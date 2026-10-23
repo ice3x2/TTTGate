@@ -225,6 +225,22 @@ export function startTargetService(options: {slowDelayMs?: number} = {}): Promis
                 res.writeHead(200, {"Content-Type": req.headers["content-type"] ?? "application/octet-stream"});
                 res.end(body);
             }
+        } else if(pathname === "/big-cut") {
+            // #237: mb 만큼 보낸다고 알리고, cutAfterMb 만큼만 보낸 뒤 대상 쪽에서 연결을 끊는다.
+            const mb = Math.min(1024, Math.max(1, Number(parsedUrl.searchParams.get("mb") ?? "64")));
+            const cutAt = Math.min(mb, Math.max(1, Number(parsedUrl.searchParams.get("cutAfterMb") ?? "8"))) * 1048576;
+            res.writeHead(200, {"Content-Type": "application/octet-stream", "Content-Length": String(mb * 1048576)});
+            let offset = 0;
+            const writeNext = () => {
+                while(offset < cutAt) {
+                    const length = Math.min(CHUNK_SIZE, cutAt - offset);
+                    const ok = res.write(bigPayloadChunk(offset, length));
+                    offset += length;
+                    if(!ok) { res.once("drain", writeNext); return; }
+                }
+                res.socket?.destroy();
+            };
+            writeNext();
         } else if(pathname === "/drip") {
             // #231·#232: 끊길 때까지 조금씩 계속 보낸다. 전송 도중의 장애를 재현할 때 쓴다.
             const intervalMs = Math.max(5, Number(parsedUrl.searchParams.get("ms") ?? "50"));
