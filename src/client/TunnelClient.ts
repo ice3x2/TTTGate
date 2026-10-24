@@ -13,6 +13,7 @@ import LoggerFactory  from "../util/logger/LoggerFactory";
 import {SystemInfoProviderRegistry} from "../commons/SystemInfoProvider";
 import {sysinfoMessagePacket} from "./sysinfoPacket";
 import {HEARTBEAT_CAPABILITY, heartbeatKindOf, heartbeatPacket, HeartbeatPolicyRegistry} from "../commons/Heartbeat";
+import {TTTClientRuntimeRegistry} from "./TTTClientRuntime";
 const logger = LoggerFactory.getLogger('client', 'TunnelClient');
 
 
@@ -80,6 +81,8 @@ class TunnelClient {
     /** #230: 서버가 heartbeat 를 알렸는지, ping 타이머, 마지막으로 제어 패킷을 받은 시각. */
     private _serverHeartbeat = false;
     private _heartbeatTimer: NodeJS.Timeout | undefined;
+    /** #255: 접속과 핸드셰이크의 기한 타이머. heartbeat 는 핸드셰이크가 끝난 뒤에만 돌기 때문이다. */
+    private _handshakeTimer: NodeJS.Timeout | undefined;
     private _lastControlReceiveAt = 0;
     private _closeCountSafe = false;
 
@@ -153,6 +156,8 @@ class TunnelClient {
             
             // 연결 시도가 성공적으로 시작된 후에만 state 변경
             this._state = CtrlState.Connecting;
+            // OS 접속 기한은 SYN 단계에만 걸린다. TLS 핸드셰이크에 답하지 않는 상대에 묶이지 않게 기한을 둔다(#255).
+            this.armHandshakeDeadline(this._ctrlHandler, TTTClientRuntimeRegistry.current().controlConnectTimeoutMs, 'connect');
             this._ctrlHandler.handlerType = HandlerType.Control;
             this._ctrlHandler.packetStreamer = new CtrlPacketStreamer();
             
@@ -178,6 +183,7 @@ class TunnelClient {
 
     private failHandshake(err?: Error) : void {
         this.stopHeartbeat();
+        this.clearHandshakeDeadline();
         this._closeCountSafe = false;
         this._state = CtrlState.None
         this._ctrlHandler?.end_();
@@ -283,6 +289,8 @@ class TunnelClient {
     private onCtrlHandlerEvent = (handler: SocketHandler, state: SocketState, data?: any) : void => {
         if(handler !== this._ctrlHandler) return;
         if(state == SocketState.Connected && this._ctrlHandler) {
+            // 접속은 끝났다. 이제 SyncCtrlAck 를 받고 AckCtrl 을 보낼 때까지의 기한을 건다(#255).
+            this.armHandshakeDeadline(this._ctrlHandler, TTTClientRuntimeRegistry.current().syncAckTimeoutMs, 'SyncCtrlAck');
             this.sendSyncAndSyncSyncCmd(this._ctrlHandler);
         }
         else if(state == SocketState.Receive && handler == this._ctrlHandler) {
@@ -298,6 +306,7 @@ class TunnelClient {
     private closeControlHandler(handler: SocketHandler, error?: Error): void {
         if(handler !== this._ctrlHandler) return;
         this.stopHeartbeat();
+        this.clearHandshakeDeadline();
         this._closeCountSafe = false;
         this._state = CtrlState.None;
         this._ctrlHandler = undefined;
@@ -624,6 +633,7 @@ class TunnelClient {
                 this.failHandshake(err);
                 return;
             }
+            this.clearHandshakeDeadline();
             this._state = CtrlState.Connected;
             this._onCtrlStateCallback?.(this, 'connected');
             this.sendClientSysinfo(ctrlHandler, id);
@@ -791,8 +801,31 @@ class TunnelClient {
         this._heartbeatTimer = undefined;
     }
 
+    /**
+     * #255: 기한 안에 다음 단계로 가지 못하면 연결을 닫는다. 닫으면 기존 'closed' 흐름을 따라 TTTClient 가 다시 연결한다.
+     * 새 기한은 앞 기한을 바꾼다(접속 → SyncCtrlAck).
+     * ConnectOpt.connectTimeout 을 쓰지 않고 한 타이머로 두 단계를 다룬다. 단계가 바뀔 때 기한을 이어 걸고,
+     * 어느 단계에서 끝났는지 같은 경로(closeControlHandler)로 닫기 위해서다.
+     */
+    private armHandshakeDeadline(handler: SocketHandler, timeoutMs: number, stage: 'connect' | 'SyncCtrlAck'): void {
+        this.clearHandshakeDeadline();
+        this._handshakeTimer = setTimeout(() => {
+            this._handshakeTimer = undefined;
+            if(handler !== this._ctrlHandler || this._state === CtrlState.Connected) return;
+            logger.warn(`Control connection ${stage} timed out after ${timeoutMs}ms. Closing to reconnect.`);
+            this.closeControlHandler(handler, new Error(`Control connection ${stage} timed out`));
+        }, timeoutMs);
+        this._handshakeTimer.unref?.();
+    }
+
+    private clearHandshakeDeadline(): void {
+        if(this._handshakeTimer) clearTimeout(this._handshakeTimer);
+        this._handshakeTimer = undefined;
+    }
+
     public destroy(): void {
         this.stopHeartbeat();
+        this.clearHandshakeDeadline();
         this._closeCountSafe = false;
         this._state = CtrlState.None;
         this._ctrlHandler?.destroy();
