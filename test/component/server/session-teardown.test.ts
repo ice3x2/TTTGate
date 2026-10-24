@@ -83,6 +83,8 @@ test('a CloseSession that arrives after the data connection closed is still hand
     await waitFor(() => runtime.debugSessionCount() === 0, 3000, 'server session map left an entry');
     // CloseSession 을 받았으므로 유예 타이머도 지운다.
     expect((peer.pool as any)._dataDropTimers.size).toBe(0);
+    // 외부 쪽이 끝나 매핑에서 빠지면 넘긴 닫기 길이 기록도 지운다(#266, 세션마다 쌓이지 않게).
+    expect(runtime._forwardedCloseLengths.size).toBe(0);
     expect((peer.pool as any)._foreignCloseCount).toBe(0);
     // 닫기는 CloseSession 의 한 번뿐이다. 유예 타이머가 끝난 세션을 다시 닫지 않는다.
     expect(calls).toEqual([[session.packet.sessionID, 'normal-close'.length]]);
@@ -147,6 +149,50 @@ test('closing the tunnel server does not close a session that already ended norm
     expect(calls).toEqual([]);
     expect(session.socket.destroyed).toBe(false);
 }));
+
+// #266 — CloseSession(길이 N)을 받은 세션은 외부 쪽이 배출을 끝낼 때까지 매핑에 남는다. 그 사이 TunnelServer 를 닫거나
+// (데이터 연결이 아직 열려 있음) 제어 연결이 끊겨도 길이 0 으로 다시 닫지 않는다. 0 이면 HTTP 외부 연결은 배출 중인 응답을 끊는다.
+test.each(['close the tunnel server', 'drop the control connection'] as const)(
+    'a session that already received CloseSession keeps its close length when we %s (#266)', async (action) => withLegacyIds(async f => {
+    const runtime = f.server.tunnelServer as any;
+    runtime.configureSessionTtl(0);
+    const peer = await f.peer();
+    const session = await peer.open();
+    await peer.complete(session);
+    await peer.roundtrip(session, 'draining');
+    // count 를 받은 것보다 크게 보내 외부 쪽이 배출을 끝내지 않은 상태로 둔다. 데이터 연결은 열어 둔다.
+    const length = 'draining'.length + 1;
+    peer.control.write(CtrlPacket.closeSession(session.packet.ID, session.packet.sessionID, length).toBuffer());
+    await waitFor(() => (peer.pool as any)._activatedSessionHandlerMap_.get(session.packet.sessionID)?.closeReceived === true, 3000, 'CloseSession was not handled');
+    const outer = recordCloseCalls(runtime);
+    if(action === 'close the tunnel server') await runtime.close();
+    else {
+        peer.control.destroy();
+        await waitFor(() => !runtime._clientHandlerPoolMap.has(peer.pool.id), 3000, 'pool was not removed');
+    }
+    await delay(200);
+    expect(outer).toEqual([[session.packet.sessionID, length]]);
+    expect(session.socket.destroyed).toBe(false);
+}));
+
+// #266 REQ-2 — CloseSession 을 받지 않은 세션은 지금처럼 길이 0 으로 닫는다.
+test.each(['close the tunnel server', 'drop the control connection'] as const)(
+    'a session without CloseSession is still closed with length 0 when we %s (#266)', async (action) => withLegacyIds(async f => {
+    const runtime = f.server.tunnelServer as any;
+    runtime.configureSessionTtl(0);
+    const peer = await f.peer();
+    const session = await peer.open();
+    await peer.complete(session);
+    await peer.roundtrip(session, 'open');
+    const outer = recordCloseCalls(runtime);
+    if(action === 'close the tunnel server') await runtime.close();
+    else {
+        peer.control.destroy();
+        await waitFor(() => !runtime._clientHandlerPoolMap.has(peer.pool.id), 3000, 'pool was not removed');
+    }
+    expect(outer).toEqual([[session.packet.sessionID, 0]]);
+    await waitFor(() => session.socket.destroyed, 3000, 'external connection left open');
+}));
 });
 
 // REQ-3 — 엔드포인트 쪽 정상 종료는 CloseSession 을 먼저 보내고 데이터 연결을 닫는다. 외부 쪽 배출이 유예보다 오래 걸려도
@@ -167,5 +213,26 @@ test('a data connection closed after CloseSession does not close the session a s
     await waitFor(() => data.destroyed, 3000, 'data connection did not close');
     await delay(900);
     expect(calls).toEqual([[session.packet.sessionID, 'drain-later'.length + 1]]);
+}));
+
+// #266 — 유예 타이머가 넘긴 길이(F)도 같은 규칙을 따른다. 외부 쪽이 아직 배출 중이라 매핑에 남은 세션의 제어 연결이 끊기면
+// 0 이 아니라 F 로 닫는다. 외부 쪽은 다른 길이를 받으면 끊으므로 처음 넘긴 길이와 같아야 한다.
+test('a session closed by the data-drop timer keeps that length when the control connection drops (#266)', async () => withLegacyIds(async f => {
+    const runtime = f.server.tunnelServer as any;
+    runtime.configureSessionTtl(0);
+    const peer = await f.peer();
+    const session = await peer.open();
+    const data = await peer.complete(session);
+    await peer.roundtrip(session, 'timer-close');
+    // 외부 쪽 닫기를 기록만 해 세션을 매핑에 남긴다(외부 쪽이 아직 배출 중인 상태).
+    const outer: Array<[number, number]> = [];
+    runtime._onSessionCloseCallback = (sessionID: number, endLength: number) => { outer.push([sessionID, endLength]); };
+    data.destroy();
+    await waitFor(() => outer.length === 1, 3000, 'data-drop timer did not close the session');
+    expect(runtime.debugSessionCount()).toBe(1);
+    peer.control.destroy();
+    await waitFor(() => !runtime._clientHandlerPoolMap.has(peer.pool.id), 3000, 'pool was not removed');
+    expect(outer).toEqual([[session.packet.sessionID, 'timer-close'.length], [session.packet.sessionID, 'timer-close'.length]]);
+    expect(runtime._forwardedCloseLengths.size).toBe(0);
 }));
 });
