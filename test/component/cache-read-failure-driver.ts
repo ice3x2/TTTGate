@@ -103,6 +103,8 @@ const main = async () => {
             mode, prefixBytes: prefix.length, pieceBytes: PIECE_BYTES, writes: victim.writes, drains, sendLength: victim.handler.sendLength,
             pending: victim.handler.pendingWriteBytes, cacheBytes: victim.handler.pendingFileCacheBytes,
             ended: victim.handler.isEnd(), ownerRetained: owners.has(victim.handler.id),
+            // #258: 열린 핸들러의 캐시 파일은 기록이 모두 빠지면 0 으로 준다(파일이 없으면 -1).
+            cacheFileSize: fs.existsSync(cache.filePath) ? fs.statSync(cache.filePath).size : -1,
             globalBytes: SocketHandler.globalFileCacheSize - baseGlobal,
             survivorBytes: survivor?.handler.pendingFileCacheBytes ?? 0,
             survivorLive: survivor ? owners.has(survivor.handler.id) && !survivor.handler.isEnd() : true,

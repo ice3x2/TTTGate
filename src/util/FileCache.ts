@@ -12,9 +12,14 @@ interface CacheRecord {
 }
 
 const MIN_CAPACITY = 4096;
+/** 캐시 파일 이름: <pid>.<yyMMddHHmmss>.<난수>.cache */
+const CACHE_FILE_PATTERN = /^(\d+)\.\d+\.\d+\.cache$/;
 const EMPTY_BUFFER = Buffer.allocUnsafe(0);
 
 class FileCache {
+
+    /** #258: 이 프로세스가 만들어 아직 지우지 않은 캐시 파일 경로. 시작 시 정리는 이 파일만 남긴다. */
+    private static readonly OwnedPaths = new Set<string>();
 
     private _lastId: number = 1;
     private readonly _filePath: string;
@@ -51,6 +56,44 @@ class FileCache {
         return new FileCache(filePath);
     }
 
+    /**
+     * #258: 폴더에서 살아 있지 않은 프로세스가 남긴 캐시 파일을 지우고 지운 경로를 돌려준다.
+     * 캐시 파일은 deleteSync 로만 지우므로, 넘친 상태에서 죽거나 종료한 프로세스의 파일은 그대로 남는다.
+     * 이름이 캐시 형식이 아니거나 PID 가 살아 있으면(다른 사용자의 프로세스 포함) 지우지 않는다.
+     * 자기 PID 이름이라도 이 프로세스가 만들지 않은 파일은 같은 PID 로 돌던 이전 실행의 것이다(컨테이너 재시작). 지운다.
+     */
+    public static sweepStale(directoryPath: string) : string[] {
+        let names: string[];
+        try {
+            names = fs.readdirSync(directoryPath);
+        } catch {
+            return [];
+        }
+        const removed: string[] = [];
+        for(const name of names) {
+            const match = CACHE_FILE_PATTERN.exec(name);
+            if(!match) continue;
+            const pid = Number(match[1]);
+            const filePath = Path.join(directoryPath, name);
+            if(pid === process.pid ? FileCache.OwnedPaths.has(Path.resolve(filePath)) : FileCache.isProcessAlive(pid)) continue;
+            try {
+                fs.unlinkSync(filePath);
+                removed.push(filePath);
+            } catch {}
+        }
+        return removed;
+    }
+
+    private static isProcessAlive(pid: number) : boolean {
+        try {
+            process.kill(pid, 0);
+            return true;
+        } catch (e) {
+            // EPERM: 살아 있지만 신호를 보낼 권한이 없다(다른 사용자의 프로세스).
+            return (e as NodeJS.ErrnoException).code === 'EPERM';
+        }
+    }
+
     private static convertDateToString(date: Date) : string {
         let year = FileCache.tenDigitNumber(date.getFullYear() % 100);
         let month = FileCache.tenDigitNumber(date.getMonth() + 1);
@@ -73,6 +116,7 @@ class FileCache {
 
     private constructor(directoryPath: string) {
         this._filePath = Path.join(directoryPath,process.pid + "." +  FileCache.convertDateToString(new Date()) + "." + Math.floor(((Math.random() * 10000000) + 100000000)) + ".cache");
+        FileCache.OwnedPaths.add(Path.resolve(this._filePath));
     }
 
     private reset() : void {
@@ -172,6 +216,13 @@ class FileCache {
         if(this._cacheMap.size == 0) {
             this._emptyBlocks = [];
             this._cacheSize = 0;
+            // 남은 기록이 없으면 디스크도 비운다. 그러지 않으면 핸들러가 살아 있는 동안 파일이 줄지 않아,
+            // 전체 파일 캐시 집계(살아 있는 바이트)가 0 이어도 디스크에는 넘쳤던 크기가 남는다(#258).
+            if(this._fileDescriptor != -1) {
+                try {
+                    fs.ftruncateSync(this._fileDescriptor, 0);
+                } catch {}
+            }
         }
         return true;
     }
@@ -185,6 +236,7 @@ class FileCache {
             return;
         }
         this._deleted = true;
+        FileCache.OwnedPaths.delete(Path.resolve(this._filePath));
         this._cacheMap = new Map<number, CacheRecord>();
         this._emptyBlocks = [];
         this._cacheSize = 0;

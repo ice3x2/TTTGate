@@ -36,5 +36,7 @@ test.each(["last-drain", "followers", "survivor", "short-read", "success", "spli
         expect(report.cacheBytes).toBe(0);
         expect(report.ended).toBe(!successful);
         expect(report.ownerRetained).toBe(successful);
+        // #258 AC-1 — 넘친 기록을 모두 보낸 열린 핸들러의 캐시 파일은 0 이다.
+        if(successful) expect(report.cacheFileSize).toBe(0);
         expect(report.payloadValid).toBe(true);
     }, 30_000);
