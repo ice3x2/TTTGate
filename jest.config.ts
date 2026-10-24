@@ -26,7 +26,8 @@ const config: Config = {
     setupFiles: ["<rootDir>/test/setup/forgeBigInteger.ts"],
     // 테스트가 저장소 작업 트리의 파일을 만들거나 바꾸면 실행을 실패로 끝낸다(#264).
     // 같은 작업 트리에서 jest 를 여러 개 동시에 돌릴 때는 TTTGATE_SKIP_WORKTREE_GUARD=1 로 끈다.
-    globalSetup: "<rootDir>/test/setup/worktreeGuardSetup.ts",
+    // 전역 setup 은 워커 수도 넘겨 워커마다 다른 포트 범위를 쓰게 한다(#262).
+    globalSetup: "<rootDir>/test/setup/globalSetup.ts",
     globalTeardown: "<rootDir>/test/setup/worktreeGuardTeardown.ts",
     // coverage 인프라 — `npm run test:coverage`에서 실행.
     collectCoverageFrom: ["src/**/*.ts", "!src/**/*.d.ts"],
