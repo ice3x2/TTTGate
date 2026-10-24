@@ -399,7 +399,8 @@ describe("audit-sink: audited() 밖의 이벤트", () => {
     }));
 
     it("로그인 실패 감사는 형식이 틀린 username 원문을 남기지 않는다", async () => withAuditServer(async (f) => {
-        const huge = "x".repeat(64 * 1024);
+        // 로그인 본문 상한(16 KiB, #265) 안에서 가장 긴 축에 드는 값이다. 그보다 크면 본문 단계에서 413 으로 끝난다.
+        const huge = "x".repeat(8 * 1024);
         expect((await f.login({username: huge, password: "wrong-password"})).status).toBe(401);
         expect((await f.login({username: "hunter2!!secret", password: "wrong-password"})).status).toBe(401);
         const failures = f.sink.events.filter((event) => event.type === "login_failure");

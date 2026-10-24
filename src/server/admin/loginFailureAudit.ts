@@ -11,7 +11,7 @@ const OVERFLOW_KEY = 'overflow';
 
 /**
  * 로그인 실패 감사에 남길 username. 형식 검증(validateUsername)을 통과한 값만 원문으로 남긴다.
- * 인증 없는 경로라 본문 상한(1MiB)까지의 문자열이 그대로 감사 파일에 쌓일 수 있고, 사용자가 username 칸에
+ * 인증 없는 경로라 본문 상한(16 KiB, #265)까지의 문자열이 그대로 감사 파일에 쌓일 수 있고, 사용자가 username 칸에
  * 잘못 넣은 비밀번호도 남을 수 있기 때문이다(#139). 형식이 틀리면 고정값과 길이만 남긴다.
  */
 export function loginFailureUsername(value: unknown): {username: string; usernameLength?: number} {
@@ -46,7 +46,8 @@ export function createLoginFailureAuditor(options: {maxKeys?: number} = {}): (bo
             const key = blockedGate.size() >= maxKeys ? OVERFLOW_KEY : (limited ? `${gateKey}:inflight` : gateKey);
             if(!blockedGate.allow(key, now)) return undefined;
         }
-        const name = loginFailureUsername(body?.['username']);
+        // #265: 본문을 읽기 전에 거절한 요청은 body 가 undefined 다. 빠진 값과 구분해 '(unread)' 로 남긴다.
+        const name = body === undefined ? {username: '(unread)'} : loginFailureUsername(body?.['username']);
         return {
             at: now, actor: {userId: 'system'}, ip,
             type: AUDIT_EVENT_TYPES.login_failure, outcome: 'failure',
