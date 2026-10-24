@@ -1,7 +1,7 @@
 import {ExternalPortServerPool, ExternalPortServerStatus } from "./ExternalPortServerPool";
 import {TunnelServer, ClientStatus} from "./TunnelServer";
 import {EnrollmentRegistry} from "./EnrollmentRegistry";
-import {ConnectionSecurityOption, DEFAULT_AUDIT_QUEUE_SIZE, DEFAULT_AUDIT_RETENTION_DAYS, DEFAULT_GEO_CONFIG, DEFAULT_LOG_LEVEL, ServerOption, TunnelingOption, resolveSessionTtlMs} from "../types/TunnelingOption";
+import {ConnectionSecurityOption, DEFAULT_AUDIT_QUEUE_SIZE, DEFAULT_AUDIT_RETENTION_DAYS, DEFAULT_GEO_CONFIG, DEFAULT_LOG_LEVEL, DEFAULT_CLOSE_STALL_MS, DEFAULT_CLOSE_GRACE_MS, ServerOption, TunnelingOption, resolveSessionTtlMs} from "../types/TunnelingOption";
 import SocketState from "../util/SocketState";
 import {CertInfo, CertificationStore} from "./CertificationStore";
 import ServerOptionStore from "./ServerOptionStore";
@@ -343,8 +343,9 @@ class TTTServer {
         try { this._tunnelServer.configureSessionTtl(state.sessionTtlPolicy.ttlMs, state.sessionTtlPolicy.checkIntervalMs); }
         catch(error) { logger.error('session TTL restore failed', error); failures.push('session-ttl-restore'); }
         if(SocketHandler.maxGlobalMemoryBufferSize !== state.memoryLimit) AppCompositionRoot.applyGlobalMemLimitMiB(state.memoryLimit / (1024 * 1024));
-        // #267: applyServerOption 은 다른 적용이 실패하기 전에 로그 레벨을 바꾼다. 저장을 되돌리면 레벨도 이전 값으로 돌린다.
+        // #267·#268: applyServerOption 은 다른 적용이 실패하기 전에 로그 레벨과 닫기 기한을 바꾼다. 저장을 되돌리면 함께 돌린다.
         LoggerFactory.setLevel(state.serverOption.logLevel ?? DEFAULT_LOG_LEVEL);
+        TTTServer.applyCloseDeadlines(state.serverOption);
         for(const port of new Set([...Object.keys(state.external).map(Number), ...Object.keys(this._appliedExternal).map(Number), ...this._dirtyExternal])) {
             const previous = state.external[port];
             const status = this._externalPortServerPool.getServerStatus(port);
@@ -409,6 +410,12 @@ class TTTServer {
         await previous.close();
     }
 
+    /** #268: 서버 설정의 닫기 기한을 SocketHandler 에 넣는다. 값이 없으면 기본값이다. */
+    public static applyCloseDeadlines(option: ServerOption): void {
+        SocketHandler.closeStallMs = option.closeStallMs ?? DEFAULT_CLOSE_STALL_MS;
+        SocketHandler.closeGraceMs = option.closeGraceMs ?? DEFAULT_CLOSE_GRACE_MS;
+    }
+
     public async applyServerOption(nextOption: ServerOption, previousOption: ServerOption): Promise<RuntimeApplyResult> {
         const ttl = resolveSessionTtlMs(nextOption.sessionTtlMs);
         if(!ttl.success) return {success: false, partial: false, failedScopes: ['session-ttl'], warnings: [ttl.message], restartRequiredScopes: []};
@@ -418,6 +425,8 @@ class TTTServer {
         await TTTServer.applyAuditOption(nextOption);
         // #267: 로그 레벨은 다시 시작하지 않고 바로 모든 로그 출력에 적용한다.
         LoggerFactory.setLevel(nextOption.logLevel ?? DEFAULT_LOG_LEVEL);
+        // #268: 닫기 기한은 닫기를 시작할 때 읽으므로 이후 닫는 연결부터 새 값을 쓴다.
+        TTTServer.applyCloseDeadlines(nextOption);
         const restartRequiredScopes: string[] = [];
         const warnings: string[] = [];
 

@@ -1,6 +1,6 @@
 import Environment from "../Environment";
 import File from "../util/File";
-import {ControlProtocolMode, DEFAULT_KEY, DEFAULT_SESSION_TTL_MS, resolveSessionTtlMs, resolveAuditRetentionDays, resolveAuditQueueSize, resolveLogLevel, HttpOption, ServerOption, TunnelingOption, normalizeRateLimit, defaultRateLimit} from "../types/TunnelingOption";
+import {ControlProtocolMode, DEFAULT_KEY, DEFAULT_SESSION_TTL_MS, resolveSessionTtlMs, resolveAuditRetentionDays, resolveAuditQueueSize, resolveLogLevel, resolveCloseStallMs, resolveCloseGraceMs, HttpOption, ServerOption, TunnelingOption, normalizeRateLimit, defaultRateLimit} from "../types/TunnelingOption";
 import YAML from "yaml";
 import Files, {AtomicFileValue} from "../util/Files";
 import ObjectUtil from "../util/ObjectUtil";
@@ -28,7 +28,7 @@ const ROLLBACK_BACKUP_SUFFIX: string = '.bak';
 // 디스크의 server.yaml 에는 하나도 없으면, 그 저장과 같은 배치로 직전 두 파일을 .bak 으로 남긴다.
 // 이전 바이너리는 verificationServerOption 에 허용 목록이 없어 새 필드가 든 yaml 도 읽으므로,
 // .bak 은 수기 편집 손실을 막기 위한 복원 지점이다(설계 §3.1).
-const ROLLBACK_SENSITIVE_TOP_FIELDS = ['connectionSecurity', 'mfaRequiredForSuperusers', 'auditRetentionDays', 'auditQueueSize', 'logLevel'] as const;
+const ROLLBACK_SENSITIVE_TOP_FIELDS = ['connectionSecurity', 'mfaRequiredForSuperusers', 'auditRetentionDays', 'auditQueueSize', 'logLevel', 'closeStallMs', 'closeGraceMs'] as const;
 const ROLLBACK_SENSITIVE_TUNNEL_FIELDS = ['ownerId', 'rateLimit'] as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -452,6 +452,12 @@ class ServerOptionStore {
         const logLevel = resolveLogLevel(option.logLevel);
         if(!logLevel.success) return logLevel;
         option.logLevel = logLevel.level;
+        const closeStall = resolveCloseStallMs(option.closeStallMs);
+        if(!closeStall.success) return closeStall;
+        option.closeStallMs = closeStall.ms;
+        const closeGrace = resolveCloseGraceMs(option.closeGraceMs);
+        if(!closeGrace.success) return closeGrace;
+        option.closeGraceMs = closeGrace.ms;
         if(!option.key) {
             return {success: false, message: "key is undefined"};
         }

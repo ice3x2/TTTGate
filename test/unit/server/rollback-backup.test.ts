@@ -108,10 +108,9 @@ test('a later save does not overwrite an existing backup', async () => {
 
 test('saving an option that carries none of the rollback-sensitive fields creates no backup', async () => {
     const boot = await bootLegacyStore('rollback-backup-absent');
-    // 최상위 민감 필드 다섯 개를 모두 벗긴다. verificationServerOption 이 로드 때
-    // auditRetentionDays·auditQueueSize·logLevel(#267)을 기본값으로 채우므로 그 셋도 빼야
-    // "민감 필드가 하나도 없는 옵션" 이 된다.
-    const {connectionSecurity, mfaRequiredForSuperusers, auditRetentionDays, auditQueueSize, logLevel,
+    // 최상위 민감 필드 일곱 개를 모두 벗긴다. verificationServerOption 이 로드 때 auditRetentionDays·auditQueueSize·
+    // logLevel(#267)·closeStallMs·closeGraceMs(#268)를 기본값으로 채우므로 그것들도 빼야 "민감 필드가 하나도 없는 옵션" 이 된다.
+    const {connectionSecurity, mfaRequiredForSuperusers, auditRetentionDays, auditQueueSize, logLevel, closeStallMs, closeGraceMs,
         ...withoutSensitive} = boot.store.serverOption;
     const tunnel = legacyTunnel(boot.store);
     const {rateLimit, ownerId, ...tunnelWithoutNewFields} = tunnel;
@@ -155,14 +154,14 @@ test.each(['ownerId', 'rateLimit'] as const)('a tunnel-level %s alone triggers t
     expect(fs.readFileSync(boot.backupState, 'utf-8')).toBe(LEGACY_STATE_JSON);
 });
 
-test.each(['connectionSecurity', 'mfaRequiredForSuperusers', 'auditRetentionDays', 'auditQueueSize', 'logLevel'] as const)(
+test.each(['connectionSecurity', 'mfaRequiredForSuperusers', 'auditRetentionDays', 'auditQueueSize', 'logLevel', 'closeStallMs', 'closeGraceMs'] as const)(
     'a top-level %s alone triggers the backup', async (field) => {
     const boot = await bootLegacyStore(`rollback-backup-top-${field}`);
     const {connectionSecurity, ...withoutSecurity} = boot.store.serverOption;
     const tunnel = legacyTunnel(boot.store);
     const {rateLimit, ownerId, ...bare} = tunnel;
     const values: Record<string, unknown> = {
-        connectionSecurity, mfaRequiredForSuperusers: true, auditRetentionDays: 14, auditQueueSize: 1000, logLevel: 'debug'
+        connectionSecurity, mfaRequiredForSuperusers: true, auditRetentionDays: 14, auditQueueSize: 1000, logLevel: 'debug', closeStallMs: 90_000, closeGraceMs: 5_000
     };
     expect(values[field]).not.toBeUndefined();
     const result = boot.store.commitPreparedServerOption(withExtra(

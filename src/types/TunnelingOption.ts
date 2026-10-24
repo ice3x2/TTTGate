@@ -71,7 +71,11 @@ type ServerOption = {
     /** 감사 쓰기 큐 상한. 기본 1000. 가득 차면 CUD API 가 503 으로 실패한다. */
     auditQueueSize?: number,
     /** #267 로그 레벨. 기본 info. 바꾸면 다시 시작하지 않고 모든 로그 출력(파일·콘솔)에 적용한다. */
-    logLevel?: LogLevel
+    logLevel?: LogLevel,
+    /** #268 닫기를 시작한 연결의 남은 출력이 진행 없이 멈춰 있을 수 있는 시간(ms). 기본 60000, 1000..600000. */
+    closeStallMs?: number,
+    /** #268 FIN 을 보내거나 받은 뒤 상대가 닫기를 기다리는 시간(ms). 기본 10000, 1000..120000. */
+    closeGraceMs?: number
 
 
 }
@@ -216,6 +220,22 @@ const resolveLogLevel = (value: unknown): {success: true; level: LogLevel} | {su
     return {success: true, level: value as LogLevel};
 };
 
+/** #268: SocketHandler 의 시작값과 같다(close-deadline-defaults 테스트가 지킨다). */
+const DEFAULT_CLOSE_STALL_MS = 60_000;
+const DEFAULT_CLOSE_GRACE_MS = 10_000;
+const CLOSE_STALL_MS_RANGE = [1_000, 600_000] as const;
+const CLOSE_GRACE_MS_RANGE = [1_000, 120_000] as const;
+
+const resolveCloseDeadline = (name: string, value: unknown, fallback: number, [min, max]: readonly [number, number]):
+    {success: true; ms: number} | {success: false; message: string} => {
+    if(value === undefined) return {success: true, ms: fallback};
+    if(!Number.isInteger(value) || (value as number) < min || (value as number) > max)
+        return {success: false, message: `${name} must be an integer within ${min}..${max}`};
+    return {success: true, ms: value as number};
+};
+const resolveCloseStallMs = (value: unknown) => resolveCloseDeadline('closeStallMs', value, DEFAULT_CLOSE_STALL_MS, CLOSE_STALL_MS_RANGE);
+const resolveCloseGraceMs = (value: unknown) => resolveCloseDeadline('closeGraceMs', value, DEFAULT_CLOSE_GRACE_MS, CLOSE_GRACE_MS_RANGE);
+
 const resolveAuditQueueSize = (value: unknown): {success: true; size: number} | {success: false; message: string} => {
     if(value === undefined) return {success: true, size: DEFAULT_AUDIT_QUEUE_SIZE};
     const [min, max] = AUDIT_QUEUE_SIZE_RANGE;
@@ -329,6 +349,10 @@ export {
     LOG_LEVELS,
     DEFAULT_LOG_LEVEL,
     resolveLogLevel,
+    DEFAULT_CLOSE_STALL_MS,
+    DEFAULT_CLOSE_GRACE_MS,
+    resolveCloseStallMs,
+    resolveCloseGraceMs,
     normalizationClientOption,
     resolveClientKeepAlive,
     NormalizationClientOptionWarner,

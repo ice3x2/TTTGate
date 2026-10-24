@@ -347,6 +347,65 @@ test("로그 레벨은 기본 info 이고, 네 가지 가운데 골라 저장하
     }
 }, 120_000);
 
+// #268 REQ-4 — 닫기 기한 두 값을 서버 설정에서 바꾼다. 범위 밖 값은 서버의 400 문구를 보이고, 빈칸은 요청 없이 막는다.
+describe("#268 닫기 기한 카드", () => {
+    const card = (page: Page) => page.locator("#server-connection-close");
+    const modalText = (page: Page, text: string) => page.getByRole("dialog").getByText(text);
+
+    test("기본값을 보이고, 범위 밖 값은 실패 모달로, 고친 값은 저장되어 새로 읽어도 남는다", async () => {
+        const app = await startAdminApp({fixture: "password"});
+        try {
+            const {page} = app;
+            await openServerSettings(page);
+            await card(page).waitFor({state: "visible"});
+            expect(await page.locator("#input-close-stall-ms").inputValue()).toBe("60000");
+            expect(await page.locator("#input-close-grace-ms").inputValue()).toBe("10000");
+            expect(await page.locator('label[for="input-close-stall-ms"]').textContent()).toContain("Close stall timeout (ms)");
+            expect(await page.locator('label[for="input-close-grace-ms"]').textContent()).toContain("Close grace timeout (ms)");
+
+            await page.locator("#input-close-grace-ms").fill("200000");
+            await waitForApply(page, false);
+            await page.getByRole("button", {name: "Apply", exact: true}).click();
+            await modalText(page, "closeGraceMs must be an integer within 1000..120000").waitFor({state: "visible", timeout: 10_000});
+            await page.getByRole("dialog").getByRole("button", {name: "OK", exact: true}).click();
+
+            await page.locator("#input-close-grace-ms").fill("3000");
+            await page.locator("#input-close-stall-ms").fill("120000");
+            const saved = page.waitForResponse((response) => response.request().method() === "POST"
+                && new URL(response.url()).pathname === "/api/serverOption", {timeout: 15_000});
+            await page.getByRole("button", {name: "Apply", exact: true}).click();
+            expect((await (await saved).json()).success).toBe(true);
+            const stored = await page.evaluate(async () => (await (await fetch("/api/serverOption", {credentials: "same-origin"})).json()).serverOption);
+            expect(stored.closeStallMs).toBe(120000);
+            expect(stored.closeGraceMs).toBe(3000);
+            expect(app.errors).toEqual([]);
+        } finally {
+            await app.close();
+        }
+    }, 120_000);
+
+    // 빈칸은 JSON 에서 빠져 서버 기본값이 된다. 바꾸려던 값이 조용히 기본값으로 돌아가지 않게 저장을 막는다.
+    test("칸이 비면 요청 없이 칸 아래 오류를 보인다", async () => {
+        const app = await startAdminApp({fixture: "password"});
+        try {
+            const {page} = app;
+            await openServerSettings(page);
+            await card(page).waitFor({state: "visible"});
+            let posts = 0;
+            page.on("request", (request) => { if(request.method() === "POST" && new URL(request.url()).pathname === "/api/serverOption") posts++; });
+            await page.locator("#input-close-stall-ms").fill("");
+            await page.locator("#input-close-grace-ms").fill("");
+            await page.getByRole("button", {name: "Apply", exact: true}).click();
+            await card(page).getByText("Enter a time in milliseconds (1000-600000).", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+            await card(page).getByText("Enter a time in milliseconds (1000-120000).", {exact: true}).waitFor({state: "visible"});
+            expect(posts).toBe(0);
+            expect(app.errors).toEqual([]);
+        } finally {
+            await app.close();
+        }
+    }, 120_000);
+});
+
 test("#136 Keep-Alive 는 0 으로 비활성화할 수 있고 음수는 0 으로 올리며, 0 이 그대로 저장된다", async () => {
     const app = await startAdminApp({fixture: "password"});
     try {

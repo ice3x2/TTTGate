@@ -566,7 +566,9 @@ class SocketHandler {
      */
     private armDrainDeadline(): void {
         this._closePhase = 'drain';
-        this.armCloseTimer(SocketHandler.closeStallMs, () => this.forceClose(`remaining output made no progress for ${SocketHandler.closeStallMs}ms`));
+        // 기한은 실행 중 바뀔 수 있다(#268). 타이머와 로그가 켤 때의 같은 값을 쓰게 한 번 읽는다.
+        const ms = SocketHandler.closeStallMs;
+        this.armCloseTimer(ms, () => this.forceClose(`remaining output made no progress for ${ms}ms`));
     }
 
     /**
@@ -576,7 +578,8 @@ class SocketHandler {
     private armFinDeadline(): void {
         if(this._closePhase === 'fin') return;
         this._closePhase = 'fin';
-        this.armCloseTimer(SocketHandler.closeGraceMs, () => this.forceClose(`the peer did not close within ${SocketHandler.closeGraceMs}ms`));
+        const ms = SocketHandler.closeGraceMs;
+        this.armCloseTimer(ms, () => this.forceClose(`the peer did not close within ${ms}ms`));
     }
 
     /** drain 단계에서 쓰기가 끝났다. 기한을 다시 잰다. 상대가 먼저 닫았고 마지막 쓰기가 끝났으면 FIN 대기로 넘어간다. */

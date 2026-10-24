@@ -21,6 +21,9 @@
     // U4-09: 서버가 값을 아직 저장하지 않았을 때 보이는 기본값(서버 src/types/TunnelingOption.ts 와 같다).
     const DEFAULT_AUDIT_RETENTION_DAYS = 90;
     const DEFAULT_AUDIT_QUEUE_SIZE = 1000;
+    // 이슈 268: 닫기 기한의 서버 기본값과 범위(서버 TunnelingOption 과 같다).
+    const DEFAULT_CLOSE_STALL_MS = 60000;
+    const DEFAULT_CLOSE_GRACE_MS = 10000;
     // 이슈 267: 서버 로그 레벨(서버 LOG_LEVELS 와 같은 순서). 값이 없는 설정(새로 만든 기본값 포함)은 info 다.
     // 주석에 '#' 과 숫자를 붙여 쓰지 않는다. design-system-rules 의 hex 색상 검사가 색으로 읽는다.
     // 저장값이 없을 때 info 를 고르면 바뀐 것이 없으므로 키를 지운다(undefined 로 두면 깊은 비교가 다르다고 본다).
@@ -38,11 +41,18 @@
     let queueInput = $state<number | null>(DEFAULT_AUDIT_QUEUE_SIZE);
     // 빈 감사 칸 오류. 빈칸은 JSON 에서 빠져 서버 기본값(보존 90일)이 되므로 저장을 막는다.
     let auditErrors = $state<{retention?: string; queue?: string}>({});
+    // 이슈 268: 닫기 기한 칸도 같은 방식이다. 빈칸이면 기본값으로 조용히 돌아가지 않게 저장을 막는다.
+    let closeStallInput = $state<number | null>(DEFAULT_CLOSE_STALL_MS);
+    let closeGraceInput = $state<number | null>(DEFAULT_CLOSE_GRACE_MS);
+    let closeErrors = $state<{stall?: string; grace?: string}>({});
 
     const syncSecurityInputs = () => {
         retentionInput = serverOption.auditRetentionDays ?? DEFAULT_AUDIT_RETENTION_DAYS;
         queueInput = serverOption.auditQueueSize ?? DEFAULT_AUDIT_QUEUE_SIZE;
         auditErrors = {};
+        closeStallInput = serverOption.closeStallMs ?? DEFAULT_CLOSE_STALL_MS;
+        closeGraceInput = serverOption.closeGraceMs ?? DEFAULT_CLOSE_GRACE_MS;
+        closeErrors = {};
     };
     let serverOption = $state<ServerOption>(ServerOptionCtrl.instance.getCachedServerOption());
     let lastServerOption = $state<ServerOption>(ServerOptionCtrl.instance.getCachedServerOption());
@@ -146,7 +156,11 @@
             ...(retentionInput == null ? {retention: 'Enter a number of days. 0 keeps logs forever.'} : {}),
             ...(queueInput == null ? {queue: 'Enter a queue size.'} : {})
         };
-        if(Object.keys(auditErrors).length > 0) return;
+        closeErrors = {
+            ...(closeStallInput == null ? {stall: 'Enter a time in milliseconds (1000-600000).'} : {}),
+            ...(closeGraceInput == null ? {grace: 'Enter a time in milliseconds (1000-120000).'} : {})
+        };
+        if(Object.keys(auditErrors).length > 0 || Object.keys(closeErrors).length > 0) return;
         try {
             loading = true;
             const result = await ServerOptionCtrl.instance.updateServerOption($state.snapshot(serverOption), snapshotRevision);
@@ -258,6 +272,23 @@
                 <Field label="Audit queue size" for="input-audit-queue-size" error={auditErrors.queue}>
                     <NumberInput id="input-audit-queue-size" min={100} max={100000} step={1}
                         bind:value={queueInput} oninput={(value) => (serverOption.auditQueueSize = value ?? undefined)} />
+                </Field>
+            </div>
+        </Card>
+    </section>
+    <!-- 이슈 268: 닫기를 시작한 연결의 기한. 바꾸면 이후 닫는 연결부터 적용된다. -->
+    <section id="server-connection-close">
+        <Card label="Connection close">
+            <div class="form-stack">
+                <Field label="Close stall timeout (ms)" for="input-close-stall-ms" error={closeErrors.stall}
+                    hint="Time the remaining output can make no progress before the connection is closed. 1000-600000. Applies to connections that start to close after you apply.">
+                    <NumberInput id="input-close-stall-ms" min={1000} max={600000} step={1000}
+                        bind:value={closeStallInput} oninput={(value) => (serverOption.closeStallMs = value ?? undefined)} />
+                </Field>
+                <Field label="Close grace timeout (ms)" for="input-close-grace-ms" error={closeErrors.grace}
+                    hint="Time to wait for the peer to close after FIN. 1000-120000. Applies to connections that send or receive FIN after you apply.">
+                    <NumberInput id="input-close-grace-ms" min={1000} max={120000} step={1000}
+                        bind:value={closeGraceInput} oninput={(value) => (serverOption.closeGraceMs = value ?? undefined)} />
                 </Field>
             </div>
         </Card>
