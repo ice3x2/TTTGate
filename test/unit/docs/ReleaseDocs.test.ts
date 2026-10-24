@@ -11,7 +11,8 @@ describe("release documentation and sample config alignment", () => {
             adminBindHost: "127.0.0.1",
             adminTls: true,
             controlProtocolMode: "mixed",
-            allowLegacyControlAuth: false
+            allowLegacyControlAuth: false,
+            logLevel: "info"
         });
         expect(serverSample.trustedClients?.[0]).toMatchObject({
             clientId: "client-a",
@@ -38,6 +39,8 @@ describe("release documentation and sample config alignment", () => {
         expect(readme).toContain("config/.bootstrap-token");
         expect(readme).toContain("replaceAccessControlAllowOrigin");
         expect(readme).toContain("allowLegacyControlAuth");
+        // #267: 로그 레벨 설정과 허용값을 README 에 적는다.
+        expect(readme).toMatch(/`logLevel`[^\n]*`error`, `warn`, `info` \(default\) and `debug`/);
         expect(readme).toContain("clientId");
         expect(readme).toContain("clientSecret");
     });

@@ -92,6 +92,18 @@ Server options:
 
 `TTTGate server --help` lists the common options. `--help-advanced` adds the legacy and risky options.
 
+### Log Level
+
+`logLevel` in `config/server.yaml` sets which server logs are written. The values are `error`, `warn`, `info` (default) and `debug`. A missing value means `info`.
+
+- Change it in the admin console (**Server settings** → **Log level**) or with `POST`/`PUT /api/serverOption`.
+- The new level applies at once to all log output (files and console). You do not need to restart the server.
+- Any other value is rejected with `400`, and `server.yaml` does not change.
+- Use `debug` only while you investigate a problem. It writes much more and can fill the disk.
+- Audit logs (`logs/audit`) are not affected.
+- A wrong value written directly in `server.yaml` fails config validation at startup.
+- Upgrade note: earlier versions also wrote `debug` lines by default. Set `logLevel: debug` to keep that output.
+
 ### First Admin Login
 
 On a fresh install, the server writes a one-time bootstrap token to `config/.bootstrap-token`.

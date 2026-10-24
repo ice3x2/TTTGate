@@ -118,6 +118,23 @@ describe("ServerApp process boundary", () => {
         await expectConnectionRefused(yamlAdminPort);
     });
 
+    // #267 — server.yaml 의 logLevel 은 시작할 때 서버 로그에 적용된다. warn 이면 info 줄이 파일에 남지 않는다.
+    // 로그가 아직 쓰이지 않아 통과하는 일이 없도록, 두 경우 모두 warn 줄(부트스트랩 토큰 안내)이 파일에 남은 뒤에 본다.
+    test.each([["info", true], ["warn", false]] as const)("logLevel %s in server.yaml applies at startup (info lines written: %s)", async (logLevel, infoWritten) => {
+        root = makeTestRoot();
+        const adminPort = await getFreePort();
+        writeServerYaml(root, {adminPort, port: await getFreePort(), logLevel});
+        child = spawnProcess(process.execPath, [APP_JS, "server"], {cwd: root});
+        await waitUntil(async () => (await httpsGetJson(adminPort, "/api/version")).status === 200 || undefined,
+            {timeoutMs: 20_000, label: "admin ready"});
+        const logs = path.join(root, "logs");
+        const read = () => fs.existsSync(logs) ? fs.readdirSync(logs).filter((file) => file.startsWith("server-"))
+            .map((file) => fs.readFileSync(path.join(logs, file), "utf-8")).join("") : "";
+        const text = await waitUntil(async () => read().includes("Bootstrap token created") ? read() : undefined,
+            {timeoutMs: 10_000, label: "warn line written"});
+        expect(text.includes("Start service with option")).toBe(infoWritten);
+    });
+
     test("-reset true wipes config/ and reinitializes it with a freshly generated key", async () => {
         await ensureReservedControlPortIsFree();
         root = makeTestRoot();

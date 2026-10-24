@@ -313,6 +313,40 @@ describe("U4-09 서버 설정 Security 카드", () => {
     }, 120_000);
 });
 
+// #267 REQ-4·AC-3 — 서버 설정에서 로그 레벨을 고르고 저장하면 서버 설정에 반영된다.
+test("로그 레벨은 기본 info 이고, 네 가지 가운데 골라 저장하면 서버 설정에 남는다", async () => {
+    const app = await startAdminApp({fixture: "password"});
+    try {
+        const {page} = app;
+        // 새로 만든 기본 설정에는 logLevel 이 없다(감사 칸과 같다). 화면은 서버 기본값 info 를 보인다.
+        await openServerSettings(page);
+        const select = page.locator("#input-log-level");
+        expect(await select.inputValue()).toBe("info");
+        expect(await select.locator("option").evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value)))
+            .toEqual(["error", "warn", "info", "debug"]);
+        expect(await page.locator('label[for="input-log-level"]').textContent()).toContain("Log level");
+        await waitForApply(page, true);
+        // 저장값이 없는 상태에서 다른 값을 골랐다가 info 로 돌아오면 바뀐 것이 없다. Apply 가 다시 잠긴다.
+        await select.selectOption("warn");
+        await waitForApply(page, false);
+        await select.selectOption("info");
+        await waitForApply(page, true);
+        await select.selectOption("debug");
+        await waitForApply(page, false);
+        const saved = page.waitForResponse((response) => response.request().method() === "POST"
+            && new URL(response.url()).pathname === "/api/serverOption", {timeout: 15_000});
+        await page.getByRole("button", {name: "Apply", exact: true}).click();
+        const request = (await saved).request();
+        expect(JSON.parse(request.postData() ?? "{}").logLevel).toBe("debug");
+        expect((await (await saved).json()).success).toBe(true);
+        const stored = await page.evaluate(async () => (await (await fetch("/api/serverOption", {credentials: "same-origin"})).json()).serverOption);
+        expect(stored.logLevel).toBe("debug");
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, 120_000);
+
 test("#136 Keep-Alive 는 0 으로 비활성화할 수 있고 음수는 0 으로 올리며, 0 이 그대로 저장된다", async () => {
     const app = await startAdminApp({fixture: "password"});
     try {

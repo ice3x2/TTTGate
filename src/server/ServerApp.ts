@@ -2,7 +2,7 @@ import TTTServer from "./TTTServer";
 import ServerOptionStore from "./ServerOptionStore";
 import AdminServer from "./admin/AdminServer";
 import {CertificationStore, CertInfo} from "./CertificationStore";
-import {DEFAULT_AUDIT_QUEUE_SIZE, DEFAULT_AUDIT_RETENTION_DAYS, DEFAULT_GEO_CONFIG, ServerOption} from "../types/TunnelingOption";
+import {DEFAULT_AUDIT_QUEUE_SIZE, DEFAULT_AUDIT_RETENTION_DAYS, DEFAULT_GEO_CONFIG, DEFAULT_LOG_LEVEL, ServerOption} from "../types/TunnelingOption";
 import {AdmissionController} from "./security/AdmissionController";
 import CLI from "../util/CLI";
 import Files from "../util/Files";
@@ -38,6 +38,8 @@ const startService = async (serverOption: ServerOption, adminCertInfo: CertInfo)
         logger.error(`identity store unavailable (${identity.reason}); continuing with legacy admin key only`);
     }
     AppCompositionRoot.applyGlobalMemLimitMiB(serverOption.globalMemCacheLimit ?? 128);
+    // #267: server.yaml 의 logLevel 을 시작할 때 모든 로그 출력에 적용한다. 실행 중에는 applyServerOption 이 바꾼다.
+    LoggerFactory.setLevel(serverOption.logLevel ?? DEFAULT_LOG_LEVEL);
     logger.info("Start service with option: " + JSON.stringify(redactSecrets(serverOption), null, 2));
     AdmissionController.instance.configureGeo(serverOption.connectionSecurity?.geo ?? DEFAULT_GEO_CONFIG);
     tttServer = TTTServer.create(serverOption);

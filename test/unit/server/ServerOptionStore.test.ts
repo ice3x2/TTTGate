@@ -174,6 +174,21 @@ describe("ServerOptionStore 감사 옵션 검증", () => {
         expect(verify({auditQueueSize: 100001}).result.success).toBe(false);
         expect(verify({auditQueueSize: 0}).result.success).toBe(false);
     });
+
+    // #267 REQ-1·REQ-3 — logLevel 은 error·warn·info·debug 가운데 하나다. 없으면 info, 틀리면 저장 전에 거부한다.
+    it("logLevel 을 생략하면 info 로 채우고, 허용값은 그대로 둔다", () => {
+        const {result, option} = verify({logLevel: undefined});
+        expect(result.success).toBe(true);
+        expect(option.logLevel).toBe("info");
+        expect(verify({logLevel: "debug"}).option.logLevel).toBe("debug");
+    });
+
+    it("logLevel 이 허용값이 아니면 실패한다", () => {
+        const wrong = verify({logLevel: "verbose"});
+        expect(wrong.result.success).toBe(false);
+        expect(wrong.result.message).toBe("logLevel must be one of error, warn, info, debug");
+        expect(verify({logLevel: 3}).result.success).toBe(false);
+    });
 });
 
 describe("ServerOptionStore mfaRequiredForSuperusers (#112 U4-04)", () => {

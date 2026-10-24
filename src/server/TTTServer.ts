@@ -1,7 +1,7 @@
 import {ExternalPortServerPool, ExternalPortServerStatus } from "./ExternalPortServerPool";
 import {TunnelServer, ClientStatus} from "./TunnelServer";
 import {EnrollmentRegistry} from "./EnrollmentRegistry";
-import {ConnectionSecurityOption, DEFAULT_AUDIT_QUEUE_SIZE, DEFAULT_AUDIT_RETENTION_DAYS, DEFAULT_GEO_CONFIG, ServerOption, TunnelingOption, resolveSessionTtlMs} from "../types/TunnelingOption";
+import {ConnectionSecurityOption, DEFAULT_AUDIT_QUEUE_SIZE, DEFAULT_AUDIT_RETENTION_DAYS, DEFAULT_GEO_CONFIG, DEFAULT_LOG_LEVEL, ServerOption, TunnelingOption, resolveSessionTtlMs} from "../types/TunnelingOption";
 import SocketState from "../util/SocketState";
 import {CertInfo, CertificationStore} from "./CertificationStore";
 import ServerOptionStore from "./ServerOptionStore";
@@ -343,6 +343,8 @@ class TTTServer {
         try { this._tunnelServer.configureSessionTtl(state.sessionTtlPolicy.ttlMs, state.sessionTtlPolicy.checkIntervalMs); }
         catch(error) { logger.error('session TTL restore failed', error); failures.push('session-ttl-restore'); }
         if(SocketHandler.maxGlobalMemoryBufferSize !== state.memoryLimit) AppCompositionRoot.applyGlobalMemLimitMiB(state.memoryLimit / (1024 * 1024));
+        // #267: applyServerOption 은 다른 적용이 실패하기 전에 로그 레벨을 바꾼다. 저장을 되돌리면 레벨도 이전 값으로 돌린다.
+        LoggerFactory.setLevel(state.serverOption.logLevel ?? DEFAULT_LOG_LEVEL);
         for(const port of new Set([...Object.keys(state.external).map(Number), ...Object.keys(this._appliedExternal).map(Number), ...this._dirtyExternal])) {
             const previous = state.external[port];
             const status = this._externalPortServerPool.getServerStatus(port);
@@ -414,6 +416,8 @@ class TTTServer {
             this.applyConnectionSecurity(nextOption.connectionSecurity);
         }
         await TTTServer.applyAuditOption(nextOption);
+        // #267: 로그 레벨은 다시 시작하지 않고 바로 모든 로그 출력에 적용한다.
+        LoggerFactory.setLevel(nextOption.logLevel ?? DEFAULT_LOG_LEVEL);
         const restartRequiredScopes: string[] = [];
         const warnings: string[] = [];
 

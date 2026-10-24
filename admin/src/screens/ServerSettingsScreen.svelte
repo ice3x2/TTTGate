@@ -13,6 +13,7 @@
     import Loading from '../ui/Loading.svelte';
     import Modal from '../ui/Modal.svelte';
     import NumberInput from '../ui/NumberInput.svelte';
+    import Select from '../ui/Select.svelte';
     import TextInput from '../ui/TextInput.svelte';
     import {useSession} from '../shell/session';
     import InputCertFile from './parts/InputCertFile.svelte';
@@ -20,6 +21,18 @@
     // U4-09: 서버가 값을 아직 저장하지 않았을 때 보이는 기본값(서버 src/types/TunnelingOption.ts 와 같다).
     const DEFAULT_AUDIT_RETENTION_DAYS = 90;
     const DEFAULT_AUDIT_QUEUE_SIZE = 1000;
+    // 이슈 267: 서버 로그 레벨(서버 LOG_LEVELS 와 같은 순서). 값이 없는 설정(새로 만든 기본값 포함)은 info 다.
+    // 주석에 '#' 과 숫자를 붙여 쓰지 않는다. design-system-rules 의 hex 색상 검사가 색으로 읽는다.
+    // 저장값이 없을 때 info 를 고르면 바뀐 것이 없으므로 키를 지운다(undefined 로 두면 깊은 비교가 다르다고 본다).
+    // 그래야 Apply 가 켜지지 않는다.
+    const setLogLevel = (value: string) => {
+        if(value === 'info' && lastServerOption.logLevel === undefined) delete serverOption.logLevel;
+        else serverOption.logLevel = value as ServerOption['logLevel'];
+    };
+    const LOG_LEVEL_OPTIONS = [
+        {value: 'error', label: 'error'}, {value: 'warn', label: 'warn'},
+        {value: 'info', label: 'info'}, {value: 'debug', label: 'debug'},
+    ];
     // 입력 칸은 별도 상태다. 칸을 비워도 기본값이 다시 들어오지 않게, 불러올 때와 Reset 때만 서버 값(없으면 기본값)으로 맞춘다.
     let retentionInput = $state<number | null>(DEFAULT_AUDIT_RETENTION_DAYS);
     let queueInput = $state<number | null>(DEFAULT_AUDIT_QUEUE_SIZE);
@@ -225,6 +238,10 @@
                 <!-- 문구대로 0 은 keep-alive 를 끈다(서버는 keepAlive > 0 일 때만 켠다). ms 단위라 정수로 자르고, 음수(-0.5 포함)는 0 으로 올린다. -->
                 <NumberInput id="input-keep-alive" min={0} max={99999} bind:value={serverOption.keepAlive}
                     oninput={(v) => (serverOption.keepAlive = keepAliveOf(enforceMinMax('input-keep-alive', v, 0, 99999)) as number)} />
+            </Field>
+            <Field label="Log level" for="input-log-level" hint="Applies to all server logs right away. debug is verbose.">
+                <Select id="input-log-level" options={LOG_LEVEL_OPTIONS}
+                    bind:value={() => serverOption.logLevel ?? 'info', setLogLevel} />
             </Field>
         </div>
     </Card>

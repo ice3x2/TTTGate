@@ -69,7 +69,9 @@ type ServerOption = {
     /** 감사 파일 보존 기간(일). 기본 90, 0 이면 무제한. */
     auditRetentionDays?: number,
     /** 감사 쓰기 큐 상한. 기본 1000. 가득 차면 CUD API 가 503 으로 실패한다. */
-    auditQueueSize?: number
+    auditQueueSize?: number,
+    /** #267 로그 레벨. 기본 info. 바꾸면 다시 시작하지 않고 모든 로그 출력(파일·콘솔)에 적용한다. */
+    logLevel?: LogLevel
 
 
 }
@@ -202,6 +204,18 @@ const resolveAuditRetentionDays = (value: unknown): {success: true; days: number
     return {success: true, days};
 };
 
+type LogLevel = 'error' | 'warn' | 'info' | 'debug';
+const LOG_LEVELS: readonly LogLevel[] = ['error', 'warn', 'info', 'debug'];
+const DEFAULT_LOG_LEVEL: LogLevel = 'info';
+
+/** #267: 값이 없는 예전 설정은 info 다. 대소문자를 바꾸거나 별칭을 받지 않는다. */
+const resolveLogLevel = (value: unknown): {success: true; level: LogLevel} | {success: false; message: string} => {
+    if(value === undefined) return {success: true, level: DEFAULT_LOG_LEVEL};
+    if(typeof value !== 'string' || !(LOG_LEVELS as readonly string[]).includes(value))
+        return {success: false, message: `logLevel must be one of ${LOG_LEVELS.join(', ')}`};
+    return {success: true, level: value as LogLevel};
+};
+
 const resolveAuditQueueSize = (value: unknown): {success: true; size: number} | {success: false; message: string} => {
     if(value === undefined) return {success: true, size: DEFAULT_AUDIT_QUEUE_SIZE};
     const [min, max] = AUDIT_QUEUE_SIZE_RANGE;
@@ -311,6 +325,10 @@ export {
     DEFAULT_AUDIT_QUEUE_SIZE,
     resolveAuditRetentionDays,
     resolveAuditQueueSize,
+    LogLevel,
+    LOG_LEVELS,
+    DEFAULT_LOG_LEVEL,
+    resolveLogLevel,
     normalizationClientOption,
     resolveClientKeepAlive,
     NormalizationClientOptionWarner,

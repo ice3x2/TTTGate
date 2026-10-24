@@ -15,6 +15,8 @@ trustedClients:
     displayName: "Client A"
 globalMemCacheLimit: 128
 keepAlive: 10000
+# error, warn, info or debug. You can change it at run time in the admin console.
+logLevel: "info"
 tunnelingOptions:
   - forwardPort: 18080
     protocol: "http"
