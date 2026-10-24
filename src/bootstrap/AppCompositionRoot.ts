@@ -2,6 +2,7 @@ import Environment from "../Environment";
 import {CertificationStore} from "../server/CertificationStore";
 import ServerOptionStore from "../server/ServerOptionStore";
 import {SocketHandler} from "../util/SocketHandler";
+import {FileCache} from "../util/FileCache";
 import LoggerFactory from "../util/logger/LoggerFactory";
 
 const AppCompositionRoot = {
@@ -16,9 +17,12 @@ const AppCompositionRoot = {
     },
     useServerCacheDir(): void {
         SocketHandler.fileCacheDirPath = Environment.path.serverCacheDir;
+        // 죽은 프로세스가 남긴 캐시 파일을 지운다(#258).
+        FileCache.sweepStale(Environment.path.serverCacheDir);
     },
     useClientCacheDir(): void {
         SocketHandler.fileCacheDirPath = Environment.path.clientCacheDir;
+        FileCache.sweepStale(Environment.path.clientCacheDir);
     },
     applyGlobalMemLimitMiB(limitMiB: number = 128): void {
         SocketHandler.GlobalMemCacheLimit = limitMiB * 1024 * 1024;

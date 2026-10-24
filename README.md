@@ -191,6 +191,7 @@ A daemon whose app stops with a configuration error is not restarted. The reason
 - Adding or removing a trusted client no longer restarts the control listener. Only the removed client, or a client whose secret was renewed, is disconnected.
 - The control connection now has a heartbeat. A client pings every 10 seconds, and either side closes the control connection after 30 seconds without any control packet. The client then reconnects. This finds connections that are cut without a FIN or RST (a pulled cable, an expired NAT entry). The heartbeat is used only when both sides support it, so older servers and clients work as before.
 - The client stops with an error for options it does not know (exit code 2), and for a `-ca`, `-cert`, `-privateKey` or `-clientSecretFile` file that it cannot read (exit code 78). Check your service scripts.
+- `stop` now stops only the processes that it can confirm as the TTTGate processes it recorded. Before, it stopped every pid in the pid files, including old pids that the system may have given to another program. See [Stop Background Processes](#stop-background-processes). The pid files now hold one JSON object per line (for example `{"pid":1234,"start":…}`) in place of a bare pid. If your own scripts read them, read the `pid` field. Older pid files are still read.
 
 Read this before you replace a running server with this version.
 
@@ -212,6 +213,9 @@ Read this before you replace a running server with this version.
 **Other changes to be aware of:**
 
 - HTTP tunnels reject a request whose header block is larger than 64 KiB (earlier: 8 MiB) with `431`.
+- Admin passwords are limited to 1024 characters (leading and trailing whitespace is not counted). A longer password cannot be set, and a login with a longer password fails without a password check. If you use a longer password, change it before you upgrade.
+- The admin server handles at most 5 login requests (`/api/login` and `/api/login/mfa` together) at the same time from one network (IPv4 /24, IPv6 /64). More requests get `429` with code `login_concurrency_limit`; try again after the earlier requests finish.
+- The admin server keeps at most 20 login sessions per user and 10,000 in total. A new login closes the session that was used least recently and records a `session_killed` audit event with actor `system`. Scripts that log in to the admin API must call `POST /api/logout` when they finish; otherwise each run closes an older session of the same account, for example a browser session.
 
 ## HTTP Tunnel CORS Policy
 
@@ -243,3 +247,13 @@ Recommended cutover order:
 ```shell
 ./TTTGate-linux-x64 stop
 ```
+
+`stop` reads the pid files in the `bin` folder (`.pid_sentinel`, `.pid_app`, `.pid_foreground`). It stops a process only when it can confirm that the process is the one that TTTGate recorded:
+
+- On Linux, it compares the start time in `/proc/<pid>/stat` and the executable.
+- On Windows, it asks `Get-Process` for the start time and the executable.
+
+If it cannot confirm a process, it does not stop it and writes a warning with the pid and the pid file.
+
+- **Use the same user.** Stop and start TTTGate as the user that started it. A user without administrator rights cannot stop, or on Windows identify, a daemon that an administrator started.
+- **A start is refused while an old daemon runs.** If `-daemon` finds a TTTGate process that it could not stop, it does not start a second pair (the ports would collide). It names the pid and the pid file and exits with code 1. Stop that process, or delete the pid file if that pid is not TTTGate, and start again.

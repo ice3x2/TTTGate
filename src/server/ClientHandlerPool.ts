@@ -50,6 +50,8 @@ class ClientHandlerPool {
 
     // 열린 핸들러 맵. 세션ID를 키로 사용한다.
     private _activatedSessionHandlerMap_ : Map<number, TunnelDataHandler> = new Map<number, TunnelDataHandler>();
+    /** #253: 데이터 연결이 CloseSession 없이 끊긴 세션의 유예 타이머. 세션당 하나이고, 끝나거나 풀이 닫히면 지운다. */
+    private readonly _dataDropTimers = new Map<number, {timer: NodeJS.Timeout; endLength: number}>();
     private _waitingDataBufferQueueMap : Map<number, WaitingQueueState> = new Map<number, WaitingQueueState>();
     private _waitingReliefListeners: Map<number, Array<() => void>> = new Map();
     private _bufferSize : number = 0;
@@ -81,9 +83,49 @@ class ClientHandlerPool {
     public endDataHandler(handler: TunnelDataHandler) : void {
         let sessionID = this.findSessionIDByDataHandler(handler);
         if(sessionID != undefined) {
+            // 이미 끝난 세션(terminateSession 이 핸들러를 뺀 뒤 닫힌 연결)은 외부 쪽을 다시 닫지 않는다.
+            // CloseSession 을 이미 받았으면 정상 종료다. 외부 쪽은 그 CloseSession 이 닫는다.
+            const active = this._activatedSessionHandlerMap_.get(sessionID) === handler && handler.closeReceived !== true;
             this.terminateSession(sessionID);
+            if(active) this.armDataDropClose(sessionID, handler.forwardedLength ?? 0);
         }
     }
+
+    /**
+     * #253: 활성 세션의 데이터 연결이 끊겼다. 정상 종료에서도 데이터 연결의 끊김이 CloseSession 보다 먼저 올 수 있으므로
+     * (서로 다른 소켓) 바로 닫지 않고 유예를 둔다. 유예 안에 세션이 정상으로 끝나면 서버 매핑이 사라지므로 아무 일도 하지 않는다.
+     * 끝나지 않았으면 외부 쪽을 닫는다. 종료 길이는 이 연결에서 받아 외부로 넘긴 바이트 수다. 더 올 데이터가 없기 때문이다.
+     */
+    private armDataDropClose(sessionID: number, endLength: number) : void {
+        if(this._dataDropTimers.has(sessionID)) return;
+        const timer: NodeJS.Timeout = setTimeout(() => {
+            this._dataDropTimers.delete(sessionID);
+            if(this._isSessionOwned && !this._isSessionOwned(sessionID)) return;
+            logger.info(`Data connection closed without CloseSession; closing the session - sessionID: ${sessionID}`);
+            this._onSessionCloseCallback?.(sessionID, endLength);
+        }, ClientHandlerPool.DATA_DROP_CLOSE_GRACE_MS);
+        timer.unref?.();
+        this._dataDropTimers.set(sessionID, {timer, endLength});
+    }
+
+    /**
+     * #253: 유예 중인 세션을 모두 꺼내고 타이머를 지운다. 풀을 닫기 전에 TunnelServer 가 이 세션들의 외부 쪽을
+     * 타이머가 터질 때와 같은 길이로 닫는다. 이 세션들은 풀의 세션 목록(getAllSessionIDs)에는 없다.
+     * 타이머와 같이, 그사이 외부 쪽이 끝나 서버 매핑이 사라진 세션은 돌려주지 않는다.
+     */
+    public takePendingDataDrops() : Array<{sessionID: number; endLength: number}> {
+        const drops: Array<{sessionID: number; endLength: number}> = [];
+        for(const [sessionID, drop] of this._dataDropTimers) {
+            clearTimeout(drop.timer);
+            if(this._isSessionOwned && !this._isSessionOwned(sessionID)) continue;
+            drops.push({sessionID, endLength: drop.endLength});
+        }
+        this._dataDropTimers.clear();
+        return drops;
+    }
+
+    /** #253: 데이터 연결이 끊긴 뒤 CloseSession 을 기다리는 시간. */
+    public static DATA_DROP_CLOSE_GRACE_MS = 2000;
 
     public get sysInfo() {
         return this._sysInfo;
@@ -225,6 +267,7 @@ class ClientHandlerPool {
         let receiveData = receiveWaitPacketQueue.popFront();
         while(receiveData != undefined) {
             this.releaseQueueBytes(waitQueue, 'receive', receiveData.length);
+            handler.forwardedLength = (handler.forwardedLength ?? 0) + receiveData.length;
             try {
                 this._onDataReceiveCallback?.(sessionID, receiveData);
             } catch (error) {
@@ -248,6 +291,7 @@ class ClientHandlerPool {
     public pushReceiveBuffer(sessionID: number, data: Buffer) : boolean {
         let handler = this._activatedSessionHandlerMap_.get(sessionID);
         if(handler != undefined && handler.dataHandlerState == DataHandlerState.OnlineSession) {
+            handler.forwardedLength = (handler.forwardedLength ?? 0) + data.length;
             this._onDataReceiveCallback?.(sessionID, data);
             return true;
         }
@@ -616,10 +660,17 @@ class ClientHandlerPool {
             pendingState.available = false;
         }
         let handler = this._activatedSessionHandlerMap_.get(sessionID);
+        // #253: 데이터 연결이 먼저 끊겨 유예 중이었다면 이 CloseSession 이 정상 종료다. 타이머가 세션을 다시 닫지 않게 한다.
+        const drop = this._dataDropTimers.get(sessionID);
+        if(drop) {
+            clearTimeout(drop.timer);
+            this._dataDropTimers.delete(sessionID);
+        }
         if(handler == undefined) {
             this.closeSessionAndCallback(sessionID, endLength);
             return;
         }
+        handler.closeReceived = true;
         this.closeSessionAndCallback(sessionID,endLength);
     }
 
@@ -716,6 +767,8 @@ class ClientHandlerPool {
         for(const sessionID of this._waitingDataBufferQueueMap.keys()) this.burnWaitBuffer(sessionID);
         for(const state of this._pendingSessionIDMap.values()) clearTimeout(state.openTimer);
         this._pendingSessionIDMap.clear();
+        // 유예 중인 세션의 외부 쪽은 풀을 닫는 쪽(TunnelServer.destroyClientHandlerPool·close)이 닫는다(#253).
+        this.takePendingDataDrops();
         // noinspection JSUnusedLocalSymbols
         for(let [key, value] of this._activatedSessionHandlerMap_) {
             value.onSocketEvent = function () {};

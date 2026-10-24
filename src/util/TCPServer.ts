@@ -9,6 +9,16 @@ const logger = LoggerFactory.getLogger('socket', 'TCPServer');
 
 
 const DEFAULT_KEEP_ALIVE : number = 10000;
+/** 거절 응답을 보낸 소켓을 상대가 닫지 않아도 이 시간 뒤에는 닫는다(#245). */
+const DEFAULT_REJECT_LINGER_MS : number = 5000;
+/** 거절 응답을 보내고 닫히기를 기다리는 소켓 수의 상한. 넘으면 응답 없이 바로 닫는다(#245). */
+const DEFAULT_MAX_REJECTED_SOCKETS : number = 256;
+/**
+ * 거절한 상대에게서 읽어서 버릴 최대 바이트(#245). 넘으면 읽기를 멈춰 TCP 흐름 제어로 상대를 막고, 연결은 기한에 닫는다.
+ * 멈춘 뒤에도 Node 가 highWaterMark 만큼은 더 읽는다.
+ * 바로 끊지 않는 까닭: 본문이 큰 정상 요청이 곧바로 RST 를 받지 않고, 기한까지 503 을 읽을 시간을 갖게 한다.
+ */
+const MAX_REJECTED_DISCARD_BYTES : number = 64 * 1024;
 
 interface OnServerEvent {
     (server: TCPServer, state: SocketState, handler? : SocketHandler) : void;
@@ -22,6 +32,9 @@ interface OnSocketEvent {
 // (util/ 은 server/security를 import하지 않는다).
 type AdmitVerdict = {allowed: true} | {allowed: false; reason: string; retryAfterMs?: number; rejectResponse?: Buffer};
 
+/** 따로 묶어 세는 경고의 종류(#245). */
+type ThrottledWarnKind = 'pending-tls' | 'rejected-sockets';
+
 interface ServerOption {port: number, tls?: boolean, ca?: string, cert?: string, key?: string, keepAlive?: number, requestClientCert?: boolean, admit?: (remoteAddress: string | undefined) => AdmitVerdict,
     /** TLS 핸드셰이크 기한(ms). 핸드셰이크가 끝나기 전 연결은 바인드되지 않아 미인증 기한 밖에 있으므로 따로 끊는다(#174). */
     handshakeTimeoutMs?: number,
@@ -30,7 +43,11 @@ interface ServerOption {port: number, tls?: boolean, ca?: string, cert?: string,
     /** 같은 주소 버킷이 핸드셰이크 중일 수 있는 연결 수. 주소 하나가 대기 슬롯을 다 차지하지 못하게 한다(#181). */
     maxPendingTlsHandshakesPerAddress?: number,
     /** 주소를 버킷으로 묶는 함수(예: IPv4 주소 하나, IPv6 /64). 없으면 주소 그대로 쓴다. */
-    addressBucketOf?: (remoteAddress: string) => string};
+    addressBucketOf?: (remoteAddress: string) => string,
+    /** 거절 응답(예: 503)을 보낸 소켓을 닫기까지 기다리는 최대 시간(ms, 양수). 기본 5초(#245). */
+    rejectLingerMs?: number,
+    /** 거절 응답을 보내고 닫히기를 기다리는 소켓 수의 상한. 기본 256(#245). */
+    maxRejectedSockets?: number};
 
 class TCPServer {
 
@@ -44,6 +61,8 @@ class TCPServer {
     private _state : SocketState = SocketState.None;
     private _bundle : Map<string, any> = new Map<string, any>();
     private _error : any = undefined;
+    /** 거절 응답을 보내고 닫히기를 기다리는 소켓. 핸들러가 없으므로 stop() 이 따로 닫는다(#245). */
+    private _rejectedSockets : Set<net.Socket> = new Set<net.Socket>();
 
 
 
@@ -125,7 +144,7 @@ class TCPServer {
             const bucket = bucketOf(raw.remoteAddress ?? '');
             const fromBucket = perBucket.get(bucket) ?? 0;
             if(pending.size >= max || fromBucket >= maxPerBucket) {
-                this.warnThrottled(`too many pending TLS handshakes on port ${this._options.port}${fromBucket >= maxPerBucket ? ` from ${bucket}` : ''}; closing new connections`);
+                this.warnThrottled('pending-tls', `too many pending TLS handshakes on port ${this._options.port}${fromBucket >= maxPerBucket ? ` from ${bucket}` : ''}; closing new connections`);
                 raw.destroy();
                 return;
             }
@@ -140,16 +159,18 @@ class TCPServer {
     }
 
     private _pendingTlsSockets: Map<net.Socket, string> | undefined;
-    private _lastWarnAt = 0;
-    private _suppressedWarns = 0;
+    private _throttledWarns: Map<ThrottledWarnKind, {lastAt: number, suppressed: number}> = new Map();
 
-    /** 공격 중에는 거절이 초당 수십 번 난다. 약한 서버의 디스크·CPU 를 지키려고 10초에 한 줄만 남긴다(#181). */
-    private warnThrottled(message: string): void {
+    /**
+     * 공격 중에는 거절이 초당 수십 번 난다. 약한 서버의 디스크·CPU 를 지키려고 종류마다 10초에 한 줄만 남긴다(#181).
+     * 종류를 나눠 세므로 한 종류의 경고가 다른 종류를 가리지 않는다(#245).
+     */
+    private warnThrottled(kind: ThrottledWarnKind, message: string): void {
         const now = Date.now();
-        if(now - this._lastWarnAt < 10_000) { this._suppressedWarns++; return; }
-        logger.warn(`TCPServer: ${message}${this._suppressedWarns > 0 ? ` (${this._suppressedWarns} more since the last warning)` : ''}`);
-        this._lastWarnAt = now;
-        this._suppressedWarns = 0;
+        const state = this._throttledWarns.get(kind) ?? {lastAt: 0, suppressed: 0};
+        if(now - state.lastAt < 10_000) { state.suppressed++; this._throttledWarns.set(kind, state); return; }
+        logger.warn(`TCPServer: ${message}${state.suppressed > 0 ? ` (${state.suppressed} more since the last warning)` : ''}`);
+        this._throttledWarns.set(kind, {lastAt: now, suppressed: 0});
     }
 
     private createServer(): net.Server {
@@ -191,11 +212,45 @@ class TCPServer {
         return server;
     }
 
+    /**
+     * 거절 응답을 쓰고 연결을 끝낸다. 이 소켓에는 핸들러가 없으므로 오류 처리와 닫기 기한을 여기서 건다(#245).
+     * 오류 리스너가 없으면 상대의 RST 가 처리되지 않은 'error' 가 되어 프로세스가 끝나고,
+     * 기한이 없으면 FIN 을 보내지 않는 상대가 동시 연결 한도 밖에서 소켓을 붙잡는다.
+     */
+    private endRejected(socket: net.Socket, response: Buffer) : void {
+        // 이미 닫힌 소켓의 오류도 다음 틱에 올 수 있으므로 무엇보다 먼저 건다.
+        socket.on('error', (error) => logger.debug(`TCPServer: rejected socket error: ${error.message}`));
+        if(socket.destroyed) return;
+        if(this._rejectedSockets.size >= (this._options.maxRejectedSockets ?? DEFAULT_MAX_REJECTED_SOCKETS)) {
+            this.warnThrottled('rejected-sockets', `too many rejected connections waiting to close on port ${this._options.port}; closing new ones without a response`);
+            socket.destroy();
+            return;
+        }
+        this._rejectedSockets.add(socket);
+        const linger = setTimeout(() => socket.destroy(), Math.max(1, this._options.rejectLingerMs ?? DEFAULT_REJECT_LINGER_MS));
+        linger.unref?.();
+        socket.once('close', () => {
+            clearTimeout(linger);
+            this._rejectedSockets.delete(socket);
+        });
+        // 아무도 읽지 않으면 남은 요청 바이트 때문에 'end' 가 미뤄져, 상대가 FIN 을 보내도 기한까지 닫히지 않는다.
+        // 그래서 읽어서 버리되, 상한을 넘으면 읽기를 멈추고 기한에 맡긴다.
+        let discarded = 0;
+        const discard = (chunk: Buffer) => {
+            discarded += chunk.length;
+            if(discarded <= MAX_REJECTED_DISCARD_BYTES) return;
+            socket.off('data', discard);
+            socket.pause();
+        };
+        socket.on('data', discard);
+        socket.end(response);
+    }
+
     private onBind = (socket: net.Socket) : void => {
         if(this._options.admit) {
             const verdict = this._options.admit(socket.remoteAddress);
             if(!verdict.allowed) {
-                if(verdict.rejectResponse) socket.end(verdict.rejectResponse); else socket.destroy();
+                if(verdict.rejectResponse) this.endRejected(socket, verdict.rejectResponse); else socket.destroy();
                 return;
             }
         }
@@ -261,6 +316,7 @@ class TCPServer {
             });
             // 핸드셰이크 중인 연결은 핸들러가 아직 없다. 다시 기동한 서버의 계수 밖에 남지 않게 함께 닫는다(#181).
             this._pendingTlsSockets?.forEach((_bucket, raw) => raw.destroy());
+            this._rejectedSockets.forEach((socket) => socket.destroy());
             if(callback) this.onceCompletion(this._server, 'close', callback);
             this._server.close();
         } else if(callback) {

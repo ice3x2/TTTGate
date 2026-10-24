@@ -13,6 +13,24 @@ import {TlsOptionsFactoryRegistry} from "./TlsOptionsFactory";
 
 import LoggerFactory  from "../util/logger/LoggerFactory";
 const logger = LoggerFactory.getLogger('socket', 'SocketHandler');
+/**
+ * 리스너를 모두 지운 뒤에도 Node 는 진행 중이던 쓰기의 오류를 'error' 로 늦게 내보낼 수 있다.
+ * 리스너가 없으면 처리되지 않은 예외로 프로세스가 끝나므로, 닫은 소켓에는 이것만 남긴다(#260).
+ */
+const IGNORE_LATE_SOCKET_ERROR = () => {};
+/** FIN 을 보내거나 받은 뒤 상대가 닫기를 기다리는 시간의 기본값(#248). 데이터는 이미 커널에 있다. */
+const DEFAULT_CLOSE_GRACE_MS = 10_000;
+/**
+ * 닫기 전 남은 출력이 진행 없이 멈춰 있을 수 있는 시간의 기본값(#248).
+ * Linux 는 커널 송신 버퍼가 크게(약 1/3, 수 MiB) 비워질 때만 쓰기 완료를 알리므로, 느린 수신자도 끝까지 받도록 넉넉히 둔다.
+ * 한계: 보장되는 최소 수신 속도는 약 (송신 버퍼의 1/3) / 이 값이다. Linux 루프백·LAN 에서 60초면 약 25KiB/s 다.
+ */
+const DEFAULT_CLOSE_STALL_MS = 60_000;
+/**
+ * 한 번에 소켓에 넘기는 최대 바이트(#248). 큰 버퍼 하나를 통째로 넘기면 다 보낼 때까지 쓰기 완료가 없어
+ * 닫는 중에 진행을 볼 수 없다(TLS 는 쓰기 대기량도 줄지 않는다). 조각으로 나누면 조각마다 완료가 생긴다.
+ */
+const MAX_WRITE_PIECE_BYTES = 64 * 1024;
 interface OnSocketEvent {
     (handler: SocketHandler, state: SocketState, data?: any) : void;
 }
@@ -29,6 +47,8 @@ type WaitItem = {
     length: number;
     cacheID : FileCacheRecordID;
     onWriteComplete : OnWriteComplete | undefined;
+    /** 끝날 때 메모리 계산에서 뺄 바이트. 없으면 length. 큰 버퍼의 조각은 원래 버퍼를 함께 쓰므로 마지막 조각이 전체를 뺀다(#248). */
+    memoryBytes?: number;
 }
 
 // noinspection JSUnusedGlobalSymbols
@@ -55,6 +75,8 @@ class SocketHandler {
     private _fileCache : FileCache | null = null;
     private _waitQueue: Dequeue<WaitItem> = new Dequeue<WaitItem>();
     private _drainEventList : Array<OnDrainEvent> = [];
+    /** #254: connect() 의 연결 기한 타이머. 연결이 끝나거나 실패하면 지운다. */
+    private _connectTimer : NodeJS.Timeout | undefined;
 
     private _breakBufferFlush : boolean = false;
 
@@ -62,6 +84,12 @@ class SocketHandler {
     private _receiveLength: number = 0;
 
     private _endWaitingState = false;
+    /**
+     * 닫기 기한(#248). 'drain' 은 남은 출력을 보내는 단계(closeStallMs, 진행하면 다시 잰다),
+     * 'fin' 은 FIN 을 보냈거나 받아 상대가 닫기를 기다리는 단계(closeGraceMs)다.
+     */
+    private _closeTimer: NodeJS.Timeout | undefined;
+    private _closePhase: 'drain' | 'fin' | undefined;
 
     private _event: OnSocketEvent;
     private _onOwnerTerminal?: (handler: SocketHandler) => void;
@@ -86,6 +114,11 @@ class SocketHandler {
     public get socket() : net.Socket {
         return this._socket;
     }
+
+    /** FIN 을 보내거나 받은 뒤 상대가 닫지 않으면 강제로 닫기까지의 시간(ms)(#248). 테스트에서 줄일 수 있다. */
+    public static closeGraceMs: number = DEFAULT_CLOSE_GRACE_MS;
+    /** 닫기를 시작했는데 남은 출력이 진행 없이 멈춰 있으면 강제로 닫기까지의 시간(ms)(#248). 테스트에서 줄일 수 있다. */
+    public static closeStallMs: number = DEFAULT_CLOSE_STALL_MS;
 
     public static set fileCacheDirPath(path: string) {
         this.FileCacheDirPath = path;
@@ -239,6 +272,11 @@ class SocketHandler {
     }
 
 
+    private clearConnectTimer(): void {
+        if(this._connectTimer) clearTimeout(this._connectTimer);
+        this._connectTimer = undefined;
+    }
+
     public static connect(options: ConnectOpt, event: OnSocketEvent) : SocketHandler {
         let handlerRef: Array<SocketHandler> = [];
         options.keepalive = options.keepalive ?? 60000;
@@ -247,6 +285,7 @@ class SocketHandler {
         let connected = () => {
             established = true;
             clearTimeout(connectTimer);
+            handlerRef[0]?.clearConnectTimer();
             if(handlerRef.length > 0 && handlerRef[0]._state == SocketState.None) {
                 handlerRef[0]._state = SocketState.Connected;
                 event(handlerRef[0], SocketState.Connected);
@@ -274,6 +313,8 @@ class SocketHandler {
                 socket.destroy(Object.assign(new Error(`connect timed out after ${limit}ms`), {code: 'ETIMEDOUT'}));
             }, limit);
             connectTimer.unref?.();
+            // 연결이 실패하거나 닫히면 release()·destroy() 가 지운다(#254). 남으면 기한까지 핸들러를 붙잡는다.
+            handler._connectTimer = connectTimer;
         }
 
         if(options.timeout && options.timeout > 0) {
@@ -341,6 +382,11 @@ class SocketHandler {
 
     public isEnd() : boolean {
         return this._state == SocketState.Closed || this._state == SocketState.End; /* || this._state == SocketState.Error; */
+    }
+
+    /** 종료를 요청했거나(end_()) 이미 끝난 연결. 이 상태에서는 더 보낼 수 없다(#260). */
+    public get isEnding() : boolean {
+        return this._endWaitingState || this.isEnd();
     }
 
     private notifyOwnerTerminal(): void {
@@ -419,6 +465,11 @@ class SocketHandler {
                 this._event(this, SocketState.End);
                 //23.10.19 수정
                 this.clearWaitQueue();
+                // 상대가 먼저 FIN 을 보냈다. 남은 쓰기가 비워지지 않으면 'close' 가 오지 않으므로 기한을 건다(#248).
+                // 아직 끝나지 않은 쓰기가 있으면 그 쓰기가 나갈 시간을 정체 기한으로 준다.
+                if(!this._socket.destroyed) {
+                    if(this._inFlightWriteCount > 0) this.armDrainDeadline(); else this.armFinDeadline();
+                }
             }
 
         });
@@ -440,9 +491,12 @@ class SocketHandler {
     }
 
     private release(error?: Error) : void {
+        this.clearConnectTimer();
         this.clearWaitQueue(error);
         this.clearTimeout();
+        this.clearCloseTimer();
         this._socket.removeAllListeners();
+        this._socket.on('error', IGNORE_LATE_SOCKET_ERROR);
         this._state = SocketState.Closed;
         this._socket.destroy();
         this._event = ()=>{};
@@ -489,18 +543,81 @@ class SocketHandler {
         if(this._endWaitingState || this.isEnd()) {
             return;
         }
-        if(!this.isOutputDrained) {
-            this._endWaitingState = true;
+        // 종료를 요청했음을 출력이 비어 있어도 표시한다. 이 뒤의 sendData 는 소켓에 쓰지 않고 실패한다.
+        // 표시하지 않으면 end() 뒤의 쓰기가 ERR_STREAM_WRITE_AFTER_END 로 실패한다(#260).
+        const drained = this.isOutputDrained;
+        this._endWaitingState = true;
+        if(drained) {
+            this.endSocket();
+        } else {
+            this.armDrainDeadline();
+        }
+    }
+
+    /** FIN 을 보내고 상대가 닫기를 기다리는 단계로 넘어간다(#248). */
+    private endSocket(): void {
+        this._socket.end();
+        this.armFinDeadline();
+    }
+
+    /**
+     * #248 — 닫기를 시작했는데 남은 출력이 멈춰 있으면(상대가 읽지 않음) 연결과 세션 전체가 끝없이 남는다.
+     * 진행 없이 closeStallMs 가 지나면 강제로 닫는다. 쓰기(최대 MAX_WRITE_PIECE_BYTES 조각)가 끝날 때마다 다시 잰다.
+     */
+    private armDrainDeadline(): void {
+        this._closePhase = 'drain';
+        this.armCloseTimer(SocketHandler.closeStallMs, () => this.forceClose(`remaining output made no progress for ${SocketHandler.closeStallMs}ms`));
+    }
+
+    /**
+     * #248 — FIN 을 보냈거나 받았는데 상대가 닫지 않으면 연결과 세션 전체가 끝없이 남는다.
+     * 이 단계의 데이터는 이미 커널에 있으므로 closeGraceMs 뒤 강제로 닫아도 잃는 것이 없다.
+     */
+    private armFinDeadline(): void {
+        if(this._closePhase === 'fin') return;
+        this._closePhase = 'fin';
+        this.armCloseTimer(SocketHandler.closeGraceMs, () => this.forceClose(`the peer did not close within ${SocketHandler.closeGraceMs}ms`));
+    }
+
+    /** drain 단계에서 쓰기가 끝났다. 기한을 다시 잰다. 상대가 먼저 닫았고 마지막 쓰기가 끝났으면 FIN 대기로 넘어간다. */
+    private noteCloseProgress(): void {
+        if(this._closePhase !== 'drain' || !this._closeTimer) return;
+        if(this.isEnd() && this._inFlightWriteCount === 0) {
+            this.armFinDeadline();
             return;
         }
-        this._socket.end();
+        this._closeTimer.refresh();
+    }
+
+    private armCloseTimer(ms: number, onExpire: () => void): void {
+        this.clearCloseTimer();
+        this._closeTimer = setTimeout(() => {
+            this._closeTimer = undefined;
+            if(this._state == SocketState.Closed) return;
+            onExpire();
+        }, Math.max(1, ms));
+        this._closeTimer.unref?.();
+    }
+
+    private clearCloseTimer(): void {
+        if(this._closeTimer) clearTimeout(this._closeTimer);
+        this._closeTimer = undefined;
+    }
+
+    /**
+     * 강제 종료는 destroy() 의 종료 경로(Closed 이벤트)를 따르므로 세션 맵·캐시 파일이 평소처럼 정리된다.
+     * 한계: 받은 데이터를 읽지 않은 채 닫으면 Linux 는 RST 를 보내 커널에 남은 송신 데이터도 버린다.
+     */
+    private forceClose(reason: string): void {
+        logger.info(`Socket ${this._id} closed by force: ${reason}`);
+        this.destroy();
     }
 
     public endImmediate() : void {
         if(this.isEnd()) {
             return;
         }
-        this._socket.end();
+        this.endSocket();
         this._state = SocketState.End;
         this.notifyOwnerTerminal();
         this._event?.(this, SocketState.End);
@@ -512,9 +629,12 @@ class SocketHandler {
         if(this._state == SocketState.Closed /*|| this._state == SocketState.Error*/) {
             return;
         }
+        this.clearConnectTimer();
         this.clearTimeout();
+        this.clearCloseTimer();
         this.callAllDrainEvent(this.isOutputDrained);
         this._socket.removeAllListeners();
+        this._socket.on('error', IGNORE_LATE_SOCKET_ERROR);
         this._socket.destroy();
 
 
@@ -557,13 +677,16 @@ class SocketHandler {
             return;
         }
 
-        if(QueueLimiterRegistry.current().shouldSpillToFile({
+        // 메모리·파일 캐시 경로와 파일 캐시 예산은 버퍼 전체로 한 번 정한다. 조각마다 정하면 버퍼 하나가 두 곳으로 갈라져
+        // 메모리 조각(subarray)이 원래 버퍼 전체를 RAM 에 붙잡는데 계산은 일부만 센다(#248).
+        const spill = QueueLimiterRegistry.current().shouldSpillToFile({
             incomingSize: data.length,
             localBufferedBytes: this._memoryBufferSize,
             localBufferedLimit: this._memBufferSizeLimit,
             globalBufferedBytes: SocketHandler.GlobalMemoryBufferSize,
             globalBufferedLimit: SocketHandler.MaxGlobalMemoryBufferSize
-        })) {
+        });
+        if(spill) {
             if(!this._fileCache) {
                 this._fileCache = FileCache.create(SocketHandler.FileCacheDirPath);
             }
@@ -573,29 +696,52 @@ class SocketHandler {
                 this.destroy();
                 return;
             }
-            try {
-                let record = this._fileCache.writeSync(data);
-                if(record.id < 0) {
-                    throw new Error("File cache write failed");
-                }
-                this.appendFileCacheUsage(data.length);
-                this._waitQueueBytes += data.length;
-                this._waitQueue.pushBack({buffer: EMPTY_BUFFER, length: data.length, cacheID: record.id, onWriteComplete: onWriteComplete});
-            } catch (error) {
-                logger.error(`Failed to spill socket ${this._id} buffer to file cache`, error);
-                onWriteComplete?.(this, false, error as Error);
+        }
+
+        // 큰 버퍼는 복사 없이 MAX_WRITE_PIECE_BYTES 조각으로 나눠 넣는다. 조각마다 쓰기 완료가 생겨 닫는 중에도 진행을 본다(#248).
+        // 완료 콜백은 마지막 조각에만 단다. 넣다가 실패하면 그 오류로 한 번 알리고 닫는다
+        // (뒤에 소켓 오류가 나면 clearWaitQueue 가 마지막 조각의 콜백에 그 오류를 넘긴다).
+        // 메모리 경로의 조각(subarray)은 원래 버퍼를 함께 쓰므로 마지막 조각이 끝날 때까지 버퍼 전체가 RAM 에 있다.
+        // 그래서 메모리 계산은 버퍼 전체를 한 번 더하고, 마지막 조각이 끝날 때 한 번에 뺀다.
+        if(!spill) this.appendUsageMemoryBufferSize(data.length);
+        for(let offset = 0; offset < data.length; offset += MAX_WRITE_PIECE_BYTES) {
+            const last = offset + MAX_WRITE_PIECE_BYTES >= data.length;
+            const piece = data.length <= MAX_WRITE_PIECE_BYTES ? data : data.subarray(offset, offset + MAX_WRITE_PIECE_BYTES);
+            const error = this.enqueuePiece(piece, last ? onWriteComplete : undefined, spill, last ? data.length : 0);
+            if(error) {
+                onWriteComplete?.(this, false, error);
                 this.destroy();
                 return;
             }
-        } else  {
-            this.appendUsageMemoryBufferSize(data.length);
-            this._waitQueueBytes += data.length;
-            this._waitQueue.pushBack({buffer: data, length: data.length, cacheID: -1, onWriteComplete: onWriteComplete});
         }
-
 
         this.sendPopDataRecursive2();
 
+    }
+
+    /**
+     * 조각 하나를 대기 큐에 넣는다. 파일 캐시에 쓰지 못하면 그 오류를 돌려준다(콜백은 부르지 않는다).
+     * @param memoryBytes 메모리 경로에서 이 조각이 끝날 때 메모리 계산에서 뺄 바이트(더하기는 sendData 가 버퍼 전체로 한 번 한다)
+     */
+    private enqueuePiece(piece: Buffer, onWriteComplete: OnWriteComplete | undefined, spill: boolean, memoryBytes: number): Error | undefined {
+        if(!spill) {
+            this._waitQueueBytes += piece.length;
+            this._waitQueue.pushBack({buffer: piece, length: piece.length, cacheID: -1, onWriteComplete: onWriteComplete, memoryBytes});
+            return undefined;
+        }
+        try {
+            let record = this._fileCache!.writeSync(piece);
+            if(record.id < 0) {
+                throw new Error("File cache write failed");
+            }
+            this.appendFileCacheUsage(piece.length);
+            this._waitQueueBytes += piece.length;
+            this._waitQueue.pushBack({buffer: EMPTY_BUFFER, length: piece.length, cacheID: record.id, onWriteComplete: onWriteComplete});
+            return undefined;
+        } catch (error) {
+            logger.error(`Failed to spill socket ${this._id} buffer to file cache`, error);
+            return error as Error;
+        }
     }
 
     private callAllDrainEvent(success: boolean) : void {
@@ -605,6 +751,14 @@ class SocketHandler {
                 event(this,success);
             }
         }
+    }
+
+    /**
+     * #254: 이 핸들러를 다른 핸들러로 바꿔 닫기 전에, 배압 해제를 기다리던 쪽을 깨운다.
+     * destroy() 는 이 리스너를 부르지 않으므로, 그대로 닫으면 기다리던 쪽(끝점 읽기)이 세션이 끝날 때까지 멈춘다.
+     */
+    public releasePressureReliefListeners(): void {
+        this.callPressureReliefEvent();
     }
 
     private callPressureReliefEvent(): void {
@@ -635,7 +789,7 @@ class SocketHandler {
                 this._inRunWriteBuffer = false;
                 // 종료 대기 상태고, 버퍼 큐가 비어있으면 소켓을 종료한다.
                 if(this._endWaitingState && this._inFlightWriteCount === 0) {
-                    this._socket.end();
+                    this.endSocket();
                 }
                 this.maybeNotifyDrainOrPressureRelief();
                 return;
@@ -662,6 +816,8 @@ class SocketHandler {
                     return;
                 }
                 this._sendLength += length;
+                // 닫는 중에도 출력이 나가고 있으면 기한을 다시 잰다(#248).
+                this.noteCloseProgress();
                 this.completeWaitItem(currentWaitItem, currentWaitItem.cacheID == -1);
                 this.maybeNotifyDrainOrPressureRelief();
             });
@@ -718,11 +874,11 @@ class SocketHandler {
 
 
     private appendUsageMemoryBufferSize(size: number) : void {
-        this._memoryBufferSize += size;
-        if(this._memoryBufferSize < 0) {
-            this._memoryBufferSize = 0;
-        }
-        SocketHandler.GlobalMemoryBufferSize += size;
+        // 빼는 양은 이 핸들러가 가진 만큼까지만 전역에 반영한다. destroy() 가 이미 전부 뺀 뒤 늦게 끝난 쓰기가
+        // 다시 빼면 다른 핸들러의 몫까지 줄어 전역 상한이 느슨해진다(#248 의 강제 종료로 이 순서가 흔해졌다).
+        const delta = size < 0 ? Math.max(size, -this._memoryBufferSize) : size;
+        this._memoryBufferSize += delta;
+        SocketHandler.GlobalMemoryBufferSize += delta;
         if(SocketHandler.GlobalMemoryBufferSize < 0) {
             SocketHandler.GlobalMemoryBufferSize = 0;
         }
@@ -773,7 +929,7 @@ class SocketHandler {
             this.appendFileCacheUsage(-waitItem.length);
         }
         if(releaseMemoryBuffer) {
-            this.appendUsageMemoryBufferSize(-waitItem.length);
+            this.appendUsageMemoryBufferSize(-(waitItem.memoryBytes ?? waitItem.length));
         }
     }
 
@@ -788,7 +944,7 @@ class SocketHandler {
         }
         if(this.isOutputDrained) {
             if(this._endWaitingState && !this.isEnd()) {
-                this._socket.end();
+                this.endSocket();
             }
             this.callAllDrainEvent(true);
         }

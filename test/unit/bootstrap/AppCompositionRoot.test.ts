@@ -1,4 +1,7 @@
+import fs from "fs";
+import path from "path";
 import AppCompositionRoot from "../../../src/bootstrap/AppCompositionRoot";
+import {FileCache} from "../../../src/util/FileCache";
 import Environment from "../../../src/Environment";
 import LoggerFactory from "../../../src/util/logger/LoggerFactory";
 import {LoggerConfig} from "../../../src/util/logger/LoggerConfig";
@@ -57,6 +60,25 @@ describe("AppCompositionRoot", () => {
 
         AppCompositionRoot.useClientCacheDir();
         expect((SocketHandler as any).FileCacheDirPath).toBe(Environment.path.clientCacheDir);
+    });
+
+    // #258 REQ-2 — 캐시 폴더를 정할 때 죽은 프로세스가 남긴 캐시 파일을 지운다.
+    test("useServerCacheDir()/useClientCacheDir() remove cache files left by dead processes", () => {
+        const deadPid = Number(require("child_process").spawnSync(process.execPath, ["-e", "process.stdout.write(String(process.pid))"], {encoding: "utf-8"}).stdout);
+        for(const [dir, use] of [[Environment.path.serverCacheDir, AppCompositionRoot.useServerCacheDir],
+            [Environment.path.clientCacheDir, AppCompositionRoot.useClientCacheDir]] as const) {
+            fs.mkdirSync(dir, {recursive: true});
+            const stale = path.join(dir, `${deadPid}.260101000000.1.cache`);
+            fs.writeFileSync(stale, "stale");
+            const mine = FileCache.create(dir);
+            mine.writeSync(Buffer.from("mine"));
+            try {
+                use();
+                expect({dir, stale: fs.existsSync(stale), mine: fs.existsSync(mine.filePath)}).toEqual({dir, stale: false, mine: true});
+            } finally {
+                mine.deleteSync();
+            }
+        }
     });
 
     test("applyGlobalMemLimitMiB() sets the global memory cache limit in bytes, defaulting to 128 MiB", () => {

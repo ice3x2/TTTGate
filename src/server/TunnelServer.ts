@@ -299,8 +299,9 @@ class TunnelServer {
                 if(pool) {
                     pool.sendCloseSession(sessionId, 0);
                 }
-                // 매핑 제거(단일 경로).
-                this._sessionIDAndCtrlIDMap.delete(sessionId);
+                // 매핑 제거와 풀 정리(단일 경로). 매핑만 지우면 뒤이어 오는 terminateSession 이 풀을 찾지 못해
+                // 풀 항목과 데이터 핸들러가 클라이언트가 데이터 연결을 닫을 때까지 남는다(#253).
+                this.terminateSession(sessionId);
             } catch(e) {
                 logger.error("TTL close error", e);
             }
@@ -355,6 +356,9 @@ class TunnelServer {
             this._authTimeouts.clear();
             this._clientHandlerPoolMap.forEach((handlerPool) => {
                 handlerPool.getAllSessionIDs().forEach((id) => { this._onSessionCloseCallback?.(id, 0) });
+                // 데이터 연결이 끊겨 유예 중인 세션은 풀의 세션 목록에 없다. 타이머가 터질 때와 같은 길이로 외부 쪽을 닫는다(#253).
+                // 매핑 전체를 닫지 않는다. 정상으로 끝나 외부 쪽이 배출 중인 세션도 매핑에 남아 있기 때문이다.
+                for(const drop of handlerPool.takePendingDataDrops()) this._onSessionCloseCallback?.(drop.sessionID, drop.endLength);
                 handlerPool.end();
             });
             this._unauthenticatedHandlerIds.clear();
@@ -537,6 +541,9 @@ class TunnelServer {
             logger.error('sendSyncCtrlAck: ctrlHandler is null');
             return;
         }
+        // 이미 닫혔거나 종료를 요청한 연결에 대기 항목을 만들면 지울 종료 이벤트가 다시 오지 않거나
+        // 보내기가 실패한다(#247, #260).
+        if (ctrlHandler.isEnding) return;
         const handshakeMeta: SyncCtrlAckMeta = {
             protocolVersion: CONTROL_PROTOCOL_V2,
             capabilities: DEFAULT_PROTOCOL_V2_CAPABILITIES,
@@ -548,7 +555,8 @@ class TunnelServer {
         let sendBuffer = CtrlPacket.createSyncCtrlAck(ctrlHandler.id, handshakeMeta).toBuffer();
         ctrlHandler.sendData(sendBuffer, (handler_, success, err) => {
             if(!success) {
-                logger.error(`sendSyncAndSyncSyncCmd Fail - id:${ctrlHandler.id}, remote:(${ctrlHandler.socket.remoteAddress})${ctrlHandler.socket.remotePort}, ${err}`);
+                // 인증 전 연결이므로 debug 로 남긴다(#166).
+                logger.debug(`sendSyncAndSyncSyncCmd Fail - id:${ctrlHandler.id}, remote:(${ctrlHandler.socket.remoteAddress})${ctrlHandler.socket.remotePort}, ${err}`);
                 ctrlHandler.destroy();
                 return;
             }
@@ -761,6 +769,8 @@ class TunnelServer {
             return;
         }
         for(let i = 0, len = packetList.length; i < len; i++) {
+            // 앞 패킷을 처리하다 연결이 닫혔거나 종료를 요청했으면 같은 묶음의 나머지는 처리하지 않는다(#247, #260).
+            if(handler.isEnding) break;
             let packet = packetList[i];
             this.onReceiveCtrlPacket(handler, packet);
         }
@@ -917,7 +927,9 @@ class TunnelServer {
             let ctrlID = handler.id;
             let clientHandlerPool = this._clientHandlerPoolMap.get(ctrlID);
             if(!clientHandlerPool) {
-                logger.error(`onHandlerEvent - Not Found ClientHandlerPool. id: ${ctrlID}`);
+                // 인증 전 연결은 누구나 보낼 수 있으므로 debug 로 남긴다(#166, #260).
+                const message = `onHandlerEvent - Not Found ClientHandlerPool. id: ${ctrlID}`;
+                if(this._unauthenticatedHandlerIds.has(ctrlID)) logger.debug(message); else logger.error(message);
                 handler.end_();
                 return;
             }
@@ -1042,6 +1054,8 @@ class TunnelServer {
             this.onReceiveAllHandler(handler, data);
         } else {
             this.clearUnauthenticatedHandler(handler.id);
+            // 핸드셰이크를 마치지 못하고 닫힌 제어 연결의 대기 항목. 아래 풀 정리는 풀이 없으면 바로 돌아가므로 여기서 지운다(#247).
+            this._pendingControlHandshakeMap.delete(handler.id);
             let handlerType = (handler as TunnelHandler).handlerType;
             if(handlerType == HandlerType.Unknown || handlerType == undefined) {
                 return;
@@ -1078,7 +1092,16 @@ class TunnelServer {
         }
         // 중복 세션 정리 방지: 처리된 세션 ID들을 Set으로 추적
         let processedSessionIDs = new Set<number>();
-        
+
+        // 데이터 연결이 끊겨 유예 중인 세션은 close() 와 같이 외부로 넘긴 길이로 닫는다(#253).
+        // 0 으로 닫으면 HTTP 외부 연결은 이미 받은 응답을 끝까지 넘기지 않고 끊는다.
+        for(const drop of handlerPool.takePendingDataDrops()) {
+            this._sessionIDAndCtrlIDMap.delete(drop.sessionID);
+            this._sessionLastActivityMs.delete(drop.sessionID);
+            this._onSessionCloseCallback?.(drop.sessionID, drop.endLength);
+            processedSessionIDs.add(drop.sessionID);
+        }
+
         // 먼저 sessionIDAndCtrlIDMap에서 해당 ctrlID 관련 세션들 정리
         let removeSessionIDs : Array<number> = [];
         this._sessionIDAndCtrlIDMap.forEach((value, key) => {

@@ -29,7 +29,7 @@ test("부트스트랩 화면이 단계별 문구를 보여주고 새로고침 �
 
         await password.fill("short");
         await clickOk(app.page);
-        await expectMessage(app.page, "The password does not meet the server's minimum length.");
+        await expectMessage(app.page, "The password must be 8 to 1024 characters long.");
 
         await password.fill("plainword");
         await clickOk(app.page);

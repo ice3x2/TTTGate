@@ -5,7 +5,8 @@ import {
     newUserId,
     validateGroupAttributes,
     validatePassword,
-    validateUsername
+    validateUsername,
+    MAX_PASSWORD_LENGTH
 } from "../../../../src/server/rbac/IdentityTypes";
 
 jest.setTimeout(15_000);
@@ -34,6 +35,15 @@ describe("IdentityTypes.validatePassword", () => {
         const result = validatePassword("1234567");
         expect(result.success).toBe(false);
         expect((result as {code: string}).code).toBe("password_too_short");
+    });
+
+    // #251 — 로그인이 받지 않는 길이는 저장도 하지 않는다. 그래야 만든 비밀번호로 다시 로그인할 수 있다.
+    it("rejects a password longer than MAX_PASSWORD_LENGTH and accepts one at the limit", () => {
+        expect(MAX_PASSWORD_LENGTH).toBe(1024);
+        const result = validatePassword("a".repeat(MAX_PASSWORD_LENGTH + 1));
+        expect(result.success).toBe(false);
+        expect((result as {code: string}).code).toBe("password_too_long");
+        expect(validatePassword("a".repeat(MAX_PASSWORD_LENGTH)).success).toBe(true);
     });
 
     it("accepts a password at the minimum length", () => {
