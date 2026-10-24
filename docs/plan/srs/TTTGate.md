@@ -2486,7 +2486,7 @@ DataStatePacket.fromBuffer 에서 prefix 문자열이 'DATA_STATE' 가 아니면
 
 > **Type:** verification | **Confidence:** 1 | **Phase:** 2
 
-authKey|proof|token|secret|hmac|bindingToken|challengeNonce|sessionId 식별자가 ===/!==/==/!= 로 비교되는 라인을 감지. false positive 필터: undefined/null/true/false/숫자/Enum.Member, 문자열 리터럴 제외. `lint-auth-compare-allow` 주석 화이트리스트. STRICT=1 또는 --strict 시 위반 존재하면 exit 1, 그 외 exit 0. reports/auth-compare.json 출력, --report-dir 로 재지정.
+authKey|proof|token|secret|hmac|bindingToken|challengeNonce|sessionId 식별자가 ===/!==/==/!= 로 비교되는 라인을 감지. false positive 필터: undefined/null/true/false/숫자/Enum.Member, 문자열 리터럴 제외. `lint-auth-compare-allow` 주석 화이트리스트. STRICT=1 또는 --strict 시 위반 존재하면 exit 1, 그 외 exit 0. build/reports/auth-compare.json(기본, git 이 무시) 출력, --report-dir 로 재지정(#272). 저장소의 reports/auth-compare.json 은 #272 이전의 과거 스냅샷이며 다시 생성하지 않는다.
 
 **Source:** `scripts/lint-auth-compare.mjs:L1-L231`
 
