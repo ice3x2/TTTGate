@@ -5,6 +5,10 @@ import HttpHandler from "../../src/server/http/HttpHandler";
 import {SocketHandler} from "../../src/util/SocketHandler";
 import SocketState from "../../src/util/SocketState";
 
+// 조건 대기 기한. 큰 본문을 다루는 파일은 부하에서 2초를 넘기므로 늘려 쓴다(#263). 모듈은 테스트 파일마다 따로 읽힌다.
+let untilTimeoutMs = 2000;
+export const setHttpFixtureWaitMs = (ms: number) => { untilTimeoutMs = ms; };
+
 export async function withHttpDuplex(check: (fixture: {
     client: net.Socket; upstream: net.Socket; handler: HttpHandler;
     requests: () => Buffer; responses: () => Buffer;
@@ -39,7 +43,7 @@ export async function withHttpDuplex(check: (fixture: {
         await once(client, "connect");
         const current = await bound, upstream = await acceptedUpstream;
         const until = async (condition: () => boolean) => {
-            const deadline = Date.now() + 2000;
+            const deadline = Date.now() + untilTimeoutMs;
             while(!condition()) { if(Date.now() > deadline) throw new Error("HTTP fixture condition timed out"); await delay(5); }
         };
         await check({client, upstream, handler: current, requests: () => Buffer.concat(inbound), responses: () => Buffer.concat(outbound), until, ownerCalls: () => owners});

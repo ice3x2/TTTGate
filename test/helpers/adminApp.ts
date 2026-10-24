@@ -39,7 +39,8 @@ export type AdminApp = {
 const BACKEND_START_TIMEOUT_MS = 60_000;
 const BACKEND_STOP_TIMEOUT_MS = 10_000;
 const CALLS_TIMEOUT_MS = 5_000;
-const FIRST_SCREEN_TIMEOUT_MS = 90_000;
+// 파일의 첫 테스트는 개발 서버가 화면을 처음 컴파일하는 시간까지 낸다. CPU 부하에서 90초를 넘긴 일이 있다(#263).
+const FIRST_SCREEN_TIMEOUT_MS = 150_000;
 
 /**
  * login: true(기본)는 admin / ADMIN_TEST_PASSWORD 로, 객체면 그 계정으로 로그인한 뒤 상태 화면까지 기다린다.

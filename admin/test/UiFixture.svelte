@@ -79,6 +79,8 @@
 </Modal>
 
 <div id="toast-push"><Button onclick={() => toast.push({tone: 'pulse', message: 'Fixture toast', timeoutMs: 1500})}>Push toast</Button></div>
+<!-- 스스로 사라지지 않는 토스트. 쌓이는 상한을 시간과 무관하게 확인한다(#263). -->
+<div id="toast-push-sticky"><Button onclick={() => toast.push({tone: 'trace', message: 'Sticky toast', timeoutMs: 0})}>Push sticky toast</Button></div>
 
 <Tabs items={[{id: 'one', label: 'One'}, {id: 'two', label: 'Two'}]} bind:active={tab} />
 <output id="tab-echo">{tab}</output>
