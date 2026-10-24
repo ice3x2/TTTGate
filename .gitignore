@@ -50,6 +50,10 @@ bin/
 /cert/
 config/cert/
 /config/.adminCert.json
+# 실행 중 생기는 설정·상태 파일(#264). 샘플과 README 만 추적한다.
+/config/*
+!/config/README.md
+!/config/*.sample.yaml
 
 cache/
 dist/

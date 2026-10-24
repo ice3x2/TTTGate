@@ -174,6 +174,42 @@ describe("ServerOptionStore 감사 옵션 검증", () => {
         expect(verify({auditQueueSize: 100001}).result.success).toBe(false);
         expect(verify({auditQueueSize: 0}).result.success).toBe(false);
     });
+
+    // #267 REQ-1·REQ-3 — logLevel 은 error·warn·info·debug 가운데 하나다. 없으면 info, 틀리면 저장 전에 거부한다.
+    it("logLevel 을 생략하면 info 로 채우고, 허용값은 그대로 둔다", () => {
+        const {result, option} = verify({logLevel: undefined});
+        expect(result.success).toBe(true);
+        expect(option.logLevel).toBe("info");
+        expect(verify({logLevel: "debug"}).option.logLevel).toBe("debug");
+    });
+
+    // #268 REQ-1·REQ-3 — 닫기 기한. 없으면 기본값(정체 60초·FIN 10초), 범위 밖이면 저장 전에 거부한다.
+    it("closeStallMs·closeGraceMs 를 생략하면 기본값으로 채운다", () => {
+        const {result, option} = verify({closeStallMs: undefined, closeGraceMs: undefined});
+        expect(result.success).toBe(true);
+        expect(option.closeStallMs).toBe(60_000);
+        expect(option.closeGraceMs).toBe(10_000);
+    });
+
+    it.each([
+        ["closeStallMs", 1_000, 600_000, "closeStallMs must be an integer within 1000..600000"],
+        ["closeGraceMs", 1_000, 120_000, "closeGraceMs must be an integer within 1000..120000"]
+    ] as const)("%s 는 %d..%d 의 정수만 받는다", (field, min, max, message) => {
+        expect(verify({[field]: min}).option[field]).toBe(min);
+        expect(verify({[field]: max}).option[field]).toBe(max);
+        for(const wrong of [min - 1, max + 1, 1_500.5, "60000", null]) {
+            const result = verify({[field]: wrong}).result;
+            expect(result.success).toBe(false);
+            expect(result.message).toBe(message);
+        }
+    });
+
+    it("logLevel 이 허용값이 아니면 실패한다", () => {
+        const wrong = verify({logLevel: "verbose"});
+        expect(wrong.result.success).toBe(false);
+        expect(wrong.result.message).toBe("logLevel must be one of error, warn, info, debug");
+        expect(verify({logLevel: 3}).result.success).toBe(false);
+    });
 });
 
 describe("ServerOptionStore mfaRequiredForSuperusers (#112 U4-04)", () => {

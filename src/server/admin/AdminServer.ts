@@ -76,6 +76,8 @@ const LOGIN_MAX_IN_FLIGHT = LOGIN_MAX_FAILURES;
 
 // P5-T3 / REQ-11: JSON 본문 크기 / 타임아웃 상한.
 const ADMIN_JSON_BODY_LIMIT_BYTES = 1 * 1024 * 1024; // 1MiB
+// #265: 로그인 본문 상한. 비밀번호(최대 1024자)와 MFA 코드면 충분하다. 칸을 잡은 채 큰 본문을 들고 있지 않게 한다.
+const LOGIN_JSON_BODY_LIMIT_BYTES = 16 * 1024;
 const ADMIN_REQUEST_IDLE_TIMEOUT_MS = 10_000;
 const ADMIN_PROCESSING_IDLE_TIMEOUT_MS = 120_000;
 const ADMIN_HEADERS_TIMEOUT_MS = 15_000;
@@ -167,14 +169,14 @@ class AdminServer {
 
         this._routes = buildAdminRoutes({
             onLogin: this.onLogin,
-            onLoginMfa: this.inLoginSlot(mfaLoginHandler(this._mfa.tickets, {
+            onLoginMfa: mfaLoginHandler(this._mfa.tickets, {
                 isBlocked: (req) => this.isLoginBlocked(req),
                 fail: async (req) => { this.recordLoginFailure(req); await this.delayFailedLogin(req); },
                 issueSession: (req, res, user) => this.completeLogin(req, res, user.id,
                     {id: user.id, username: user.username, displayName: user.displayName, role: user.role}, user.mustChangePassword),
                 sendFailure: (res, status, payload) => this.sendApiFailure(res, status, payload),
                 emitAudit: (event) => this.emitAudit(event)
-            })),
+            }),
             onGetVersion: this.onGetVersion,
             onLogout: this.onLogout,
             onGetValidateSession: this.onGetValidateSession,
@@ -330,9 +332,11 @@ class AdminServer {
            const staticAction = typeof matched.route.action === 'string' && matched.route.action !== 'public'
                && matched.route.action !== 'session' && !matched.route.targetFromBody ? matched.route.action : undefined;
            if(staticAction && this.denyIfUnauthorized(ctx, staticAction, matched.route, pathname, true)) return;
+           // #265: 로그인은 본문(최대 16 KiB, LOGIN_JSON_BODY_LIMIT_BYTES)을 읽기 전에 차단과 동시 처리 칸을 판정한다. 상한을 넘은 요청이 본문을 들고 있지 않게 한다.
+           if(matched.route.loginSlot && !this.admitLogin(ctx, matched.route.loginSlot)) return;
            if(method === 'POST' || method === 'PUT' || method === 'DELETE') {
                // #135: 감사 대상 CUD 의 본문 실패(413·408·400)도 남긴다. 상태를 바꾸지 않으므로 reserve() 없이 흘려보낸다(bodyRejectionAudit.ts).
-               ctx.body = await AdminServer.readJson(req).catch((e) => { if(isBodyRejectionAuditable(ctx, matched.route)) this.emitAudit(bodyRejectionEvent(ctx, method!, pathname, e)); throw e; });
+               ctx.body = await AdminServer.readJson(req, matched.route.loginSlot ? LOGIN_JSON_BODY_LIMIT_BYTES : undefined).catch((e) => { if(isBodyRejectionAuditable(ctx, matched.route)) this.emitAudit(bodyRejectionEvent(ctx, method!, pathname, e)); throw e; });
            }
            // 요청 수신은 끝났다. 유휴 기한(REQ-11)은 느린 송신(slowloris)용이므로 여기서 넉넉히 늘린다. 약한 서버에서
            // 처리가 스왑에 걸려 10초를 넘어도 끊지 않고, 응답을 읽지 않는 클라이언트(slow read)는 여전히 닫는다(#181).
@@ -1313,61 +1317,57 @@ class AdminServer {
     }
 
     private onLogin = async (ctx: RouteContext) => {
-        const limited = await this.performLogin(ctx);
+        await this.performLogin(ctx);
         // 성공은 completeLogin 이 남긴다(새 세션 해시를 그곳에서만 알 수 있다).
         if(ctx.res.statusCode === 200) return;
-        // username 이 없으면 'admin' 으로 적지 않는다(별칭은 #102 에서 지웠다). 형식·429 처리는 loginFailureAudit 에 있다(#139).
-        const event = this._loginFailureAudit(ctx.body, ctx.ip, this.buildLoginAttemptKey(ctx.req), ctx.res.statusCode, this.now(), limited);
+        // username 이 없으면 'admin' 으로 적지 않는다(별칭은 #102 에서 지웠다). 형식 처리는 loginFailureAudit 에 있다(#139).
+        const event = this._loginFailureAudit(ctx.body, ctx.ip, this.buildLoginAttemptKey(ctx.req), ctx.res.statusCode, this.now());
         if(event) this.emitAudit(event);
     }
 
-    /** 동시 처리 상한 때문에 429 를 보냈으면 'concurrency_limit' 을 돌려준다(감사에서 차단과 구분한다). */
-    private performLogin = async (ctx: RouteContext): Promise<'concurrency_limit' | undefined> => {
+    /**
+     * #251·#265: 로그인 두 경로가 본문을 읽기 전에 거치는 문. 차단을 먼저 본다 — 차단된 버킷은 칸이 차 있어도
+     * 차단 429 를 받고, 형식 오류로 401 을 받아 백오프를 우회하지 못한다. 차단은 실패가 기록된 뒤에야 걸리므로
+     * 그 전에 몰린 요청이 bcrypt 대기열과 실패 지연에 쌓이지 않게 버킷마다 동시 처리 칸을 센다. 칸이 없으면 429 다.
+     * 칸은 응답이 끝나거나 연결이 닫힐 때(본문 읽기 실패·시간 초과·크기 초과 포함) 한 번만 돌려준다. 통과하면 true 다.
+     * 본문을 읽지 않았으므로 password 경로의 거절 감사는 username 을 '(unread)' 로 남긴다.
+     */
+    private admitLogin(ctx: RouteContext, kind: 'password' | 'mfa'): boolean {
         const {req, res} = ctx;
-        // 단일 관리자 암호이므로 제출 값과 무관하게 네트워크 버킷으로 집계한다.
-        // 본문 검증보다 먼저 판정한다 — 차단된 IP가 형식 오류로 401을 받아 백오프를
-        // 우회하거나, 차단 상태를 401/429로 구분당하지 않게 한다.
+        const bucket = this.buildLoginAttemptKey(req);
+        const reject = (payload: {code?: string, message: string}, reason?: 'concurrency_limit'): false => {
+            // 읽지 않은 본문이 남은 연결은 다시 쓰지 않는다(#173 의 denyIfUnauthorized 와 같다).
+            res.setHeader('Connection', 'close');
+            this.sendApiFailure(res, 429, payload);
+            const event = kind === 'password' ? this._loginFailureAudit(undefined, ctx.ip, bucket, 429, this.now(), reason) : undefined;
+            if(event) this.emitAudit(event);
+            return false;
+        };
+        if(this.isLoginBlocked(req)) return reject({message: 'Too many login attempts'});
+        const inFlight = this._loginInFlight.get(bucket) ?? 0;
+        if(inFlight >= LOGIN_MAX_IN_FLIGHT) {
+            return reject({code: 'login_concurrency_limit', message: 'Too many login attempts'}, 'concurrency_limit');
+        }
+        this._loginInFlight.set(bucket, inFlight + 1);
+        let released = false;
+        const release = () => {
+            if(released) return;
+            released = true;
+            const left = (this._loginInFlight.get(bucket) ?? 1) - 1;
+            if(left > 0) this._loginInFlight.set(bucket, left); else this._loginInFlight.delete(bucket);
+        };
+        res.once('finish', release);
+        res.once('close', release);
+        return true;
+    }
+
+    private performLogin = async (ctx: RouteContext) => {
+        const {req, res} = ctx;
+        // admitLogin 은 본문을 읽기 전에 차단을 봤다. 본문을 받는 사이 버킷이 차단되었을 수 있으므로 검증 전에 다시 본다(#265).
         if(this.isLoginBlocked(req)) {
             this.sendApiFailure(res, 429, {message: 'Too many login attempts'});
             return;
         }
-        return await this.runInLoginSlot(req, res, () => this.performLoginInSlot(ctx)) ? undefined : 'concurrency_limit';
-    }
-
-    /**
-     * #251: 차단은 실패가 기록된 뒤에야 걸린다. 그 전에 동시에 몰린 요청이 모두 bcrypt 대기열과 실패 지연에 쌓이지 않게
-     * 버킷마다 동시 처리 수를 센다. 칸이 없으면 429 를 보내고 false 다. 칸은 응답(실패 지연 포함)이 끝나면 돌려준다.
-     */
-    private async runInLoginSlot(req: IncomingMessage, res: ServerResponse, handler: () => Promise<void>): Promise<boolean> {
-        const bucket = this.buildLoginAttemptKey(req);
-        const inFlight = this._loginInFlight.get(bucket) ?? 0;
-        if(inFlight >= LOGIN_MAX_IN_FLIGHT) {
-            this.sendApiFailure(res, 429, {code: 'login_concurrency_limit', message: 'Too many login attempts'});
-            return false;
-        }
-        this._loginInFlight.set(bucket, inFlight + 1);
-        try {
-            await handler();
-        } finally {
-            const left = (this._loginInFlight.get(bucket) ?? 1) - 1;
-            if(left > 0) this._loginInFlight.set(bucket, left); else this._loginInFlight.delete(bucket);
-        }
-        return true;
-    }
-
-    /** /api/login 과 같은 순서로 차단을 먼저 보고, 그다음 동시 처리 칸을 잡는다. */
-    private inLoginSlot(handler: (ctx: RouteContext) => Promise<void>): (ctx: RouteContext) => Promise<void> {
-        return async (ctx) => {
-            if(this.isLoginBlocked(ctx.req)) {
-                this.sendApiFailure(ctx.res, 429, {message: 'Too many login attempts'});
-                return;
-            }
-            await this.runInLoginSlot(ctx.req, ctx.res, () => handler(ctx));
-        };
-    }
-
-    private performLoginInSlot = async (ctx: RouteContext) => {
-        const {req, res} = ctx;
         const json: any = ctx.body;
         // #102 (U2-10): 로그인 본문은 {username, password} 하나다. 옛 {key} 별칭과 username 기본값('admin')은 지웠다.
         const password = (typeof json?.['password'] == 'string' ? json['password'] : '').trim();

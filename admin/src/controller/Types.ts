@@ -23,6 +23,11 @@ type ServerOption = {
     mfaRequiredForSuperusers?: boolean;
     auditRetentionDays?: number;
     auditQueueSize?: number;
+    /** #267: 서버 로그 레벨. 저장하면 다시 시작하지 않고 바로 적용된다. */
+    logLevel?: 'error' | 'warn' | 'info' | 'debug';
+    /** #268: 닫기 기한(ms). 저장하면 이후 닫는 연결부터 적용된다. */
+    closeStallMs?: number;
+    closeGraceMs?: number;
     /** U3-04: 그룹 속성의 신뢰 클라이언트 선택지. clientSecret 은 타입에 넣지 않는다. */
     trustedClients?: Array<{clientId: string; displayName?: string}>;
 }

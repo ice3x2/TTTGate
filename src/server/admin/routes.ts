@@ -76,6 +76,8 @@ export type Route = {
     audit?: ((ctx: RouteContext) => AuditRouteMeta) | false;
     /** 권한 판정 대상(target)을 본문에서 읽는다. 이런 라우트는 본문을 읽은 뒤에만 권한을 판정할 수 있다(#173). */
     targetFromBody?: true;
+    /** 로그인 경로. 본문을 읽기 전에 차단과 동시 처리 칸을 판정한다(#265). password 는 거절도 login_failure 로 감사한다. */
+    loginSlot?: 'password' | 'mfa';
     handler: (ctx: RouteContext) => Promise<void>;
 };
 
@@ -180,6 +182,7 @@ export type RouteEntry = {
     target?: (ctx: RouteContext) => Target | undefined;
     audit?: ((ctx: RouteContext) => AuditRouteMeta) | false;
     targetFromBody?: true;
+    loginSlot?: Route['loginSlot'];
     handler: string;
 };
 
@@ -187,9 +190,9 @@ export type RouteEntry = {
 // pattern 은 new RegExp(string) 으로 만든다: 정규식 리터럴(/.../)은 '/' 이스케이프가 source 에 그대로
 // 남아 표(이슈 #95)에 적힌 패턴 문자열과 pattern.source 가 어긋나 보이므로 피한다.
 export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
-    {method: 'POST', pattern: new RegExp('^/api/login$'), action: 'public', handler: 'onLogin'},
+    {method: 'POST', pattern: new RegExp('^/api/login$'), action: 'public', loginSlot: 'password', handler: 'onLogin'},
     // U4-08 / #127 2단계 로그인. 세션이 없으므로 audited() 대신 핸들러가 직접 감사한다.
-    {method: 'POST', pattern: new RegExp('^/api/login/mfa$'), action: 'public', handler: 'onLoginMfa'},
+    {method: 'POST', pattern: new RegExp('^/api/login/mfa$'), action: 'public', loginSlot: 'mfa', handler: 'onLoginMfa'},
     {method: 'GET', pattern: new RegExp('^/api/version$'), action: 'public', handler: 'onGetVersion'},
     {method: 'POST', pattern: new RegExp('^/api/logout$'), action: 'session',
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.logout, {kind: 'session', id: SessionStore.sessionIdOf(ctx.session!.key)}), handler: 'onLogout'},
@@ -305,6 +308,6 @@ export function buildAdminRoutes(handlers: RouteHandlers): readonly Route[] {
             throw new Error(`AdminServer route handler not found: ${entry.handler}`);
         }
         return {method: entry.method, pattern: entry.pattern, action: entry.action, target: entry.target, audit: entry.audit,
-            targetFromBody: entry.targetFromBody, handler};
+            targetFromBody: entry.targetFromBody, loginSlot: entry.loginSlot, handler};
     });
 }

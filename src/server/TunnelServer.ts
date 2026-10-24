@@ -92,6 +92,13 @@ class TunnelServer {
     private readonly _serverOption : {port: number, tls: boolean, key: string, controlProtocolMode: ControlProtocolMode, allowLegacyControlAuth: boolean};
     private _clientHandlerPoolMap : Map<number, ClientHandlerPool> = new Map<number, ClientHandlerPool>();
     private _sessionIDAndCtrlIDMap : Map<number, number> = new Map<number, number>();
+    /**
+     * #266: 풀이 외부 쪽에 처음 넘긴 세션 닫기의 길이(CloseSession·유예 타이머·실패 경로 어느 것이든). 이렇게 닫힌 세션은
+     * 외부 쪽이 배출을 끝낼 때까지 매핑에 남는다. 그 사이 close()·destroyClientHandlerPool 이 길이 0 으로 다시 닫으면
+     * HTTP 외부 연결은 배출 중인 응답을 끊으므로, 두 경로는 이 길이로 닫는다. ExternalPortServerPool 은 처음과 다른
+     * 길이를 받으면 끊으므로 다시 닫을 때도 처음 값과 같아야 한다. 매핑에서 세션을 지울 때 함께 지운다.
+     */
+    private _forwardedCloseLengths : Map<number, number> = new Map<number, number>();
     private _pendingControlHandshakeMap: Map<number, PendingControlHandshake> = new Map<number, PendingControlHandshake>();
 
     private _tunnelServer : TCPServer;
@@ -348,6 +355,8 @@ class TunnelServer {
         this.stopSessionTtlTimer();
         this.stopHeartbeatTimer();
         this._sessionLastActivityMs.clear();
+        const closeLengths = this._forwardedCloseLengths;
+        this._forwardedCloseLengths = new Map<number, number>();
         return new Promise((resolve) => {
             // 모든 auth timeout 정리
             this._authTimeouts.forEach((timeoutId) => {
@@ -355,7 +364,8 @@ class TunnelServer {
             });
             this._authTimeouts.clear();
             this._clientHandlerPoolMap.forEach((handlerPool) => {
-                handlerPool.getAllSessionIDs().forEach((id) => { this._onSessionCloseCallback?.(id, 0) });
+                // CloseSession 을 이미 받은 세션은 그 길이로 닫는다(#266). 나머지는 지금처럼 0 이다.
+                handlerPool.getAllSessionIDs().forEach((id) => { this._onSessionCloseCallback?.(id, closeLengths.get(id) ?? 0) });
                 // 데이터 연결이 끊겨 유예 중인 세션은 풀의 세션 목록에 없다. 타이머가 터질 때와 같은 길이로 외부 쪽을 닫는다(#253).
                 // 매핑 전체를 닫지 않는다. 정상으로 끝나 외부 쪽이 배출 중인 세션도 매핑에 남아 있기 때문이다.
                 for(const drop of handlerPool.takePendingDataDrops()) this._onSessionCloseCallback?.(drop.sessionID, drop.endLength);
@@ -575,6 +585,9 @@ class TunnelServer {
         let ctrlHandlerPool = ClientHandlerPool.create(handler.id, handler);
         ctrlHandlerPool.isSessionOwned = (sessionID: number) => this._sessionIDAndCtrlIDMap.get(sessionID) === handler.id;
         ctrlHandlerPool.onSessionCloseCallback = (sessionID: number, endLength:  number) => {
+            if(this._sessionIDAndCtrlIDMap.has(sessionID) && !this._forwardedCloseLengths.has(sessionID)) {
+                this._forwardedCloseLengths.set(sessionID, endLength);
+            }
             this._onSessionCloseCallback?.(sessionID, endLength);
         }
         ctrlHandlerPool.onReceiveDataCallback = (sessionID: number, data: Buffer) => {
@@ -784,6 +797,7 @@ class TunnelServer {
     public terminateSession(sessionId: number) : void {
         let pool = this.findCtrlHandlerPool(sessionId);
         this._sessionIDAndCtrlIDMap.delete(sessionId);
+        this._forwardedCloseLengths.delete(sessionId);
         // P6-T1 / REQ-09: 세션 종료 시 활동 기록 제거.
         this._sessionLastActivityMs.delete(sessionId);
         if(pool == undefined) {
@@ -1097,6 +1111,7 @@ class TunnelServer {
         // 0 으로 닫으면 HTTP 외부 연결은 이미 받은 응답을 끝까지 넘기지 않고 끊는다.
         for(const drop of handlerPool.takePendingDataDrops()) {
             this._sessionIDAndCtrlIDMap.delete(drop.sessionID);
+            this._forwardedCloseLengths.delete(drop.sessionID);
             this._sessionLastActivityMs.delete(drop.sessionID);
             this._onSessionCloseCallback?.(drop.sessionID, drop.endLength);
             processedSessionIDs.add(drop.sessionID);
@@ -1114,7 +1129,10 @@ class TunnelServer {
             this._sessionIDAndCtrlIDMap.delete(id);
             // P6-T1 / REQ-09: Pool swap/destroy 시 orphan close 일괄 통보 + 활동 기록 제거.
             this._sessionLastActivityMs.delete(id);
-            this._onSessionCloseCallback?.(id, 0);
+            // CloseSession 을 이미 받아 배출 중인 세션은 그 길이로 닫는다(#266). 나머지는 지금처럼 0 이다.
+            const closeLength = this._forwardedCloseLengths.get(id) ?? 0;
+            this._forwardedCloseLengths.delete(id);
+            this._onSessionCloseCallback?.(id, closeLength);
             processedSessionIDs.add(id);
         }
         

@@ -92,6 +92,37 @@ Server options:
 
 `TTTGate server --help` lists the common options. `--help-advanced` adds the legacy and risky options.
 
+### Log Level
+
+`logLevel` in `config/server.yaml` sets which server logs are written. The values are `error`, `warn`, `info` (default) and `debug`. A missing value means `info`.
+
+- Change it in the admin console (**Server settings** → **Log level**) or with `POST`/`PUT /api/serverOption`.
+- The new level applies at once to all log output (files and console). You do not need to restart the server.
+- Any other value is rejected with `400`, and `server.yaml` does not change.
+- Use `debug` only while you investigate a problem. It writes much more and can fill the disk.
+- Audit logs (`logs/audit`) are not affected.
+- A wrong value written directly in `server.yaml` fails config validation at startup.
+- Upgrade note: earlier versions also wrote `debug` lines by default. Set `logLevel: debug` to keep that output.
+
+### Connection Close Timeouts
+
+When the server closes a tunnelled connection, it first sends the remaining output and then waits for the peer to close. Two options in `config/server.yaml` limit these waits:
+
+| Option | Meaning | Range (ms) | Default (ms) |
+|---|---|---|---|
+| `closeStallMs` | How long the remaining output can make no progress. Each write that completes starts the time again. | 1000–600000 | 60000 |
+| `closeGraceMs` | How long to wait for the peer to close after FIN was sent or received. | 1000–120000 | 10000 |
+
+- When a timeout ends, the server closes the connection by force.
+- Change them in the admin console (**Server settings** → **Connection close**) or with `POST`/`PUT /api/serverOption`. You do not need to restart the server.
+  - A new `closeStallMs` applies to connections that start to close after the change.
+  - A new `closeGraceMs` applies to connections that send or receive FIN after the change.
+- A missing value means the default.
+- A value outside the range is rejected with `400`, and `server.yaml` does not change. A wrong value written directly in `server.yaml` fails config validation at startup.
+- These options apply only to the server process. The client always uses the defaults.
+- Increase `closeStallMs` when slow users download large files. The slowest reader the server waits for is about (one third of the kernel send buffer) / `closeStallMs`. On Linux with the default 60000 this is about 25 KiB/s.
+- Decrease them on a small server to free connections sooner.
+
 ### First Admin Login
 
 On a fresh install, the server writes a one-time bootstrap token to `config/.bootstrap-token`.

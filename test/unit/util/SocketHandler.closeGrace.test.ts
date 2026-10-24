@@ -96,6 +96,24 @@ describe("SocketHandler close grace (#248)", () => {
         expect(serverSide.destroyed).toBe(true);
     });
 
+    // #268 — 기한은 실행 중 바뀔 수 있다. 강제 종료 로그는 타이머를 켤 때의 값을 적어야 한다(만료 때의 설정값이 아니라).
+    test("the forced-close reason names the deadline the timer was armed with, not a value changed later", async () => {
+        const {handler, events} = bind();
+        const reasons: string[] = [];
+        const force = jest.spyOn(handler as any, "forceClose").mockImplementation(function(this: any, reason: unknown) {
+            reasons.push(String(reason));
+            this.destroy();
+        });
+        try {
+            handler.end_();
+            SocketHandler.closeGraceMs = 9_999;
+            expect(await waitFor(() => events.includes(SocketState.Closed), GRACE * 10)).toBe(true);
+            expect(reasons).toEqual([`the peer did not close within ${GRACE}ms`]);
+        } finally {
+            force.mockRestore();
+        }
+    });
+
     // REQ-1 — endImmediate() 도 같다.
     test("an endImmediate() whose peer never closes is destroyed after the grace time", async () => {
         const {handler} = bind();

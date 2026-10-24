@@ -41,7 +41,9 @@ class LogWriter {
     private _waitEnd : boolean = false;
     private _isEnd : boolean = false;
     private _endWaiters : Array<() => void> = [];
-    private readonly _level : Level;
+    /** 설정에서 정한 레벨. 실행 중 레벨(#267)을 거두면 이 값으로 돌아간다. */
+    private readonly _configuredLevel : Level;
+    private _level : Level;
     /**
      * 큐에 있는, 아직 스트림에 넘기지 않은 로그의 바이트(#249).
      * 넣을 때 큐가 비어 있으면 바로 스트림에 쓰므로 큐는 보통 한 줄을 넘지 않는다. 대기량은 주로 스트림의 writableLength 가 맡고,
@@ -67,7 +69,8 @@ class LogWriter {
         this._history = writeConfig.history ?? 30;
         this._fileWrite = writeConfig.file ?? true;
         this._consoleWrite = writeConfig.console ?? true;
-        this._level = writeConfig.level ?? 'debug';
+        this._configuredLevel = writeConfig.level ?? 'debug';
+        this._level = this._configuredLevel;
         this.init();
     }
 
@@ -156,6 +159,15 @@ class LogWriter {
     }
 
 
+
+    public get level() : Level {
+        return this._level;
+    }
+
+    /** #267: 실행 중 레벨을 바꾼다. undefined 면 설정의 레벨로 돌아간다. 다음 로그부터 적용한다. */
+    public set level(level: Level | undefined) {
+        this._level = level ?? this._configuredLevel;
+    }
 
      public pushMessage(message: LogMessage) {
         if(LEVEL_ORDER[message.level] < LEVEL_ORDER[this._level]) return;

@@ -38,6 +38,15 @@ describe("loginFailureAudit", () => {
         expect(blocked!.detail).toEqual({username: "admin", blocked: true});
     });
 
+    // #265 — 본문을 읽기 전에 거절한 요청(body undefined)은 빠진 username 과 구분해 '(unread)' 로 남긴다.
+    it("본문을 읽기 전에 거절한 요청은 username 을 (unread) 로 남긴다", () => {
+        const audit = createLoginFailureAuditor();
+        expect(audit(undefined, "10.0.0.1", "v4:10.0.0.0/24", 429, NOW, "concurrency_limit")!.detail)
+            .toEqual({username: "(unread)", reason: "concurrency_limit"});
+        expect(audit(undefined, "10.0.0.2", "v4:10.0.1.0/24", 429, NOW)!.detail).toEqual({username: "(unread)", blocked: true});
+        expect(audit({}, "10.0.0.3", "v4:10.0.2.0/24", 401, NOW)!.detail).toEqual({username: "(missing)"});
+    });
+
     it("차단이 아닌 실패는 지금처럼 요청마다 남는다", () => {
         const audit = createLoginFailureAuditor();
         const events = Array.from({length: 3}, () => audit({username: "admin"}, "127.0.0.1", "v4:127.0.0.0/24", 401, NOW));

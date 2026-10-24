@@ -2,7 +2,7 @@ import TTTServer from "./TTTServer";
 import ServerOptionStore from "./ServerOptionStore";
 import AdminServer from "./admin/AdminServer";
 import {CertificationStore, CertInfo} from "./CertificationStore";
-import {DEFAULT_AUDIT_QUEUE_SIZE, DEFAULT_AUDIT_RETENTION_DAYS, DEFAULT_GEO_CONFIG, ServerOption} from "../types/TunnelingOption";
+import {DEFAULT_AUDIT_QUEUE_SIZE, DEFAULT_AUDIT_RETENTION_DAYS, DEFAULT_GEO_CONFIG, DEFAULT_LOG_LEVEL, ServerOption} from "../types/TunnelingOption";
 import {AdmissionController} from "./security/AdmissionController";
 import CLI from "../util/CLI";
 import Files from "../util/Files";
@@ -32,12 +32,22 @@ const logger = LoggerFactory.getLogger('server', 'ServerApp');
 let adminServer : AdminServer;
 let tttServer : TTTServer;
 
+/**
+ * server.yaml 의 실행 설정을 시작할 때 적용한다. 실행 중에는 TTTServer.applyServerOption 이 바꾼다.
+ * 로그 레벨(#267)은 모든 로그 출력에, 닫기 기한(#268)은 이후 닫는 연결에 적용된다.
+ */
+const applyStartupRuntimeOptions = (serverOption: ServerOption): void => {
+    LoggerFactory.setLevel(serverOption.logLevel ?? DEFAULT_LOG_LEVEL);
+    TTTServer.applyCloseDeadlines(serverOption);
+};
+
 const startService = async (serverOption: ServerOption, adminCertInfo: CertInfo) => {
     const identity = await IdentityMigration.runAtStartup();
     if(identity.kind === 'legacy-fallback') {
         logger.error(`identity store unavailable (${identity.reason}); continuing with legacy admin key only`);
     }
     AppCompositionRoot.applyGlobalMemLimitMiB(serverOption.globalMemCacheLimit ?? 128);
+    applyStartupRuntimeOptions(serverOption);
     logger.info("Start service with option: " + JSON.stringify(redactSecrets(serverOption), null, 2));
     AdmissionController.instance.configureGeo(serverOption.connectionSecurity?.geo ?? DEFAULT_GEO_CONFIG);
     tttServer = TTTServer.create(serverOption);
@@ -151,4 +161,4 @@ let ServerApp : {start(options?: {[key: string]: string}) : Promise<void>} = {
 }
 
 export default ServerApp;
-export {validateServerCliOptions};
+export {validateServerCliOptions, applyStartupRuntimeOptions};

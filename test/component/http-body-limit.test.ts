@@ -1,7 +1,12 @@
 import http from 'node:http';
 import SocketState from '../../src/util/SocketState';
-import {withHttpDuplex} from './http-duplex-fixture';
+import {setHttpFixtureWaitMs, withHttpDuplex} from './http-duplex-fixture';
 const limit = 16 * 1024 * 1024;
+// 16MiB 본문을 오가므로 CPU 부하에서는 조건 대기 2초, jest 기본 5초를 넘긴다(#263). 기다리는 것은 조건이고 시간이 아니다.
+// 시간 자체를 확인하는 'stalled finite response' 의 4.5초 기한은 그대로 둔다.
+jest.setTimeout(60_000);
+setHttpFixtureWaitMs(20_000);
+const COMPLETION_WAIT_MS = 20_000;
 const request = 'GET / HTTP/1.1\r\nHost: public.example\r\n\r\n';
 const bad = 'GET /bad HTTP/1.1\r\nHost: a\r\nHost: b\r\n\r\n';
 const error502 = 'HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\nContent-Length: 0\r\n\r\n';
@@ -73,7 +78,7 @@ test('committed chunked limit+1 aborts Node response without another upstream wr
 }, true));
 
 test.each([false, true])('exact encoded limit completes finite Node response chunked=%s', async chunked => {
-    const deadline = Date.now() + 4500;
+    const deadline = Date.now() + COMPLETION_WAIT_MS;
     return withHttpDuplex(async f => {
         const client = observeHttp(f);
         try {
@@ -93,7 +98,7 @@ test.each([false, true])('exact encoded limit completes finite Node response chu
 });
 
 test('stalled finite response rejects and cleans up before the existing case budget', async () => {
-    const started = Date.now();
+    let started = 0;
     let ownedClient: any;
     await withHttpDuplex(async f => {
         ownedClient = f.client;
@@ -102,6 +107,8 @@ test('stalled finite response rejects and cleans up before the existing case bud
         let guard: NodeJS.Timeout | undefined;
         try {
             await f.until(() => f.requests().length > 0);
+            // 기한은 요청이 오간 뒤부터 잰다. 부하로 fixture 기동이 늦어도 멈춘 응답을 쓰기 전에 기한이 지나지 않는다(#263).
+            started = Date.now();
             const errorsBefore = client.request.listenerCount('error');
             completion = responseCompletion(client.request, started + 4500);
             const result = completion.done.then(() => 'unexpected success', error => error.message);

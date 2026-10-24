@@ -41,6 +41,9 @@ describe("global bandwidth queue budget (#183)", () => {
         await cleanupTestRoot(testRoot);
     });
 
+    // 동기 구간에서만 쓴다. waitFor 는 Date.now 로 기한을 재므로 멈춘 채로 기다리면 끝나지 않는다.
+    const frozenClock = () => { const now = Date.now(); return jest.spyOn(Date, "now").mockReturnValue(now); };
+
     const openSession = async (port: number): Promise<number> => {
         const before = sessionIds.length;
         const socket = net.connect({host: "127.0.0.1", port});
@@ -58,12 +61,18 @@ describe("global bandwidth queue budget (#183)", () => {
             destinationPort: 18080, keepAlive: 0, bufferLimitOnServer: 8})).resolves.toBe(true);
         const first = await openSession(port);
         const second = await openSession(port);
-        // 세션별 상단(8MiB 의 75% = 6MiB)에는 한참 못 미치지만 합이 전체 예산의 75%(1.5MiB)를 넘는다.
-        for(let i = 0; i < 48; i++) expect(pool.send(first, Buffer.alloc(64 * 1024, i))).toBe(true);
-        // 그룹 버킷이 비었으므로 두 번째 세션의 데이터도 큐에 들어간다.
-        expect(pool.send(second, Buffer.alloc(1024, 1))).toBe(true);
-        expect(pool.isSessionBackpressured(first)).toBe(true);
-        expect(pool.isSessionBackpressured(second)).toBe(true);
+        // 버킷은 Date.now 로 다시 찬다. 부하로 아래 동기 구간이 느려져도 큐 상태가 같도록 그동안 시계를 멈춘다(#263).
+        const clock = frozenClock();
+        try {
+            // 세션별 상단(8MiB 의 75% = 6MiB)에는 한참 못 미치지만 합이 전체 예산의 75%(1.5MiB)를 넘는다.
+            for(let i = 0; i < 48; i++) expect(pool.send(first, Buffer.alloc(64 * 1024, i))).toBe(true);
+            // 그룹 버킷이 비었으므로 두 번째 세션의 데이터도 큐에 들어간다.
+            expect(pool.send(second, Buffer.alloc(1024, 1))).toBe(true);
+            expect(pool.isSessionBackpressured(first)).toBe(true);
+            expect(pool.isSessionBackpressured(second)).toBe(true);
+        } finally {
+            clock.mockRestore();
+        }
         let relieved = false;
         pool.addSessionPressureReliefListener(second, () => { relieved = true; });
         await waitFor(() => { if(!relieved) throw new Error("waiting for relief"); }, {timeoutMs: 10_000});
