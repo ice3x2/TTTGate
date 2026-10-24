@@ -75,6 +75,8 @@ class SocketHandler {
     private _fileCache : FileCache | null = null;
     private _waitQueue: Dequeue<WaitItem> = new Dequeue<WaitItem>();
     private _drainEventList : Array<OnDrainEvent> = [];
+    /** #254: connect() 의 연결 기한 타이머. 연결이 끝나거나 실패하면 지운다. */
+    private _connectTimer : NodeJS.Timeout | undefined;
 
     private _breakBufferFlush : boolean = false;
 
@@ -270,6 +272,11 @@ class SocketHandler {
     }
 
 
+    private clearConnectTimer(): void {
+        if(this._connectTimer) clearTimeout(this._connectTimer);
+        this._connectTimer = undefined;
+    }
+
     public static connect(options: ConnectOpt, event: OnSocketEvent) : SocketHandler {
         let handlerRef: Array<SocketHandler> = [];
         options.keepalive = options.keepalive ?? 60000;
@@ -278,6 +285,7 @@ class SocketHandler {
         let connected = () => {
             established = true;
             clearTimeout(connectTimer);
+            handlerRef[0]?.clearConnectTimer();
             if(handlerRef.length > 0 && handlerRef[0]._state == SocketState.None) {
                 handlerRef[0]._state = SocketState.Connected;
                 event(handlerRef[0], SocketState.Connected);
@@ -305,6 +313,8 @@ class SocketHandler {
                 socket.destroy(Object.assign(new Error(`connect timed out after ${limit}ms`), {code: 'ETIMEDOUT'}));
             }, limit);
             connectTimer.unref?.();
+            // 연결이 실패하거나 닫히면 release()·destroy() 가 지운다(#254). 남으면 기한까지 핸들러를 붙잡는다.
+            handler._connectTimer = connectTimer;
         }
 
         if(options.timeout && options.timeout > 0) {
@@ -481,6 +491,7 @@ class SocketHandler {
     }
 
     private release(error?: Error) : void {
+        this.clearConnectTimer();
         this.clearWaitQueue(error);
         this.clearTimeout();
         this.clearCloseTimer();
@@ -618,6 +629,7 @@ class SocketHandler {
         if(this._state == SocketState.Closed /*|| this._state == SocketState.Error*/) {
             return;
         }
+        this.clearConnectTimer();
         this.clearTimeout();
         this.clearCloseTimer();
         this.callAllDrainEvent(this.isOutputDrained);
@@ -739,6 +751,14 @@ class SocketHandler {
                 event(this,success);
             }
         }
+    }
+
+    /**
+     * #254: 이 핸들러를 다른 핸들러로 바꿔 닫기 전에, 배압 해제를 기다리던 쪽을 깨운다.
+     * destroy() 는 이 리스너를 부르지 않으므로, 그대로 닫으면 기다리던 쪽(끝점 읽기)이 세션이 끝날 때까지 멈춘다.
+     */
+    public releasePressureReliefListeners(): void {
+        this.callPressureReliefEvent();
     }
 
     private callPressureReliefEvent(): void {

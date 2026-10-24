@@ -200,6 +200,8 @@ class TunnelClient {
         if(!dataHandler || !this._ctrlHandler) {
             return false;
         }
+        // 끝점이 다시 열리면(중복 OpenSession) 대기 버퍼를 새로 만든다. 옛 항목의 바이트는 반납한다(#254).
+        this.clearWaitBuffer(sessionID);
         this._waitBufferQueueMap.set(sessionID, {
             queue: new Dequeue<Buffer>(),
             bytes: 0,
@@ -237,7 +239,8 @@ class TunnelClient {
         }
         let dataHandler = this._activatedSessionDataHandlerMap.get(sessionID);
         if(!dataHandler) {
-            this._waitBufferQueueMap.delete(sessionID);
+            // 보낼 곳이 없으니 버린다. 바이트는 반납한다(#254).
+            this.clearWaitBuffer(sessionID);
             return;
         }
         let data = waitState.queue.popFront();
@@ -430,14 +433,19 @@ class TunnelClient {
                             this._onEndPointCloseCallback?.(packet.sessionID, 0);
                         }
                     } else {
-                        dataHandler.addOnceDrainListener((drained, success) => {
+                        // 같은 세션의 CloseSession 이 반복되어도 drain 리스너는 하나만 둔다. 출력이 빌 때 마지막 count 로 닫는다(#254).
+                        const waiting = dataHandler.pendingCloseCount !== undefined;
+                        dataHandler.pendingCloseCount = count.value.count;
+                        if(!waiting) dataHandler.addOnceDrainListener((drained, success) => {
+                            const closeCount = dataHandler.pendingCloseCount!;
+                            dataHandler.pendingCloseCount = undefined;
                             if(!dataHandler || drained !== dataHandler || this._activatedSessionDataHandlerMap.get(packet.sessionID) !== dataHandler ||
                                 !success || dataHandler.isEnd() || !dataHandler.isOutputDrained) return;
                             if (dataHandler) {
                                 dataHandler.setBufferSizeLimit(-1);
                                 dataHandler.dataHandlerState = DataHandlerState.Terminated;
                             }
-                            this._onEndPointCloseCallback?.(packet.sessionID, count.value.count);
+                            this._onEndPointCloseCallback?.(packet.sessionID, closeCount);
                         });
                     }
                 } else {
@@ -514,7 +522,16 @@ class TunnelClient {
                 tunnelDataHandler.bindingToken = bindingToken;
                 tunnelDataHandler.handlerType = HandlerType.Data;
                 tunnelDataHandler.dataHandlerState = DataHandlerState.Initializing;
+                const replaced = this._activatedSessionDataHandlerMap.get(sessionID);
                 this._activatedSessionDataHandlerMap.set(sessionID, tunnelDataHandler);
+                // 활성 세션에 NewDataHandler 가 다시 왔다. 옛 연결은 더 쓰지 않으므로 닫는다(#254).
+                // 맵을 먼저 바꿔 두어야 옛 핸들러의 닫힘 이벤트가 새 세션 상태를 지우지 않는다.
+                if(replaced && replaced !== tunnelDataHandler) {
+                    this._gracefulDataHandlers.delete(replaced);
+                    // 옛 연결의 배압으로 끝점 읽기를 멈췄다면 다시 읽게 한다. 데이터는 이제 새 연결로 간다.
+                    replaced.releasePressureReliefListeners();
+                    replaced.destroy();
+                }
                 this._pendingDataAttempts.delete(sessionID);
                 // P6-T1: waitBuffer queue 선할당.
                 if(!this._waitBufferQueueMap.has(sessionID)) {

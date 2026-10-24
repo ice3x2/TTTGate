@@ -52,6 +52,8 @@ type TunnelDataHandler = TunnelHandler & {
     forwardedLength?: number;
     /** #253: 클라이언트가 이 세션의 CloseSession 을 보냈다. 뒤이은 데이터 연결의 끊김은 정상 종료다. */
     closeReceived?: boolean;
+    /** #254: (클라이언트) 출력이 빌 때 끝점을 닫으려고 기다리는 CloseSession 의 count. 기다리는 동안만 값이 있다. */
+    pendingCloseCount?: number;
 }
 
 
