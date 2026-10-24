@@ -10,7 +10,7 @@ import {createHash} from "node:crypto";
 import {CertificationStore, CertInfo, PemData} from "../CertificationStore";
 import ObjectUtil from "../../util/ObjectUtil";
 import UsablePortChecker from "../../util/UsablePortChecker";
-import TTTServer from "../TTTServer";
+import TTTServer, {type RuntimeApplyResult} from "../TTTServer";
 import Environment from "../../Environment";
 import Path from "path";
 import File from "../../util/File";
@@ -23,7 +23,7 @@ import {AdminSecurityPolicyRegistry, clientAddressFromForwardedFor, evaluateAdmi
 import {timingSafeStringEqual} from "../../util/timingSafeStringEqual";
 import {computeBackoffMs} from "./loginBackoff";
 import crypto from "crypto";
-import {DEFAULT_GEO_CONFIG, GeoConfig, TrustedClient, TunnelingOption} from "../../types/TunnelingOption";
+import {DEFAULT_GEO_CONFIG, GeoConfig, ServerOption, TrustedClient, TunnelingOption} from "../../types/TunnelingOption";
 import {AdmissionController} from "../security/AdmissionController";
 import {rateLimitBucketOf} from "../security/ConnectionRateLimiter";
 import {normalizeConnectionSecurity} from "../security/connectionSecurity";
@@ -598,6 +598,30 @@ class AdminServer {
         });
     }
 
+    /**
+     * #271: 저장한 서버 설정을 런타임에 적용한다. 적용이 예외를 던지면 적용 실패(server-runtime)와 같이 다뤄
+     * 호출한 쪽이 저장 전 설정과 실행 상태로 되돌리게 한다. 예외 문자열은 응답에 넣지 않고 로그에만 남긴다.
+     */
+    private async applyServerOptionSafely(next: ServerOption, previous: ServerOption): Promise<RuntimeApplyResult> {
+        try {
+            return await this._tttServer!.applyServerOption(next, previous);
+        } catch(error) {
+            logger.error('server option runtime apply threw; rolling back', error);
+            return {success: false, partial: false, warnings: [], failedScopes: ['server-runtime'], restartRequiredScopes: []};
+        }
+    }
+
+    /** #271: 터널·외부 인증서 적용도 같다. 예외는 그 범위의 적용 실패로 바꿔 호출한 쪽이 되돌리게 한다. */
+    private async applyRuntimeSafely(label: string, failedScope: string, apply: () => Promise<RuntimeApplyResult> | undefined):
+        Promise<RuntimeApplyResult | undefined> {
+        try {
+            return await apply();
+        } catch(error) {
+            logger.error(`${label} runtime apply threw; rolling back`, error);
+            return {success: false, partial: false, warnings: [], failedScopes: [failedScope], restartRequiredScopes: []};
+        }
+    }
+
     /** 신뢰 클라이언트 목록만 바꿔 저장하고 적용한다(#212). 실패하면 응답을 보내고 undefined 를 돌려준다. */
     private async commitTrustedClients(res: ServerResponse, store: ServerOptionStore, next: TrustedClient[]): Promise<object | undefined> {
         const current = store.serverOption;
@@ -615,7 +639,7 @@ class AdminServer {
             return undefined;
         }
         const runtime = typeof (this._tttServer as any)?.applyServerOption == 'function'
-            ? await this._tttServer!.applyServerOption(prepared.serverOption, current) : undefined;
+            ? await this.applyServerOptionSafely(prepared.serverOption, current) : undefined;
         if(runtime && !runtime.success) {
             const failures = await this.restoreConfigurationBaseline(committedBefore, runtimeBefore);
             this.sendApiFailure(res, 500, {message: 'Unable to apply trusted clients.', failedScopes: [...runtime.failedScopes, ...failures]});
@@ -724,7 +748,7 @@ class AdminServer {
             }
             let runtimeResult;
             if(typeof (this._tttServer as any)?.applyServerOption == "function") {
-                runtimeResult = await (this._tttServer as any).applyServerOption(serverOption, currentServerOption);
+                runtimeResult = await this.applyServerOptionSafely(serverOption, currentServerOption);
             } else if(!hotApplyRequired) {
                 runtimeResult = {
                     success: true,
@@ -821,7 +845,8 @@ class AdminServer {
                 });
                 return;
             }
-            let runtimeResult = await this._tttServer?.applyTunnelingOption(serverOptionStore.getTunnelingOption(tunnelingOption.forwardPort)!, previousOption) ?? {
+            let runtimeResult = await this.applyRuntimeSafely('tunneling option', `external-listener:${tunnelingOption.forwardPort}`,
+                () => this._tttServer?.applyTunnelingOption(serverOptionStore.getTunnelingOption(tunnelingOption.forwardPort)!, previousOption)) ?? {
                 success: false,
                 partial: false,
                 warnings: [],
@@ -1004,7 +1029,10 @@ class AdminServer {
             let warnings: string[] = [];
             let status = this._tttServer?.externalServerStatus(forwardPort);
             if(status?.online) {
-                let stopped = await this._tttServer?.stopExternalPortServer(forwardPort, true);
+                // #271: 리스너를 멈추다 예외가 나도 멈추지 못한 것과 같이 삭제를 되돌린다.
+                let stopped = false;
+                try { stopped = await this._tttServer?.stopExternalPortServer(forwardPort, true) === true; }
+                catch(error) { logger.error(`tunneling option remove: stopping listener ${forwardPort} threw; rolling back`, error); }
                 if(!stopped) {
                     const recoveryFailures = await this.restoreConfigurationBaseline(committedBefore, runtimeBefore);
                     if(recoveryFailures.length === 0) {
@@ -1225,7 +1253,8 @@ class AdminServer {
                 });
                 return;
             }
-            let runtimeResult = await this._tttServer?.applyExternalServerCert(port, certInfo, previousCert) ?? {
+            let runtimeResult = await this.applyRuntimeSafely('external certificate', `external-cert:${port}`,
+                () => this._tttServer?.applyExternalServerCert(port, certInfo, previousCert)) ?? {
                 success: false,
                 partial: false,
                 warnings: [],
