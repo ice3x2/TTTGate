@@ -36,6 +36,7 @@ const spawned = (child: ChildProcess): Promise<number> => new Promise((resolve, 
 describe("Sentinel pid files (#256)", () => {
     let root: TestRoot;
     let originalArgv: string[];
+    let originalExitCode: typeof process.exitCode;
     const children: ChildProcess[] = [];
 
     beforeEach(async () => {
@@ -44,6 +45,8 @@ describe("Sentinel pid files (#256)", () => {
         applyTestRoot(root.rootDir);
         originalArgv = process.argv;
         process.argv = [process.execPath, "app.js", "server"];
+        // 거부된 데몬 부팅은 process.exitCode 를 1 로 둔다. 테스트마다 되돌리지 않으면 jest 프로세스가 실패로 끝난다.
+        originalExitCode = process.exitCode;
     });
     afterEach(async () => {
         // 실행 파일을 지우기 전에 자식이 끝날 때까지 기다린다. Windows 는 실행 중인 파일을 지우지 못한다(EPERM).
@@ -54,6 +57,7 @@ describe("Sentinel pid files (#256)", () => {
             await Promise.race([exited, new Promise<void>((resolve) => setTimeout(resolve, 5000).unref())]);
         }));
         process.argv = originalArgv;
+        process.exitCode = originalExitCode;
         await cleanupTestRoot(root);
     });
 

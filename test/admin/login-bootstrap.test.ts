@@ -153,7 +153,7 @@ test("weak-password response is preserved instead of hashing short input into a 
         const response = await submit();
         expect(response.status()).toBe(400);
         expect(await response.json()).toMatchObject({bootstrapRequired: true, weakPassword: true});
-        await app.page.waitForFunction(() => /minimum|weak/i.test(document.querySelector("#login-message")?.textContent ?? ""));
+        await app.page.waitForFunction(() => /8 to 1024 characters/i.test(document.querySelector("#login-message")?.textContent ?? ""));
     });
 }, 45_000);
 
