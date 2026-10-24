@@ -8,7 +8,7 @@ import ConnectOpt from "../util/ConnectOpt";
 import {TunnelControlHandler,TunnelDataHandler,DataHandlerState} from "../types/TunnelHandler";
 import DataStatePacket from "../commons/DataStatePacket";
 import Dequeue from "../util/Dequeue";
-import {ResourcePolicyRegistry} from "../util/ResourcePolicy";
+import {computeWatermarkBytes, ResourcePolicyRegistry} from "../util/ResourcePolicy";
 import LoggerFactory  from "../util/logger/LoggerFactory";
 import {SystemInfoProviderRegistry} from "../commons/SystemInfoProvider";
 import {sysinfoMessagePacket} from "./sysinfoPacket";
@@ -76,6 +76,8 @@ class TunnelClient {
     private _pendingDataAttempts = new Map<number, DataAttempt>();
     private _waitBufferQueueMap : Map<number, WaitBufferState> = new Map<number, WaitBufferState>();
     private _waitBufferBytesTotal: number = 0;
+    /** #257: 대기 버퍼 배압이 풀리기를 기다리는 리스너. 대기 버퍼를 비우거나 버리면 부른다. */
+    private _waitReliefListeners = new Map<number, Array<() => void>>();
     private _protocolVersion: number = 1;
     private _legacyMode: boolean = true;
     /** #230: 서버가 heartbeat 를 알렸는지, ping 타이머, 마지막으로 제어 패킷을 받은 시각. */
@@ -250,6 +252,12 @@ class TunnelClient {
             data = waitState.queue.popFront();
         }
         this._waitBufferQueueMap.delete(sessionID);
+        this.releaseWaitReliefListeners(sessionID);
+        // 대기 데이터가 남아 미뤄 둔 정상 종료다. 이제 다 보냈으니 닫는다(#257).
+        if(dataHandler.endAfterFlush) {
+            dataHandler.endAfterFlush = false;
+            dataHandler.end_();
+        }
     }
 
     public terminateEndPointSession(sessionID: number, mode: 'graceful' | 'abort' = 'abort') : void {
@@ -257,6 +265,11 @@ class TunnelClient {
         if(mode === 'graceful' && current && current.dataHandlerState === DataHandlerState.OnlineSession && !current.isEnd()) {
             if(this._gracefulDataHandlers.has(current)) return;
             this._gracefulDataHandlers.add(current);
+            // Ack 전에 모아 둔 데이터가 남아 있으면 지금 닫지 않는다. 닫으면 Ack 뒤 flush 가 그 데이터를 버린다(#257).
+            if(!(this._waitBufferQueueMap.get(sessionID)?.queue.isEmpty() ?? true)) {
+                current.endAfterFlush = true;
+                return;
+            }
             current.end_();
             return;
         }
@@ -751,6 +764,11 @@ class TunnelClient {
         if(dataHandler.dataHandlerState != DataHandlerState.OnlineSession) {
             return this.writeWaitBuffer(sessionID, data);
         }
+        // ResultOfOpenSession 쓰기가 끝나 OnlineSession 이 되었어도, Ack 전에 모아 둔 데이터는 Ack 를 받아야 나간다.
+        // 그 데이터가 남아 있으면 새 데이터를 뒤에 붙인다. 바로 보내면 앞서 온 데이터를 앞질러 순서가 뒤바뀐다(#257).
+        if(!(this._waitBufferQueueMap.get(sessionID)?.queue.isEmpty() ?? true)) {
+            return this.writeWaitBuffer(sessionID, data);
+        }
         dataHandler.sendData(data);
         return true;
     }
@@ -758,6 +776,7 @@ class TunnelClient {
     // 이슈 #129 대응 누락분: 터널 데이터 소켓(서버로 나가는 방향)이 배압 상태면
     // EndPointClientPool이 목적지 소켓 읽기를 멈출 수 있도록 상태를 노출한다.
     public isSessionBackpressured(sessionID: number) : boolean {
+        if(this.isWaitBufferPressured(sessionID)) return true;
         return this._activatedSessionDataHandlerMap.get(sessionID)?.isBackpressured ?? false;
     }
 
@@ -771,10 +790,36 @@ class TunnelClient {
     }
 
     public addSessionPressureReliefListener(sessionID: number, listener: () => void) : void {
+        // 대기 버퍼 때문에 멈췄다면 그 버퍼를 비우거나 버릴 때 다시 읽게 한다(#257).
+        if(this.isWaitBufferPressured(sessionID)) {
+            const listeners = this._waitReliefListeners.get(sessionID) ?? [];
+            listeners.push(listener);
+            this._waitReliefListeners.set(sessionID, listeners);
+            return;
+        }
         const handler = this._activatedSessionDataHandlerMap.get(sessionID);
         if(handler) {
             handler.addOncePressureReliefListener(() => listener());
         }
+    }
+
+    /**
+     * #257: 대기 버퍼가 세션 상한이나 풀 상한의 높은 수위에 닿았는지. 서버 쪽 대기 큐(#163·#183)와 같은 기준이다.
+     * 대기 버퍼는 Ack 를 받을 때까지 쌓이므로, 상한에 닿아 세션을 닫기 전에 목적지 읽기를 멈춘다.
+     */
+    private isWaitBufferPressured(sessionID: number) : boolean {
+        const waitState = this._waitBufferQueueMap.get(sessionID);
+        if(!waitState || waitState.queue.isEmpty()) return false;
+        if(waitState.limitBytes > 0 && waitState.bytes >= computeWatermarkBytes(waitState.limitBytes).high) return true;
+        const policy = ResourcePolicyRegistry.current();
+        return policy.defaultPoolQueueLimitBytes > 0 && this._waitBufferBytesTotal >= computeWatermarkBytes(policy.defaultPoolQueueLimitBytes).high;
+    }
+
+    private releaseWaitReliefListeners(sessionID: number) : void {
+        const listeners = this._waitReliefListeners.get(sessionID);
+        if(!listeners) return;
+        this._waitReliefListeners.delete(sessionID);
+        listeners.forEach((listener) => listener());
     }
 
     private writeWaitBuffer(sessionID: number, data: Buffer) : boolean {
@@ -849,6 +894,8 @@ class TunnelClient {
         this._ctrlHandler = undefined;
         this.destroyAllDataHandler();
         this._waitBufferQueueMap.clear();
+        // 끝난 클라이언트의 목적지는 함께 닫히므로 다시 읽게 하지 않는다. 리스너만 버린다.
+        this._waitReliefListeners.clear();
         this._waitBufferBytesTotal = 0;
     }
 
@@ -878,6 +925,7 @@ class TunnelClient {
             return;
         }
         this._waitBufferQueueMap.delete(sessionID);
+        this.releaseWaitReliefListeners(sessionID);
         this._waitBufferBytesTotal = Math.max(0, this._waitBufferBytesTotal - waitState.bytes);
         waitState.bytes = 0;
         waitState.queue.clear();

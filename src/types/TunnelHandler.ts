@@ -54,6 +54,8 @@ type TunnelDataHandler = TunnelHandler & {
     closeReceived?: boolean;
     /** #254: (클라이언트) 출력이 빌 때 끝점을 닫으려고 기다리는 CloseSession 의 count. 기다리는 동안만 값이 있다. */
     pendingCloseCount?: number;
+    /** #257: (클라이언트) 정상 종료를 대기 버퍼를 다 보낸 뒤로 미뤘다. Ack 뒤 flush 가 끝나면 닫는다. */
+    endAfterFlush?: boolean;
 }
 
 
