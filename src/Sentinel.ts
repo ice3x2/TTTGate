@@ -121,9 +121,24 @@ class Sentinel {
      */
     private static writeForegroundPID() {
         // 같은 PID 의 항목이라도 앞서 죽은 프로세스의 것(PID 재사용)일 수 있다. 신원까지 같을 때만 건너뛴다.
-        if(Sentinel.readPIDFile('foreground').some((entry) => entry.pid == process.pid && Sentinel.matchRecordedProcess(entry) === 'match')) return;
-        Sentinel.appendPidEntry({pid: process.pid, start: Date.now() - process.uptime() * 1000,
+        if(Sentinel.readPIDFile('foreground').some((entry) => Sentinel.isOwnEntry(entry))) return;
+        Sentinel.appendPidEntry({pid: process.pid, start: Sentinel.ownStartTime(),
             ticks: process.platform === 'linux' ? Sentinel.processIdentity(process.pid)?.ticks : undefined, exe: process.execPath}, 'foreground');
+    }
+
+    private static ownStartTime(): number {
+        return Date.now() - process.uptime() * 1000;
+    }
+
+    /**
+     * 이 프로세스가 쓴 항목인지 OS 조회 없이 본다. 자기 시작 시각과 실행 파일은 직접 알기 때문이다.
+     * OS 조회(Windows PowerShell)는 부하에서 시간 초과로 unknown 이 될 수 있고, 그러면 시작할 때마다 항목이 늘어난다.
+     */
+    private static isOwnEntry(entry: PidEntry): boolean {
+        if(entry.pid != process.pid) return false;
+        if(entry.start === undefined) return Sentinel.matchRecordedProcess(entry) === 'match';
+        if(Math.abs(entry.start - Sentinel.ownStartTime()) > START_TOLERANCE_MS) return false;
+        return entry.exe === undefined || Sentinel.samePath(entry.exe, process.execPath);
     }
 
     private static appendPidEntry(entry: PidEntry, type: PidType) {

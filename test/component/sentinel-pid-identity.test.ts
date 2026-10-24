@@ -46,7 +46,13 @@ describe("Sentinel pid files (#256)", () => {
         process.argv = [process.execPath, "app.js", "server"];
     });
     afterEach(async () => {
-        for(const child of children.splice(0)) { try { child.kill(); } catch { /* gone */ } }
+        // 실행 파일을 지우기 전에 자식이 끝날 때까지 기다린다. Windows 는 실행 중인 파일을 지우지 못한다(EPERM).
+        await Promise.all(children.splice(0).map(async (child) => {
+            if(child.exitCode !== null || child.signalCode !== null) return;
+            const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
+            try { child.kill(); } catch { return; }
+            await Promise.race([exited, new Promise<void>((resolve) => setTimeout(resolve, 5000).unref())]);
+        }));
         process.argv = originalArgv;
         await cleanupTestRoot(root);
     });
@@ -57,6 +63,30 @@ describe("Sentinel pid files (#256)", () => {
         const lines = pidLines("foreground");
         expect(lines.length).toBe(1);
         expect(JSON.parse(lines[0])).toMatchObject({pid: process.pid});
+    });
+
+    // REQ-1 — 자기 항목은 OS 조회 없이 알아본다. 부하로 프로세스 조회가 시간 초과(unknown)여도 항목이 늘지 않는다.
+    test("starting three times leaves one entry even when the process query fails", () => {
+        const identity = jest.spyOn(Sentinel, "processIdentity").mockReturnValue(undefined);
+        try {
+            for(let n = 0; n < 3; n++) expect(Sentinel.create(false).start()).toBe(false);
+        } finally {
+            identity.mockRestore();
+        }
+        expect(pidLines("foreground")).toHaveLength(1);
+    });
+
+    // REQ-1 — 같은 PID 라도 시작 시각이 다르면(앞서 죽은 프로세스의 PID 재사용) 자기 항목이 아니다. 새 항목을 덧붙인다.
+    test("an entry with the same pid but another start time is not taken as the current process", () => {
+        fs.writeFileSync(path.join(root.rootDir, "bin", ".pid_foreground"),
+            JSON.stringify({pid: process.pid, start: Date.now() - process.uptime() * 1000 - 3_600_000, exe: process.execPath}) + "\n");
+        const identity = jest.spyOn(Sentinel, "processIdentity").mockReturnValue(undefined);
+        try {
+            expect(Sentinel.create(false).start()).toBe(false);
+        } finally {
+            identity.mockRestore();
+        }
+        expect(pidLines("foreground")).toHaveLength(2);
     });
 
     // REQ-2 / AC-2 — 예전 형식(숫자만)의 PID 를 다른 프로그램이 쓰고 있으면 끝내지 않는다.
