@@ -299,8 +299,9 @@ class TunnelServer {
                 if(pool) {
                     pool.sendCloseSession(sessionId, 0);
                 }
-                // 매핑 제거(단일 경로).
-                this._sessionIDAndCtrlIDMap.delete(sessionId);
+                // 매핑 제거와 풀 정리(단일 경로). 매핑만 지우면 뒤이어 오는 terminateSession 이 풀을 찾지 못해
+                // 풀 항목과 데이터 핸들러가 클라이언트가 데이터 연결을 닫을 때까지 남는다(#253).
+                this.terminateSession(sessionId);
             } catch(e) {
                 logger.error("TTL close error", e);
             }
@@ -355,6 +356,9 @@ class TunnelServer {
             this._authTimeouts.clear();
             this._clientHandlerPoolMap.forEach((handlerPool) => {
                 handlerPool.getAllSessionIDs().forEach((id) => { this._onSessionCloseCallback?.(id, 0) });
+                // 데이터 연결이 끊겨 유예 중인 세션은 풀의 세션 목록에 없다. 타이머가 터질 때와 같은 길이로 외부 쪽을 닫는다(#253).
+                // 매핑 전체를 닫지 않는다. 정상으로 끝나 외부 쪽이 배출 중인 세션도 매핑에 남아 있기 때문이다.
+                for(const drop of handlerPool.takePendingDataDrops()) this._onSessionCloseCallback?.(drop.sessionID, drop.endLength);
                 handlerPool.end();
             });
             this._unauthenticatedHandlerIds.clear();
@@ -1088,7 +1092,16 @@ class TunnelServer {
         }
         // 중복 세션 정리 방지: 처리된 세션 ID들을 Set으로 추적
         let processedSessionIDs = new Set<number>();
-        
+
+        // 데이터 연결이 끊겨 유예 중인 세션은 close() 와 같이 외부로 넘긴 길이로 닫는다(#253).
+        // 0 으로 닫으면 HTTP 외부 연결은 이미 받은 응답을 끝까지 넘기지 않고 끊는다.
+        for(const drop of handlerPool.takePendingDataDrops()) {
+            this._sessionIDAndCtrlIDMap.delete(drop.sessionID);
+            this._sessionLastActivityMs.delete(drop.sessionID);
+            this._onSessionCloseCallback?.(drop.sessionID, drop.endLength);
+            processedSessionIDs.add(drop.sessionID);
+        }
+
         // 먼저 sessionIDAndCtrlIDMap에서 해당 ctrlID 관련 세션들 정리
         let removeSessionIDs : Array<number> = [];
         this._sessionIDAndCtrlIDMap.forEach((value, key) => {
