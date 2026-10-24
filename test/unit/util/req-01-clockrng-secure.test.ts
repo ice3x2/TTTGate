@@ -8,7 +8,8 @@ import { DefaultClockRng, ClockRngProvider } from "../../../src/util/ClockRng";
  */
 describe("REQ-01 ClockRng.secureRandomBytes", () => {
     const REPO_ROOT = path.resolve(__dirname, "..", "..", "..");
-    const REPORTS_DIR = path.join(REPO_ROOT, "reports");
+    // 추적되는 reports/ 를 실행마다 다시 쓰지 않게 무시되는 build/ 아래에 쓴다(#264).
+    const REPORTS_DIR = path.join(REPO_ROOT, "build", "reports");
 
     beforeAll(() => {
         if (!fs.existsSync(REPORTS_DIR)) {

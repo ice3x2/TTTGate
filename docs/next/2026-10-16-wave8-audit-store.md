@@ -105,6 +105,8 @@ config/.server.state.json     # 테스트가 만든 런타임 파일, .gitignore
 config/identity.yaml          # 테스트가 만든 런타임 파일, .gitignore 에 없다
 ```
 
+> #264 이후: 두 보고서는 이제 `build/reports/` 에 쓰이고, `config/` 의 실행 파일은 `.gitignore` 로 무시한다. 테스트가 작업 트리를 바꾸면 jest 가 실패로 끝난다. 저장소의 `reports/req-01-*.json` 은 당시 측정 기록으로 남겨 둔다.
+
 `reports/auth-compare.json` 은 작성 시점에 더티하지 않다(`scannedFiles: 65` 로 커밋된 그대로). 다만 `npm run lint` 를 돌리면 더러워지므로, 린트를 돌린 뒤에는 그것까지 함께 되돌려라.
 
 커밋 직전에 반드시 이것을 돌려라.

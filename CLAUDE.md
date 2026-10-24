@@ -251,6 +251,7 @@ type ClientOption = {
 
 ### 개발 시 주의사항
 - **tests**: 전체 테스트가 길다. CI 는 단위·컴포넌트·E2E 를 작업별로 나눠 돈다(`.github/workflows/code-regression.yml`)
+- **test output**: 테스트는 저장소 작업 트리에 파일을 만들거나 바꾸면 안 된다(#264). jest 전역 teardown 이 실행 전후 `git status` 를 비교해 실패로 끝낸다. 같은 작업 트리에서 jest 를 여러 개 동시에 돌릴 때만 `TTTGATE_SKIP_WORKTREE_GUARD=1` 로 끈다
 - **memory management**: 대용량 파일 전송 시 메모리 제한 고려
 - **cross-platform**: 다양한 OS/아키텍처 지원 필요
 - **binary packaging**: pkg를 사용한 실행 파일 생성 시 경로 처리 주의
