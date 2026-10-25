@@ -1,6 +1,9 @@
 import type {Page} from "playwright";
 import {startAdminBrowser} from "../helpers/adminBrowser";
-import {startAdminApp} from "../helpers/adminApp";
+import {startAdminApp, ADMIN_APP_TEST_TIMEOUT_MS} from "../helpers/adminApp";
+
+// 앱 기동 예산보다 짧으면 부하에서 helper 의 진단 대신 jest 시간 초과로 끝난다(#273).
+jest.setTimeout(ADMIN_APP_TEST_TIMEOUT_MS);
 
 const FIXTURE = "/test/shell-fixture.html";
 
@@ -26,7 +29,7 @@ test("#/status 로 열면 제목과 화면 표식이 status 다", async () => {
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("메뉴 버튼이 드로어를 열고 항목을 고르면 해시와 화면이 바뀌며 초점이 돌아온다", async () => {
     const app = await startAdminBrowser();
@@ -54,7 +57,7 @@ test("메뉴 버튼이 드로어를 열고 항목을 고르면 해시와 화면�
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("Escape 와 오버레이 클릭이 드로어를 닫는다", async () => {
     const app = await startAdminBrowser();
@@ -78,7 +81,7 @@ test("Escape 와 오버레이 클릭이 드로어를 닫는다", async () => {
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("해시마다 제목·화면 표식·뒤로 가기가 규칙대로 바뀐다", async () => {
     const app = await startAdminBrowser();
@@ -110,7 +113,7 @@ test("해시마다 제목·화면 표식·뒤로 가기가 규칙대로 바뀐�
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("본문이 모바일에서 전폭이고 데스크톱에서 1024px 중앙 정렬이다", async () => {
     const app = await startAdminBrowser();
@@ -133,7 +136,7 @@ test("본문이 모바일에서 전폭이고 데스크톱에서 1024px 중앙 �
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 // ---- #102 (U2-10) 사용자명·Sign out·섹션 필터. 실제 백엔드가 필요하므로 startAdminApp 을 쓴다. ----
 
@@ -159,7 +162,7 @@ test("드로어 하단에 사용자명과 Sign out 이 있고 Sign out 은 세�
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("슈퍼유저 드로어는 NAV 10개를 순서대로 보여 준다", async () => {
     const app = await startAdminApp({fixture: "password"});
@@ -171,4 +174,4 @@ test("슈퍼유저 드로어는 NAV 10개를 순서대로 보여 준다", async 
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);

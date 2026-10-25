@@ -1,8 +1,11 @@
 import fs from "fs";
 import path from "path";
 import type {Page, Response} from "playwright";
-import {startAdminApp} from "../helpers/adminApp";
+import {startAdminApp, ADMIN_APP_TEST_TIMEOUT_MS} from "../helpers/adminApp";
 import {getFreePort} from "../helpers/network";
+
+// 앱 기동 예산보다 짧으면 부하에서 helper 의 진단 대신 jest 시간 초과로 끝난다(#273).
+jest.setTimeout(ADMIN_APP_TEST_TIMEOUT_MS);
 
 const root = path.resolve(__dirname, "../..");
 
@@ -58,7 +61,7 @@ test("변경이 없으면 Apply 가 잠기고, 값을 바꾸면 풀리며, Reset
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("숫자 입력은 입력란의 원문 문자열을 정수부로 범위와 비교해 자른다", async () => {
     const app = await startAdminApp();
@@ -100,7 +103,7 @@ test("숫자 입력은 입력란의 원문 문자열을 정수부로 범위와 �
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("관리자 TLS 를 켜면 인증서 파일 입력 3개와 Remove CA 가 나타나고, 끄면 사라진다", async () => {
     const app = await startAdminApp();
@@ -130,7 +133,7 @@ test("관리자 TLS 를 켜면 인증서 파일 입력 3개와 Remove CA 가 나
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("터널 TLS·메모리 캐시 한도·Keep-Alive 입력이 id 와 라벨로 연결되어 있다", async () => {
     const app = await startAdminApp();
@@ -144,7 +147,7 @@ test("터널 TLS·메모리 캐시 한도·Keep-Alive 입력이 id 와 라벨로
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("Apply 는 화면의 모든 설정 필드를 저장 요청에 담고 서버가 바꾼 값을 런타임에 적용한다", async () => {
     const app = await startAdminApp();
@@ -196,7 +199,7 @@ test("Apply 는 화면의 모든 설정 필드를 저장 요청에 담고 서버
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("Retry 알림 뒤의 알림은 버튼 문구가 OK 로 돌아온다 (옛 _alert 결함을 의도적으로 고친 차이)", async () => {
     const app = await startAdminApp();
@@ -236,7 +239,7 @@ test("Retry 알림 뒤의 알림은 버튼 문구가 OK 로 돌아온다 (옛 _a
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 describe("U4-09 서버 설정 Security 카드", () => {
     const security = (page: Page) => page.locator("#server-security");
@@ -289,7 +292,7 @@ describe("U4-09 서버 설정 Security 카드", () => {
         } finally {
             await app.close();
         }
-    }, 120_000);
+    }, ADMIN_APP_TEST_TIMEOUT_MS);
 
     // 빈 감사 칸은 JSON 에서 빠져 서버 기본값(보존 90일)이 된다. 오래된 감사가 지워지지 않도록 저장을 막는다.
     test("감사 보존 기간이나 큐 크기 칸이 비면 요청 없이 칸 아래 오류를 보인다", async () => {
@@ -310,7 +313,7 @@ describe("U4-09 서버 설정 Security 카드", () => {
         } finally {
             await app.close();
         }
-    }, 120_000);
+    }, ADMIN_APP_TEST_TIMEOUT_MS);
 });
 
 // #267 REQ-4·AC-3 — 서버 설정에서 로그 레벨을 고르고 저장하면 서버 설정에 반영된다.
@@ -345,7 +348,7 @@ test("로그 레벨은 기본 info 이고, 네 가지 가운데 골라 저장하
     } finally {
         await app.close();
     }
-}, 120_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 // #268 REQ-4 — 닫기 기한 두 값을 서버 설정에서 바꾼다. 범위 밖 값은 서버의 400 문구를 보이고, 빈칸은 요청 없이 막는다.
 describe("#268 닫기 기한 카드", () => {
@@ -382,7 +385,7 @@ describe("#268 닫기 기한 카드", () => {
         } finally {
             await app.close();
         }
-    }, 120_000);
+    }, ADMIN_APP_TEST_TIMEOUT_MS);
 
     // 빈칸은 JSON 에서 빠져 서버 기본값이 된다. 바꾸려던 값이 조용히 기본값으로 돌아가지 않게 저장을 막는다.
     test("칸이 비면 요청 없이 칸 아래 오류를 보인다", async () => {
@@ -403,7 +406,7 @@ describe("#268 닫기 기한 카드", () => {
         } finally {
             await app.close();
         }
-    }, 120_000);
+    }, ADMIN_APP_TEST_TIMEOUT_MS);
 });
 
 test("#136 Keep-Alive 는 0 으로 비활성화할 수 있고 음수는 0 으로 올리며, 0 이 그대로 저장된다", async () => {
@@ -439,4 +442,4 @@ test("#136 Keep-Alive 는 0 으로 비활성화할 수 있고 음수는 0 으로
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);

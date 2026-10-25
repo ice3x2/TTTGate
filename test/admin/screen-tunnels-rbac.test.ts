@@ -1,9 +1,9 @@
 import type {Page} from "playwright";
-import {startAdminApp, type AdminApp} from "../helpers/adminApp";
+import {startAdminApp, type AdminApp, ADMIN_APP_TEST_TIMEOUT_MS} from "../helpers/adminApp";
 import {RBAC_PASSWORDS, RBAC_USER_IDS} from "../helpers/rbacFixture";
 
 // U3-06 / #108 — 터널 화면의 소유권 표시와 그룹 속성 제한. 테스트마다 rbac fixture 로 앱을 새로 띄운다.
-jest.setTimeout(120_000);
+jest.setTimeout(ADMIN_APP_TEST_TIMEOUT_MS);
 
 type Name = keyof typeof RBAC_PASSWORDS;
 

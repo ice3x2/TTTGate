@@ -10,10 +10,12 @@ import YAML from "yaml";
 import {startTargetService, TargetService} from "../target/targetService";
 import {ADMIN_PASSWORD_HASH, createProcessTunnelHarness, ProcessTunnelHarness} from "../../helpers/processTunnelHarness";
 import {startAdminBrowser} from "../../helpers/adminBrowser";
+import {ADMIN_APP_TEST_TIMEOUT_MS} from "../../helpers/adminApp";
 import {E2E_ADMIN_PASSWORD} from "../../helpers/identityFixture";
 import {MIGRATED_OWNER_ID} from "../../../src/server/rbac/IdentityTypes";
 
-jest.setTimeout(180_000);
+// 하니스 기동·서버 재시작까지 이 제한 안에서 돈다. 예전 180초보다 줄이지 않는다(#273).
+jest.setTimeout(ADMIN_APP_TEST_TIMEOUT_MS);
 
 const MIGRATION_LOG_MARKER = "identity migrated from legacy admin key";
 

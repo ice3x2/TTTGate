@@ -11,7 +11,10 @@ import TTTServer from "../../src/server/TTTServer";
 import {applyTestRoot, cleanupTestRoot, createTestRoot, writeWebFixture} from "../helpers/runtime";
 import {getFreePort} from "../helpers/network";
 import {generateSelfSignedCert} from "../helpers/testCerts";
-import {startAdminBrowser} from "../helpers/adminBrowser";
+import {startAdminBrowser, ADMIN_BROWSER_TEST_TIMEOUT_MS} from "../helpers/adminBrowser";
+
+// 앱 기동 예산보다 짧으면 부하에서 helper 의 진단 대신 jest 시간 초과로 끝난다(#273).
+jest.setTimeout(ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 const certificate = generateSelfSignedCert("csrf-browser-test");
 const certInfo = {key: {name: "csrf-key.pem", value: certificate.keyPem},
@@ -136,7 +139,7 @@ test.each([false, true])("setup failure releases real resources (browser acquire
             await cleanupTestRoot(acquired.root);
         }
     }
-}, 45_000);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("all seven authenticated browser controller mutations succeed against the real admin API", async () => {
     const fixture = await setup();
@@ -171,7 +174,7 @@ test("all seven authenticated browser controller mutations succeed against the r
     } finally {
         await fixture.close();
     }
-}, 45_000);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("lost CSRF cookie is restored once before concurrent mutations, without replaying mutations", async () => {
     const fixture = await setup();
@@ -190,7 +193,7 @@ test("lost CSRF cookie is restored once before concurrent mutations, without rep
     } finally {
         await fixture.close();
     }
-}, 45_000);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("real 403, malformed JSON and network failures remain visible to callers without mutation retries", async () => {
     const fixture = await setup();
@@ -215,7 +218,7 @@ test("real 403, malformed JSON and network failures remain visible to callers wi
     } finally {
         await fixture.close();
     }
-}, 45_000);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("failed session recovery preserves InvalidSession and sends no mutation", async () => {
     const fixture = await setup();
@@ -232,7 +235,7 @@ test("failed session recovery preserves InvalidSession and sends no mutation", a
     } finally {
         await fixture.close();
     }
-}, 45_000);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("foreign URLs and same-origin redirects cannot leak a CSRF token to another origin", async () => {
     const fixture = await setup();
@@ -276,4 +279,4 @@ test("foreign URLs and same-origin redirects cannot leak a CSRF token to another
         await Promise.all([new Promise<void>((resolve) => foreign.close(() => resolve())),
             new Promise<void>((resolve) => redirect.close(() => resolve()))]);
     }
-}, 45_000);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);

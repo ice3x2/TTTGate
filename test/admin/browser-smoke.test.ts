@@ -1,4 +1,7 @@
-import {startAdminBrowser} from "../helpers/adminBrowser";
+import {startAdminBrowser, ADMIN_BROWSER_TEST_TIMEOUT_MS} from "../helpers/adminBrowser";
+
+// 앱 기동 예산보다 짧으면 부하에서 helper 의 진단 대신 jest 시간 초과로 끝난다(#273).
+jest.setTimeout(ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("real admin component mounts, responds to a click and reports browser errors", async () => {
     const app = await startAdminBrowser();
@@ -12,5 +15,5 @@ test("real admin component mounts, responds to a click and reports browser error
     } finally {
         await app.close();
     }
-}, 30_000);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 

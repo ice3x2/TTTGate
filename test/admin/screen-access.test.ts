@@ -1,9 +1,9 @@
 import type {Page} from "playwright";
-import {startAdminApp} from "../helpers/adminApp";
+import {startAdminApp, ADMIN_APP_TEST_TIMEOUT_MS} from "../helpers/adminApp";
 import {RBAC_PASSWORDS} from "../helpers/rbacFixture";
 
 // U3-01 / #103 — 섹션 기반 드로어와 라우트 가드. 테스트마다 rbac fixture 로 앱을 새로 띄운다.
-jest.setTimeout(120_000);
+jest.setTimeout(ADMIN_APP_TEST_TIMEOUT_MS);
 
 type Name = keyof typeof RBAC_PASSWORDS;
 

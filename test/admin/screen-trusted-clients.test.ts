@@ -1,9 +1,9 @@
 import type {Page} from "playwright";
-import {startAdminApp, type AdminApp} from "../helpers/adminApp";
+import {startAdminApp, type AdminApp, ADMIN_APP_TEST_TIMEOUT_MS} from "../helpers/adminApp";
 import {RBAC_PASSWORDS} from "../helpers/rbacFixture";
 
 // #213 신뢰 클라이언트 화면과 "등록 명령 복사"
-jest.setTimeout(120_000);
+jest.setTimeout(ADMIN_APP_TEST_TIMEOUT_MS);
 
 const withApp = async (options: Parameters<typeof startAdminApp>[0], check: (app: AdminApp) => Promise<void>): Promise<void> => {
     const app = await startAdminApp(options);

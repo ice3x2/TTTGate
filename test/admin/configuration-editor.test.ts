@@ -1,10 +1,10 @@
 import {withConfigurationServer} from "../component/server/admin/configuration-revision-fixture";
 import {writeWebFixture} from "../helpers/runtime";
 import {getFreePort} from "../helpers/network";
-import {startAdminBrowser} from "../helpers/adminBrowser";
+import {startAdminBrowser, ADMIN_BROWSER_TEST_TIMEOUT_MS} from "../helpers/adminBrowser";
 import {generateSelfSignedCert} from "../helpers/testCerts";
 
-jest.setTimeout(60_000);
+jest.setTimeout(ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("server editor submits its held revision after another controller read and retains the stale draft", async () => {
     await withConfigurationServer(async ({root, ports, request, snapshot}: any) => {

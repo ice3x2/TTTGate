@@ -1,7 +1,10 @@
 import fs from "fs";
 import path from "path";
 import type {Locator, Page} from "playwright";
-import {startAdminApp} from "../helpers/adminApp";
+import {startAdminApp, ADMIN_APP_TEST_TIMEOUT_MS} from "../helpers/adminApp";
+
+// 앱 기동 예산보다 짧으면 부하에서 helper 의 진단 대신 jest 시간 초과로 끝난다(#273).
+jest.setTimeout(ADMIN_APP_TEST_TIMEOUT_MS);
 
 const root = path.resolve(__dirname, "../..");
 
@@ -43,7 +46,7 @@ test("상태 화면이 게이지 4개와 가동 시간을 실제 수치로 그�
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("INFO 를 누르면 시스템 정보 모달이 세 절을 보여주고 OK 로 닫힌다", async () => {
     const app = await startAdminApp();
@@ -64,7 +67,7 @@ test("INFO 를 누르면 시스템 정보 모달이 세 절을 보여주고 OK �
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("클라이언트 카드가 스텁 값을 그리고 카드를 누르면 그 클라이언트의 시스템 정보가 열린다", async () => {
     const app = await startAdminApp();
@@ -92,7 +95,7 @@ test("클라이언트 카드가 스텁 값을 그리고 카드를 누르면 그 
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("상태 화면은 1초마다 다시 읽고 화면을 떠나면 폴링을 멈춘다", async () => {
     const app = await startAdminApp();
@@ -122,4 +125,4 @@ test("상태 화면은 1초마다 다시 읽고 화면을 떠나면 폴링을 �
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
