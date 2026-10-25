@@ -169,12 +169,54 @@ describe("half-open control connection (process boundary, #230)", () => {
             for(const socket of [inbound, outbound]) { sockets.add(socket); socket.on("error", () => {}); socket.on("close", () => sockets.delete(socket)); }
             inbound.on("data", (chunk) => { if(!blackhole) outbound.write(chunk); });
             outbound.on("data", (chunk) => { if(!blackhole) inbound.write(chunk); });
-            inbound.on("close", () => outbound.destroy());
-            outbound.on("close", () => inbound.destroy());
+            // 블랙홀은 닫힘(FIN·RST)도 넘기지 않는다. 넘기면 먼저 알아챈 쪽의 닫힘이 다른 쪽의 하트비트 감지를 가로챈다(#274).
+            inbound.on("close", () => { if(!blackhole) outbound.destroy(); });
+            outbound.on("close", () => { if(!blackhole) inbound.destroy(); });
         });
         proxy.listen(0, "127.0.0.1");
         await once(proxy, "listening");
         await harness.startClient(0, {connectPort: (proxy.address() as net.AddressInfo).port});
+        await harness.waitForTunnelOnline(forwardPort);
+        const firstId = async () => ((await harness.adminRequest("/api/clientStatus")).json?.statuses ?? [])[0]?.id;
+        const first = await firstId();
+        expect(first).toBeDefined();
+
+        blackhole = true;
+        // 서버: 정해진 시간(1.5초) 안에 그 클라이언트를 뺀다.
+        await waitUntil(async () => (await firstId()) === undefined ? true : undefined, {timeoutMs: 15_000, intervalMs: 200, label: "server dropped the client"})
+            .catch((error) => { throw new Error(`${error.message}\nCLIENT:\n${formatTail(harness.clients[0], 25)}\nSERVER:\n${formatTail(harness.server, 25)}`); });
+        // 클라이언트: 끊김을 알아채고 다시 연결을 시도한다.
+        await waitUntil(async () => harness.clients[0].readChannel().stdout.includes("heartbeat timed out") ? true : undefined,
+            {timeoutMs: 15_000, intervalMs: 200, label: "client detected the timeout"});
+        expect(harness.clients[0].child.exitCode).toBeNull();
+
+        // 길이 복구되면(블랙홀 해제·남은 연결 정리) 다시 연결되어 터널이 동작한다.
+        blackhole = false;
+        sockets.forEach((socket) => socket.destroy());
+        await waitUntil(async () => { const id = await firstId(); return id !== undefined && id !== first ? true : undefined; },
+            {timeoutMs: 30_000, intervalMs: 200, label: "client reconnected"});
+        await harness.waitForTunnelOnline(forwardPort);
+        expect(await getText(forwardPort, "/custom-response")).toEqual({status: 200, body: "original-body"});
+    });
+
+    // #274 — 서버가 먼저 끊김을 알아채 연결을 닫아도 블랙홀은 그 닫힘을 클라이언트에 넘기지 않는다(실제 블랙홀처럼).
+    // 그래야 클라이언트가 하트비트로 스스로 알아챈다. 두 기한이 같으면 부하에 따라 순서가 바뀌므로 클라이언트 기한을 길게 둔다.
+    test("the client detects the blackhole by heartbeat even when the server drops it first", async () => {
+        target = await startTargetService();
+        harness = await createProcessTunnelHarness({tunnels: [{protocol: "http", destinationPort: target.port}], startClient: false});
+        const forwardPort = harness.tunnels[0].forwardPort;
+        proxy = net.createServer((inbound) => {
+            const outbound = net.connect(harness.tunnelPort, "127.0.0.1");
+            for(const socket of [inbound, outbound]) { sockets.add(socket); socket.on("error", () => {}); socket.on("close", () => sockets.delete(socket)); }
+            inbound.on("data", (chunk) => { if(!blackhole) outbound.write(chunk); });
+            outbound.on("data", (chunk) => { if(!blackhole) inbound.write(chunk); });
+            // 블랙홀은 닫힘(FIN·RST)도 넘기지 않는다. 넘기면 먼저 알아챈 쪽의 닫힘이 다른 쪽의 하트비트 감지를 가로챈다(#274).
+            inbound.on("close", () => { if(!blackhole) outbound.destroy(); });
+            outbound.on("close", () => { if(!blackhole) inbound.destroy(); });
+        });
+        proxy.listen(0, "127.0.0.1");
+        await once(proxy, "listening");
+        await harness.startClient(0, {connectPort: (proxy.address() as net.AddressInfo).port, env: {TTTGATE_HEARTBEAT_TIMEOUT_MS: "4000"}});
         await harness.waitForTunnelOnline(forwardPort);
         const firstId = async () => ((await harness.adminRequest("/api/clientStatus")).json?.statuses ?? [])[0]?.id;
         const first = await firstId();

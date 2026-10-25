@@ -1,11 +1,11 @@
 import type {Page} from "playwright";
-import {startAdminApp} from "../helpers/adminApp";
+import {startAdminApp, ADMIN_APP_TEST_TIMEOUT_MS} from "../helpers/adminApp";
 import {RBAC_PASSWORDS} from "../helpers/rbacFixture";
 import {generate} from "../../src/server/mfa/Totp";
 import {base32Decode} from "../../src/server/mfa/Base32";
 
 // U4-09 / #128 — 슈퍼유저 MFA 강제. 서버 옵션을 켠 뒤 admin 으로 로그인하면 #/me 에 고정되고, 등록을 마치면 풀린다.
-jest.setTimeout(120_000);
+jest.setTimeout(ADMIN_APP_TEST_TIMEOUT_MS);
 
 const hashIs = (page: Page, expected: string) =>
     page.waitForFunction((value) => location.hash === value, expected, {timeout: 10_000});

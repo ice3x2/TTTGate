@@ -1,11 +1,10 @@
 import type {Page} from "playwright";
-import {startAdminApp, type AdminApp} from "../helpers/adminApp";
+import {startAdminApp, type AdminApp, ADMIN_APP_TEST_TIMEOUT_MS} from "../helpers/adminApp";
 import {RBAC_USER_IDS} from "../helpers/rbacFixture";
 
 // U3-03 / #105 — 사용자 목록·편집 화면과 임시 비밀번호 모달. admin 으로 시작하고, 테스트마다 rbac fixture 로 앱을 새로 띄운다.
-// 테스트마다 앱을 새로 띄운다. 기동 기한의 합(백엔드 60초 + 브라우저 서버 60초 + 첫 화면 150초)보다 짧으면
-// 그 기한의 진단보다 먼저 끊긴다(#263).
-jest.setTimeout(300_000);
+// 테스트마다 앱을 새로 띄운다. 제한은 helper 의 기동 예산에 작업 여유를 더한 값이다(#263·#273).
+jest.setTimeout(ADMIN_APP_TEST_TIMEOUT_MS);
 // 화면 문구 대기 기한. 사용자 저장·삭제·비밀번호 초기화는 서버에서 비밀번호 해시를 거치므로
 // CPU 부하에서 10초를 넘길 수 있다(#263). 기다리는 것은 문구가 나타나는 조건이다.
 const UI_WAIT_MS = 30_000;

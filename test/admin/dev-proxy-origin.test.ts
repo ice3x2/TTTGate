@@ -7,7 +7,10 @@ import ServerOptionStore from "../../src/server/ServerOptionStore";
 import {CertificationStore} from "../../src/server/CertificationStore";
 import {applyTestRoot, cleanupTestRoot, createTestRoot} from "../helpers/runtime";
 import {httpRequest} from "../helpers/http";
-import {startAdminBrowser} from "../helpers/adminBrowser";
+import {startAdminBrowser, ADMIN_BROWSER_TEST_TIMEOUT_MS} from "../helpers/adminBrowser";
+
+// 앱 기동 예산보다 짧으면 부하에서 helper 의 진단 대신 jest 시간 초과로 끝난다(#273).
+jest.setTimeout(ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test.each([false, true])("actual configured proxy adapts only trusted present origins (preview=%s)", async (preview) => {
     if(preview) {
@@ -102,4 +105,4 @@ test.each([false, true])("actual configured proxy adapts only trusted present or
             finally { await cleanupTestRoot(root); }
         }
     }
-}, 60_000);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);

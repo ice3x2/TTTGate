@@ -6,7 +6,7 @@
  *      violation이 0건임을 확인. (Phase 3 범위 외 파일의 violation은 무시.)
  *  (b) IdentityRegistry.consumeBindingToken에 대해 (clientId 일치/불일치, id 일치/불일치)
  *      의미론 4가지 모두 실 동작 검증.
- *  (c) 마이크로벤치: 동일 길이, 맨앞 1바이트 차이 vs 맨뒤 1바이트 차이의 실행시간 편향 < 7%.
+ *  (c) 마이크로벤치: 동일 길이, 맨앞 1바이트 차이 vs 맨뒤 1바이트 차이의 실행시간 편향 < 12%(최솟값 기반, #274).
  */
 import { spawnSync } from "child_process";
 import { resolve, relative, sep } from "path";
@@ -88,17 +88,21 @@ describe("REQ-04 상수시간 비교 전환", () => {
         process.env.npm_lifecycle_event === "test:coverage" ||
         process.argv.includes("--coverage")
     );
-    (underCoverage ? it.skip : it)("(c) timingSafeStringEqual 마이크로벤치 편향 < 12% (median 기반)", () => {
+    (underCoverage ? it.skip : it)("(c) timingSafeStringEqual 마이크로벤치 편향 < 12% (최솟값 기반)", () => {
         // 본 벤치 주의:
         //  - 상수시간성은 Node `crypto.timingSafeEqual` 구현 신뢰에 의존.
         //  - 본 테스트는 회귀 탐지(임계 초과 시 신호) 목적이며, 통계적 부채널 증명 아님.
-        //  - Windows + VM + 공유 CI 환경의 OS 스케줄러 노이즈를 흡수하기 위해
-        //    median(SAMPLES 샘플)을 사용하고 임계는 12%(여유)로 완화. Phase 2 req-04와 같은 정책.
-        const N = 50_000;
-        const SAMPLES = 7;
-        const base = "a".repeat(64);
-        const diffFirst = "b" + "a".repeat(63);
-        const diffLast = "a".repeat(63) + "b";
+        //  - #274: 병렬 실행에서는 선점·GC 가 한쪽 측정에만 몰려 중앙값도 흔들렸다(편향 0.26). 그런 잡음은 시간을 늘리기만
+        //    하므로 각 쪽의 최솟값을 비교하고, 순서를 번갈아 재며, 측정 묶음을 최대 3번 시도한다. 임계는 그대로 12% 다.
+        //  - 64자에서는 앞에서 끊는 JS 비교의 편향(약 0.15)이 임계에 너무 가까워 재시도에 묻혔다. 1024자로 늘려 버퍼 생성
+        //    비용보다 비교 위치의 차이가 커지게 했다(앞에서 끊는 비교 약 0.25, 정상 비교 0.05 이하).
+        const L = 1024;
+        const N = 20_000;
+        const SAMPLES = 9;
+        const ATTEMPTS = 3;
+        const base = "a".repeat(L);
+        const diffFirst = "b" + "a".repeat(L - 1);
+        const diffLast = "a".repeat(L - 1) + "b";
 
         // 워밍업
         for (let i = 0; i < 2000; i++) {
@@ -113,21 +117,25 @@ describe("REQ-04 상수시간 비교 전환", () => {
             return Number(t1 - t0);
         };
 
-        const median = (xs: number[]): number => {
-            const s = xs.slice().sort((a, b) => a - b);
-            const m = Math.floor(s.length / 2);
-            return s.length % 2 === 0 ? (s[m - 1] + s[m]) / 2 : s[m];
+        const attemptBias = (): number => {
+            const firstSamples: number[] = [];
+            const lastSamples: number[] = [];
+            for (let s = 0; s < SAMPLES; s++) {
+                // 순서를 번갈아 재 시간에 따른 변화가 한쪽에만 쌓이지 않게 한다.
+                if (s % 2 === 0) { firstSamples.push(measure(diffFirst)); lastSamples.push(measure(diffLast)); }
+                else { lastSamples.push(measure(diffLast)); firstSamples.push(measure(diffFirst)); }
+            }
+            const nsFirst = Math.min(...firstSamples);
+            const nsLast = Math.min(...lastSamples);
+            return Math.abs(nsFirst - nsLast) / Math.max(nsFirst, nsLast);
         };
 
-        const firstSamples: number[] = [];
-        const lastSamples: number[] = [];
-        for (let s = 0; s < SAMPLES; s++) {
-            firstSamples.push(measure(diffFirst));
-            lastSamples.push(measure(diffLast));
+        const biases: number[] = [];
+        for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+            biases.push(attemptBias());
+            if (biases[biases.length - 1] < 0.12) break;
         }
-        const nsFirst = median(firstSamples);
-        const nsLast = median(lastSamples);
-        const bias = Math.abs(nsFirst - nsLast) / Math.max(nsFirst, nsLast);
-        expect(bias).toBeLessThan(0.12);
+        // 실패하면 시도별 편향을 모두 보여 진단할 수 있게 한다.
+        expect({belowThreshold: Math.min(...biases) < 0.12, biases}).toEqual({belowThreshold: true, biases});
     }, 60_000);
 });

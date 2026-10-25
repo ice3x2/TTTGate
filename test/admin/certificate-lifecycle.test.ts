@@ -1,5 +1,8 @@
-import {startAdminBrowser} from "../helpers/adminBrowser";
+import {startAdminBrowser, ADMIN_BROWSER_TEST_TIMEOUT_MS} from "../helpers/adminBrowser";
 import {generateSelfSignedCert} from "../helpers/testCerts";
+
+// 앱 기동 예산보다 짧으면 부하에서 helper 의 진단 대신 jest 시간 초과로 끝난다(#273).
+jest.setTimeout(ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 const empty = () => ({key: {name: "", value: ""}, cert: {name: "", value: ""}, ca: {name: "", value: ""}});
 const bundle = generateSelfSignedCert("certificate-lifecycle");
@@ -18,7 +21,7 @@ test("certificate component mounts and unmounts without update-depth errors", as
     } finally {
         await app.close();
     }
-}, 30_000);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("partial file edits survive component and unrelated parent updates until the pair is complete", async () => {
     const app = await startAdminBrowser();
@@ -44,7 +47,7 @@ test("partial file edits survive component and unrelated parent updates until th
     } finally {
         await app.close();
     }
-}, 30_000);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("changed parent props refresh native files, including in-place updates and clearing", async () => {
     const app = await startAdminBrowser();
@@ -70,7 +73,7 @@ test("changed parent props refresh native files, including in-place updates and 
     } finally {
         await app.close();
     }
-}, 30_000);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("related Gauge and Timer lifecycle paths mount, update and unmount under Svelte 5", async () => {
     const app = await startAdminBrowser();
@@ -86,7 +89,7 @@ test("related Gauge and Timer lifecycle paths mount, update and unmount under Sv
     } finally {
         await app.close();
     }
-}, 30_000);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("a null parent certificate clears native file inputs without a lifecycle error", async () => {
     const app = await startAdminBrowser();
@@ -99,4 +102,4 @@ test("a null parent certificate clears native file inputs without a lifecycle er
     } finally {
         await app.close();
     }
-}, 30_000);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);

@@ -20,9 +20,25 @@ export const createStageLog = (now: () => number = Date.now) => {
 };
 
 const ADMIN_TEST_SERVER_START_TIMEOUT_MS = 60_000;
+/** 브라우저 실행 기한. Playwright 기본값(3분)에 맡기지 않는다(#273). */
+const BROWSER_LAUNCH_TIMEOUT_MS = 30_000;
+/** #273: startAdminBrowser 가 쓸 수 있는 가장 긴 시간(개발 서버 기동 + 브라우저 실행). */
+export const ADMIN_BROWSER_START_BUDGET_MS = ADMIN_TEST_SERVER_START_TIMEOUT_MS + BROWSER_LAUNCH_TIMEOUT_MS;
+/** #273: startAdminBrowser 를 쓰는 테스트의 제한. 기동 예산에 화면 작업 여유를 더한다. */
+export const ADMIN_BROWSER_TEST_TIMEOUT_MS = ADMIN_BROWSER_START_BUDGET_MS + 60_000;
 
-export const startAdminBrowser = async (options: {apiOrigin?: string, proxyTarget?: string, preview?: boolean, httpAlias?: boolean, startTimeoutMs?: number} = {}) => {
-    const startTimeoutMs = options.startTimeoutMs ?? ADMIN_TEST_SERVER_START_TIMEOUT_MS;
+/**
+ * deadline(절대 시각)을 주면 서버 기동과 브라우저 실행이 그 안에서 끝나야 한다(#273). 실행 기한은 서버가 뜬 뒤 남은 시간으로 정한다.
+ */
+export const startAdminBrowser = async (options: {apiOrigin?: string, proxyTarget?: string, preview?: boolean, httpAlias?: boolean,
+    startTimeoutMs?: number, deadline?: number} = {}) => {
+    const remaining = (stageMs: number, stage: string): number => {
+        if(options.deadline === undefined) return stageMs;
+        const left = options.deadline - Date.now();
+        if(left <= 0) throw new Error(`Admin start budget exhausted before stage=${stage}`);
+        return Math.min(stageMs, left);
+    };
+    const startTimeoutMs = remaining(options.startTimeoutMs ?? ADMIN_TEST_SERVER_START_TIMEOUT_MS, "admin-test-server");
     const server = fork(path.resolve(__dirname, "../../admin/test/server.mjs"), [], {
         stdio: ["ignore", "pipe", "pipe", "ipc"],
         env: {...process.env, ADMIN_TEST_API_ORIGIN: options.apiOrigin,
@@ -69,9 +85,10 @@ export const startAdminBrowser = async (options: {apiOrigin?: string, proxyTarge
             const timeout = setTimeout(() => finish(new Error(`Admin test server did not start within ${startTimeoutMs}ms: ${diagnostic()}`)), startTimeoutMs);
             server.on("message", message); server.once("error", failed); server.once("close", closed);
         });
+        const launchTimeoutMs = remaining(BROWSER_LAUNCH_TIMEOUT_MS, "browser-launch");
         browser = await chromium.launch(options.httpAlias ? {
-            args: ["--host-resolver-rules=MAP admin.test 127.0.0.1", "--no-proxy-server"],
-        } : {});
+            args: ["--host-resolver-rules=MAP admin.test 127.0.0.1", "--no-proxy-server"], timeout: launchTimeoutMs,
+        } : {timeout: launchTimeoutMs});
         const page = await browser.newPage();
         const errors: string[] = [];
         page.on("pageerror", (error) => errors.push(error.message));

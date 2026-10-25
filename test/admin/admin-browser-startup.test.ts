@@ -1,8 +1,8 @@
 import childProcess = require('child_process');
 import path from 'node:path';
-import {startAdminBrowser} from '../helpers/adminBrowser';
+import {startAdminBrowser, ADMIN_BROWSER_TEST_TIMEOUT_MS} from '../helpers/adminBrowser';
 
-jest.setTimeout(30_000);
+jest.setTimeout(ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test.each(['early', 'no-ready'])('actual admin child %s preserves startup diagnostics', async mode => {
     const original = childProcess.fork;

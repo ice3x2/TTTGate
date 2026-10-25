@@ -6,7 +6,11 @@ import YAML from "yaml";
 import {IdentityMigration} from "../../src/server/rbac/IdentityMigration";
 import {createTestRoot, cleanupTestRoot, writeWebFixture} from "../helpers/runtime";
 import {startAdminBrowser} from "../helpers/adminBrowser";
+import {ADMIN_APP_TEST_TIMEOUT_MS} from "../helpers/adminApp";
 import {httpRequest} from "../helpers/http";
+
+// 백엔드 기동·로그인·재시작까지 테스트 안에서 하므로 앱 제한을 쓴다(#273).
+jest.setTimeout(ADMIN_APP_TEST_TIMEOUT_MS);
 
 const readIdentityPasswordHash = async (root: string, username: string): Promise<string> => {
     const raw = await fs.readFile(path.join(root, "config", "identity.yaml"), "utf8");
@@ -102,7 +106,7 @@ test("bootstrap response completes first setup without obsolete discovery reques
         expect(JSON.parse(removed.body).emptyKey).toBeUndefined();
         expect(discoveryRequests).toEqual([]);
     });
-}, 45_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("controller sends the actual raw key and bootstrap token accepted by the server", async () => {
     await withLogin(async ({app, token, root}) => {
@@ -116,7 +120,7 @@ test("controller sends the actual raw key and bootstrap token accepted by the se
         const passwordHash = await readIdentityPasswordHash(root, "admin");
         expect(await bcrypt.compare(password.trim(), passwordHash)).toBe(true);
     });
-}, 45_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("first-login UI requests the bootstrap token and accepts the existing server password policy", async () => {
     await withLogin(async ({app, token, submit, origin}) => {
@@ -131,7 +135,7 @@ test("first-login UI requests the bootstrap token and accepts the existing serve
         const session = await app.page.evaluate(async () => (await fetch("/api/validateSession")).json());
         expect(session.valid).toBe(true);
     });
-}, 45_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("invalid bootstrap token has a distinct actionable UI message", async () => {
     await withLogin(async ({app, submit}) => {
@@ -145,7 +149,7 @@ test("invalid bootstrap token has a distinct actionable UI message", async () =>
         expect(await response.json()).toMatchObject({bootstrapRequired: true, invalidBootstrapToken: true});
         await app.page.waitForFunction(() => /invalid.*bootstrap|bootstrap.*invalid/i.test(document.querySelector("#login-message")?.textContent ?? ""));
     });
-}, 45_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("weak-password response is preserved instead of hashing short input into a long value", async () => {
     await withLogin(async ({app, submit}) => {
@@ -155,7 +159,7 @@ test("weak-password response is preserved instead of hashing short input into a 
         expect(await response.json()).toMatchObject({bootstrapRequired: true, weakPassword: true});
         await app.page.waitForFunction(() => /8 to 1024 characters/i.test(document.querySelector("#login-message")?.textContent ?? ""));
     });
-}, 45_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test.each(["bcrypt", "legacy"])("existing %s account works after a real backend process restart", async (kind) => {
     const password = "  기존-암호🙂-password  ";
@@ -177,7 +181,7 @@ test.each(["bcrypt", "legacy"])("existing %s account works after a real backend 
         // 승격은 .key를 고치지 않는다 — 기동 전 storedKey 그대로 남아 있어야 한다.
         expect(await fs.readFile(path.join(root, "config", ".key"), "utf8")).toBe(storedKey);
     }, storedKey);
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("429 is shown without automatic login retries on an isolated server", async () => {
     await withLogin(async ({app, submit}) => {
@@ -192,4 +196,4 @@ test("429 is shown without automatic login retries on an isolated server", async
         await new Promise((resolve) => setTimeout(resolve, 1200));
         expect(attempts).toBe(1);
     }, await bcrypt.hash("correct-password", 12));
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);

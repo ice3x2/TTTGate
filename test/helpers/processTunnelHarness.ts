@@ -69,7 +69,8 @@ export type ProcessTunnelHarness = {
     /** #231: 클라이언트 프로세스를 SIGKILL 로 즉시 죽인다. 서버가 그 클라이언트를 목록에서 뺄 때까지 기다리지 않는다. */
     killClient(index?: number): Promise<void>;
     /** connectPort: 서버 대신 이 포트로 연결한다(#230 — 사이에 프록시를 둘 때). */
-    startClient(index?: number, options?: {connectPort?: number}): Promise<void>;
+    /** env: 이 클라이언트에만 더하는 환경 변수(예: 서버와 다른 하트비트 기한, #274). */
+    startClient(index?: number, options?: {connectPort?: number, env?: {[key: string]: string}}): Promise<void>;
     dispose(): Promise<void>;
 };
 
@@ -245,7 +246,7 @@ export async function createProcessTunnelHarness(options: ProcessTunnelOptions):
             return proc;
         };
 
-        const spawnClient = (index: number, connectPort: number = tunnelPort): SpawnedProcess => {
+        const spawnClient = (index: number, connectPort: number = tunnelPort, extraEnv: {[key: string]: string} = {}): SpawnedProcess => {
             const proc = spawnProcess(process.execPath, [
                 APP_JS, "client",
                 "-addr", `127.0.0.1:${connectPort}`,
@@ -254,7 +255,7 @@ export async function createProcessTunnelHarness(options: ProcessTunnelOptions):
             ], {
                 cwd: clientRootDirs[index],
                 // #209: 권장 경로대로 비밀값을 환경 변수로 넘긴다(명령줄은 프로세스 목록에 보인다).
-                env: {TTTGATE_CLIENT_SECRET: `e2e-secret-${index}`},
+                env: {...extraEnv, TTTGATE_CLIENT_SECRET: `e2e-secret-${index}`},
                 logPrefix: VERBOSE ? `e2e-client-${index}` : undefined
             });
             allSpawnedClients.push(proc);
@@ -420,12 +421,12 @@ export async function createProcessTunnelHarness(options: ProcessTunnelOptions):
             await forceKill(proc);
         };
 
-        const startClient = async (index: number = 0, options: {connectPort?: number} = {}): Promise<void> => {
+        const startClient = async (index: number = 0, options: {connectPort?: number, env?: {[key: string]: string}} = {}): Promise<void> => {
             const existing = clientProcesses[index];
             if(existing && existing.child.exitCode === null && existing.child.signalCode === null) {
                 throw new Error("Client is already running");
             }
-            clientProcesses[index] = spawnClient(index, options.connectPort);
+            clientProcesses[index] = spawnClient(index, options.connectPort, options.env);
             await waitForClientOnline();
         };
 

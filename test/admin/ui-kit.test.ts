@@ -1,8 +1,8 @@
-import {startAdminBrowser} from "../helpers/adminBrowser";
+import {startAdminBrowser, ADMIN_BROWSER_TEST_TIMEOUT_MS} from "../helpers/adminBrowser";
 
-// 테스트마다 개발 서버와 브라우저를 띄운다. 그 기동만 CPU 부하에서 60초까지 허용하므로(#181)
-// 테스트 제한이 그보다 짧으면 기동 기한보다 먼저 끊긴다(#263). 화면 동작의 단언은 그대로다.
-const UI_KIT_TEST_MS = 120_000;
+// 앱 기동 예산보다 짧으면 부하에서 helper 의 진단 대신 jest 시간 초과로 끝난다(#273).
+jest.setTimeout(ADMIN_BROWSER_TEST_TIMEOUT_MS);
+
 
 test("Button 클릭이 count 를 증가시키고, disabled 버튼은 비활성 상태다", async () => {
     const app = await startAdminBrowser();
@@ -21,7 +21,7 @@ test("Button 클릭이 count 를 증가시키고, disabled 버튼은 비활성 �
     } finally {
         await app.close();
     }
-}, UI_KIT_TEST_MS);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("TextInput 입력이 echo 되고 label 로 접근할 수 있다", async () => {
     const app = await startAdminBrowser();
@@ -35,7 +35,7 @@ test("TextInput 입력이 echo 되고 label 로 접근할 수 있다", async () 
     } finally {
         await app.close();
     }
-}, UI_KIT_TEST_MS);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("NumberInput 이 값을 echo 하고 초과 값에 에러 메시지를 보이며 빈 값은 null 이다", async () => {
     const app = await startAdminBrowser();
@@ -51,7 +51,7 @@ test("NumberInput 이 값을 echo 하고 초과 값에 에러 메시지를 보�
     } finally {
         await app.close();
     }
-}, UI_KIT_TEST_MS);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("Select 에서 옵션을 고르면 echo 된다", async () => {
     const app = await startAdminBrowser();
@@ -64,7 +64,7 @@ test("Select 에서 옵션을 고르면 echo 된다", async () => {
     } finally {
         await app.close();
     }
-}, UI_KIT_TEST_MS);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("Checkbox 를 체크/해제하면 echo 되고 label 로 접근할 수 있다", async () => {
     const app = await startAdminBrowser();
@@ -81,7 +81,7 @@ test("Checkbox 를 체크/해제하면 echo 되고 label 로 접근할 수 있�
     } finally {
         await app.close();
     }
-}, UI_KIT_TEST_MS);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("Switch 를 클릭하면 aria-checked 와 echo, 이벤트 카운트가 갱신된다", async () => {
     const app = await startAdminBrowser();
@@ -99,7 +99,7 @@ test("Switch 를 클릭하면 aria-checked 와 echo, 이벤트 카운트가 갱�
     } finally {
         await app.close();
     }
-}, UI_KIT_TEST_MS);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("Card 는 label 과 body 를 보이고, ticked+compact 조합이 1개다", async () => {
     const app = await startAdminBrowser();
@@ -113,7 +113,7 @@ test("Card 는 label 과 body 를 보이고, ticked+compact 조합이 1개다", 
     } finally {
         await app.close();
     }
-}, UI_KIT_TEST_MS);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("Chip 과 Badge 가 올바른 tone 과 텍스트로 렌더링된다", async () => {
     const app = await startAdminBrowser();
@@ -127,7 +127,7 @@ test("Chip 과 Badge 가 올바른 tone 과 텍스트로 렌더링된다", async
     } finally {
         await app.close();
     }
-}, UI_KIT_TEST_MS);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("모든 입력과 select 는 뷰포트 폭을 넘지 않고 가로 스크롤이 없다", async () => {
     const app = await startAdminBrowser();
@@ -147,7 +147,7 @@ test("모든 입력과 select 는 뷰포트 폭을 넘지 않고 가로 스크�
     } finally {
         await app.close();
     }
-}, UI_KIT_TEST_MS);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("Modal 이 열리고 초점이 이동하며, Escape·닫기 버튼·오버레이 클릭으로 닫힌다", async () => {
     const app = await startAdminBrowser();
@@ -178,7 +178,7 @@ test("Modal 이 열리고 초점이 이동하며, Escape·닫기 버튼·오버�
     } finally {
         await app.close();
     }
-}, UI_KIT_TEST_MS);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("Toast 가 표시되고 자동으로 사라지며, 최대 3개까지만 쌓인다", async () => {
     const app = await startAdminBrowser();
@@ -201,7 +201,7 @@ test("Toast 가 표시되고 자동으로 사라지며, 최대 3개까지만 쌓
     } finally {
         await app.close();
     }
-}, UI_KIT_TEST_MS);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("Tabs 에서 탭을 고르면 active 클래스와 aria-selected, echo 가 갱신된다", async () => {
     const app = await startAdminBrowser();
@@ -219,7 +219,7 @@ test("Tabs 에서 탭을 고르면 active 클래스와 aria-selected, echo 가 �
     } finally {
         await app.close();
     }
-}, UI_KIT_TEST_MS);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("Kpi 가 label 과 value 를 accent 스타일로 보여준다", async () => {
     const app = await startAdminBrowser();
@@ -234,7 +234,7 @@ test("Kpi 가 label 과 value 를 accent 스타일로 보여준다", async () =>
     } finally {
         await app.close();
     }
-}, UI_KIT_TEST_MS);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("Gauge 가 percent 와 message 를 보여준다", async () => {
     const app = await startAdminBrowser();
@@ -249,7 +249,7 @@ test("Gauge 가 percent 와 message 를 보여준다", async () => {
     } finally {
         await app.close();
     }
-}, UI_KIT_TEST_MS);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("Loading 이 오버레이 없이 보인다", async () => {
     const app = await startAdminBrowser();
@@ -263,7 +263,7 @@ test("Loading 이 오버레이 없이 보인다", async () => {
     } finally {
         await app.close();
     }
-}, UI_KIT_TEST_MS);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("Timer 가 남은 시간을 보여주고, 설정 다이얼로그로 새 제한 시간을 확정하면 echo 되며, 값을 바꾸지 않으면 onchange 가 호출되지 않는다", async () => {
     const app = await startAdminBrowser();
@@ -292,7 +292,7 @@ test("Timer 가 남은 시간을 보여주고, 설정 다이얼로그로 새 제
     } finally {
         await app.close();
     }
-}, UI_KIT_TEST_MS);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("Banner 가 메시지를 보여주고 Dismiss 클릭으로 사라진다", async () => {
     const app = await startAdminBrowser();
@@ -308,4 +308,4 @@ test("Banner 가 메시지를 보여주고 Dismiss 클릭으로 사라진다", a
     } finally {
         await app.close();
     }
-}, UI_KIT_TEST_MS);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);

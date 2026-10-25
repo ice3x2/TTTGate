@@ -41,6 +41,8 @@ class TTTServer {
     private _appliedExternal: Record<number, {option: TunnelingOption, cert: CertInfo, configurationRevision: number, certificateRevision: number}> = {};
     private _appliedScopeRevisions: Record<string, number> = {};
     private _dirtyControl = false;
+    /** #271: 신뢰 클라이언트를 바꾸기 시작해 적용을 다 마치지 못했다. 복원할 때 이전 목록으로 되돌린다. */
+    private _dirtyTrustedClients = false;
     private _dirtyExternal = new Set<number>();
     private _externalPortServerPool : ExternalPortServerPool;
     private _tunnelServer : TunnelServer;
@@ -335,11 +337,22 @@ class TTTServer {
                 this._tunnelServer = restored;
                 this._appliedServerOption = ObjectUtil.cloneDeep(state.serverOption);
                 this._dirtyControl = false;
+                // 새 제어 서버는 이전 목록으로 만들었으므로 신뢰 클라이언트도 되돌린 것이다.
+                this._dirtyTrustedClients = false;
             } catch(error) { logger.error('control runtime restore failed', error); failures.push('tunnel-control-restore'); }
-        } else if(this.trustedClientsChanged(this._appliedServerOption, state.serverOption)) {
-            this.applyTrustedClients(state.serverOption);
-            this._appliedServerOption.trustedClients = ObjectUtil.cloneDeep(state.serverOption.trustedClients ?? []);
+        } else if(this._dirtyTrustedClients || this.trustedClientsChanged(this._appliedServerOption, state.serverOption)) {
+            // #271: 적용 도중 예외가 나면 레지스트리만 새 목록이고 _appliedServerOption 은 옛 값일 수 있다. 같은 목록을 다시 넣는 것은 안전하다.
+            // 다시 넣다가 또 예외가 나도 나머지 복원은 이어 간다. 플래그는 남겨 다음 복원에서 다시 시도한다.
+            try {
+                this._dirtyTrustedClients = true;
+                this.applyTrustedClients(state.serverOption);
+                this._appliedServerOption.trustedClients = ObjectUtil.cloneDeep(state.serverOption.trustedClients ?? []);
+                this._dirtyTrustedClients = false;
+            } catch(error) { logger.error('trusted clients restore failed', error); failures.push('trusted-clients-restore'); }
         }
+        // #271: 감사 싱크(보존·큐)도 실행 상태다. 이전 설정과 다르면 이전 설정의 싱크로 되돌린다.
+        try { await TTTServer.applyAuditOption(state.serverOption); }
+        catch(error) { logger.error('audit sink restore failed', error); failures.push('audit-restore'); }
         try { this._tunnelServer.configureSessionTtl(state.sessionTtlPolicy.ttlMs, state.sessionTtlPolicy.checkIntervalMs); }
         catch(error) { logger.error('session TTL restore failed', error); failures.push('session-ttl-restore'); }
         if(SocketHandler.maxGlobalMemoryBufferSize !== state.memoryLimit) AppCompositionRoot.applyGlobalMemLimitMiB(state.memoryLimit / (1024 * 1024));
@@ -443,10 +456,15 @@ class TTTServer {
         this.revokeEnrollmentsIfModeChanged(nextOption, previousOption);
 
         if(!requiresTunnelRestart) {
-            if(this.trustedClientsChanged(nextOption, previousOption)) this.applyTrustedClients(nextOption);
+            // 앞선 복원이 실패해 레지스트리가 저장된 목록과 다를 수 있으면(플래그) 바뀌지 않았어도 다시 넣어 맞춘다.
+            if(this._dirtyTrustedClients || this.trustedClientsChanged(nextOption, previousOption)) {
+                this._dirtyTrustedClients = true;
+                this.applyTrustedClients(nextOption);
+            }
             this._tunnelServer.configureSessionTtl(ttl.ttlMs);
             this.syncAllowedClientMaps(nextOption);
             this.recordAppliedServerOption(nextOption, false);
+            this._dirtyTrustedClients = false;
             return {
                 success: true,
                 partial: restartRequiredScopes.length > 0,
@@ -466,6 +484,8 @@ class TTTServer {
             this.syncAllowedClientMaps(nextOption);
             this.recordAppliedServerOption(nextOption, true);
             this._dirtyControl = false;
+            // 새 제어 서버는 nextOption 의 목록으로 만들었으므로 레지스트리도 맞다.
+            this._dirtyTrustedClients = false;
             return {
                 success: true,
                 partial: restartRequiredScopes.length > 0,
@@ -686,3 +706,4 @@ class TTTServer {
 }
 
 export default TTTServer;
+export type {RuntimeApplyResult};

@@ -4,7 +4,10 @@ import {spawnSync} from "child_process";
 import AdminServer from "../../src/server/admin/AdminServer";
 import ServerOptionStore from "../../src/server/ServerOptionStore";
 import {applyTestRoot, cleanupTestRoot, createTestRoot} from "../helpers/runtime";
-import {startAdminBrowser} from "../helpers/adminBrowser";
+import {startAdminBrowser, ADMIN_BROWSER_TEST_TIMEOUT_MS} from "../helpers/adminBrowser";
+
+// 앱 기동 예산보다 짧으면 부하에서 helper 의 진단 대신 jest 시간 초과로 끝난다(#273).
+jest.setTimeout(ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 const root = path.resolve(__dirname, "../..");
 
@@ -44,4 +47,4 @@ test.each([false, true])("actual administrator entrypoint renders sign-in withou
         await api.close();
         await cleanupTestRoot(testRoot);
     }
-}, 45_000);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);

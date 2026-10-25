@@ -2,9 +2,12 @@ import {withConfigurationServer} from "../component/server/admin/configuration-r
 import {configurationFiles, peerFingerprint} from "../component/server/admin/compound-review-fixture";
 import {writeWebFixture} from "../helpers/runtime";
 import {getFreePort} from "../helpers/network";
-import {startAdminBrowser} from "../helpers/adminBrowser";
+import {startAdminBrowser, ADMIN_BROWSER_TEST_TIMEOUT_MS} from "../helpers/adminBrowser";
 import {generateSelfSignedCert} from "../helpers/testCerts";
 import {CertificationStore} from "../../src/server/CertificationStore";
+
+// 앱 기동 예산보다 짧으면 부하에서 helper 의 진단 대신 jest 시간 초과로 끝난다(#273).
+jest.setTimeout(ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test.each(["target-stale", "source-stale", "target-fresh"])("rename deletion snapshot survives TLS toggle/refresh: %s", async mode => withConfigurationServer(async f => {
     const sourcePort = await getFreePort(), targetPort = await getFreePort();
@@ -52,4 +55,4 @@ test.each(["target-stale", "source-stale", "target-fresh"])("rename deletion sna
             files: configurationFiles(f.root.rootDir), fingerprint: await peerFingerprint(sourcePort)}).toEqual(baseline);
         expect(f.store.getTunnelingOption(targetPort)).toBeUndefined();
     } finally { await app.close(); }
-}), 60_000);
+}), ADMIN_BROWSER_TEST_TIMEOUT_MS);

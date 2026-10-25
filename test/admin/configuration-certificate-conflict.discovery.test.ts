@@ -1,9 +1,12 @@
 import {withConfigurationServer} from "../component/server/admin/configuration-revision-fixture";
 import {writeWebFixture} from "../helpers/runtime";
 import {getFreePort} from "../helpers/network";
-import {startAdminBrowser} from "../helpers/adminBrowser";
+import {startAdminBrowser, ADMIN_BROWSER_TEST_TIMEOUT_MS} from "../helpers/adminBrowser";
 import {generateSelfSignedCert} from "../helpers/testCerts";
 import {CertificationStore} from "../../src/server/CertificationStore";
+
+// 앱 기동 예산보다 짧으면 부하에서 helper 의 진단 대신 jest 시간 초과로 끝난다(#273).
+jest.setTimeout(ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("stale TLS editor cannot replace the live certificate before its config conflict", async () => {
     await withConfigurationServer(async ({root, ports, request, snapshot}: any) => {
@@ -45,4 +48,4 @@ test("stale TLS editor cannot replace the live certificate before its config con
             expect(responses).toEqual([{path: "/api/tunnelingOption", status: 409}]);
         } finally { await app.close(); }
     });
-}, 60_000);
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);

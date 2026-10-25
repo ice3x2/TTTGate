@@ -1,11 +1,11 @@
 import type {Page} from "playwright";
-import {startAdminApp, type AdminApp} from "../helpers/adminApp";
+import {startAdminApp, type AdminApp, ADMIN_APP_TEST_TIMEOUT_MS} from "../helpers/adminApp";
 import {RBAC_PASSWORDS} from "../helpers/rbacFixture";
 import {generate} from "../../src/server/mfa/Totp";
 import {base32Decode} from "../../src/server/mfa/Base32";
 
 // U4-09 / #128 — 내 계정 화면의 MFA 카드(등록 3단계·재발급·해제)와 세션 카드. alice 로 시작한다.
-jest.setTimeout(120_000);
+jest.setTimeout(ADMIN_APP_TEST_TIMEOUT_MS);
 
 const hashIs = (page: Page, expected: string) =>
     page.waitForFunction((value) => location.hash === value, expected, {timeout: 10_000});
