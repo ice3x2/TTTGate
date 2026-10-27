@@ -176,11 +176,14 @@ class TTTServer {
         }
     }
 
-    private async restoreExternalPortStatus(port: number, option: TunnelingOption, lastServerStatus: ExternalPortServerStatus): Promise<void> {
+    /**
+     * @param renamed 외부 포트를 바꾼 경우다. 손으로 켠 상태를 그대로 옮기므로 inactiveOnStartup 을 보지 않는다(#279).
+     */
+    private async restoreExternalPortStatus(port: number, option: TunnelingOption, lastServerStatus: ExternalPortServerStatus, renamed = false): Promise<void> {
         // 잘린 값이 아니라 요청값과 원래 시작 시각으로 다시 건다. 상한은 지금 기준으로 다시 계산된다(#137).
         const requested = lastServerStatus.requestedTimeout ?? lastServerStatus.activeTimeout;
         this._externalPortServerPool.setActiveTimeout(port, requested);
-        if(lastServerStatus.active && !option.inactiveOnStartup) {
+        if(lastServerStatus.active && (renamed || !option.inactiveOnStartup)) {
             await this._externalPortServerPool.active(port, requested, {startedAt: lastServerStatus.activeStart});
             return;
         }
@@ -515,7 +518,7 @@ class TTTServer {
     }
 
     /**
-     * @param previousForwardPort 외부 포트를 바꾸는 중이면 옛 포트. 새 리스너는 옛 포트의 활성 상태를 이어받는다(이슈 279).
+     * @param previousForwardPort 외부 포트를 바꾸는 중이면 옛 포트. 새 리스너는 옛 포트의 활성 상태를 이어받는다(#279).
      */
     public async applyTunnelingOption(nextOption: TunnelingOption, previousOption?: TunnelingOption, stagedCert?: CertInfo, previousForwardPort?: number): Promise<RuntimeApplyResult> {
         const port = nextOption.forwardPort;
@@ -532,7 +535,7 @@ class TTTServer {
                 }
             }
             await this._externalPortServerPool.startServer(nextOption, nextCert);
-            await this.restoreExternalPortStatus(port, nextOption, inheritedStatus);
+            await this.restoreExternalPortStatus(port, nextOption, inheritedStatus, previousForwardPort !== undefined);
             this.applyAllowedClientsForPort(nextOption);
             this._appliedExternal[port] = {option: ObjectUtil.cloneDeep(nextOption), cert: ObjectUtil.cloneDeep(nextCert),
                 configurationRevision: ServerOptionStore.instance.revisionState.currentRevision,
