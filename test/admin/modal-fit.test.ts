@@ -93,7 +93,7 @@ test("a short modal keeps its natural height and is centred (REQ-4)", async () =
     }
 });
 
-// 리뷰: 화면이 아주 낮으면(확대 등) 85% 안에 제목·버튼줄도 다 들어가지 않는다. 그때는 페이지 스크롤로 버튼에 닿게 한다.
+// 화면이 아주 낮으면(확대 등) 85% 안에 제목·버튼줄도 다 들어가지 않는다. 그때는 페이지 스크롤로 버튼에 닿게 한다.
 test("on a very short viewport the modal buttons stay reachable by scrolling the page", async () => {
     const app = await startAdminApp();
     try {
@@ -112,7 +112,7 @@ test("on a very short viewport the modal buttons stay reachable by scrolling the
     }
 });
 
-// 리뷰: 본문 끝까지 스크롤한 뒤에도 뒤 페이지로 스크롤이 넘어가지 않는다.
+// 본문 끝까지 스크롤한 뒤에도 뒤 페이지로 스크롤이 넘어가지 않는다.
 test("scrolling past the end of the modal body does not scroll the page behind", async () => {
     const app = await startAdminApp();
     try {
