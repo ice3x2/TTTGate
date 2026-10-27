@@ -51,6 +51,8 @@ test("renaming a manually activated tunnel that is inactive on startup keeps it 
 test("renaming keeps the active timeout and its start time (REQ-1)", async () => withConfigurationServer(async f => {
     const {port, option} = await addTunnel(f);
     expect(await f.tunnel.activeExternalPortServer(port, 600)).toBe(true);
+    // 시작 시각을 새로 찍는 결함이 같은 밀리초에 숨지 않도록 시간을 조금 흘려보낸다.
+    await new Promise((resolve) => setTimeout(resolve, 20));
     const before = {...f.tunnel.externalServerStatus(port)};
     const next = await rename(f, option, port);
     const after = f.tunnel.externalServerStatus(next);

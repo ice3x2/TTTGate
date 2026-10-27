@@ -1,4 +1,7 @@
+import fs from "node:fs";
 import https from "node:https";
+import path from "node:path";
+import YAML from "yaml";
 import tls from "node:tls";
 import {createProcessTunnelHarness, ProcessTunnelHarness} from "../../helpers/processTunnelHarness";
 import {generateSelfSignedCert} from "../../helpers/testCerts";
@@ -68,10 +71,29 @@ describe("self-signed destination certificate", () => {
     });
 
     test("a tunnel that does not allow it still refuses the self-signed destination (AC-2)", async () => {
+        // 이 요청 뒤에 쌓인 로그만 본다. 앞 테스트의 로그로 통과하면 안 된다.
+        const from = harness.clients[0].stdoutChunks.length;
         const result = await fetchThrough(harness.tunnels[1].forwardPort);
         expect("status" in result && result.status === 200).toBe(false);
         // 다른 이유(연결 안 됨·시간 초과)가 아니라, 클라이언트가 대상 인증서를 거부해서 실패해야 한다.
-        const clientLog = () => Buffer.concat(harness.clients[0].stdoutChunks).toString("utf-8");
+        const clientLog = () => Buffer.concat(harness.clients[0].stdoutChunks.slice(from)).toString("utf-8");
         await waitUntil(async () => clientLog().includes("self-signed certificate") || undefined, {timeoutMs: 10_000, label: "client rejected the certificate"});
+    });
+
+    // 실행 중인 서버에서 저장하면 다시 시작하지 않아도 그 뒤 새 세션부터 반영되고, 설정 파일에도 남는다(REQ-6, AC-3).
+    test("turning the option on through the admin API applies to new sessions without a restart (REQ-6)", async () => {
+        const port = harness.tunnels[1].forwardPort;
+        const list = await harness.adminRequest("/api/tunnelingOption");
+        expect(list.status).toBe(200);
+        const {ownerId: _ownerId, owner: _owner, editable: _editable, ...stored} = list.json.tunnelingOptions.find((row: any) => row.forwardPort === port);
+        const saved = await harness.adminRequest("/api/tunnelingOption", {method: "POST",
+            body: {...stored, allowSelfSignedDestinationCert: true, expectedRevision: list.json.revisionState.currentRevision}});
+        expect(saved.status).toBe(200);
+
+        const after = await harness.adminRequest("/api/tunnelingOption");
+        expect(after.json.tunnelingOptions.find((row: any) => row.forwardPort === port).allowSelfSignedDestinationCert).toBe(true);
+        const yaml = YAML.parse(fs.readFileSync(path.join(harness.rootDir, "config", "server.yaml"), "utf-8"));
+        expect(yaml.tunnelingOptions.find((row: any) => row.forwardPort === port).allowSelfSignedDestinationCert).toBe(true);
+        expect(await fetchThrough(port)).toEqual({status: 200, body: "self-signed-ok"});
     });
 });
