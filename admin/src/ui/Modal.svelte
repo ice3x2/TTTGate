@@ -51,11 +51,11 @@
 {/if}
 
 <style>
+    /* 모달은 화면 가운데에 놓이고 화면 높이의 85% 를 넘지 않는다. 넘치는 내용은 본문 안에서 스크롤한다(이슈 277). */
     .modal-overlay{
         position: fixed; inset: 0; z-index: 100;
-        display: flex; justify-content: center; align-items: flex-start;
-        padding: 80px var(--s-4) var(--s-4);
-        overflow-y: auto;
+        display: flex; justify-content: center; align-items: center;
+        padding: var(--s-4);
     }
     .modal-overlay::before{
         content: '';
@@ -65,6 +65,8 @@
     .modal{
         position: relative;
         width: 100%; max-width: 480px;
+        max-height: 85vh; max-height: 85dvh;
+        display: flex; flex-direction: column;
         border: 1px solid var(--line-2);
         border-radius: var(--r-3);
         background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
@@ -74,6 +76,7 @@
         overflow: hidden;
     }
     .modal-head{
+        flex: none;
         padding: var(--s-4) var(--s-5);
         border-bottom: 1px solid var(--line-1);
         display:flex; align-items:center; justify-content: space-between;
@@ -84,8 +87,9 @@
         font-variation-settings: "opsz" 48, "wght" 420;
         font-size: 18px;
     }
-    .modal-body{ padding: var(--s-6); color: var(--ink-1); }
+    .modal-body{ flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--s-6); color: var(--ink-1); }
     .modal-foot{
+        flex: none;
         padding: var(--s-4) var(--s-5);
         border-top: 1px solid var(--line-1);
         display: flex; justify-content: flex-end; gap: var(--s-3);
