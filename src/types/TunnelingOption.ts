@@ -91,7 +91,7 @@ type TunnelingOption = {
     allowedClientIds?: Array<string>;
     inactiveOnStartup?: boolean;
     tls?: boolean,
-    /** TLS 터널에서 클라이언트가 대상 서버의 인증서를 검증하지 않는다. 내부망의 자체 서명 서버용이며 기본은 꺼짐이다(이슈 280). */
+    /** TLS 터널에서 클라이언트가 대상 서버의 인증서를 검증하지 않는다. 내부망의 자체 서명 서버용이며 기본은 꺼짐이다(#280). */
     allowSelfSignedDestinationCert?: boolean,
     bufferLimitOnServer?: number,
     bufferLimitOnClient?: number,

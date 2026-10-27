@@ -448,11 +448,10 @@
                     </div>
                 {/if}
                 <Field label="Destination certificate" for="input-allow-self-signed"
-                    hint="The client skips certificate verification when it connects to the destination server.">
-                    <!-- 옛 설정에는 이 값이 없어 undefined 다. bind 는 undefined 를 받지 못하므로 값과 변경을 따로 넘긴다. -->
-                    <Checkbox id="input-allow-self-signed" label="Allow self-signed certificate"
-                        checked={option.allowSelfSignedDestinationCert === true}
-                        onchange={(checked) => (option!.allowSelfSignedDestinationCert = checked)} />
+                    hint="The client accepts any certificate from the destination server, including self-signed ones. Use it only on a trusted network.">
+                    <!-- 옛 설정에는 이 값이 없어 undefined 다. 기본값이 있는 bind 는 undefined 를 받지 못하므로 함수 바인딩을 쓴다. -->
+                    <Checkbox id="input-allow-self-signed" label="Skip certificate verification (allow self-signed)"
+                        bind:checked={() => option!.allowSelfSignedDestinationCert === true, (on) => (option!.allowSelfSignedDestinationCert = on)} />
                 </Field>
             {/if}
             <Field label="Destination host" for="input-destination-host">

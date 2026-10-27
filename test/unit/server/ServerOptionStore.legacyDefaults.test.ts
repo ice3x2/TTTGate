@@ -42,7 +42,9 @@ describe("legacy configuration keeps the previous behaviour (#182)", () => {
     it("reads a tunnel without allowSelfSignedDestinationCert as verifying the destination certificate", () => {
         const store = load(legacyYaml());
         expect(store.getTunnelingOption(18192)?.allowSelfSignedDestinationCert).toBe(false);
-        expect(load(legacyYaml({}, {allowSelfSignedDestinationCert: true})).getTunnelingOption(18192)?.allowSelfSignedDestinationCert).toBe(true);
+        expect(load(legacyYaml({}, {tls: true, allowSelfSignedDestinationCert: true})).getTunnelingOption(18192)?.allowSelfSignedDestinationCert).toBe(true);
+        // 평문 터널에는 뜻이 없으므로 켜져 있어도 꺼짐으로 정리한다.
+        expect(load(legacyYaml({}, {tls: false, allowSelfSignedDestinationCert: true})).getTunnelingOption(18192)?.allowSelfSignedDestinationCert).toBe(false);
     });
 
     it("keeps the session idle TTL off when the loaded file has no sessionTtlMs", () => {

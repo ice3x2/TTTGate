@@ -2,6 +2,7 @@ import https from "node:https";
 import tls from "node:tls";
 import {createProcessTunnelHarness, ProcessTunnelHarness} from "../../helpers/processTunnelHarness";
 import {generateSelfSignedCert} from "../../helpers/testCerts";
+import {waitUntil} from "../../helpers/smokeProcess";
 
 // 이슈 280 — 대상 서버가 자체 서명 인증서를 쓰면, 그 터널에서 허용을 켠 경우에만 연결된다.
 jest.setTimeout(120_000);
@@ -69,5 +70,8 @@ describe("self-signed destination certificate", () => {
     test("a tunnel that does not allow it still refuses the self-signed destination (AC-2)", async () => {
         const result = await fetchThrough(harness.tunnels[1].forwardPort);
         expect("status" in result && result.status === 200).toBe(false);
+        // 다른 이유(연결 안 됨·시간 초과)가 아니라, 클라이언트가 대상 인증서를 거부해서 실패해야 한다.
+        const clientLog = () => Buffer.concat(harness.clients[0].stdoutChunks).toString("utf-8");
+        await waitUntil(async () => clientLog().includes("self-signed certificate") || undefined, {timeoutMs: 10_000, label: "client rejected the certificate"});
     });
 });
