@@ -940,7 +940,8 @@ class AdminServer {
         let runtime: Awaited<ReturnType<TTTServer['applyTunnelingOption']>> =
             {success: false, partial: false, failedScopes: ['server-runtime'], warnings: [], restartRequiredScopes: []};
         try {
-            if(this._tttServer) runtime = await this._tttServer.applyTunnelingOption(store.getTunnelingOption(option.forwardPort)!, previousOption, certInfo);
+            if(this._tttServer) runtime = await this._tttServer.applyTunnelingOption(store.getTunnelingOption(option.forwardPort)!, previousOption, certInfo,
+                rename ? previousForwardPort : undefined);
             if(runtime.success && rename && !await this._tttServer!.stopExternalPortServer(previousForwardPort!, true)) {
                 runtime.success = false; runtime.failedScopes.push(`external-listener:${previousForwardPort}`);
             }

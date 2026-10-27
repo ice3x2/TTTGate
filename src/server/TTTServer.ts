@@ -513,9 +513,13 @@ class TTTServer {
         }
     }
 
-    public async applyTunnelingOption(nextOption: TunnelingOption, previousOption?: TunnelingOption, stagedCert?: CertInfo): Promise<RuntimeApplyResult> {
+    /**
+     * @param previousForwardPort 외부 포트를 바꾸는 중이면 옛 포트. 새 리스너는 옛 포트의 활성 상태를 이어받는다(이슈 279).
+     */
+    public async applyTunnelingOption(nextOption: TunnelingOption, previousOption?: TunnelingOption, stagedCert?: CertInfo, previousForwardPort?: number): Promise<RuntimeApplyResult> {
         const port = nextOption.forwardPort;
         const lastServerStatus = this._externalPortServerPool.getServerStatus(port);
+        const inheritedStatus = previousForwardPort === undefined ? lastServerStatus : this._externalPortServerPool.getServerStatus(previousForwardPort);
         const nextCert = stagedCert ?? CertificationStore.instance.getExternalCert(port);
 
         try {
@@ -527,7 +531,7 @@ class TTTServer {
                 }
             }
             await this._externalPortServerPool.startServer(nextOption, nextCert);
-            await this.restoreExternalPortStatus(port, nextOption, lastServerStatus);
+            await this.restoreExternalPortStatus(port, nextOption, inheritedStatus);
             this.applyAllowedClientsForPort(nextOption);
             this._appliedExternal[port] = {option: ObjectUtil.cloneDeep(nextOption), cert: ObjectUtil.cloneDeep(nextCert),
                 configurationRevision: ServerOptionStore.instance.revisionState.currentRevision,
