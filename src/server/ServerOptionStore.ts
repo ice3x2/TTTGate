@@ -558,6 +558,8 @@ class ServerOptionStore {
         if(option.inactiveOnStartup == undefined) {
             option.inactiveOnStartup = false;
         }
+        // 명시적으로 true 일 때만 대상 서버의 인증서 검증을 건너뛴다(이슈 280).
+        option.allowSelfSignedDestinationCert = option.allowSelfSignedDestinationCert === true;
         if(!option.allowedClientNames) {
             option.allowedClientNames = [];
         }

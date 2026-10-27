@@ -196,7 +196,8 @@ class TTTServer {
         this._sessions.add(id);
         let allowClientIds = this._allowClientIdsMap.get(opt.forwardPort);
         let allowClientNames = this._allowClientNamesMap.get(opt.forwardPort);
-        let success = this._tunnelServer.openSession(id, {host: opt.destinationAddress,port: opt.destinationPort!,tls: opt.tls,bufferLimit: bufferLimitOnClient},allowClientNames, allowClientIds);
+        let success = this._tunnelServer.openSession(id, {host: opt.destinationAddress,port: opt.destinationPort!,tls: opt.tls,bufferLimit: bufferLimitOnClient,
+            ...(opt.allowSelfSignedDestinationCert === true ? {rejectUnauthorized: false} : {})},allowClientNames, allowClientIds);
         if(!success) {
             this._sessions.delete(id);
             this._externalPortServerPool.closeSession(id,0);

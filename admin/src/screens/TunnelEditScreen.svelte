@@ -447,6 +447,13 @@
                         <InputCertFile certInfo={option.certInfo} hideMessage={true} onupdate={(value) => (option!.certInfo = value)} />
                     </div>
                 {/if}
+                <Field label="Destination certificate" for="input-allow-self-signed"
+                    hint="The client skips certificate verification when it connects to the destination server.">
+                    <!-- 옛 설정에는 이 값이 없어 undefined 다. bind 는 undefined 를 받지 못하므로 값과 변경을 따로 넘긴다. -->
+                    <Checkbox id="input-allow-self-signed" label="Allow self-signed certificate"
+                        checked={option.allowSelfSignedDestinationCert === true}
+                        onchange={(checked) => (option!.allowSelfSignedDestinationCert = checked)} />
+                </Field>
             {/if}
             <Field label="Destination host" for="input-destination-host">
                 <TextInput id="input-destination-host" bind:value={option.destinationAddress} />

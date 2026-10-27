@@ -369,6 +369,34 @@ test("목적지 호스트를 바꿔 저장하면 본문 전체가 그대로 나�
     }
 }, ADMIN_APP_TEST_TIMEOUT_MS);
 
+// 이슈 280: TLS 를 켜면 대상 서버의 자체 서명 인증서 허용 체크 상자가 나오고, 체크하면 저장 본문에 실린다.
+test("TLS 를 켜면 자체 서명 인증서 허용 체크 상자가 보이고 체크한 값이 저장 본문에 실린다 (AC-3)", async () => {
+    const app = await startAdminApp({fixture: "with-tunnels"});
+    try {
+        await openEdit(app.page, 20001);
+        const allow = app.page.locator("#input-allow-self-signed");
+        expect(await allow.count()).toBe(0);
+        await app.page.locator("#input-tls").check();
+        await allow.waitFor({state: "visible", timeout: 10_000});
+        expect(await allow.isChecked()).toBe(false);
+        await allow.check();
+
+        const sent = bodiesOf(app.page, "POST", "/api/tunnelingOption");
+        await app.page.getByRole("button", {name: "Apply and Restart", exact: true}).click();
+        await app.page.waitForFunction(() => location.hash === "#/tunnels", undefined, {timeout: 10_000});
+        expect(sent).toHaveLength(1);
+        expect(sent[0]).toMatchObject({forwardPort: 20001, tls: true, allowSelfSignedDestinationCert: true});
+
+        // TLS 를 끄면 체크 상자도 사라진다.
+        await openEdit(app.page, 20001);
+        await app.page.locator("#input-tls").uncheck();
+        await allow.waitFor({state: "detached", timeout: 10_000});
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, ADMIN_APP_TEST_TIMEOUT_MS);
+
 test("http 터널은 HTTP 옵션 절을 펼쳐 보이고 tcp 로 바꾸면 그 절이 사라지고 TLS 가 풀린다", async () => {
     const app = await startAdminApp({fixture: "with-tunnels"});
     try {

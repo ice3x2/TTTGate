@@ -240,6 +240,8 @@ class CtrlPacket {
         writer.writeUInt16(opt.port);
         writer.writeBoolean(opt.tls);
         writer.writeInt32(opt.bufferLimit);
+        // 대상 서버 인증서 검증을 끌 때만 끝에 붙인다. 옛 클라이언트는 남는 바이트를 읽지 않고 검증한다(이슈 280).
+        if(opt.rejectUnauthorized === false) writer.writeBoolean(true);
         //writer.writeString(opt.protocol);
         packet._data = writer.toBuffer();
         return packet;
@@ -415,7 +417,9 @@ class CtrlPacket {
         let port = reader.readUInt16();
         let tls = reader.readBoolean();
         let bufferLimit = reader.readInt32();
-        return {host, port,bufferLimit, tls: tls};
+        // 옛 서버가 보낸 패킷에는 이 값이 없다. 그때는 검증한다.
+        const skipVerification = reader.readable() > 0 && reader.readBoolean();
+        return skipVerification ? {host, port, bufferLimit, tls, rejectUnauthorized: false} : {host, port,bufferLimit, tls: tls};
     }
 
     private static parseAckCtrlData(data: Buffer) :  {name: string, key: string, v2?: AckCtrlV2Meta}  {

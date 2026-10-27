@@ -38,6 +38,13 @@ describe("legacy configuration keeps the previous behaviour (#182)", () => {
         expect(store.getTunnelingOption(18193)?.rateLimit).toEqual({...defaultRateLimit("http"), enabled: false});
     });
 
+    // 이슈 280: 값이 없는 설정 파일의 터널은 대상 서버의 인증서를 지금처럼 검증한다.
+    it("reads a tunnel without allowSelfSignedDestinationCert as verifying the destination certificate", () => {
+        const store = load(legacyYaml());
+        expect(store.getTunnelingOption(18192)?.allowSelfSignedDestinationCert).toBe(false);
+        expect(load(legacyYaml({}, {allowSelfSignedDestinationCert: true})).getTunnelingOption(18192)?.allowSelfSignedDestinationCert).toBe(true);
+    });
+
     it("keeps the session idle TTL off when the loaded file has no sessionTtlMs", () => {
         expect(load(legacyYaml()).serverOption.sessionTtlMs).toBe(0);
     });
