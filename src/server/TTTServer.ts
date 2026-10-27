@@ -518,7 +518,7 @@ class TTTServer {
     }
 
     /**
-     * @param previousForwardPort 외부 포트를 바꾸는 중이면 옛 포트. 새 리스너는 옛 포트의 활성 상태를 이어받는다(#279).
+     * @param previousForwardPort 외부 포트를 바꾸는 중이면 옛 포트. 옛 리스너가 돌고 있으면 새 리스너가 그 활성 상태를 이어받는다(#279, #281).
      */
     public async applyTunnelingOption(nextOption: TunnelingOption, previousOption?: TunnelingOption, stagedCert?: CertInfo, previousForwardPort?: number): Promise<RuntimeApplyResult> {
         const port = nextOption.forwardPort;
@@ -557,7 +557,9 @@ class TTTServer {
             if(previousOption) {
                 try {
                     await this._externalPortServerPool.startServer(previousOption, nextCert);
-                    await this.restoreExternalPortStatus(port, lastServerStatus);
+                    // 돌던 리스너가 아니었다면 남은 상태는 낡은 값이다. 새 리스너 규칙으로 되돌린다(#281).
+                    if(inherits) await this.restoreExternalPortStatus(port, lastServerStatus);
+                    else await this.activateNewListener(previousOption);
                     this.applyAllowedClientsForPort(previousOption);
                 } catch (restoreError) {
                     logger.error(`applyTunnelingOption restore failed - port: ${port}`, restoreError);

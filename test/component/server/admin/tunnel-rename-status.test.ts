@@ -1,16 +1,9 @@
 import {withConfigurationServer} from "./configuration-revision-fixture";
 import {getFreePort} from "../../../helpers/network";
+import {addTunnel} from "./tunnel-admin-fixture";
 
-// 이슈 279 — 외부 포트를 바꾸면 새 포트의 리스너가 옛 포트의 활성 상태를 이어받는다.
+// #279 — 외부 포트를 바꾸면 새 포트의 리스너가 옛 포트의 활성 상태를 이어받는다.
 jest.setTimeout(60000);
-
-const addTunnel = async (f: any, extra: Record<string, unknown> = {}) => {
-    const port = await getFreePort();
-    const option = {forwardPort: port, protocol: "tcp", tls: false, destinationAddress: "127.0.0.1", destinationPort: 9, keepAlive: 0, ...extra};
-    const read = await f.snapshot();
-    expect((await f.request("POST", "/api/tunnelingOption", {...option, expectedRevision: read.revisionState.currentRevision})).statusCode).toBe(200);
-    return {port, option};
-};
 
 const rename = async (f: any, option: any, from: number) => {
     const to = await getFreePort();
