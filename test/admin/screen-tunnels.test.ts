@@ -409,6 +409,8 @@ test("인증서 검증을 끈 터널은 목록 카드에 표시가 붙는다 (AC
 
         await card(app.page, 20001).locator("[data-cert-unverified]").waitFor({state: "visible", timeout: 10_000});
         expect((await card(app.page, 20001).locator("[data-cert-unverified]").textContent())?.trim()).toBe("cert not verified");
+        // 표시가 붙어도 카드의 .chip 은 프로토콜 하나뿐이다(목록 계약, REQ-3).
+        expect(await card(app.page, 20001).locator(".chip").count()).toBe(1);
         expect(await card(app.page, 20002).locator("[data-cert-unverified]").count()).toBe(0);
         expect(app.errors).toEqual([]);
     } finally {

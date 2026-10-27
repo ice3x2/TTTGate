@@ -172,8 +172,8 @@
                                 <span data-readonly><Chip tone="trace">read only</Chip></span>
                             {/if}
                             {#if option.tls === true && option.allowSelfSignedDestinationCert === true}
-                                <!-- 대상 서버의 인증서를 검증하지 않는 터널이다. 읽기 전용 표시처럼 감싸 프로토콜 Chip 계약을 지킨다. -->
-                                <span data-cert-unverified title="The client does not verify the destination server certificate."><Chip tone="warn">cert not verified</Chip></span>
+                                <!-- 대상 서버의 인증서를 검증하지 않는 터널이다. 소유자 표시처럼 Chip 을 쓰지 않아야 카드의 .chip 이 프로토콜 하나로 남는다. -->
+                                <span data-cert-unverified class="mono cert-unverified">cert not verified</span>
                             {/if}
                         </div>
                         <div class="tunnel-row">
@@ -224,4 +224,5 @@
     .tunnel-controls { margin-top: var(--s-3); padding-top: var(--s-3); border-top: 1px solid var(--line-0); gap: var(--s-3); }
     .tunnel-label { font-size: var(--fs-sm); color: var(--ink-2); }
     .empty { color: var(--ink-2); }
+    .cert-unverified { color: var(--warn); }
 </style>
