@@ -397,6 +397,25 @@ test("TLS 를 켜면 자체 서명 인증서 허용 체크 상자가 보이고 �
     }
 }, ADMIN_APP_TEST_TIMEOUT_MS);
 
+// #282: 인증서 검증을 끈 터널은 목록 카드에 표시가 붙고, 다른 터널에는 없다.
+test("인증서 검증을 끈 터널은 목록 카드에 표시가 붙는다 (AC-1, AC-2)", async () => {
+    const app = await startAdminApp({fixture: "with-tunnels"});
+    try {
+        await openEdit(app.page, 20001);
+        await app.page.locator("#input-tls").check();
+        await app.page.locator("#input-allow-self-signed").check();
+        await app.page.getByRole("button", {name: "Apply and Restart", exact: true}).click();
+        await app.page.waitForFunction(() => location.hash === "#/tunnels", undefined, {timeout: 10_000});
+
+        await card(app.page, 20001).locator("[data-cert-unverified]").waitFor({state: "visible", timeout: 10_000});
+        expect((await card(app.page, 20001).locator("[data-cert-unverified]").textContent())?.trim()).toBe("cert not verified");
+        expect(await card(app.page, 20002).locator("[data-cert-unverified]").count()).toBe(0);
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, ADMIN_APP_TEST_TIMEOUT_MS);
+
 test("http 터널은 HTTP 옵션 절을 펼쳐 보이고 tcp 로 바꾸면 그 절이 사라지고 TLS 가 풀린다", async () => {
     const app = await startAdminApp({fixture: "with-tunnels"});
     try {
