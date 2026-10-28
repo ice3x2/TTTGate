@@ -590,7 +590,7 @@
                 {/if}
             {/if}
             <Field label="Startup"
-                hint="Applies when the server starts, when the tunnel is created, and when you save an Offline tunnel. Saving an Online tunnel keeps its activation switch.">
+                hint="Applies when the server starts, when the tunnel is created, and when you save a tunnel that is not Online. Saving an Online tunnel keeps its activation switch and its timer.">
                 <Checkbox id="input-inactive-on-startup" label="Inactive on startup" bind:checked={option.inactiveOnStartup} />
             </Field>
         </div>

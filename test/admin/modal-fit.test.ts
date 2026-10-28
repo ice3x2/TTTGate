@@ -208,6 +208,8 @@ test("on a low viewport a short modal stays centred", async () => {
         });
         // 이 모달은 230px 에 들어간다. 들어가는데도 위에 붙으면 가운데 정렬 규칙이 깨진 것이다.
         expect(m.fits).toBe(true);
+        // 다 들어가는 모달은 낮은 화면이어도 첫 버튼에 초점을 준다. 대화상자 초점은 넘칠 때만 쓴다.
+        expect(await app.page.evaluate(() => document.activeElement?.textContent?.trim())).toBe("Close tiny modal");
         expect(Math.abs(m.top - m.bottom)).toBeLessThanOrEqual(2);
         expect(app.errors).toEqual([]);
     } finally {
