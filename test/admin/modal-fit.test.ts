@@ -109,7 +109,10 @@ test("on a very short viewport the modal buttons stay reachable by scrolling the
         // 사용자처럼 휠로 끝까지 내린다. scrollIntoView 는 overflow: hidden 인 요소도 코드로 움직여 잘림을 가린다.
         await app.page.mouse.move(200, 70);
         for(let i = 0; i < 20; i++) await app.page.mouse.wheel(0, 400);
-        await app.page.waitForTimeout(300);
+        await app.page.waitForFunction(() => {
+            const overlay = document.querySelector(".modal-overlay") as HTMLElement;
+            return overlay.scrollTop + overlay.clientHeight >= overlay.scrollHeight - 1;
+        }, undefined, {timeout: 10_000});
         // boundingBox 는 잘림을 보지 않는다. 버튼의 위·아래 끝 지점에 실제로 버튼이 그려져 있는지 본다.
         const edges = await ok.evaluate((button) => {
             const box = button.getBoundingClientRect();
@@ -132,6 +135,41 @@ test("scrolling past the end of the modal body does not scroll the page behind",
         await app.page.setViewportSize({width: 400, height: 480});
         await openSysinfo(app.page);
         expect(await app.page.locator(".modal .modal-body").evaluate((body) => getComputedStyle(body).overscrollBehaviorY)).toBe("contain");
+    } finally {
+        await app.close();
+    }
+});
+
+// 보통 높이의 화면에서는 모달을 열 때 첫 초점 대상이 본문 아래쪽에 있어도 보이게 한다(키보드 사용자의 초점 표시).
+test("on a normal viewport the first focused control inside a long body is scrolled into view", async () => {
+    const app = await startAdminBrowser();
+    try {
+        await app.page.setViewportSize({width: 400, height: 480});
+        await app.page.goto(`${app.url}/test/ui-fixture.html`);
+        await app.page.getByRole("button", {name: "Open tall modal", exact: true}).click();
+        const action = app.page.getByRole("button", {name: "Body action", exact: true});
+        await app.page.waitForFunction(() => document.activeElement?.textContent?.trim() === "Body action", undefined, {timeout: 10_000});
+        const inBody = await action.evaluate((button) => {
+            const body = (button.closest(".modal-body") as HTMLElement).getBoundingClientRect();
+            const box = button.getBoundingClientRect();
+            return box.top >= body.top - 1 && box.bottom <= body.bottom + 1;
+        });
+        expect(inBody).toBe(true);
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+});
+
+// 85% 규칙을 푸는 경계는 240px 이다. 그보다 높으면 85% 안에서 본문만 스크롤하고, 그 이하면 페이지(오버레이)를 스크롤한다.
+test.each([[260, false], [230, true]] as const)("at %ipx the overlay scrolls: %s (boundary 240px)", async (height, overlayScrolls) => {
+    const app = await startAdminApp();
+    try {
+        await app.page.setViewportSize({width: 400, height});
+        await openSysinfo(app.page);
+        const m = await measure(app.page);
+        expect(m.overlayScroll > m.overlayClient).toBe(overlayScrolls);
+        if(!overlayScrolls) expect(m.height).toBeLessThanOrEqual(m.viewport * 0.85 + 1);
     } finally {
         await app.close();
     }

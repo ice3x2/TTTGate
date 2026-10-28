@@ -28,6 +28,7 @@
     let on = $state(false);
     let switchEvents = $state(0);
     let modalOpen = $state(false);
+    let tallModalOpen = $state(false);
     let tab = $state('one');
     let timerValue = $state(-1);
     let bannerShown = $state(true);
@@ -76,6 +77,13 @@
 <Modal bind:open={modalOpen} title="Fixture modal">
     <p>Modal body</p>
     {#snippet footer()}<Button variant="primary" onclick={() => (modalOpen = false)}>Close modal</Button>{/snippet}
+</Modal>
+<!-- 본문이 길고 첫 초점 대상이 본문 아래쪽에 있는 모달. 열었을 때 초점이 화면에 보이는지 본다. -->
+<div id="open-tall-modal"><Button onclick={() => (tallModalOpen = true)}>Open tall modal</Button></div>
+<Modal bind:open={tallModalOpen} title="Tall fixture modal">
+    <div style="height: 900px;">Tall body</div>
+    <Button onclick={() => {}}>Body action</Button>
+    {#snippet footer()}<Button variant="primary" onclick={() => (tallModalOpen = false)}>Close tall modal</Button>{/snippet}
 </Modal>
 
 <div id="toast-push"><Button onclick={() => toast.push({tone: 'pulse', message: 'Fixture toast', timeoutMs: 1500})}>Push toast</Button></div>

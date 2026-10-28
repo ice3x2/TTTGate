@@ -234,6 +234,10 @@ Read this before you replace a running server with this version.
 2. **Existing clients.** Clients of earlier versions authenticate with the shared key only. This version turns that off by default, so every tunnel disconnects until you either:
    - start the server with `-allowLegacyControlAuth` (or set `allowLegacyControlAuth: true`) for the rollout window, then upgrade the clients with `clientId` and `clientSecret` (see "Mixed-Version Rollout Policy" below), or
    - upgrade the clients first.
+3. **TLS tunnels to a destination with a self-signed certificate.** A client of this version verifies the certificate of the destination server. A 1.0.10 client did not verify it. After you upgrade a client, a TLS or HTTPS tunnel to a destination with a self-signed (or otherwise untrusted) certificate fails with `self-signed certificate`. For each such tunnel, do this:
+   - Upgrade the server first. In the admin console, open the tunnel and check **Skip certificate verification (allow self-signed)** (`allowSelfSignedDestinationCert: true`). Then upgrade the client. A 1.0.10 server cannot send this option, and a client of this version then verifies the certificate.
+   - Or give the destination a certificate that the client trusts.
+   - With the option on, the client accepts any certificate from the destination server. Use it only on a trusted network. The tunnel list marks such tunnels with **cert not verified**.
 
 **Values that are adjusted automatically (a warning is logged at startup):**
 
@@ -243,9 +247,7 @@ Read this before you replace a running server with this version.
 
 **Other changes to be aware of:**
 
-- A tunnel added in the admin console now starts switched on, unless **Inactive on startup** is checked. Earlier versions started it switched off. Saving a running tunnel (a new port, other settings or a new certificate) keeps its on/off state and its timer. **Inactive on startup** applies only when the server starts and when a tunnel is created.
-- TLS tunnels have a new option, **Skip certificate verification (allow self-signed)** (`allowSelfSignedDestinationCert`). With it, the client accepts any certificate from the destination server, so use it only on a trusted network. The client must also run this version. An older client ignores the option and still verifies the certificate, so the connection keeps failing with `self-signed certificate`.
-
+- Saving a running tunnel (a new port, other settings or a new certificate) keeps its on/off state and its timer. In 1.0.10, saving a tunnel with **Inactive on startup** checked switched it off. **Inactive on startup** applies when the server starts, when a tunnel is created, and when you save a tunnel that is not running.
 - HTTP tunnels reject a request whose header block is larger than 64 KiB (earlier: 8 MiB) with `431`.
 - Admin passwords are limited to 1024 characters (leading and trailing whitespace is not counted). A longer password cannot be set, and a login with a longer password fails without a password check. If you use a longer password, change it before you upgrade.
 - The admin server handles at most 5 login requests (`/api/login` and `/api/login/mfa` together) at the same time from one network (IPv4 /24, IPv6 /64). More requests get `429` with code `login_concurrency_limit`; try again after the earlier requests finish.

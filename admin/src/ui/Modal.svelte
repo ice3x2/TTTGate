@@ -18,6 +18,8 @@
     } = $props();
 
     const titleId = $props.id();
+    /** 아래 style 의 @media 와 같은 값이다. 이 높이 이하에서는 85% 제한을 풀고 페이지를 스크롤한다. */
+    const LOW_VIEWPORT_QUERY = '(max-height: 240px)';
     let dialog: HTMLDivElement | undefined = $state();
 
     $effect(() => {
@@ -26,8 +28,9 @@
         const focusable = dialog?.querySelector<HTMLElement>(
             'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
         );
-        // 초점만 옮긴다. 스크롤까지 하면 키가 작은 화면에서 모달이 안쪽으로 밀려 제목이 가려진다.
-        (focusable ?? dialog)?.focus({preventScroll: true});
+        // 보통 화면에서는 초점 대상이 보이게 스크롤한다. 아주 낮은 화면(아래 240px 규칙)에서는 스크롤하면
+        // 페이지가 버튼 쪽으로 밀려 제목이 가려지므로 초점만 옮긴다.
+        (focusable ?? dialog)?.focus({preventScroll: window.matchMedia(LOW_VIEWPORT_QUERY).matches});
         return () => {
             previouslyFocused?.focus();
         };
@@ -52,7 +55,8 @@
 {/if}
 
 <style>
-    /* 모달은 화면 가운데에 놓이고 화면 높이의 85% 를 넘지 않는다. 넘치는 내용은 본문 안에서 스크롤한다(이슈 277). */
+    /* 모달은 화면 가운데에 놓이고 화면 높이의 85% 를 넘지 않는다. 넘치는 내용은 본문 안에서 스크롤한다(이슈 277).
+       화면 높이가 240px 이하이면 아래 규칙으로 예외를 둔다. */
     .modal-overlay{
         position: fixed; inset: 0; z-index: 100;
         display: flex; justify-content: center; align-items: center;
@@ -89,11 +93,13 @@
         font-size: 18px;
     }
     .modal-body{ flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--s-6); color: var(--ink-1); }
-    /* 화면이 아주 낮으면 제목줄·본문 여백·버튼줄만으로 85% 를 넘는다(약 205px 미만).
-       그때는 높이 제한을 풀고 페이지(오버레이)를 스크롤해 버튼에 닿게 한다. */
+    /* 제목줄·본문 여백·버튼줄은 약 170px 이다. 240px 화면의 85%(204px)에서는 본문에 약 34px 만 남아 읽을 수 없고,
+       205px 미만에서는 버튼줄이 잘린다. 그래서 240px 이하에서는 높이 제한을 풀고 페이지(오버레이)를 스크롤한다.
+       스크롤이 뒤 페이지로 넘어가지 않게 막는다. 위의 LOW_VIEWPORT_QUERY 와 같은 값이다. */
     @media (max-height: 240px){
-        .modal-overlay{ align-items: flex-start; overflow-y: auto; }
-        .modal{ max-height: none; overflow: visible; }
+        .modal-overlay{ align-items: flex-start; overflow-y: auto; overscroll-behavior: contain; }
+        .modal{ max-height: none; }
+        /* 본문이 스크롤 영역으로 남으면 그 위의 휠이 오버레이로 넘어가지 않는다. */
         .modal-body{ overflow-y: visible; }
     }
     .modal-foot{
