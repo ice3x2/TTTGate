@@ -115,7 +115,7 @@ test("해시마다 제목·화면 표식·뒤로 가기가 규칙대로 바뀐�
     }
 }, ADMIN_APP_TEST_TIMEOUT_MS);
 
-test("본문이 모바일에서 전폭이고 데스크톱에서 1024px 중앙 정렬이다", async () => {
+test("본문이 모바일에서 전폭이고 데스크톱에서 서랍 오른쪽 공간에 1024px 로 중앙 정렬된다", async () => {
     const app = await startAdminBrowser();
     try {
         await app.page.setViewportSize({width: 400, height: 800});
@@ -126,12 +126,16 @@ test("본문이 모바일에서 전폭이고 데스크톱에서 1024px 중앙 �
             await app.page.evaluate(() => document.documentElement.clientWidth));
 
         await app.page.setViewportSize({width: 1280, height: 800});
-        await app.page.waitForFunction(() => document.querySelector("main.shell-main")!.getBoundingClientRect().width === 1024);
-        const box = await app.page.locator("main.shell-main").evaluate((el) => {
-            const rect = el.getBoundingClientRect();
-            return {width: rect.width, left: rect.left};
+        await app.page.waitForFunction(() => document.querySelector("main.shell-main")!.getBoundingClientRect().width === 1024
+            && document.querySelector("#nav-drawer") !== null);
+        // #278: 데스크탑에서는 서랍이 왼쪽에 늘 열려 있으므로, 본문은 서랍을 뺀 나머지 폭의 가운데에 놓인다.
+        const box = await app.page.evaluate(() => {
+            const rect = document.querySelector("main.shell-main")!.getBoundingClientRect();
+            const drawerRight = document.querySelector("#nav-drawer")!.getBoundingClientRect().right;
+            return {width: rect.width, left: rect.left, centredLeft: drawerRight + (document.documentElement.clientWidth - drawerRight - 1024) / 2};
         });
-        expect(box).toEqual({width: 1024, left: 128});
+        expect(box.width).toBe(1024);
+        expect(box.left).toBeCloseTo(box.centredLeft, 0);
         expect(app.errors).toEqual([]);
     } finally {
         await app.close();

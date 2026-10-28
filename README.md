@@ -231,9 +231,14 @@ Read this before you replace a running server with this version.
 1. **Admin console security policy.** Earlier versions served the admin console over plain HTTP on all interfaces. This version refuses to start (exit code 1) while `adminTls` is `false` or `adminBindHost` is not a loopback address. Do one of the following before you start it:
    - Set `adminTls: true` and `adminBindHost: 127.0.0.1` in `config/server.yaml`, and reach the console through an SSH tunnel. This is the recommended setup.
    - Or start with `-allowLegacyAdminHttp` and `-allowLegacyAdminRemote` for that run while you move to the setup above.
-2. **Existing clients.** Clients of earlier versions authenticate with the shared key only. This version turns that off by default, so every tunnel disconnects until you either:
+2. **Existing clients.** Clients of earlier versions (1.0.10 and older) authenticate with the shared key only. This version turns that off by default, so every tunnel disconnects until you either:
    - start the server with `-allowLegacyControlAuth` (or set `allowLegacyControlAuth: true`) for the rollout window, then upgrade the clients with `clientId` and `clientSecret` (see "Mixed-Version Rollout Policy" below), or
-   - upgrade the clients first.
+   - upgrade the clients first (not when you have the tunnels in step 3).
+3. **Tunnels to a destination with an untrusted certificate.** A client of this version verifies the certificate of the destination server. Clients of earlier versions (1.0.10 and older) did not. This applies to tunnels with **Secure tunneling Server/Client** checked (`tls: true`) and to every HTTPS tunnel. After you upgrade a client, such a tunnel to a destination with a self-signed (or otherwise untrusted) certificate fails with a certificate error, for example `self-signed certificate`. If you have such tunnels, do one of the following:
+   - Upgrade the server first, with `-allowLegacyControlAuth` as in step 2 so that 1.0.10 clients stay connected. In the admin console, open each such tunnel and check **Skip certificate verification (allow self-signed)** (`allowSelfSignedDestinationCert: true`). Then upgrade the clients with `clientId` and `clientSecret` as in step 2. A server of an earlier version cannot send this option, so do not upgrade the clients first.
+   - Give the destination a certificate from a public CA that Node.js trusts, and that matches the destination host of the tunnel. The client's `-ca` option applies only to the control connection, not to destinations. A certificate for a DNS name fails when the tunnel uses an IP address, and the other way round.
+
+   With the option checked, the client accepts any certificate from the destination server. Use it only on a trusted network. The tunnel list marks these tunnels with **cert not verified**.
 
 **Values that are adjusted automatically (a warning is logged at startup):**
 
@@ -243,6 +248,7 @@ Read this before you replace a running server with this version.
 
 **Other changes to be aware of:**
 
+- Saving an **Online** tunnel (a new port, other settings or a new certificate) keeps its activation switch and its timer. In 1.0.10, saving reset them: a tunnel with **Inactive on startup** checked was switched off, any other tunnel was switched on, and the timer started again. **Inactive on startup** applies when the server starts, when a tunnel is created, and when you save a tunnel that is not **Online** (the tunnel list shows **Error**, for example after a port bind failure).
 - HTTP tunnels reject a request whose header block is larger than 64 KiB (earlier: 8 MiB) with `431`.
 - Admin passwords are limited to 1024 characters (leading and trailing whitespace is not counted). A longer password cannot be set, and a login with a longer password fails without a password check. If you use a longer password, change it before you upgrade.
 - The admin server handles at most 5 login requests (`/api/login` and `/api/login/mfa` together) at the same time from one network (IPv4 /24, IPv6 /64). More requests get `429` with code `login_concurrency_limit`; try again after the earlier requests finish.

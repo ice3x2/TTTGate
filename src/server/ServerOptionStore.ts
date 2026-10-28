@@ -571,6 +571,8 @@ class ServerOptionStore {
             if(option.destinationPort == undefined) option.destinationPort = 443;
             option.tls = true;
         }
+        // TLS 터널에서 명시적으로 true 일 때만 대상 서버의 인증서 검증을 건너뛴다. 평문 터널에는 뜻이 없으므로 false 로 둔다(#280).
+        option.allowSelfSignedDestinationCert = option.tls === true && option.allowSelfSignedDestinationCert === true;
         if(option.destinationPort == undefined) {
             return {success: false,forwardPort:option.forwardPort, message: "destinationPort is undefined"};
         }

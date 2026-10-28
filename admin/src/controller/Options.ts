@@ -58,6 +58,8 @@ type Options = {
     destinationAddress: string,
     destinationPort?: number;
     tls?: boolean;
+    /** TLS 터널에서 대상 서버의 자체 서명 인증서를 허용한다(인증서 검증을 건너뛴다). */
+    allowSelfSignedDestinationCert?: boolean;
     inactiveOnStartup?: boolean;
     allowedClientNames?: Array<string>;
     bufferLimitOnServer?: number,

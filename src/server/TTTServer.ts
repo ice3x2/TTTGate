@@ -176,11 +176,14 @@ class TTTServer {
         }
     }
 
-    private async restoreExternalPortStatus(port: number, option: TunnelingOption, lastServerStatus: ExternalPortServerStatus): Promise<void> {
+    /**
+     * 저장 전의 켜짐 상태와 활성 시간을 새 리스너에 다시 건다. 손으로 정한 상태이므로 inactiveOnStartup 은 보지 않는다(#281).
+     */
+    private async restoreExternalPortStatus(port: number, lastServerStatus: ExternalPortServerStatus): Promise<void> {
         // 잘린 값이 아니라 요청값과 원래 시작 시각으로 다시 건다. 상한은 지금 기준으로 다시 계산된다(#137).
         const requested = lastServerStatus.requestedTimeout ?? lastServerStatus.activeTimeout;
         this._externalPortServerPool.setActiveTimeout(port, requested);
-        if(lastServerStatus.active && !option.inactiveOnStartup) {
+        if(lastServerStatus.active) {
             await this._externalPortServerPool.active(port, requested, {startedAt: lastServerStatus.activeStart});
             return;
         }
@@ -196,7 +199,8 @@ class TTTServer {
         this._sessions.add(id);
         let allowClientIds = this._allowClientIdsMap.get(opt.forwardPort);
         let allowClientNames = this._allowClientNamesMap.get(opt.forwardPort);
-        let success = this._tunnelServer.openSession(id, {host: opt.destinationAddress,port: opt.destinationPort!,tls: opt.tls,bufferLimit: bufferLimitOnClient},allowClientNames, allowClientIds);
+        let success = this._tunnelServer.openSession(id, {host: opt.destinationAddress,port: opt.destinationPort!,tls: opt.tls,bufferLimit: bufferLimitOnClient,
+            ...(opt.allowSelfSignedDestinationCert === true ? {rejectUnauthorized: false} : {})},allowClientNames, allowClientIds);
         if(!success) {
             this._sessions.delete(id);
             this._externalPortServerPool.closeSession(id,0);
@@ -513,9 +517,17 @@ class TTTServer {
         }
     }
 
-    public async applyTunnelingOption(nextOption: TunnelingOption, previousOption?: TunnelingOption, stagedCert?: CertInfo): Promise<RuntimeApplyResult> {
+    /**
+     * @param previousForwardPort 외부 포트를 바꾸는 중이면 옛 포트. 옛 리스너가 돌고 있으면 새 리스너가 그 활성 상태를 이어받는다(#279, #281).
+     *   포트를 바꿀 때는 새 포트에 행이 없으므로 previousOption 을 함께 넘기지 않는다. 실패 복원은 같은 포트의 previousOption 만 다룬다.
+     */
+    public async applyTunnelingOption(nextOption: TunnelingOption, previousOption?: TunnelingOption, stagedCert?: CertInfo, previousForwardPort?: number): Promise<RuntimeApplyResult> {
         const port = nextOption.forwardPort;
         const lastServerStatus = this._externalPortServerPool.getServerStatus(port);
+        const inheritedStatus = previousForwardPort === undefined ? lastServerStatus : this._externalPortServerPool.getServerStatus(previousForwardPort);
+        // 리스너가 돌던 터널만 상태를 이어받는다. 아니면 새 터널로 보고 inactiveOnStartup 을 따른다(#281).
+        // 리스너를 멈추면 online 이 false 가 되므로 멈추기 전에 읽는다.
+        const inherits = inheritedStatus.online;
         const nextCert = stagedCert ?? CertificationStore.instance.getExternalCert(port);
 
         try {
@@ -527,7 +539,8 @@ class TTTServer {
                 }
             }
             await this._externalPortServerPool.startServer(nextOption, nextCert);
-            await this.restoreExternalPortStatus(port, nextOption, lastServerStatus);
+            if(inherits) await this.restoreExternalPortStatus(port, inheritedStatus);
+            else await this.activateNewListener(nextOption);
             this.applyAllowedClientsForPort(nextOption);
             this._appliedExternal[port] = {option: ObjectUtil.cloneDeep(nextOption), cert: ObjectUtil.cloneDeep(nextCert),
                 configurationRevision: ServerOptionStore.instance.revisionState.currentRevision,
@@ -545,7 +558,10 @@ class TTTServer {
             if(previousOption) {
                 try {
                     await this._externalPortServerPool.startServer(previousOption, nextCert);
-                    await this.restoreExternalPortStatus(port, previousOption, lastServerStatus);
+                    // 돌던 리스너가 아니었다면 남은 상태는 낡은 값이므로 새 리스너 규칙을 쓴다(#281).
+                    // 관리 API 를 거친 호출이면 최종 상태는 호출자의 restoreRuntimeState 가 다시 정한다.
+                    if(inherits) await this.restoreExternalPortStatus(port, lastServerStatus);
+                    else await this.activateNewListener(previousOption);
                     this.applyAllowedClientsForPort(previousOption);
                 } catch (restoreError) {
                     logger.error(`applyTunnelingOption restore failed - port: ${port}`, restoreError);
@@ -611,7 +627,7 @@ class TTTServer {
                 throw new Error(`failed to stop listener ${port}`);
             }
             await this._externalPortServerPool.startServer(currentOption, nextCert);
-            await this.restoreExternalPortStatus(port, currentOption, lastServerStatus);
+            await this.restoreExternalPortStatus(port, lastServerStatus);
             if(this._appliedExternal[port]) {
                 this._appliedExternal[port].cert = ObjectUtil.cloneDeep(nextCert);
                 this._appliedExternal[port].certificateRevision = CertificationStore.instance.revisionState.currentRevision;
@@ -628,7 +644,7 @@ class TTTServer {
             logger.error(`applyExternalServerCert failed - port: ${port}`, error);
             try {
                 await this._externalPortServerPool.startServer(currentOption, previousCert);
-                await this.restoreExternalPortStatus(port, currentOption, lastServerStatus);
+                await this.restoreExternalPortStatus(port, lastServerStatus);
             } catch (restoreError) {
                 logger.error(`applyExternalServerCert restore failed - port: ${port}`, restoreError);
             }
@@ -666,6 +682,16 @@ class TTTServer {
 
 
 
+    /**
+     * 새로 띄운 리스너는 startServer 가 inactiveOnStartup 에 따라 켜 둔다. 그 자동 활성에는 타이머가 없으므로,
+     * 상한이 있는 터널은 active() 로 다시 켜 상한 타이머를 건다. 서버 기동과 새 터널 추가가 같이 쓴다(#281).
+     */
+    private async activateNewListener(option: TunnelingOption): Promise<void> {
+        if(!option.inactiveOnStartup && maxActiveSeconds(option.forwardPort, AuthorizationContext) !== undefined) {
+            await this._externalPortServerPool.active(option.forwardPort);
+        }
+    }
+
     public async start() : Promise<void> {
         let optionStore =  ServerOptionStore.instance;
         let tunnelOptions =  optionStore.getTunnelingOptions();
@@ -674,10 +700,7 @@ class TTTServer {
             try {
                 const cert = certStore.getExternalCert(tunnelOption.forwardPort);
                 const started = await this._externalPortServerPool.startServer(tunnelOption, cert);
-                // 기동 시 자동 활성은 타이머가 없으므로, 상한이 있는 터널은 active() 로 다시 켜 상한 타이머를 건다.
-                if(started && !tunnelOption.inactiveOnStartup && maxActiveSeconds(tunnelOption.forwardPort, AuthorizationContext) !== undefined) {
-                    await this._externalPortServerPool.active(tunnelOption.forwardPort);
-                }
+                if(started) await this.activateNewListener(tunnelOption);
                 this._appliedExternal[tunnelOption.forwardPort] = {option: ObjectUtil.cloneDeep(tunnelOption), cert,
                     configurationRevision: optionStore.revisionState.currentRevision, certificateRevision: certStore.revisionState.currentRevision};
             } catch (err) {

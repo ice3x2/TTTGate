@@ -29,6 +29,8 @@ tunnelingOptions:
       - "client-a"
     inactiveOnStartup: false
     tls: false
+    # TLS tunnels only: true makes the client skip verification of the destination certificate (self-signed). Trusted networks only.
+    allowSelfSignedDestinationCert: false
     bufferLimitOnServer: 8
     bufferLimitOnClient: 8
     keepAlive: -1
