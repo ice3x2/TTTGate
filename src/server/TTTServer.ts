@@ -557,7 +557,8 @@ class TTTServer {
             if(previousOption) {
                 try {
                     await this._externalPortServerPool.startServer(previousOption, nextCert);
-                    // 돌던 리스너가 아니었다면 남은 상태는 낡은 값이다. 새 리스너 규칙으로 되돌린다(#281).
+                    // 돌던 리스너가 아니었다면 남은 상태는 낡은 값이므로 새 리스너 규칙을 쓴다(#281).
+                    // 관리 API 를 거친 호출이면 최종 상태는 호출자의 restoreRuntimeState 가 다시 정한다.
                     if(inherits) await this.restoreExternalPortStatus(port, lastServerStatus);
                     else await this.activateNewListener(previousOption);
                     this.applyAllowedClientsForPort(previousOption);

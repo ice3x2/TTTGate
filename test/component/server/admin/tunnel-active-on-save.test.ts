@@ -1,5 +1,6 @@
 import {withConfigurationServer} from "./configuration-revision-fixture";
 import {addTunnel} from "./tunnel-admin-fixture";
+import {getFreePort} from "../../../helpers/network";
 import {generateSelfSignedCert} from "../../../helpers/testCerts";
 import {CertificationStore} from "../../../../src/server/CertificationStore";
 
@@ -60,6 +61,33 @@ test("saving with a new certificate keeps a manually activated tunnel active wit
     expect(response.statusCode).toBe(200);
     const after = f.tunnel.externalServerStatus(port);
     expect(after.active).toBe(true);
+    expect(after.activeTimeout).toBe(before.activeTimeout);
+    expect(after.requestedTimeout).toBe(before.requestedTimeout);
+    expect(after.activeStart).toBe(before.activeStart);
+}));
+
+const certInfoOf = (name: string) => {
+    const bundle = generateSelfSignedCert(name);
+    return {key: {name: `${name}.key`, value: bundle.keyPem}, cert: {name: `${name}.crt`, value: bundle.certPem}, ca: {name: "", value: ""}};
+};
+
+// 이미 TLS 인 터널의 인증서만 바꾸는 API 도 손으로 켠 상태와 타이머를 유지한다(REQ-3).
+test("replacing only the certificate of a TLS tunnel keeps a manually activated tunnel active with the same timer (REQ-3)", async () => withConfigurationServer(async f => {
+    const port = await getFreePort();
+    expect((await f.request("POST", `/api/externalCert/${port}`, {certInfo: certInfoOf(`first-${port}`)})).statusCode).toBe(200);
+    const read = await f.snapshot();
+    expect((await f.request("POST", "/api/tunnelingOption", {forwardPort: port, protocol: "tcp", tls: true, destinationAddress: "127.0.0.1",
+        destinationPort: 9, keepAlive: 0, inactiveOnStartup: true, expectedRevision: read.revisionState.currentRevision})).statusCode).toBe(200);
+    expect(await f.tunnel.activeExternalPortServer(port, 600)).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const before = {...f.tunnel.externalServerStatus(port)};
+    const response = await f.request("POST", `/api/externalCert/${port}`, {certInfo: certInfoOf(`second-${port}`),
+        expectedCertificateRevision: CertificationStore.instance.revisionState.currentRevision});
+    expect(response.statusCode).toBe(200);
+    const after = f.tunnel.externalServerStatus(port);
+    expect(after.active).toBe(true);
+    expect(after.activeTimeout).toBe(before.activeTimeout);
+    expect(after.requestedTimeout).toBe(before.requestedTimeout);
     expect(after.activeStart).toBe(before.activeStart);
 }));
 
@@ -72,4 +100,14 @@ test("a tunnel deleted and added again on the same port is treated as new (REQ-4
     expect(response.statusCode).toBe(200);
     expect(f.tunnel.externalServerStatus(port).online).toBe(true);
     expect(f.tunnel.externalServerStatus(port).active).toBe(false);
+}));
+
+// 반대 방향: 손으로 끈 채 지운 터널을 같은 포트로 다시 만들면, Inactive on startup 이 꺼져 있으니 켜진다(REQ-4).
+test("a tunnel deleted while switched off and added again on the same port starts active (REQ-4)", async () => withConfigurationServer(async f => {
+    const {port, option} = await addTunnel(f);
+    expect(await f.tunnel.inactiveExternalPortServer(port)).toBe(true);
+    expect((await f.request("DELETE", "/api/tunnelingOption", {forwardPort: port, expectedRevision: f.store.revisionState.currentRevision})).statusCode).toBe(200);
+    const response = await f.request("POST", "/api/tunnelingOption", {...option, expectedRevision: f.store.revisionState.currentRevision});
+    expect(response.statusCode).toBe(200);
+    expect(f.tunnel.externalServerStatus(port).active).toBe(true);
 }));

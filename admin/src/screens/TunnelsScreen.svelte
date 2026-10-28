@@ -173,7 +173,7 @@
                             {/if}
                             {#if option.tls === true && option.allowSelfSignedDestinationCert === true}
                                 <!-- 대상 서버의 인증서를 검증하지 않는 터널이다. 소유자 표시처럼 Chip 을 쓰지 않아야 카드의 .chip 이 프로토콜 하나로 남는다. -->
-                                <span data-cert-unverified class="mono cert-unverified">cert not verified</span>
+                                <span data-cert-unverified class="mono cert-unverified" title="The client does not verify the destination server certificate.">cert not verified</span>
                             {/if}
                         </div>
                         <div class="tunnel-row">
