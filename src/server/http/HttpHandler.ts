@@ -523,7 +523,8 @@ class HttpHandler {
         if(this._rejectionSent || this._released || this._socketHandler.isEnd()) return;
         this._rejectionSent = true;
         // HEAD 응답에는 본문을 싣지 않는다(RFC 9110). 길이 헤더는 GET 과 같게 둔다.
-        const head = this._pendingRequests[this._pendingRequests.length - 1]?.method === HttpMethod.HEAD;
+        // 응답을 하나도 받지 않았으므로 답하는 것은 첫 요청이다(파이프라인으로 여러 요청이 와 있어도).
+        const head = this._pendingRequests[0]?.method === HttpMethod.HEAD;
         this._socketHandler.sendData(head ? BAD_GATEWAY_HEAD : BAD_GATEWAY_RESPONSE, (_handler, success) => {
             if(!success) this.destroy();
         });

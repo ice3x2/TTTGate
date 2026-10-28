@@ -150,3 +150,26 @@ test("a HEAD request gets a 502 without a body", () => {
     expect(Number(/Content-Length: (\d+)/.exec(head)![1])).toBeGreaterThan(0);
     expect(body).toBe("");
 });
+
+// 요청이 여러 개 한꺼번에 와 있으면 답하는 것은 첫 요청이다. 본문 유무도 첫 요청의 메서드로 정한다.
+test.each([
+    ["GET then HEAD", "GET /a HTTP/1.1\r\nHost: public.example\r\n\r\nHEAD /b HTTP/1.1\r\nHost: public.example\r\n\r\n", true],
+    ["HEAD then GET", "HEAD /a HTTP/1.1\r\nHost: public.example\r\n\r\nGET /b HTTP/1.1\r\nHost: public.example\r\n\r\n", false],
+] as const)("with pipelined requests (%s) the 502 answers the first request", (_name, requests, hasBody) => {
+    const {handler, feed, written} = setup();
+    feed(requests);
+    handler.failToReachDestination();
+    const [head, body] = written().split("\r\n\r\n");
+    const length = Number(/Content-Length: (\d+)/.exec(head)![1]);
+    expect(Buffer.byteLength(body)).toBe(hasBody ? length : 0);
+});
+
+// 실패가 먼저 오고 HEAD 가 나중에 와도 본문 없이 답한다.
+test("a HEAD request that arrives after the failure gets a 502 without a body", () => {
+    const {handler, feed, written} = setup();
+    handler.failToReachDestination();
+    feed("HEAD / HTTP/1.1\r\nHost: public.example\r\n\r\n");
+    const [head, body] = written().split("\r\n\r\n");
+    expect(head).toMatch(/^HTTP\/1\.1 502 Bad Gateway/);
+    expect(body).toBe("");
+});
