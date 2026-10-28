@@ -369,7 +369,7 @@ test("목적지 호스트를 바꿔 저장하면 본문 전체가 그대로 나�
     }
 }, ADMIN_APP_TEST_TIMEOUT_MS);
 
-// 이슈 280: TLS 를 켜면 대상 서버의 자체 서명 인증서 허용 체크 상자가 나오고, 체크하면 저장 본문에 실린다.
+// #280: TLS 를 켜면 대상 서버의 자체 서명 인증서 허용 체크 상자가 나오고, 체크하면 저장 본문에 실린다.
 test("TLS 를 켜면 자체 서명 인증서 허용 체크 상자가 보이고 체크한 값이 저장 본문에 실린다 (AC-3)", async () => {
     const app = await startAdminApp({fixture: "with-tunnels"});
     try {
@@ -379,6 +379,8 @@ test("TLS 를 켜면 자체 서명 인증서 허용 체크 상자가 보이고 �
         await app.page.locator("#input-tls").check();
         await allow.waitFor({state: "visible", timeout: 10_000});
         expect(await allow.isChecked()).toBe(false);
+        // 체크 상자 옆에 인증서 검증을 건너뛴다는 설명이 있다(REQ-4).
+        expect(await app.page.locator(".field").filter({has: allow}).locator(".hint").textContent()).toContain("accepts any certificate");
         await allow.check();
 
         const sent = bodiesOf(app.page, "POST", "/api/tunnelingOption");

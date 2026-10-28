@@ -243,6 +243,9 @@ Read this before you replace a running server with this version.
 
 **Other changes to be aware of:**
 
+- A tunnel added in the admin console now starts switched on, unless **Inactive on startup** is checked. Earlier versions started it switched off. Saving a running tunnel (a new port, other settings or a new certificate) keeps its on/off state and its timer. **Inactive on startup** applies only when the server starts and when a tunnel is created.
+- TLS tunnels have a new option, **Skip certificate verification (allow self-signed)** (`allowSelfSignedDestinationCert`). With it, the client accepts any certificate from the destination server, so use it only on a trusted network. The client must also run this version. An older client ignores the option and still verifies the certificate, so the connection keeps failing with `self-signed certificate`.
+
 - HTTP tunnels reject a request whose header block is larger than 64 KiB (earlier: 8 MiB) with `431`.
 - Admin passwords are limited to 1024 characters (leading and trailing whitespace is not counted). A longer password cannot be set, and a login with a longer password fails without a password check. If you use a longer password, change it before you upgrade.
 - The admin server handles at most 5 login requests (`/api/login` and `/api/login/mfa` together) at the same time from one network (IPv4 /24, IPv6 /64). More requests get `429` with code `login_concurrency_limit`; try again after the earlier requests finish.

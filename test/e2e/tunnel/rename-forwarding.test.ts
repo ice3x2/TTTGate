@@ -2,7 +2,7 @@ import http from "node:http";
 import {createProcessTunnelHarness, ProcessTunnelHarness} from "../../helpers/processTunnelHarness";
 import {getFreePort} from "../../helpers/smokeProcess";
 
-// 이슈 279 — 켜진 터널의 외부 포트를 바꾸면, 바로 새 포트로 들어온 연결이 대상 서버까지 간다(REQ-2).
+// #279 — 켜진 터널의 외부 포트를 바꾸면, 바로 새 포트로 들어온 연결이 대상 서버까지 간다(REQ-2).
 jest.setTimeout(120_000);
 
 const get = (port: number): Promise<{status: number; body: string} | {error: string}> => new Promise((resolve) => {

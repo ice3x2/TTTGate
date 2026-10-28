@@ -2,12 +2,11 @@ import fs from "node:fs";
 import https from "node:https";
 import path from "node:path";
 import YAML from "yaml";
-import tls from "node:tls";
 import {createProcessTunnelHarness, ProcessTunnelHarness} from "../../helpers/processTunnelHarness";
 import {generateSelfSignedCert} from "../../helpers/testCerts";
 import {waitUntil} from "../../helpers/smokeProcess";
 
-// 이슈 280 — 대상 서버가 자체 서명 인증서를 쓰면, 그 터널에서 허용을 켠 경우에만 연결된다.
+// #280 — 대상 서버가 자체 서명 인증서를 쓰면, 그 터널에서 허용을 켠 경우에만 연결된다.
 jest.setTimeout(120_000);
 
 /** 자체 서명 인증서로 응답하는 https 대상 서버. 클라이언트 프로세스는 이 인증서를 신뢰하지 않는다. */

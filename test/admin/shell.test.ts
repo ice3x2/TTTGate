@@ -128,7 +128,7 @@ test("본문이 모바일에서 전폭이고 데스크톱에서 서랍 오른쪽
         await app.page.setViewportSize({width: 1280, height: 800});
         await app.page.waitForFunction(() => document.querySelector("main.shell-main")!.getBoundingClientRect().width === 1024
             && document.querySelector("#nav-drawer") !== null);
-        // 이슈 278: 데스크탑에서는 서랍이 왼쪽에 늘 열려 있으므로, 본문은 서랍을 뺀 나머지 폭의 가운데에 놓인다.
+        // #278: 데스크탑에서는 서랍이 왼쪽에 늘 열려 있으므로, 본문은 서랍을 뺀 나머지 폭의 가운데에 놓인다.
         const box = await app.page.evaluate(() => {
             const rect = document.querySelector("main.shell-main")!.getBoundingClientRect();
             const drawerRight = document.querySelector("#nav-drawer")!.getBoundingClientRect().right;

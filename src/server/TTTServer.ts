@@ -519,6 +519,7 @@ class TTTServer {
 
     /**
      * @param previousForwardPort 외부 포트를 바꾸는 중이면 옛 포트. 옛 리스너가 돌고 있으면 새 리스너가 그 활성 상태를 이어받는다(#279, #281).
+     *   포트를 바꿀 때는 새 포트에 행이 없으므로 previousOption 을 함께 넘기지 않는다. 실패 복원은 같은 포트의 previousOption 만 다룬다.
      */
     public async applyTunnelingOption(nextOption: TunnelingOption, previousOption?: TunnelingOption, stagedCert?: CertInfo, previousForwardPort?: number): Promise<RuntimeApplyResult> {
         const port = nextOption.forwardPort;

@@ -24,7 +24,7 @@ describe("CtrlPacket baseline contract", () => {
         });
     });
 
-    // 이슈 280: 대상 서버 인증서 검증을 끄는 값은 페이로드 끝에 붙는다. 없으면 옛 형식 그대로이고 검증한다.
+    // #280: 대상 서버 인증서 검증을 끄는 값은 페이로드 끝에 붙는다. 없으면 옛 형식 그대로이고 검증한다.
     it("carries the skip-verification flag for the destination and keeps the legacy payload when it is absent", () => {
         const legacy = CtrlPacket.connectEndPoint(7, 42, {host: "127.0.0.1", port: 18080, tls: true, bufferLimit: 2048});
         const insecure = CtrlPacket.connectEndPoint(7, 42, {host: "127.0.0.1", port: 18080, tls: true, bufferLimit: 2048, rejectUnauthorized: false});
