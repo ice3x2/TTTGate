@@ -26,11 +26,11 @@
         const focusable = dialog?.querySelector<HTMLElement>(
             'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
         );
-        // 아주 낮은 화면(아래 240px 규칙)에서는 오버레이가 스크롤 영역이 된다. 모달이 넘치면 첫 컨트롤은 화면 밖이므로
-        // 대화상자 자체에 초점을 주고 스크롤하지 않는다. 그래야 제목이 보이고, 다음 Tab 에서 컨트롤이 드러난다.
+        // 아주 낮은 화면(아래 240px 규칙)에서는 오버레이가 스크롤 영역이 된다. 모달이 넘치면 첫 컨트롤이 화면 밖일 수 있고,
+        // 그리로 스크롤하면 제목이 밀려난다. 그래서 대화상자 자체에 초점을 주고 스크롤하지 않는다. 다음 Tab 에서 컨트롤이 드러난다.
         // 경계값은 CSS 한 곳에만 두고, 여기서는 그 결과(오버레이의 overflow)만 읽는다. 판단은 열 때 한 번만 한다.
         const overlay = dialog?.parentElement;
-        const low = overlay ? getComputedStyle(overlay).overflowY === 'auto' && overlay.scrollHeight > overlay.clientHeight : false;
+        const low = overlay ? getComputedStyle(overlay).overflowY === 'auto' && overlay.scrollHeight - overlay.clientHeight > 1 : false;
         (low ? dialog : focusable ?? dialog)?.focus({preventScroll: low});
         return () => {
             previouslyFocused?.focus();
