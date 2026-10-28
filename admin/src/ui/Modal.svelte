@@ -18,8 +18,6 @@
     } = $props();
 
     const titleId = $props.id();
-    /** 아래 style 의 @media 와 같은 값이다. 이 높이 이하에서는 85% 제한을 풀고 페이지를 스크롤한다. */
-    const LOW_VIEWPORT_QUERY = '(max-height: 240px)';
     let dialog: HTMLDivElement | undefined = $state();
 
     $effect(() => {
@@ -28,9 +26,12 @@
         const focusable = dialog?.querySelector<HTMLElement>(
             'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
         );
-        // 보통 화면에서는 초점 대상이 보이게 스크롤한다. 아주 낮은 화면(아래 240px 규칙)에서는 스크롤하면
-        // 페이지가 버튼 쪽으로 밀려 제목이 가려지므로 초점만 옮긴다.
-        (focusable ?? dialog)?.focus({preventScroll: window.matchMedia(LOW_VIEWPORT_QUERY).matches});
+        // 아주 낮은 화면(아래 240px 규칙)에서는 오버레이가 스크롤 영역이 된다. 그때 첫 컨트롤은 대개 화면 밖이므로
+        // 대화상자 자체에 초점을 주고 스크롤하지 않는다. 그래야 제목이 보이고, 다음 Tab 에서 컨트롤이 드러난다.
+        // 경계값은 CSS 한 곳에만 두고, 여기서는 그 결과(오버레이의 overflow)만 읽는다.
+        const overlay = dialog?.parentElement;
+        const low = overlay ? getComputedStyle(overlay).overflowY === 'auto' : false;
+        (low ? dialog : focusable ?? dialog)?.focus({preventScroll: low});
         return () => {
             previouslyFocused?.focus();
         };
@@ -95,10 +96,11 @@
     .modal-body{ flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--s-6); color: var(--ink-1); }
     /* 제목줄·본문 여백·버튼줄은 약 170px 이다. 240px 화면의 85%(204px)에서는 본문에 약 34px 만 남아 읽을 수 없고,
        205px 미만에서는 버튼줄이 잘린다. 그래서 240px 이하에서는 높이 제한을 풀고 페이지(오버레이)를 스크롤한다.
-       스크롤이 뒤 페이지로 넘어가지 않게 막는다. 위의 LOW_VIEWPORT_QUERY 와 같은 값이다. */
+       스크롤이 뒤 페이지로 넘어가지 않게 막는다. 짧은 모달은 가운데에 두고, 넘칠 때만 위에서 시작한다(margin auto).
+       초점 규칙은 이 규칙의 결과(오버레이 overflow)를 읽으므로 경계값은 여기 한 곳에만 둔다. */
     @media (max-height: 240px){
-        .modal-overlay{ align-items: flex-start; overflow-y: auto; overscroll-behavior: contain; }
-        .modal{ max-height: none; }
+        .modal-overlay{ overflow-y: auto; overscroll-behavior: contain; }
+        .modal{ max-height: none; margin-block: auto; }
         /* 본문이 스크롤 영역으로 남으면 그 위의 휠이 오버레이로 넘어가지 않는다. */
         .modal-body{ overflow-y: visible; }
     }

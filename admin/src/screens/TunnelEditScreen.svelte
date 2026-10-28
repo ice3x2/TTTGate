@@ -448,7 +448,7 @@
                     </div>
                 {/if}
                 <Field label="Destination certificate"
-                    hint="The client accepts any certificate from the destination server, including self-signed ones. Use it only on a trusted network.">
+                    hint="When checked, the client accepts any certificate from the destination server, including self-signed ones. Use it only on a trusted network.">
                     <!-- 옛 설정에는 이 값이 없어 undefined 다. 기본값이 있는 bind 는 undefined 를 받지 못하므로 함수 바인딩을 쓴다. -->
                     <Checkbox id="input-allow-self-signed" label="Skip certificate verification (allow self-signed)"
                         bind:checked={() => option!.allowSelfSignedDestinationCert === true, (on) => (option!.allowSelfSignedDestinationCert = on)} />
@@ -590,7 +590,7 @@
                 {/if}
             {/if}
             <Field label="Startup"
-                hint="Applies when the server starts, when the tunnel is created, and when you save a tunnel that is not running. Saving a running tunnel keeps its on/off state.">
+                hint="Applies when the server starts, when the tunnel is created, and when you save an Offline tunnel. Saving an Online tunnel keeps its activation switch.">
                 <Checkbox id="input-inactive-on-startup" label="Inactive on startup" bind:checked={option.inactiveOnStartup} />
             </Field>
         </div>

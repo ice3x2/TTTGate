@@ -29,6 +29,7 @@
     let switchEvents = $state(0);
     let modalOpen = $state(false);
     let tallModalOpen = $state(false);
+    let tinyModalOpen = $state(false);
     let tab = $state('one');
     let timerValue = $state(-1);
     let bannerShown = $state(true);
@@ -107,3 +108,8 @@
 {/if}
 
 <Toast />
+<!-- 본문이 없는 아주 작은 모달. 낮은 화면에서도 들어가므로 가운데에 놓여야 한다. -->
+<div id="open-tiny-modal"><Button onclick={() => (tinyModalOpen = true)}>Open tiny modal</Button></div>
+<Modal bind:open={tinyModalOpen} title="Tiny fixture modal">
+    {#snippet footer()}<Button variant="primary" onclick={() => (tinyModalOpen = false)}>Close tiny modal</Button>{/snippet}
+</Modal>

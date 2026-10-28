@@ -105,6 +105,8 @@ test("on a very short viewport the modal buttons stay reachable by scrolling the
             return box.top >= 0 && heading.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2));
         });
         expect(headingVisible).toBe(true);
+        // 아주 낮은 화면에서는 화면 밖의 버튼이 아니라 대화상자 자체에 초점을 준다. 보이지 않는 곳에 초점을 두지 않는다.
+        expect(await app.page.evaluate(() => document.activeElement?.getAttribute("role"))).toBe("dialog");
         const ok = dialog.getByRole("button", {name: "OK", exact: true});
         // 사용자처럼 휠로 끝까지 내린다. scrollIntoView 는 overflow: hidden 인 요소도 코드로 움직여 잘림을 가린다.
         await app.page.mouse.move(200, 70);
@@ -170,6 +172,44 @@ test.each([[260, false], [230, true]] as const)("at %ipx the overlay scrolls: %s
         const m = await measure(app.page);
         expect(m.overlayScroll > m.overlayClient).toBe(overlayScrolls);
         if(!overlayScrolls) expect(m.height).toBeLessThanOrEqual(m.viewport * 0.85 + 1);
+        // 낮은 화면 규칙과 초점 규칙이 같은 경계를 쓴다. 제목이 보이고, 초점은 대화상자에 있다.
+        const low = await app.page.evaluate(() => {
+            const heading = document.querySelector(".modal-head .ttl") as HTMLElement;
+            const box = heading.getBoundingClientRect();
+            return {
+                headingVisible: box.top >= 0 && heading.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)),
+                dialogFocused: document.activeElement?.getAttribute("role") === "dialog",
+                overscroll: getComputedStyle(document.querySelector(".modal-overlay")!).overscrollBehaviorY,
+                modalOverflow: getComputedStyle(document.querySelector(".modal")!).overflowY,
+            };
+        });
+        expect(low.headingVisible).toBe(true);
+        expect(low.dialogFocused).toBe(overlayScrolls);
+        expect(low.modalOverflow).toBe("hidden");
+        if(overlayScrolls) expect(low.overscroll).toBe("contain");
+    } finally {
+        await app.close();
+    }
+});
+
+// 낮은 화면에서도 내용이 짧은 모달은 가운데에 놓인다. 넘칠 때만 위에서 시작한다.
+test("on a low viewport a short modal stays centred", async () => {
+    const app = await startAdminBrowser();
+    try {
+        await app.page.setViewportSize({width: 400, height: 230});
+        await app.page.goto(`${app.url}/test/ui-fixture.html`);
+        await app.page.getByRole("button", {name: "Open tiny modal", exact: true}).click();
+        await app.page.getByRole("dialog", {name: "Tiny fixture modal"}).waitFor({state: "visible", timeout: 10_000});
+        const m = await app.page.evaluate(() => {
+            const modal = document.querySelector(".modal") as HTMLElement;
+            const overlay = modal.parentElement as HTMLElement;
+            const box = modal.getBoundingClientRect();
+            return {top: box.top, bottom: window.innerHeight - box.bottom, fits: overlay.scrollHeight <= overlay.clientHeight};
+        });
+        // 이 모달은 230px 에 들어간다. 들어가는데도 위에 붙으면 가운데 정렬 규칙이 깨진 것이다.
+        expect(m.fits).toBe(true);
+        expect(Math.abs(m.top - m.bottom)).toBeLessThanOrEqual(2);
+        expect(app.errors).toEqual([]);
     } finally {
         await app.close();
     }

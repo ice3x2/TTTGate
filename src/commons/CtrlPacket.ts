@@ -240,7 +240,7 @@ class CtrlPacket {
         writer.writeUInt16(opt.port);
         writer.writeBoolean(opt.tls);
         writer.writeInt32(opt.bufferLimit);
-        // 대상 서버 인증서 검증을 끌 때만 끝에 붙인다. 옛 클라이언트는 남는 바이트를 읽지 않고 검증한다(#280).
+        // 대상 서버 인증서 검증을 끌 때만 끝에 붙인다. 옛 클라이언트는 남는 바이트를 읽지 않는다(1.0.10 은 대상 인증서를 검증하지 않았다)(#280).
         // 이 뒤에 필드를 더할 때는 이 바이트를 늘 써야 한다. 그래야 읽는 쪽이 위치로 구분할 수 있다.
         if(opt.rejectUnauthorized === false) writer.writeBoolean(true);
         //writer.writeString(opt.protocol);
