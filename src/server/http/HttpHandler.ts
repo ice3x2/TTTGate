@@ -20,8 +20,9 @@ const MAX_PENDING_REQUESTS = 128;
 const REQUEST_HEADER_DEADLINE_MS = 30_000;
 /** 대상 서버에 닿지 못했을 때의 응답. 외부 방문자에게 내부 주소·오류 원문을 보이지 않는다(#284). */
 const BAD_GATEWAY_BODY = 'Bad Gateway: the service behind this tunnel could not be reached.\n';
-const BAD_GATEWAY_RESPONSE = Buffer.from('HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/plain; charset=utf-8\r\nCache-Control: no-store\r\n'
-    + `Connection: close\r\nContent-Length: ${Buffer.byteLength(BAD_GATEWAY_BODY)}\r\n\r\n${BAD_GATEWAY_BODY}`);
+const BAD_GATEWAY_HEAD = Buffer.from('HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/plain; charset=utf-8\r\nCache-Control: no-store\r\n'
+    + `Connection: close\r\nContent-Length: ${Buffer.byteLength(BAD_GATEWAY_BODY)}\r\n\r\n`);
+const BAD_GATEWAY_RESPONSE = Buffer.concat([BAD_GATEWAY_HEAD, Buffer.from(BAD_GATEWAY_BODY)]);
 type RequestContext = Readonly<{host: string, origin: string, method: HttpMethod, webSocket: boolean}>;
 
 class HttpHandler {
@@ -207,7 +208,7 @@ class HttpHandler {
                 origin: HttpUtil.findHeaderValue(header, "Origin") ?? "", method: header.method,
                 webSocket: this.checkWebSocketUpgrade(header)}));
             if(this._destinationFailed) {
-                // 대상에 닿지 못한 세션이다. 요청 헤더도 넘기지 않고 502 로 답한다.
+                // 대상에 닿지 못한 세션이다. 요청 헤더도 넘기지 않고 502 로 답한다(#284).
                 this.sendBadGateway();
                 return;
             }
@@ -521,7 +522,9 @@ class HttpHandler {
         this.clearHeaderDeadline();
         if(this._rejectionSent || this._released || this._socketHandler.isEnd()) return;
         this._rejectionSent = true;
-        this._socketHandler.sendData(BAD_GATEWAY_RESPONSE, (_handler, success) => {
+        // HEAD 응답에는 본문을 싣지 않는다(RFC 9110). 길이 헤더는 GET 과 같게 둔다.
+        const head = this._pendingRequests[this._pendingRequests.length - 1]?.method === HttpMethod.HEAD;
+        this._socketHandler.sendData(head ? BAD_GATEWAY_HEAD : BAD_GATEWAY_RESPONSE, (_handler, success) => {
             if(!success) this.destroy();
         });
         this._socketHandler.end_();

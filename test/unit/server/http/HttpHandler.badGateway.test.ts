@@ -116,3 +116,37 @@ test("a connection that already received part of a response is not answered with
     expect(written()).toBe(before);
     expect(written()).not.toContain("502");
 });
+
+// 실패한 뒤 본문이 붙은 요청이 한 덩어리로 와도 본문을 대상 쪽으로 넘기지 않는다(REQ-3).
+test("a request body that arrives after the failure is not forwarded (REQ-3)", () => {
+    const {handler, feed, written, forwarded} = setup();
+    expect(handler.failToReachDestination()).toBe(true);
+    feed("POST / HTTP/1.1\r\nHost: public.example\r\nContent-Length: 5\r\n\r\nhello");
+    expect(written()).toMatch(/^HTTP\/1\.1 502 Bad Gateway\r\n/);
+    expect(forwarded).toEqual([]);
+});
+
+// 요청이 끝내 오지 않으면 기존 요청 헤더 기한(408)으로 닫는다. 대기가 끝없이 이어지지 않는다(REQ-2).
+test("without a request the failed connection still closes at the header deadline with 408 (REQ-2)", () => {
+    jest.useFakeTimers();
+    try {
+        const {socketHandler, handler, written} = setup();
+        expect(handler.failToReachDestination()).toBe(true);
+        jest.advanceTimersByTime(30_001);
+        expect(written()).toMatch(/^HTTP\/1\.1 408 Request Timeout\r\n/);
+        expect(socketHandler.end_).toHaveBeenCalled();
+    } finally {
+        jest.useRealTimers();
+    }
+});
+
+// HEAD 응답에는 본문이 없어야 한다. 길이 헤더는 GET 과 같게 둔다.
+test("a HEAD request gets a 502 without a body", () => {
+    const {handler, feed, written} = setup();
+    feed("HEAD / HTTP/1.1\r\nHost: public.example\r\n\r\n");
+    handler.failToReachDestination();
+    const [head, body] = written().split("\r\n\r\n");
+    expect(head).toMatch(/^HTTP\/1\.1 502 Bad Gateway/);
+    expect(Number(/Content-Length: (\d+)/.exec(head)![1])).toBeGreaterThan(0);
+    expect(body).toBe("");
+});

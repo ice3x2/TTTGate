@@ -32,6 +32,7 @@ describe("bad gateway", () => {
 
     test("an HTTP tunnel whose destination is down answers 502 (AC-1)", async () => {
         const result = await get(harness.tunnels[0].forwardPort);
-        expect("status" in result ? result.status : result.error).toBe(502);
+        // 실패하면 받은 결과 전체를 보여, 포트를 다른 프로세스가 차지한 경우 등을 바로 알 수 있게 한다.
+        expect({result, status: "status" in result ? result.status : undefined}).toMatchObject({status: 502});
     });
 });
