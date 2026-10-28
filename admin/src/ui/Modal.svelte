@@ -26,7 +26,8 @@
         const focusable = dialog?.querySelector<HTMLElement>(
             'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
         );
-        (focusable ?? dialog)?.focus();
+        // 초점만 옮긴다. 스크롤까지 하면 키가 작은 화면에서 모달이 안쪽으로 밀려 제목이 가려진다.
+        (focusable ?? dialog)?.focus({preventScroll: true});
         return () => {
             previouslyFocused?.focus();
         };
@@ -88,6 +89,13 @@
         font-size: 18px;
     }
     .modal-body{ flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--s-6); color: var(--ink-1); }
+    /* 화면이 아주 낮으면 제목줄·본문 여백·버튼줄만으로 85% 를 넘는다(약 205px 미만).
+       그때는 높이 제한을 풀고 페이지(오버레이)를 스크롤해 버튼에 닿게 한다. */
+    @media (max-height: 240px){
+        .modal-overlay{ align-items: flex-start; overflow-y: auto; }
+        .modal{ max-height: none; overflow: visible; }
+        .modal-body{ overflow-y: visible; }
+    }
     .modal-foot{
         flex: none;
         padding: var(--s-4) var(--s-5);

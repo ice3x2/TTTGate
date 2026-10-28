@@ -93,18 +93,31 @@ test("a short modal keeps its natural height and is centred (REQ-4)", async () =
     }
 });
 
-// 화면이 아주 낮으면(확대 등) 85% 안에 제목·버튼줄도 다 들어가지 않는다. 그때는 페이지 스크롤로 버튼에 닿게 한다.
+// 화면이 아주 낮으면(확대 등) 85% 안에 제목·본문 여백·버튼줄이 다 들어가지 않는다(약 205px 미만). 그때는 페이지 스크롤로 버튼에 닿게 한다.
 test("on a very short viewport the modal buttons stay reachable by scrolling the page", async () => {
     const app = await startAdminApp();
     try {
-        await app.page.setViewportSize({width: 400, height: 200});
+        await app.page.setViewportSize({width: 400, height: 140});
         const dialog = await openSysinfo(app.page);
+        // 처음 열었을 때 제목이 실제로 보인다. 모달이 초점 이동 때문에 안쪽으로 밀려 제목을 가리면 안 된다.
+        const headingVisible = await dialog.getByRole("heading", {name: "System info"}).evaluate((heading) => {
+            const box = heading.getBoundingClientRect();
+            return box.top >= 0 && heading.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2));
+        });
+        expect(headingVisible).toBe(true);
         const ok = dialog.getByRole("button", {name: "OK", exact: true});
-        await ok.scrollIntoViewIfNeeded();
-        const box = await ok.boundingBox();
-        expect(box).not.toBeNull();
-        expect(box!.y).toBeGreaterThanOrEqual(0);
-        expect(box!.y + box!.height).toBeLessThanOrEqual(200);
+        // 사용자처럼 휠로 끝까지 내린다. scrollIntoView 는 overflow: hidden 인 요소도 코드로 움직여 잘림을 가린다.
+        await app.page.mouse.move(200, 70);
+        for(let i = 0; i < 20; i++) await app.page.mouse.wheel(0, 400);
+        await app.page.waitForTimeout(300);
+        // boundingBox 는 잘림을 보지 않는다. 버튼의 위·아래 끝 지점에 실제로 버튼이 그려져 있는지 본다.
+        const edges = await ok.evaluate((button) => {
+            const box = button.getBoundingClientRect();
+            const x = box.left + box.width / 2;
+            const at = (y: number) => button.contains(document.elementFromPoint(x, y));
+            return {top: at(box.top + 1), bottom: at(box.bottom - 1), inViewport: box.top >= 0 && box.bottom <= window.innerHeight};
+        });
+        expect(edges).toEqual({top: true, bottom: true, inViewport: true});
         await ok.click();
         await dialog.waitFor({state: "detached", timeout: 10_000});
     } finally {
