@@ -110,19 +110,8 @@ export class AdmissionController implements AdmissionPolicy {
         if (remoteAddress === undefined) return ADMIT;
         const ip = normalizeRemoteAddress(remoteAddress);
 
-        // #286 차단 목록을 가장 먼저 본다. 국가 조회와 레이트 리밋 카운터를 쓰기 전에 거절한다. 관리 화면에는 적용하지 않는다.
-        if (scope.kind === 'tunnel' && this.blocklist.isBlocked(scope.port, ip)) {
-            this.denialLog.record(scope, IP_BLOCKLIST_DENY.reason, now);
-            return IP_BLOCKLIST_DENY;
-        }
-
-        if (scope.kind === 'tunnel') {
-            const banDecision = this.rateLimiter.banned(scope.port, ip, now);
-            if (banDecision) {
-                this.denialLog.record(scope, banDecision.reason, now);
-                return banDecision;
-            }
-        }
+        const refused = this.refusedAddress(scope, ip, now);
+        if (refused) return refused;
 
         const geoDecision = this.geo.decide(ip, scope);
         if (!geoDecision.allowed) {
@@ -153,6 +142,26 @@ export class AdmissionController implements AdmissionPolicy {
         }
 
         return ADMIT;
+    }
+
+    /**
+     * #287 TLS 외부 포트가 핸드셰이크 전에 부르는 판정. 이미 거절하기로 정해진 주소(차단 목록, 레이트 리밋 차단 중)만 거절한다.
+     * 국가 조회·레이트 리밋 계수·동시 연결 상한은 핸드셰이크 뒤의 admit 이 한다.
+     */
+    public admitBeforeHandshake(scope: AdmissionScope, remoteAddress: string | undefined, now: number = Date.now()): AdmissionDecision {
+        if (remoteAddress === undefined) return ADMIT;
+        return this.refusedAddress(scope, normalizeRemoteAddress(remoteAddress), now) ?? ADMIT;
+    }
+
+    /**
+     * 이미 거절하기로 정해진 터널 연결이면 그 거절을 거절 집계에 남기고 돌려준다. 관리 화면에는 적용하지 않는다.
+     * 차단 목록(#286)을 먼저 본다. 그러면 국가 조회와 레이트 리밋 카운터를 쓰기 전에 거절한다.
+     */
+    private refusedAddress(scope: AdmissionScope, ip: string, now: number): AdmissionDenial | undefined {
+        if (scope.kind !== 'tunnel') return undefined;
+        const denial = this.blocklist.isBlocked(scope.port, ip) ? IP_BLOCKLIST_DENY : this.rateLimiter.banned(scope.port, ip, now);
+        if (denial) this.denialLog.record(scope, denial.reason, now);
+        return denial;
     }
 
     public denials(scope: number | 'admin'): {geo: number; rateLimit: number} {

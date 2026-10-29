@@ -168,6 +168,9 @@ class ExternalPortServerPool {
                 maxPendingTlsHandshakes: EXTERNAL_MAX_PENDING_TLS_HANDSHAKES,
                 maxPendingTlsHandshakesPerAddress: EXTERNAL_MAX_PENDING_TLS_HANDSHAKES_PER_ADDRESS,
                 addressBucketOf: rateLimitBucketOf,
+                // #287 TLS 포트는 이미 거절하기로 정해진 주소를 핸드셰이크 전에 닫는다.
+                admitBeforeHandshake: (addr: string | undefined) =>
+                    AdmissionController.instance.admitBeforeHandshake({kind: 'tunnel', port: option.forwardPort, protocol: option.protocol ?? 'tcp'}, addr),
                 admit: (addr: string | undefined) => {
                     const protocol = option.protocol ?? 'tcp';
                     const decision = AdmissionController.instance.admit({kind: 'tunnel', port: option.forwardPort, protocol}, addr);

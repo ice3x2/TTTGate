@@ -36,6 +36,11 @@ type AdmitVerdict = {allowed: true} | {allowed: false; reason: string; retryAfte
 type ThrottledWarnKind = 'pending-tls' | 'rejected-sockets';
 
 interface ServerOption {port: number, tls?: boolean, ca?: string, cert?: string, key?: string, keepAlive?: number, requestClientCert?: boolean, admit?: (remoteAddress: string | undefined) => AdmitVerdict,
+    /**
+     * TLS 서버에서 핸드셰이크 전에 부르는 판정(#287). 거절이면 TLS 응답 없이 바로 닫고 핸드셰이크 대기 수에도 넣지 않는다.
+     * 핸드셰이크 비용을 아끼려는 것이므로 값싼 판정만 넣는다. 나머지 판정은 핸드셰이크 뒤의 admit 이 한다.
+     */
+    admitBeforeHandshake?: (remoteAddress: string | undefined) => AdmitVerdict,
     /** TLS 핸드셰이크 기한(ms). 핸드셰이크가 끝나기 전 연결은 바인드되지 않아 미인증 기한 밖에 있으므로 따로 끊는다(#174). */
     handshakeTimeoutMs?: number,
     /** TLS 핸드셰이크 중인 연결 수의 상한. 넘는 새 TCP 연결은 바로 닫는다(#181). 미지정이면 상한 없음. */
@@ -141,6 +146,8 @@ class TCPServer {
         };
         this._pendingTlsSockets = pending;
         server.on('connection', (raw: net.Socket) => {
+            // 핸드셰이크 전 판정이 이미 닫은 연결은 세지 않는다(#287).
+            if(raw.destroyed) return;
             const bucket = bucketOf(raw.remoteAddress ?? '');
             const fromBucket = perBucket.get(bucket) ?? 0;
             if(pending.size >= max || fromBucket >= maxPerBucket) {
@@ -177,6 +184,13 @@ class TCPServer {
         const server = this._options.tls
             ? tls.createServer(this.serverTlsOptions(), this.onBind)
             : net.createServer(this.onBind);
+        // 핸드셰이크 전 판정은 대기 수를 세기 전에 둔다. 'connection' 리스너는 등록한 순서대로 불린다(#287).
+        const admitBeforeHandshake = this._options.admitBeforeHandshake;
+        if(this._options.tls && admitBeforeHandshake) {
+            server.on('connection', (raw: net.Socket) => {
+                if(!admitBeforeHandshake(raw.remoteAddress).allowed) raw.destroy();
+            });
+        }
         if(this._options.tls && this._options.maxPendingTlsHandshakes !== undefined) this.limitPendingTlsHandshakes(server as tls.Server, this._options.maxPendingTlsHandshakes);
         if(this._options.tls) {
             // 핸드셰이크 기한이 지나도 Node 는 tlsClientError 만 내고 TCP 소켓을 그대로 둔다. 직접 닫아야 슬롯이 풀린다(#174).
