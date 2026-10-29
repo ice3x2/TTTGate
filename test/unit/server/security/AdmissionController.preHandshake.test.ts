@@ -27,7 +27,10 @@ describe("AdmissionController.admitBeforeHandshake (#287)", () => {
         controller.configureTunnel({forwardPort: 1111, rateLimit: {enabled: true, windowMs: 60_000, maxConnections: 1, banMs: 1_000}});
         controller.admit(tunnel, "198.51.100.5", 0);
         controller.admit(tunnel, "198.51.100.5", 1);
+        const pending = controller.denialLog.pending();
         expect(controller.admitBeforeHandshake(tunnel, "198.51.100.5", 2)).toMatchObject({allowed: false, reason: "rate-limit-ban"});
+        // rate-limit-ban 사유로 거절 집계에 한 줄이 더 생긴다(REQ-4).
+        expect(controller.denialLog.pending()).toBe(pending + 1);
         expect(controller.denials(1111).rateLimit).toBe(2);
         expect(controller.admitBeforeHandshake(tunnel, "198.51.100.5", 5_000)).toEqual({allowed: true});
     });

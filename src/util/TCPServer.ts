@@ -37,7 +37,7 @@ type ThrottledWarnKind = 'pending-tls' | 'rejected-sockets';
 
 interface ServerOption {port: number, tls?: boolean, ca?: string, cert?: string, key?: string, keepAlive?: number, requestClientCert?: boolean, admit?: (remoteAddress: string | undefined) => AdmitVerdict,
     /**
-     * TLS 서버에서 핸드셰이크 전에 부르는 판정(#287). 거절이면 TLS 응답 없이 바로 닫고 핸드셰이크 대기 수에도 넣지 않는다.
+     * TLS 서버에서 핸드셰이크(암호 연산) 전에 부르는 판정(#287). 거절이면 TLS 응답 없이 바로 닫고 핸드셰이크 대기 수에도 넣지 않는다.
      * 핸드셰이크 비용을 아끼려는 것이므로 값싼 판정만 넣는다. 나머지 판정은 핸드셰이크 뒤의 admit 이 한다.
      */
     admitBeforeHandshake?: (remoteAddress: string | undefined) => AdmitVerdict,
@@ -129,9 +129,9 @@ class TCPServer {
     /**
      * 핸드셰이크가 끝나기 전 연결은 바인드 뒤에 세는 미인증 상한 밖에 있다. 약한 서버(512MB)에서 fd·메모리가
      * 고갈되지 않게 그 수를 묶는다. secureConnection 의 TLS 소켓은 _parent 로 원래 TCP 소켓을 가리킨다(Node 내부).
-     * 그 대응을 찾지 못해도 TCP 소켓의 close 에서 반드시 줄어든다.
+     * 그 대응을 찾지 못해도 TCP 소켓의 close 에서 반드시 줄어든다. 돌려주는 함수를 새 TCP 연결마다 부른다.
      */
-    private limitPendingTlsHandshakes(server: tls.Server, max: number): void {
+    private limitPendingTlsHandshakes(server: tls.Server, max: number): (raw: net.Socket) => void {
         // 서버마다 따로 센다. stop() 이 이 서버의 대기 연결을 닫는다.
         const pending = new Map<net.Socket, string>();
         const perBucket = new Map<string, number>();
@@ -145,9 +145,11 @@ class TCPServer {
             if(count > 0) perBucket.set(bucket, count); else perBucket.delete(bucket);
         };
         this._pendingTlsSockets = pending;
-        server.on('connection', (raw: net.Socket) => {
-            // 핸드셰이크 전 판정이 이미 닫은 연결은 세지 않는다(#287).
-            if(raw.destroyed) return;
+        server.on('secureConnection', (secure: tls.TLSSocket) => {
+            const raw = (secure as unknown as {_parent?: net.Socket})._parent;
+            if(raw) release(raw);
+        });
+        return (raw: net.Socket) => {
             const bucket = bucketOf(raw.remoteAddress ?? '');
             const fromBucket = perBucket.get(bucket) ?? 0;
             if(pending.size >= max || fromBucket >= maxPerBucket) {
@@ -158,12 +160,31 @@ class TCPServer {
             pending.set(raw, bucket);
             perBucket.set(bucket, fromBucket + 1);
             raw.once('close', () => release(raw));
-        });
-        server.on('secureConnection', (secure: tls.TLSSocket) => {
-            const raw = (secure as unknown as {_parent?: net.Socket})._parent;
-            if(raw) release(raw);
+        };
+    }
+
+    /**
+     * TLS 서버의 새 TCP 연결을 핸드셰이크(암호 연산) 전에 다룬다. 먼저 admitBeforeHandshake 로 거절할 주소를 닫고(#287),
+     * 남은 연결만 핸드셰이크 대기 수에 넣는다. 둘을 한 리스너에 두어 이 순서가 리스너 등록 순서에 기대지 않게 한다.
+     * Node 의 tls.Server 는 자기 'connection' 리스너에서 TLS 소켓을 먼저 만들어 두므로, 거절한 연결도 tlsClientError 를 낸다.
+     */
+    private guardTlsConnections(server: tls.Server): void {
+        const admitBeforeHandshake = this._options.admitBeforeHandshake;
+        const max = this._options.maxPendingTlsHandshakes;
+        const countPending = max !== undefined ? this.limitPendingTlsHandshakes(server, max) : undefined;
+        if(!admitBeforeHandshake && !countPending) return;
+        server.on('connection', (raw: net.Socket) => {
+            if(admitBeforeHandshake && !admitBeforeHandshake(raw.remoteAddress).allowed) {
+                this._refusedBeforeHandshake.add(raw);
+                raw.destroy();
+                return;
+            }
+            countPending?.(raw);
         });
     }
+
+    /** 핸드셰이크 전에 거절한 TCP 소켓. 그 소켓이 내는 tlsClientError 는 로그에 남기지 않는다(거절마다 쌓이지 않게). */
+    private readonly _refusedBeforeHandshake = new WeakSet<net.Socket>();
 
     private _pendingTlsSockets: Map<net.Socket, string> | undefined;
     private _throttledWarns: Map<ThrottledWarnKind, {lastAt: number, suppressed: number}> = new Map();
@@ -184,18 +205,12 @@ class TCPServer {
         const server = this._options.tls
             ? tls.createServer(this.serverTlsOptions(), this.onBind)
             : net.createServer(this.onBind);
-        // 핸드셰이크 전 판정은 대기 수를 세기 전에 둔다. 'connection' 리스너는 등록한 순서대로 불린다(#287).
-        const admitBeforeHandshake = this._options.admitBeforeHandshake;
-        if(this._options.tls && admitBeforeHandshake) {
-            server.on('connection', (raw: net.Socket) => {
-                if(!admitBeforeHandshake(raw.remoteAddress).allowed) raw.destroy();
-            });
-        }
-        if(this._options.tls && this._options.maxPendingTlsHandshakes !== undefined) this.limitPendingTlsHandshakes(server as tls.Server, this._options.maxPendingTlsHandshakes);
         if(this._options.tls) {
+            this.guardTlsConnections(server as tls.Server);
             // 핸드셰이크 기한이 지나도 Node 는 tlsClientError 만 내고 TCP 소켓을 그대로 둔다. 직접 닫아야 슬롯이 풀린다(#174).
             server.on('tlsClientError', (error, socket) => {
-                logger.debug(`TCPServer: TLS client error: ${error.message}`);
+                const raw = (socket as unknown as {_parent?: net.Socket})._parent;
+                if(!raw || !this._refusedBeforeHandshake.has(raw)) logger.debug(`TCPServer: TLS client error: ${error.message}`);
                 socket.destroy();
             });
         }

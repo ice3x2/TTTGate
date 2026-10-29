@@ -5,6 +5,7 @@ import forge from "node-forge";
 import {ExternalPortServerPool} from "../../../src/server/ExternalPortServerPool";
 import {AdmissionController} from "../../../src/server/security/AdmissionController";
 import {TCPServer} from "../../../src/util/TCPServer";
+import LoggerFactory from "../../../src/util/logger/LoggerFactory";
 import {getFreePort} from "../../helpers/network";
 import {applyTestRoot, cleanupTestRoot, createTestRoot, TestRoot} from "../../helpers/runtime";
 
@@ -77,6 +78,20 @@ describe("TCPServer admitBeforeHandshake (#287)", () => {
         }
     });
 
+    // 거절된 연결도 Node 가 TLS 소켓을 만들어 두었으므로 tlsClientError(ECONNRESET)가 난다. 거절마다 로그가 쌓이지 않게 한다.
+    it("핸드셰이크 전에 거절한 연결은 TLS 클라이언트 오류 로그를 남기지 않는다", async () => {
+        const debug = jest.spyOn(LoggerFactory.getLogger("socket", "TCPServer"), "debug");
+        const {server, port} = await startTls({admitBeforeHandshake: () => ({allowed: false, reason: "ip-blocklist"})});
+        try {
+            for(let i = 0; i < 3; i++) expect((await rawUntilClose(port)).length).toBe(0);
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            expect(debug.mock.calls.filter((call) => String(call[0]).includes("TLS client error"))).toEqual([]);
+        } finally {
+            debug.mockRestore();
+            await stop(server);
+        }
+    });
+
     it("허용된 주소는 지금처럼 핸드셰이크를 마치고 admit 을 거친다 (AC-5)", async () => {
         const admit = jest.fn(() => ({allowed: true as const}));
         const {server, port} = await startTls({admitBeforeHandshake: () => ({allowed: true}), admit});
@@ -131,6 +146,18 @@ describe("ExternalPortServerPool TLS pre-handshake wiring (#287)", () => {
         const forwardPort = await getFreePort();
         await expect(pool.startServer(tlsTunnel(forwardPort), certInfo)).resolves.toBe(true);
         expect((await rawUntilClose(forwardPort)).length).toBe(0);
+    });
+
+    it("레이트 리밋 차단이 끝나면 다시 핸드셰이크할 수 있다 (AC-2)", async () => {
+        const forwardPort = await getFreePort();
+        const option = {...tlsTunnel(forwardPort), rateLimit: {enabled: true, windowMs: 60_000, maxConnections: 1, banMs: 300, customized: false}};
+        await expect(pool.startServer(option, certInfo)).resolves.toBe(true);
+        const scope = {kind: "tunnel", port: forwardPort, protocol: "tcp"} as const;
+        AdmissionController.instance.admit(scope, "127.0.0.1");
+        AdmissionController.instance.admit(scope, "127.0.0.1");
+        expect((await rawUntilClose(forwardPort)).length).toBe(0);
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        await expect(handshake(forwardPort)).resolves.toBeUndefined();
     });
 
     it("레이트 리밋으로 차단 중인 주소도 핸드셰이크 전에 닫힌다 (AC-2)", async () => {
