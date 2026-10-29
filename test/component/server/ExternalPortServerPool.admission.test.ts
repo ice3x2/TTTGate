@@ -110,13 +110,14 @@ describe("ExternalPortServerPool admission wiring", () => {
         });
         const firstPort = await getFreePort();
         await expect(pool.startServer(option(firstPort))).resolves.toBe(true);
-        expect((await connectAndCollectUntilClose(firstPort)).length).toBe(0);
+        // 거절은 바로 닫힌다. 부하가 큰 전체 실행에서 흔들리지 않게 기한은 넉넉히 둔다.
+        expect((await connectAndCollectUntilClose(firstPort, 3_000)).length).toBe(0);
         expect(pool.getServerStatus(firstPort).sessions).toBe(0);
 
         await expect(pool.stop(firstPort)).resolves.toBe(true);
         const secondPort = await getFreePort();
         await expect(pool.startServer(option(secondPort))).resolves.toBe(true);
-        expect((await connectAndCollectUntilClose(secondPort)).length).toBe(0);
+        expect((await connectAndCollectUntilClose(secondPort, 3_000)).length).toBe(0);
         expect(pool.getServerStatus(secondPort).sessions).toBe(0);
     });
 

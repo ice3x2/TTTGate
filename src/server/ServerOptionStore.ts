@@ -276,6 +276,10 @@ class ServerOptionStore {
         return false;
     }
 
+    /**
+     * 저장만 하는 간이 헬퍼(테스트 픽스처가 쓴다). 그 포트의 차단 항목도 함께 바뀌지만 감사를 남기지 않고 런타임 판정에도
+     * 반영하지 않는다(#286). 운영 경로는 관리 API(AdminServer)를 거친다.
+     */
     public removeTunnelingOption(forwardPort: number) : boolean {
         const result = this.composeServerOptionWithoutTunnelingOption(forwardPort);
         if(!result.success) {
@@ -284,6 +288,7 @@ class ServerOptionStore {
         return this.commitPreparedServerOption(result.serverOption!).success;
     }
 
+    /** removeTunnelingOption 과 같은 간이 헬퍼다. 새 포트면 그 포트의 고아 차단 항목을 감사 없이 뺀다(#286). */
     public updateTunnelingOption(tunnelingOption: TunnelingOption): boolean {
         const result = this.composeServerOptionWithTunnelingOption(tunnelingOption);
         if(!result.success) {
