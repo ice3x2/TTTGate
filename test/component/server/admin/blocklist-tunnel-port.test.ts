@@ -70,6 +70,20 @@ test("터널을 지우는 동안 리스너가 멈출 때까지 차단을 건다"
     expect(AdmissionController.instance.blocklist.isBlocked(port, "203.0.113.7")).toBe(false);
 }));
 
+// 서버 설정 저장으로 터널을 빼도 그 리스너는 다시 시작할 때까지 돈다. 그동안 그 포트의 항목도 남아 계속 막는다.
+// 남은 리스너가 포트를 쥐고 있으므로 같은 포트로 새 터널을 만들 수 없고, 항목은 다시 시작할 때 고아로 빠진다.
+test("서버 설정 저장으로 터널을 빼도 그 포트의 항목은 남는다", async () => withConfigurationServer(async f => {
+    const {port} = await addTunnel(f);
+    await block(f, "203.0.113.7", port);
+    const read = await f.snapshot();
+    const response = await f.request("POST", "/api/serverOption", {...read.serverOption, tunnelingOptions: [],
+        expectedRevision: read.revisionState.currentRevision});
+    expect(response.statusCode).toBe(200);
+    expect(tunnelPorts(f)).not.toContain(port);
+    expect(storedBlocklist(f).map((entry: any) => entry.port)).toEqual([port]);
+    expect(AdmissionController.instance.blocklist.isBlocked(port, "203.0.113.7")).toBe(true);
+}));
+
 test("터널이 없는 포트에는 포트를 고른 항목을 넣을 수 없다", async () => withConfigurationServer(async f => {
     const {port} = await addTunnel(f);
     const unused = await getFreePort();

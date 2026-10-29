@@ -8,7 +8,8 @@ import {
     MAX_BLOCKLIST_NOTE_LENGTH,
     normalizeBlocklist,
     parseBlockedAddress,
-    removeBlocklistEntry
+    removeBlocklistEntry,
+    withPortAlias
 } from "../../../../src/server/security/IpBlocklist";
 import {BlocklistEntry} from "../../../../src/types/TunnelingOption";
 
@@ -236,13 +237,26 @@ describe("dropOrphanBlocklistEntries (#286 REQ-3 AC-2)", () => {
         const entries = [entryOf("203.0.113.1"), entryOf("203.0.113.2", 1111), entryOf("203.0.113.3", 2222)];
         expect(dropOrphanBlocklistEntries(entries, new Set([1111]))).toEqual({
             entries: [entryOf("203.0.113.1"), entryOf("203.0.113.2", 1111)],
-            warnings: ["connectionSecurity.blocklist: no tunnel uses port 2222 for 203.0.113.3; dropped"]
+            warnings: ["connectionSecurity.blocklist: no tunnel uses port 2222 for 203.0.113.3; ignored and dropped at the next save"]
         });
     });
 
     it("모두 터널이 있으면 같은 목록이고 경고가 없다", () => {
         const entries = [entryOf("203.0.113.2", 1111)];
         expect(dropOrphanBlocklistEntries(entries, new Set([1111]))).toEqual({entries, warnings: []});
+    });
+});
+
+describe("withPortAlias (#286)", () => {
+    it("그 포트의 항목을 별칭 포트에도 덧붙이고 다른 항목은 그대로 둔다", () => {
+        const option = {geo: {mode: "off" as const, countries: [], applyToAdmin: true, unknownPolicy: "allow" as const},
+            blocklist: [entryOf("203.0.113.1"), entryOf("203.0.113.2", 1111)]};
+        expect(withPortAlias(option, 1111, 2222)?.blocklist).toEqual([entryOf("203.0.113.1"), entryOf("203.0.113.2", 1111), entryOf("203.0.113.2", 2222)]);
+        expect(option.blocklist).toHaveLength(2);
+    });
+
+    it("설정이 없으면 그대로 돌려준다", () => {
+        expect(withPortAlias(undefined, 1111, 2222)).toBeUndefined();
     });
 });
 

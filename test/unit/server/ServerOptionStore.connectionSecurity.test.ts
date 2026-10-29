@@ -161,4 +161,28 @@ describe("ServerOptionStore connectionSecurity normalization", () => {
             warn.mockRestore();
         }
     });
+
+    // 예전 서버가 남긴 문자열 포트("20500")는 읽을 때 숫자로 바뀐다. 그 터널의 항목을 고아로 잘못 빼지 않는다.
+    it("keeps a port-scoped entry whose tunnel port is written as a string", () => {
+        const configFile = new File(Environment.path.configDir, "server.yaml");
+        Files.writeSync(configFile, YAML.stringify({
+            key: "srv-connection-security-string-port",
+            adminPort: 9305,
+            adminBindHost: "127.0.0.1",
+            adminTls: true,
+            port: 9131,
+            tls: false,
+            controlProtocolMode: "mixed",
+            allowLegacyControlAuth: false,
+            trustedClients: [],
+            globalMemCacheLimit: 128,
+            keepAlive: 10000,
+            tunnelingOptions: [{forwardPort: "20501", protocol: "tcp", tls: false, destinationAddress: "127.0.0.1", destinationPort: 9, keepAlive: 0}],
+            connectionSecurity: {blocklist: [{address: "203.0.113.7", port: 20501, note: "", createdAt: 1, createdBy: "admin"}]}
+        }));
+        ServerOptionStore.resetForTest();
+        const reloaded = ServerOptionStore.instance;
+        expect(reloaded.loadStatus.ready).toBe(true);
+        expect(reloaded.serverOption.connectionSecurity?.blocklist?.map((entry) => entry.port)).toEqual([20501]);
+    });
 });

@@ -389,7 +389,21 @@ class ServerOptionStore {
             candidate.tunnelingOptions.some(option => !this.verificationTunnelingOption(option, 'legacy-load').success)) {
             this._loadStatus = {ready: false, reason: 'validation'}; return;
         }
+        this.dropOrphanBlocklistEntriesAtLoad(candidate);
         this._serverOption = candidate; this._loadStatus = {ready: true, source: 'loaded'};
+    }
+
+    /**
+     * #286 터널이 없는 포트에 건 차단 항목은 나중에 그 포트로 만든 다른 터널에 걸리므로 시작할 때 경고와 함께 뺀다.
+     * 터널 포트를 숫자로 정규화한 뒤(legacy-load)에 판정한다. 저장할 때는 빼지 않는다. 서버 설정 저장으로 터널을 빼도
+     * 그 리스너는 다시 시작할 때까지 돌고 포트를 쥐고 있으므로, 그동안 항목을 남겨 계속 막는다.
+     */
+    private dropOrphanBlocklistEntriesAtLoad(candidate: ServerOption): void {
+        const security = candidate.connectionSecurity;
+        if(!security) return;
+        const result = dropOrphanBlocklistEntries(security.blocklist ?? [], new Set(candidate.tunnelingOptions.map((tunnel) => tunnel.forwardPort)));
+        result.warnings.forEach((warning) => logger.warn(warning));
+        security.blocklist = result.entries;
     }
 
     /**
@@ -515,11 +529,9 @@ class ServerOptionStore {
         if(!connectionSecurity.success) {
             return {success: false, message: connectionSecurity.message};
         }
-        // #286 차단 목록의 틀린 항목과 터널이 없는 포트의 항목은 실패가 아니라 경고다. 그 항목만 빼고 계속한다.
-        const orphans = dropOrphanBlocklistEntries(connectionSecurity.value.blocklist ?? [],
-            new Set((option.tunnelingOptions ?? []).map((tunnel) => tunnel.forwardPort)));
-        [...connectionSecurity.blocklistWarnings, ...orphans.warnings].forEach((warning) => logger.warn(warning));
-        option.connectionSecurity = {...connectionSecurity.value, blocklist: orphans.entries};
+        // #286 차단 목록의 틀린 항목은 실패가 아니라 경고다. 그 항목만 빼고 계속한다.
+        connectionSecurity.blocklistWarnings.forEach((warning) => logger.warn(warning));
+        option.connectionSecurity = connectionSecurity.value;
         return {success: true, message: "", serverOption: option};
     }
 

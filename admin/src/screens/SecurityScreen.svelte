@@ -125,6 +125,11 @@
                 port: blockAppliesTo === '' ? null : Number(blockAppliesTo), note: blockNote});
             if(!result.success) {
                 blockError = result.message;
+                // 화면이 읽은 뒤 터널이 바뀌었을 수 있다. 다음 선택을 위해 "Applies to" 를 다시 읽는다.
+                if(blockAppliesTo !== '') {
+                    await loadTunnels();
+                    if(!tunnels.some((tunnel) => String(tunnel.forwardPort) === blockAppliesTo)) blockAppliesTo = '';
+                }
                 return;
             }
             blockAddress = '';

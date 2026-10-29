@@ -257,3 +257,27 @@ test("목록이 가득 차면 Block permanently 확인 창이 그 사실을 미�
     expect(await dialog.locator("#promote-full").textContent())
         .toBe("The blocklist is full. This works only if the address is already blocked on one tunnel.");
 }));
+
+test("화면의 터널 목록이 낡아 서버가 거절하면 Applies to 선택지를 다시 읽는다", () => withSecurity(async ({page, url}) => {
+    let first = true;
+    await page.route("**/api/tunnelingOption", async (route) => {
+        if(!first || route.request().method() !== "GET") {
+            await route.continue();
+            return;
+        }
+        first = false;
+        // 화면이 읽은 뒤 지워진 터널(29999)이 목록에 남아 있는 상황을 만든다.
+        const response = await route.fetch();
+        const body = await response.json();
+        body.tunnelingOptions = [...body.tunnelingOptions, {...body.tunnelingOptions[0], forwardPort: 29999}];
+        await route.fulfill({response, json: body});
+    });
+    await goSecurity(page, url);
+    await page.locator('#block-applies-to option[value="29999"]').waitFor({state: "attached", timeout: 10_000});
+    await page.locator("#block-address").fill("203.0.113.7");
+    await page.locator("#block-applies-to").selectOption("29999");
+    await page.locator("#block-submit").click();
+    await page.locator("#block-error").getByText("no tunnel uses port 29999").waitFor({state: "visible", timeout: 10_000});
+    await page.locator('#block-applies-to option[value="29999"]').waitFor({state: "detached", timeout: 10_000});
+    expect(await page.locator("#block-applies-to").inputValue()).toBe("");
+}));

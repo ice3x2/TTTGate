@@ -107,7 +107,7 @@ export function dropOrphanBlocklistEntries(entries: BlocklistEntry[], tunnelPort
     if(orphans.length === 0) return {entries, warnings: []};
     return {
         entries: entries.filter((entry) => !orphans.includes(entry)),
-        warnings: orphans.map((entry) => `connectionSecurity.blocklist: no tunnel uses port ${entry.port} for ${entry.address}; dropped`)
+        warnings: orphans.map((entry) => `connectionSecurity.blocklist: no tunnel uses port ${entry.port} for ${entry.address}; ${DROPPED}`)
     };
 }
 
