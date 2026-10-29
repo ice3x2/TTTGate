@@ -73,7 +73,8 @@ describe("self-signed destination certificate", () => {
         // 이 요청 뒤에 쌓인 로그만 본다. 앞 테스트의 로그로 통과하면 안 된다.
         const from = harness.clients[0].stdoutChunks.length;
         const result = await fetchThrough(harness.tunnels[1].forwardPort);
-        expect("status" in result && result.status === 200).toBe(false);
+        // 응답 없이 끊지 않고 502 로 답한다(#284 AC-2).
+        expect("status" in result ? result.status : result.error).toBe(502);
         // 다른 이유(연결 안 됨·시간 초과)가 아니라, 클라이언트가 대상 인증서를 거부해서 실패해야 한다.
         const clientLog = () => Buffer.concat(harness.clients[0].stdoutChunks.slice(from)).toString("utf-8");
         await waitUntil(async () => clientLog().includes("self-signed certificate") || undefined, {timeoutMs: 10_000, label: "client rejected the certificate"});

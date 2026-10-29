@@ -480,6 +480,11 @@ class ExternalPortServerPool {
         let handler = this._handlerMap.get(id);
         if(handler) {
             if(handler.closeInitiated) return;
+            // 대상 쪽에서 응답 바이트 없이 닫힌 HTTP 세션은 그냥 끊지 않고 502 로 답한다. 마무리는 HttpHandler 가 맡는다(#284).
+            if(handler instanceof HttpHandler && endLength === 0 && handler.failToReachDestination()) {
+                handler.closeInitiated = true;
+                return;
+            }
             if(handler instanceof HttpHandler && (!Number.isSafeInteger(endLength) || endLength < 0 ||
                 endLength < handler.responseInputLength || (handler.closeWait && handler.endLength !== endLength))) {
                 this.closeIfSatisfiedLength(handler, true);

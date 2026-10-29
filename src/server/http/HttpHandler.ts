@@ -18,6 +18,11 @@ const MAX_BUFFER_SIZE: number = 16 * 1024 * 1024; // 16MB
 const MAX_PENDING_REQUESTS = 128;
 /** 연결 뒤 첫 요청 헤더를 다 받을 때까지의 기한. 헤더를 조금씩 보내 연결을 붙잡는 요청을 408 로 닫는다(#166). */
 const REQUEST_HEADER_DEADLINE_MS = 30_000;
+/** 대상 서버에 닿지 못했을 때의 응답. 외부 방문자에게 내부 주소·오류 원문을 보이지 않는다(#284). */
+const BAD_GATEWAY_BODY = 'Bad Gateway: the service behind this tunnel could not be reached.\n';
+const BAD_GATEWAY_HEAD = Buffer.from('HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/plain; charset=utf-8\r\nCache-Control: no-store\r\n'
+    + `Connection: close\r\nContent-Length: ${Buffer.byteLength(BAD_GATEWAY_BODY)}\r\n\r\n`);
+const BAD_GATEWAY_RESPONSE = Buffer.concat([BAD_GATEWAY_HEAD, Buffer.from(BAD_GATEWAY_BODY)]);
 type RequestContext = Readonly<{host: string, origin: string, method: HttpMethod, webSocket: boolean}>;
 
 class HttpHandler {
@@ -45,6 +50,8 @@ class HttpHandler {
     private _sendLength: number = 0;
     private _responseInputEnded = false;
     private _released = false;
+    /** 대상 서버에 닿지 못한 세션이다. 다음 요청 헤더에 502 로 답하고, 그 뒤 데이터는 넘기지 않는다(#284). */
+    private _destinationFailed = false;
     public onOutputProgress?: () => void;
 
     public get responseInputLength(): number { return this._bufLength; }
@@ -145,7 +152,7 @@ class HttpHandler {
             this.sendRequestRejectionIfReady();
         };
         this._requestPipe.onDataCallback = data => {
-            if(this._socketHandler.isEnd()) return false;
+            if(this._socketHandler.isEnd() || this._destinationFailed) return false;
             this.callEvent(SocketState.Receive, data);
             return true;
         };
@@ -200,6 +207,11 @@ class HttpHandler {
             this._pendingRequests.push(Object.freeze({host: this.findHostFromHeader(header),
                 origin: HttpUtil.findHeaderValue(header, "Origin") ?? "", method: header.method,
                 webSocket: this.checkWebSocketUpgrade(header)}));
+            if(this._destinationFailed) {
+                // 대상에 닿지 못한 세션이다. 요청 헤더도 넘기지 않고 502 로 답한다(#284).
+                this.sendBadGateway();
+                return;
+            }
         } else {
             if(this._inputRejected && header.status === 101 && header.upgrade) {
                 this.destroy();
@@ -492,6 +504,31 @@ class HttpHandler {
     private clearHeaderDeadline(): void {
         if(this._headerDeadline) clearTimeout(this._headerDeadline);
         this._headerDeadline = undefined;
+    }
+
+    /**
+     * 대상 서버에 닿지 못한 세션(응답 바이트 없이 닫힘)을 502 로 마무리한다(#284).
+     * 요청이 이미 와 있으면 바로 보내고, 아직이면 다음 요청 헤더를 기다렸다가 보낸다. 요청이 끝내 오지 않으면 408 기한을 따른다.
+     * @returns 이 연결의 마무리를 맡으면 true. 응답을 일부라도 받았거나 업그레이드된 연결은 맡지 않는다.
+     */
+    public failToReachDestination(): boolean {
+        if(this._bufLength > 0 || this._isUpgrade || this._isWebSocket || this._rejectionSent || this._released || this._socketHandler.isEnd()) return false;
+        this._destinationFailed = true;
+        if(this._pendingRequests.length > 0) this.sendBadGateway();
+        return true;
+    }
+
+    private sendBadGateway(): void {
+        this.clearHeaderDeadline();
+        if(this._rejectionSent || this._released || this._socketHandler.isEnd()) return;
+        this._rejectionSent = true;
+        // HEAD 응답에는 본문을 싣지 않는다(RFC 9110). 길이 헤더는 GET 과 같게 둔다.
+        // 응답을 하나도 받지 않았으므로 답하는 것은 첫 요청이다(파이프라인으로 여러 요청이 와 있어도).
+        const head = this._pendingRequests[0]?.method === HttpMethod.HEAD;
+        this._socketHandler.sendData(head ? BAD_GATEWAY_HEAD : BAD_GATEWAY_RESPONSE, (_handler, success) => {
+            if(!success) this.destroy();
+        });
+        this._socketHandler.end_();
     }
 
     /** 요청 헤더 단계의 거절. 상태 줄만 보내고 닫는다. 인증 없는 경로라 로그는 debug 로만 남긴다(#166). */
