@@ -51,6 +51,13 @@ import {AUDIT_EVENT_TYPES} from "../audit/AuditEventTypes";
 const logger = LoggerFactory.getLogger('server', 'AdminServer');
 const MFA_NOW = (): number => ClockRngProvider.current().now();
 
+/**
+ * #286 port 에 건 차단 항목(감사용 주소·메모). 터널을 지우거나, 터널이 없는 포트로 새 터널을 만들 때
+ * 설정에서 빠지는 항목을 감사 detail(droppedBlocks)에 남기는 데 쓴다.
+ */
+const blocksAt = (serverOption: ServerOption, port: number): Array<{address: string; note: string}> =>
+    (serverOption.connectionSecurity?.blocklist ?? []).filter((entry) => entry.port === port).map((entry) => ({address: entry.address, note: entry.note}));
+
 type LoginAttemptState = {
     failedCount: number;
     windowStartedAt: number;
@@ -820,6 +827,7 @@ class AdminServer {
                 return;
             }
             let previousOption = serverOptionStore.getTunnelingOption(tunnelingOption.forwardPort);
+            const droppedBlocks = previousOption ? [] : blocksAt(serverOptionStore.serverOption, tunnelingOption.forwardPort);
             let composeResult = serverOptionStore.composeServerOptionWithTunnelingOption(ObjectUtil.cloneDeep(tunnelingOption));
             if(!composeResult.success || !composeResult.serverOption) {
                 this.sendApiFailure(res, 400, {
@@ -877,6 +885,7 @@ class AdminServer {
                 });
                 return;
             }
+            if(droppedBlocks.length > 0) ctx.auditDetail({droppedBlocks});
             this.sendApiSuccess(res, {
                 forwardPort: tunnelingOption.forwardPort,
                 revisionState: commitResult.revisionState
@@ -914,6 +923,7 @@ class AdminServer {
             !ObjectUtil.equalsType(EMPTY_CERT_INFO, certInfo) || !certificates.prepareExternalServerCert(certInfo))) {
             this.sendApiFailure(res, 400, {message: 'Invalid certificate.'}); return;
         }
+        const droppedBlocks = previousOption ? [] : blocksAt(store.serverOption, option.forwardPort);
         const composed = store.composeServerOptionWithTunnelingOption(ObjectUtil.cloneDeep(option));
         if(!composed.success || !composed.serverOption) {
             this.sendApiFailure(res, 400, {message: 'Tunneling options update failed.'}); return;
@@ -957,6 +967,8 @@ class AdminServer {
         try {
             // #286 옛 리스너는 멈출 때까지 연결을 받으므로, 그동안 옮긴 차단 항목을 옛 포트에도 건다.
             if(rename) this._tttServer?.applyConnectionSecurity?.(withPortAlias(store.serverOption.connectionSecurity, option.forwardPort, previousForwardPort!));
+            // 새 터널이면 그 포트에 남아 있던 고아 항목이 빠졌으므로 리스너를 열기 전에 반영한다.
+            else if(!previousOption) this._tttServer?.applyConnectionSecurity?.(store.serverOption.connectionSecurity);
             if(this._tttServer) runtime = await this._tttServer.applyTunnelingOption(store.getTunnelingOption(option.forwardPort)!, previousOption, certInfo,
                 rename ? previousForwardPort : undefined);
             if(runtime.success && rename && !await this._tttServer!.stopExternalPortServer(previousForwardPort!, true)) {
@@ -978,7 +990,9 @@ class AdminServer {
             this.sendApiFailure(res, 400, {message: 'Unable to apply compound tunneling option.', partial: recoveryFailures.length > 0,
                 failedScopes: [...runtime.failedScopes, ...recoveryFailures], revisionState: store.revisionState, certificateRevisionState: certificates.revisionState}); return;
         }
-        if(movedBlocks.length > 0) auditDetail({movedBlocks});
+        if(movedBlocks.length > 0 || droppedBlocks.length > 0) {
+            auditDetail({...(movedBlocks.length > 0 ? {movedBlocks} : {}), ...(droppedBlocks.length > 0 ? {droppedBlocks} : {})});
+        }
         this.sendApiSuccess(res, {forwardPort: option.forwardPort, revisionState: store.revisionState, certificateRevisionState: certificates.revisionState});
     }
 
@@ -1031,8 +1045,7 @@ class AdminServer {
             const committedBefore = serverOptionStore.captureCommittedState();
             const runtimeBefore = this._tttServer?.captureRuntimeState?.();
             // #286 그 터널에만 건 차단 항목도 함께 빠진다. 터널 소유자는 security:manage 없이도 지우므로 풀린 차단을 감사에 남긴다.
-            const droppedBlocks = (serverOptionStore.serverOption.connectionSecurity?.blocklist ?? [])
-                .filter((entry) => entry.port === forwardPort).map((entry) => ({address: entry.address, note: entry.note}));
+            const droppedBlocks = blocksAt(serverOptionStore.serverOption, forwardPort);
             let composeResult = serverOptionStore.composeServerOptionWithoutTunnelingOption(forwardPort);
             if(!composeResult.success || !composeResult.serverOption) {
                 this.sendApiFailure(res, 400, {message: `External port(${forwardPort}) server already removed.`, forwardPort});
