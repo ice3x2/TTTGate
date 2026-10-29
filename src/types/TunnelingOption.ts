@@ -110,7 +110,13 @@ const DEFAULT_KEY = "hello-TTTGate";
  */
 type GeoMode = 'off' | 'allow' | 'deny';
 type GeoConfig = {mode: GeoMode; countries: string[]; applyToAdmin: boolean; unknownPolicy: 'allow' | 'deny'};
-type ConnectionSecurityOption = {geo: GeoConfig};
+/**
+ * #286 — 관리자가 직접 넣는 영구 차단 항목. address 는 정규화된 주소나 CIDR 대역이고 목록 안에서 유일하다.
+ * port 가 null 이면 모든 터널에, 숫자면 그 외부 포트에만 적용한다. 관리 화면·제어 포트에는 적용하지 않는다.
+ */
+type BlocklistEntry = {address: string; port: number | null; note: string; createdAt: number; createdBy: string};
+/** blocklist 는 이전 설정 파일에 없을 수 있다. normalizeConnectionSecurity 가 늘 채운다. */
+type ConnectionSecurityOption = {geo: GeoConfig; blocklist?: BlocklistEntry[]};
 const DEFAULT_GEO_CONFIG: Readonly<GeoConfig> = Object.freeze({mode: 'off', countries: [], applyToAdmin: true, unknownPolicy: 'allow'});
 
 /**
@@ -371,5 +377,6 @@ export {
     GeoMode,
     GeoConfig,
     ConnectionSecurityOption,
+    BlocklistEntry,
     DEFAULT_GEO_CONFIG
 };

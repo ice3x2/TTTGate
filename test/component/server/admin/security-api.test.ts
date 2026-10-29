@@ -160,7 +160,7 @@ describe("security-api", () => {
         expect(response.body.geo).toEqual({mode: "allow", countries: ["KR", "US"], applyToAdmin: true, unknownPolicy: "deny"});
         expect(response.body.warnings).toHaveLength(1);
 
-        expect(applied).toEqual([{geo: {mode: "allow", countries: ["KR", "US"], applyToAdmin: true, unknownPolicy: "deny"}}]);
+        expect(applied).toEqual([{geo: {mode: "allow", countries: ["KR", "US"], applyToAdmin: true, unknownPolicy: "deny"}, blocklist: []}]);
 
         const raw = await fs.readFile(path.join(testRoot.rootDir, "config", "server.yaml"), "utf8");
         expect(raw).toContain("connectionSecurity:");

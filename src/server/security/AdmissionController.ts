@@ -1,4 +1,4 @@
-import {ADMIT, AdmissionDecision, AdmissionPolicy, AdmissionScope} from "./AdmissionPolicy";
+import {ADMIT, AdmissionDecision, AdmissionDenial, AdmissionPolicy, AdmissionScope} from "./AdmissionPolicy";
 import {ConnectionRateLimiter} from "./ConnectionRateLimiter";
 import {normalizeRemoteAddress} from "./address";
 import {GeoFilter} from "./GeoFilter";
@@ -6,7 +6,8 @@ import {DenialAggregator} from "./DenialAggregator";
 import {ConcurrencyDenial, ConcurrencyLimiter} from "./ConcurrencyLimiter";
 import {AuditRateGate} from "./AuditRateGate";
 import LoggerFactory from "../../util/logger/LoggerFactory";
-import {DEFAULT_GEO_CONFIG, GeoConfig} from "../../types/TunnelingOption";
+import {ConnectionSecurityOption, DEFAULT_GEO_CONFIG, GeoConfig} from "../../types/TunnelingOption";
+import {IpBlocklist} from "./IpBlocklist";
 
 export type TunnelRateLimitSource = {
     forwardPort: number;
@@ -14,6 +15,8 @@ export type TunnelRateLimitSource = {
 };
 
 export const PRUNE_INTERVAL_MS = 30_000;
+
+const IP_BLOCKLIST_DENY: AdmissionDenial = Object.freeze({allowed: false, reason: 'ip-blocklist'});
 
 export class AdmissionController implements AdmissionPolicy {
     private static _instance: AdmissionController | undefined;
@@ -30,6 +33,8 @@ export class AdmissionController implements AdmissionPolicy {
 
     public readonly rateLimiter = new ConnectionRateLimiter();
     public readonly geo = new GeoFilter();
+    // #286 관리자 차단 목록. 터널 포트와 무관하게 살아 있으므로 configureTunnel·releaseTunnel 이 건드리지 않는다.
+    public readonly blocklist = new IpBlocklist();
     // 거절은 건마다 로그로 남지 않는다. 30초 prune 타이머가 창이 닫힌 버킷만 한 줄로 내보낸다.
     public readonly denialLog = new DenialAggregator(line => LoggerFactory.getLogger('server', 'Admission').warn(line));
     private readonly _geoDenials = new Map<number | 'admin', number>();
@@ -46,6 +51,12 @@ export class AdmissionController implements AdmissionPolicy {
 
     public configureGeo(config: GeoConfig): void {
         this.geo.configure(config);
+    }
+
+    /** 연결 보안 설정 전체(국가 필터·차단 목록)를 적용하는 진입점이다(#286). */
+    public configureConnectionSecurity(option: ConnectionSecurityOption): void {
+        this.configureGeo(option.geo);
+        this.blocklist.configure(option.blocklist ?? []);
     }
 
     private dispose(): void {
@@ -98,6 +109,12 @@ export class AdmissionController implements AdmissionPolicy {
     public admit(scope: AdmissionScope, remoteAddress: string | undefined, now: number = Date.now()): AdmissionDecision {
         if (remoteAddress === undefined) return ADMIT;
         const ip = normalizeRemoteAddress(remoteAddress);
+
+        // #286 차단 목록을 가장 먼저 본다. 국가 조회와 레이트 리밋 카운터를 쓰기 전에 거절한다. 관리 화면에는 적용하지 않는다.
+        if (scope.kind === 'tunnel' && this.blocklist.isBlocked(scope.port, ip)) {
+            this.denialLog.record(scope, IP_BLOCKLIST_DENY.reason, now);
+            return IP_BLOCKLIST_DENY;
+        }
 
         if (scope.kind === 'tunnel') {
             const banDecision = this.rateLimiter.banned(scope.port, ip, now);

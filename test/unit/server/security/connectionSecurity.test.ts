@@ -4,7 +4,7 @@ import {DEFAULT_GEO_CONFIG} from "../../../../src/types/TunnelingOption";
 describe("normalizeConnectionSecurity", () => {
     it("defaults to the off geo config with no warnings when input is undefined", () => {
         const result = normalizeConnectionSecurity(undefined);
-        expect(result).toEqual({success: true, value: {geo: {...DEFAULT_GEO_CONFIG}}, warnings: []});
+        expect(result).toEqual({success: true, value: {geo: {...DEFAULT_GEO_CONFIG}, blocklist: []}, warnings: [], blocklistWarnings: []});
     });
 
     it("trims, uppercases, and de-duplicates country codes", () => {
@@ -51,5 +51,27 @@ describe("normalizeConnectionSecurity", () => {
         });
         expect(withoutAdmin.success).toBe(true);
         if(withoutAdmin.success) expect(withoutAdmin.warnings).toEqual([]);
+    });
+
+    // #286 REQ-2 AC-3 — 차단 목록은 geo 와 함께 정규화한다. 틀린 항목은 실패가 아니라 경고로 건너뛴다.
+    it("normalizes the blocklist and skips broken entries with a warning", () => {
+        const result = normalizeConnectionSecurity({blocklist: [
+            {address: "198.51.100.9/24", port: null, note: "", createdAt: 1, createdBy: "admin"},
+            {address: "bogus", port: null, note: "", createdAt: 1, createdBy: "admin"}
+        ]});
+        expect(result).toEqual({
+            success: true,
+            value: {geo: {...DEFAULT_GEO_CONFIG}, blocklist: [{address: "198.51.100.0/24", port: null, note: "", createdAt: 1, createdBy: "admin"}]},
+            warnings: [],
+            blocklistWarnings: [expect.stringContaining("connectionSecurity.blocklist[1]")]
+        });
+    });
+
+    it("keeps the blocklist alongside a valid geo config", () => {
+        const result = normalizeConnectionSecurity({geo: {mode: "deny", countries: ["KP"]}, blocklist: [
+            {address: "203.0.113.7", port: 18080, note: "x", createdAt: 1, createdBy: "admin"}
+        ]});
+        expect(result.success && result.value.blocklist).toEqual([{address: "203.0.113.7", port: 18080, note: "x", createdAt: 1, createdBy: "admin"}]);
+        expect(result.success && result.value.geo.mode).toBe("deny");
     });
 });

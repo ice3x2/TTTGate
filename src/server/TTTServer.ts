@@ -273,11 +273,13 @@ class TTTServer {
         return this._tunnelServer.clientStatuses();
     }
 
-    // U5-03 / #118 — connectionSecurity.geo 를 AdmissionController에 적용한다. #120 (U5-05)의 PUT /api/security/geo도 같은 진입점을 쓴다.
+    // U5-03 / #118 — connectionSecurity 를 AdmissionController에 적용한다. #120 (U5-05)의 PUT /api/security/geo와
+    // #286 의 차단 목록 API 도 같은 진입점을 쓴다.
     public applyConnectionSecurity(next: ConnectionSecurityOption | undefined): void {
         const geo = next?.geo ?? DEFAULT_GEO_CONFIG;
-        AdmissionController.instance.configureGeo(geo);
-        this._appliedServerOption.connectionSecurity = {geo: {...geo, countries: [...geo.countries]}};
+        const blocklist = next?.blocklist ?? [];
+        AdmissionController.instance.configureConnectionSecurity({geo, blocklist});
+        this._appliedServerOption.connectionSecurity = {geo: {...geo, countries: [...geo.countries]}, blocklist: blocklist.map((entry) => ({...entry}))};
     }
 
     private controlOptionsChanged(next: ServerOption, previous: ServerOption): boolean {
@@ -436,7 +438,8 @@ class TTTServer {
     public async applyServerOption(nextOption: ServerOption, previousOption: ServerOption): Promise<RuntimeApplyResult> {
         const ttl = resolveSessionTtlMs(nextOption.sessionTtlMs);
         if(!ttl.success) return {success: false, partial: false, failedScopes: ['session-ttl'], warnings: [ttl.message], restartRequiredScopes: []};
-        if(!ObjectUtil.canonicalEquals(previousOption.connectionSecurity?.geo ?? DEFAULT_GEO_CONFIG, nextOption.connectionSecurity?.geo ?? DEFAULT_GEO_CONFIG)) {
+        const securityOf = (option: ServerOption) => ({geo: option.connectionSecurity?.geo ?? DEFAULT_GEO_CONFIG, blocklist: option.connectionSecurity?.blocklist ?? []});
+        if(!ObjectUtil.canonicalEquals(securityOf(previousOption), securityOf(nextOption))) {
             this.applyConnectionSecurity(nextOption.connectionSecurity);
         }
         await TTTServer.applyAuditOption(nextOption);

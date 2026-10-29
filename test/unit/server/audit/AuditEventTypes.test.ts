@@ -14,6 +14,8 @@ const EXPECTED_TYPES = [
     "tunnel_cert_updated", "tunnel_cert_deleted",
     "server_option_updated", "admin_cert_updated",
     "security_geo_updated", "security_ban_removed",
+    // #286 관리자 차단 목록
+    "security_block_added", "security_block_removed",
     "access_denied", "last_superuser_guard_hit", "request_body_rejected",
     "conn_limit_hit", "tunnel_autoexpire",
     "audit_retention_pruned",
@@ -23,8 +25,8 @@ const EXPECTED_TYPES = [
 ];
 
 describe("AuditEventTypes", () => {
-    it("표의 이름 48 개를 모두 담는다", () => {
-        expect(AUDIT_EVENT_TYPE_LIST).toHaveLength(48);
+    it("표의 이름 50 개를 모두 담는다", () => {
+        expect(AUDIT_EVENT_TYPE_LIST).toHaveLength(50);
         expect([...AUDIT_EVENT_TYPE_LIST].sort()).toEqual([...EXPECTED_TYPES].sort());
     });
 

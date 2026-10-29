@@ -510,6 +510,8 @@ class ServerOptionStore {
         if(!connectionSecurity.success) {
             return {success: false, message: connectionSecurity.message};
         }
+        // #286 차단 목록의 틀린 항목은 실패가 아니라 경고다. 그 항목만 빼고 계속한다.
+        connectionSecurity.blocklistWarnings.forEach((warning) => logger.warn(warning));
         option.connectionSecurity = connectionSecurity.value;
         return {success: true, message: "", serverOption: option};
     }

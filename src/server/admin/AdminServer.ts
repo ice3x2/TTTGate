@@ -28,12 +28,13 @@ import {AdmissionController} from "../security/AdmissionController";
 import {rateLimitBucketOf} from "../security/ConnectionRateLimiter";
 import {normalizeConnectionSecurity} from "../security/connectionSecurity";
 import {listCountries} from "../security/countries";
-import {auditEventOf, AuditRouteMeta, buildAdminRoutes, errorLabelOf, isTunnelActivationRequested, parseActiveTimeout, parsePathId, parsePathPort, Route, RouteContext} from "./routes";
+import {auditEventOf, AuditRouteMeta, buildAdminRoutes, decodedPathSegment, errorLabelOf, isTunnelActivationRequested, parseActiveTimeout, parsePathId, parsePathPort, Route, RouteContext} from "./routes";
 import {createLoginFailureAuditor} from "./loginFailureAudit";
 import {bodyRejectionEvent, isBodyRejectionAuditable} from "./bodyRejectionAudit";
 import {truncateAuditValue} from "./auditValue";
 import {rbacRouteHandlers} from "./rbacRoutes";
 import {keepTrustedClients, maskTrustedClientSecrets, trustedClientRouteHandlers} from "./trustedClientRoutes";
+import {blocklistRouteHandlers, updateConnectionSecurity} from "./blocklistRoutes";
 import {MfaTicketStore, PendingEnrollmentStore} from "../mfa/MfaTickets";
 import {mfaLoginHandler} from "./mfaLoginRoutes";
 import {auditRouteHandlers} from "./auditRoutes";
@@ -48,15 +49,6 @@ import {AUDIT_EVENT_TYPES} from "../audit/AuditEventTypes";
 
 const logger = LoggerFactory.getLogger('server', 'AdminServer');
 const MFA_NOW = (): number => ClockRngProvider.current().now();
-
-/** 경로 세그먼트를 퍼센트 디코딩한다. 잘못된 인코딩이면 던지지 않고 undefined 를 돌려준다. */
-const decodedPathSegment = (segment: string): string | undefined => {
-    try {
-        return decodeURIComponent(segment);
-    } catch {
-        return undefined;
-    }
-};
 
 type LoginAttemptState = {
     failedCount: number;
@@ -207,6 +199,11 @@ class AdminServer {
             onGetSecurityGeo: this.onGetSecurityGeo,
             onUpdateSecurityGeo: this.onUpdateSecurityGeo,
             onGetSecurityCountries: this.onGetSecurityCountries,
+            // #286: 관리자 차단 목록. 핸들러는 blocklistRoutes.ts 가 갖는다.
+            ...blocklistRouteHandlers({
+                applyConnectionSecurity: (next) => this._tttServer?.applyConnectionSecurity(next),
+                fail: (res, status, payload) => this.sendApiFailure(res, status, payload)
+            }),
             // U2-06 / #98: 사용자·그룹 핸들러는 rbacRoutes.ts 가 갖는다(AdminServer.ts 를 2,000줄 아래로 유지).
             ...rbacRouteHandlers,
             // #212: 신뢰 클라이언트 관리. 저장·적용은 서버 옵션과 같은 커밋·되돌리기 경로를 쓴다.
@@ -662,6 +659,11 @@ class AdminServer {
                 return;
             }
             requestedServerOption.trustedClients = keptTrustedClients;
+            // #286: 차단 목록은 /api/security/blocklist 로만 바꾼다. 화면이 보낸 값은 무시하고 지금 값을 지킨다.
+            const requestedSecurity = requestedServerOption.connectionSecurity;
+            if(requestedSecurity === undefined || (typeof requestedSecurity === 'object' && requestedSecurity !== null && !Array.isArray(requestedSecurity))) {
+                requestedServerOption.connectionSecurity = {...requestedSecurity, blocklist: currentServerOption.connectionSecurity?.blocklist ?? []};
+            }
             let prepareResult = serverOptionStore.prepareServerOption(ObjectUtil.cloneDeep(requestedServerOption));
             if(!prepareResult.success || !prepareResult.serverOption) {
                 this.sendApiFailure(res, 400, {message: prepareResult.message || 'Invalid server option', updated: false});
@@ -1732,21 +1734,12 @@ class AdminServer {
             return;
         }
         const value = normalized.value;
-        let committed = false;
-        await ServerOptionStore.instance.runConfigurationMutation(async () => {
-            const store = ServerOptionStore.instance;
-            const read = store.readServerOption();
-            if(!read.success) return;
-            const serverOption = read.serverOption;
-            serverOption.connectionSecurity = value;
-            committed = store.commitPreparedServerOption(serverOption).success;
-        });
-        if(!committed) {
+        // #286: 국가 필터만 바꾼다. 차단 목록은 지금 값을 그대로 둔다.
+        const update = await updateConnectionSecurity((next) => this._tttServer?.applyConnectionSecurity(next), (current) => ({...current, geo: value.geo}));
+        if(update !== 'applied') {
             this.sendApiFailure(res, 500, {message: 'Unable to commit server option.'});
             return;
         }
-        // 런타임 반영은 applyServerOption 이 아니라 이 전용 진입점으로만 한다(#118 U5-03).
-        this._tttServer?.applyConnectionSecurity(value);
         // 감사 메타는 요청 전에 계산되므로 정규화된 값은 여기서 더한다.
         ctx.auditDetail({...value.geo});
         this.sendApiSuccess(res, {geo: value.geo, warnings: normalized.warnings});
