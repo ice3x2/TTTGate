@@ -25,7 +25,7 @@ import {computeBackoffMs} from "./loginBackoff";
 import crypto from "crypto";
 import {DEFAULT_GEO_CONFIG, GeoConfig, ServerOption, TrustedClient, TunnelingOption} from "../../types/TunnelingOption";
 import {AdmissionController} from "../security/AdmissionController";
-import {moveBlocklistPort} from "../security/IpBlocklist";
+import {moveBlocklistPort, withPortAlias} from "../security/IpBlocklist";
 import {rateLimitBucketOf} from "../security/ConnectionRateLimiter";
 import {normalizeConnectionSecurity} from "../security/connectionSecurity";
 import {listCountries} from "../security/countries";
@@ -948,12 +948,14 @@ class AdminServer {
         let runtime: Awaited<ReturnType<TTTServer['applyTunnelingOption']>> =
             {success: false, partial: false, failedScopes: ['server-runtime'], warnings: [], restartRequiredScopes: []};
         try {
-            if(rename) this._tttServer?.applyConnectionSecurity?.(store.serverOption.connectionSecurity);
+            // #286 옛 리스너는 멈출 때까지 연결을 받으므로, 그동안 옮긴 차단 항목을 옛 포트에도 건다.
+            if(rename) this._tttServer?.applyConnectionSecurity?.(withPortAlias(store.serverOption.connectionSecurity, option.forwardPort, previousForwardPort!));
             if(this._tttServer) runtime = await this._tttServer.applyTunnelingOption(store.getTunnelingOption(option.forwardPort)!, previousOption, certInfo,
                 rename ? previousForwardPort : undefined);
             if(runtime.success && rename && !await this._tttServer!.stopExternalPortServer(previousForwardPort!, true)) {
                 runtime.success = false; runtime.failedScopes.push(`external-listener:${previousForwardPort}`);
             }
+            if(runtime.success && rename) this._tttServer?.applyConnectionSecurity?.(store.serverOption.connectionSecurity);
         } catch(error) {
             logger.error('compound runtime apply failed', error);
             runtime = {success: false, partial: false, failedScopes: [`external-listener:${option.forwardPort}`], warnings: [], restartRequiredScopes: []};
@@ -1036,8 +1038,6 @@ class AdminServer {
                 });
                 return;
             }
-            // #286 지운 터널에만 건 차단 항목도 빠졌으므로 판정에 바로 반영한다.
-            this._tttServer?.applyConnectionSecurity?.(composeResult.serverOption.connectionSecurity);
             let warnings: string[] = [];
             let status = this._tttServer?.externalServerStatus(forwardPort);
             if(status?.online) {
@@ -1064,6 +1064,8 @@ class AdminServer {
             } else {
                 warnings.push(`listener ${forwardPort} was already offline`);
             }
+            // #286 지운 터널에만 건 차단 항목도 빠졌다. 리스너가 멈춘 뒤에 반영해 그때까지는 그 포트에서도 막는다.
+            this._tttServer?.applyConnectionSecurity?.(composeResult.serverOption.connectionSecurity);
             this.sendApiSuccess(res, {forwardPort, warnings, revisionState: commitResult.revisionState});
         });
     }

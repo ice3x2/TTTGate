@@ -1,5 +1,5 @@
 import {BlockList, isIP} from "net";
-import {BlocklistEntry} from "../../types/TunnelingOption";
+import {BlocklistEntry, ConnectionSecurityOption} from "../../types/TunnelingOption";
 import {ipv6Groups, normalizeRemoteAddress} from "./address";
 
 /**
@@ -55,23 +55,27 @@ export function parseBlockedAddress(input: unknown): Parsed<{address: string}> {
     return {ok: true, address: prefix === bits ? address : `${address}/${prefix}`};
 }
 
+/** addBlocklistEntry 의 문맥. tunnelPorts 는 지금 터널이 쓰는 외부 포트다. 포트를 고른 항목은 그중 하나여야 한다. */
+export type AddBlocklistContext = {now: number; createdBy: string; tunnelPorts: ReadonlySet<number>; widen?: boolean};
+
 /**
  * 새 항목을 검증해 붙인 새 목록을 돌려준다. 원래 목록은 바꾸지 않는다. 주소는 목록 안에서 유일하다.
+ * 포트를 고른 항목은 그 포트를 쓰는 터널이 있어야 한다. 없는 터널에 건 항목은 나중에 그 포트로 만든 다른 터널에 걸린다.
  * widen 이면(일시 차단에서 옮길 때) 포트 하나에만 걸린 같은 주소를 그 자리에서 All tunnels 로 넓힌다(REQ-5 AC-1).
  * 넓힐 때는 적용 범위만 바꾸고, 원래 메모·시각·사용자는 그대로 둔다.
  */
-export function addBlocklistEntry(entries: readonly BlocklistEntry[], request: AddBlocklistRequest,
-                                  meta: {now: number; createdBy: string}, options: {widen?: boolean} = {}): AddBlocklistResult {
+export function addBlocklistEntry(entries: readonly BlocklistEntry[], request: AddBlocklistRequest, context: AddBlocklistContext): AddBlocklistResult {
     const address = parseBlockedAddress(request.address);
     if(!address.ok) return {ok: false, code: 'invalid', message: address.message};
     const port = parsePort(request.port);
     if(!port.ok) return {ok: false, code: 'invalid', message: port.message};
+    if(port.port !== null && !context.tunnelPorts.has(port.port)) return {ok: false, code: 'invalid', message: `no tunnel uses port ${port.port}`};
     const note = parseNote(request.note);
     if(!note.ok) return {ok: false, code: 'invalid', message: note.message};
-    const entry: BlocklistEntry = {address: address.address, port: port.port, note: note.note, createdAt: meta.now, createdBy: meta.createdBy};
+    const entry: BlocklistEntry = {address: address.address, port: port.port, note: note.note, createdAt: context.now, createdBy: context.createdBy};
     const existing = entries.find((candidate) => candidate.address === address.address);
     if(existing) {
-        if(options.widen && existing.port !== null && entry.port === null) {
+        if(context.widen && existing.port !== null && entry.port === null) {
             const widened: BlocklistEntry = {...existing, port: null};
             return {ok: true, entry: widened, entries: entries.map((candidate) => candidate === existing ? widened : candidate), widenedFrom: existing.port};
         }
@@ -95,6 +99,26 @@ export function removeBlocklistEntry(entries: BlocklistEntry[], address: string)
 /** 외부 포트를 바꾼 터널의 항목을 새 포트로 옮긴 새 목록. 포트를 고른 항목은 포트 번호가 아니라 터널을 따라간다. */
 export function moveBlocklistPort(entries: readonly BlocklistEntry[], from: number, to: number): BlocklistEntry[] {
     return entries.map((entry) => entry.port === from ? {...entry, port: to} : entry);
+}
+
+/** 터널이 없는 포트에 건 항목을 빼고 경고를 돌려준다. 설정 파일을 손으로 고쳤거나 터널 목록을 통째로 바꾼 경우에 생긴다. */
+export function dropOrphanBlocklistEntries(entries: BlocklistEntry[], tunnelPorts: ReadonlySet<number>): {entries: BlocklistEntry[]; warnings: string[]} {
+    const orphans = entries.filter((entry) => entry.port !== null && !tunnelPorts.has(entry.port));
+    if(orphans.length === 0) return {entries, warnings: []};
+    return {
+        entries: entries.filter((entry) => !orphans.includes(entry)),
+        warnings: orphans.map((entry) => `connectionSecurity.blocklist: no tunnel uses port ${entry.port} for ${entry.address}; dropped`)
+    };
+}
+
+/**
+ * port 에 건 항목을 alias 포트에도 건 설정. 터널의 외부 포트를 바꾸는 동안 옛 리스너가 멈출 때까지 쓴다.
+ * 판정용 규칙에만 쓰고 저장하지 않는다(주소가 유일하다는 목록 규칙을 이 값은 지키지 않는다).
+ */
+export function withPortAlias(option: ConnectionSecurityOption | undefined, port: number, alias: number): ConnectionSecurityOption | undefined {
+    if(!option) return option;
+    const entries = option.blocklist ?? [];
+    return {...option, blocklist: [...entries, ...entries.filter((entry) => entry.port === port).map((entry) => ({...entry, port: alias}))]};
 }
 
 /** 지운 터널의 항목을 뺀 새 목록. 남겨 두면 나중에 같은 포트를 쓰는 다른 터널에 걸린다. */

@@ -2,7 +2,7 @@ import {ServerResponse} from "http";
 import ServerOptionStore from "../ServerOptionStore";
 import {AdmissionController} from "../security/AdmissionController";
 import {addBlocklistEntry, AddBlocklistResult, isPortNumber, MAX_BLOCKLIST_ENTRIES, removeBlocklistEntry} from "../security/IpBlocklist";
-import {BlocklistEntry, ConnectionSecurityOption, DEFAULT_GEO_CONFIG} from "../../types/TunnelingOption";
+import {BlocklistEntry, ConnectionSecurityOption, DEFAULT_GEO_CONFIG, ServerOption} from "../../types/TunnelingOption";
 import {decodedPathSegment, RouteContext, RouteHandlers} from "./routes";
 import {truncateAuditValue} from "./auditValue";
 
@@ -17,13 +17,13 @@ export type ConnectionSecurityUpdate = 'not-ready' | 'unchanged' | 'commit-faile
 
 /**
  * 국가 필터·차단 목록(connectionSecurity)을 바꿔 저장하고, 저장에 성공하면 바로 적용한다.
- * change 는 지금 값을 받아 새 값을 돌려준다. undefined 를 돌려주면 저장하지 않는다(unchanged).
+ * change 는 지금 값(과 그 값을 담은 서버 설정)을 받아 새 값을 돌려준다. undefined 를 돌려주면 저장하지 않는다(unchanged).
  * 런타임 반영은 applyServerOption 이 아니라 applyConnectionSecurity 로만 한다(#118 U5-03).
  * 적용은 설정 잠금 안에서 커밋 바로 뒤에 한다. 잠금을 놓은 뒤에 적용하면 다음 변경이 그 사이에 런타임 상태를 잡아
  * 되돌릴 때 이 값이 빠질 수 있다.
  */
 export async function updateConnectionSecurity(apply: ApplyConnectionSecurity,
-                                               change: (current: ConnectionSecurityOption) => ConnectionSecurityOption | undefined):
+                                               change: (current: ConnectionSecurityOption, serverOption: ServerOption) => ConnectionSecurityOption | undefined):
     Promise<ConnectionSecurityUpdate> {
     let outcome = 'not-ready' as ConnectionSecurityUpdate;
     await ServerOptionStore.instance.runConfigurationMutation(async () => {
@@ -31,7 +31,7 @@ export async function updateConnectionSecurity(apply: ApplyConnectionSecurity,
         const read = store.readServerOption();
         if(!read.success) return;
         const serverOption = read.serverOption;
-        const next = change(serverOption.connectionSecurity ?? {geo: {...DEFAULT_GEO_CONFIG, countries: []}, blocklist: []});
+        const next = change(serverOption.connectionSecurity ?? {geo: {...DEFAULT_GEO_CONFIG, countries: []}, blocklist: []}, serverOption);
         if(next === undefined) {
             outcome = 'unchanged';
             return;
@@ -88,8 +88,11 @@ export function blocklistRouteHandlers(deps: {applyConnectionSecurity: ApplyConn
                 note: typeof body.note === 'string' && body.note.trim() !== '' ? body.note : `From rate-limit ban on ${fromBan.port}`}
             : body;
         let result = undefined as AddBlocklistResult | undefined;
-        const update = await updateConnectionSecurity(deps.applyConnectionSecurity, (current) => {
-            result = addBlocklistEntry(current.blocklist ?? [], request, {now: Date.now(), createdBy: ctx.principal!.username}, {widen: fromBan !== undefined});
+        const update = await updateConnectionSecurity(deps.applyConnectionSecurity, (current, serverOption) => {
+            // 터널 목록은 잠금 안에서 읽는다. 화면이 가진 목록이 낡았어도 지금 없는 터널에는 걸지 못한다.
+            const tunnelPorts = new Set(serverOption.tunnelingOptions.map((tunnel) => tunnel.forwardPort));
+            result = addBlocklistEntry(current.blocklist ?? [], request,
+                {now: Date.now(), createdBy: ctx.principal!.username, tunnelPorts, widen: fromBan !== undefined});
             return result.ok ? {...current, blocklist: result.entries} : undefined;
         });
         if(update === 'not-ready' || result === undefined) {

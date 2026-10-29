@@ -120,6 +120,12 @@ describe("security-blocklist", () => {
             {currentPassword: created.body.temporaryPassword, newPassword: "regular-next-password"}, ru);
         expect(changed.status).toBe(200);
 
+        // 포트를 고른 항목은 그 포트를 쓰는 터널이 있어야 한다(REQ-3 AC-2). 테스트가 쓰는 포트의 터널을 만들어 둔다.
+        for(const forwardPort of [18080, 9000]) {
+            expect(ServerOptionStore.instance.updateTunnelingOption({forwardPort, protocol: "tcp", tls: false,
+                destinationAddress: "127.0.0.1", destinationPort: 9, keepAlive: 0} as any)).toBe(true);
+        }
+
         sink = createStubSink();
         AuditSinkRegistry.set(sink);
     });

@@ -1,6 +1,7 @@
 import {
     addBlocklistEntry,
     dropBlocklistPort,
+    dropOrphanBlocklistEntries,
     moveBlocklistPort,
     IpBlocklist,
     MAX_BLOCKLIST_ENTRIES,
@@ -119,7 +120,8 @@ describe("IpBlocklist.isBlocked (#286 REQ-1·REQ-3)", () => {
 });
 
 describe("addBlocklistEntry (#286 REQ-4·REQ-5)", () => {
-    const meta = {now: 1_000, createdBy: "admin"};
+    // 포트를 고른 항목은 그 포트를 쓰는 터널이 있어야 한다. 이 표의 포트만 터널이 있다고 본다.
+    const meta = {now: 1_000, createdBy: "admin", tunnelPorts: new Set([18080, 9000])};
 
     it("주소를 정규화하고 메모를 다듬어 끝에 붙인다", () => {
         const result = addBlocklistEntry([entryOf("203.0.113.1")], {address: "198.51.100.9/24", port: 18080, note: "  scanner  "}, meta);
@@ -153,7 +155,7 @@ describe("addBlocklistEntry (#286 REQ-4·REQ-5)", () => {
         const scoped = {address: "203.0.113.7", port: 9000, note: "scanner", createdAt: 5, createdBy: "ops"};
         const entries = [entryOf("203.0.113.1"), scoped, entryOf("203.0.113.9")];
         const widened = {...scoped, port: null};
-        expect(addBlocklistEntry(entries, {address: "203.0.113.7", note: "moved"}, meta, {widen: true})).toEqual({
+        expect(addBlocklistEntry(entries, {address: "203.0.113.7", note: "moved"}, {...meta, widen: true})).toEqual({
             ok: true,
             entry: widened,
             entries: [entryOf("203.0.113.1"), widened, entryOf("203.0.113.9")],
@@ -162,10 +164,10 @@ describe("addBlocklistEntry (#286 REQ-4·REQ-5)", () => {
     });
 
     it("widen 이어도 이미 All tunnels 이면 duplicate 이고, 목록이 가득 차도 넓힐 수 있다", () => {
-        expect(addBlocklistEntry([entryOf("203.0.113.7")], {address: "203.0.113.7"}, meta, {widen: true}))
+        expect(addBlocklistEntry([entryOf("203.0.113.7")], {address: "203.0.113.7"}, {...meta, widen: true}))
             .toEqual({ok: false, code: "duplicate", message: "203.0.113.7 is already blocked on all tunnels"});
         const full = Array.from({length: MAX_BLOCKLIST_ENTRIES}, (_, i) => entryOf(`10.0.${Math.floor(i / 256)}.${i % 256}`, 9000));
-        expect(addBlocklistEntry(full, {address: "10.0.0.5"}, meta, {widen: true})).toMatchObject({ok: true, entry: {address: "10.0.0.5", port: null}});
+        expect(addBlocklistEntry(full, {address: "10.0.0.5"}, {...meta, widen: true})).toMatchObject({ok: true, entry: {address: "10.0.0.5", port: null}});
     });
 
     it("상한에 이르면 full 이다", () => {
@@ -185,6 +187,12 @@ describe("addBlocklistEntry (#286 REQ-4·REQ-5)", () => {
         [{address: "203.0.113.7", note: "x".repeat(MAX_BLOCKLIST_NOTE_LENGTH + 1)}]
     ])("잘못된 입력 %p 은 invalid 다", (request) => {
         expect(addBlocklistEntry([], request, meta)).toMatchObject({ok: false, code: "invalid"});
+    });
+
+    // 없는 터널에 건 항목은 나중에 그 포트로 만든 다른 터널에 걸린다(REQ-3 AC-2).
+    it("그 포트를 쓰는 터널이 없으면 invalid 다", () => {
+        expect(addBlocklistEntry([], {address: "203.0.113.7", port: 7777}, meta))
+            .toEqual({ok: false, code: "invalid", message: "no tunnel uses port 7777"});
     });
 
     it("메모는 상한 길이까지 받는다", () => {
@@ -220,6 +228,21 @@ describe("moveBlocklistPort / dropBlocklistPort (#286)", () => {
     it("그 포트의 항목이 없으면 같은 내용을 돌려준다", () => {
         expect(moveBlocklistPort(entries, 9999, 3333)).toEqual(entries);
         expect(dropBlocklistPort(entries, 9999)).toEqual(entries);
+    });
+});
+
+describe("dropOrphanBlocklistEntries (#286 REQ-3 AC-2)", () => {
+    it("터널이 없는 포트의 항목은 빼고 경고한다. All tunnels 항목은 그대로다", () => {
+        const entries = [entryOf("203.0.113.1"), entryOf("203.0.113.2", 1111), entryOf("203.0.113.3", 2222)];
+        expect(dropOrphanBlocklistEntries(entries, new Set([1111]))).toEqual({
+            entries: [entryOf("203.0.113.1"), entryOf("203.0.113.2", 1111)],
+            warnings: ["connectionSecurity.blocklist: no tunnel uses port 2222 for 203.0.113.3; dropped"]
+        });
+    });
+
+    it("모두 터널이 있으면 같은 목록이고 경고가 없다", () => {
+        const entries = [entryOf("203.0.113.2", 1111)];
+        expect(dropOrphanBlocklistEntries(entries, new Set([1111]))).toEqual({entries, warnings: []});
     });
 });
 

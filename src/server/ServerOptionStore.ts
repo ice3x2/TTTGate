@@ -11,7 +11,7 @@ import {createOpaqueToken} from "../commons/ProtocolV2";
 import {redactSecrets} from "../util/SecretRedactor";
 import {createInitialRevisionState, RevisionState} from "./RevisionState";
 import {normalizeConnectionSecurity} from "./security/connectionSecurity";
-import {dropBlocklistPort} from "./security/IpBlocklist";
+import {dropBlocklistPort, dropOrphanBlocklistEntries} from "./security/IpBlocklist";
 
 const logger = LoggerFactory.getLogger('server', 'ServerOptionStore');
 
@@ -515,9 +515,11 @@ class ServerOptionStore {
         if(!connectionSecurity.success) {
             return {success: false, message: connectionSecurity.message};
         }
-        // #286 차단 목록의 틀린 항목은 실패가 아니라 경고다. 그 항목만 빼고 계속한다.
-        connectionSecurity.blocklistWarnings.forEach((warning) => logger.warn(warning));
-        option.connectionSecurity = connectionSecurity.value;
+        // #286 차단 목록의 틀린 항목과 터널이 없는 포트의 항목은 실패가 아니라 경고다. 그 항목만 빼고 계속한다.
+        const orphans = dropOrphanBlocklistEntries(connectionSecurity.value.blocklist ?? [],
+            new Set((option.tunnelingOptions ?? []).map((tunnel) => tunnel.forwardPort)));
+        [...connectionSecurity.blocklistWarnings, ...orphans.warnings].forEach((warning) => logger.warn(warning));
+        option.connectionSecurity = {...connectionSecurity.value, blocklist: orphans.entries};
         return {success: true, message: "", serverOption: option};
     }
 

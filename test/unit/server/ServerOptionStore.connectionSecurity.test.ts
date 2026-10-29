@@ -127,4 +127,38 @@ describe("ServerOptionStore connectionSecurity normalization", () => {
             warn.mockRestore();
         }
     });
+
+    // #286 REQ-3 AC-2 — 터널이 없는 포트에 건 항목은 나중에 그 포트로 만든 다른 터널에 걸리므로 읽을 때 뺀다.
+    it("drops a port-scoped blocklist entry whose tunnel does not exist, with a warning", () => {
+        const configFile = new File(Environment.path.configDir, "server.yaml");
+        Files.writeSync(configFile, YAML.stringify({
+            key: "srv-connection-security-orphan",
+            adminPort: 9304,
+            adminBindHost: "127.0.0.1",
+            adminTls: true,
+            port: 9130,
+            tls: false,
+            controlProtocolMode: "mixed",
+            allowLegacyControlAuth: false,
+            trustedClients: [],
+            globalMemCacheLimit: 128,
+            keepAlive: 10000,
+            tunnelingOptions: [{forwardPort: 20500, protocol: "tcp", tls: false, destinationAddress: "127.0.0.1", destinationPort: 9, keepAlive: 0}],
+            connectionSecurity: {blocklist: [
+                {address: "203.0.113.7", port: 20500, note: "", createdAt: 1, createdBy: "admin"},
+                {address: "203.0.113.8", port: 7777, note: "", createdAt: 1, createdBy: "admin"},
+                {address: "203.0.113.9", port: null, note: "", createdAt: 1, createdBy: "admin"}
+            ]}
+        }));
+        const warn = jest.spyOn(LoggerFactory.getLogger("server", "ServerOptionStore"), "warn").mockImplementation(() => undefined);
+        try {
+            ServerOptionStore.resetForTest();
+            const reloaded = ServerOptionStore.instance;
+            expect(reloaded.loadStatus.ready).toBe(true);
+            expect(reloaded.serverOption.connectionSecurity?.blocklist?.map((entry) => entry.address)).toEqual(["203.0.113.7", "203.0.113.9"]);
+            expect(warn.mock.calls.map((call) => String(call[0])).filter((message) => message.includes("no tunnel uses port 7777"))).toHaveLength(1);
+        } finally {
+            warn.mockRestore();
+        }
+    });
 });
