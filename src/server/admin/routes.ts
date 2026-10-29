@@ -84,10 +84,14 @@ export type Route = {
 
 export type RouteHandlers = {[name: string]: (ctx: RouteContext) => Promise<void>};
 
-/** #286 차단 목록 감사의 대상 id. 넣을 때와 풀 때 같은 id 로 이어지도록 정규화한 주소를 쓰고, 틀린 입력은 원문을 쓴다. */
+/**
+ * #286 차단 목록 감사의 대상 id. 넣을 때와 풀 때 같은 id 로 이어지도록 정규화한 주소를 쓴다.
+ * 틀린 문자열은 원문을, 문자열이 아니면(주소가 빠진 요청 등) 'invalid' 를 쓴다.
+ */
 const blocklistAuditId = (raw: unknown): string => {
+    if(typeof raw !== 'string') return 'invalid';
     const parsed = parseBlockedAddress(raw);
-    return truncateAuditValue(parsed.ok ? parsed.address : String(raw));
+    return truncateAuditValue(parsed.ok ? parsed.address : raw);
 };
 
 /** 경로 세그먼트를 퍼센트 디코딩한다. 잘못된 인코딩이면 던지지 않고 undefined 를 돌려준다. */

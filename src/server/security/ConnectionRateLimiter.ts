@@ -79,6 +79,10 @@ export class ConnectionRateLimiter {
         return key !== ip ? this.activeBan(state, key, now) : undefined;
     }
 
+    /**
+     * 차단 판정과 세기를 한 번에 한다(banned 다음 count). 판정 로직은 두 메서드에만 있고 이것은 그 조합이다.
+     * AdmissionController 는 차단 판정을 국가 필터보다 먼저 따로 하므로 이것 대신 둘을 나눠 부른다(#287).
+     */
     public admit(port: number, address: string, now: number): AdmissionDecision {
         return this.banned(port, address, now) ?? this.count(port, address, now);
     }

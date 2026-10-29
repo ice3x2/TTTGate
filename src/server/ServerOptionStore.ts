@@ -117,7 +117,7 @@ class ServerOptionStore {
         if(index < 0) {
             serverOption.tunnelingOptions.push(normalizedOption);
             // 새 터널 API 는 포트가 비어 있는지 확인한 뒤에 저장하므로 옛 리스너가 이미 없다.
-            droppedBlocks = ServerOptionStore.releaseOrphanBlocks(serverOption, [normalizedOption.forwardPort]);
+            droppedBlocks = ServerOptionStore.releasePortBlocks(serverOption, [normalizedOption.forwardPort]);
         } else {
             serverOption.tunnelingOptions[index] = normalizedOption;
         }
@@ -125,11 +125,11 @@ class ServerOptionStore {
     }
 
     /**
-     * #286 새로 터널이 쓰게 된 포트에 남아 있던 고아 차단 항목(지운 터널의 것)을 빼고, 뺀 항목을 돌려준다(감사용).
-     * 새 터널이 옛 터널의 차단을 물려받지 않게 한다. 옛 리스너가 아직 도는 포트는 호출자가 ports 에서 뺀다
-     * (그 리스너가 도는 동안은 계속 막는다). serverOption 을 그 자리에서 바꾼다.
+     * #286 그 포트들에 건 차단 항목을 빼고, 뺀 항목을 돌려준다(감사용). serverOption 을 그 자리에서 바꾼다.
+     * 터널을 지울 때, 그리고 새로 터널이 쓰게 된 포트의 고아 항목(지운 터널의 것)을 새 터널이 물려받지 않게 할 때 쓴다.
+     * 옛 리스너가 아직 도는 포트는 호출자가 ports 에서 뺀다(그 리스너가 도는 동안은 계속 막는다).
      */
-    public static releaseOrphanBlocks(serverOption: Pick<ServerOption, 'connectionSecurity'>, ports: Iterable<number>): BlocklistEntry[] {
+    public static releasePortBlocks(serverOption: Pick<ServerOption, 'connectionSecurity'>, ports: Iterable<number>): BlocklistEntry[] {
         const security = serverOption.connectionSecurity;
         if(!security) return [];
         let dropped: BlocklistEntry[] = [];
@@ -150,12 +150,7 @@ class ServerOptionStore {
         }
         serverOption.tunnelingOptions.splice(index, 1);
         // #286 그 터널에만 건 차단 항목도 함께 지운다.
-        let droppedBlocks: BlocklistEntry[] = [];
-        if(serverOption.connectionSecurity) {
-            const result = dropBlocklistPort(serverOption.connectionSecurity.blocklist ?? [], forwardPort);
-            serverOption.connectionSecurity.blocklist = result.entries;
-            droppedBlocks = result.dropped;
-        }
+        const droppedBlocks = ServerOptionStore.releasePortBlocks(serverOption, [forwardPort]);
         return {success: true, message: "", serverOption, droppedBlocks};
     }
 

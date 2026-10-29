@@ -198,6 +198,13 @@ describe("security-blocklist", () => {
         expect(events[events.length - 1].outcome).toBe("failure");
     });
 
+    it("주소가 문자열이 아니면 감사 대상 id 는 invalid 다", async () => {
+        const response = await request("POST", "/api/security/blocklist", {}, su);
+        expect(response.status).toBe(422);
+        const events = eventsOf("security_block_added");
+        expect(events[events.length - 1].target).toEqual({kind: "security", id: "invalid"});
+    });
+
     it("같은 주소는 409 already blocked 다 (REQ-4 AC-2, REQ-5 AC-3)", async () => {
         expect((await request("POST", "/api/security/blocklist", {address: "203.0.113.7", port: 18080}, su)).status).toBe(201);
         const response = await request("POST", "/api/security/blocklist", {address: "::ffff:203.0.113.7"}, su);

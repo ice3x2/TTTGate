@@ -296,3 +296,24 @@ test("차단 목록을 불러오지 못하면 빈 목록처럼 보이지 않고 
     await page.locator("#block-address").fill("203.0.113.7");
     expect(await page.locator("#block-submit").isDisabled()).toBe(true);
 }));
+
+// 다른 관리자가 화면을 연 뒤 같은 주소를 넣었으면, 409 를 받을 때 차단 목록도 다시 읽어 화면이 낡지 않게 한다.
+test("Block permanently 가 이미 막힌 주소로 거절되면 차단 목록도 다시 읽는다", () => withSecurity(async (app) => {
+    const {page} = app;
+    await app.seedBan(20001, "203.0.113.9");
+    await goSecurity(page, app.url);
+    const banRow = page.locator('#ban-table tr[data-ban="20001/203.0.113.9"]');
+    await banRow.waitFor({state: "visible", timeout: 10_000});
+    await page.locator("#block-empty").waitFor({state: "visible", timeout: 10_000});
+    const added = await page.evaluate(async () => {
+        const csrf = document.cookie.split("; ").find((part) => part.startsWith("csrfToken="))?.slice("csrfToken=".length) ?? "";
+        const response = await fetch("/api/security/blocklist", {method: "POST", credentials: "same-origin",
+            headers: {"Content-Type": "application/json", "X-CSRF-Token": csrf}, body: JSON.stringify({address: "203.0.113.9"})});
+        return response.status;
+    });
+    expect(added).toBe(201);
+    await banRow.getByRole("button", {name: "Block permanently", exact: true}).click();
+    await page.locator("[role=dialog]").getByRole("button", {name: "Block permanently", exact: true}).click();
+    await toast(page, "203.0.113.9 is already blocked on all tunnels").waitFor({state: "visible", timeout: 10_000});
+    await page.locator('#block-table tr[data-block="203.0.113.9"]').waitFor({state: "visible", timeout: 10_000});
+}));

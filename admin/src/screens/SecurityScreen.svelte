@@ -182,8 +182,8 @@
         try {
             const result = await SecurityCtrl.instance.block({address: ban.ip, note: `From rate-limit ban on ${ban.port}`, fromBan: {port: ban.port, ip: ban.ip}});
             if(!result.success) {
-                // 이미 막힌 주소면 서버가 그 일시 차단을 풀었으므로 표를 다시 읽는다.
-                if(result.code === 'duplicate') await loadBans();
+                // 이미 막힌 주소면 서버가 그 일시 차단을 풀었고, 다른 관리자가 막 넣었을 수도 있다. 두 표를 다시 읽는다.
+                if(result.code === 'duplicate') await Promise.all([loadBans(), loadBlocklist()]);
                 toast.push({tone: result.code === 'duplicate' ? 'neutral' : 'alarm', message: result.message});
                 return;
             }

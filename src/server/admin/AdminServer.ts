@@ -675,7 +675,7 @@ class AdminServer {
                 const requestedTunnels: unknown[] = Array.isArray(requestedServerOption.tunnelingOptions) ? requestedServerOption.tunnelingOptions : [];
                 const newPorts = requestedTunnels.map((tunnel) => Number((tunnel as {forwardPort?: unknown} | null)?.forwardPort))
                     .filter((port) => Number.isInteger(port) && !currentPorts.has(port) && this._tttServer?.externalServerStatus?.(port)?.online !== true);
-                droppedBlocks = ServerOptionStore.releaseOrphanBlocks(requestedServerOption, newPorts);
+                droppedBlocks = ServerOptionStore.releasePortBlocks(requestedServerOption, newPorts);
             }
             let prepareResult = serverOptionStore.prepareServerOption(ObjectUtil.cloneDeep(requestedServerOption));
             if(!prepareResult.success || !prepareResult.serverOption) {
