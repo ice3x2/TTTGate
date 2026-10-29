@@ -154,6 +154,7 @@ class TCPServer {
             const fromBucket = perBucket.get(bucket) ?? 0;
             if(pending.size >= max || fromBucket >= maxPerBucket) {
                 this.warnThrottled('pending-tls', `too many pending TLS handshakes on port ${this._options.port}${fromBucket >= maxPerBucket ? ` from ${bucket}` : ''}; closing new connections`);
+                this._closedBeforeHandshake.add(raw);
                 raw.destroy();
                 return;
             }
@@ -175,7 +176,7 @@ class TCPServer {
         if(!admitBeforeHandshake && !countPending) return;
         server.on('connection', (raw: net.Socket) => {
             if(admitBeforeHandshake && !admitBeforeHandshake(raw.remoteAddress).allowed) {
-                this._refusedBeforeHandshake.add(raw);
+                this._closedBeforeHandshake.add(raw);
                 raw.destroy();
                 return;
             }
@@ -183,8 +184,11 @@ class TCPServer {
         });
     }
 
-    /** 핸드셰이크 전에 거절한 TCP 소켓. 그 소켓이 내는 tlsClientError 는 로그에 남기지 않는다(거절마다 쌓이지 않게). */
-    private readonly _refusedBeforeHandshake = new WeakSet<net.Socket>();
+    /**
+     * 서버가 핸드셰이크 전에 닫은 TCP 소켓(판정 거절, 대기 상한 초과). 그 소켓이 내는 tlsClientError 는 로그에 남기지 않는다.
+     * 거절이 몰릴 때 거절마다 로그가 쌓이지 않게 한다. 거절 자체는 warnThrottled 와 거절 집계가 알린다.
+     */
+    private readonly _closedBeforeHandshake = new WeakSet<net.Socket>();
 
     private _pendingTlsSockets: Map<net.Socket, string> | undefined;
     private _throttledWarns: Map<ThrottledWarnKind, {lastAt: number, suppressed: number}> = new Map();
@@ -210,7 +214,7 @@ class TCPServer {
             // 핸드셰이크 기한이 지나도 Node 는 tlsClientError 만 내고 TCP 소켓을 그대로 둔다. 직접 닫아야 슬롯이 풀린다(#174).
             server.on('tlsClientError', (error, socket) => {
                 const raw = (socket as unknown as {_parent?: net.Socket})._parent;
-                if(!raw || !this._refusedBeforeHandshake.has(raw)) logger.debug(`TCPServer: TLS client error: ${error.message}`);
+                if(!raw || !this._closedBeforeHandshake.has(raw)) logger.debug(`TCPServer: TLS client error: ${error.message}`);
                 socket.destroy();
             });
         }

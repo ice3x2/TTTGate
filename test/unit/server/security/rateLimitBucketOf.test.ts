@@ -1,6 +1,6 @@
 import {prefixBucketOf, rateLimitBucketOf} from "../../../../src/server/security/ConnectionRateLimiter";
 
-// #288 — IPv6 그룹 펴기를 공용 함수로 옮겨도 버킷 문자열은 그대로여야 한다. 아래 값은 옮기기 전 결과다.
+// #288 — IPv6 그룹 펴기를 공용 함수로 옮겨도 버킷 문자열은 그대로여야 한다. 첫 표의 값은 옮기기 전 결과와 같다.
 describe("rateLimitBucketOf (#288)", () => {
     it.each([
         ["203.0.113.7", "203.0.113.7"],
@@ -15,6 +15,15 @@ describe("rateLimitBucketOf (#288)", () => {
         ["::1.2.3.4", "0:0:0:0::/64"],
         ["fe80::1%eth0", "fe80:0:0:0::/64"]
     ])("%s 의 버킷은 %s 다", (input, expected) => {
+        expect(rateLimitBucketOf(input)).toBe(expected);
+    });
+
+    // 옮기기 전에는 :: 뒤의 IPv4 점 표기를 그룹 하나로 세어 /64 접두가 틀렸다. 지금 값이 올바른 접두다.
+    // Node 는 원격 주소를 이렇게 쓰지 않으므로 연결 판정에는 영향이 없다(일시 차단 해제 API 에 직접 넣을 때만 다르다).
+    it.each([
+        ["1:2::3:4:5:1.2.3.4", "1:2:0:3::/64"],
+        ["1::2:3:4:5:1.2.3.4", "1:0:2:3::/64"]
+    ])("%s 의 버킷은 IPv4 점 표기를 그룹 둘로 세어 %s 다", (input, expected) => {
         expect(rateLimitBucketOf(input)).toBe(expected);
     });
 

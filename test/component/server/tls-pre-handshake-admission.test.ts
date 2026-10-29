@@ -92,6 +92,54 @@ describe("TCPServer admitBeforeHandshake (#287)", () => {
         }
     });
 
+    // 거절한 연결이 닫힐 때 칸이 풀리더라도, 그 사이에 칸을 차지하면 같은 때 들어온 정상 연결이 거절될 수 있다.
+    it("거절한 연결은 핸드셰이크 대기 표에 한 번도 들어가지 않는다 (AC-3)", async () => {
+        const {server, port} = await startTls({admitBeforeHandshake: () => ({allowed: false, reason: "ip-blocklist"}), maxPendingTlsHandshakes: 4});
+        const set = jest.spyOn((server as unknown as {_pendingTlsSockets: Map<net.Socket, string>})._pendingTlsSockets, "set");
+        try {
+            for(let i = 0; i < 3; i++) expect((await rawUntilClose(port)).length).toBe(0);
+            expect(set).not.toHaveBeenCalled();
+        } finally {
+            set.mockRestore();
+            await stop(server);
+        }
+    });
+
+    it("핸드셰이크 대기 상한을 넘겨 닫은 연결도 TLS 클라이언트 오류 로그를 남기지 않는다", async () => {
+        const debug = jest.spyOn(LoggerFactory.getLogger("socket", "TCPServer"), "debug");
+        const {server, port} = await startTls({maxPendingTlsHandshakes: 1});
+        const holder = net.connect({host: "127.0.0.1", port});
+        holder.on("error", () => {});
+        try {
+            await new Promise((resolve) => holder.once("connect", resolve));
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            for(let i = 0; i < 3; i++) expect((await rawUntilClose(port)).length).toBe(0);
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            expect(debug.mock.calls.filter((call) => String(call[0]).includes("TLS client error"))).toEqual([]);
+        } finally {
+            holder.destroy();
+            debug.mockRestore();
+            await stop(server);
+        }
+    });
+
+    it("거절하지 않은 연결의 TLS 오류는 지금처럼 로그에 남긴다", async () => {
+        const debug = jest.spyOn(LoggerFactory.getLogger("socket", "TCPServer"), "debug");
+        const {server, port} = await startTls({admitBeforeHandshake: () => ({allowed: true})});
+        try {
+            await new Promise<void>((resolve) => {
+                const socket = net.connect({host: "127.0.0.1", port}, () => socket.write("this is not a TLS ClientHello\r\n\r\n"));
+                socket.on("error", () => {});
+                socket.once("close", () => resolve());
+            });
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            expect(debug.mock.calls.filter((call) => String(call[0]).includes("TLS client error"))).toHaveLength(1);
+        } finally {
+            debug.mockRestore();
+            await stop(server);
+        }
+    });
+
     it("허용된 주소는 지금처럼 핸드셰이크를 마치고 admit 을 거친다 (AC-5)", async () => {
         const admit = jest.fn(() => ({allowed: true as const}));
         const {server, port} = await startTls({admitBeforeHandshake: () => ({allowed: true}), admit});
@@ -150,13 +198,16 @@ describe("ExternalPortServerPool TLS pre-handshake wiring (#287)", () => {
 
     it("레이트 리밋 차단이 끝나면 다시 핸드셰이크할 수 있다 (AC-2)", async () => {
         const forwardPort = await getFreePort();
-        const option = {...tlsTunnel(forwardPort), rateLimit: {enabled: true, windowMs: 60_000, maxConnections: 1, banMs: 300, customized: false}};
-        await expect(pool.startServer(option, certInfo)).resolves.toBe(true);
+        await expect(pool.startServer(tlsTunnel(forwardPort), certInfo)).resolves.toBe(true);
+        // 차단 중에 거절되는 것은 아래 테스트가 본다. 여기서는 시각을 넘겨 준 판정으로 차단이 끝난 뒤를 본다.
+        // 실제 시간을 기다리면 부하가 큰 환경에서 차단 시간 안에 첫 연결이 닿지 못해 흔들린다.
         const scope = {kind: "tunnel", port: forwardPort, protocol: "tcp"} as const;
-        AdmissionController.instance.admit(scope, "127.0.0.1");
-        AdmissionController.instance.admit(scope, "127.0.0.1");
-        expect((await rawUntilClose(forwardPort)).length).toBe(0);
-        await new Promise((resolve) => setTimeout(resolve, 400));
+        const start = Date.now();
+        AdmissionController.instance.admit(scope, "127.0.0.1", start);
+        AdmissionController.instance.admit(scope, "127.0.0.1", start);
+        expect(AdmissionController.instance.admitBeforeHandshake(scope, "127.0.0.1", start)).toMatchObject({reason: "rate-limit-ban"});
+        // 차단 시간이 지난 시각으로 한 번 판정하면 리미터가 지난 차단을 지운다.
+        expect(AdmissionController.instance.admitBeforeHandshake(scope, "127.0.0.1", start + 60_001)).toEqual({allowed: true});
         await expect(handshake(forwardPort)).resolves.toBeUndefined();
     });
 
