@@ -80,12 +80,17 @@ export class ConnectionRateLimiter {
     }
 
     public admit(port: number, address: string, now: number): AdmissionDecision {
+        return this.banned(port, address, now) ?? this.count(port, address, now);
+    }
+
+    /**
+     * 차단 판정(banned)을 이미 한 연결을 창에 세고, 넘치면 차단한다. AdmissionController 는 차단 판정을 국가 필터보다
+     * 먼저 따로 하므로 이 메서드로 세기만 한다(#287). 그 밖에는 admit 을 쓴다.
+     */
+    public count(port: number, address: string, now: number): AdmissionDecision {
         const ip = rateLimitBucketOf(address);
         const state = this._ports.get(port);
         if (!state) return ADMIT;
-
-        const banDecision = this.banned(port, ip, now);
-        if (banDecision) return banDecision;
 
         const {windowMs, maxConnections, banMs} = state.config;
         const key = this.windowKeyOf(state, ip);

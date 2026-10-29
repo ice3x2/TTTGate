@@ -816,7 +816,7 @@ class AdminServer {
             tunnelingOption.ownerId = admission.ownerId;
             ctx.auditDetail({ownerId: admission.ownerId});
             if(certInfo !== undefined || previousForwardPort !== undefined) {
-                await this.applyCompoundTunnelingOption(res, tunnelingOption, certInfo, expectedCertificateRevision, previousForwardPort);
+                await this.applyCompoundTunnelingOption(res, tunnelingOption, certInfo, expectedCertificateRevision, previousForwardPort, ctx.auditDetail);
                 return;
             }
             let previousOption = serverOptionStore.getTunnelingOption(tunnelingOption.forwardPort);
@@ -848,6 +848,8 @@ class AdminServer {
                 });
                 return;
             }
+            // #286 새 터널이면 그 포트에 남아 있던 고아 차단 항목이 빠졌을 수 있다. 리스너를 열기 전에 판정에 반영한다.
+            if(!previousOption) this._tttServer?.applyConnectionSecurity?.(serverOptionStore.serverOption.connectionSecurity);
             let runtimeResult = await this.applyRuntimeSafely('tunneling option', `external-listener:${tunnelingOption.forwardPort}`,
                 () => this._tttServer?.applyTunnelingOption(serverOptionStore.getTunnelingOption(tunnelingOption.forwardPort)!, previousOption)) ?? {
                 success: false,
@@ -895,7 +897,7 @@ class AdminServer {
     }
 
     private async applyCompoundTunnelingOption(res: ServerResponse, option: TunnelingOption, certInfo: CertInfo | undefined,
-        expectedCertificateRevision: unknown, previousForwardPort?: number): Promise<void> {
+        expectedCertificateRevision: unknown, previousForwardPort?: number, auditDetail: (patch: Record<string, unknown>) => void = () => {}): Promise<void> {
         const store = ServerOptionStore.instance, certificates = CertificationStore.instance;
         if(previousForwardPort !== undefined && (!Number.isSafeInteger(previousForwardPort) || previousForwardPort < 1 || previousForwardPort > 65535 || !store.getTunnelingOption(previousForwardPort))) {
             this.sendApiFailure(res, 400, {message: 'The original configured row does not exist.'}); return;
@@ -916,11 +918,16 @@ class AdminServer {
         if(!composed.success || !composed.serverOption) {
             this.sendApiFailure(res, 400, {message: 'Tunneling options update failed.'}); return;
         }
+        let movedBlocks: Array<{address: string; from: number; to: number}> = [];
         if(rename) {
             composed.serverOption.tunnelingOptions = composed.serverOption.tunnelingOptions.filter(row => row.forwardPort !== previousForwardPort);
-            // #286 그 터널에만 건 차단 항목도 새 포트로 옮긴다.
+            // #286 그 터널에만 건 차단 항목도 새 포트로 옮기고, 옮긴 항목을 감사에 남긴다.
             const security = composed.serverOption.connectionSecurity;
-            if(security) security.blocklist = moveBlocklistPort(security.blocklist ?? [], previousForwardPort!, option.forwardPort);
+            if(security) {
+                movedBlocks = (security.blocklist ?? []).filter((entry) => entry.port === previousForwardPort)
+                    .map((entry) => ({address: entry.address, from: previousForwardPort!, to: option.forwardPort}));
+                security.blocklist = moveBlocklistPort(security.blocklist ?? [], previousForwardPort!, option.forwardPort);
+            }
         }
         if(!previousOption && !await UsablePortChecker.check(option.forwardPort)) {
             this.sendApiFailure(res, 400, {message: `${option.forwardPort} is an unusable port number.`}); return;
@@ -971,6 +978,7 @@ class AdminServer {
             this.sendApiFailure(res, 400, {message: 'Unable to apply compound tunneling option.', partial: recoveryFailures.length > 0,
                 failedScopes: [...runtime.failedScopes, ...recoveryFailures], revisionState: store.revisionState, certificateRevisionState: certificates.revisionState}); return;
         }
+        if(movedBlocks.length > 0) auditDetail({movedBlocks});
         this.sendApiSuccess(res, {forwardPort: option.forwardPort, revisionState: store.revisionState, certificateRevisionState: certificates.revisionState});
     }
 
@@ -1022,6 +1030,9 @@ class AdminServer {
             }
             const committedBefore = serverOptionStore.captureCommittedState();
             const runtimeBefore = this._tttServer?.captureRuntimeState?.();
+            // #286 그 터널에만 건 차단 항목도 함께 빠진다. 터널 소유자는 security:manage 없이도 지우므로 풀린 차단을 감사에 남긴다.
+            const droppedBlocks = (serverOptionStore.serverOption.connectionSecurity?.blocklist ?? [])
+                .filter((entry) => entry.port === forwardPort).map((entry) => ({address: entry.address, note: entry.note}));
             let composeResult = serverOptionStore.composeServerOptionWithoutTunnelingOption(forwardPort);
             if(!composeResult.success || !composeResult.serverOption) {
                 this.sendApiFailure(res, 400, {message: `External port(${forwardPort}) server already removed.`, forwardPort});
@@ -1066,6 +1077,7 @@ class AdminServer {
             }
             // #286 지운 터널에만 건 차단 항목도 빠졌다. 리스너가 멈춘 뒤에 반영해 그때까지는 그 포트에서도 막는다.
             this._tttServer?.applyConnectionSecurity?.(composeResult.serverOption.connectionSecurity);
+            if(droppedBlocks.length > 0) ctx.auditDetail({droppedBlocks});
             this.sendApiSuccess(res, {forwardPort, warnings, revisionState: commitResult.revisionState});
         });
     }

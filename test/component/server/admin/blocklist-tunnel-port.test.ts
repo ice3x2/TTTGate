@@ -2,6 +2,15 @@ import {withConfigurationServer} from "./configuration-revision-fixture";
 import {getFreePort} from "../../../helpers/network";
 import {addTunnel} from "./tunnel-admin-fixture";
 import {AdmissionController} from "../../../../src/server/security/AdmissionController";
+import {AuditEvent, AuditSink, AuditSinkRegistry} from "../../../../src/server/audit/AuditSink";
+
+/** 감사 이벤트를 메모리에 모은다. 끝나면 반드시 reset 한다. */
+const captureAudit = (): {events: AuditEvent[]; reset: () => void} => {
+    const events: AuditEvent[] = [];
+    const sink: AuditSink = {reserve: () => true, record: (event: AuditEvent) => { events.push(event); return Promise.resolve(); }};
+    AuditSinkRegistry.set(sink);
+    return {events, reset: () => AuditSinkRegistry.reset()};
+};
 
 // #286 — 포트를 고른 차단 항목은 포트 번호가 아니라 터널을 따라간다(REQ-2 AC-2, REQ-3 AC-2).
 jest.setTimeout(60000);
@@ -18,9 +27,17 @@ test("외부 포트를 바꾸면 그 터널의 차단 항목도 새 포트로 �
     await block(f, "203.0.113.7", port);
     await block(f, "203.0.113.8", null);
     const next = await getFreePort();
-    const response = await f.request("POST", "/api/tunnelingOption", {...option, forwardPort: next, previousForwardPort: port,
-        expectedRevision: f.store.revisionState.currentRevision});
-    expect(response.statusCode).toBe(200);
+    const audit = captureAudit();
+    try {
+        const response = await f.request("POST", "/api/tunnelingOption", {...option, forwardPort: next, previousForwardPort: port,
+            expectedRevision: f.store.revisionState.currentRevision});
+        expect(response.statusCode).toBe(200);
+        // 옮긴 항목은 터널 저장 감사에 남는다.
+        const saved = audit.events.filter((event) => event.type.startsWith("tunnel_"));
+        expect(saved[saved.length - 1].detail).toMatchObject({movedBlocks: [{address: "203.0.113.7", from: port, to: next}]});
+    } finally {
+        audit.reset();
+    }
 
     expect(storedBlocklist(f).map((entry: any) => [entry.address, entry.port])).toEqual([["203.0.113.7", next], ["203.0.113.8", null]]);
     expect(AdmissionController.instance.blocklist.isBlocked(next, "203.0.113.7")).toBe(true);
@@ -84,6 +101,23 @@ test("서버 설정 저장으로 터널을 빼도 그 포트의 항목은 남는
     expect(AdmissionController.instance.blocklist.isBlocked(port, "203.0.113.7")).toBe(true);
 }));
 
+// 리스너가 꺼진 터널을 서버 설정 저장으로 빼면 그 포트의 항목이 남는다. 그 포트로 새 터널을 만들면 그 항목을 물려받지 않는다.
+test("새 터널을 만들면 그 포트에 남아 있던 고아 항목을 뺀다", async () => withConfigurationServer(async f => {
+    const port = await getFreePort();
+    const read = f.store.readServerOption();
+    read.serverOption.connectionSecurity = {...read.serverOption.connectionSecurity, blocklist: [
+        {address: "203.0.113.7", port, note: "", createdAt: 1, createdBy: "admin"},
+        {address: "203.0.113.8", port: null, note: "", createdAt: 1, createdBy: "admin"}]};
+    expect(f.store.commitPreparedServerOption(read.serverOption).success).toBe(true);
+    f.tunnel.applyConnectionSecurity(f.store.serverOption.connectionSecurity);
+
+    const snapshot = await f.snapshot();
+    expect((await f.request("POST", "/api/tunnelingOption", {forwardPort: port, protocol: "tcp", tls: false, destinationAddress: "127.0.0.1",
+        destinationPort: 9, keepAlive: 0, expectedRevision: snapshot.revisionState.currentRevision})).statusCode).toBe(200);
+    expect(storedBlocklist(f).map((entry: any) => entry.address)).toEqual(["203.0.113.8"]);
+    expect(AdmissionController.instance.blocklist.isBlocked(port, "203.0.113.7")).toBe(false);
+}));
+
 test("터널이 없는 포트에는 포트를 고른 항목을 넣을 수 없다", async () => withConfigurationServer(async f => {
     const {port} = await addTunnel(f);
     const unused = await getFreePort();
@@ -134,8 +168,16 @@ test("터널을 지우면 그 터널의 차단 항목도 지운다. 같은 포�
     const {port} = await addTunnel(f);
     await block(f, "203.0.113.7", port);
     await block(f, "203.0.113.8", null);
-    const response = await f.request("DELETE", "/api/tunnelingOption", {forwardPort: port, expectedRevision: f.store.revisionState.currentRevision});
-    expect(response.statusCode).toBe(200);
+    const audit = captureAudit();
+    try {
+        const response = await f.request("DELETE", "/api/tunnelingOption", {forwardPort: port, expectedRevision: f.store.revisionState.currentRevision});
+        expect(response.statusCode).toBe(200);
+        // 터널 소유자는 security:manage 권한이 없어도 자기 터널을 지운다. 그때 풀린 차단은 감사로 확인할 수 있어야 한다.
+        const deleted = audit.events.filter((event) => event.type === "tunnel_deleted");
+        expect(deleted[deleted.length - 1].detail).toMatchObject({droppedBlocks: [{address: "203.0.113.7", note: ""}]});
+    } finally {
+        audit.reset();
+    }
     expect(tunnelPorts(f)).not.toContain(port);
 
     expect(storedBlocklist(f).map((entry: any) => entry.address)).toEqual(["203.0.113.8"]);

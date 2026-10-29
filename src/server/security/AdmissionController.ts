@@ -122,7 +122,8 @@ export class AdmissionController implements AdmissionPolicy {
         }
 
         if (scope.kind === 'tunnel') {
-            const decision = this.rateLimiter.admit(scope.port, ip, now);
+            // 차단 중인지는 refusedAddress 가 이미 봤다. 여기서는 세기만 한다.
+            const decision = this.rateLimiter.count(scope.port, ip, now);
             if (!decision.allowed) {
                 this.denialLog.record(scope, decision.reason, now);
                 return decision;

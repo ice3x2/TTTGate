@@ -112,6 +112,11 @@ class ServerOptionStore {
         const index = serverOption.tunnelingOptions.findIndex((option) => option.forwardPort == tunnelingOption.forwardPort);
         if(index < 0) {
             serverOption.tunnelingOptions.push(normalizedOption);
+            // #286 그 포트에 남아 있던 고아 차단 항목(지운 터널의 것)을 새 터널이 물려받지 않게 뺀다.
+            // 이 포트를 새로 쓸 수 있다는 것은 옛 리스너가 이미 없다는 뜻이다.
+            if(serverOption.connectionSecurity) {
+                serverOption.connectionSecurity.blocklist = dropBlocklistPort(serverOption.connectionSecurity.blocklist ?? [], normalizedOption.forwardPort);
+            }
         } else {
             serverOption.tunnelingOptions[index] = normalizedOption;
         }

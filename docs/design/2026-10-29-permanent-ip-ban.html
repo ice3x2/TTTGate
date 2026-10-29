@@ -324,6 +324,7 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line-1);font-
     <div class="req-body"><ul class="ac">
       <li><b>AC-1</b>넣으면 <code>security_block_added</code>, 풀면 <code>security_block_removed</code> 이벤트가 남는다. 대상 id는 주소이고, detail에는 적용 범위와 메모가 들어간다.</li>
       <li><b>AC-2</b>개별 거절은 감사 로그에 남기지 않는다. 기존 거절 집계와 같은 방식이다.</li>
+      <li><b>AC-3</b>터널을 지워 그 터널의 항목이 함께 빠지면 <code>tunnel_deleted</code> detail에 <code>droppedBlocks</code>를, 외부 포트를 바꿔 항목을 옮기면 터널 저장 감사 detail에 <code>movedBlocks</code>를 남긴다. 터널 소유자는 <code>security:manage</code> 없이도 자기 터널을 지우기 때문이다.</li>
     </ul></div></div>
 </section>
 

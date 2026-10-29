@@ -39,6 +39,16 @@ describe("AdmissionController 차단 목록 (#286)", () => {
         expect(controller.geo.stats().lookups).toBe(0);
     });
 
+    // 레이트 리밋 차단 판정은 연결마다 한 번만 한다(차단 목록 다음, 국가 필터 앞).
+    it("레이트 리밋 차단 판정을 연결마다 한 번만 한다", () => {
+        const controller = AdmissionController.instance;
+        controller.configureTunnel({forwardPort: 1111, rateLimit: {enabled: true, windowMs: 60_000, maxConnections: 5, banMs: 60_000}});
+        const banned = jest.spyOn(controller.rateLimiter, "banned");
+        expect(controller.admit(tunnel(1111), "198.51.100.5", 0)).toEqual({allowed: true});
+        expect(banned).toHaveBeenCalledTimes(1);
+        banned.mockRestore();
+    });
+
     it("거절을 거절 집계 로그에 남긴다", () => {
         const controller = AdmissionController.instance;
         controller.configureConnectionSecurity({geo: {...DEFAULT_GEO_CONFIG}, blocklist: [entryOf("203.0.113.7")]});
