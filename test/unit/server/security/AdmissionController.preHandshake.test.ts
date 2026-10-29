@@ -35,6 +35,15 @@ describe("AdmissionController.admitBeforeHandshake (#287)", () => {
         expect(controller.admitBeforeHandshake(tunnel, "198.51.100.5", 5_000)).toEqual({allowed: true});
     });
 
+    it("IPv6 /48 로 묶어 센 차단도 핸드셰이크 전에 거절한다 (REQ-2)", () => {
+        const controller = AdmissionController.instance;
+        controller.configureTunnel({forwardPort: 1111, rateLimit: {enabled: true, windowMs: 60_000, maxConnections: 3, banMs: 60_000}});
+        for(let n = 0; n < 256; n++) controller.admit(tunnel, `2001:db8:77:${n.toString(16)}::1`, 0);
+        for(let n = 0; n < 4; n++) controller.admit(tunnel, `2001:db8:77:${(0x1000 + n).toString(16)}::1`, 1);
+        expect(controller.admitBeforeHandshake(tunnel, "2001:db8:77:2000::1", 2)).toMatchObject({allowed: false, reason: "rate-limit-ban"});
+        expect(controller.admitBeforeHandshake(tunnel, "2001:db8:77:0::5", 2)).toEqual({allowed: true});
+    });
+
     it("그 밖의 주소는 들이고, 레이트 리밋 계수와 국가 조회는 하지 않는다 (REQ-5)", () => {
         const controller = AdmissionController.instance;
         controller.configureConnectionSecurity({geo: {mode: "deny", countries: ["KP"], applyToAdmin: false, unknownPolicy: "allow"}, blocklist: []});

@@ -64,21 +64,19 @@ export class ConnectionRateLimiter {
         });
     }
 
+    /**
+     * 이 주소가 지금 차단 중이면 그 거절을 돌려준다. admit 이 세는 것과 같은 키를 본다. 따로 세는 버킷이 아니면
+     * /48 로 묶어 센 차단(#175)도 본다. TLS 포트는 핸드셰이크 전에 이 판정만 쓴다(#287).
+     */
     public banned(port: number, address: string, now: number): AdmissionDenial | undefined {
         const ip = rateLimitBucketOf(address);
         const state = this._ports.get(port);
         if (!state) return undefined;
 
-        const ban = state.bans.get(ip);
-        if (!ban) return undefined;
-
-        if (ban.until > now) {
-            state.rejectedBans++;
-            return {allowed: false, reason: 'rate-limit-ban', retryAfterMs: ban.until - now};
-        }
-
-        state.bans.delete(ip);
-        return undefined;
+        const direct = this.activeBan(state, ip, now);
+        if (direct) return direct;
+        const key = this.windowKeyOf(state, ip);
+        return key !== ip ? this.activeBan(state, key, now) : undefined;
     }
 
     public admit(port: number, address: string, now: number): AdmissionDecision {
@@ -91,10 +89,6 @@ export class ConnectionRateLimiter {
 
         const {windowMs, maxConnections, banMs} = state.config;
         const key = this.windowKeyOf(state, ip);
-        if (key !== ip) {
-            const overflowBan = this.activeBan(state, key, now);
-            if (overflowBan) return overflowBan;
-        }
 
         let arr = state.windows.get(key);
         if (!arr) {

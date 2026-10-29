@@ -51,6 +51,20 @@ const startTls = async (options: Partial<Parameters<typeof TCPServer.create>[0]>
     return {server, port};
 };
 const stop = (server: TCPServer) => new Promise<void>((resolve) => server.stop(() => resolve()));
+/** 서버가 tlsClientError 를 n 번 낼 때까지 기다린다. 그 뒤에 로그를 세야 늦게 온 오류를 놓치지 않는다. */
+const tlsClientErrors = (server: TCPServer) => {
+    let count = 0;
+    (server as unknown as {_server: tls.Server})._server.on("tlsClientError", () => { count++; });
+    return (n: number) => new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(`expected ${n} tlsClientError events, got ${count}`)), 5_000);
+        const poll = setInterval(() => {
+            if(count < n) return;
+            clearInterval(poll);
+            clearTimeout(timer);
+            resolve();
+        }, 10);
+    });
+};
 
 describe("TCPServer admitBeforeHandshake (#287)", () => {
     it("거절된 주소는 TLS 응답 없이 바로 닫히고, 핸드셰이크 뒤 판정(admit)까지 가지 않는다 (AC-1)", async () => {
@@ -82,9 +96,10 @@ describe("TCPServer admitBeforeHandshake (#287)", () => {
     it("핸드셰이크 전에 거절한 연결은 TLS 클라이언트 오류 로그를 남기지 않는다", async () => {
         const debug = jest.spyOn(LoggerFactory.getLogger("socket", "TCPServer"), "debug");
         const {server, port} = await startTls({admitBeforeHandshake: () => ({allowed: false, reason: "ip-blocklist"})});
+        const errors = tlsClientErrors(server);
         try {
             for(let i = 0; i < 3; i++) expect((await rawUntilClose(port)).length).toBe(0);
-            await new Promise((resolve) => setTimeout(resolve, 100));
+            await errors(3);
             expect(debug.mock.calls.filter((call) => String(call[0]).includes("TLS client error"))).toEqual([]);
         } finally {
             debug.mockRestore();
@@ -108,13 +123,14 @@ describe("TCPServer admitBeforeHandshake (#287)", () => {
     it("핸드셰이크 대기 상한을 넘겨 닫은 연결도 TLS 클라이언트 오류 로그를 남기지 않는다", async () => {
         const debug = jest.spyOn(LoggerFactory.getLogger("socket", "TCPServer"), "debug");
         const {server, port} = await startTls({maxPendingTlsHandshakes: 1});
+        const errors = tlsClientErrors(server);
         const holder = net.connect({host: "127.0.0.1", port});
         holder.on("error", () => {});
         try {
             await new Promise((resolve) => holder.once("connect", resolve));
             await new Promise((resolve) => setTimeout(resolve, 100));
             for(let i = 0; i < 3; i++) expect((await rawUntilClose(port)).length).toBe(0);
-            await new Promise((resolve) => setTimeout(resolve, 100));
+            await errors(3);
             expect(debug.mock.calls.filter((call) => String(call[0]).includes("TLS client error"))).toEqual([]);
         } finally {
             holder.destroy();
@@ -209,6 +225,16 @@ describe("ExternalPortServerPool TLS pre-handshake wiring (#287)", () => {
         // 차단 시간이 지난 시각으로 한 번 판정하면 리미터가 지난 차단을 지운다.
         expect(AdmissionController.instance.admitBeforeHandshake(scope, "127.0.0.1", start + 60_001)).toEqual({allowed: true});
         await expect(handshake(forwardPort)).resolves.toBeUndefined();
+    });
+
+    it("HTTPS 터널 포트도 차단 목록의 주소를 핸드셰이크 전에 닫는다 (#286 REQ-1 AC-1)", async () => {
+        AdmissionController.instance.configureConnectionSecurity({
+            geo: {mode: "off", countries: [], applyToAdmin: true, unknownPolicy: "allow"},
+            blocklist: [{address: "127.0.0.1", port: null, note: "", createdAt: 1, createdBy: "admin"}]
+        });
+        const forwardPort = await getFreePort();
+        await expect(pool.startServer({...tlsTunnel(forwardPort), protocol: "https" as const}, certInfo)).resolves.toBe(true);
+        expect((await rawUntilClose(forwardPort)).length).toBe(0);
     });
 
     it("레이트 리밋으로 차단 중인 주소도 핸드셰이크 전에 닫힌다 (AC-2)", async () => {

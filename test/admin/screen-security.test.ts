@@ -233,6 +233,8 @@ test("이미 All tunnels 로 막힌 주소를 Block permanently 로 옮기면 al
     await banRow.getByRole("button", {name: "Block permanently", exact: true}).click();
     await page.locator("[role=dialog]").getByRole("button", {name: "Block permanently", exact: true}).click();
     await toast(page, "203.0.113.9 is already blocked on all tunnels").waitFor({state: "visible", timeout: 10_000});
+    // 이미 영구 차단된 주소의 일시 차단은 서버가 풀었으므로 표에서도 사라진다.
+    await page.locator("#ban-empty").waitFor({state: "visible", timeout: 10_000});
 }));
 
 test("목록이 가득 차면 Block permanently 확인 창이 그 사실을 미리 알린다", () => withSecurity(async (app) => {

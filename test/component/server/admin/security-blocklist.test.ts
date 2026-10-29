@@ -286,11 +286,29 @@ describe("security-blocklist", () => {
     });
 
     it("넣기가 실패하면 일시 차단을 풀지 않는다", async () => {
+        const full = Array.from({length: MAX_BLOCKLIST_ENTRIES}, (_, i) =>
+            ({address: `10.1.${Math.floor(i / 256)}.${i % 256}`, port: null, note: "", createdAt: 1, createdBy: "admin"}));
+        await storeBlocklist(full);
+        try {
+            banTwice("203.0.113.9");
+            const response = await request("POST", "/api/security/blocklist", {fromBan: {port: TUNNEL_PORT, ip: "203.0.113.9"}}, su);
+            expect(response.status).toBe(409);
+            expect(response.body.code).toBe("full");
+            expect(AdmissionController.instance.rateLimiter.bans(Date.now())).toHaveLength(1);
+        } finally {
+            await storeBlocklist([]);
+        }
+    });
+
+    // 이미 All tunnels 로 막힌 주소는 새로 넣지 않지만, 그 일시 차단은 더 의미가 없으므로 푼다(REQ-5 AC-3).
+    it("이미 All tunnels 로 막힌 주소를 옮기면 409 already blocked 이고 일시 차단은 푼다", async () => {
         expect((await request("POST", "/api/security/blocklist", {address: "203.0.113.9"}, su)).status).toBe(201);
         banTwice("203.0.113.9");
-        const response = await request("POST", "/api/security/blocklist", {address: "203.0.113.9", fromBan: {port: TUNNEL_PORT, ip: "203.0.113.9"}}, su);
+        const response = await request("POST", "/api/security/blocklist", {fromBan: {port: TUNNEL_PORT, ip: "203.0.113.9"}}, su);
         expect(response.status).toBe(409);
-        expect(AdmissionController.instance.rateLimiter.bans(Date.now())).toHaveLength(1);
+        expect(response.body).toMatchObject({code: "duplicate", message: "203.0.113.9 is already blocked on all tunnels", unbanned: true});
+        expect(AdmissionController.instance.rateLimiter.bans(Date.now())).toEqual([]);
+        expect(await addresses()).toEqual(["203.0.113.9"]);
     });
 
     it("fromBan 의 형식이 틀리면 422 다", async () => {

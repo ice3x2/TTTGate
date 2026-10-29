@@ -34,6 +34,17 @@ describe("ConnectionRateLimiter window table under a /64 flood (#175)", () => {
         expect(limiter.admit(1, "2001:db8:78:1::1", 2).allowed).toBe(true);
     });
 
+    // #287 — TLS 포트는 핸드셰이크 전에 banned 로 판정한다. /48 로 묶어 센 차단도 여기서 보여야 한다.
+    it("banned reports the /48 overflow ban for a new /64 but not for a /64 counted on its own", () => {
+        const limiter = new ConnectionRateLimiter();
+        limiter.configurePort(1, CONFIG);
+        for(let n = 0; n < MAX_TRACKED_SUBNETS_PER_PREFIX; n++) limiter.admit(1, `2001:db8:77:${n.toString(16)}::1`, 0);
+        for(let n = 0; n < 4; n++) limiter.admit(1, `2001:db8:77:${(0x1000 + n).toString(16)}::1`, 1);
+        expect(limiter.banned(1, "2001:db8:77:2000::1", 2)).toMatchObject({allowed: false, reason: "rate-limit-ban"});
+        expect(limiter.banned(1, "2001:db8:77:0::5", 2)).toBeUndefined();
+        expect(limiter.banned(1, "2001:db8:78:1::1", 2)).toBeUndefined();
+    });
+
     it("a full table of active IPv4 buckets never turns into a shared bucket that blocks new clients", () => {
         const limiter = new ConnectionRateLimiter();
         limiter.configurePort(1, CONFIG);
