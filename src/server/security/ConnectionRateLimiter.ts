@@ -1,4 +1,5 @@
 import {ADMIT, AdmissionDecision, AdmissionDenial} from "./AdmissionPolicy";
+import {ipv6Groups} from "./address";
 
 export type RateLimitConfig = {windowMs: number; maxConnections: number; banMs: number};
 
@@ -17,13 +18,10 @@ export function rateLimitBucketOf(ip: string): string {
     if(!address.includes(':')) return address;
     // 목록에 보인 버킷 문자열(…::/64)도 같은 버킷으로 읽는다. 압축 표기가 달라도 같은 접두로 정규화한다.
     if(address.endsWith('/64')) return rateLimitBucketOf(address.slice(0, -3));
-    const [head, tail] = address.includes('::') ? address.split('::') : [address, undefined];
-    const headParts = head ? head.split(':') : [];
-    const tailParts = tail === undefined ? [] : (tail ? tail.split(':') : []);
-    const groups = tail === undefined ? headParts : [...headParts, ...Array(Math.max(0, 8 - headParts.length - tailParts.length)).fill('0'), ...tailParts];
-    const prefix = groups.slice(0, 4).map((group) => (parseInt(group || '0', 16) || 0).toString(16));
-    while(prefix.length < 4) prefix.push('0');
-    return `${prefix.join(':')}::/64`;
+    // IPv6 가 아닌 문자열은 바꾸지 않는다. 억지로 읽으면 관계없는 버킷과 겹친다(일시 차단 해제 API 가 입력을 그대로 넘긴다, #288).
+    const groups = ipv6Groups(address);
+    if(!groups) return address;
+    return `${groups.slice(0, 4).map((group) => group.toString(16)).join(':')}::/64`;
 }
 
 /**

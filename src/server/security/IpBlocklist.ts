@@ -1,6 +1,6 @@
 import {BlockList, isIP} from "net";
 import {BlocklistEntry} from "../../types/TunnelingOption";
-import {normalizeRemoteAddress} from "./address";
+import {ipv6Groups, normalizeRemoteAddress} from "./address";
 
 /**
  * #286 — 관리자가 직접 관리하는 영구 차단 목록.
@@ -37,7 +37,7 @@ export function parseBlockedAddress(input: unknown): Parsed<{address: string}> {
     const family = isIP(host);
     if(family === 0) return notAddress;
 
-    let bytes = family === 4 ? ipv4Bytes(host) : ipv6Bytes(host);
+    let bytes = family === 4 ? ipv4Bytes(host) : ipv6Groups(host)!.flatMap((group) => [group >> 8, group & 0xff]);
     let prefix = bytes.length * 8;
     if(prefixText !== undefined) {
         if(!PREFIX_PATTERN.test(prefixText) || Number(prefixText) > prefix) return notAddress;
@@ -226,21 +226,6 @@ function ipv4Bytes(text: string): number[] {
     return text.split('.').map(Number);
 }
 
-/** isIP 로 검증한 IPv6 문자열을 16바이트로 편다. 끝에 IPv4 점 표기가 붙은 형태도 받는다. */
-function ipv6Bytes(text: string): number[] {
-    const groupsOf = (part: string): number[] => part === '' ? [] : part.split(':').flatMap((group) => {
-        if(!group.includes('.')) return [parseInt(group, 16)];
-        const [a, b, c, d] = ipv4Bytes(group);
-        return [(a << 8) | b, (c << 8) | d];
-    });
-    const gap = text.indexOf('::');
-    const groups = gap < 0 ? groupsOf(text) : (() => {
-        const head = groupsOf(text.slice(0, gap));
-        const tail = groupsOf(text.slice(gap + 2));
-        return [...head, ...Array(8 - head.length - tail.length).fill(0), ...tail];
-    })();
-    return groups.flatMap((group) => [group >> 8, group & 0xff]);
-}
 
 /** RFC 5952: 소문자, 앞자리 0 생략, 가장 긴(같으면 앞의) 두 개 이상 연속한 0 그룹을 :: 로 줄인다. */
 function formatIpv6(bytes: number[]): string {

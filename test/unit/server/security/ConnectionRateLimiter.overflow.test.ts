@@ -4,7 +4,8 @@ jest.setTimeout(30_000);
 
 // #175 — IPv6 /48 하나로 /64 를 대량으로 만들어 창 표를 넘쳐도 다른 버킷의 카운터가 지워지면 안 된다.
 const CONFIG = {windowMs: 60_000, maxConnections: 3, banMs: 60_000};
-const v6 = (n: number) => `2001:db8:${(n >> 16) & 0xffff}:${n & 0xffff}::1`;
+// 그룹은 16진수로 쓴다. 10진수로 쓰면 10000 이상에서 다섯 자리 그룹이 되어 IPv6 가 아니다(#288).
+const v6 = (n: number) => `2001:db8:${((n >> 16) & 0xffff).toString(16)}:${(n & 0xffff).toString(16)}::1`;
 const v4 = (n: number) => `10.${(n >> 16) & 255}.${(n >> 8) & 255}.${n & 255}`;
 
 describe("ConnectionRateLimiter window table under a /64 flood (#175)", () => {
