@@ -52,6 +52,7 @@ describe("ip-blocklist e2e", () => {
 
         await harness.restartServer();
         await harness.waitForTunnelOnline(tcpPort);
+        await harness.waitForTunnelOnline(httpPort);
         // 관리 화면에는 적용하지 않으므로 같은 주소로 관리 API 를 계속 쓸 수 있다(REQ-3 AC-3).
         const listed = await harness.adminRequest("/api/security/blocklist");
         expect(listed.status).toBe(200);

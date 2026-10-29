@@ -258,7 +258,7 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line-1);font-
 
   <h3>사용 흐름</h3>
   <ol>
-    <li><b>직접 넣기:</b> 주소나 대역을 쓰고 Block을 누릅니다. 형식이 틀리면 입력란 아래에 바로 이유를 보여 줍니다.</li>
+    <li><b>직접 넣기:</b> 주소나 대역을 쓰고 Block을 누릅니다. 서버가 확인해서 형식이 틀리면 입력란 아래에 이유를 보여 줍니다.</li>
     <li><b>일시 차단에서 옮기기:</b> 레이트 리밋 표에서 "Block permanently"를 누릅니다. 확인 창에는 주소와 "모든 터널에서 계속 막습니다"를 보여 줍니다.</li>
     <li><b>풀기:</b> Unblock을 누르면 확인 창 없이 바로 풉니다. 실수로 풀어도 다시 넣으면 되므로 마찰을 줄입니다. 결과는 토스트로 알립니다.</li>
   </ol>
@@ -300,7 +300,7 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line-1);font-
   <div class="req"><div class="req-head"><span class="req-id">REQ-3</span><span class="s">항목은 모든 터널 또는 터널 하나에 적용되어야 한다(shall).</span></div>
     <div class="req-body"><ul class="ac">
       <li><b>AC-1</b>"All tunnels" 항목은 지금 있는 터널과 나중에 만드는 터널 모두에 적용된다.</li>
-      <li><b>AC-2</b>포트를 고른 항목은 그 외부 포트의 연결만 거절한다.</li>
+      <li><b>AC-2</b>포트를 고른 항목은 그 터널의 연결만 거절한다. 그 터널의 외부 포트를 바꾸면 항목도 새 포트로 옮기고, 터널을 지우면 항목도 지운다.</li>
       <li><b>AC-3</b>관리 화면 포트와 제어 포트(클라이언트 접속)에는 적용하지 않는다.</li>
     </ul></div></div>
 

@@ -25,6 +25,7 @@ import {computeBackoffMs} from "./loginBackoff";
 import crypto from "crypto";
 import {DEFAULT_GEO_CONFIG, GeoConfig, ServerOption, TrustedClient, TunnelingOption} from "../../types/TunnelingOption";
 import {AdmissionController} from "../security/AdmissionController";
+import {moveBlocklistPort} from "../security/IpBlocklist";
 import {rateLimitBucketOf} from "../security/ConnectionRateLimiter";
 import {normalizeConnectionSecurity} from "../security/connectionSecurity";
 import {listCountries} from "../security/countries";
@@ -915,7 +916,12 @@ class AdminServer {
         if(!composed.success || !composed.serverOption) {
             this.sendApiFailure(res, 400, {message: 'Tunneling options update failed.'}); return;
         }
-        if(rename) composed.serverOption.tunnelingOptions = composed.serverOption.tunnelingOptions.filter(row => row.forwardPort !== previousForwardPort);
+        if(rename) {
+            composed.serverOption.tunnelingOptions = composed.serverOption.tunnelingOptions.filter(row => row.forwardPort !== previousForwardPort);
+            // #286 그 터널에만 건 차단 항목도 새 포트로 옮긴다.
+            const security = composed.serverOption.connectionSecurity;
+            if(security) security.blocklist = moveBlocklistPort(security.blocklist ?? [], previousForwardPort!, option.forwardPort);
+        }
         if(!previousOption && !await UsablePortChecker.check(option.forwardPort)) {
             this.sendApiFailure(res, 400, {message: `${option.forwardPort} is an unusable port number.`}); return;
         }
@@ -942,6 +948,7 @@ class AdminServer {
         let runtime: Awaited<ReturnType<TTTServer['applyTunnelingOption']>> =
             {success: false, partial: false, failedScopes: ['server-runtime'], warnings: [], restartRequiredScopes: []};
         try {
+            if(rename) this._tttServer?.applyConnectionSecurity?.(store.serverOption.connectionSecurity);
             if(this._tttServer) runtime = await this._tttServer.applyTunnelingOption(store.getTunnelingOption(option.forwardPort)!, previousOption, certInfo,
                 rename ? previousForwardPort : undefined);
             if(runtime.success && rename && !await this._tttServer!.stopExternalPortServer(previousForwardPort!, true)) {
@@ -1029,6 +1036,8 @@ class AdminServer {
                 });
                 return;
             }
+            // #286 지운 터널에만 건 차단 항목도 빠졌으므로 판정에 바로 반영한다.
+            this._tttServer?.applyConnectionSecurity?.(composeResult.serverOption.connectionSecurity);
             let warnings: string[] = [];
             let status = this._tttServer?.externalServerStatus(forwardPort);
             if(status?.online) {

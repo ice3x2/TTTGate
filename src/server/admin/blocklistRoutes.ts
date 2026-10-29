@@ -19,26 +19,31 @@ export type ConnectionSecurityUpdate = 'not-ready' | 'unchanged' | 'commit-faile
  * 국가 필터·차단 목록(connectionSecurity)을 바꿔 저장하고, 저장에 성공하면 바로 적용한다.
  * change 는 지금 값을 받아 새 값을 돌려준다. undefined 를 돌려주면 저장하지 않는다(unchanged).
  * 런타임 반영은 applyServerOption 이 아니라 applyConnectionSecurity 로만 한다(#118 U5-03).
+ * 적용은 설정 잠금 안에서 커밋 바로 뒤에 한다. 잠금을 놓은 뒤에 적용하면 다음 변경이 그 사이에 런타임 상태를 잡아
+ * 되돌릴 때 이 값이 빠질 수 있다.
  */
 export async function updateConnectionSecurity(apply: ApplyConnectionSecurity,
                                                change: (current: ConnectionSecurityOption) => ConnectionSecurityOption | undefined):
     Promise<ConnectionSecurityUpdate> {
     let outcome = 'not-ready' as ConnectionSecurityUpdate;
-    let next = undefined as ConnectionSecurityOption | undefined;
     await ServerOptionStore.instance.runConfigurationMutation(async () => {
         const store = ServerOptionStore.instance;
         const read = store.readServerOption();
         if(!read.success) return;
         const serverOption = read.serverOption;
-        next = change(serverOption.connectionSecurity ?? {geo: {...DEFAULT_GEO_CONFIG, countries: []}, blocklist: []});
+        const next = change(serverOption.connectionSecurity ?? {geo: {...DEFAULT_GEO_CONFIG, countries: []}, blocklist: []});
         if(next === undefined) {
             outcome = 'unchanged';
             return;
         }
         serverOption.connectionSecurity = next;
-        outcome = store.commitPreparedServerOption(serverOption).success ? 'applied' : 'commit-failed';
+        if(!store.commitPreparedServerOption(serverOption).success) {
+            outcome = 'commit-failed';
+            return;
+        }
+        apply(next);
+        outcome = 'applied';
     });
-    if(outcome === 'applied' && next !== undefined) apply(next);
     return outcome;
 }
 
@@ -79,7 +84,8 @@ export function blocklistRouteHandlers(deps: {applyConnectionSecurity: ApplyConn
         // 일시 차단에서 옮기면 그 주소를 All tunnels 로 넣고, 메모가 없으면 출처 포트를 적는다(REQ-5 AC-1).
         // 요청의 address·port 는 쓰지 않는다.
         const request = fromBan
-            ? {address: fromBan.ip, port: null, note: body.note || `From rate-limit ban on ${fromBan.port}`}
+            ? {address: fromBan.ip, port: null,
+                note: typeof body.note === 'string' && body.note.trim() !== '' ? body.note : `From rate-limit ban on ${fromBan.port}`}
             : body;
         let result = undefined as AddBlocklistResult | undefined;
         const update = await updateConnectionSecurity(deps.applyConnectionSecurity, (current) => {
@@ -104,7 +110,8 @@ export function blocklistRouteHandlers(deps: {applyConnectionSecurity: ApplyConn
         // 영구 차단을 건 뒤에 일시 차단을 푼다. 넣기가 실패하면 위에서 돌아가므로 일시 차단은 그대로 남는다(REQ-5 AC-2).
         const unbanned = fromBan ? AdmissionController.instance.rateLimiter.unban(fromBan.port, fromBan.ip) : false;
         const {address, port, note} = result.entry;
-        ctx.auditDetail({address, port, note, ...(fromBan ? {fromBan, unbanned} : {})});
+        ctx.auditDetail({address, port, note, ...(result.widenedFrom === undefined ? {} : {widenedFrom: result.widenedFrom}),
+            ...(fromBan ? {fromBan, unbanned} : {})});
         ctx.ok({entry: result.entry, unbanned}, 201);
     };
 

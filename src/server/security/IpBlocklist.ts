@@ -19,7 +19,7 @@ type Parsed<T> = {ok: true} & T | {ok: false; message: string};
 
 export type AddBlocklistRequest = {address?: unknown; port?: unknown; note?: unknown};
 export type AddBlocklistResult =
-    {ok: true; entry: BlocklistEntry; entries: BlocklistEntry[]} |
+    {ok: true; entry: BlocklistEntry; entries: BlocklistEntry[]; widenedFrom?: number} |
     {ok: false; code: 'invalid' | 'duplicate' | 'full'; message: string};
 
 /**
@@ -73,7 +73,7 @@ export function addBlocklistEntry(entries: readonly BlocklistEntry[], request: A
     if(existing) {
         if(options.widen && existing.port !== null && entry.port === null) {
             const widened: BlocklistEntry = {...existing, port: null};
-            return {ok: true, entry: widened, entries: entries.map((candidate) => candidate === existing ? widened : candidate)};
+            return {ok: true, entry: widened, entries: entries.map((candidate) => candidate === existing ? widened : candidate), widenedFrom: existing.port};
         }
         const scope = existing.port === null ? 'all tunnels' : `port ${existing.port}`;
         return {ok: false, code: 'duplicate', message: `${address.address} is already blocked on ${scope}`};
@@ -90,6 +90,16 @@ export function removeBlocklistEntry(entries: BlocklistEntry[], address: string)
     const key = parsed.ok ? parsed.address : address;
     const removed = entries.find((entry) => entry.address === key);
     return removed ? {removed, entries: entries.filter((entry) => entry !== removed)} : {removed: undefined, entries};
+}
+
+/** 외부 포트를 바꾼 터널의 항목을 새 포트로 옮긴 새 목록. 포트를 고른 항목은 포트 번호가 아니라 터널을 따라간다. */
+export function moveBlocklistPort(entries: readonly BlocklistEntry[], from: number, to: number): BlocklistEntry[] {
+    return entries.map((entry) => entry.port === from ? {...entry, port: to} : entry);
+}
+
+/** 지운 터널의 항목을 뺀 새 목록. 남겨 두면 나중에 같은 포트를 쓰는 다른 터널에 걸린다. */
+export function dropBlocklistPort(entries: readonly BlocklistEntry[], port: number): BlocklistEntry[] {
+    return entries.filter((entry) => entry.port !== port);
 }
 
 /** 설정 파일에서 읽은 목록을 정규화한다. 틀린 항목은 서버 시작을 막지 않도록 건너뛰고 경고만 남긴다(REQ-2 AC-3). */

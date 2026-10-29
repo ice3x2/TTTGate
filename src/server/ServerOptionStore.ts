@@ -11,6 +11,7 @@ import {createOpaqueToken} from "../commons/ProtocolV2";
 import {redactSecrets} from "../util/SecretRedactor";
 import {createInitialRevisionState, RevisionState} from "./RevisionState";
 import {normalizeConnectionSecurity} from "./security/connectionSecurity";
+import {dropBlocklistPort} from "./security/IpBlocklist";
 
 const logger = LoggerFactory.getLogger('server', 'ServerOptionStore');
 
@@ -125,6 +126,10 @@ class ServerOptionStore {
             return {success: false, message: `forwardPort ${forwardPort} is not registered`};
         }
         serverOption.tunnelingOptions.splice(index, 1);
+        // #286 그 터널에만 건 차단 항목도 함께 지운다.
+        if(serverOption.connectionSecurity) {
+            serverOption.connectionSecurity.blocklist = dropBlocklistPort(serverOption.connectionSecurity.blocklist ?? [], forwardPort);
+        }
         return {success: true, message: "", serverOption};
     }
 

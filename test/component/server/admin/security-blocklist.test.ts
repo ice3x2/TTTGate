@@ -242,6 +242,9 @@ describe("security-blocklist", () => {
         expect(response.status).toBe(201);
         // 적용 범위만 넓히고 원래 메모는 지킨다.
         expect(response.body.entry).toMatchObject({address: "203.0.113.9", port: null, note: "scanner"});
+        // 새로 넣은 것과 구별되도록 감사에 원래 적용 범위를 남긴다.
+        const events = eventsOf("security_block_added");
+        expect(events[events.length - 1].detail).toMatchObject({address: "203.0.113.9", port: null, widenedFrom: 9000});
         expect((await request("GET", "/api/security/blocklist", {}, su)).body.entries).toEqual([response.body.entry]);
         expect(AdmissionController.instance.rateLimiter.bans(Date.now())).toEqual([]);
     });
@@ -262,6 +265,13 @@ describe("security-blocklist", () => {
         expect(response.body.entry).toMatchObject({address: "203.0.113.9", port: null, note: `From rate-limit ban on ${TUNNEL_PORT}`});
         const events = eventsOf("security_block_added");
         expect(events[events.length - 1].target).toEqual({kind: "security", id: "203.0.113.9"});
+    });
+
+    it("fromBan 의 메모가 공백뿐이면 출처 포트를 메모로 쓴다 (REQ-5 AC-1)", async () => {
+        banTwice("203.0.113.9");
+        const response = await request("POST", "/api/security/blocklist", {note: "   ", fromBan: {port: TUNNEL_PORT, ip: "203.0.113.9"}}, su);
+        expect(response.status).toBe(201);
+        expect(response.body.entry.note).toBe(`From rate-limit ban on ${TUNNEL_PORT}`);
     });
 
     it("fromBan.ip 의 앞뒤 공백은 지우고 옮긴다", async () => {

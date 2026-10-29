@@ -128,7 +128,17 @@ describe("TCPServer admitBeforeHandshake (#287)", () => {
         holder.on("error", () => {});
         try {
             await new Promise((resolve) => holder.once("connect", resolve));
-            await new Promise((resolve) => setTimeout(resolve, 100));
+            // holder 가 대기 칸에 들어갈 때까지 기다린다. 고정 시간을 기다리면 부하가 클 때 다음 연결이 먼저 칸을 차지한다.
+            const pending = (server as unknown as {_pendingTlsSockets: Map<net.Socket, string>})._pendingTlsSockets;
+            await new Promise<void>((resolve, reject) => {
+                const timer = setTimeout(() => reject(new Error("holder did not take the pending slot")), 5_000);
+                const poll = setInterval(() => {
+                    if(pending.size < 1) return;
+                    clearInterval(poll);
+                    clearTimeout(timer);
+                    resolve();
+                }, 10);
+            });
             for(let i = 0; i < 3; i++) expect((await rawUntilClose(port)).length).toBe(0);
             await errors(3);
             expect(debug.mock.calls.filter((call) => String(call[0]).includes("TLS client error"))).toEqual([]);

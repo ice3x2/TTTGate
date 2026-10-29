@@ -1,5 +1,7 @@
 import {
     addBlocklistEntry,
+    dropBlocklistPort,
+    moveBlocklistPort,
     IpBlocklist,
     MAX_BLOCKLIST_ENTRIES,
     MAX_BLOCKLIST_NOTE_LENGTH,
@@ -154,7 +156,8 @@ describe("addBlocklistEntry (#286 REQ-4·REQ-5)", () => {
         expect(addBlocklistEntry(entries, {address: "203.0.113.7", note: "moved"}, meta, {widen: true})).toEqual({
             ok: true,
             entry: widened,
-            entries: [entryOf("203.0.113.1"), widened, entryOf("203.0.113.9")]
+            entries: [entryOf("203.0.113.1"), widened, entryOf("203.0.113.9")],
+            widenedFrom: 9000
         });
     });
 
@@ -198,6 +201,25 @@ describe("removeBlocklistEntry (#286 REQ-4)", () => {
     it("없는 주소면 removed 가 없고 목록은 그대로다", () => {
         const entries = [entryOf("203.0.113.7")];
         expect(removeBlocklistEntry(entries, "not-an-ip")).toEqual({removed: undefined, entries});
+    });
+});
+
+// 포트를 고른 항목은 터널을 따라간다. 외부 포트를 바꾸면 옮기고, 터널을 지우면 함께 지운다(REQ-2 AC-2, REQ-3 AC-2).
+describe("moveBlocklistPort / dropBlocklistPort (#286)", () => {
+    const entries = [entryOf("203.0.113.1"), entryOf("203.0.113.2", 1111), entryOf("203.0.113.3", 2222)];
+
+    it("옛 포트의 항목만 새 포트로 옮기고 나머지는 그대로 둔다", () => {
+        expect(moveBlocklistPort(entries, 1111, 3333)).toEqual([entryOf("203.0.113.1"), entryOf("203.0.113.2", 3333), entryOf("203.0.113.3", 2222)]);
+        expect(entries[1].port).toBe(1111);
+    });
+
+    it("그 포트의 항목만 지운다", () => {
+        expect(dropBlocklistPort(entries, 1111)).toEqual([entryOf("203.0.113.1"), entryOf("203.0.113.3", 2222)]);
+    });
+
+    it("그 포트의 항목이 없으면 같은 내용을 돌려준다", () => {
+        expect(moveBlocklistPort(entries, 9999, 3333)).toEqual(entries);
+        expect(dropBlocklistPort(entries, 9999)).toEqual(entries);
     });
 });
 
