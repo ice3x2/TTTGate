@@ -1,6 +1,6 @@
 import Environment from "../Environment";
 import File from "../util/File";
-import {ControlProtocolMode, DEFAULT_KEY, DEFAULT_SESSION_TTL_MS, resolveSessionTtlMs, resolveAuditRetentionDays, resolveAuditQueueSize, resolveLogLevel, resolveCloseStallMs, resolveCloseGraceMs, HttpOption, ServerOption, TunnelingOption, normalizeRateLimit, defaultRateLimit} from "../types/TunnelingOption";
+import {ControlProtocolMode, DEFAULT_KEY, DEFAULT_SESSION_TTL_MS, resolveSessionTtlMs, resolveAuditRetentionDays, resolveAuditQueueSize, resolveLogLevel, resolveCloseStallMs, resolveCloseGraceMs, HttpOption, ServerOption, TunnelingOption, normalizeRateLimit, defaultRateLimit, BlocklistEntry} from "../types/TunnelingOption";
 import YAML from "yaml";
 import Files, {AtomicFileValue} from "../util/Files";
 import ObjectUtil from "../util/ObjectUtil";
@@ -12,6 +12,9 @@ import {redactSecrets} from "../util/SecretRedactor";
 import {createInitialRevisionState, RevisionState} from "./RevisionState";
 import {normalizeConnectionSecurity} from "./security/connectionSecurity";
 import {dropBlocklistPort, dropOrphanBlocklistEntries} from "./security/IpBlocklist";
+
+/** 터널 행을 넣거나 뺀 서버 설정. droppedBlocks 는 그 포트에서 함께 빠진 차단 항목이다(#286, 감사용). */
+type ComposedServerOption = {success: boolean, message: string, serverOption?: ServerOption, droppedBlocks?: BlocklistEntry[]};
 
 const logger = LoggerFactory.getLogger('server', 'ServerOptionStore');
 
@@ -101,7 +104,7 @@ class ServerOptionStore {
         return this.verificationServerOption(serverOption);
     }
 
-    public composeServerOptionWithTunnelingOption(tunnelingOption: TunnelingOption): {success: boolean, message: string, serverOption?: ServerOption} {
+    public composeServerOptionWithTunnelingOption(tunnelingOption: TunnelingOption): ComposedServerOption {
         if(!this._loadStatus.ready) return {success: false, message: 'server configuration is not ready'};
         const normalizedOption = ObjectUtil.cloneDeep(tunnelingOption);
         const result = this.verificationTunnelingOption(normalizedOption);
@@ -110,20 +113,23 @@ class ServerOptionStore {
         }
         const serverOption = this.serverOption;
         const index = serverOption.tunnelingOptions.findIndex((option) => option.forwardPort == tunnelingOption.forwardPort);
+        let droppedBlocks: BlocklistEntry[] = [];
         if(index < 0) {
             serverOption.tunnelingOptions.push(normalizedOption);
             // #286 그 포트에 남아 있던 고아 차단 항목(지운 터널의 것)을 새 터널이 물려받지 않게 뺀다.
             // 이 포트를 새로 쓸 수 있다는 것은 옛 리스너가 이미 없다는 뜻이다.
             if(serverOption.connectionSecurity) {
-                serverOption.connectionSecurity.blocklist = dropBlocklistPort(serverOption.connectionSecurity.blocklist ?? [], normalizedOption.forwardPort);
+                const result = dropBlocklistPort(serverOption.connectionSecurity.blocklist ?? [], normalizedOption.forwardPort);
+                serverOption.connectionSecurity.blocklist = result.entries;
+                droppedBlocks = result.dropped;
             }
         } else {
             serverOption.tunnelingOptions[index] = normalizedOption;
         }
-        return {success: true, message: "", serverOption};
+        return {success: true, message: "", serverOption, droppedBlocks};
     }
 
-    public composeServerOptionWithoutTunnelingOption(forwardPort: number): {success: boolean, message: string, serverOption?: ServerOption} {
+    public composeServerOptionWithoutTunnelingOption(forwardPort: number): ComposedServerOption {
         if(!this._loadStatus.ready) return {success: false, message: 'server configuration is not ready'};
         const serverOption = this.serverOption;
         const index = serverOption.tunnelingOptions.findIndex((option) => option.forwardPort == forwardPort);
@@ -132,10 +138,13 @@ class ServerOptionStore {
         }
         serverOption.tunnelingOptions.splice(index, 1);
         // #286 그 터널에만 건 차단 항목도 함께 지운다.
+        let droppedBlocks: BlocklistEntry[] = [];
         if(serverOption.connectionSecurity) {
-            serverOption.connectionSecurity.blocklist = dropBlocklistPort(serverOption.connectionSecurity.blocklist ?? [], forwardPort);
+            const result = dropBlocklistPort(serverOption.connectionSecurity.blocklist ?? [], forwardPort);
+            serverOption.connectionSecurity.blocklist = result.entries;
+            droppedBlocks = result.dropped;
         }
-        return {success: true, message: "", serverOption};
+        return {success: true, message: "", serverOption, droppedBlocks};
     }
 
     public commitPreparedServerOption(

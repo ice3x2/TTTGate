@@ -23,9 +23,9 @@ import {AdminSecurityPolicyRegistry, clientAddressFromForwardedFor, evaluateAdmi
 import {timingSafeStringEqual} from "../../util/timingSafeStringEqual";
 import {computeBackoffMs} from "./loginBackoff";
 import crypto from "crypto";
-import {DEFAULT_GEO_CONFIG, GeoConfig, ServerOption, TrustedClient, TunnelingOption} from "../../types/TunnelingOption";
+import {BlocklistEntry, DEFAULT_GEO_CONFIG, GeoConfig, ServerOption, TrustedClient, TunnelingOption} from "../../types/TunnelingOption";
 import {AdmissionController} from "../security/AdmissionController";
-import {moveBlocklistPort, withPortAlias} from "../security/IpBlocklist";
+import {dropBlocklistPort, moveBlocklistPort, withPortAlias} from "../security/IpBlocklist";
 import {rateLimitBucketOf} from "../security/ConnectionRateLimiter";
 import {normalizeConnectionSecurity} from "../security/connectionSecurity";
 import {listCountries} from "../security/countries";
@@ -51,12 +51,9 @@ import {AUDIT_EVENT_TYPES} from "../audit/AuditEventTypes";
 const logger = LoggerFactory.getLogger('server', 'AdminServer');
 const MFA_NOW = (): number => ClockRngProvider.current().now();
 
-/**
- * #286 port 에 건 차단 항목(감사용 주소·메모). 터널을 지우거나, 터널이 없는 포트로 새 터널을 만들 때
- * 설정에서 빠지는 항목을 감사 detail(droppedBlocks)에 남기는 데 쓴다.
- */
-const blocksAt = (serverOption: ServerOption, port: number): Array<{address: string; note: string}> =>
-    (serverOption.connectionSecurity?.blocklist ?? []).filter((entry) => entry.port === port).map((entry) => ({address: entry.address, note: entry.note}));
+/** #286 설정에서 빠진 차단 항목을 감사 detail(droppedBlocks)에 남길 모양(주소·메모)으로 바꾼다. */
+const auditBlocks = (entries: readonly BlocklistEntry[] | undefined): Array<{address: string; note: string}> =>
+    (entries ?? []).map((entry) => ({address: entry.address, note: entry.note}));
 
 type LoginAttemptState = {
     failedCount: number;
@@ -668,9 +665,21 @@ class AdminServer {
             }
             requestedServerOption.trustedClients = keptTrustedClients;
             // #286: 차단 목록은 /api/security/blocklist 로만 바꾼다. 화면이 보낸 값은 무시하고 지금 값을 지킨다.
+            // 요청이 터널 목록을 바꿔 새 포트에 터널을 더하면, 그 포트에 남아 있던 고아 항목은 새 터널이 물려받지 않게 뺀다.
             const requestedSecurity = requestedServerOption.connectionSecurity;
+            let droppedBlocks: BlocklistEntry[] = [];
             if(requestedSecurity === undefined || (typeof requestedSecurity === 'object' && requestedSecurity !== null && !Array.isArray(requestedSecurity))) {
-                requestedServerOption.connectionSecurity = {...requestedSecurity, blocklist: currentServerOption.connectionSecurity?.blocklist ?? []};
+                let blocklist = currentServerOption.connectionSecurity?.blocklist ?? [];
+                const currentPorts = new Set(currentServerOption.tunnelingOptions.map((tunnel) => tunnel.forwardPort));
+                const requestedTunnels: unknown[] = Array.isArray(requestedServerOption.tunnelingOptions) ? requestedServerOption.tunnelingOptions : [];
+                for(const tunnel of requestedTunnels) {
+                    const port = Number((tunnel as {forwardPort?: unknown} | null)?.forwardPort);
+                    if(!Number.isInteger(port) || currentPorts.has(port)) continue;
+                    const result = dropBlocklistPort(blocklist, port);
+                    blocklist = result.entries;
+                    droppedBlocks = [...droppedBlocks, ...result.dropped];
+                }
+                requestedServerOption.connectionSecurity = {...requestedSecurity, blocklist};
             }
             let prepareResult = serverOptionStore.prepareServerOption(ObjectUtil.cloneDeep(requestedServerOption));
             if(!prepareResult.success || !prepareResult.serverOption) {
@@ -797,6 +806,7 @@ class AdminServer {
                 });
                 return;
             }
+            if(droppedBlocks.length > 0) ctx.auditDetail({droppedBlocks: auditBlocks(droppedBlocks)});
             this.sendApiSuccess(res, {
                 partial: runtimeResult.partial,
                 updated: true,
@@ -827,8 +837,8 @@ class AdminServer {
                 return;
             }
             let previousOption = serverOptionStore.getTunnelingOption(tunnelingOption.forwardPort);
-            const droppedBlocks = previousOption ? [] : blocksAt(serverOptionStore.serverOption, tunnelingOption.forwardPort);
             let composeResult = serverOptionStore.composeServerOptionWithTunnelingOption(ObjectUtil.cloneDeep(tunnelingOption));
+            const droppedBlocks = auditBlocks(composeResult.droppedBlocks);
             if(!composeResult.success || !composeResult.serverOption) {
                 this.sendApiFailure(res, 400, {
                     message: 'Tunneling options update failed.',
@@ -923,8 +933,8 @@ class AdminServer {
             !ObjectUtil.equalsType(EMPTY_CERT_INFO, certInfo) || !certificates.prepareExternalServerCert(certInfo))) {
             this.sendApiFailure(res, 400, {message: 'Invalid certificate.'}); return;
         }
-        const droppedBlocks = previousOption ? [] : blocksAt(store.serverOption, option.forwardPort);
         const composed = store.composeServerOptionWithTunnelingOption(ObjectUtil.cloneDeep(option));
+        const droppedBlocks = auditBlocks(composed.droppedBlocks);
         if(!composed.success || !composed.serverOption) {
             this.sendApiFailure(res, 400, {message: 'Tunneling options update failed.'}); return;
         }
@@ -934,9 +944,9 @@ class AdminServer {
             // #286 그 터널에만 건 차단 항목도 새 포트로 옮기고, 옮긴 항목을 감사에 남긴다.
             const security = composed.serverOption.connectionSecurity;
             if(security) {
-                movedBlocks = (security.blocklist ?? []).filter((entry) => entry.port === previousForwardPort)
-                    .map((entry) => ({address: entry.address, from: previousForwardPort!, to: option.forwardPort}));
-                security.blocklist = moveBlocklistPort(security.blocklist ?? [], previousForwardPort!, option.forwardPort);
+                const moved = moveBlocklistPort(security.blocklist ?? [], previousForwardPort!, option.forwardPort);
+                security.blocklist = moved.entries;
+                movedBlocks = moved.moved.map((entry) => ({address: entry.address, from: previousForwardPort!, to: option.forwardPort}));
             }
         }
         if(!previousOption && !await UsablePortChecker.check(option.forwardPort)) {
@@ -1044,9 +1054,9 @@ class AdminServer {
             }
             const committedBefore = serverOptionStore.captureCommittedState();
             const runtimeBefore = this._tttServer?.captureRuntimeState?.();
-            // #286 그 터널에만 건 차단 항목도 함께 빠진다. 터널 소유자는 security:manage 없이도 지우므로 풀린 차단을 감사에 남긴다.
-            const droppedBlocks = blocksAt(serverOptionStore.serverOption, forwardPort);
             let composeResult = serverOptionStore.composeServerOptionWithoutTunnelingOption(forwardPort);
+            // #286 그 터널에만 건 차단 항목도 함께 빠진다. 터널 소유자는 security:manage 없이도 지우므로 풀린 차단을 감사에 남긴다.
+            const droppedBlocks = auditBlocks(composeResult.droppedBlocks);
             if(!composeResult.success || !composeResult.serverOption) {
                 this.sendApiFailure(res, 400, {message: `External port(${forwardPort}) server already removed.`, forwardPort});
                 return;

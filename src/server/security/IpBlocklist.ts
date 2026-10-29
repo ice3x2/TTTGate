@@ -96,9 +96,15 @@ export function removeBlocklistEntry(entries: BlocklistEntry[], address: string)
     return removed ? {removed, entries: entries.filter((entry) => entry !== removed)} : {removed: undefined, entries};
 }
 
-/** 외부 포트를 바꾼 터널의 항목을 새 포트로 옮긴 새 목록. 포트를 고른 항목은 포트 번호가 아니라 터널을 따라간다. */
-export function moveBlocklistPort(entries: readonly BlocklistEntry[], from: number, to: number): BlocklistEntry[] {
-    return entries.map((entry) => entry.port === from ? {...entry, port: to} : entry);
+/**
+ * 외부 포트를 바꾼 터널의 항목을 새 포트로 옮긴 새 목록과, 옮기기 전의 그 항목(감사용).
+ * 포트를 고른 항목은 포트 번호가 아니라 터널을 따라간다.
+ */
+export function moveBlocklistPort(entries: readonly BlocklistEntry[], from: number, to: number): {entries: BlocklistEntry[]; moved: BlocklistEntry[]} {
+    return {
+        entries: entries.map((entry) => entry.port === from ? {...entry, port: to} : entry),
+        moved: entries.filter((entry) => entry.port === from)
+    };
 }
 
 /** 터널이 없는 포트에 건 항목을 빼고 경고를 돌려준다. 설정 파일을 손으로 고쳤거나 터널 목록을 통째로 바꾼 경우에 생긴다. */
@@ -121,9 +127,13 @@ export function withPortAlias(option: ConnectionSecurityOption | undefined, port
     return {...option, blocklist: [...entries, ...entries.filter((entry) => entry.port === port).map((entry) => ({...entry, port: alias}))]};
 }
 
-/** 지운 터널의 항목을 뺀 새 목록. 남겨 두면 나중에 같은 포트를 쓰는 다른 터널에 걸린다. */
-export function dropBlocklistPort(entries: readonly BlocklistEntry[], port: number): BlocklistEntry[] {
-    return entries.filter((entry) => entry.port !== port);
+/**
+ * 그 포트의 항목을 뺀 새 목록과 뺀 항목(감사용). 지운 터널의 항목, 새 터널이 쓰게 된 포트의 고아 항목을 뺄 때 쓴다.
+ * 남겨 두면 나중에 같은 포트를 쓰는 다른 터널에 걸린다.
+ */
+export function dropBlocklistPort(entries: readonly BlocklistEntry[], port: number): {entries: BlocklistEntry[]; dropped: BlocklistEntry[]} {
+    if(!entries.some((entry) => entry.port === port)) return {entries: [...entries], dropped: []};
+    return {entries: entries.filter((entry) => entry.port !== port), dropped: entries.filter((entry) => entry.port === port)};
 }
 
 /** 설정 파일에서 읽은 목록을 정규화한다. 틀린 항목은 서버 시작을 막지 않도록 건너뛰고 경고만 남긴다(REQ-2 AC-3). */

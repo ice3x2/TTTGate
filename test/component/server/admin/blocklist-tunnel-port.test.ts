@@ -137,6 +137,73 @@ test.each(["plain", "with certificate"])("새 터널을 만들면 그 포트에 
     expect(AdmissionController.instance.blocklist.isBlocked(port, "203.0.113.7")).toBe(false);
 }));
 
+const addOrphan = (f: any, address: string, port: number) => {
+    const read = f.store.readServerOption();
+    read.serverOption.connectionSecurity = {...read.serverOption.connectionSecurity,
+        blocklist: [...(read.serverOption.connectionSecurity?.blocklist ?? []), {address, port, note: "old", createdAt: 1, createdBy: "admin"}]};
+    expect(f.store.commitPreparedServerOption(read.serverOption).success).toBe(true);
+    f.tunnel.applyConnectionSecurity(f.store.serverOption.connectionSecurity);
+};
+
+test("고아 항목이 있는 포트로 포트를 바꾸면 고아 항목은 빼고 옮긴 항목만 남기며 둘 다 감사에 남긴다", async () => withConfigurationServer(async f => {
+    const {port, option} = await addTunnel(f);
+    await block(f, "203.0.113.7", port);
+    const next = await getFreePort();
+    addOrphan(f, "203.0.113.9", next);
+    const audit = captureAudit();
+    try {
+        const response = await f.request("POST", "/api/tunnelingOption", {...option, forwardPort: next, previousForwardPort: port,
+            expectedRevision: f.store.revisionState.currentRevision});
+        expect(response.statusCode).toBe(200);
+        const saved = audit.events.filter((event) => event.type.startsWith("tunnel_"));
+        expect(saved[saved.length - 1].detail).toMatchObject({
+            movedBlocks: [{address: "203.0.113.7", from: port, to: next}],
+            droppedBlocks: [{address: "203.0.113.9", note: "old"}]
+        });
+    } finally {
+        audit.reset();
+    }
+    expect(storedBlocklist(f).map((entry: any) => [entry.address, entry.port])).toEqual([["203.0.113.7", next]]);
+    expect(AdmissionController.instance.blocklist.isBlocked(next, "203.0.113.9")).toBe(false);
+    expect(AdmissionController.instance.blocklist.isBlocked(next, "203.0.113.7")).toBe(true);
+}));
+
+test("고아 항목이 있는 포트에 새 터널을 만들다 실패하면 고아 항목도 되돌린다", async () => withConfigurationServer(async f => {
+    const port = await getFreePort();
+    addOrphan(f, "203.0.113.9", port);
+    const failure = jest.spyOn(f.tunnel, "applyTunnelingOption")
+        .mockResolvedValueOnce({success: false, partial: false, failedScopes: ["external-listener:test"], warnings: [], restartRequiredScopes: []});
+    try {
+        const response = await f.request("POST", "/api/tunnelingOption", {forwardPort: port, protocol: "tcp", tls: false, destinationAddress: "127.0.0.1",
+            destinationPort: 9, keepAlive: 0, expectedRevision: f.store.revisionState.currentRevision});
+        expect(response.statusCode).toBe(400);
+    } finally {
+        failure.mockRestore();
+    }
+    expect(storedBlocklist(f).map((entry: any) => [entry.address, entry.port])).toEqual([["203.0.113.9", port]]);
+    expect(AdmissionController.instance.blocklist.isBlocked(port, "203.0.113.9")).toBe(true);
+}));
+
+// 관리 화면은 보내지 않지만, 서버 설정 저장 API 로 터널 목록을 직접 바꿔 고아 포트에 터널을 더할 수도 있다.
+test("서버 설정 저장으로 고아 포트에 터널을 더해도 그 항목을 빼고 감사에 남긴다", async () => withConfigurationServer(async f => {
+    const port = await getFreePort();
+    addOrphan(f, "203.0.113.9", port);
+    const read = await f.snapshot();
+    const tunnel = {forwardPort: port, protocol: "tcp", tls: false, destinationAddress: "127.0.0.1", destinationPort: 9, keepAlive: 0};
+    const audit = captureAudit();
+    try {
+        const response = await f.request("POST", "/api/serverOption", {...read.serverOption,
+            tunnelingOptions: [...f.store.serverOption.tunnelingOptions, tunnel], expectedRevision: read.revisionState.currentRevision});
+        expect(response.statusCode).toBe(200);
+        const saved = audit.events.filter((event) => event.type === "server_option_updated");
+        expect(saved[saved.length - 1].detail).toMatchObject({droppedBlocks: [{address: "203.0.113.9", note: "old"}]});
+    } finally {
+        audit.reset();
+    }
+    expect(storedBlocklist(f)).toEqual([]);
+    expect(AdmissionController.instance.blocklist.isBlocked(port, "203.0.113.9")).toBe(false);
+}));
+
 test("터널이 없는 포트에는 포트를 고른 항목을 넣을 수 없다", async () => withConfigurationServer(async f => {
     const {port} = await addTunnel(f);
     const unused = await getFreePort();

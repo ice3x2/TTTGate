@@ -218,17 +218,20 @@ describe("moveBlocklistPort / dropBlocklistPort (#286)", () => {
     const entries = [entryOf("203.0.113.1"), entryOf("203.0.113.2", 1111), entryOf("203.0.113.3", 2222)];
 
     it("옛 포트의 항목만 새 포트로 옮기고 나머지는 그대로 둔다", () => {
-        expect(moveBlocklistPort(entries, 1111, 3333)).toEqual([entryOf("203.0.113.1"), entryOf("203.0.113.2", 3333), entryOf("203.0.113.3", 2222)]);
+        expect(moveBlocklistPort(entries, 1111, 3333)).toEqual({
+            entries: [entryOf("203.0.113.1"), entryOf("203.0.113.2", 3333), entryOf("203.0.113.3", 2222)],
+            moved: [entryOf("203.0.113.2", 1111)]
+        });
         expect(entries[1].port).toBe(1111);
     });
 
     it("그 포트의 항목만 지운다", () => {
-        expect(dropBlocklistPort(entries, 1111)).toEqual([entryOf("203.0.113.1"), entryOf("203.0.113.3", 2222)]);
+        expect(dropBlocklistPort(entries, 1111)).toEqual({entries: [entryOf("203.0.113.1"), entryOf("203.0.113.3", 2222)], dropped: [entryOf("203.0.113.2", 1111)]});
     });
 
     it("그 포트의 항목이 없으면 같은 내용을 돌려준다", () => {
-        expect(moveBlocklistPort(entries, 9999, 3333)).toEqual(entries);
-        expect(dropBlocklistPort(entries, 9999)).toEqual(entries);
+        expect(moveBlocklistPort(entries, 9999, 3333)).toEqual({entries, moved: []});
+        expect(dropBlocklistPort(entries, 9999)).toEqual({entries, dropped: []});
     });
 });
 
