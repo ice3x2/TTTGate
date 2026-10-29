@@ -295,12 +295,13 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line-1);font-
       <li><b>AC-1</b>목록은 <code>server.yaml</code>의 <code>connectionSecurity.blocklist</code>에 저장된다. 서버를 다시 시작한 뒤에도 같은 주소가 거절된다.</li>
       <li><b>AC-2</b>터널을 저장하거나 외부 포트를 바꿔 리스너를 새로 만들어도 차단은 유지된다.</li>
       <li><b>AC-3</b>저장된 항목 중 형식이 틀린 것은 시작할 때 건너뛰고 경고 로그를 남긴다. 나머지 항목과 서버 시작은 영향을 받지 않는다. 건너뛴 항목은 다음 저장 때 파일에서도 빠지며, 경고에 그 사실을 적는다.</li>
+      <li><b>AC-4</b>국가 필터 저장(<code>PUT /api/security/geo</code>)과 서버 설정 저장(<code>/api/serverOption</code>)은 차단 목록을 지우거나 바꾸지 않는다.</li>
     </ul></div></div>
 
   <div class="req"><div class="req-head"><span class="req-id">REQ-3</span><span class="s">항목은 모든 터널 또는 터널 하나에 적용되어야 한다(shall).</span></div>
     <div class="req-body"><ul class="ac">
       <li><b>AC-1</b>"All tunnels" 항목은 지금 있는 터널과 나중에 만드는 터널 모두에 적용된다.</li>
-      <li><b>AC-2</b>포트를 고른 항목은 그 터널의 연결만 거절한다. 항목은 포트 번호가 아니라 터널을 따라간다. 그 터널의 외부 포트를 바꾸면 항목도 새 포트로 옮기고, 터널을 지우면 항목도 지운다. 옮기거나 지우는 동안에도 옛 리스너가 멈출 때까지 그 포트에서 계속 막는다. 터널이 없는 포트에는 항목을 넣을 수 없다(422 <code>no tunnel uses port N</code>). 설정 파일에 그런 항목이 있으면 시작할 때 경고와 함께 뺀다. 저장할 때는 빼지 않는다(서버 설정 저장으로 터널을 빼도 그 리스너는 다시 시작할 때까지 돌므로, 그동안 항목을 남겨 계속 막는다). 그 포트로 새 터널을 만들면 남아 있던 항목을 뺀다(새 터널이 물려받지 않는다).</li>
+      <li><b>AC-2</b>포트를 고른 항목은 그 터널의 연결만 거절한다. 항목은 포트 번호가 아니라 터널을 따라간다. 그 터널의 외부 포트를 바꾸면 항목도 새 포트로 옮기고, 터널을 지우면 항목도 지운다. 옮기거나 지우는 동안에도 옛 리스너가 멈출 때까지 그 포트에서 계속 막는다. 터널이 없는 포트에는 항목을 넣을 수 없다(422 <code>no tunnel uses port N</code>). 설정 파일에 그런 항목이 있으면 시작할 때 경고와 함께 뺀다. 저장할 때는 빼지 않는다(서버 설정 저장으로 터널을 빼도 그 리스너는 다시 시작할 때까지 돌므로, 그동안 항목을 남겨 계속 막는다). 그 포트로 새 터널을 만들면 남아 있던 항목을 뺀다(새 터널이 물려받지 않는다). 다만 서버 설정 저장으로 같은 포트에 터널을 다시 더할 때 옛 리스너가 아직 돌고 있으면, 그 리스너가 도는 동안은 항목을 남긴다.</li>
       <li><b>AC-3</b>관리 화면 포트와 제어 포트(클라이언트 접속)에는 적용하지 않는다.</li>
     </ul></div></div>
 
@@ -317,7 +318,7 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line-1);font-
     <div class="req-body"><ul class="ac">
       <li><b>AC-1</b>"Block permanently"를 누르고 확인하면 그 주소(IPv6는 표에 보인 <code>/64</code>·<code>/48</code> 대역)가 "All tunnels" 항목으로 들어가고, 메모에는 출처 포트가 들어간다. 그 주소가 포트 하나에만 걸린 항목으로 이미 있으면 그 항목을 "All tunnels"로 넓힌다.</li>
       <li><b>AC-2</b>같은 동작에서 그 행의 일시 차단을 푼다. 표에서 행이 사라진다.</li>
-      <li><b>AC-3</b>이미 "All tunnels"로 목록에 있는 주소이면 새로 넣지 않고 "already blocked"를 알린다. 그 주소는 이미 영구 차단되어 있으므로 그 행의 일시 차단은 풀고, 그 사실을 감사 로그에 남긴다.</li>
+      <li><b>AC-3</b>이미 "All tunnels"로 목록에 있는 주소이면 새로 넣지 않고 "already blocked"(409)를 알린다. 그 주소는 이미 영구 차단되어 있으므로 그 행의 일시 차단은 풀고, 그 사실을 감사 detail(<code>fromBan</code>, <code>unbanned</code>)에 남긴다.</li>
     </ul></div></div>
 
   <div class="req"><div class="req-head"><span class="req-id">REQ-6</span><span class="s">넣기와 풀기는 감사 로그에 남아야 한다(shall).</span></div>

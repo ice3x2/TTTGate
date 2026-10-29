@@ -38,6 +38,9 @@
     let tick = $state(Date.now());
     // 관리자 차단 목록(이슈 286).
     let blocklist = $state<BlocklistEntry[]>([]);
+    // 불러오기 전이나 실패했을 때 빈 목록처럼 보이면 "차단된 주소가 없다"로 오해한다. 상태를 따로 둔다.
+    let blocklistLoaded = $state(false);
+    let blocklistFailed = $state(false);
     let blockLimit = $state(1000);
     let tunnels = $state<Array<{forwardPort: number; protocol: string}>>([]);
     let blockAddress = $state('');
@@ -96,12 +99,20 @@
     };
 
     const loadBlocklist = async () => {
-        const result = await SecurityCtrl.instance.blocklist();
-        if(result.success) {
-            blocklist = result.entries;
-            blockLimit = result.limit;
-        } else {
-            toast.push({tone: 'alarm', message: result.message});
+        try {
+            const result = await SecurityCtrl.instance.blocklist();
+            if(result.success) {
+                blocklist = result.entries;
+                blockLimit = result.limit;
+                blocklistLoaded = true;
+                blocklistFailed = false;
+            } else {
+                blocklistFailed = true;
+                toast.push({tone: 'alarm', message: result.message});
+            }
+        } catch(e) {
+            blocklistFailed = true;
+            failed(e, 'Unable to connect to the server.');
         }
     };
 
@@ -307,7 +318,9 @@
     <Card label="Blocked addresses">
         <div style="display: flex; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; margin-bottom: var(--s-4);">
             <p style="margin: 0;">Connections to tunnels from these addresses are always refused, even after a restart. The admin console is not affected.</p>
-            <span id="block-count" class="mono">{blocklist.length.toLocaleString('en-US')} / {blockLimit.toLocaleString('en-US')}</span>
+            {#if blocklistLoaded}
+                <span id="block-count" class="mono">{blocklist.length.toLocaleString('en-US')} / {blockLimit.toLocaleString('en-US')}</span>
+            {/if}
         </div>
         <form style="display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: flex-end;" onsubmit={(e) => { e.preventDefault(); void block(); }}>
             <Field label="Address or range" for="block-address">
@@ -320,7 +333,7 @@
             <Field label="Note (optional)" for="block-note">
                 <TextInput id="block-note" placeholder="Why is this blocked?" bind:value={blockNote} />
             </Field>
-            <Button id="block-submit" type="submit" variant="primary" disabled={blockAddress.trim() === '' || blockFull || blockPending}>Block</Button>
+            <Button id="block-submit" type="submit" variant="primary" disabled={!blocklistLoaded || blockAddress.trim() === '' || blockFull || blockPending}>Block</Button>
         </form>
         {#if blockError}
             <p id="block-error" role="alert">{blockError}</p>
@@ -328,7 +341,14 @@
         {#if blockFull}
             <p id="block-full" role="status">The blocklist is full. Unblock an address to add another.</p>
         {/if}
-        {#if blocklist.length === 0}
+        {#if blocklistFailed}
+            <div style="display: flex; align-items: center; gap: var(--s-3); margin-top: var(--s-4);">
+                <span id="block-failed" role="alert">The blocklist could not be loaded.</span>
+                <Button id="block-retry" onclick={() => { void loadBlocklist(); }}>Retry</Button>
+            </div>
+        {:else if !blocklistLoaded}
+            <p id="block-loading">Loading…</p>
+        {:else if blocklist.length === 0}
             <p id="block-empty">No blocked addresses.</p>
         {:else}
             <table id="block-table" style="width: 100%; border-collapse: collapse; margin-top: var(--s-4);">

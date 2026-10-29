@@ -281,3 +281,18 @@ test("화면의 터널 목록이 낡아 서버가 거절하면 Applies to 선택
     await page.locator('#block-applies-to option[value="29999"]').waitFor({state: "detached", timeout: 10_000});
     expect(await page.locator("#block-applies-to").inputValue()).toBe("");
 }));
+
+test("차단 목록을 불러오지 못하면 빈 목록처럼 보이지 않고 Block 이 꺼진다", () => withSecurity(async ({page, url}) => {
+    await page.route("**/api/security/blocklist", async (route) => {
+        if(route.request().method() !== "GET") {
+            await route.continue();
+            return;
+        }
+        await route.fulfill({status: 200, contentType: "application/json", body: JSON.stringify({success: false, message: "Temporary failure."})});
+    });
+    await goSecurity(page, url);
+    await page.locator("#block-failed").waitFor({state: "visible", timeout: 10_000});
+    expect(await page.locator("#block-empty").count()).toBe(0);
+    await page.locator("#block-address").fill("203.0.113.7");
+    expect(await page.locator("#block-submit").isDisabled()).toBe(true);
+}));

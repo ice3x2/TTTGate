@@ -28,7 +28,8 @@ const selfSigned = () => {
 const {key, cert} = selfSigned();
 
 /** ClientHello 를 보내지 않는 TCP 연결을 열고, 닫히면 받은 바이트를 돌려준다. 기한 안에 닫히지 않으면 실패한다. */
-const rawUntilClose = (port: number, timeoutMs = 1_000): Promise<Buffer> => new Promise((resolve, reject) => {
+// 핸드셰이크 기한(10초)보다 훨씬 짧으면 "핸드셰이크 전에 닫혔다"는 판정으로 충분하다. 부하가 큰 전체 실행을 생각해 3초를 둔다.
+const rawUntilClose = (port: number, timeoutMs = 3_000): Promise<Buffer> => new Promise((resolve, reject) => {
     const socket = net.connect({host: "127.0.0.1", port});
     const chunks: Buffer[] = [];
     const timer = setTimeout(() => { socket.destroy(); reject(new Error(`connection was not closed within ${timeoutMs}ms`)); }, timeoutMs);

@@ -25,7 +25,7 @@ import {computeBackoffMs} from "./loginBackoff";
 import crypto from "crypto";
 import {BlocklistEntry, DEFAULT_GEO_CONFIG, GeoConfig, ServerOption, TrustedClient, TunnelingOption} from "../../types/TunnelingOption";
 import {AdmissionController} from "../security/AdmissionController";
-import {dropBlocklistPort, moveBlocklistPort, withPortAlias} from "../security/IpBlocklist";
+import {moveBlocklistPort, withPortAlias} from "../security/IpBlocklist";
 import {rateLimitBucketOf} from "../security/ConnectionRateLimiter";
 import {normalizeConnectionSecurity} from "../security/connectionSecurity";
 import {listCountries} from "../security/countries";
@@ -666,20 +666,16 @@ class AdminServer {
             requestedServerOption.trustedClients = keptTrustedClients;
             // #286: 차단 목록은 /api/security/blocklist 로만 바꾼다. 화면이 보낸 값은 무시하고 지금 값을 지킨다.
             // 요청이 터널 목록을 바꿔 새 포트에 터널을 더하면, 그 포트에 남아 있던 고아 항목은 새 터널이 물려받지 않게 뺀다.
+            // 다만 서버 설정 저장으로 뺀 터널의 리스너가 아직 도는 포트는 남긴다(다시 시작할 때까지 그 리스너에서 계속 막는다).
             const requestedSecurity = requestedServerOption.connectionSecurity;
             let droppedBlocks: BlocklistEntry[] = [];
             if(requestedSecurity === undefined || (typeof requestedSecurity === 'object' && requestedSecurity !== null && !Array.isArray(requestedSecurity))) {
-                let blocklist = currentServerOption.connectionSecurity?.blocklist ?? [];
+                requestedServerOption.connectionSecurity = {...requestedSecurity, blocklist: currentServerOption.connectionSecurity?.blocklist ?? []};
                 const currentPorts = new Set(currentServerOption.tunnelingOptions.map((tunnel) => tunnel.forwardPort));
                 const requestedTunnels: unknown[] = Array.isArray(requestedServerOption.tunnelingOptions) ? requestedServerOption.tunnelingOptions : [];
-                for(const tunnel of requestedTunnels) {
-                    const port = Number((tunnel as {forwardPort?: unknown} | null)?.forwardPort);
-                    if(!Number.isInteger(port) || currentPorts.has(port)) continue;
-                    const result = dropBlocklistPort(blocklist, port);
-                    blocklist = result.entries;
-                    droppedBlocks = [...droppedBlocks, ...result.dropped];
-                }
-                requestedServerOption.connectionSecurity = {...requestedSecurity, blocklist};
+                const newPorts = requestedTunnels.map((tunnel) => Number((tunnel as {forwardPort?: unknown} | null)?.forwardPort))
+                    .filter((port) => Number.isInteger(port) && !currentPorts.has(port) && this._tttServer?.externalServerStatus?.(port)?.online !== true);
+                droppedBlocks = ServerOptionStore.releaseOrphanBlocks(requestedServerOption, newPorts);
             }
             let prepareResult = serverOptionStore.prepareServerOption(ObjectUtil.cloneDeep(requestedServerOption));
             if(!prepareResult.success || !prepareResult.serverOption) {

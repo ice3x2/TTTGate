@@ -17,6 +17,9 @@ const captureAudit = (): {events: AuditEvent[]; reset: () => void} => {
 // #286 — 포트를 고른 차단 항목은 포트 번호가 아니라 터널을 따라간다(REQ-2 AC-2, REQ-3 AC-2).
 jest.setTimeout(60000);
 
+// 판정용 차단 규칙은 프로세스에 하나다. 앞 테스트의 규칙이 다음 테스트로 남지 않게 한다.
+beforeEach(() => AdmissionController.resetForTest());
+
 const block = async (f: any, address: string, port: number | null) => {
     const response = await f.request("POST", "/api/security/blocklist", {address, port});
     expect(response.statusCode).toBe(201);
@@ -202,6 +205,65 @@ test("서버 설정 저장으로 고아 포트에 터널을 더해도 그 항목
     }
     expect(storedBlocklist(f)).toEqual([]);
     expect(AdmissionController.instance.blocklist.isBlocked(port, "203.0.113.9")).toBe(false);
+}));
+
+// 서버 설정 저장으로 뺀 터널의 리스너는 다시 시작할 때까지 돈다. 같은 포트로 다시 더해도 그 리스너가 도는 동안은 막는다.
+test("서버 설정 저장으로 같은 포트에 터널을 다시 더해도 옛 리스너가 돌면 항목을 남긴다", async () => withConfigurationServer(async f => {
+    const {port, option} = await addTunnel(f);
+    await block(f, "203.0.113.7", port);
+    let read = await f.snapshot();
+    const others = f.store.serverOption.tunnelingOptions.filter((tunnel: any) => tunnel.forwardPort !== port);
+    expect((await f.request("POST", "/api/serverOption", {...read.serverOption, tunnelingOptions: others,
+        expectedRevision: read.revisionState.currentRevision})).statusCode).toBe(200);
+    expect(f.tunnel.externalServerStatus(port).online).toBe(true);
+    read = await f.snapshot();
+    expect((await f.request("POST", "/api/serverOption", {...read.serverOption, tunnelingOptions: [...others, option],
+        expectedRevision: read.revisionState.currentRevision})).statusCode).toBe(200);
+    expect(storedBlocklist(f).map((entry: any) => [entry.address, entry.port])).toEqual([["203.0.113.7", port]]);
+    expect(AdmissionController.instance.blocklist.isBlocked(port, "203.0.113.7")).toBe(true);
+}));
+
+test("서버 설정 저장의 적용이 실패하면 고아 항목도 되돌리고 감사에 droppedBlocks 를 남기지 않는다", async () => withConfigurationServer(async f => {
+    const port = await getFreePort();
+    addOrphan(f, "203.0.113.9", port);
+    const read = await f.snapshot();
+    const tunnel = {forwardPort: port, protocol: "tcp", tls: false, destinationAddress: "127.0.0.1", destinationPort: 9, keepAlive: 0};
+    const failure = jest.spyOn(f.tunnel, "applyServerOption")
+        .mockResolvedValueOnce({success: false, partial: false, failedScopes: ["server-runtime"], warnings: [], restartRequiredScopes: []});
+    const audit = captureAudit();
+    try {
+        const response = await f.request("POST", "/api/serverOption", {...read.serverOption,
+            tunnelingOptions: [...f.store.serverOption.tunnelingOptions, tunnel], expectedRevision: read.revisionState.currentRevision});
+        expect(response.statusCode).not.toBe(200);
+        expect(audit.events.some((event) => (event.detail as any)?.droppedBlocks !== undefined)).toBe(false);
+    } finally {
+        audit.reset();
+        failure.mockRestore();
+    }
+    expect(storedBlocklist(f).map((entry: any) => [entry.address, entry.port])).toEqual([["203.0.113.9", port]]);
+    expect(AdmissionController.instance.blocklist.isBlocked(port, "203.0.113.9")).toBe(true);
+}));
+
+test("인증서를 붙인 새 터널이 실패하면 고아 항목을 되돌리고 감사에 남기지 않는다", async () => withConfigurationServer(async f => {
+    const port = await getFreePort();
+    addOrphan(f, "203.0.113.9", port);
+    const bundle = generateSelfSignedCert("orphan-failure");
+    const failure = jest.spyOn(f.tunnel, "applyTunnelingOption")
+        .mockResolvedValueOnce({success: false, partial: false, failedScopes: ["external-listener:test"], warnings: [], restartRequiredScopes: []});
+    const audit = captureAudit();
+    try {
+        const response = await f.request("POST", "/api/tunnelingOption", {forwardPort: port, protocol: "tcp", tls: true, destinationAddress: "127.0.0.1",
+            destinationPort: 9, keepAlive: 0, expectedRevision: f.store.revisionState.currentRevision,
+            certInfo: {key: {name: `fail-${port}.key`, value: bundle.keyPem}, cert: {name: `fail-${port}.crt`, value: bundle.certPem}, ca: {name: "", value: ""}},
+            expectedCertificateRevision: CertificationStore.instance.revisionState.currentRevision});
+        expect(response.statusCode).toBe(400);
+        expect(audit.events.some((event) => (event.detail as any)?.droppedBlocks !== undefined)).toBe(false);
+    } finally {
+        audit.reset();
+        failure.mockRestore();
+    }
+    expect(storedBlocklist(f).map((entry: any) => [entry.address, entry.port])).toEqual([["203.0.113.9", port]]);
+    expect(AdmissionController.instance.blocklist.isBlocked(port, "203.0.113.9")).toBe(true);
 }));
 
 test("터널이 없는 포트에는 포트를 고른 항목을 넣을 수 없다", async () => withConfigurationServer(async f => {

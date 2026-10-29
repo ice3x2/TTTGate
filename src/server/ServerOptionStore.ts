@@ -116,17 +116,29 @@ class ServerOptionStore {
         let droppedBlocks: BlocklistEntry[] = [];
         if(index < 0) {
             serverOption.tunnelingOptions.push(normalizedOption);
-            // #286 그 포트에 남아 있던 고아 차단 항목(지운 터널의 것)을 새 터널이 물려받지 않게 뺀다.
-            // 이 포트를 새로 쓸 수 있다는 것은 옛 리스너가 이미 없다는 뜻이다.
-            if(serverOption.connectionSecurity) {
-                const result = dropBlocklistPort(serverOption.connectionSecurity.blocklist ?? [], normalizedOption.forwardPort);
-                serverOption.connectionSecurity.blocklist = result.entries;
-                droppedBlocks = result.dropped;
-            }
+            // 새 터널 API 는 포트가 비어 있는지 확인한 뒤에 저장하므로 옛 리스너가 이미 없다.
+            droppedBlocks = ServerOptionStore.releaseOrphanBlocks(serverOption, [normalizedOption.forwardPort]);
         } else {
             serverOption.tunnelingOptions[index] = normalizedOption;
         }
         return {success: true, message: "", serverOption, droppedBlocks};
+    }
+
+    /**
+     * #286 새로 터널이 쓰게 된 포트에 남아 있던 고아 차단 항목(지운 터널의 것)을 빼고, 뺀 항목을 돌려준다(감사용).
+     * 새 터널이 옛 터널의 차단을 물려받지 않게 한다. 옛 리스너가 아직 도는 포트는 호출자가 ports 에서 뺀다
+     * (그 리스너가 도는 동안은 계속 막는다). serverOption 을 그 자리에서 바꾼다.
+     */
+    public static releaseOrphanBlocks(serverOption: Pick<ServerOption, 'connectionSecurity'>, ports: Iterable<number>): BlocklistEntry[] {
+        const security = serverOption.connectionSecurity;
+        if(!security) return [];
+        let dropped: BlocklistEntry[] = [];
+        for(const port of ports) {
+            const result = dropBlocklistPort(security.blocklist ?? [], port);
+            security.blocklist = result.entries;
+            dropped = [...dropped, ...result.dropped];
+        }
+        return dropped;
     }
 
     public composeServerOptionWithoutTunnelingOption(forwardPort: number): ComposedServerOption {
