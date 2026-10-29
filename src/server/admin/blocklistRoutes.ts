@@ -93,6 +93,7 @@ export function blocklistRouteHandlers(deps: {applyConnectionSecurity: ApplyConn
         if(!result.ok) {
             // 이미 All tunnels 로 막힌 주소(widen 으로도 넓힐 것이 없는 중복)의 일시 차단은 더 의미가 없으므로 푼다(REQ-5 AC-3).
             const unbanned = result.code === 'duplicate' && fromBan ? AdmissionController.instance.rateLimiter.unban(fromBan.port, fromBan.ip) : undefined;
+            if(unbanned !== undefined) ctx.auditDetail({fromBan, unbanned});
             deps.fail(res, result.code === 'invalid' ? 422 : 409, {code: result.code, message: result.message, ...(unbanned === undefined ? {} : {unbanned})});
             return;
         }

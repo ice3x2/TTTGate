@@ -307,6 +307,9 @@ describe("security-blocklist", () => {
         const response = await request("POST", "/api/security/blocklist", {fromBan: {port: TUNNEL_PORT, ip: "203.0.113.9"}}, su);
         expect(response.status).toBe(409);
         expect(response.body).toMatchObject({code: "duplicate", message: "203.0.113.9 is already blocked on all tunnels", unbanned: true});
+        // 일시 차단을 푼 사실은 감사 로그로 확인할 수 있어야 한다.
+        const events = eventsOf("security_block_added");
+        expect(events[events.length - 1]).toMatchObject({outcome: "failure", detail: {fromBan: {port: TUNNEL_PORT, ip: "203.0.113.9"}, unbanned: true}});
         expect(AdmissionController.instance.rateLimiter.bans(Date.now())).toEqual([]);
         expect(await addresses()).toEqual(["203.0.113.9"]);
     });

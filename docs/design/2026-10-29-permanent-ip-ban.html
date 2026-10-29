@@ -317,7 +317,7 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line-1);font-
     <div class="req-body"><ul class="ac">
       <li><b>AC-1</b>"Block permanently"를 누르고 확인하면 그 주소(IPv6는 표에 보인 <code>/64</code>·<code>/48</code> 대역)가 "All tunnels" 항목으로 들어가고, 메모에는 출처 포트가 들어간다. 그 주소가 포트 하나에만 걸린 항목으로 이미 있으면 그 항목을 "All tunnels"로 넓힌다.</li>
       <li><b>AC-2</b>같은 동작에서 그 행의 일시 차단을 푼다. 표에서 행이 사라진다.</li>
-      <li><b>AC-3</b>이미 "All tunnels"로 목록에 있는 주소이면 새로 넣지 않고 "already blocked"를 알린다.</li>
+      <li><b>AC-3</b>이미 "All tunnels"로 목록에 있는 주소이면 새로 넣지 않고 "already blocked"를 알린다. 그 주소는 이미 영구 차단되어 있으므로 그 행의 일시 차단은 풀고, 그 사실을 감사 로그에 남긴다.</li>
     </ul></div></div>
 
   <div class="req"><div class="req-head"><span class="req-id">REQ-6</span><span class="s">넣기와 풀기는 감사 로그에 남아야 한다(shall).</span></div>
@@ -345,7 +345,7 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line-1);font-
     <thead><tr><th style="width:36%">요청</th><th>동작</th><th style="width:22%">감사</th></tr></thead>
     <tbody>
       <tr><td><code>GET /api/security/blocklist</code></td><td>항목 목록과 상한을 돌려준다.</td><td>—</td></tr>
-      <tr><td><code>POST /api/security/blocklist</code></td><td><code>{address, port?, note?, fromBan?: {port, ip}}</code>로 하나를 넣는다. <code>fromBan</code>이 있으면 그 일시 차단을 함께 푼다. 잘못된 입력은 422, 중복은 409.</td><td><code>security_block_added</code></td></tr>
+      <tr><td><code>POST /api/security/blocklist</code></td><td><code>{address, port?, note?, fromBan?: {port, ip}}</code>로 하나를 넣는다. <code>fromBan</code>이 있으면 그 일시 차단을 함께 푼다. 잘못된 입력은 422, 중복은 409. 중복이어도 <code>fromBan</code>의 주소가 이미 "All tunnels"로 막혀 있으면 그 일시 차단은 푼다.</td><td><code>security_block_added</code></td></tr>
       <tr><td><code>DELETE /api/security/blocklist/:address</code></td><td>하나를 푼다. 주소는 URL 인코딩한다(<code>/</code> 포함).</td><td><code>security_block_removed</code></td></tr>
     </tbody>
   </table></div>
