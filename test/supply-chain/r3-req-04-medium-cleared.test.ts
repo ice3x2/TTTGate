@@ -3,7 +3,8 @@
  * NO-MOCK: 실 npm audit CLI.
  *
  * 범위: 서버 런타임 npm audit --omit=dev --audit-level=moderate 에서 검토 예외 밖의 moderate 이상 권고 0건(#293 REQ-4a).
- * 지난 정리(R3)에서 고친 yaml·lodash·qs·nanoid·js-yaml·diff·formidable 도 이 검사가 함께 본다(따로 audit 을 부르지 않는다).
+ * 지난 정리(R3)에서 고친 yaml·lodash·qs·nanoid·js-yaml·diff·formidable 의 moderate 이상 권고도 이 검사가 함께 본다.
+ * low 권고는 보지 않는다(#293 부터 서버 판정은 moderate 부터 본다).
  */
 import {audit, onlineTest} from "../helpers/SupplyChainGate";
 

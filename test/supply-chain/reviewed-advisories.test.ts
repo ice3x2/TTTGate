@@ -107,6 +107,13 @@ describe("server HIGH gate with reviewed advisories (#180)", () => {
         expect(gate.evaluateGate(report, "high", [{...REVIEWED[0], reviewedOn: "2026-08-04"}], NOW).blocking).toEqual([]);
     });
 
+    // 형식이 틀린 예외 항목(id 없음)이 있어도 오류로 멈추지 않고, 그 권고를 검토되지 않은 것으로 막는다.
+    it("treats a malformed exception without an id as unreviewed", () => {
+        const report = reportOf({forge: {name: "forge", severity: "high", via: [advisory("forge", "high", "GHSA-aaaa-bbbb-cccc")]}});
+        const {id: _omit, ...withoutId} = REVIEWED[0];
+        expect(gate.evaluateGate(report, "high", [withoutId], NOW).blocking).toEqual(["forge GHSA-aaaa-bbbb-cccc"]);
+    });
+
     // 판정 진입점은 evaluateGate 하나다(#293).
     it("the gate has a single entry point and rejects unsupported levels", () => {
         const report = reportOf({x: {name: "x", severity: "moderate", via: [advisory("x", "moderate", "GHSA-9999-8888-7777")]}});
@@ -123,6 +130,9 @@ describe("server HIGH gate with reviewed advisories (#180)", () => {
             // 서버 판정은 moderate 부터 본다. low 예외는 아무 권고도 덮지 못한다.
             expect(["moderate", "high"]).toContain(entry.severity);
             expect(entry.reason.length).toBeGreaterThan(20);
+            // ISO 날짜(YYYY-MM-DD)만 받는다. 다른 형식은 로컬 시각으로 해석되어 UTC 00:00 경계가 흔들린다.
+            expect(entry.reviewedOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+            expect(entry.reviewBy).toMatch(/^\d{4}-\d{2}-\d{2}$/);
             const reviewedOn = Date.parse(entry.reviewedOn);
             const reviewBy = Date.parse(entry.reviewBy);
             expect(Number.isFinite(reviewedOn) && Number.isFinite(reviewBy)).toBe(true);

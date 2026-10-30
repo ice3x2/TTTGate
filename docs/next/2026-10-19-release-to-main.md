@@ -4,10 +4,15 @@
 
 ## 0. 다음 세션의 첫 행동
 
-**2026-10-31 기준 남은 일이 있다.** #293(공급망 감사 실패)을 main 에 병합한 뒤 다음 두 가지를 확인하고 이슈를 닫는다.
+**2026-10-31 기준 남은 일이 있다.** #293(공급망 감사 실패)의 PR #294 는 `develop` 을 향한다. 다음 순서로 마치고 이슈를 닫는다.
 
-1. main 에서 Supply Chain Audit 을 수동 실행해 모든 작업이 성공하는지 본다: `gh workflow run supply-chain-audit.yml --ref main`
-2. 2.0.0 초안 릴리스(공개 전)에는 node-forge 1.4.0 이 들어 있다. 공개하지 말고 태그를 고친 main 으로 다시 올려 초안을 다시 만든다: `git push origin :refs/tags/2.0.0` → `git tag -f 2.0.0 <main 커밋>` → `git push origin 2.0.0`. Release 워크플로가 성공하고 초안에 파일 7개가 있는지 확인한다.
+1. PR #294 를 `develop` 에 병합하고, `develop` → `main` PR 을 만들어 병합한다.
+2. main 에서 Supply Chain Audit 을 수동 실행해 모든 작업이 성공하는지 본다: `gh workflow run supply-chain-audit.yml --ref main`
+3. 2.0.0 초안 릴리스(공개 전)에는 node-forge 1.4.0 이 들어 있다. **공개하지 않는다.** 옛 초안과 태그를 지우고 고친 main 에서 다시 만든다.
+   - `gh release delete 2.0.0 --repo ice3x2/TTTGate --yes --cleanup-tag`
+   - `git tag 2.0.0 <main 커밋>` → `git push origin 2.0.0`
+   - Release 워크플로가 성공하고, 초안이 하나뿐이며 파일 7개가 있는지 확인한다.
+4. Dependabot 경고 중 `undici`·`vite`(13건)는 main 병합 뒤 닫혀야 한다. `deepmerge` 2건은 수정 버전이 없어 남는다.
 
 2026-10-21 에는 열린 이슈·PR·Dependabot 경고가 모두 0건이었다.
 
@@ -27,11 +32,11 @@ gh api "repos/ice3x2/TTTGate/dependabot/alerts?state=open" --jq length
 
 | 항목 | 값 |
 |---|---|
-| `main` | `dc6a0a3` — PR #196 병합 커밋 |
-| `refactor/admin` | `main` 과 같은 커밋에서 이 문서를 커밋한 상태(원격 반영) |
-| 열린 이슈·PR·Dependabot 경고 | 0 · 0 · 0 |
+| `main` | `af114a3` — PR #292(`develop` → `main`, 2.0.0) 병합 커밋(2026-10-31) |
+| 작업 흐름 | #286 부터는 작업 브랜치 → `develop` → `main` 으로 병합했다 |
+| 열린 이슈·PR·Dependabot 경고 | 2026-10-31: 이슈 #293·#244, PR #294, 경고 15건(§0 4번) |
 | 테스트 도구 | jest 30, ts-jest 29.4, `tsconfig.jest.json`, `test/setup/forgeBigInteger.ts`(setupFiles) |
-| 남은 워크트리·작업 브랜치·stash | 없음 |
+| 남은 워크트리·작업 브랜치·stash | 2026-10-31: 작업 트리 `C:\Work\git\_Snoworca\TTTGate-wt\supply`(브랜치 `fix/supply-chain-advisories`). #293 을 마치면 지운다 |
 | 릴리스 태그·바이너리 | 2026-10-31: 태그 `2.0.0` 과 초안 릴리스가 있다(공개 전, 다시 만들어야 함 — §0). `release.yml` 이 태그 push 로 돈다 |
 
 ### 2026-10-16 이후에 한 일

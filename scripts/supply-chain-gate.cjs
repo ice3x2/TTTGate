@@ -98,7 +98,7 @@ const evaluateGate = (report, level, reviewed = REVIEWED_ADVISORIES, now = Date.
             const id = GHSA_PATTERN.exec(String(advisory.url ?? ""))?.[0];
             const pkg = advisory.name ?? advisory.dependency ?? name;
             const label = `${pkg} ${id ?? advisory.title ?? "unknown advisory"}`;
-            const review = id === undefined ? undefined : reviewed.find((item) => item.id.toLowerCase() === id.toLowerCase() && item.package === pkg);
+            const review = id === undefined ? undefined : reviewed.find((item) => String(item.id ?? "").toLowerCase() === id.toLowerCase() && item.package === pkg);
             if(advisory.severity === "critical" || review === undefined) blocking.add(label);
             else if(!hasValidReviewWindow(review, now)) blocking.add(`${label} (review window invalid)`);
             else if(!(Date.parse(review.reviewBy) > now)) blocking.add(`${label} (review expired ${review.reviewBy})`);
