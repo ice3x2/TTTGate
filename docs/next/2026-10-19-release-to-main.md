@@ -10,14 +10,14 @@
 2. main 에서 Supply Chain Audit 을 수동 실행해 모든 작업이 성공하는지 본다: `gh workflow run supply-chain-audit.yml --ref main`
 3. 2.0.0 초안 릴리스(공개 전)에는 node-forge 1.4.0 이 들어 있다. **공개하지 않는다.** 옛 초안과 태그를 지우고 고친 main 에서 다시 만든다.
    - `gh release delete 2.0.0 --repo ice3x2/TTTGate --yes --cleanup-tag`
-   - `git tag 2.0.0 <main 커밋>` → `git push origin 2.0.0`
+   - `git tag -f 2.0.0 <main 커밋>` → `git push origin 2.0.0` (`--cleanup-tag` 는 원격 태그만 지우므로 로컬 태그는 `-f` 로 덮는다)
    - Release 워크플로가 성공하고, 초안이 하나뿐이며 파일 7개가 있는지 확인한다.
 4. Dependabot 경고 중 `undici`·`vite`(13건)는 main 병합 뒤 닫혀야 한다. `deepmerge` 2건은 수정 버전이 없어 남는다.
 
 2026-10-21 에는 열린 이슈·PR·Dependabot 경고가 모두 0건이었다.
 
 - `refactor/admin` 은 `main` 에 세 번 병합됐다: PR #185(`6a295dc`, 에픽 #125 와 #130~#191), PR #193(`137e4a9`, #192 개발 의존성 정리와 jest 30), PR #196(`dc6a0a3`, 테스트 불안정 해소 #194·#195·#197~#199).
-- 남은 운영 의존성 경고 `node-forge` GHSA-86w9-cpqp-85rv 2건은 수정 버전이 없어 '감수 가능한 위험'으로 닫았다. #180 의 검토 예외(`scripts/supply-chain-gate.cjs`)에 **재검토 기한 2027-01-31** 이 있다. 그 전에 node-forge 새 버전이 나오면 올려라. → 2026-10-31 #293 에서 수정 버전(1.4.2)으로 올리고 이 예외를 지웠다. 개발 의존성의 low 권고(`deepmerge`, `jest` 계열)는 수정 버전이 없어 남아 있다(개발 의존성이라 서버 감사(`--omit=dev`)에 들어가지 않는다).
+- `node-forge` GHSA-86w9-cpqp-85rv 는 2026-10-31 #293 에서 수정 버전(1.4.2)으로 올렸다. #180 의 검토 예외는 지웠고, `REVIEWED_ADVISORIES` 는 비어 있다. 개발 의존성의 low 권고(`deepmerge`, `jest` 계열)는 수정 버전이 없어 남아 있다(개발 의존성이라 서버 감사(`--omit=dev`)에 들어가지 않는다).
 
 새 작업을 시작하기 전에 상태를 확인하라.
 

@@ -54,6 +54,11 @@ jobs:
         env:
           NODE_ENV: development
 
+      - name: Audit full root tree including build tools (HIGH report; command errors fail)
+        run: node scripts/supply-chain-gate.cjs --high-report
+        env:
+          NODE_ENV: development
+
       - name: Online production audit regression
         run: npx jest --runInBand --runTestsByPath test/supply-chain/r3-req-03-critical-fixed.test.ts test/supply-chain/r3-req-04-medium-cleared.test.ts
         env:
@@ -89,7 +94,7 @@ jobs:
 
       - name: Audit admin (HIGH report; command errors fail)
         working-directory: admin
-        run: node ../scripts/supply-chain-gate.cjs --admin-high-report
+        run: node ../scripts/supply-chain-gate.cjs --high-report
 
   tests:
     name: Supply-chain regression tests

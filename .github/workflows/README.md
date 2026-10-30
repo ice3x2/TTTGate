@@ -97,7 +97,8 @@ node app.js client -addr <server_address>
 
 1. 실패 로그에서 권고 번호(GHSA-…)와 패키지를 확인합니다. 로컬에서는 다음 명령으로 같은 판정을 봅니다.
    - 서버 운영 의존성: `node scripts/supply-chain-gate.cjs --server-gate`
-   - 관리 화면: `cd admin && node ../scripts/supply-chain-gate.cjs --admin-high-report`
+   - 관리 화면: `cd admin && node ../scripts/supply-chain-gate.cjs --high-report`
+   - 빌드 도구를 포함한 루트 전체 트리: `node scripts/supply-chain-gate.cjs --high-report`
 2. 수정 버전이 있으면 그 버전으로 올립니다. 이것이 기본입니다. 소스 배포판도 같은 버전을 쓰도록 `package-build.json` 의 범위도 함께 올립니다.
 3. 수정 버전이 없으면, TTTGate 가 영향받는 API 를 쓰는지 검토합니다. 쓰지 않을 때만 `scripts/supply-chain-gate.cjs` 의 `REVIEWED_ADVISORIES` 에 예외를 올립니다.
    - 권고 번호, 패키지, 검토일(`reviewedOn`), 재검토일(`reviewBy`), 이유를 적습니다. 검토일은 오늘(UTC 기준, 당일 포함) 이전이어야 하고, 재검토일은 검토일에서 180일 안이어야 합니다. 어기면 `(review window invalid)` 를 붙여 막습니다.
@@ -111,4 +112,4 @@ node app.js client -addr <server_address>
 4. 수정 버전이 없는 critical 은 예외로 풀 수 없습니다. 그 의존성을 다른 패키지로 바꾸거나 빼고, 하위 의존성이면 `overrides` 로 고친 버전을 강제합니다. 어느 쪽도 어려우면 정보보호팀과 검토합니다.
 5. 관리 화면 감사는 critical 만 막고 high 는 경고로 남깁니다. 검토 예외는 서버 운영 의존성에만 쓰이므로, 관리 화면의 high 경고는 업그레이드(필요하면 `overrides`)로 풉니다.
 
-빌드 도구(예: `@yao-pkg/pkg-fetch` 와 그 하위 의존성)는 개발 의존성이라 서버 판정(`--omit=dev`)에 들어가지 않습니다. 대신 루트 전체 트리 감사(`npm audit --audit-level=critical`)가 critical 을 막습니다. 빌드 도구의 high 이하 권고는 Dependabot 경고로 확인하고 업그레이드로 풉니다. 이 감사에는 검토 예외가 쓰이지 않습니다.
+빌드 도구(예: `@yao-pkg/pkg-fetch` 와 그 하위 의존성)는 개발 의존성이라 서버 판정(`--omit=dev`)에 들어가지 않습니다. 대신 루트 전체 트리 감사가 관리 화면 감사와 같은 방식으로 돕니다. critical 은 막고, high 는 경고로 남깁니다. 빌드 도구의 high 경고는 업그레이드(필요하면 `overrides`)로 풉니다. 이 감사에는 검토 예외가 쓰이지 않습니다.

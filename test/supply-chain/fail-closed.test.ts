@@ -47,7 +47,8 @@ test.each([
     ["empty npm ls output", "r3-req-02-crypto-js-removed", "", "0"],
     ["vulnerable audit", "r3-req-04-medium-cleared", JSON.stringify({
         auditReportVersion: 2,
-        vulnerabilities: {lodash: {severity: "critical"}},
+        vulnerabilities: {lodash: {name: "lodash", severity: "critical", via: [{source: 1, name: "lodash", dependency: "lodash", title: "fixture",
+            url: "https://github.com/advisories/GHSA-4444-5555-6666", severity: "critical", range: "*"}]}},
         metadata: {vulnerabilities: {info: 0, low: 0, moderate: 0, high: 0, critical: 1, total: 1}},
     }), "1"],
     ["report-only HIGH advisory", "admin-report", JSON.stringify({
@@ -57,7 +58,7 @@ test.each([
     }), "1"],
 ])("blocks %s in the actual gate", (_label, suite, output, status) => {
     const result = runWithFakeNpm(output, status, suite === "admin-report" ? [
-        path.join(repoRoot, "scripts/supply-chain-gate.cjs"), "--admin-high-report",
+        path.join(repoRoot, "scripts/supply-chain-gate.cjs"), "--high-report",
     ] : [
         path.join(repoRoot, "node_modules/jest/bin/jest.js"), "--runInBand", "--runTestsByPath",
         `test/supply-chain/${suite}.test.ts`,
@@ -65,14 +66,13 @@ test.each([
     expect(result.error).toBeUndefined();
     if(suite === "admin-report") {
         expect(result.status).toBe(0);
-        expect(result.stdout).toContain("::warning::");
-        expect(result.stdout).toContain("fixture-high");
+        expect(result.stdout).toContain("::warning::HIGH advisories (report only): fixture-high");
         return;
     }
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("FAIL");
     expect(result.stderr).toContain(suite === "r3-req-02-crypto-js-removed"
-        ? "empty output" : "lodash");
+        ? "empty output" : "lodash GHSA-4444-5555-6666");
 }, 35_000);
 
 // #293: 서버 판정 명령(--server-gate)은 moderate 수준으로 판정하고, 막을 때 종료 코드 1 과 사유를 낸다.

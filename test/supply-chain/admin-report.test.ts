@@ -5,7 +5,7 @@ const root = path.resolve(__dirname, "../..");
 const report = path.join(root, "scripts/supply-chain-gate.cjs");
 
 test("admin advisory-only gate fails when audit registry is unreachable", () => {
-    const result = spawnSync(process.execPath, [report, "--admin-high-report"], {
+    const result = spawnSync(process.execPath, [report, "--high-report"], {
         cwd: root, encoding: "utf8", timeout: 30_000,
         env: {...process.env, npm_config_registry: "http://127.0.0.1:1",
             npm_config_fetch_retries: "0", npm_config_fetch_timeout: "1000"},

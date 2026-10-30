@@ -73,6 +73,14 @@ describe("R3-REQ-06 CI supply-chain gate (static)", () => {
         expect(steps[0].env?.NODE_ENV).toBe("development");
     });
 
+    // 루트 전체 트리와 관리 화면의 high 는 막지 않고 경고로 남긴다. 같은 보고 명령을 쓴다(#293).
+    test("루트 전체 트리와 관리 화면의 HIGH 보고 단계 존재", () => {
+        const workflow = parseYaml(fs.readFileSync(workflowPath, "utf8"));
+        const runsOf = (job: string): string[] => workflow.jobs[job].steps.map((step: any) => String(step.run ?? "").trim());
+        expect(runsOf("audit-runtime")).toContain("node scripts/supply-chain-gate.cjs --high-report");
+        expect(runsOf("audit-admin")).toContain("node ../scripts/supply-chain-gate.cjs --high-report");
+    });
+
     // 판정 단계가 먼저 돌아야 막힐 때 그 사유와 예외 경고가 로그에 남는다. jest 가 먼저 실패하면 뒤 단계는 건너뛴다(#293).
     test("판정 단계가 온라인 jest 단계보다 먼저 돈다", () => {
         const workflow = parseYaml(fs.readFileSync(workflowPath, "utf8"));

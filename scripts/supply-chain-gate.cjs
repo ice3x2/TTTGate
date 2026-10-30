@@ -64,7 +64,7 @@ const SEVERITY_ORDER = ["low", "moderate", "high", "critical"];
 const MAX_REVIEW_DAYS = 180;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** 검토일이 오늘 이전이고 재검토일이 검토일에서 180일 안이어야 한다. 아니면 기한 제한을 우회한다(#293). */
+/** 검토일이 오늘 이전이고 재검토일이 검토일에서 180일 안이어야 한다. 어기는 항목은 기한 제한을 우회하므로 막는다(#293). */
 const hasValidReviewWindow = (review, now) => {
     const reviewedOn = Date.parse(review.reviewedOn);
     const reviewBy = Date.parse(review.reviewBy);
@@ -123,12 +123,13 @@ if(require.main === module && process.argv[2] === "--server-gate") {
     if(blocking.length) throw new Error(`Blocked server advisories: ${blocking.join(", ")}`);
     console.log("No blocked server advisories");
 } else if(require.main === module) {
-    if(process.argv[2] !== "--admin-high-report") throw new Error("Expected --admin-high-report or --server-gate");
+    // 지금 디렉터리의 전체 트리(관리 화면, 빌드 도구를 포함한 루트)에서 critical 은 막고 high 는 경고로 남긴다(#293).
+    if(process.argv[2] !== "--high-report") throw new Error("Expected --high-report or --server-gate");
     const report = readAuditReport(runNpm(["audit", "--audit-level=high", "--json"]));
     const entries = Object.entries(report.vulnerabilities);
     const critical = entries.filter(([, entry]) => entry.severity === "critical").map(([name]) => name);
-    if(critical.length) throw new Error(`CRITICAL admin advisories: ${critical.join(", ")}`);
+    if(critical.length) throw new Error(`CRITICAL advisories: ${critical.join(", ")}`);
     const high = entries.filter(([, entry]) => entry.severity === "high").map(([name]) => name);
-    if(high.length) console.log(`::warning::admin HIGH advisories (report only): ${high.join(", ")}`);
-    else console.log("No admin HIGH advisories");
+    if(high.length) console.log(`::warning::HIGH advisories (report only): ${high.join(", ")}`);
+    else console.log("No HIGH advisories");
 }
