@@ -32,6 +32,9 @@ describe("server HIGH gate with reviewed advisories (#180)", () => {
     });
 
     it("blocks a reviewed advisory after its review date", () => {
+        // 재검토일 UTC 00:00 정각부터 막는다(README 와 같은 경계).
+        expect(gate.evaluateGate(reportOf({forge: {name: "forge", severity: "high", via: [advisory("forge", "high", "GHSA-aaaa-bbbb-cccc")]}}), "high", REVIEWED,
+            Date.parse("2027-01-31T00:00:00Z")).blocking).toEqual(["forge GHSA-aaaa-bbbb-cccc (review expired 2027-01-31)"]);
         const later = Date.parse("2027-02-01T00:00:00Z");
         expect(gate.evaluateGate(reportOf({forge: {name: "forge", severity: "high", via: [advisory("forge", "high", "GHSA-aaaa-bbbb-cccc")]}}), "high", REVIEWED, later).blocking)
             .toEqual(["forge GHSA-aaaa-bbbb-cccc (review expired 2027-01-31)"]);
