@@ -52,7 +52,8 @@ const runNpm = (args, cwd = process.cwd()) => spawnSync("npm", args, {
 /**
  * #180: 수정 버전이 없어 업그레이드로 풀 수 없고, TTTGate 가 영향받는 API 를 쓰지 않음을 검토한 권고.
  * 서버 게이트(moderate·high)는 이 목록의 권고만 통과시킨다(#293). reviewBy 날짜의 UTC 00:00 에 만료되어 다시 막고 재검토를 강제한다.
- * reviewBy 는 reviewedOn 에서 180일 안이어야 한다(테스트가 지킨다).
+ * reviewBy 는 reviewedOn 에서 180일 안이어야 한다(테스트가 지킨다). severity 는 검토할 때의 등급이며, 권고 등급이 그보다
+ * 오르면 다시 막는다(#293). 항목 형식: {id, package, severity, reviewedOn, reviewBy, reason}.
  * 예외의 전제(영향 API 미사용)는 test/supply-chain/reviewed-advisories.test.ts 가 지킨다.
  */
 // #293: GHSA-86w9-cpqp-85rv(node-forge) 는 수정 버전 1.4.1 이 나와 예외를 지우고 1.4.2 로 올렸다.
@@ -91,6 +92,10 @@ const evaluateGate = (report, level, reviewed = REVIEWED_ADVISORIES, now = Date.
             const review = id === undefined ? undefined : reviewed.find((item) => item.id.toLowerCase() === id.toLowerCase() && item.package === pkg);
             if(advisory.severity === "critical" || review === undefined) blocking.add(label);
             else if(!(Date.parse(review.reviewBy) >= now)) blocking.add(`${label} (review expired ${review.reviewBy})`);
+            // 예외는 검토할 때의 등급까지만 덮는다. 등급이 올라가면(또는 적혀 있지 않으면) 다시 검토하게 막는다.
+            else if(!(SEVERITY_ORDER.indexOf(advisory.severity) <= SEVERITY_ORDER.indexOf(review.severity))) {
+                blocking.add(`${label} (reviewed as ${review.severity}, now ${advisory.severity})`);
+            }
             else accepted.add(label);
         }
     }

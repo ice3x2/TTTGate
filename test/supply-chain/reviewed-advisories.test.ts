@@ -8,7 +8,7 @@ const gate = require("../../scripts/supply-chain-gate.cjs");
 const advisory = (name: string, severity: string, ghsa: string) =>
     ({source: 1, name, dependency: name, title: `${name} advisory`, url: `https://github.com/advisories/${ghsa}`, severity, range: "*"});
 const reportOf = (vulnerabilities: Record<string, any>) => ({auditReportVersion: 2, vulnerabilities});
-const REVIEWED = [{id: "GHSA-aaaa-bbbb-cccc", package: "forge", reviewBy: "2027-01-31", reason: "unused API"}];
+const REVIEWED = [{id: "GHSA-aaaa-bbbb-cccc", package: "forge", severity: "high", reviewBy: "2027-01-31", reason: "unused API"}];
 const NOW = Date.parse("2026-10-19T00:00:00Z");
 
 describe("server HIGH gate with reviewed advisories (#180)", () => {
@@ -73,6 +73,15 @@ describe("server HIGH gate with reviewed advisories (#180)", () => {
             Date.parse("2027-02-01T00:00:00Z")).blocking).toEqual(["forge GHSA-aaaa-bbbb-cccc (review expired 2027-01-31)"]);
     });
 
+    // 예외는 검토할 때의 등급까지만 덮는다. 권고 등급이 올라가면 다시 검토해야 한다.
+    it("blocks a reviewed advisory whose severity rose above the reviewed severity", () => {
+        const moderateReview = [{...REVIEWED[0], severity: "moderate"}];
+        const regraded = reportOf({forge: {name: "forge", severity: "high", via: [advisory("forge", "high", "GHSA-aaaa-bbbb-cccc")]}});
+        expect(gate.evaluateGate(regraded, "moderate", moderateReview, NOW).blocking).toEqual(["forge GHSA-aaaa-bbbb-cccc (reviewed as moderate, now high)"]);
+        const same = reportOf({forge: {name: "forge", severity: "moderate", via: [advisory("forge", "moderate", "GHSA-aaaa-bbbb-cccc")]}});
+        expect(gate.evaluateGate(same, "moderate", moderateReview, NOW).blocking).toEqual([]);
+    });
+
     it("the HIGH gate is the same gate at the high level", () => {
         const report = reportOf({x: {name: "x", severity: "moderate", via: [advisory("x", "moderate", "GHSA-9999-8888-7777")]}});
         expect(gate.evaluateHighGate(report, REVIEWED, NOW)).toEqual(gate.evaluateGate(report, "high", REVIEWED, NOW));
@@ -80,11 +89,12 @@ describe("server HIGH gate with reviewed advisories (#180)", () => {
     });
 
     // #293: 수정 버전이 나오면 예외를 지우고 업그레이드로 푼다. 그래서 목록은 비어 있을 수 있다.
-    it("every reviewed advisory in the repository has an id, package, reason and a future-dated review", () => {
+    it("every reviewed advisory in the repository has an id, package, reviewed severity, reason and a review date within 180 days", () => {
         expect(Array.isArray(gate.REVIEWED_ADVISORIES)).toBe(true);
         for(const entry of gate.REVIEWED_ADVISORIES) {
             expect(entry.id).toMatch(/^GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}$/);
             expect(typeof entry.package).toBe("string");
+            expect(["low", "moderate", "high"]).toContain(entry.severity);
             expect(entry.reason.length).toBeGreaterThan(20);
             const reviewedOn = Date.parse(entry.reviewedOn);
             const reviewBy = Date.parse(entry.reviewBy);
