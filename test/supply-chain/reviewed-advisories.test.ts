@@ -13,27 +13,27 @@ const NOW = Date.parse("2026-10-19T00:00:00Z");
 
 describe("server HIGH gate with reviewed advisories (#180)", () => {
     it("passes when every HIGH advisory is reviewed and not expired", () => {
-        const result = gate.evaluateHighGate(reportOf({forge: {name: "forge", severity: "high", via: [advisory("forge", "high", "GHSA-aaaa-bbbb-cccc")]}}), REVIEWED, NOW);
+        const result = gate.evaluateGate(reportOf({forge: {name: "forge", severity: "high", via: [advisory("forge", "high", "GHSA-aaaa-bbbb-cccc")]}}), "high", REVIEWED, NOW);
         expect(result.blocking).toEqual([]);
         expect(result.accepted).toEqual(["forge GHSA-aaaa-bbbb-cccc"]);
     });
 
     it("blocks an unreviewed HIGH advisory, also next to a reviewed one", () => {
-        const result = gate.evaluateHighGate(reportOf({forge: {name: "forge", severity: "high",
-            via: [advisory("forge", "high", "GHSA-aaaa-bbbb-cccc"), advisory("forge", "high", "GHSA-dddd-eeee-ffff")]}}), REVIEWED, NOW);
+        const result = gate.evaluateGate(reportOf({forge: {name: "forge", severity: "high",
+            via: [advisory("forge", "high", "GHSA-aaaa-bbbb-cccc"), advisory("forge", "high", "GHSA-dddd-eeee-ffff")]}}), "high", REVIEWED, NOW);
         expect(result.blocking).toEqual(["forge GHSA-dddd-eeee-ffff"]);
     });
 
     it("blocks a reviewed advisory on another package and any CRITICAL", () => {
-        expect(gate.evaluateHighGate(reportOf({other: {name: "other", severity: "high", via: [advisory("other", "high", "GHSA-aaaa-bbbb-cccc")]}}), REVIEWED, NOW).blocking)
+        expect(gate.evaluateGate(reportOf({other: {name: "other", severity: "high", via: [advisory("other", "high", "GHSA-aaaa-bbbb-cccc")]}}), "high", REVIEWED, NOW).blocking)
             .toEqual(["other GHSA-aaaa-bbbb-cccc"]);
-        expect(gate.evaluateHighGate(reportOf({forge: {name: "forge", severity: "critical", via: [advisory("forge", "critical", "GHSA-aaaa-bbbb-cccc")]}}), REVIEWED, NOW).blocking)
+        expect(gate.evaluateGate(reportOf({forge: {name: "forge", severity: "critical", via: [advisory("forge", "critical", "GHSA-aaaa-bbbb-cccc")]}}), "high", REVIEWED, NOW).blocking)
             .toEqual(["forge GHSA-aaaa-bbbb-cccc"]);
     });
 
     it("blocks a reviewed advisory after its review date", () => {
         const later = Date.parse("2027-02-01T00:00:00Z");
-        expect(gate.evaluateHighGate(reportOf({forge: {name: "forge", severity: "high", via: [advisory("forge", "high", "GHSA-aaaa-bbbb-cccc")]}}), REVIEWED, later).blocking)
+        expect(gate.evaluateGate(reportOf({forge: {name: "forge", severity: "high", via: [advisory("forge", "high", "GHSA-aaaa-bbbb-cccc")]}}), "high", REVIEWED, later).blocking)
             .toEqual(["forge GHSA-aaaa-bbbb-cccc (review expired 2027-01-31)"]);
     });
 
@@ -42,18 +42,18 @@ describe("server HIGH gate with reviewed advisories (#180)", () => {
             forge: {name: "forge", severity: "high", via: [advisory("forge", "high", "GHSA-aaaa-bbbb-cccc")]},
             wrapper: {name: "wrapper", severity: "high", via: ["forge"]},
         });
-        expect(gate.evaluateHighGate(report, REVIEWED, NOW).blocking).toEqual([]);
+        expect(gate.evaluateGate(report, "high", REVIEWED, NOW).blocking).toEqual([]);
         const bad = reportOf({lib: {name: "lib", severity: "high", via: [advisory("lib", "high", "GHSA-1111-2222-3333")]}, wrap: {name: "wrap", severity: "high", via: ["lib"]}});
-        expect(gate.evaluateHighGate(bad, REVIEWED, NOW).blocking).toEqual(["lib GHSA-1111-2222-3333"]);
+        expect(gate.evaluateGate(bad, "high", REVIEWED, NOW).blocking).toEqual(["lib GHSA-1111-2222-3333"]);
     });
 
     it("blocks a HIGH entry whose advisories cannot be resolved", () => {
-        expect(gate.evaluateHighGate(reportOf({wrap: {name: "wrap", severity: "high", via: ["missing"]}}), REVIEWED, NOW).blocking)
+        expect(gate.evaluateGate(reportOf({wrap: {name: "wrap", severity: "high", via: ["missing"]}}), "high", REVIEWED, NOW).blocking)
             .toEqual(["wrap (unresolved via)"]);
     });
 
     it("ignores moderate and low advisories", () => {
-        expect(gate.evaluateHighGate(reportOf({x: {name: "x", severity: "moderate", via: [advisory("x", "moderate", "GHSA-9999-8888-7777")]}}), REVIEWED, NOW).blocking).toEqual([]);
+        expect(gate.evaluateGate(reportOf({x: {name: "x", severity: "moderate", via: [advisory("x", "moderate", "GHSA-9999-8888-7777")]}}), "high", REVIEWED, NOW).blocking).toEqual([]);
     });
 
     // #293: moderate 검사(주간 감사·릴리스)도 같은 검토 예외를 쓴다. 그래야 수정 버전이 없는 권고로 릴리스가 막혔을 때
@@ -89,9 +89,10 @@ describe("server HIGH gate with reviewed advisories (#180)", () => {
         expect(gate.evaluateGate(report, "moderate", [withoutSeverity], NOW).blocking).toEqual(["forge GHSA-aaaa-bbbb-cccc (reviewed severity missing)"]);
     });
 
-    it("the HIGH gate is the same gate at the high level", () => {
+    // 판정 진입점은 evaluateGate 하나다(#293).
+    it("the gate has a single entry point and rejects unsupported levels", () => {
         const report = reportOf({x: {name: "x", severity: "moderate", via: [advisory("x", "moderate", "GHSA-9999-8888-7777")]}});
-        expect(gate.evaluateHighGate(report, REVIEWED, NOW)).toEqual(gate.evaluateGate(report, "high", REVIEWED, NOW));
+        expect(gate.evaluateHighGate).toBeUndefined();
         expect(() => gate.evaluateGate(report, "info", REVIEWED, NOW)).toThrow("Unsupported gate level: info");
     });
 
@@ -101,7 +102,8 @@ describe("server HIGH gate with reviewed advisories (#180)", () => {
         for(const entry of gate.REVIEWED_ADVISORIES) {
             expect(entry.id).toMatch(/^GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}$/);
             expect(typeof entry.package).toBe("string");
-            expect(["low", "moderate", "high"]).toContain(entry.severity);
+            // 서버 판정은 moderate 부터 본다. low 예외는 아무 권고도 덮지 못한다.
+            expect(["moderate", "high"]).toContain(entry.severity);
             expect(entry.reason.length).toBeGreaterThan(20);
             const reviewedOn = Date.parse(entry.reviewedOn);
             const reviewBy = Date.parse(entry.reviewBy);

@@ -103,10 +103,7 @@ const evaluateGate = (report, level, reviewed = REVIEWED_ADVISORIES, now = Date.
     return {blocking: [...blocking], accepted: [...accepted]};
 };
 
-/** #180 서버 HIGH 게이트. evaluateGate 의 high 수준이다. */
-const evaluateHighGate = (report, reviewed = REVIEWED_ADVISORIES, now = Date.now()) => evaluateGate(report, "high", reviewed, now);
-
-module.exports = {readAuditReport, readDependencyTree, runNpm, evaluateGate, evaluateHighGate, REVIEWED_ADVISORIES};
+module.exports = {readAuditReport, readDependencyTree, runNpm, evaluateGate, REVIEWED_ADVISORIES};
 
 if(require.main === module && process.argv[2] === "--server-gate") {
     // moderate 이상을 판정한다. 예외로 통과한 권고는 모두 경고로 남긴다(#293).

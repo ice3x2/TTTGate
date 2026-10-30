@@ -36,11 +36,7 @@ jobs:
         env:
           NODE_ENV: development
 
-      - name: Online production audit regression
-        run: npx jest --runInBand --runTestsByPath test/supply-chain/r3-req-03-critical-fixed.test.ts test/supply-chain/r3-req-04-medium-cleared.test.ts
-        env:
-          SUPPLY_CHAIN_ONLINE: "1"
-
+      # 판정 단계를 jest 단계보다 먼저 돌린다. 막힐 때 그 사유와 예외 경고가 로그에 남는다(#293).
       - name: Audit production tree (CRITICAL gate)
         run: npm audit --omit=dev --audit-level=critical
         env:
@@ -51,6 +47,11 @@ jobs:
         run: node scripts/supply-chain-gate.cjs --server-gate
         env:
           NODE_ENV: development
+
+      - name: Online production audit regression
+        run: npx jest --runInBand --runTestsByPath test/supply-chain/r3-req-03-critical-fixed.test.ts test/supply-chain/r3-req-04-medium-cleared.test.ts
+        env:
+          SUPPLY_CHAIN_ONLINE: "1"
 
       - name: crypto-js 서버 체인 미포함 확인
         run: npx jest --runInBand --runTestsByPath test/supply-chain/r3-req-02-crypto-js-removed.test.ts # R3-REQ-02

@@ -5,12 +5,12 @@
  * 증명 범위:
  *   1) 워크플로우 파일 존재
  *   2) PR 트리거 존재 (pull_request)
- *   3) HIGH 게이트 Step 이 `npm audit --audit-level=high` 를 포함
+ *   3) moderate 게이트 Step 이 판정 스크립트(--server-gate)를 부르고, 온라인 jest 단계보다 먼저 돈다(#293)
  *   4) crypto-js 서버 체인 부재 검증 Step 존재
  *   5) R3 테스트 실행 Step 존재
  *
- * 의도 실패 증명(dry-run): 게이트가 CRITICAL/HIGH advisory 를 통과시키지 않음은
- *   npm audit 자체의 exit code 계약으로 보장된다 (--audit-level >= found → exit 1).
+ * 의도 실패 증명: CRITICAL 게이트는 npm audit 의 exit code 계약(--audit-level >= found → exit 1)으로,
+ *   moderate 게이트는 판정 스크립트로 막는다(fail-closed.test.ts 가 종료 코드를 본다).
  */
 import * as fs from "fs";
 import * as path from "path";
@@ -63,6 +63,19 @@ describe("R3-REQ-06 CI supply-chain gate (static)", () => {
     test("R3 supply-chain 테스트 실행 Step 존재", () => {
         const content = fs.readFileSync(workflowPath, "utf8");
         expect(content).toMatch(/jest test\/supply-chain/);
+    });
+
+    // 판정 단계가 먼저 돌아야 막힐 때 그 사유와 예외 경고가 로그에 남는다. jest 가 먼저 실패하면 뒤 단계는 건너뛴다(#293).
+    test("판정 단계가 온라인 jest 단계보다 먼저 돈다", () => {
+        const workflow = parseYaml(fs.readFileSync(workflowPath, "utf8"));
+        const runs: string[] = workflow.jobs["audit-runtime"].steps.map((step: any) => String(step.run ?? "").trim());
+        const gate = runs.indexOf("node scripts/supply-chain-gate.cjs --server-gate");
+        const critical = runs.indexOf("npm audit --omit=dev --audit-level=critical");
+        const online = runs.findIndex((run) => run.includes("r3-req-04-medium-cleared.test.ts"));
+        expect(gate).toBeGreaterThanOrEqual(0);
+        expect(online).toBeGreaterThanOrEqual(0);
+        expect(critical).toBeLessThan(online);
+        expect(gate).toBeLessThan(online);
     });
 
     // runtime-only audit 는 --omit=dev 로 빌드 의존성 노이즈를 뺀다. 주석이 아니라 실제 run 단계와 판정 스크립트를 본다(#293).
