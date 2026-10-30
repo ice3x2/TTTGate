@@ -82,6 +82,13 @@ describe("server HIGH gate with reviewed advisories (#180)", () => {
         expect(gate.evaluateGate(same, "moderate", moderateReview, NOW).blocking).toEqual([]);
     });
 
+    it("blocks a reviewed advisory whose exception does not record the reviewed severity", () => {
+        const {severity: _omit, ...withoutSeverity} = REVIEWED[0];
+        void _omit;
+        const report = reportOf({forge: {name: "forge", severity: "moderate", via: [advisory("forge", "moderate", "GHSA-aaaa-bbbb-cccc")]}});
+        expect(gate.evaluateGate(report, "moderate", [withoutSeverity], NOW).blocking).toEqual(["forge GHSA-aaaa-bbbb-cccc (reviewed severity missing)"]);
+    });
+
     it("the HIGH gate is the same gate at the high level", () => {
         const report = reportOf({x: {name: "x", severity: "moderate", via: [advisory("x", "moderate", "GHSA-9999-8888-7777")]}});
         expect(gate.evaluateHighGate(report, REVIEWED, NOW)).toEqual(gate.evaluateGate(report, "high", REVIEWED, NOW));

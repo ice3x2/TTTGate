@@ -92,8 +92,9 @@ const evaluateGate = (report, level, reviewed = REVIEWED_ADVISORIES, now = Date.
             const review = id === undefined ? undefined : reviewed.find((item) => item.id.toLowerCase() === id.toLowerCase() && item.package === pkg);
             if(advisory.severity === "critical" || review === undefined) blocking.add(label);
             else if(!(Date.parse(review.reviewBy) >= now)) blocking.add(`${label} (review expired ${review.reviewBy})`);
-            // 예외는 검토할 때의 등급까지만 덮는다. 등급이 올라가면(또는 적혀 있지 않으면) 다시 검토하게 막는다.
-            else if(!(SEVERITY_ORDER.indexOf(advisory.severity) <= SEVERITY_ORDER.indexOf(review.severity))) {
+            // 예외는 검토할 때의 등급까지만 덮는다. 등급이 적혀 있지 않거나 올라가면 다시 검토하게 막는다.
+            else if(!SEVERITY_ORDER.includes(review.severity)) blocking.add(`${label} (reviewed severity missing)`);
+            else if(SEVERITY_ORDER.indexOf(advisory.severity) > SEVERITY_ORDER.indexOf(review.severity)) {
                 blocking.add(`${label} (reviewed as ${review.severity}, now ${advisory.severity})`);
             }
             else accepted.add(label);
