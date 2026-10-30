@@ -46,9 +46,9 @@ jobs:
         env:
           NODE_ENV: development
 
-      - name: Audit production tree (HIGH gate, reviewed advisories only)
-        # npm audit --omit=dev --audit-level=high 결과를 검토 예외(scripts/supply-chain-gate.cjs)와 대조한다(#180).
-        run: node scripts/supply-chain-gate.cjs --server-high-gate
+      - name: Audit production tree (moderate gate, reviewed advisories only)
+        # npm audit --omit=dev --audit-level=moderate 결과를 검토 예외(scripts/supply-chain-gate.cjs)와 대조한다(#180, #293).
+        run: node scripts/supply-chain-gate.cjs --server-gate
         env:
           NODE_ENV: development
 

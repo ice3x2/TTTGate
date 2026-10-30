@@ -95,12 +95,17 @@ node app.js client -addr <server_address>
 
 주간 감사나 릴리스가 공급망 감사에서 실패하면 다음 순서로 처리합니다.
 
-1. 실패 로그에서 권고 번호(GHSA-…)와 패키지를 확인합니다. 로컬에서는 `npm audit --omit=dev`(서버 운영 의존성)와 `cd admin && npm audit`(관리 화면)으로 같은 결과를 봅니다.
+1. 실패 로그에서 권고 번호(GHSA-…)와 패키지를 확인합니다. 로컬에서는 다음 명령으로 같은 판정을 봅니다. `NODE_ENV` 가 `production` 이면 결과가 달라지므로 `development` 로 둡니다.
+   - 서버 운영 의존성: `node scripts/supply-chain-gate.cjs --server-gate`
+   - 관리 화면: `cd admin && node ../scripts/supply-chain-gate.cjs --admin-high-report`
 2. 수정 버전이 있으면 그 버전으로 올립니다. 이것이 기본입니다. 소스 배포판도 같은 버전을 쓰도록 `package-build.json` 의 범위도 함께 올립니다.
 3. 수정 버전이 없으면, TTTGate 가 영향받는 API 를 쓰는지 검토합니다. 쓰지 않을 때만 `scripts/supply-chain-gate.cjs` 의 `REVIEWED_ADVISORIES` 에 예외를 올립니다.
    - 권고 번호, 패키지, 검토일(`reviewedOn`), 재검토일(`reviewBy`), 이유를 적습니다. 재검토일은 검토일에서 180일 안이어야 합니다.
    - 검토할 때의 등급(`severity`)도 적습니다. 권고 등급이 그보다 올라가면 다시 막힙니다.
    - 예외는 서버 운영 의존성의 moderate·high 검사에 함께 쓰입니다. critical 은 예외로도 통과하지 않습니다.
-   - 재검토일이 지나면 다시 막힙니다. 그 사이에 수정 버전이 나오면 올리고 예외를 지웁니다.
+   - 재검토일이 지나면 다시 막힙니다(로그에 `review expired` 가 붙습니다). 그 사이에 수정 버전이 나오면 올리고 예외를 지웁니다. 수정 버전이 아직 없으면 영향 API 를 다시 검토한 뒤 `reviewedOn` 과 `reviewBy` 를 새 날짜로 바꿉니다.
+   - 로그 항목에 권고 번호가 없거나 `(unresolved via)` 가 붙으면 예외로 풀 수 없습니다. 권고를 특정할 수 없기 때문입니다. 업그레이드나 `overrides` 로 풉니다.
+   - 예외를 올릴 때는 영향 API 를 쓰지 않음을 지키는 테스트를 `test/supply-chain/reviewed-advisories.test.ts` 에 함께 더합니다.
+   - 예외로 통과한 권고는 감사 로그에 경고(`reviewed advisory accepted`)로 남습니다.
 4. 수정 버전이 없는 critical 은 예외로 풀 수 없습니다. 그 의존성을 다른 패키지로 바꾸거나 빼고, 하위 의존성이면 `overrides` 로 고친 버전을 강제합니다. 어느 쪽도 어려우면 정보보호팀과 검토합니다.
 5. 관리 화면 감사는 critical 만 막고 high 는 경고로 남깁니다. 검토 예외는 서버 운영 의존성에만 쓰이므로, 관리 화면의 high 경고는 업그레이드(필요하면 `overrides`)로 풉니다.

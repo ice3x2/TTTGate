@@ -54,7 +54,7 @@ const runNpm = (args, cwd = process.cwd()) => spawnSync("npm", args, {
  * 서버 게이트(moderate·high)는 이 목록의 권고만 통과시킨다(#293). reviewBy 날짜의 UTC 00:00 에 만료되어 다시 막고 재검토를 강제한다.
  * reviewBy 는 reviewedOn 에서 180일 안이어야 한다(테스트가 지킨다). severity 는 검토할 때의 등급이며, 권고 등급이 그보다
  * 오르면 다시 막는다(#293). 항목 형식: {id, package, severity, reviewedOn, reviewBy, reason}.
- * 예외의 전제(영향 API 미사용)는 test/supply-chain/reviewed-advisories.test.ts 가 지킨다.
+ * 항목을 더할 때는 그 권고의 영향 API 를 쓰지 않음을 지키는 테스트를 test/supply-chain/reviewed-advisories.test.ts 에 함께 더한다.
  */
 // #293: GHSA-86w9-cpqp-85rv(node-forge) 는 수정 버전 1.4.1 이 나와 예외를 지우고 1.4.2 로 올렸다.
 const REVIEWED_ADVISORIES = [];
@@ -108,14 +108,15 @@ const evaluateHighGate = (report, reviewed = REVIEWED_ADVISORIES, now = Date.now
 
 module.exports = {readAuditReport, readDependencyTree, runNpm, evaluateGate, evaluateHighGate, REVIEWED_ADVISORIES};
 
-if(require.main === module && process.argv[2] === "--server-high-gate") {
-    const report = readAuditReport(runNpm(["audit", "--omit=dev", "--audit-level=high", "--json"]));
-    const {blocking, accepted} = evaluateHighGate(report);
+if(require.main === module && process.argv[2] === "--server-gate") {
+    // moderate 이상을 판정한다. 예외로 통과한 권고는 모두 경고로 남긴다(#293).
+    const report = readAuditReport(runNpm(["audit", "--omit=dev", "--audit-level=moderate", "--json"]));
+    const {blocking, accepted} = evaluateGate(report, "moderate");
     for(const label of accepted) console.log(`::warning::reviewed advisory accepted until its review date: ${label}`);
-    if(blocking.length) throw new Error(`Unreviewed HIGH/CRITICAL server advisories: ${blocking.join(", ")}`);
-    console.log("No unreviewed server HIGH advisories");
+    if(blocking.length) throw new Error(`Blocked server advisories: ${blocking.join(", ")}`);
+    console.log("No blocked server advisories");
 } else if(require.main === module) {
-    if(process.argv[2] !== "--admin-high-report") throw new Error("Expected --admin-high-report or --server-high-gate");
+    if(process.argv[2] !== "--admin-high-report") throw new Error("Expected --admin-high-report or --server-gate");
     const report = readAuditReport(runNpm(["audit", "--audit-level=high", "--json"]));
     const entries = Object.entries(report.vulnerabilities);
     const critical = entries.filter(([, entry]) => entry.severity === "critical").map(([name]) => name);

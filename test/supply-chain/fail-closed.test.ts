@@ -70,3 +70,42 @@ test.each([
         fs.rmSync(directory, {recursive: true, force: true});
     }
 }, 35_000);
+
+// #293: 서버 판정 명령(--server-gate)은 moderate 수준으로 판정하고, 막을 때 종료 코드 1 과 사유를 낸다.
+// 예외로 통과한 권고는 ::warning:: 으로 남긴다(단위 판정은 reviewed-advisories.test.ts 가 본다).
+const runServerGate = (output: string, status: string) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "tttgate-server-gate-"));
+    try {
+        const emitter = path.join(directory, "emit.cjs");
+        fs.writeFileSync(emitter, "process.stdout.write(process.env.FIXTURE_OUTPUT); process.exit(Number(process.env.FIXTURE_STATUS));");
+        const windows = process.platform === "win32";
+        fs.writeFileSync(path.join(directory, windows ? "npm.cmd" : "npm"), windows
+            ? `@echo off\r\n"${process.execPath}" "${emitter}"\r\n`
+            : `#!/bin/sh\nexec '${process.execPath}' '${emitter}'\n`, {mode: 0o755});
+        const environment = {...process.env};
+        const pathKey = Object.keys(environment).find((key) => key.toLowerCase() === "path") || "PATH";
+        environment[pathKey] = directory + path.delimiter + environment[pathKey];
+        return spawnSync(process.execPath, [path.join(repoRoot, "scripts/supply-chain-gate.cjs"), "--server-gate"],
+            {cwd: repoRoot, encoding: "utf8", timeout: 30_000, env: {...environment, FIXTURE_OUTPUT: output, FIXTURE_STATUS: status}});
+    } finally {
+        fs.rmSync(directory, {recursive: true, force: true});
+    }
+};
+
+test("the server gate CLI blocks an unreviewed moderate advisory with its reason", () => {
+    const result = runServerGate(JSON.stringify({
+        auditReportVersion: 2,
+        vulnerabilities: {lodash: {name: "lodash", severity: "moderate", via: [{source: 1, name: "lodash", dependency: "lodash", title: "fixture",
+            url: "https://github.com/advisories/GHSA-1111-2222-3333", severity: "moderate", range: "*"}]}},
+        metadata: {vulnerabilities: {info: 0, low: 0, moderate: 1, high: 0, critical: 0, total: 1}},
+    }), "1");
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Blocked server advisories: lodash GHSA-1111-2222-3333");
+}, 35_000);
+
+test("the server gate CLI passes a clean report", () => {
+    const result = runServerGate(JSON.stringify({auditReportVersion: 2, vulnerabilities: {},
+        metadata: {vulnerabilities: {info: 0, low: 0, moderate: 0, high: 0, critical: 0, total: 0}}}), "0");
+    expect({status: result.status, stdout: result.stdout.trim()}).toEqual({status: 0, stdout: "No blocked server advisories"});
+}, 35_000);

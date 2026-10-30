@@ -41,12 +41,12 @@ describe("R3-REQ-06 CI supply-chain gate (static)", () => {
         expect(on.pull_request).toBeDefined();
     });
 
-    test("HIGH 차단 게이트 존재 (검토 예외만 통과하는 서버 게이트, #180)", () => {
+    test("moderate 차단 게이트 존재 (검토 예외만 통과하는 서버 게이트, #180, #293)", () => {
         const content = fs.readFileSync(workflowPath, "utf8");
-        expect(content).toMatch(/node scripts\/supply-chain-gate\.cjs --server-high-gate/);
-        // 게이트 스크립트가 실제로 HIGH 수준 production 감사를 돈다.
+        expect(content).toMatch(/node scripts\/supply-chain-gate\.cjs --server-gate/);
+        // 게이트 스크립트가 실제로 moderate 수준 production 감사를 돈다.
         const script = fs.readFileSync(path.join(__dirname, "..", "..", "scripts", "supply-chain-gate.cjs"), "utf8");
-        expect(script).toMatch(/"audit", "--omit=dev", "--audit-level=high", "--json"/);
+        expect(script).toMatch(/"audit", "--omit=dev", "--audit-level=moderate", "--json"/);
     });
 
     test("CRITICAL 차단 게이트 존재 (--audit-level=critical)", () => {
@@ -65,11 +65,13 @@ describe("R3-REQ-06 CI supply-chain gate (static)", () => {
         expect(content).toMatch(/jest test\/supply-chain/);
     });
 
+    // runtime-only audit 는 --omit=dev 로 빌드 의존성 노이즈를 뺀다. 주석이 아니라 실제 run 단계와 판정 스크립트를 본다(#293).
     test("production 트리 감사가 --omit=dev 로 격리됨", () => {
-        const content = fs.readFileSync(workflowPath, "utf8");
-        // runtime-only audit 는 --omit=dev 를 반드시 포함해야 함 (빌드 의존성 노이즈 제거).
-        const matches = content.match(/npm audit --omit=dev/g);
-        expect(matches).not.toBeNull();
-        expect(matches!.length).toBeGreaterThanOrEqual(2);
+        const workflow = parseYaml(fs.readFileSync(workflowPath, "utf8"));
+        const runs: string[] = workflow.jobs["audit-runtime"].steps.filter((step: any) => step.run).map((step: any) => step.run.trim());
+        expect(runs).toContain("npm audit --omit=dev --audit-level=critical");
+        expect(runs).toContain("node scripts/supply-chain-gate.cjs --server-gate");
+        const script = fs.readFileSync(path.join(path.dirname(workflowPath), "../../scripts/supply-chain-gate.cjs"), "utf8");
+        expect(script).toContain('runNpm(["audit", "--omit=dev", "--audit-level=moderate", "--json"])');
     });
 });
