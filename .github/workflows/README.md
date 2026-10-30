@@ -3,8 +3,8 @@
 | 워크플로 | 파일 | 언제 도는가 | 하는 일 |
 |---|---|---|---|
 | Code Regression | `code-regression.yml` | 모든 PR, main 에 push, 수동 실행, 릴리스 워크플로가 부를 때 | 빌드·린트·단위 테스트, 컴포넌트 테스트, 타입 검사, 관리 화면·터널·브라우저 E2E 를 네 작업으로 나눠 병렬로 돌립니다. |
-| Release | `release.yml` | 버전 태그를 push 할 때, 수동 실행 | Code Regression 을 통과하면 소스 배포판과 다섯 플랫폼 바이너리를 만들어 초안(draft) 릴리스에 올립니다. |
-| Supply Chain Audit | `supply-chain-audit.yml` | 의존성 파일이 바뀐 main 대상 PR, main 에 push, 매주 월요일, 수동 실행 | 의존성 보안 권고(advisory)와 SBOM 을 확인합니다. |
+| Release | `release.yml` | 버전 태그를 push 할 때, 수동 실행 | Code Regression 과 온라인 공급망 감사를 통과하면 소스 배포판과 다섯 플랫폼 바이너리를 만들어 초안(draft) 릴리스에 올립니다. |
+| Supply Chain Audit | `supply-chain-audit.yml` | 의존성 파일이 바뀐 main 대상 PR, main 에 push, 매주 월요일, 수동 실행, 릴리스 워크플로가 부를 때 | 의존성 보안 권고(advisory)를 확인합니다. 온라인 감사는 매주 월요일, 수동 실행, 릴리스 때 돕니다. |
 
 ## 릴리스 만들기
 
@@ -21,7 +21,7 @@
 
 3. Release 워크플로가 자동으로 돕니다. 순서는 다음과 같습니다.
    1. 태그가 `package.json`·`package-build.json` 의 `version` 과 같은지 확인합니다. 다르면 여기서 멈춥니다.
-   2. Code Regression 의 네 작업을 병렬로 돌립니다(보통 20~50분). 하나라도 실패하면 패키징하지 않습니다. 스트레스 테스트(`npm run test:stress`)는 여기에 들어가지 않으므로, 필요하면 릴리스 전에 따로 돌립니다.
+   2. Code Regression 의 네 작업과 온라인 공급망 감사를 병렬로 돌립니다(보통 20~50분). 하나라도 실패하면 패키징하지 않습니다. 스트레스 테스트(`npm run test:stress`)는 여기에 들어가지 않으므로, 필요하면 릴리스 전에 따로 돌립니다.
    3. `npm run dist -- --skip-tests` 로 빌드하고 바이너리를 만듭니다. 테스트는 2단계에서 이미 돌렸으므로 다시 돌리지 않습니다.
    4. 소스 배포판과 바이너리를 압축하고, 릴리스 노트를 써서 초안 릴리스에 올립니다.
 4. **Releases** 화면에서 초안 릴리스를 확인합니다. 릴리스 노트를 고친 뒤 **Publish release** 를 눌러 공개합니다.
@@ -90,3 +90,14 @@ node app.js client -addr <server_address>
 | `npm run dist` | 모든 단계를 거쳐 소스 배포판과 바이너리를 만듭니다. |
 | `npm run dist -- --skip-binaries` | 바이너리는 만들지 않습니다. |
 | `npm run dist -- --skip-tests` | 브라우저 설치와 전체 테스트를 건너뜁니다. 같은 커밋이 Code Regression 을 통과했을 때만 씁니다(Release 워크플로가 이렇게 씁니다). |
+
+## 공급망 감사로 막혔을 때
+
+주간 감사나 릴리스가 공급망 감사에서 실패하면 다음 순서로 처리합니다.
+
+1. 실패 로그에서 권고 번호(GHSA-…)와 패키지를 확인합니다. 로컬에서는 `npm audit --omit=dev`(서버 운영 의존성)와 `cd admin && npm audit`(관리 화면)으로 같은 결과를 봅니다.
+2. 수정 버전이 있으면 그 버전으로 올립니다. 이것이 기본입니다. 소스 배포판도 같은 버전을 쓰도록 `package-build.json` 의 범위도 함께 올립니다.
+3. 수정 버전이 없으면, TTTGate 가 영향받는 API 를 쓰는지 검토합니다. 쓰지 않을 때만 `scripts/supply-chain-gate.cjs` 의 `REVIEWED_ADVISORIES` 에 예외를 올립니다.
+   - 권고 번호, 패키지, 검토일(`reviewedOn`), 재검토일(`reviewBy`), 이유를 적습니다. 재검토일은 검토일에서 180일 안이어야 합니다.
+   - 예외는 서버 운영 의존성의 moderate·high 검사에 함께 쓰입니다. critical 은 예외로도 통과하지 않습니다.
+   - 재검토일이 지나면 다시 막힙니다. 그 사이에 수정 버전이 나오면 올리고 예외를 지웁니다.

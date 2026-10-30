@@ -51,7 +51,7 @@ const runNpm = (args, cwd = process.cwd()) => spawnSync("npm", args, {
 
 /**
  * #180: 수정 버전이 없어 업그레이드로 풀 수 없고, TTTGate 가 영향받는 API 를 쓰지 않음을 검토한 권고.
- * 서버 HIGH 게이트는 이 목록의 권고만 통과시킨다. reviewBy 날짜의 UTC 00:00 에 만료되어 다시 막고 재검토를 강제한다.
+ * 서버 게이트(moderate·high)는 이 목록의 권고만 통과시킨다(#293). reviewBy 날짜의 UTC 00:00 에 만료되어 다시 막고 재검토를 강제한다.
  * reviewBy 는 reviewedOn 에서 180일 안이어야 한다(테스트가 지킨다).
  * 예외의 전제(영향 API 미사용)는 test/supply-chain/reviewed-advisories.test.ts 가 지킨다.
  */
@@ -59,13 +59,15 @@ const runNpm = (args, cwd = process.cwd()) => spawnSync("npm", args, {
 const REVIEWED_ADVISORIES = [];
 
 const GHSA_PATTERN = /GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}/i;
-const BLOCKING_SEVERITIES = ["high", "critical"];
+const SEVERITY_ORDER = ["low", "moderate", "high", "critical"];
 
 /**
- * npm audit 보고서에서 HIGH·CRITICAL 권고를 모아 검토 예외와 대조한다.
+ * npm audit 보고서에서 level 이상 등급의 권고를 모아 검토 예외와 대조한다(level: moderate·high, #293).
  * 다른 패키지를 가리키는 via(문자열)는 그 패키지의 권고로 따라간다. CRITICAL 은 예외로도 통과하지 않는다.
  */
-const evaluateHighGate = (report, reviewed = REVIEWED_ADVISORIES, now = Date.now()) => {
+const evaluateGate = (report, level, reviewed = REVIEWED_ADVISORIES, now = Date.now()) => {
+    if(!["moderate", "high"].includes(level)) throw new Error(`Unsupported gate level: ${level}`);
+    const blockingSeverities = SEVERITY_ORDER.slice(SEVERITY_ORDER.indexOf(level));
     const blocking = new Set();
     const accepted = new Set();
     const vulnerabilities = report.vulnerabilities ?? {};
@@ -77,12 +79,12 @@ const evaluateHighGate = (report, reviewed = REVIEWED_ADVISORIES, now = Date.now
         return entry.via.flatMap((via) => typeof via === "string" ? advisoriesOf(via, seen) : isObject(via) ? [via] : []);
     };
     for(const [name, entry] of Object.entries(vulnerabilities)) {
-        if(!BLOCKING_SEVERITIES.includes(entry.severity)) continue;
-        const advisories = advisoriesOf(name).filter((advisory) => BLOCKING_SEVERITIES.includes(advisory.severity));
-        // HIGH 이상 항목인데 그 근거 권고를 찾지 못하면(보고서에 없는 패키지를 가리킴) 통과시키지 않는다.
+        if(!blockingSeverities.includes(entry.severity)) continue;
+        const advisories = advisoriesOf(name).filter((advisory) => blockingSeverities.includes(advisory.severity));
+        // 기준 등급 이상 항목인데 그 근거 권고를 찾지 못하면(보고서에 없는 패키지를 가리킴) 통과시키지 않는다.
         if(advisories.length === 0) blocking.add(`${name} (unresolved via)`);
         for(const advisory of advisories) {
-            if(!BLOCKING_SEVERITIES.includes(advisory.severity)) continue;
+            if(!blockingSeverities.includes(advisory.severity)) continue;
             const id = GHSA_PATTERN.exec(String(advisory.url ?? ""))?.[0];
             const pkg = advisory.name ?? advisory.dependency ?? name;
             const label = `${pkg} ${id ?? advisory.title ?? "unknown advisory"}`;
@@ -95,7 +97,10 @@ const evaluateHighGate = (report, reviewed = REVIEWED_ADVISORIES, now = Date.now
     return {blocking: [...blocking], accepted: [...accepted]};
 };
 
-module.exports = {readAuditReport, readDependencyTree, runNpm, evaluateHighGate, REVIEWED_ADVISORIES};
+/** #180 서버 HIGH 게이트. evaluateGate 의 high 수준이다. */
+const evaluateHighGate = (report, reviewed = REVIEWED_ADVISORIES, now = Date.now()) => evaluateGate(report, "high", reviewed, now);
+
+module.exports = {readAuditReport, readDependencyTree, runNpm, evaluateGate, evaluateHighGate, REVIEWED_ADVISORIES};
 
 if(require.main === module && process.argv[2] === "--server-high-gate") {
     const report = readAuditReport(runNpm(["audit", "--omit=dev", "--audit-level=high", "--json"]));

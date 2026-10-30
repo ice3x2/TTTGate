@@ -56,6 +56,29 @@ describe("server HIGH gate with reviewed advisories (#180)", () => {
         expect(gate.evaluateHighGate(reportOf({x: {name: "x", severity: "moderate", via: [advisory("x", "moderate", "GHSA-9999-8888-7777")]}}), REVIEWED, NOW).blocking).toEqual([]);
     });
 
+    // #293: moderate 검사(주간 감사·릴리스)도 같은 검토 예외를 쓴다. 그래야 수정 버전이 없는 권고로 릴리스가 막혔을 때
+    // 정해진 절차(검토 → 예외 등록 → 180일 안 재검토)로 풀 수 있다. critical 은 여전히 예외로도 통과하지 않는다.
+    it("the moderate gate accepts a reviewed moderate advisory and blocks an unreviewed one", () => {
+        const reviewedModerate = reportOf({forge: {name: "forge", severity: "moderate", via: [advisory("forge", "moderate", "GHSA-aaaa-bbbb-cccc")]}});
+        expect(gate.evaluateGate(reviewedModerate, "moderate", REVIEWED, NOW)).toEqual({blocking: [], accepted: ["forge GHSA-aaaa-bbbb-cccc"]});
+        const unreviewed = reportOf({x: {name: "x", severity: "moderate", via: [advisory("x", "moderate", "GHSA-9999-8888-7777")]}});
+        expect(gate.evaluateGate(unreviewed, "moderate", REVIEWED, NOW).blocking).toEqual(["x GHSA-9999-8888-7777"]);
+    });
+
+    it("the moderate gate ignores low, blocks any critical and expired reviews", () => {
+        expect(gate.evaluateGate(reportOf({x: {name: "x", severity: "low", via: [advisory("x", "low", "GHSA-9999-8888-7777")]}}), "moderate", REVIEWED, NOW).blocking).toEqual([]);
+        expect(gate.evaluateGate(reportOf({forge: {name: "forge", severity: "critical", via: [advisory("forge", "critical", "GHSA-aaaa-bbbb-cccc")]}}), "moderate", REVIEWED, NOW).blocking)
+            .toEqual(["forge GHSA-aaaa-bbbb-cccc"]);
+        expect(gate.evaluateGate(reportOf({forge: {name: "forge", severity: "moderate", via: [advisory("forge", "moderate", "GHSA-aaaa-bbbb-cccc")]}}), "moderate", REVIEWED,
+            Date.parse("2027-02-01T00:00:00Z")).blocking).toEqual(["forge GHSA-aaaa-bbbb-cccc (review expired 2027-01-31)"]);
+    });
+
+    it("the HIGH gate is the same gate at the high level", () => {
+        const report = reportOf({x: {name: "x", severity: "moderate", via: [advisory("x", "moderate", "GHSA-9999-8888-7777")]}});
+        expect(gate.evaluateHighGate(report, REVIEWED, NOW)).toEqual(gate.evaluateGate(report, "high", REVIEWED, NOW));
+        expect(() => gate.evaluateGate(report, "info", REVIEWED, NOW)).toThrow("Unsupported gate level: info");
+    });
+
     // #293: 수정 버전이 나오면 예외를 지우고 업그레이드로 푼다. 그래서 목록은 비어 있을 수 있다.
     it("every reviewed advisory in the repository has an id, package, reason and a future-dated review", () => {
         expect(Array.isArray(gate.REVIEWED_ADVISORIES)).toBe(true);
@@ -73,8 +96,9 @@ describe("server HIGH gate with reviewed advisories (#180)", () => {
     });
 });
 
-describe("node-forge exception stays valid (#180)", () => {
-    // GHSA-86w9-cpqp-85rv 는 node-forge 의 RSA 서명 검증 결함이다. 이 API 를 쓰기 시작하면 예외가 무효가 된다.
+// #180 에서 예외의 전제로 둔 검사다. #293 으로 예외는 지웠지만, node-forge 를 쓰는 곳을 좁게 두고 서명·체인 검증은
+// Node/OpenSSL 에 맡긴다는 원칙은 계속 지킨다.
+describe("node-forge stays limited to certificate generation and PEM parsing (#180, #293)", () => {
     const sources = (dir: string): string[] => fs.readdirSync(dir, {withFileTypes: true}).flatMap((entry) => {
         const full = path.join(dir, entry.name);
         if(entry.isDirectory()) return entry.name === "node_modules" ? [] : sources(full);

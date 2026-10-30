@@ -25,11 +25,11 @@ describe("R3-REQ-03 CRITICAL cleared on production chain", () => {
         expect(criticalHits).toEqual([]);
     }, 60_000);
 
-    onlineTest("npm audit --omit=dev --audit-level=high → form-data 0건, node-forge 는 검토 예외만(#180)", () => {
+    onlineTest("npm audit --omit=dev --audit-level=high → form-data 0건, 그 밖의 HIGH 는 검토 예외만(#180)", () => {
         const report = audit("high");
         expect(report.vulnerabilities["form-data"]).toBeUndefined();
-        const {evaluateHighGate} = require("../../scripts/supply-chain-gate.cjs");
-        expect(evaluateHighGate(report).blocking).toEqual([]);
+        const {evaluateGate} = require("../../scripts/supply-chain-gate.cjs");
+        expect(evaluateGate(report, "high").blocking).toEqual([]);
     }, 60_000);
 
     test("form-data overrides 설정 존재 (production 트리 트랜지티브 고정)", () => {
