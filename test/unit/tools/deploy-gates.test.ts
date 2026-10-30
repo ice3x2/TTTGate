@@ -116,6 +116,16 @@ test("the geoip update script reports a skipped update without a license key", (
         stderr: "MAXMIND_LICENSE_KEY is not set; keeping the bundled GeoLite2 database\n"});
 });
 
+// #290 — 릴리스 워크플로는 Code Regression 을 먼저 통과하므로 패키징 때 테스트를 다시 돌리지 않는다.
+test("--skip-tests skips only the browser install and test gates and still packages", () => {
+    withFixture(({directory, result, journal}) => {
+        expect({status: result.status, error: result.status ? String(result.stderr) : ""}).toEqual({status: 0, error: ""});
+        expect(journal.map(entry => entry.stage)).toEqual(["root-install", "admin-install", "admin-check", "root-build", "admin-build", "pkg"]);
+        expect(fs.readFileSync(path.join(directory, "dist/web/index.html"), "utf8")).toBe("PRODUCTION ADMIN");
+        expect(fs.readFileSync(path.join(directory, "dist/bin/fixture.txt"), "utf8")).toBe("fixture package");
+    }, undefined, ["--skip-tests"]);
+}, 50_000);
+
 test("explicit source-only deployment runs all gates but never invokes pkg", () => {
     withFixture(({directory, result, journal}) => {
         expect(result.status).toBe(0);

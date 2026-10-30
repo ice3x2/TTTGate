@@ -53,8 +53,9 @@ describe("Node 24 runtime and packaging contract", () => {
     });
     test("installation guidance and generated release requirements use Node 24", () => {
         expect(fs.readFileSync(path.join(root, "README.md"), "utf8")).toContain("Node.js 24");
-        const workflow = fs.readFileSync(path.join(root, ".github/workflows/build-release-binaries.yml"), "utf8");
-        expect(workflow).toContain("Node.js 24+");
-        expect(workflow).not.toContain("Node.js 18+");
+        // #290: 릴리스 노트는 scripts/release-notes.cjs 가 쓴다.
+        const notes = fs.readFileSync(path.join(root, "scripts/release-notes.cjs"), "utf8");
+        expect(notes).toContain("Node.js 24+");
+        expect(notes).not.toContain("Node.js 18+");
     });
 });

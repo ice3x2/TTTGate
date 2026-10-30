@@ -63,14 +63,17 @@ test.each(["app.js", "package.json", "web/index.html", "web/assets/main.js"])("e
     expect(fs.readdirSync(directory).filter(name => name.startsWith("TTTGate-"))).toEqual([]);
 }));
 
-test.each(["build-release.yml", "build-release-binaries.yml"])("%s archives source and documents isolated dependency installation", name => {
-    const workflow = parse(fs.readFileSync(path.join(root, ".github/workflows", name), "utf8"));
-    const runs = workflow.jobs.build.steps.filter((step: any) => step.run).map((step: any) => step.run).join("\n");
+// #290 — 설치 안내는 릴리스 노트 스크립트가 쓴다.
+test("release workflow archives source and the notes document isolated dependency installation", () => {
+    const workflow = parse(fs.readFileSync(path.join(root, ".github/workflows/release.yml"), "utf8"));
+    const runs = workflow.jobs.release.steps.filter((step: any) => step.run).map((step: any) => step.run).join("\n");
     expect(runs).toContain('node scripts/archive-source.cjs "$RELEASE_VERSION"');
-    expect(runs).not.toContain("cd dist\n");
-    expect(runs).toContain("npm install --omit=dev");
-    expect(runs).toContain("node app.js server");
-    expect(runs).not.toContain("node src/app.js");
-    const upload = workflow.jobs.build.steps.find((step: any) => step.uses?.startsWith("softprops/action-gh-release"));
+    const notes = spawnSync(process.execPath, [path.join(root, "scripts/release-notes.cjs"), "2.0.0", "abc1234"], {encoding: "utf8"});
+    expect(notes.status).toBe(0);
+    expect(notes.stdout).not.toContain("cd dist\n");
+    expect(notes.stdout).toContain("npm install --omit=dev");
+    expect(notes.stdout).toContain("node app.js server");
+    expect(notes.stdout).not.toContain("node src/app.js");
+    const upload = workflow.jobs.release.steps.find((step: any) => step.uses?.startsWith("softprops/action-gh-release"));
     expect(upload.with.fail_on_unmatched_files).toBe(true);
 });

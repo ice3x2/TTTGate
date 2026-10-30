@@ -25,13 +25,15 @@ const runNpm = (args, cwd, nodeEnv = 'development') => {
 const main = () => {
     const browser = ['run', 'test:browser:install'];
     if(process.platform === 'linux' && process.env.GITHUB_ACTIONS === 'true') browser.push('--', '--with-deps');
+    // --skip-tests: the release workflow runs Code Regression first, so packaging does not run the tests again (#290).
+    const skipTests = process.argv.includes('--skip-tests');
     const gates = [
         {cwd: root, args: ['ci', '--include=dev', '--no-audit', '--no-fund']},
         {cwd: admin, args: ['ci', '--include=dev', '--no-audit', '--no-fund']},
-        {cwd: root, args: browser},
+        ...(skipTests ? [] : [{cwd: root, args: browser}]),
         {cwd: admin, args: ['run', 'check']},
         {cwd: root, args: ['run', 'build', '--', '--force']},
-        {cwd: root, args: ['test', '--', '--runInBand'], nodeEnv: 'test'},
+        ...(skipTests ? [] : [{cwd: root, args: ['test', '--', '--runInBand'], nodeEnv: 'test'}]),
         // Browser tests can rebuild admin/dist using test entrypoints.
         {cwd: admin, args: ['run', 'build'], nodeEnv: 'production'},
     ];

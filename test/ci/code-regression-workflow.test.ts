@@ -17,6 +17,8 @@ describe("code regression CI (#14)", () => {
         const workflow = parseYaml(fs.readFileSync(workflowPath, "utf8"));
         expect(workflow.on.pull_request).toEqual({});
         expect(workflow.on.push.branches).toContain("main");
+        // #290: 릴리스 워크플로가 같은 테스트 작업을 다시 쓴다.
+        expect(workflow.on.workflow_call).toEqual({});
     });
 
     test.each([

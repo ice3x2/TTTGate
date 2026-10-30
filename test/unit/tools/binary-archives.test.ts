@@ -70,19 +70,17 @@ test.each(["missing", "empty"])("%s binary fails before any archive is emitted",
     } finally { fs.rmSync(directory, {recursive: true, force: true}); }
 });
 
-test("workflow builds once, honors false and requires every selected upload", () => {
-    const workflow = parse(fs.readFileSync(path.join(root, ".github/workflows/build-release-binaries.yml"), "utf8"));
-    const steps = workflow.jobs.build.steps;
+// #290 — 릴리스 워크플로는 한 번 빌드해(dist 가 pkg 를 부른다) 다섯 바이너리를 모두 올린다.
+test("release workflow builds once and requires every platform upload", () => {
+    const workflow = parse(fs.readFileSync(path.join(root, ".github/workflows/release.yml"), "utf8"));
+    const steps = workflow.jobs.release.steps;
     const commands = steps.map((step: any) => step.run ?? "").join("\n");
     expect(commands).not.toContain("npm run pkg");
-    expect(commands).toContain("--skip-binaries");
+    expect(commands).not.toContain("--skip-binaries");
     expect(commands).toContain("scripts/archive-binaries.cjs");
-    expect(commands).toContain("./bin/TTTGate-linux-x64 server");
-    expect(commands).toContain("bin/TTTGate-win-x64.exe server");
     const release = steps.find((step: any) => step.uses?.startsWith("softprops/action-gh-release"));
     expect(release.with.fail_on_unmatched_files).toBe(true);
-    expect(release.with.files).toContain("steps.release_files.outputs.files");
-    const files = steps.find((step: any) => step.id === "release_files");
-    expect(files.run).toContain('"$BUILD_BINARIES" = "true"');
-    expect(files.env.BUILD_BINARIES).toBe("${{ inputs.build_binaries }}");
+    for(const platform of ["linux-x64.tar.gz", "linux-arm64.tar.gz", "win-x64.zip", "win-arm64.zip", "alpine-x64.tar.gz"]) {
+        expect(release.with.files).toContain(`-${platform}`);
+    }
 });

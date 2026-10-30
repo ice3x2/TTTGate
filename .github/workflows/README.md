@@ -1,74 +1,60 @@
-# GitHub Actions Workflows
+# GitHub Actions 워크플로
 
-## 사용 가능한 워크플로우
+| 워크플로 | 파일 | 언제 도는가 | 하는 일 |
+|---|---|---|---|
+| Code Regression | `code-regression.yml` | 모든 PR, main 에 push, 수동 실행, 릴리스 워크플로가 부를 때 | 빌드·린트·단위 테스트, 컴포넌트 테스트, 타입 검사, 관리 화면·터널·브라우저 E2E 를 네 작업으로 나눠 병렬로 돌립니다. |
+| Release | `release.yml` | 버전 태그를 push 할 때, 수동 실행 | Code Regression 을 통과하면 소스 배포판과 다섯 플랫폼 바이너리를 만들어 초안(draft) 릴리스에 올립니다. |
+| Supply Chain Audit | `supply-chain-audit.yml` | 의존성 파일이 바뀐 main 대상 PR, main 에 push, 매주 월요일, 수동 실행 | 의존성 보안 권고(advisory)와 SBOM 을 확인합니다. |
 
-### 1. build-release.yml
-기본 빌드 및 Draft Release 생성 (소스 배포판만)
+## 릴리스 만들기
 
-### 2. build-release-binaries.yml
-전체 빌드 및 Draft Release 생성 (소스 + 바이너리)
+1. `package.json` 의 `version` 을 릴리스할 버전으로 올리고 main 에 병합합니다. 태그 형식은 기존 릴리스를 따라 `v` 없이 씁니다(예: `2.0.0`).
+2. main 의 그 커밋에 같은 이름의 태그를 올립니다.
 
-## 사용 방법
+   ```bash
+   git tag 2.0.0 <main 의 커밋>
+   git push origin 2.0.0
+   ```
 
-### GitHub UI에서 실행
+3. Release 워크플로가 자동으로 돕니다. 순서는 다음과 같습니다.
+   1. Code Regression 의 네 작업을 병렬로 돌립니다(약 25분). 하나라도 실패하면 패키징하지 않습니다.
+   2. 태그가 `package.json` 의 `version` 과 같은지 확인합니다. 다르면 여기서 멈춥니다.
+   3. `npm run dist -- --skip-tests` 로 빌드하고 바이너리를 만듭니다. 테스트는 1단계에서 이미 돌렸으므로 다시 돌리지 않습니다.
+   4. 소스 배포판과 바이너리를 압축하고, 릴리스 노트를 써서 초안 릴리스에 올립니다.
+4. **Releases** 화면에서 초안 릴리스를 확인합니다. 릴리스 노트를 고친 뒤 **Publish release** 를 눌러 공개합니다.
 
-1. GitHub 저장소의 **Actions** 탭으로 이동
-2. 왼쪽 사이드바에서 원하는 워크플로우 선택:
-   - `Build and Create Draft Release` (소스만)
-   - `Build Binaries and Create Draft Release` (소스 + 바이너리)
-3. **Run workflow** 버튼 클릭
-4. 필요한 정보 입력:
-   - **version**: 릴리스 버전 (예: `v1.0.11b`)
-   - **release_title**: 릴리스 제목 (선택사항)
-   - **build_binaries**: 바이너리 빌드 여부 (두 번째 워크플로우만)
-5. **Run workflow** 클릭
-
-### GitHub CLI로 실행
+태그를 올렸는데 실패했다면, 원인을 고친 커밋을 main 에 병합합니다. 그다음 태그를 지우고 같은 이름으로 다시 올립니다.
 
 ```bash
-# 소스 배포판만
-gh workflow run build-release.yml \
-  -f version=v1.0.11b \
-  -f release_title="Stable Release v1.0.11b"
-
-# 소스 + 바이너리
-gh workflow run build-release-binaries.yml \
-  -f version=v1.0.11b \
-  -f release_title="Stable Release v1.0.11b" \
-  -f build_binaries=true
+git push origin :refs/tags/2.0.0
+git tag -f 2.0.0 <고친 main 의 커밋>
+git push origin 2.0.0
 ```
 
-## 워크플로우 설명
+### 수동 실행
 
-### build-release.yml (기본)
-- Node.js 소스 배포판 생성 (`dist.tar.gz`)
-- 자동 릴리스 노트 생성
-- Draft Release 생성
+Actions 화면에서 **Release** 를 고르고 **Run workflow** 를 누릅니다. **Use workflow from** 에서 브랜치가 아니라 **버전 태그**를 고릅니다. 브랜치를 고르면 2단계(태그 확인)에서 멈춥니다.
 
-### build-release-binaries.yml (전체)
-- Node.js 소스 배포판 생성 (`dist.tar.gz`, `dist.zip`)
-- 플랫폼별 바이너리 생성:
-  - Linux x64 / ARM64
-  - Windows x64 / ARM64
-  - Alpine Linux x64
-- 자동 릴리스 노트 생성
-- Draft Release 생성
+```bash
+gh workflow run release.yml --ref 2.0.0
+```
 
-## 생성되는 파일
+### 권한
 
-### 소스 배포판
-- `TTTGate-{version}-dist.tar.gz` - tar.gz 형식
-- `TTTGate-{version}-dist.zip` - zip 형식
+Release 워크플로의 패키징 작업만 `contents: write` 권한을 받습니다. 저장소의 기본 토큰 권한(`read`)은 바꾸지 않아도 됩니다.
 
-### 플랫폼 바이너리
-- `TTTGate-{version}-linux-x64.tar.gz` - Linux x64
-- `TTTGate-{version}-linux-arm64.tar.gz` - Linux ARM64
-- `TTTGate-{version}-win-x64.zip` - Windows x64
-- `TTTGate-{version}-win-arm64.zip` - Windows ARM64
-- `TTTGate-{version}-alpine-x64.tar.gz` - Alpine Linux x64
+## 만들어지는 파일
 
-바이너리 아카이브는 해당 플랫폼의 `bin/TTTGate-*` 실행 파일과 관리자 `web/` 자산을 포함합니다.
-압축을 푼 구조를 유지하고 루트에서 실행합니다.
+| 파일 | 내용 |
+|---|---|
+| `TTTGate-{version}-dist.tar.gz`, `TTTGate-{version}-dist.zip` | Node.js 소스 배포판 |
+| `TTTGate-{version}-linux-x64.tar.gz` | Linux x64 바이너리 |
+| `TTTGate-{version}-linux-arm64.tar.gz` | Linux ARM64 바이너리 |
+| `TTTGate-{version}-win-x64.zip` | Windows x64 바이너리 |
+| `TTTGate-{version}-win-arm64.zip` | Windows ARM64 바이너리 |
+| `TTTGate-{version}-alpine-x64.tar.gz` | Alpine Linux x64 바이너리 |
+
+바이너리 압축 파일에는 그 플랫폼의 `bin/TTTGate-*` 실행 파일과 관리 화면의 `web/` 자산이 들어 있습니다. 압축을 푼 구조를 그대로 두고 루트에서 실행합니다.
 
 ```bash
 ./bin/TTTGate-linux-x64 server -adminPort 9300
@@ -78,8 +64,7 @@ bin/TTTGate-win-x64.exe server -adminPort 9300
 
 ### 소스 배포판 실행
 
-Node.js 24 이상에서 소스 아카이브를 새 디렉터리에 풀고 그 디렉터리에서 실행합니다.
-배포판에는 `app.js`, `package.json`, 관리자 `web/` 자산과 런타임 `bin/` 디렉터리가 들어 있습니다.
+Node.js 24 이상에서 소스 배포판을 새 디렉터리에 풀고, 그 디렉터리에서 실행합니다. 배포판에는 `app.js`, `package.json`, 관리 화면의 `web/` 자산과 런타임 `bin/` 디렉터리가 들어 있습니다.
 
 ```bash
 npm install --omit=dev
@@ -88,19 +73,14 @@ node app.js server -adminPort 9300
 node app.js client -addr <server_address>
 ```
 
-배포 전용 lockfile을 포함하지 않으므로 `npm ci`가 아닌 위 설치 명령을 사용합니다.
-의존성은 배포 manifest의 버전 범위로 설치되며, 동일 해석 결과를 보장하는 잠금 배포는 아닙니다.
+배포판에는 배포 전용 lockfile 이 없습니다. 그래서 `npm ci` 가 아니라 위의 설치 명령을 씁니다. 의존성은 배포 manifest 의 버전 범위로 설치되므로, 같은 해석 결과를 보장하지는 않습니다.
 
-## Draft Release 게시
+## 로컬에서 배포판 만들기
 
-1. 워크플로우 실행 완료 후 **Releases** 페이지로 이동
-2. **Draft** 상태의 릴리스 확인
-3. 릴리스 노트 검토 및 필요시 수정
-4. **Publish release** 버튼 클릭하여 정식 게시
+`npm run dist` 는 의존성 설치, 관리 화면 검사, 빌드, 전체 테스트를 차례로 통과해야 배포판을 만듭니다. 전체 테스트는 오래 걸립니다.
 
-## 주의사항
-
-- 워크플로우는 수동 실행만 가능 (`workflow_dispatch`)
-- Draft 릴리스로 생성되므로 검토 후 수동 게시 필요
-- 바이너리 빌드는 시간이 오래 걸릴 수 있음 (5-10분)
-- GitHub Actions의 `GITHUB_TOKEN`이 자동으로 사용됨
+| 명령 | 하는 일 |
+|---|---|
+| `npm run dist` | 모든 단계를 거쳐 소스 배포판과 바이너리를 만듭니다. |
+| `npm run dist -- --skip-binaries` | 바이너리는 만들지 않습니다. |
+| `npm run dist -- --skip-tests` | 브라우저 설치와 전체 테스트를 건너뜁니다. 같은 커밋이 Code Regression 을 통과했을 때만 씁니다(Release 워크플로가 이렇게 씁니다). |
