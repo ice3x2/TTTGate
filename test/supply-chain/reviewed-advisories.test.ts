@@ -8,7 +8,7 @@ const gate = require("../../scripts/supply-chain-gate.cjs");
 const advisory = (name: string, severity: string, ghsa: string) =>
     ({source: 1, name, dependency: name, title: `${name} advisory`, url: `https://github.com/advisories/${ghsa}`, severity, range: "*"});
 const reportOf = (vulnerabilities: Record<string, any>) => ({auditReportVersion: 2, vulnerabilities});
-const REVIEWED = [{id: "GHSA-aaaa-bbbb-cccc", package: "forge", severity: "high", reviewBy: "2027-01-31", reason: "unused API"}];
+const REVIEWED = [{id: "GHSA-aaaa-bbbb-cccc", package: "forge", severity: "high", reviewedOn: "2026-10-01", reviewBy: "2027-01-31", reason: "unused API"}];
 const NOW = Date.parse("2026-10-19T00:00:00Z");
 
 describe("server HIGH gate with reviewed advisories (#180)", () => {
@@ -90,6 +90,17 @@ describe("server HIGH gate with reviewed advisories (#180)", () => {
         void _omit;
         const report = reportOf({forge: {name: "forge", severity: "moderate", via: [advisory("forge", "moderate", "GHSA-aaaa-bbbb-cccc")]}});
         expect(gate.evaluateGate(report, "moderate", [withoutSeverity], NOW).blocking).toEqual(["forge GHSA-aaaa-bbbb-cccc (reviewed severity missing)"]);
+    });
+
+    // 검토일이 미래이거나 없거나, 재검토일이 검토일에서 180일을 넘으면 기한 제한을 우회하므로 막는다(#293).
+    it("blocks a reviewed advisory whose review window is invalid", () => {
+        const report = reportOf({forge: {name: "forge", severity: "high", via: [advisory("forge", "high", "GHSA-aaaa-bbbb-cccc")]}});
+        const invalid = "forge GHSA-aaaa-bbbb-cccc (review window invalid)";
+        expect(gate.evaluateGate(report, "high", [{...REVIEWED[0], reviewedOn: "2026-10-20"}], NOW).blocking).toEqual([invalid]);
+        expect(gate.evaluateGate(report, "high", [{...REVIEWED[0], reviewedOn: "2026-07-01"}], NOW).blocking).toEqual([invalid]);
+        const {reviewedOn: _omit, ...withoutReviewedOn} = REVIEWED[0];
+        expect(gate.evaluateGate(report, "high", [withoutReviewedOn], NOW).blocking).toEqual([invalid]);
+        expect(gate.evaluateGate(report, "high", [{...REVIEWED[0], reviewedOn: "2026-08-04"}], NOW).blocking).toEqual([]);
     });
 
     // 판정 진입점은 evaluateGate 하나다(#293).

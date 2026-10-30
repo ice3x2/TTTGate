@@ -73,6 +73,7 @@ describe("R3-REQ-06 CI supply-chain gate (static)", () => {
         const critical = runs.indexOf("npm audit --omit=dev --audit-level=critical");
         const online = runs.findIndex((run) => run.includes("r3-req-04-medium-cleared.test.ts"));
         expect(gate).toBeGreaterThanOrEqual(0);
+        expect(critical).toBeGreaterThanOrEqual(0);
         expect(online).toBeGreaterThanOrEqual(0);
         expect(critical).toBeLessThan(online);
         expect(gate).toBeLessThan(online);

@@ -52,7 +52,7 @@ const runNpm = (args, cwd = process.cwd()) => spawnSync("npm", args, {
 /**
  * #180: 수정 버전이 없어 업그레이드로 풀 수 없고, TTTGate 가 영향받는 API 를 쓰지 않음을 검토한 권고.
  * 서버 게이트(moderate·high)는 이 목록의 권고만 통과시킨다(#293). reviewBy 날짜의 UTC 00:00 에 만료되어 다시 막고 재검토를 강제한다.
- * reviewBy 는 reviewedOn 에서 180일 안이어야 한다(테스트가 지킨다). severity 는 검토할 때의 등급이며, 권고 등급이 그보다
+ * reviewedOn 은 오늘 이전이고 reviewBy 는 reviewedOn 에서 180일 안이어야 한다(판정이 지킨다). severity 는 검토할 때의 등급이며, 권고 등급이 그보다
  * 오르면 다시 막는다(#293). 항목 형식: {id, package, severity, reviewedOn, reviewBy, reason}.
  * 항목을 더할 때는 그 권고의 영향 API 를 쓰지 않음을 지키는 테스트를 test/supply-chain/reviewed-advisories.test.ts 에 함께 더한다.
  */
@@ -61,6 +61,15 @@ const REVIEWED_ADVISORIES = [];
 
 const GHSA_PATTERN = /GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}/i;
 const SEVERITY_ORDER = ["low", "moderate", "high", "critical"];
+const MAX_REVIEW_DAYS = 180;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** 검토일이 오늘 이전이고 재검토일이 검토일에서 180일 안이어야 한다. 아니면 기한 제한을 우회한다(#293). */
+const hasValidReviewWindow = (review, now) => {
+    const reviewedOn = Date.parse(review.reviewedOn);
+    const reviewBy = Date.parse(review.reviewBy);
+    return reviewedOn <= now && reviewBy > reviewedOn && reviewBy - reviewedOn <= MAX_REVIEW_DAYS * DAY_MS;
+};
 
 /**
  * npm audit 보고서에서 level 이상 등급의 권고를 모아 검토 예외와 대조한다(level: moderate·high, #293).
@@ -91,6 +100,7 @@ const evaluateGate = (report, level, reviewed = REVIEWED_ADVISORIES, now = Date.
             const label = `${pkg} ${id ?? advisory.title ?? "unknown advisory"}`;
             const review = id === undefined ? undefined : reviewed.find((item) => item.id.toLowerCase() === id.toLowerCase() && item.package === pkg);
             if(advisory.severity === "critical" || review === undefined) blocking.add(label);
+            else if(!hasValidReviewWindow(review, now)) blocking.add(`${label} (review window invalid)`);
             else if(!(Date.parse(review.reviewBy) > now)) blocking.add(`${label} (review expired ${review.reviewBy})`);
             // 예외는 검토할 때의 등급까지만 덮는다. 등급이 적혀 있지 않거나 올라가면 다시 검토하게 막는다.
             else if(!SEVERITY_ORDER.includes(review.severity)) blocking.add(`${label} (reviewed severity missing)`);

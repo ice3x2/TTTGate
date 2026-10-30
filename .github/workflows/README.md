@@ -100,13 +100,15 @@ node app.js client -addr <server_address>
    - 관리 화면: `cd admin && node ../scripts/supply-chain-gate.cjs --admin-high-report`
 2. 수정 버전이 있으면 그 버전으로 올립니다. 이것이 기본입니다. 소스 배포판도 같은 버전을 쓰도록 `package-build.json` 의 범위도 함께 올립니다.
 3. 수정 버전이 없으면, TTTGate 가 영향받는 API 를 쓰는지 검토합니다. 쓰지 않을 때만 `scripts/supply-chain-gate.cjs` 의 `REVIEWED_ADVISORIES` 에 예외를 올립니다.
-   - 권고 번호, 패키지, 검토일(`reviewedOn`), 재검토일(`reviewBy`), 이유를 적습니다. 재검토일은 검토일에서 180일 안이어야 합니다.
-   - 검토할 때의 등급(`severity`, `moderate` 또는 `high`)도 적습니다. 권고 등급이 그보다 올라가면 `(reviewed as X, now Y)` 를 붙여 다시 막습니다. 영향 API 를 다시 검토한 뒤 등급을 고칩니다. 등급을 빠뜨리면 `(reviewed severity missing)` 을 붙여 막습니다.
+   - 권고 번호, 패키지, 검토일(`reviewedOn`), 재검토일(`reviewBy`), 이유를 적습니다. 검토일은 오늘 이전이어야 하고, 재검토일은 검토일에서 180일 안이어야 합니다. 어기면 `(review window invalid)` 를 붙여 막습니다.
+   - 검토할 때의 등급(`severity`, `moderate` 또는 `high`)도 적습니다. 권고 등급이 high 로 올라가면 `(reviewed as X, now Y)` 를 붙여 다시 막습니다. 영향 API 를 다시 검토한 뒤 등급을 고칩니다. critical 로 올라가면 접미사 없이 막고, 예외로 풀 수 없습니다(4번). 등급이 없거나 잘못된 값이면 `(reviewed severity missing)` 을 붙여 막습니다.
    - 예외는 서버 운영 의존성의 moderate·high 검사에 함께 쓰입니다. critical 은 예외로도 통과하지 않습니다.
    - 재검토일 당일 UTC 00:00 부터 다시 막힙니다(로그에 `review expired` 가 붙습니다). 그 사이에 수정 버전이 나오면 올리고 예외를 지웁니다. 수정 버전이 아직 없으면 영향 API 를 다시 검토한 뒤 `reviewedOn` 과 `reviewBy` 를 새 날짜로 바꿉니다.
    - 로그 항목에 권고 번호가 없거나 `(unresolved via)` 가 붙으면 예외로 풀 수 없습니다. 권고를 특정할 수 없기 때문입니다. 업그레이드나 `overrides` 로 풉니다.
    - 예외를 올릴 때는 영향 API 를 쓰지 않음을 지키는 테스트를 `test/supply-chain/reviewed-advisories.test.ts` 에 함께 더합니다.
    - 예외로 통과한 권고는 감사 로그에 경고(`reviewed advisory accepted`)로 남습니다.
-   - 한 예외에 문제가 여럿이면 첫 사유 하나만 표시합니다. 판정 순서는 만료 → 등급 누락 → 등급 상승입니다. 하나를 고친 뒤 다시 돌려 남은 사유가 없는지 확인합니다.
+   - 한 예외에 문제가 여럿이면 첫 사유 하나만 표시합니다. 판정 순서는 기간 오류 → 만료 → 등급 누락 → 등급 상승입니다. 하나를 고친 뒤 다시 돌려 남은 사유가 없는지 확인합니다.
 4. 수정 버전이 없는 critical 은 예외로 풀 수 없습니다. 그 의존성을 다른 패키지로 바꾸거나 빼고, 하위 의존성이면 `overrides` 로 고친 버전을 강제합니다. 어느 쪽도 어려우면 정보보호팀과 검토합니다.
 5. 관리 화면 감사는 critical 만 막고 high 는 경고로 남깁니다. 검토 예외는 서버 운영 의존성에만 쓰이므로, 관리 화면의 high 경고는 업그레이드(필요하면 `overrides`)로 풉니다.
+
+서버 감사는 `--omit=dev` 로 돌기 때문에 빌드 도구(예: `@yao-pkg/pkg-fetch` 와 그 하위 의존성)의 권고로는 릴리스가 막히지 않습니다. 빌드 도구의 권고는 Dependabot 경고로 확인하고 업그레이드로 풉니다.

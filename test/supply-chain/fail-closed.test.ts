@@ -23,6 +23,26 @@ test("unreachable audit registry fails the online medium gate", () => {
 
 // A temporary npm executable emits protocol fixtures. These check the real
 // gate's assertions and child-process plumbing, not registry advisory accuracy.
+const runWithFakeNpm = (output: string, status: string, args: string[]) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "tttgate-supply-"));
+    try {
+        const emitter = path.join(directory, "emit.cjs");
+        fs.writeFileSync(emitter, "process.stdout.write(process.env.FIXTURE_OUTPUT); process.exit(Number(process.env.FIXTURE_STATUS));");
+        const windows = process.platform === "win32";
+        fs.writeFileSync(path.join(directory, windows ? "npm.cmd" : "npm"), windows
+            ? `@echo off\r\n"${process.execPath}" "${emitter}"\r\n`
+            : `#!/bin/sh\nexec '${process.execPath}' '${emitter}'\n`, {mode: 0o755});
+        const environment = {...process.env};
+        // Windows environment names are case insensitive; avoid duplicate Path/PATH.
+        const pathKey = Object.keys(environment).find((key) => key.toLowerCase() === "path") || "PATH";
+        environment[pathKey] = directory + path.delimiter + environment[pathKey];
+        return spawnSync(process.execPath, args, {cwd: repoRoot, encoding: "utf8", timeout: 30_000,
+            env: {...environment, SUPPLY_CHAIN_ONLINE: "1", FIXTURE_OUTPUT: output, FIXTURE_STATUS: status}});
+    } finally {
+        fs.rmSync(directory, {recursive: true, force: true});
+    }
+};
+
 test.each([
     ["empty npm ls output", "r3-req-02-crypto-js-removed", "", "0"],
     ["vulnerable audit", "r3-req-04-medium-cleared", JSON.stringify({
@@ -36,61 +56,29 @@ test.each([
         metadata: {vulnerabilities: {info: 0, low: 0, moderate: 0, high: 1, critical: 0, total: 1}},
     }), "1"],
 ])("blocks %s in the actual gate", (_label, suite, output, status) => {
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "tttgate-supply-"));
-    try {
-        const emitter = path.join(directory, "emit.cjs");
-        fs.writeFileSync(emitter, "process.stdout.write(process.env.FIXTURE_OUTPUT); process.exit(Number(process.env.FIXTURE_STATUS));");
-        const windows = process.platform === "win32";
-        fs.writeFileSync(path.join(directory, windows ? "npm.cmd" : "npm"), windows
-            ? `@echo off\r\n"${process.execPath}" "${emitter}"\r\n`
-            : `#!/bin/sh\nexec '${process.execPath}' '${emitter}'\n`, {mode: 0o755});
-        const environment = {...process.env};
-        // Windows environment names are case insensitive; avoid duplicate Path/PATH.
-        const pathKey = Object.keys(environment).find((key) => key.toLowerCase() === "path") || "PATH";
-        environment[pathKey] = directory + path.delimiter + environment[pathKey];
-        const result = spawnSync(process.execPath, suite === "admin-report" ? [
-            path.join(repoRoot, "scripts/supply-chain-gate.cjs"), "--admin-high-report",
-        ] : [
-            path.join(repoRoot, "node_modules/jest/bin/jest.js"), "--runInBand", "--runTestsByPath",
-            `test/supply-chain/${suite}.test.ts`,
-        ], {cwd: repoRoot, encoding: "utf8", timeout: 30_000,
-            env: {...environment, SUPPLY_CHAIN_ONLINE: "1", FIXTURE_OUTPUT: output, FIXTURE_STATUS: status}});
-        expect(result.error).toBeUndefined();
-        if(suite === "admin-report") {
-            expect(result.status).toBe(0);
-            expect(result.stdout).toContain("::warning::");
-            expect(result.stdout).toContain("fixture-high");
-            return;
-        }
-        expect(result.status).toBe(1);
-        expect(result.stderr).toContain("FAIL");
-        expect(result.stderr).toContain(suite === "r3-req-02-crypto-js-removed"
-            ? "empty output" : "lodash");
-    } finally {
-        fs.rmSync(directory, {recursive: true, force: true});
+    const result = runWithFakeNpm(output, status, suite === "admin-report" ? [
+        path.join(repoRoot, "scripts/supply-chain-gate.cjs"), "--admin-high-report",
+    ] : [
+        path.join(repoRoot, "node_modules/jest/bin/jest.js"), "--runInBand", "--runTestsByPath",
+        `test/supply-chain/${suite}.test.ts`,
+    ]);
+    expect(result.error).toBeUndefined();
+    if(suite === "admin-report") {
+        expect(result.status).toBe(0);
+        expect(result.stdout).toContain("::warning::");
+        expect(result.stdout).toContain("fixture-high");
+        return;
     }
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("FAIL");
+    expect(result.stderr).toContain(suite === "r3-req-02-crypto-js-removed"
+        ? "empty output" : "lodash");
 }, 35_000);
 
 // #293: 서버 판정 명령(--server-gate)은 moderate 수준으로 판정하고, 막을 때 종료 코드 1 과 사유를 낸다.
 // 예외로 통과한 권고는 ::warning:: 으로 남긴다(단위 판정은 reviewed-advisories.test.ts 가 본다).
-const runServerGate = (output: string, status: string) => {
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "tttgate-server-gate-"));
-    try {
-        const emitter = path.join(directory, "emit.cjs");
-        fs.writeFileSync(emitter, "process.stdout.write(process.env.FIXTURE_OUTPUT); process.exit(Number(process.env.FIXTURE_STATUS));");
-        const windows = process.platform === "win32";
-        fs.writeFileSync(path.join(directory, windows ? "npm.cmd" : "npm"), windows
-            ? `@echo off\r\n"${process.execPath}" "${emitter}"\r\n`
-            : `#!/bin/sh\nexec '${process.execPath}' '${emitter}'\n`, {mode: 0o755});
-        const environment = {...process.env};
-        const pathKey = Object.keys(environment).find((key) => key.toLowerCase() === "path") || "PATH";
-        environment[pathKey] = directory + path.delimiter + environment[pathKey];
-        return spawnSync(process.execPath, [path.join(repoRoot, "scripts/supply-chain-gate.cjs"), "--server-gate"],
-            {cwd: repoRoot, encoding: "utf8", timeout: 30_000, env: {...environment, FIXTURE_OUTPUT: output, FIXTURE_STATUS: status}});
-    } finally {
-        fs.rmSync(directory, {recursive: true, force: true});
-    }
-};
+const runServerGate = (output: string, status: string) =>
+    runWithFakeNpm(output, status, [path.join(repoRoot, "scripts/supply-chain-gate.cjs"), "--server-gate"]);
 
 test("the server gate CLI blocks an unreviewed moderate advisory with its reason", () => {
     const result = runServerGate(JSON.stringify({
