@@ -81,7 +81,8 @@ describe("release workflow (#290)", () => {
     });
 
     test("uses action majors that run on Node 24 in every workflow (REQ-8, AC-5)", () => {
-        const minimum: Record<string, number> = {"actions/checkout": 5, "actions/setup-node": 5, "softprops/action-gh-release": 2};
+        // action-gh-release 는 v3 부터 Node 24 런타임이다(v2 는 Node 20).
+        const minimum: Record<string, number> = {"actions/checkout": 5, "actions/setup-node": 5, "softprops/action-gh-release": 3};
         let checked = 0;
         for(const file of fs.readdirSync(directory).filter((name) => /\.ya?ml$/.test(name))) {
             const workflow = parseYaml(fs.readFileSync(path.join(directory, file), "utf8"));

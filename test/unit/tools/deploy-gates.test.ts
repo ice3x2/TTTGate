@@ -90,6 +90,11 @@ test("all gates run from fixed project directories and final production rebuild 
         }
         expect(fs.readFileSync(path.join(directory, "dist.js/app.js"), "utf8")).toBe("compiled release");
         expect(fs.readFileSync(path.join(directory, "caller/dist/preserve.txt"), "utf8")).toBe("previous artifact");
+        // #290 REQ-10: 빌드 날짜(UTC)를 적어 바이너리(build/src)와 소스 배포판(dist.js)에 함께 넣는다.
+        const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+        for(const file of ["build/src/build-info.js", "dist.js/build-info.js"]) {
+            expect(fs.readFileSync(path.join(directory, file), "utf8")).toBe(`module.exports = {build: "${today}"};\n`);
+        }
     });
 }, 50_000);
 

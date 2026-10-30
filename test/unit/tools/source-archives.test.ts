@@ -74,6 +74,9 @@ test("release workflow archives source and the notes document isolated dependenc
     expect(notes.stdout).toContain("npm install --omit=dev");
     expect(notes.stdout).toContain("node app.js server");
     expect(notes.stdout).not.toContain("node src/app.js");
+    // 소스 배포판은 압축 루트에 파일이 바로 있으므로 새 디렉터리에 푼다. Alpine 은 x64 만 만든다.
+    expect(notes.stdout).toContain("mkdir TTTGate-2.0.0 && tar -xzf TTTGate-2.0.0-dist.tar.gz -C TTTGate-2.0.0 && cd TTTGate-2.0.0");
+    expect(notes.stdout).toContain("- Platforms: Linux (x64/ARM64), Windows (x64/ARM64), Alpine Linux (x64)");
     const upload = workflow.jobs.release.steps.find((step: any) => step.uses?.startsWith("softprops/action-gh-release"));
     expect(upload.with.fail_on_unmatched_files).toBe(true);
 });

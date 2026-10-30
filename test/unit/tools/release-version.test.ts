@@ -53,12 +53,20 @@ test.each(["v1.0.11b", "1.2.3-rc.1", "release_2026"])("valid %s keeps exact arch
 }));
 
 // #290 REQ-6 — 태그와 package.json 의 version 이 다르면 패키징 전에 멈춘다.
-const withPackage = (version: string, check: (directory: string) => void) => fixture(directory => {
+const withPackage = (version: string, check: (directory: string) => void, buildVersion = version) => fixture(directory => {
     fs.mkdirSync(path.join(directory, "scripts"));
     fs.copyFileSync(path.join(root, "scripts/validate-release-version.cjs"), path.join(directory, "scripts/validate-release-version.cjs"));
     fs.writeFileSync(path.join(directory, "package.json"), JSON.stringify({name: "fixture", version}));
+    fs.writeFileSync(path.join(directory, "package-build.json"), JSON.stringify({name: "fixture", version: buildVersion}));
     check(directory);
 });
+
+// 소스 배포판은 package-build.json 을 package.json 으로 쓴다. 두 버전이 다르면 소스 배포판이 다른 버전을 말한다.
+test("--match-package rejects a source distribution manifest with another version", () => withPackage("2.0.0", directory => {
+    const result = shell('node scripts/validate-release-version.cjs "$RELEASE_VERSION" --match-package', directory, "2.0.0");
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toBe("package-build.json version 1.0.11b does not match package.json version 2.0.0.\n");
+}, "1.0.11b"));
 
 test("--match-package accepts a tag equal to package.json version", () => withPackage("2.0.0", directory => {
     const result = shell('node scripts/validate-release-version.cjs "$RELEASE_VERSION" --match-package', directory, "2.0.0");
@@ -73,6 +81,7 @@ test.each(["2.0.1", "v2.0.0", "main"])("--match-package rejects %s when package.
 
 test("the package version is the one being released", () => {
     expect(JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).version).toBe("2.0.0");
+    expect(JSON.parse(fs.readFileSync(path.join(root, "package-build.json"), "utf8")).version).toBe("2.0.0");
     const lock = JSON.parse(fs.readFileSync(path.join(root, "package-lock.json"), "utf8"));
     expect([lock.version, lock.packages[""].version]).toEqual(["2.0.0", "2.0.0"]);
 });

@@ -41,6 +41,11 @@ const main = () => {
         if(!runNpm(gate.args, gate.cwd, gate.nodeEnv)) return;
     }
 
+    // The runtime reports this build date (src/Environment.ts resolveBuildId). It goes into both the binaries (pkg reads
+    // build/**) and the source distribution (dist.js is a copy of build/src) (#290).
+    const buildDate = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    fs.writeFileSync(Path.join(root, 'build', 'src', 'build-info.js'), `module.exports = {build: "${buildDate}"};\n`);
+
     // Preserve previous distributions until every validation gate has passed.
     const binaryOutput = Path.join(root, 'dist');
     const sourceOutput = Path.join(root, 'dist.js');

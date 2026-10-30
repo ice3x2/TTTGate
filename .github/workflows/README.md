@@ -8,8 +8,11 @@
 
 ## 릴리스 만들기
 
-1. `package.json` 의 `version` 을 릴리스할 버전으로 올리고 main 에 병합합니다. 태그 형식은 기존 릴리스를 따라 `v` 없이 씁니다(예: `2.0.0`).
-2. main 의 그 커밋에 같은 이름의 태그를 올립니다.
+1. 세 파일의 버전을 릴리스할 버전으로 올리고 main 에 병합합니다. 태그 형식은 기존 릴리스를 따라 `v` 없이 씁니다(예: `2.0.0`).
+   - `package.json` 의 `version`
+   - `package-lock.json` 의 최상위 `version` 과 `packages[""].version`
+   - `package-build.json` 의 `version` (소스 배포판의 `package.json` 이 됩니다)
+2. main 의 그 커밋에 같은 이름의 태그를 올립니다. 태그는 하나씩 올립니다. GitHub 는 한 번에 태그를 세 개 넘게 올리면 워크플로를 실행하지 않으므로 `git push --tags` 는 쓰지 않습니다.
 
    ```bash
    git tag 2.0.0 <main 의 커밋>
@@ -18,7 +21,7 @@
 
 3. Release 워크플로가 자동으로 돕니다. 순서는 다음과 같습니다.
    1. Code Regression 의 네 작업을 병렬로 돌립니다(약 25분). 하나라도 실패하면 패키징하지 않습니다.
-   2. 태그가 `package.json` 의 `version` 과 같은지 확인합니다. 다르면 여기서 멈춥니다.
+   2. 태그가 `package.json`·`package-build.json` 의 `version` 과 같은지 확인합니다. 다르면 여기서 멈춥니다.
    3. `npm run dist -- --skip-tests` 로 빌드하고 바이너리를 만듭니다. 테스트는 1단계에서 이미 돌렸으므로 다시 돌리지 않습니다.
    4. 소스 배포판과 바이너리를 압축하고, 릴리스 노트를 써서 초안 릴리스에 올립니다.
 4. **Releases** 화면에서 초안 릴리스를 확인합니다. 릴리스 노트를 고친 뒤 **Publish release** 를 눌러 공개합니다.
@@ -64,14 +67,17 @@ bin/TTTGate-win-x64.exe server -adminPort 9300
 
 ### 소스 배포판 실행
 
-Node.js 24 이상에서 소스 배포판을 새 디렉터리에 풀고, 그 디렉터리에서 실행합니다. 배포판에는 `app.js`, `package.json`, 관리 화면의 `web/` 자산과 런타임 `bin/` 디렉터리가 들어 있습니다.
+Node.js 24 이상에서 소스 배포판을 새 디렉터리에 풀고, 그 디렉터리에서 실행합니다. 압축 파일의 루트에 파일이 바로 들어 있으므로 먼저 디렉터리를 만듭니다. 배포판에는 `app.js`, `package.json`, 관리 화면의 `web/` 자산과 런타임 `bin/` 디렉터리가 들어 있습니다.
 
 ```bash
+mkdir TTTGate-2.0.0 && tar -xzf TTTGate-2.0.0-dist.tar.gz -C TTTGate-2.0.0 && cd TTTGate-2.0.0
 npm install --omit=dev
 node app.js server -adminPort 9300
 # 클라이언트:
 node app.js client -addr <server_address>
 ```
+
+실행 파일과 관리 화면은 실제 빌드 날짜를 보고합니다(예: `TTTGate v2.0.0 (20261030)`). 실행할 때 `TTTGATE_BUILD` 환경 변수를 주면 그 값을 씁니다.
 
 배포판에는 배포 전용 lockfile 이 없습니다. 그래서 `npm ci` 가 아니라 위의 설치 명령을 씁니다. 의존성은 배포 manifest 의 버전 범위로 설치되므로, 같은 해석 결과를 보장하지는 않습니다.
 

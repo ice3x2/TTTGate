@@ -48,7 +48,7 @@ jobs:
       - name: Write release notes
         run: node scripts/release-notes.cjs "$RELEASE_VERSION" "$GITHUB_SHA" > release_notes.md
       - name: Create draft release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}

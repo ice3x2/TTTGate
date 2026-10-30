@@ -14,6 +14,11 @@ describe("Node 24 runtime and packaging contract", () => {
         "%s retains the minimum runtime in its root package", (file) => {
             expect(readJson(file).packages[""].engines?.node).toBe(">=24.0.0");
         });
+    // #290: 소스 배포판은 package-build.json 의 의존성으로 설치한다. 빠지거나 범위가 다르면 실행 중에 모듈을 못 찾거나
+    // 고친 보안 결함이 있는 버전이 깔린다(예: 국가 필터가 지연 로드하는 geoip-lite).
+    test("the source distribution manifest declares the same runtime dependencies as package.json", () => {
+        expect(readJson("package-build.json").dependencies).toEqual(readJson("package.json").dependencies);
+    });
     test("the developer runtime and Node declarations match the supported major", () => {
         expect(fs.readFileSync(path.join(root, ".nvmrc"), "utf8").trim()).toBe("24");
         expect(readJson("package.json").devDependencies["@types/node"]).toMatch(/^\^?24\./);
