@@ -17,6 +17,7 @@
   import AuditScreen from "./screens/AuditScreen.svelte";
   import SessionsScreen from "./screens/SessionsScreen.svelte";
   import SecurityScreen from "./screens/SecurityScreen.svelte";
+  import TrustedClientsScreen from "./screens/TrustedClientsScreen.svelte";
   import MeCtrl from "./controller/MeCtrl";
   import Loading from "./ui/Loading.svelte";
   import Banner from "./ui/Banner.svelte";
@@ -139,6 +140,7 @@
     {:else if $route.screen === 'audit'}<AuditScreen />
     {:else if $route.screen === 'sessions'}<SessionsScreen />
     {:else if $route.screen === 'security'}<SecurityScreen />
+    {:else if $route.screen === 'clients'}<TrustedClientsScreen />
     {:else}
       <p id="screen-placeholder">This screen is not available yet.</p>
     {/if}

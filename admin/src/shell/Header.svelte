@@ -12,12 +12,15 @@
         back,
         menuOpen = $bindable(false),
         hideMenu = false,
+        menuPinned = false,
         class: className = '',
     }: {
         title: string;
         back?: string;
         menuOpen?: boolean;
         hideMenu?: boolean;
+        /** 서랍이 늘 열려 있으면 메뉴 버튼이 필요 없다. */
+        menuPinned?: boolean;
         class?: string;
     } = $props();
 
@@ -33,13 +36,13 @@
     });
 </script>
 
-<header class="hdr {className}">
+<header class="hdr {className}" class:no-lead={menuPinned && !back}>
     {#if hideMenu}
         <!-- 버튼 없이 같은 크기의 자리만 남겨 제목 위치를 유지한다. -->
         <span class="hdr-btn" aria-hidden="true"></span>
     {:else if back}
         <button type="button" class="hdr-btn" aria-label="Back" onclick={() => navigate(back)}>{@html ARROW}</button>
-    {:else}
+    {:else if !menuPinned}
         <button type="button" id="menu-button" class="hdr-btn" aria-label="Open menu" aria-expanded={menuOpen} aria-controls="nav-drawer" onclick={() => (menuOpen = true)}>{@html BURGER}</button>
     {/if}
     <h1 class="hdr-title">{title}</h1>
@@ -49,6 +52,7 @@
 <style>
     .hdr { position: sticky; top: 0; z-index: 50; height: 56px; display: flex; align-items: center; gap: var(--s-3);
         padding: 0 var(--s-2) 0 var(--s-1); background: var(--bg-1); border-bottom: 1px solid var(--line-0); }
+    .hdr.no-lead { padding-left: var(--s-5); }
     .hdr-btn { width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center;
         background: none; border: 0; border-radius: var(--r-2); color: var(--ink-0); cursor: pointer; }
     .hdr-title { flex: 1; font-family: var(--ff-display); font-size: var(--fs-xl); font-weight: 500; margin: 0;

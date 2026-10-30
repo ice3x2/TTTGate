@@ -1,9 +1,9 @@
 import type {Page} from "playwright";
-import {startAdminApp, type AdminApp} from "../helpers/adminApp";
+import {startAdminApp, type AdminApp, ADMIN_APP_TEST_TIMEOUT_MS} from "../helpers/adminApp";
 import {RBAC_PASSWORDS} from "../helpers/rbacFixture";
 
 // U4-06 / #114 — 감사 로그 화면. 슈퍼유저는 전체 이벤트와 사용자 필터, 일반 유저는 "My activity" 로 본인 이벤트만 본다.
-jest.setTimeout(120_000);
+jest.setTimeout(ADMIN_APP_TEST_TIMEOUT_MS);
 
 const hashIs = (page: Page, expected: string) =>
     page.waitForFunction((value) => location.hash === value, expected, {timeout: 10_000});

@@ -6,6 +6,8 @@ import {BOOTSTRAP_TOKEN_FILE_NAME, IdentityMigration} from "../../../../src/serv
 import {CertificationStore} from "../../../../src/server/CertificationStore";
 import {createTestRoot, applyTestRoot, cleanupTestRoot} from "../../../helpers/runtime";
 
+const ROUTE_RESPONSE_MS = 5000;
+
 const withRoutes = async (check: (fixture: any) => Promise<void>) => {
     const root = await createTestRoot("admin-routes38");
     let api: AdminServer | undefined;
@@ -29,7 +31,8 @@ const withRoutes = async (check: (fixture: any) => Promise<void>) => {
                 res.once("end", () => resolve({status: res.statusCode, headers: res.headers, body: Buffer.concat(data).toString()}));
             });
             req.once("error", reject);
-            req.setTimeout(700, () => req.destroy(new Error("owned HTTP route did not respond")));
+            // 응답이 오지 않는 경로(멈춤)를 잡는 기한이다. 로그인의 비밀번호 해시는 CPU 부하에서 700ms 를 넘긴다(#263).
+            req.setTimeout(ROUTE_RESPONSE_MS, () => req.destroy(new Error("owned HTTP route did not respond")));
             req.end(bytes);
         });
         const login = async () => {
@@ -50,7 +53,7 @@ test.each(["POST", "PUT", "DELETE"])("unmatched %s completes with 404 after vali
     const response = await f.request(method, "/api/absent?reason=route", {}, headers);
     expect(response.status).toBe(404);
     expect(JSON.parse(response.body).success).toBe(false);
-}), 15_000);
+}), 60_000);
 
 test("query login shares its exact pathname with the Origin/CSRF exception and keeps raw query", async () => withRoutes(async f => {
     const target = "/api/login?return=%2F&value=1+2";
@@ -60,7 +63,7 @@ test("query login shares its exact pathname with the Origin/CSRF exception and k
     expect(result.status).toBe(200);
     expect(JSON.parse(result.body).success).toBe(true);
     expect(f.seen).toEqual([target, target]);
-}), 15_000);
+}), 60_000);
 
 test("query-bearing known routes preserve CSRF/auth rejection and reject numeric-prefix ports", async () => withRoutes(async f => {
     const browser = {Origin: `http://127.0.0.1:${f.port}`};
@@ -84,4 +87,4 @@ test("query-bearing known routes preserve CSRF/auth rejection and reject numeric
     // 숫자 접두 표기(parseInt 호환)는 더 받지 않는다. 판정과 동작이 다른 포트로 읽히는 우회로였다(#138).
     expect((await f.request("GET", "/api/externalCert/12suffix?value=3", {}, headers)).status).toBe(400);
     expect((await f.request("GET", "/api/externalCert/?value=12", {}, headers)).status).toBe(400);
-}), 15_000);
+}), 60_000);

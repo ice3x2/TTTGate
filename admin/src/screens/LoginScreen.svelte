@@ -100,7 +100,7 @@
             } else if(result.invalidUsername) {
                 message = 'Username must be 3-32 characters: a-z, 0-9, dot, underscore, hyphen.';
             } else if(result.weakPassword) {
-                message = "The password does not meet the server's minimum length.";
+                message = "The password must be 8 to 1024 characters long.";
             } else if(result.invalidBootstrapToken && bootstrapToken) {
                 message = 'The bootstrap token is invalid. Check config/.bootstrap-token on the server.';
             } else if(result.bootstrapRequired) {

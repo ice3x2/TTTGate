@@ -16,6 +16,8 @@ const withLogs = async (name: string, history: number | undefined, files: string
     try {
         for(const file of files) fs.writeFileSync(path.join(directory, file), "retained content\n");
         writer = LogWriter.create({name, path: directory, history, file: true, console: false});
+        // #208: 파일은 첫 기록 때 연다. 오래된 로그 정리도 그때 한다.
+        writer.pushMessage({name, module: "", message: "opened", day: 0, level: "info" as never});
         check(directory);
     } finally {
         // The production end API is synchronous; observe the real owned stream

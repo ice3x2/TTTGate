@@ -9,14 +9,15 @@
  *  4. IdentityRegistry.issueBindingToken 또한 예측 가능 시드(Math.random)와
  *     분리되어 있는지 — 두 번 호출 결과가 서로 다름을 확인(통계적 충돌 확률 ~0)
  *
- * 실행 후 `reports/req-01-chi2.json` 생성.
+ * 실행 후 `build/reports/req-01-chi2.json` 생성. 저장소의 `reports/` 는 바꾸지 않는다(#264).
  */
 import { mkdirSync, writeFileSync } from "fs";
 import { resolve } from "path";
 import { createOpaqueToken } from "../../../src/commons/ProtocolV2";
 import { IdentityRegistry } from "../../../src/server/IdentityRegistry";
 
-const REPORT_DIR = resolve(process.cwd(), "reports");
+// 추적되는 reports/ 를 실행마다 다시 쓰지 않게 무시되는 build/ 아래에 쓴다(#264).
+const REPORT_DIR = resolve(process.cwd(), "build", "reports");
 
 function writeReport(name: string, data: unknown) {
     mkdirSync(REPORT_DIR, { recursive: true });

@@ -24,6 +24,19 @@ describe("CtrlPacket baseline contract", () => {
         });
     });
 
+    // #280: 대상 서버 인증서 검증을 끄는 값은 페이로드 끝에 붙는다. 없으면 옛 형식 그대로이고 검증한다.
+    it("carries the skip-verification flag for the destination and keeps the legacy payload when it is absent", () => {
+        const legacy = CtrlPacket.connectEndPoint(7, 42, {host: "127.0.0.1", port: 18080, tls: true, bufferLimit: 2048});
+        const insecure = CtrlPacket.connectEndPoint(7, 42, {host: "127.0.0.1", port: 18080, tls: true, bufferLimit: 2048, rejectUnauthorized: false});
+
+        // 옛 형식: 호스트 길이(2) + 호스트 + 포트(2) + TLS(1) + 버퍼 한도(4).
+        expect(legacy.data.length).toBe(2 + "127.0.0.1".length + 2 + 1 + 4);
+        expect(CtrlPacket.fromBuffer(legacy.toBuffer()).packet?.openOpt?.rejectUnauthorized).toBeUndefined();
+        expect(CtrlPacket.fromBuffer(insecure.toBuffer()).packet?.openOpt).toEqual({
+            host: "127.0.0.1", port: 18080, tls: true, bufferLimit: 2048, rejectUnauthorized: false
+        });
+    });
+
     it("reassembles fragmented packets through the existing streamer contract", () => {
         const streamer = new CtrlPacketStreamer();
         const packet = CtrlPacket.message(3, {type: "log", payload: "baseline"});

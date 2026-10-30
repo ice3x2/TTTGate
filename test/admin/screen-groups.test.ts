@@ -1,9 +1,9 @@
 import type {Page} from "playwright";
-import {startAdminApp, type AdminApp} from "../helpers/adminApp";
+import {startAdminApp, type AdminApp, ADMIN_APP_TEST_TIMEOUT_MS} from "../helpers/adminApp";
 import {RBAC_GROUP_FIELD_ID} from "../helpers/rbacFixture";
 
 // U3-04 / #106 — 그룹 목록·편집 화면과 속성 11종. admin 으로 시작하고, 테스트마다 rbac fixture 로 앱을 새로 띄운다.
-jest.setTimeout(120_000);
+jest.setTimeout(ADMIN_APP_TEST_TIMEOUT_MS);
 
 const hashIs = (page: Page, expected: string | RegExp) =>
     page.waitForFunction(({exact, pattern}) => exact !== null ? location.hash === exact : new RegExp(pattern).test(location.hash),

@@ -18,6 +18,7 @@ describe("nav", () => {
         expect(chrome({screen: "audit"})).toEqual({title: "Audit log"});
         expect(chrome({screen: "sessions"})).toEqual({title: "Sessions"});
         expect(chrome({screen: "security"})).toEqual({title: "Security"});
+        expect(chrome({screen: "clients"})).toEqual({title: "Trusted clients"});
         // 기존 행은 그대로다.
         expect(chrome({screen: "tunnel-edit", param: "new"})).toEqual({title: "New tunnel", back: "#/tunnels"});
         expect(chrome({screen: "status"})).toEqual({title: "Status"});
@@ -31,14 +32,14 @@ describe("nav", () => {
         expect(navScreen({screen: "denied"})).toBe("denied");
     });
 
-    test("NAV 는 9개 항목을 정해진 순서로 갖는다(U5-06 이 Groups 와 Audit log 사이에 Security 를 넣었다)", () => {
-        expect(NAV.map((item) => item.title)).toEqual(["Status", "Tunnels", "Server settings", "Users", "Groups", "Security", "Audit log", "Sessions", "My account"]);
+    test("NAV 는 10개 항목을 정해진 순서로 갖는다(#213 이 Server settings 뒤에 Trusted clients 를 넣었다)", () => {
+        expect(NAV.map((item) => item.title)).toEqual(["Status", "Tunnels", "Server settings", "Trusted clients", "Users", "Groups", "Security", "Audit log", "Sessions", "My account"]);
         // 편집 화면이 목록과 같은 섹션이어야 가드가 #/users/new 같은 해시도 막는다.
         expect(SECTION_OF_SCREEN).toEqual({
             status: "status", tunnels: "tunnels", "tunnel-edit": "tunnels", server: "server",
             users: "users", "user-edit": "users", groups: "groups", "group-edit": "groups",
             me: "me", "me-password": null, denied: null,
-            audit: "audit", sessions: "sessions", security: "security",
+            audit: "audit", sessions: "sessions", security: "security", clients: "server",
         });
     });
 

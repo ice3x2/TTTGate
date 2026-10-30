@@ -23,6 +23,11 @@ type ServerOption = {
     mfaRequiredForSuperusers?: boolean;
     auditRetentionDays?: number;
     auditQueueSize?: number;
+    /** #267: 서버 로그 레벨. 저장하면 다시 시작하지 않고 바로 적용된다. */
+    logLevel?: 'error' | 'warn' | 'info' | 'debug';
+    /** #268: 닫기 기한(ms). 저장하면 이후 닫는 연결부터 적용된다. */
+    closeStallMs?: number;
+    closeGraceMs?: number;
     /** U3-04: 그룹 속성의 신뢰 클라이언트 선택지. clientSecret 은 타입에 넣지 않는다. */
     trustedClients?: Array<{clientId: string; displayName?: string}>;
 }
@@ -143,6 +148,8 @@ export type ApiFailure = {success: false; status: number; message: string; code?
 export type GeoConfig = {mode: 'off' | 'allow' | 'deny'; countries: string[]; applyToAdmin: boolean; unknownPolicy: 'allow' | 'deny'};
 export type CountryEntry = {code: string; name: string};
 export type BanEntry = {port: number; ip: string; country?: string; bannedUntil: number; hits: number};
+/** #286 관리자 차단 목록 항목. port 가 null 이면 모든 터널이다. */
+export type BlocklistEntry = {address: string; port: number | null; note: string; createdAt: number; createdBy: string};
 export type RateLimitOption = {enabled: boolean; windowMs: number; maxConnections: number; banMs: number; customized: boolean};
 /** U4-06: GET /api/audit 의 이벤트 한 건. */
 export type AuditEventView = {at: number; actor: {userId: string; username?: string; role?: string}; sessionIdHash?: string; ip?: string;
@@ -151,3 +158,8 @@ export type AuditQueryInput = {from?: number; to?: number; userId?: string; type
 /** U4-06: GET /api/sessions·/api/me/sessions 의 세션 한 건. */
 export type SessionView = {id: string; userId: string; username: string; createdAt: number; lastSeenAt: number; ip: string; userAgent: string; current: boolean};
 export type ApiResult<T> = ({success: true} & T) | ApiFailure;
+
+/** #213 신뢰 클라이언트 목록 항목. 비밀값은 서버가 내보내지 않는다. */
+export type TrustedClientView = {clientId: string; displayName?: string};
+/** #213 등록 코드. expiresAt 은 epoch ms, controlPort 는 명령에 넣을 제어 포트다. */
+export type EnrollmentCodeView = {code: string; expiresAt: number; controlPort: number};

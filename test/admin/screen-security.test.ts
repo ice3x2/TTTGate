@@ -1,8 +1,8 @@
 import type {Page} from "playwright";
-import {startAdminApp, type AdminApp} from "../helpers/adminApp";
+import {startAdminApp, type AdminApp, ADMIN_APP_TEST_TIMEOUT_MS} from "../helpers/adminApp";
 
 // U5-06 / #121 — 보안 화면(국가 필터·차단 목록). 슈퍼유저 admin 으로 시작하고, 테스트마다 rbac fixture 로 앱을 새로 띄운다.
-jest.setTimeout(120_000);
+jest.setTimeout(ADMIN_APP_TEST_TIMEOUT_MS);
 
 const hashIs = (page: Page, expected: string) =>
     page.waitForFunction((value) => location.hash === value, expected, {timeout: 10_000});
@@ -132,4 +132,188 @@ test("차단된 주소는 표에 보이고 Unban 으로 풀린다", () => withSe
     await row.getByRole("button", {name: "Unban", exact: true}).click();
     await toast(page, "Unbanned 203.0.113.9.").waitFor({state: "visible", timeout: 10_000});
     await page.locator("#ban-empty").waitFor({state: "visible", timeout: 10_000});
+}));
+
+// #286 — 관리자 차단 목록.
+test("차단 목록에 주소를 넣으면 표에 보이고 새로 읽어도 남으며, Unblock 으로 풀린다", () => withSecurity(async ({page, url}) => {
+    await goSecurity(page, url);
+    await page.locator("#block-empty").waitFor({state: "visible", timeout: 10_000});
+    expect(await page.locator("#block-empty").textContent()).toBe("No blocked addresses.");
+    expect(await page.locator("#block-count").textContent()).toBe("0 / 1,000");
+    expect(await page.locator("#block-submit").isDisabled()).toBe(true);
+
+    // 틀린 주소는 저장하지 않고 서버가 준 이유를 입력란 아래에 보여 준다.
+    await page.locator("#block-address").fill("0.0.0.0/0");
+    await page.locator("#block-submit").click();
+    await page.locator("#block-error").getByText("a range that covers every address cannot be blocked").waitFor({state: "visible", timeout: 10_000});
+    // 다시 입력하면 오류를 지운다.
+    await page.locator("#block-address").fill("198.51.100.9/24");
+    expect(await page.locator("#block-error").count()).toBe(0);
+
+    await page.locator("#block-applies-to").selectOption("20001");
+    await page.locator("#block-note").fill("scanner");
+    await page.locator("#block-submit").click();
+    await toast(page, "Blocked 198.51.100.0/24.").waitFor({state: "visible", timeout: 10_000});
+    const row = page.locator('#block-table tr[data-block="198.51.100.0/24"]');
+    await row.waitFor({state: "visible", timeout: 10_000});
+    const text = await row.textContent();
+    expect(text).toContain("Port 20001");
+    expect(text).toContain("scanner");
+    expect(text).toContain("admin");
+    expect(await page.locator("#block-address").inputValue()).toBe("");
+    expect(await page.locator("#block-note").inputValue()).toBe("");
+    expect(await page.locator("#block-count").textContent()).toBe("1 / 1,000");
+
+    // 같은 주소는 서버가 거절한다(포트가 달라도 같다).
+    await page.locator("#block-address").fill("198.51.100.0/24");
+    await page.locator("#block-submit").click();
+    await page.locator("#block-error").getByText("198.51.100.0/24 is already blocked").waitFor({state: "visible", timeout: 10_000});
+
+    await page.reload();
+    await row.waitFor({state: "visible", timeout: 10_000});
+    await row.getByRole("button", {name: "Unblock", exact: true}).click();
+    await toast(page, "Unblocked 198.51.100.0/24.").waitFor({state: "visible", timeout: 10_000});
+    await page.locator("#block-empty").waitFor({state: "visible", timeout: 10_000});
+}));
+
+test("일시 차단 행의 Block permanently 는 확인을 거쳐 주소를 차단 목록으로 옮기고 일시 차단을 푼다", () => withSecurity(async (app) => {
+    const {page} = app;
+    await app.seedBan(20001, "203.0.113.9");
+    await goSecurity(page, app.url);
+    const banRow = page.locator('#ban-table tr[data-ban="20001/203.0.113.9"]');
+    await banRow.waitFor({state: "visible", timeout: 10_000});
+    const dialog = page.locator("[role=dialog]").filter({hasText: "203.0.113.9"});
+
+    // 취소하면 아무것도 바뀌지 않는다.
+    await banRow.getByRole("button", {name: "Block permanently", exact: true}).click();
+    await dialog.waitFor({state: "visible", timeout: 10_000});
+    expect(await dialog.textContent()).toContain("on all tunnels");
+    await dialog.getByRole("button", {name: "Cancel", exact: true}).click();
+    await dialog.waitFor({state: "detached", timeout: 10_000});
+    expect(await page.locator("#block-empty").isVisible()).toBe(true);
+    expect(await banRow.isVisible()).toBe(true);
+
+    await banRow.getByRole("button", {name: "Block permanently", exact: true}).click();
+    await dialog.getByRole("button", {name: "Block permanently", exact: true}).click();
+    await toast(page, "Blocked 203.0.113.9 permanently.").waitFor({state: "visible", timeout: 10_000});
+    const row = page.locator('#block-table tr[data-block="203.0.113.9"]');
+    await row.waitFor({state: "visible", timeout: 10_000});
+    expect(await row.textContent()).toContain("All tunnels");
+    expect(await row.textContent()).toContain("From rate-limit ban on 20001");
+    await page.locator("#ban-empty").waitFor({state: "visible", timeout: 10_000});
+}));
+
+test("차단 목록이 가득 차면 Block 이 꺼지고 이유를 보여 준다", () => withSecurity(async ({page, url}) => {
+    await page.route("**/api/security/blocklist", async (route) => {
+        if(route.request().method() !== "GET") {
+            await route.continue();
+            return;
+        }
+        await route.fulfill({status: 200, contentType: "application/json", body: JSON.stringify({success: true, limit: 1,
+            entries: [{address: "203.0.113.1", port: null, note: "", createdAt: Date.now(), createdBy: "admin"}]})});
+    });
+    await goSecurity(page, url);
+    await page.locator('#block-table tr[data-block="203.0.113.1"]').waitFor({state: "visible", timeout: 10_000});
+    expect(await page.locator("#block-count").textContent()).toBe("1 / 1");
+    await page.locator("#block-address").fill("203.0.113.7");
+    expect(await page.locator("#block-submit").isDisabled()).toBe(true);
+    expect(await page.locator("#block-full").textContent()).toBe("The blocklist is full. Unblock an address to add another.");
+}));
+
+test("이미 All tunnels 로 막힌 주소를 Block permanently 로 옮기면 already blocked 를 알린다 (REQ-5 AC-3)", () => withSecurity(async (app) => {
+    const {page} = app;
+    await goSecurity(page, app.url);
+    await page.locator("#block-address").fill("203.0.113.9");
+    await page.locator("#block-submit").click();
+    await page.locator('#block-table tr[data-block="203.0.113.9"]').waitFor({state: "visible", timeout: 10_000});
+    await app.seedBan(20001, "203.0.113.9");
+    await page.reload();
+    const banRow = page.locator('#ban-table tr[data-ban="20001/203.0.113.9"]');
+    await banRow.waitFor({state: "visible", timeout: 10_000});
+    await banRow.getByRole("button", {name: "Block permanently", exact: true}).click();
+    await page.locator("[role=dialog]").getByRole("button", {name: "Block permanently", exact: true}).click();
+    await toast(page, "203.0.113.9 is already blocked on all tunnels").waitFor({state: "visible", timeout: 10_000});
+    // 이미 영구 차단된 주소의 일시 차단은 서버가 풀었으므로 표에서도 사라진다.
+    await page.locator("#ban-empty").waitFor({state: "visible", timeout: 10_000});
+}));
+
+test("목록이 가득 차면 Block permanently 확인 창이 그 사실을 미리 알린다", () => withSecurity(async (app) => {
+    const {page} = app;
+    await page.route("**/api/security/blocklist", async (route) => {
+        if(route.request().method() !== "GET") {
+            await route.continue();
+            return;
+        }
+        await route.fulfill({status: 200, contentType: "application/json", body: JSON.stringify({success: true, limit: 1,
+            entries: [{address: "203.0.113.1", port: null, note: "", createdAt: Date.now(), createdBy: "admin"}]})});
+    });
+    await app.seedBan(20001, "203.0.113.9");
+    await goSecurity(page, app.url);
+    const banRow = page.locator('#ban-table tr[data-ban="20001/203.0.113.9"]');
+    await banRow.waitFor({state: "visible", timeout: 10_000});
+    await banRow.getByRole("button", {name: "Block permanently", exact: true}).click();
+    const dialog = page.locator("[role=dialog]").filter({hasText: "203.0.113.9"});
+    await dialog.waitFor({state: "visible", timeout: 10_000});
+    expect(await dialog.locator("#promote-full").textContent())
+        .toBe("The blocklist is full. This works only if the address is already blocked on one tunnel.");
+}));
+
+test("화면의 터널 목록이 낡아 서버가 거절하면 Applies to 선택지를 다시 읽는다", () => withSecurity(async ({page, url}) => {
+    let first = true;
+    await page.route("**/api/tunnelingOption", async (route) => {
+        if(!first || route.request().method() !== "GET") {
+            await route.continue();
+            return;
+        }
+        first = false;
+        // 화면이 읽은 뒤 지워진 터널(29999)이 목록에 남아 있는 상황을 만든다.
+        const response = await route.fetch();
+        const body = await response.json();
+        body.tunnelingOptions = [...body.tunnelingOptions, {...body.tunnelingOptions[0], forwardPort: 29999}];
+        await route.fulfill({response, json: body});
+    });
+    await goSecurity(page, url);
+    await page.locator('#block-applies-to option[value="29999"]').waitFor({state: "attached", timeout: 10_000});
+    await page.locator("#block-address").fill("203.0.113.7");
+    await page.locator("#block-applies-to").selectOption("29999");
+    await page.locator("#block-submit").click();
+    await page.locator("#block-error").getByText("no tunnel uses port 29999").waitFor({state: "visible", timeout: 10_000});
+    await page.locator('#block-applies-to option[value="29999"]').waitFor({state: "detached", timeout: 10_000});
+    expect(await page.locator("#block-applies-to").inputValue()).toBe("");
+}));
+
+test("차단 목록을 불러오지 못하면 빈 목록처럼 보이지 않고 Block 이 꺼진다", () => withSecurity(async ({page, url}) => {
+    await page.route("**/api/security/blocklist", async (route) => {
+        if(route.request().method() !== "GET") {
+            await route.continue();
+            return;
+        }
+        await route.fulfill({status: 200, contentType: "application/json", body: JSON.stringify({success: false, message: "Temporary failure."})});
+    });
+    await goSecurity(page, url);
+    await page.locator("#block-failed").waitFor({state: "visible", timeout: 10_000});
+    expect(await page.locator("#block-empty").count()).toBe(0);
+    await page.locator("#block-address").fill("203.0.113.7");
+    expect(await page.locator("#block-submit").isDisabled()).toBe(true);
+}));
+
+// 다른 관리자가 화면을 연 뒤 같은 주소를 넣었으면, 409 를 받을 때 차단 목록도 다시 읽어 화면이 낡지 않게 한다.
+test("Block permanently 가 이미 막힌 주소로 거절되면 차단 목록도 다시 읽는다", () => withSecurity(async (app) => {
+    const {page} = app;
+    await app.seedBan(20001, "203.0.113.9");
+    await goSecurity(page, app.url);
+    const banRow = page.locator('#ban-table tr[data-ban="20001/203.0.113.9"]');
+    await banRow.waitFor({state: "visible", timeout: 10_000});
+    await page.locator("#block-empty").waitFor({state: "visible", timeout: 10_000});
+    const added = await page.evaluate(async () => {
+        const csrf = document.cookie.split("; ").find((part) => part.startsWith("csrfToken="))?.slice("csrfToken=".length) ?? "";
+        const response = await fetch("/api/security/blocklist", {method: "POST", credentials: "same-origin",
+            headers: {"Content-Type": "application/json", "X-CSRF-Token": csrf}, body: JSON.stringify({address: "203.0.113.9"})});
+        return response.status;
+    });
+    expect(added).toBe(201);
+    await banRow.getByRole("button", {name: "Block permanently", exact: true}).click();
+    await page.locator("[role=dialog]").getByRole("button", {name: "Block permanently", exact: true}).click();
+    await toast(page, "203.0.113.9 is already blocked on all tunnels").waitFor({state: "visible", timeout: 10_000});
+    await page.locator('#block-table tr[data-block="203.0.113.9"]').waitFor({state: "visible", timeout: 10_000});
 }));

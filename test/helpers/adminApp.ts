@@ -35,11 +35,20 @@ export type AdminApp = {
     close(): Promise<void>;
 };
 
+/**
+ * #273: startAdminApp 의 기동 전체 예산. 백엔드·브라우저·첫 화면·로그인 단계는 각자의 기한과 남은 예산 가운데 짧은 쪽만 기다리고,
+ * 예산을 다 쓰면 어느 단계에서 다 썼는지 알리며 끝난다. 기동 대기는 이 시간을 넘지 않는다(입력·클릭 같은 짧은 조작과
+ * 실패 뒤 정리 시간은 따로다). 테스트 제한(ADMIN_APP_TEST_TIMEOUT_MS)은 여기에 작업 여유를 더한 값이다.
+ */
+export const ADMIN_APP_START_BUDGET_MS = 180_000;
+/** #273: startAdminApp 을 쓰는 테스트의 제한. 기동 예산에 화면 작업 여유를 더한다. */
+export const ADMIN_APP_TEST_TIMEOUT_MS = ADMIN_APP_START_BUDGET_MS + 120_000;
 // 부하(CPU 85% 이상)에서도 기동 실패와 느린 기동을 구분할 만큼 둔다(#181).
 const BACKEND_START_TIMEOUT_MS = 60_000;
 const BACKEND_STOP_TIMEOUT_MS = 10_000;
 const CALLS_TIMEOUT_MS = 5_000;
-const FIRST_SCREEN_TIMEOUT_MS = 90_000;
+// 파일의 첫 테스트는 개발 서버가 화면을 처음 컴파일하는 시간까지 낸다. CPU 부하에서 90초를 넘긴 일이 있다(#263).
+const FIRST_SCREEN_TIMEOUT_MS = 150_000;
 
 /**
  * login: true(기본)는 admin / ADMIN_TEST_PASSWORD 로, 객체면 그 계정으로 로그인한 뒤 상태 화면까지 기다린다.
@@ -106,6 +115,13 @@ export const startAdminApp = async (options: {fixture?: AdminFixture; login?: bo
         if(!result.ok) throw new Error(`serverOption patch was rejected: ${JSON.stringify(patch)}`);
     };
 
+    const deadline = Date.now() + ADMIN_APP_START_BUDGET_MS;
+    /** 단계 기한과 남은 예산 가운데 짧은 쪽. 예산을 다 썼으면 기다리지 않고 그 단계 이름과 함께 실패한다. */
+    const within = (stageMs: number, stage: string) => {
+        const left = deadline - Date.now();
+        if(left <= 0) throw new Error(`Admin app start budget ${ADMIN_APP_START_BUDGET_MS}ms exhausted before stage=${stage}: ${output}`);
+        return Math.min(stageMs, left);
+    };
     try {
         child = fork(path.resolve(__dirname, "../admin/admin-backend-driver.ts"), [root.rootDir, fixture], {
             execArgv: ["-r", "ts-node/register/transpile-only"], stdio: ["ignore", "pipe", "pipe", "ipc"],
@@ -122,36 +138,37 @@ export const startAdminApp = async (options: {fixture?: AdminFixture; login?: bo
             const ready = (message: any) => { if(typeof message?.port === "number") finish(undefined, message.port); };
             const failed = (error: Error) => finish(error);
             const ended = (code: number | null) => finish(new Error(`Admin backend exited ${code}: ${output}`));
-            const timer = setTimeout(() => finish(new Error(`Admin backend did not start within ${BACKEND_START_TIMEOUT_MS}ms: ${output}`)), BACKEND_START_TIMEOUT_MS);
+            const backendMs = within(BACKEND_START_TIMEOUT_MS, "backend");
+            const timer = setTimeout(() => finish(new Error(`Admin backend did not start within ${backendMs}ms: ${output}`)), backendMs);
             owned.on("message", ready); owned.once("error", failed); owned.once("exit", ended);
         });
         const origin = `http://127.0.0.1:${port}`;
         for(const extra of options.extraLogins ?? []) {
-            const result = await ask<{ok: boolean}>({type: "login", username: extra.as, userAgent: extra.userAgent}, 15_000);
+            const result = await ask<{ok: boolean}>({type: "login", username: extra.as, userAgent: extra.userAgent}, within(15_000, "extra-login"));
             if(!result.ok) throw new Error(`extraLogins: ${extra.as} could not sign in: ${output}`);
         }
 
-        browser = await startAdminBrowser({apiOrigin: origin});
+        browser = await startAdminBrowser({apiOrigin: origin, deadline});
         const page = browser.page;
         await page.setViewportSize({width: 400, height: 800});
-        await page.goto(browser.url);
+        await page.goto(browser.url, {timeout: within(30_000, "first-navigation")});
 
         if(shouldLogin) {
             const ok = () => page.getByRole("button", {name: "OK", exact: true}).click();
             const password = page.locator("#login-password");
             // 첫 화면은 개발 서버가 Svelte 를 처음 컴파일한 뒤에 뜬다. 부하에서 30초를 넘을 수 있다(#181).
-            await password.waitFor({state: "visible", timeout: FIRST_SCREEN_TIMEOUT_MS});
+            await password.waitFor({state: "visible", timeout: within(FIRST_SCREEN_TIMEOUT_MS, "first-screen")});
             await page.locator("#login-username").fill(account.username);
             await password.fill(account.password);
             await ok();
             if(fixture === 'bootstrap') {
                 const bootstrapToken = page.locator("#bootstrap-token");
-                await bootstrapToken.waitFor({state: "visible"});
+                await bootstrapToken.waitFor({state: "visible", timeout: within(30_000, "bootstrap-token")});
                 await bootstrapToken.fill(await token());
                 await ok();
             }
             // 일반 유저는 #/tunnels, 강제 변경 사용자는 #/me/password 에 도착하므로 해시를 고정하지 않는다(U3-01, U3-02).
-            await page.waitForFunction(() => !document.querySelector('#login-password') && document.querySelector('header h1'), undefined, {timeout: FIRST_SCREEN_TIMEOUT_MS});
+            await page.waitForFunction(() => !document.querySelector('#login-password') && document.querySelector('header h1'), undefined, {timeout: within(FIRST_SCREEN_TIMEOUT_MS, "after-login")});
         }
 
         const ownedBrowser = browser;

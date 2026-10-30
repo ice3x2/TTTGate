@@ -198,6 +198,32 @@ describe("tunnel-lifetime", () => {
         expect(autoExpireEvents().map((event) => event.target)).toEqual([{kind: "tunnel", id: String(ports.a)}]);
     });
 
+    // #281: 관리 화면으로 새로 추가한 일반 유저 터널도 서버를 시작할 때와 같이 그룹 상한을 받는다.
+    it("새로 추가한 일반 유저 터널은 켜진 채 시작하고 그룹 상한을 받는다", async () => {
+        const port = await getFreePort();
+        const row = {forwardPort: port, protocol: "tcp", destinationAddress: "127.0.0.1", destinationPort: 9, keepAlive: 0,
+            inactiveOnStartup: false, ownerId: aliceId} as TunnelingOption;
+        const store = ServerOptionStore.instance;
+        expect(store.updateServerOption({...store.serverOption, tunnelingOptions: [...store.getTunnelingOptions(), row]})).toBeTruthy();
+        expect((await server!.applyTunnelingOption(JSON.parse(JSON.stringify(store.getTunnelingOption(port))))).success).toBe(true);
+        expect(status(port)).toMatchObject({active: true, activeTimeout: 2});
+
+        await sleep(2500);
+
+        expect(status(port).active).toBe(false);
+        expect(autoExpireEvents().map((event) => event.target)).toContainEqual({kind: "tunnel", id: String(port)});
+    });
+
+    it("새로 추가한 일반 유저 터널도 Inactive on startup 이면 꺼진 채로 둔다", async () => {
+        const port = await getFreePort();
+        const row = {forwardPort: port, protocol: "tcp", destinationAddress: "127.0.0.1", destinationPort: 9, keepAlive: 0,
+            inactiveOnStartup: true, ownerId: aliceId} as TunnelingOption;
+        const store = ServerOptionStore.instance;
+        expect(store.updateServerOption({...store.serverOption, tunnelingOptions: [...store.getTunnelingOptions(), row]})).toBeTruthy();
+        expect((await server!.applyTunnelingOption(JSON.parse(JSON.stringify(store.getTunnelingOption(port))))).success).toBe(true);
+        expect(status(port)).toMatchObject({active: false, activeTimeout: 0});
+    });
+
     it("기동 시 비활성으로 둔 일반 유저 터널은 상한이 있어도 켜지지 않는다", async () => {
         expect(status(ports.d)).toMatchObject({active: false, activeTimeout: 0});
         await sleep(2500);

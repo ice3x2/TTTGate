@@ -1,0 +1,83 @@
+name: Release
+
+# #290: 버전 태그(예: 2.0.0)를 올리면 돈다. 수동 실행은 Actions 화면에서 버전 태그를 골라 돌린다.
+# 태그는 package.json 의 version 과 같아야 한다. 결과는 초안(draft) 릴리스이며, 공개는 사람이 한다.
+on:
+  push:
+    tags: ['[0-9]+.[0-9]+.[0-9]+*']
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # 태그가 package.json·package-build.json 의 version 과 같은지 먼저 본다. 브랜치에서 잘못 실행하면 테스트 전에 멈춘다.
+  tag:
+    name: Check release tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    env:
+      RELEASE_VERSION: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Validate release tag
+        run: node scripts/validate-release-version.cjs "$RELEASE_VERSION" --match-package
+
+  # PR 마다 도는 Code Regression 과 같은 테스트 작업을 병렬로 다시 돌린다. 모두 통과해야 패키징한다.
+  regression:
+    needs: [tag]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/code-regression.yml
+
+  release:
+    name: Package and create draft release
+    needs: [tag, regression]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      RELEASE_VERSION: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+      # deploy.js 가 루트·admin 의존성을 설치하고 빌드한 뒤 다섯 플랫폼 바이너리를 만든다. 테스트는 위 regression 이 돌렸다.
+      - name: Build source distribution and platform binaries
+        run: npm run dist -- --skip-tests
+      - name: Archive source distribution
+        run: node scripts/archive-source.cjs "$RELEASE_VERSION"
+      - name: Archive platform binaries
+        run: node scripts/archive-binaries.cjs "$RELEASE_VERSION"
+      - name: Write release notes
+        run: node scripts/release-notes.cjs "$RELEASE_VERSION" "$GITHUB_SHA" > release_notes.md
+      - name: Create draft release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body_path: release_notes.md
+          generate_release_notes: true
+          draft: true
+          prerelease: false
+          fail_on_unmatched_files: true
+          files: |
+            TTTGate-${{ github.ref_name }}-dist.tar.gz
+            TTTGate-${{ github.ref_name }}-dist.zip
+            TTTGate-${{ github.ref_name }}-linux-x64.tar.gz
+            TTTGate-${{ github.ref_name }}-linux-arm64.tar.gz
+            TTTGate-${{ github.ref_name }}-win-x64.zip
+            TTTGate-${{ github.ref_name }}-win-arm64.zip
+            TTTGate-${{ github.ref_name }}-alpine-x64.tar.gz

@@ -1,9 +1,9 @@
 import type {Page} from "playwright";
-import {startAdminApp, type AdminApp} from "../helpers/adminApp";
+import {startAdminApp, type AdminApp, ADMIN_APP_TEST_TIMEOUT_MS} from "../helpers/adminApp";
 import {RBAC_PASSWORDS, RBAC_USER_IDS} from "../helpers/rbacFixture";
 
 // U4-06 / #114 — 세션 관리 화면. 슈퍼유저는 전체 세션을 보고 끊으며, 일반 유저는 다른 기기 로그아웃만 한다.
-jest.setTimeout(120_000);
+jest.setTimeout(ADMIN_APP_TEST_TIMEOUT_MS);
 
 const hashIs = (page: Page, expected: string) =>
     page.waitForFunction((value) => location.hash === value, expected, {timeout: 10_000});

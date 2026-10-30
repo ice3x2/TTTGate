@@ -1,6 +1,7 @@
 import {ExternalPortServerPool, ExternalPortServerStatus } from "./ExternalPortServerPool";
 import {TunnelServer, ClientStatus} from "./TunnelServer";
-import {ConnectionSecurityOption, DEFAULT_AUDIT_QUEUE_SIZE, DEFAULT_AUDIT_RETENTION_DAYS, DEFAULT_GEO_CONFIG, ServerOption, TunnelingOption, resolveSessionTtlMs} from "../types/TunnelingOption";
+import {EnrollmentRegistry} from "./EnrollmentRegistry";
+import {ConnectionSecurityOption, DEFAULT_AUDIT_QUEUE_SIZE, DEFAULT_AUDIT_RETENTION_DAYS, DEFAULT_GEO_CONFIG, DEFAULT_LOG_LEVEL, DEFAULT_CLOSE_STALL_MS, DEFAULT_CLOSE_GRACE_MS, ServerOption, TunnelingOption, resolveSessionTtlMs} from "../types/TunnelingOption";
 import SocketState from "../util/SocketState";
 import {CertInfo, CertificationStore} from "./CertificationStore";
 import ServerOptionStore from "./ServerOptionStore";
@@ -40,12 +41,16 @@ class TTTServer {
     private _appliedExternal: Record<number, {option: TunnelingOption, cert: CertInfo, configurationRevision: number, certificateRevision: number}> = {};
     private _appliedScopeRevisions: Record<string, number> = {};
     private _dirtyControl = false;
+    /** #271: 신뢰 클라이언트를 바꾸기 시작해 적용을 다 마치지 못했다. 복원할 때 이전 목록으로 되돌린다. */
+    private _dirtyTrustedClients = false;
     private _dirtyExternal = new Set<number>();
     private _externalPortServerPool : ExternalPortServerPool;
     private _tunnelServer : TunnelServer;
     private _sessions : Set<number> = new Set<number>();
     private _allowClientNamesMap : Map<number, Array<string>> = new Map<number, Array<string>>();
     private _allowClientIdsMap : Map<number, Array<string>> = new Map<number, Array<string>>();
+    /** 발급한 등록 코드(#212). 제어 서버를 다시 만들어도 유지한다. */
+    private readonly _enrollment = new EnrollmentRegistry();
 
 
     public static create(serverOption: ServerOption) : TTTServer {
@@ -78,6 +83,28 @@ class TTTServer {
             return bytesPerSecond > 0 ? {groupId: owner.groupId, bytesPerSecond} : undefined;
         };
         this.syncAllowedClientMaps(serverOption);
+    }
+
+    private onEnrollmentEvent = (event: {success: boolean, clientId?: string, address: string, reason?: string}): void => {
+        const type = event.success ? AUDIT_EVENT_TYPES.client_enrolled : AUDIT_EVENT_TYPES.client_enroll_failed;
+        recordAuditEvent({at: Date.now(), actor: {userId: 'system'}, type,
+            target: {kind: 'trusted_client', id: event.clientId ?? 'unknown'}, outcome: event.success ? 'success' : 'failure',
+            summary: `${type} ${event.clientId ?? ''}`.trim(),
+            detail: {address: event.address, ...(event.reason ? {reason: event.reason} : {})}})
+            .catch((error) => logger.error(`${type} audit failed`, error));
+    }
+
+    /**
+     * 신뢰 클라이언트의 등록 코드를 발급한다(#212 REQ-4·REQ-8). 제어 연결이 TLS 가 아니거나 mtls-strict 면 발급하지 않는다:
+     * 평문으로는 비밀값을 보내지 않고, strict 는 클라이언트 인증서 없는 등록 연결을 받지 않는다.
+     */
+    public async issueEnrollmentCode(clientId: string, ttlMs?: number): Promise<{ok: true, code: string, expiresAt: number} | {ok: false, reason: 'tls-required' | 'strict-mode' | 'unknown-client'}> {
+        const applied = this._appliedServerOption;
+        if(applied.tls !== true) return {ok: false, reason: 'tls-required'};
+        if(applied.controlProtocolMode === 'mtls-strict') return {ok: false, reason: 'strict-mode'};
+        if(!(applied.trustedClients ?? []).some((client) => client.clientId === clientId)) return {ok: false, reason: 'unknown-client'};
+        const issued = await this._enrollment.issue(clientId, ttlMs);
+        return {ok: true, ...issued};
     }
 
     private onConcurrencyDenied = (port: number, denial: ConcurrencyDenial, now: number): void => {
@@ -130,6 +157,7 @@ class TTTServer {
         const ttl = resolveSessionTtlMs(serverOption.sessionTtlMs);
         if(ttl.success) tunnelServer.configureSessionTtl(ttl.ttlMs);
         this.bindTunnelServerCallbacks(tunnelServer);
+        tunnelServer.configureEnrollment(this._enrollment, this.onEnrollmentEvent);
         return tunnelServer;
     }
 
@@ -148,11 +176,14 @@ class TTTServer {
         }
     }
 
-    private async restoreExternalPortStatus(port: number, option: TunnelingOption, lastServerStatus: ExternalPortServerStatus): Promise<void> {
+    /**
+     * 저장 전의 켜짐 상태와 활성 시간을 새 리스너에 다시 건다. 손으로 정한 상태이므로 inactiveOnStartup 은 보지 않는다(#281).
+     */
+    private async restoreExternalPortStatus(port: number, lastServerStatus: ExternalPortServerStatus): Promise<void> {
         // 잘린 값이 아니라 요청값과 원래 시작 시각으로 다시 건다. 상한은 지금 기준으로 다시 계산된다(#137).
         const requested = lastServerStatus.requestedTimeout ?? lastServerStatus.activeTimeout;
         this._externalPortServerPool.setActiveTimeout(port, requested);
-        if(lastServerStatus.active && !option.inactiveOnStartup) {
+        if(lastServerStatus.active) {
             await this._externalPortServerPool.active(port, requested, {startedAt: lastServerStatus.activeStart});
             return;
         }
@@ -168,7 +199,8 @@ class TTTServer {
         this._sessions.add(id);
         let allowClientIds = this._allowClientIdsMap.get(opt.forwardPort);
         let allowClientNames = this._allowClientNamesMap.get(opt.forwardPort);
-        let success = this._tunnelServer.openSession(id, {host: opt.destinationAddress,port: opt.destinationPort!,tls: opt.tls,bufferLimit: bufferLimitOnClient},allowClientNames, allowClientIds);
+        let success = this._tunnelServer.openSession(id, {host: opt.destinationAddress,port: opt.destinationPort!,tls: opt.tls,bufferLimit: bufferLimitOnClient,
+            ...(opt.allowSelfSignedDestinationCert === true ? {rejectUnauthorized: false} : {})},allowClientNames, allowClientIds);
         if(!success) {
             this._sessions.delete(id);
             this._externalPortServerPool.closeSession(id,0);
@@ -241,18 +273,36 @@ class TTTServer {
         return this._tunnelServer.clientStatuses();
     }
 
-    // U5-03 / #118 — connectionSecurity.geo 를 AdmissionController에 적용한다. #120 (U5-05)의 PUT /api/security/geo도 같은 진입점을 쓴다.
+    // U5-03 / #118 — connectionSecurity 를 AdmissionController에 적용한다. #120 (U5-05)의 PUT /api/security/geo와
+    // #286 의 차단 목록 API 도 같은 진입점을 쓴다.
     public applyConnectionSecurity(next: ConnectionSecurityOption | undefined): void {
         const geo = next?.geo ?? DEFAULT_GEO_CONFIG;
-        AdmissionController.instance.configureGeo(geo);
-        this._appliedServerOption.connectionSecurity = {geo: {...geo, countries: [...geo.countries]}};
+        const blocklist = next?.blocklist ?? [];
+        AdmissionController.instance.configureConnectionSecurity({geo, blocklist});
+        this._appliedServerOption.connectionSecurity = {geo: {...geo, countries: [...geo.countries]}, blocklist: blocklist.map((entry) => ({...entry}))};
     }
 
     private controlOptionsChanged(next: ServerOption, previous: ServerOption): boolean {
-        return ['port', 'tls', 'key', 'keepAlive', 'controlProtocolMode', 'allowLegacyControlAuth', 'trustedClients']
-            .some(key => key === 'trustedClients'
-                ? !ObjectUtil.canonicalEquals(next.trustedClients ?? [], previous.trustedClients ?? [])
-                : (next as any)[key] !== (previous as any)[key]);
+        // trustedClients 는 제어 서버를 다시 만들지 않고 바꾼다(#212 REQ-3). 그래서 여기서 보지 않는다.
+        return ['port', 'tls', 'key', 'keepAlive', 'controlProtocolMode', 'allowLegacyControlAuth']
+            .some(key => (next as any)[key] !== (previous as any)[key]);
+    }
+
+    /** 제어 포트의 TLS 나 모드가 바뀌면 발급한 등록 코드는 의미가 없으므로 모두 무효로 한다(#221 REQ-2). */
+    private revokeEnrollmentsIfModeChanged(next: ServerOption, previous: ServerOption): void {
+        if((next.tls === true) !== (previous.tls === true) || (next.controlProtocolMode ?? "mixed") !== (previous.controlProtocolMode ?? "mixed")) {
+            this._enrollment.revokeAll();
+        }
+    }
+
+    private trustedClientsChanged(next: ServerOption, previous: ServerOption): boolean {
+        return !ObjectUtil.canonicalEquals(next.trustedClients ?? [], previous.trustedClients ?? []);
+    }
+
+    /** 신뢰 클라이언트를 제자리에서 바꾼다. 지워졌거나 비밀값이 바뀐 클라이언트만 끊긴다. */
+    private applyTrustedClients(next: ServerOption): void {
+        const disconnected = this._tunnelServer.updateTrustedClients(next.trustedClients ?? []);
+        if(disconnected.length > 0) logger.info(`trusted clients changed; disconnected: ${disconnected.join(', ')}`);
     }
 
     /** 켜져 있는 모든 외부 포트의 수명 상한을 다시 계산한다(#137 — 소유자·그룹·그룹 속성 변경 뒤). */
@@ -284,6 +334,7 @@ class TTTServer {
 
     public async restoreRuntimeState(state: ReturnType<TTTServer['captureRuntimeState']>): Promise<string[]> {
         const failures: string[] = [];
+        this.revokeEnrollmentsIfModeChanged(state.serverOption, this._appliedServerOption);
         if(this._dirtyControl || this.controlOptionsChanged(this._appliedServerOption, state.serverOption)) {
             try {
                 await this._tunnelServer.close();
@@ -292,11 +343,28 @@ class TTTServer {
                 this._tunnelServer = restored;
                 this._appliedServerOption = ObjectUtil.cloneDeep(state.serverOption);
                 this._dirtyControl = false;
+                // 새 제어 서버는 이전 목록으로 만들었으므로 신뢰 클라이언트도 되돌린 것이다.
+                this._dirtyTrustedClients = false;
             } catch(error) { logger.error('control runtime restore failed', error); failures.push('tunnel-control-restore'); }
+        } else if(this._dirtyTrustedClients || this.trustedClientsChanged(this._appliedServerOption, state.serverOption)) {
+            // #271: 적용 도중 예외가 나면 레지스트리만 새 목록이고 _appliedServerOption 은 옛 값일 수 있다. 같은 목록을 다시 넣는 것은 안전하다.
+            // 다시 넣다가 또 예외가 나도 나머지 복원은 이어 간다. 플래그는 남겨 다음 복원에서 다시 시도한다.
+            try {
+                this._dirtyTrustedClients = true;
+                this.applyTrustedClients(state.serverOption);
+                this._appliedServerOption.trustedClients = ObjectUtil.cloneDeep(state.serverOption.trustedClients ?? []);
+                this._dirtyTrustedClients = false;
+            } catch(error) { logger.error('trusted clients restore failed', error); failures.push('trusted-clients-restore'); }
         }
+        // #271: 감사 싱크(보존·큐)도 실행 상태다. 이전 설정과 다르면 이전 설정의 싱크로 되돌린다.
+        try { await TTTServer.applyAuditOption(state.serverOption); }
+        catch(error) { logger.error('audit sink restore failed', error); failures.push('audit-restore'); }
         try { this._tunnelServer.configureSessionTtl(state.sessionTtlPolicy.ttlMs, state.sessionTtlPolicy.checkIntervalMs); }
         catch(error) { logger.error('session TTL restore failed', error); failures.push('session-ttl-restore'); }
         if(SocketHandler.maxGlobalMemoryBufferSize !== state.memoryLimit) AppCompositionRoot.applyGlobalMemLimitMiB(state.memoryLimit / (1024 * 1024));
+        // #267·#268: applyServerOption 은 다른 적용이 실패하기 전에 로그 레벨과 닫기 기한을 바꾼다. 저장을 되돌리면 함께 돌린다.
+        LoggerFactory.setLevel(state.serverOption.logLevel ?? DEFAULT_LOG_LEVEL);
+        TTTServer.applyCloseDeadlines(state.serverOption);
         for(const port of new Set([...Object.keys(state.external).map(Number), ...Object.keys(this._appliedExternal).map(Number), ...this._dirtyExternal])) {
             const previous = state.external[port];
             const status = this._externalPortServerPool.getServerStatus(port);
@@ -361,13 +429,24 @@ class TTTServer {
         await previous.close();
     }
 
+    /** #268: 서버 설정의 닫기 기한을 SocketHandler 에 넣는다. 값이 없으면 기본값이다. */
+    public static applyCloseDeadlines(option: ServerOption): void {
+        SocketHandler.closeStallMs = option.closeStallMs ?? DEFAULT_CLOSE_STALL_MS;
+        SocketHandler.closeGraceMs = option.closeGraceMs ?? DEFAULT_CLOSE_GRACE_MS;
+    }
+
     public async applyServerOption(nextOption: ServerOption, previousOption: ServerOption): Promise<RuntimeApplyResult> {
         const ttl = resolveSessionTtlMs(nextOption.sessionTtlMs);
         if(!ttl.success) return {success: false, partial: false, failedScopes: ['session-ttl'], warnings: [ttl.message], restartRequiredScopes: []};
-        if(!ObjectUtil.canonicalEquals(previousOption.connectionSecurity?.geo ?? DEFAULT_GEO_CONFIG, nextOption.connectionSecurity?.geo ?? DEFAULT_GEO_CONFIG)) {
+        const securityOf = (option: ServerOption) => ({geo: option.connectionSecurity?.geo ?? DEFAULT_GEO_CONFIG, blocklist: option.connectionSecurity?.blocklist ?? []});
+        if(!ObjectUtil.canonicalEquals(securityOf(previousOption), securityOf(nextOption))) {
             this.applyConnectionSecurity(nextOption.connectionSecurity);
         }
         await TTTServer.applyAuditOption(nextOption);
+        // #267: 로그 레벨은 다시 시작하지 않고 바로 모든 로그 출력에 적용한다.
+        LoggerFactory.setLevel(nextOption.logLevel ?? DEFAULT_LOG_LEVEL);
+        // #268: 닫기 기한은 닫기를 시작할 때 읽으므로 이후 닫는 연결부터 새 값을 쓴다.
+        TTTServer.applyCloseDeadlines(nextOption);
         const restartRequiredScopes: string[] = [];
         const warnings: string[] = [];
 
@@ -381,11 +460,18 @@ class TTTServer {
         }
 
         const requiresTunnelRestart = this.controlOptionsChanged(nextOption, previousOption);
+        this.revokeEnrollmentsIfModeChanged(nextOption, previousOption);
 
         if(!requiresTunnelRestart) {
+            // 앞선 복원이 실패해 레지스트리가 저장된 목록과 다를 수 있으면(플래그) 바뀌지 않았어도 다시 넣어 맞춘다.
+            if(this._dirtyTrustedClients || this.trustedClientsChanged(nextOption, previousOption)) {
+                this._dirtyTrustedClients = true;
+                this.applyTrustedClients(nextOption);
+            }
             this._tunnelServer.configureSessionTtl(ttl.ttlMs);
             this.syncAllowedClientMaps(nextOption);
             this.recordAppliedServerOption(nextOption, false);
+            this._dirtyTrustedClients = false;
             return {
                 success: true,
                 partial: restartRequiredScopes.length > 0,
@@ -405,6 +491,8 @@ class TTTServer {
             this.syncAllowedClientMaps(nextOption);
             this.recordAppliedServerOption(nextOption, true);
             this._dirtyControl = false;
+            // 새 제어 서버는 nextOption 의 목록으로 만들었으므로 레지스트리도 맞다.
+            this._dirtyTrustedClients = false;
             return {
                 success: true,
                 partial: restartRequiredScopes.length > 0,
@@ -432,9 +520,17 @@ class TTTServer {
         }
     }
 
-    public async applyTunnelingOption(nextOption: TunnelingOption, previousOption?: TunnelingOption, stagedCert?: CertInfo): Promise<RuntimeApplyResult> {
+    /**
+     * @param previousForwardPort 외부 포트를 바꾸는 중이면 옛 포트. 옛 리스너가 돌고 있으면 새 리스너가 그 활성 상태를 이어받는다(#279, #281).
+     *   포트를 바꿀 때는 새 포트에 행이 없으므로 previousOption 을 함께 넘기지 않는다. 실패 복원은 같은 포트의 previousOption 만 다룬다.
+     */
+    public async applyTunnelingOption(nextOption: TunnelingOption, previousOption?: TunnelingOption, stagedCert?: CertInfo, previousForwardPort?: number): Promise<RuntimeApplyResult> {
         const port = nextOption.forwardPort;
         const lastServerStatus = this._externalPortServerPool.getServerStatus(port);
+        const inheritedStatus = previousForwardPort === undefined ? lastServerStatus : this._externalPortServerPool.getServerStatus(previousForwardPort);
+        // 리스너가 돌던 터널만 상태를 이어받는다. 아니면 새 터널로 보고 inactiveOnStartup 을 따른다(#281).
+        // 리스너를 멈추면 online 이 false 가 되므로 멈추기 전에 읽는다.
+        const inherits = inheritedStatus.online;
         const nextCert = stagedCert ?? CertificationStore.instance.getExternalCert(port);
 
         try {
@@ -446,7 +542,8 @@ class TTTServer {
                 }
             }
             await this._externalPortServerPool.startServer(nextOption, nextCert);
-            await this.restoreExternalPortStatus(port, nextOption, lastServerStatus);
+            if(inherits) await this.restoreExternalPortStatus(port, inheritedStatus);
+            else await this.activateNewListener(nextOption);
             this.applyAllowedClientsForPort(nextOption);
             this._appliedExternal[port] = {option: ObjectUtil.cloneDeep(nextOption), cert: ObjectUtil.cloneDeep(nextCert),
                 configurationRevision: ServerOptionStore.instance.revisionState.currentRevision,
@@ -464,7 +561,10 @@ class TTTServer {
             if(previousOption) {
                 try {
                     await this._externalPortServerPool.startServer(previousOption, nextCert);
-                    await this.restoreExternalPortStatus(port, previousOption, lastServerStatus);
+                    // 돌던 리스너가 아니었다면 남은 상태는 낡은 값이므로 새 리스너 규칙을 쓴다(#281).
+                    // 관리 API 를 거친 호출이면 최종 상태는 호출자의 restoreRuntimeState 가 다시 정한다.
+                    if(inherits) await this.restoreExternalPortStatus(port, lastServerStatus);
+                    else await this.activateNewListener(previousOption);
                     this.applyAllowedClientsForPort(previousOption);
                 } catch (restoreError) {
                     logger.error(`applyTunnelingOption restore failed - port: ${port}`, restoreError);
@@ -530,7 +630,7 @@ class TTTServer {
                 throw new Error(`failed to stop listener ${port}`);
             }
             await this._externalPortServerPool.startServer(currentOption, nextCert);
-            await this.restoreExternalPortStatus(port, currentOption, lastServerStatus);
+            await this.restoreExternalPortStatus(port, lastServerStatus);
             if(this._appliedExternal[port]) {
                 this._appliedExternal[port].cert = ObjectUtil.cloneDeep(nextCert);
                 this._appliedExternal[port].certificateRevision = CertificationStore.instance.revisionState.currentRevision;
@@ -547,7 +647,7 @@ class TTTServer {
             logger.error(`applyExternalServerCert failed - port: ${port}`, error);
             try {
                 await this._externalPortServerPool.startServer(currentOption, previousCert);
-                await this.restoreExternalPortStatus(port, currentOption, lastServerStatus);
+                await this.restoreExternalPortStatus(port, lastServerStatus);
             } catch (restoreError) {
                 logger.error(`applyExternalServerCert restore failed - port: ${port}`, restoreError);
             }
@@ -585,6 +685,16 @@ class TTTServer {
 
 
 
+    /**
+     * 새로 띄운 리스너는 startServer 가 inactiveOnStartup 에 따라 켜 둔다. 그 자동 활성에는 타이머가 없으므로,
+     * 상한이 있는 터널은 active() 로 다시 켜 상한 타이머를 건다. 서버 기동과 새 터널 추가가 같이 쓴다(#281).
+     */
+    private async activateNewListener(option: TunnelingOption): Promise<void> {
+        if(!option.inactiveOnStartup && maxActiveSeconds(option.forwardPort, AuthorizationContext) !== undefined) {
+            await this._externalPortServerPool.active(option.forwardPort);
+        }
+    }
+
     public async start() : Promise<void> {
         let optionStore =  ServerOptionStore.instance;
         let tunnelOptions =  optionStore.getTunnelingOptions();
@@ -593,10 +703,7 @@ class TTTServer {
             try {
                 const cert = certStore.getExternalCert(tunnelOption.forwardPort);
                 const started = await this._externalPortServerPool.startServer(tunnelOption, cert);
-                // 기동 시 자동 활성은 타이머가 없으므로, 상한이 있는 터널은 active() 로 다시 켜 상한 타이머를 건다.
-                if(started && !tunnelOption.inactiveOnStartup && maxActiveSeconds(tunnelOption.forwardPort, AuthorizationContext) !== undefined) {
-                    await this._externalPortServerPool.active(tunnelOption.forwardPort);
-                }
+                if(started) await this.activateNewListener(tunnelOption);
                 this._appliedExternal[tunnelOption.forwardPort] = {option: ObjectUtil.cloneDeep(tunnelOption), cert,
                     configurationRevision: optionStore.revisionState.currentRevision, certificateRevision: certStore.revisionState.currentRevision};
             } catch (err) {
@@ -607,6 +714,7 @@ class TTTServer {
     }
 
     public async close() : Promise<void> {
+        this._enrollment.clear();
         await this._externalPortServerPool.stopAll();
         await this._tunnelServer.close();
     }
@@ -624,3 +732,4 @@ class TTTServer {
 }
 
 export default TTTServer;
+export type {RuntimeApplyResult};

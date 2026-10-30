@@ -23,6 +23,8 @@ class LoggerConfig {
         default: true,
         file: false,
         name: '',
+        // 설정하지 않은 이름이 가는 기본 writer(콘솔만). SRS 대로 debug 다. 운영의 writer(server·client·boot·socket)는
+        // appendWriteConfig 의 기본값 info 를 쓴다(#249).
         level: 'debug',
         path: this._defaultPath
     }

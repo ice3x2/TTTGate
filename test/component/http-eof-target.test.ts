@@ -103,8 +103,12 @@ test('force abort before input EOF never flushes the buffered response', async (
     expect(f.output().toString()).not.toMatch(/abc|0\r\n\r\n$/);
 }));
 
-test('zero input closes idle parser and safe large target remains pending', async () => {
-    await withPool(async f => { f.pool.closeSession(f.id, 0); await f.until(() => f.client.destroyed); });
+// #284: 응답 바이트 없이 닫히면 502 로 답한 뒤 닫는다.
+test('zero input answers 502 and closes, and a safe large target remains pending', async () => {
+    await withPool(async f => {
+        f.pool.closeSession(f.id, 0); await f.until(() => f.client.destroyed);
+        expect(f.output().toString('latin1')).toMatch(/^HTTP\/1\.1 502 Bad Gateway\r\n/);
+    });
     await withPool(async f => {
         f.pool.closeSession(f.id, Number.MAX_SAFE_INTEGER);
         expect(f.handler.endLength).toBe(Number.MAX_SAFE_INTEGER);

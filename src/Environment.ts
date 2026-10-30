@@ -4,7 +4,25 @@ import fs from "fs";
 
 const DEV_MODE = process.argv.find((arg) => arg == '-dev') != undefined;
 const DEFAULT_ROOT_DIR = (process.argv[0].includes('node') || process.argv[0].includes('npm')) ? process.cwd() : Path.join(process.argv[DEV_MODE ? 1 : 0], '..', '..');
-const DEFAULT_BUILD_ID = process.env.TTTGATE_BUILD?.trim() || '20250117';
+/** deploy.js 가 빌드할 때 빌드 날짜(UTC, YYYYMMDD)를 적는 파일. 컴파일된 이 모듈 옆에 놓인다(#290). */
+const BUILD_INFO_FILE = 'build-info.js';
+
+/**
+ * 빌드 날짜. 실행할 때 준 TTTGATE_BUILD 가 먼저이고, 없으면 릴리스 빌드가 적은 값, 그것도 없으면 'dev' 다(#290).
+ * 예전에는 고정값을 써서 모든 배포물이 같은 날짜를 보고했다.
+ */
+export const resolveBuildId = (env: NodeJS.ProcessEnv, directory: string): string => {
+    const fromEnv = env.TTTGATE_BUILD?.trim();
+    if(fromEnv) return fromEnv;
+    const file = Path.join(directory, BUILD_INFO_FILE);
+    if(fs.existsSync(file)) {
+        const stamped = (require(file) as {build?: unknown}).build;
+        if(typeof stamped === 'string' && stamped.length > 0) return stamped;
+    }
+    return 'dev';
+};
+
+const DEFAULT_BUILD_ID = resolveBuildId(process.env, __dirname);
 
 const makePaths = (rootDir: string) => {
     return {

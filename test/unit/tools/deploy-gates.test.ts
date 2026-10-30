@@ -28,7 +28,8 @@ if(stage === 'pkg') {
 }
 `;
 
-const withFixture = (check: (fixture: {directory: string, result: ReturnType<typeof spawnSync>, journal: any[]}) => void, fail?: string, args: string[] = []) => {
+const withFixture = (check: (fixture: {directory: string, result: ReturnType<typeof spawnSync>, journal: any[], days: string[]}) => void,
+                     fail?: string, args: string[] = []) => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "release gates & "));
     const manifest = (location: string, scripts: Record<string, string>) => {
         const data = {name: "release-gate-fixture", version: "1.0.0", private: true, scripts};
@@ -49,13 +50,18 @@ const withFixture = (check: (fixture: {directory: string, result: ReturnType<typ
             fs.mkdirSync(path.join(directory, output), {recursive: true});
             fs.writeFileSync(path.join(directory, output, "preserve.txt"), "previous artifact");
         }
+        // 앞선 로컬 배포가 남긴 빌드 날짜 파일. deploy.js 는 이것을 먼저 지운다.
+        fs.mkdirSync(path.join(directory, "build/src"), {recursive: true});
+        fs.writeFileSync(path.join(directory, "build/src/build-info.js"), 'module.exports = {build: "19990101"};\n');
+        const before = new Date().toISOString().slice(0, 10).replace(/-/g, "");
         const result = spawnSync(process.execPath, [path.join(directory, "deploy.js"), ...args], {
             cwd: path.join(directory, "caller"), encoding: "utf8", timeout: 45_000, maxBuffer: 4 * 1024 * 1024,
             env: {...process.env, DEPLOY_FIXTURE_FAIL: fail, npm_config_update_notifier: "false"},
         });
+        const after = new Date().toISOString().slice(0, 10).replace(/-/g, "");
         const journalFile = path.join(directory, "journal.jsonl");
         const journal = fs.existsSync(journalFile) ? fs.readFileSync(journalFile, "utf8").trim().split("\n").map((line) => JSON.parse(line)) : [];
-        check({directory, result, journal});
+        check({directory, result, journal, days: [before, after]});
     } finally {
         fs.rmSync(directory, {recursive: true, force: true});
     }
@@ -63,6 +69,8 @@ const withFixture = (check: (fixture: {directory: string, result: ReturnType<typ
 
 test.each(stages)("failed %s gate preserves previous artifacts and never reaches packaging", (stage) => {
     withFixture(({directory, result, journal}) => {
+        // 실패해도 앞선 배포의 빌드 날짜가 남아 다음 빌드가 그 날짜를 보고하지 않는다(#290).
+        expect(fs.existsSync(path.join(directory, "build/src/build-info.js"))).toBe(false);
         expect(result.error).toBeUndefined();
         expect(result.status).not.toBe(0);
         expect(journal.map((entry) => entry.stage)).toEqual(stages.slice(0, stages.indexOf(stage) + 1));
@@ -74,7 +82,7 @@ test.each(stages)("failed %s gate preserves previous artifacts and never reaches
 }, 50_000);
 
 test("all gates run from fixed project directories and final production rebuild precedes output/pkg", () => {
-    withFixture(({directory, result, journal}) => {
+    withFixture(({directory, result, journal, days}) => {
         expect(result.error).toBeUndefined();
         expect({status: result.status, error: result.status ? String(result.stderr) : ""}).toEqual({status: 0, error: ""});
         expect(journal.map((entry) => entry.stage)).toEqual([...stages, "pkg"]);
@@ -90,6 +98,12 @@ test("all gates run from fixed project directories and final production rebuild 
         }
         expect(fs.readFileSync(path.join(directory, "dist.js/app.js"), "utf8")).toBe("compiled release");
         expect(fs.readFileSync(path.join(directory, "caller/dist/preserve.txt"), "utf8")).toBe("previous artifact");
+        // #290 REQ-10: 빌드 날짜(UTC)를 적어 바이너리(build/src)와 소스 배포판(dist.js)에 함께 넣는다.
+        // 실행이 UTC 자정을 넘길 수 있으므로 실행 전후 날짜 가운데 하나면 된다.
+        for(const file of ["build/src/build-info.js", "dist.js/build-info.js"]) {
+            const stamped = fs.readFileSync(path.join(directory, file), "utf8");
+            expect(days.map((day) => `module.exports = {build: "${day}"};\n`)).toContain(stamped);
+        }
     });
 }, 50_000);
 
@@ -100,6 +114,8 @@ test("the actual browser gate invokes the installed Playwright CLI", () => {
 
 test("packaged binaries bundle the geoip-lite country databases", () => {
     const manifest = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+    // deploy.js 가 적는 build/src/build-info.js 도 이 패턴으로 바이너리에 들어간다(#290).
+    expect(manifest.pkg.scripts).toBe("build/**/*.js");
     expect(manifest.pkg.assets).toEqual([
         "node_modules/geoip-lite/data/geoip-country.dat",
         "node_modules/geoip-lite/data/geoip-country6.dat"]);
@@ -115,6 +131,16 @@ test("the geoip update script reports a skipped update without a license key", (
     expect({status: result.status, stdout: result.stdout, stderr: result.stderr}).toEqual({status: 2, stdout: "",
         stderr: "MAXMIND_LICENSE_KEY is not set; keeping the bundled GeoLite2 database\n"});
 });
+
+// #290 — 릴리스 워크플로는 Code Regression 을 먼저 통과하므로 패키징 때 테스트를 다시 돌리지 않는다.
+test("--skip-tests skips only the browser install and test gates and still packages", () => {
+    withFixture(({directory, result, journal}) => {
+        expect({status: result.status, error: result.status ? String(result.stderr) : ""}).toEqual({status: 0, error: ""});
+        expect(journal.map(entry => entry.stage)).toEqual(["root-install", "admin-install", "admin-check", "root-build", "admin-build", "pkg"]);
+        expect(fs.readFileSync(path.join(directory, "dist/web/index.html"), "utf8")).toBe("PRODUCTION ADMIN");
+        expect(fs.readFileSync(path.join(directory, "dist/bin/fixture.txt"), "utf8")).toBe("fixture package");
+    }, undefined, ["--skip-tests"]);
+}, 50_000);
 
 test("explicit source-only deployment runs all gates but never invokes pkg", () => {
     withFixture(({directory, result, journal}) => {

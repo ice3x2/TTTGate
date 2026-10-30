@@ -28,6 +28,8 @@
     let on = $state(false);
     let switchEvents = $state(0);
     let modalOpen = $state(false);
+    let tallModalOpen = $state(false);
+    let tinyModalOpen = $state(false);
     let tab = $state('one');
     let timerValue = $state(-1);
     let bannerShown = $state(true);
@@ -77,8 +79,17 @@
     <p>Modal body</p>
     {#snippet footer()}<Button variant="primary" onclick={() => (modalOpen = false)}>Close modal</Button>{/snippet}
 </Modal>
+<!-- 본문이 길고 첫 초점 대상이 본문 아래쪽에 있는 모달. 열었을 때 초점이 화면에 보이는지 본다. -->
+<div id="open-tall-modal"><Button onclick={() => (tallModalOpen = true)}>Open tall modal</Button></div>
+<Modal bind:open={tallModalOpen} title="Tall fixture modal">
+    <div style="height: 900px;">Tall body</div>
+    <Button onclick={() => {}}>Body action</Button>
+    {#snippet footer()}<Button variant="primary" onclick={() => (tallModalOpen = false)}>Close tall modal</Button>{/snippet}
+</Modal>
 
 <div id="toast-push"><Button onclick={() => toast.push({tone: 'pulse', message: 'Fixture toast', timeoutMs: 1500})}>Push toast</Button></div>
+<!-- 스스로 사라지지 않는 토스트. 쌓이는 상한을 시간과 무관하게 확인한다(#263). -->
+<div id="toast-push-sticky"><Button onclick={() => toast.push({tone: 'trace', message: 'Sticky toast', timeoutMs: 0})}>Push sticky toast</Button></div>
 
 <Tabs items={[{id: 'one', label: 'One'}, {id: 'two', label: 'Two'}]} bind:active={tab} />
 <output id="tab-echo">{tab}</output>
@@ -97,3 +108,8 @@
 {/if}
 
 <Toast />
+<!-- 본문이 없는 아주 작은 모달. 낮은 화면에서도 들어가므로 가운데에 놓여야 한다. -->
+<div id="open-tiny-modal"><Button onclick={() => (tinyModalOpen = true)}>Open tiny modal</Button></div>
+<Modal bind:open={tinyModalOpen} title="Tiny fixture modal">
+    {#snippet footer()}<Button variant="primary" onclick={() => (tinyModalOpen = false)}>Close tiny modal</Button>{/snippet}
+</Modal>

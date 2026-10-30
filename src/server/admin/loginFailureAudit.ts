@@ -11,7 +11,7 @@ const OVERFLOW_KEY = 'overflow';
 
 /**
  * 로그인 실패 감사에 남길 username. 형식 검증(validateUsername)을 통과한 값만 원문으로 남긴다.
- * 인증 없는 경로라 본문 상한(1MiB)까지의 문자열이 그대로 감사 파일에 쌓일 수 있고, 사용자가 username 칸에
+ * 인증 없는 경로라 본문 상한(16 KiB, #265)까지의 문자열이 그대로 감사 파일에 쌓일 수 있고, 사용자가 username 칸에
  * 잘못 넣은 비밀번호도 남을 수 있기 때문이다(#139). 형식이 틀리면 고정값과 길이만 남긴다.
  */
 export function loginFailureUsername(value: unknown): {username: string; usernameLength?: number} {
@@ -28,26 +28,30 @@ export function loginFailureUsername(value: unknown): {username: string; usernam
  * gateKey 는 차단 판정과 같은 네트워크 버킷(IPv6 /64 등)이어야 한다. 원본 IP 로 묶으면 같은 /64 안에서
  * 주소를 바꿔 가며 요청마다 감사를 남길 수 있다. 키 수가 상한을 넘으면 넘친 요청은 키 하나로 묶어 맵과 순회 비용을 묶는다.
  */
-export function createLoginFailureAuditor(options: {maxKeys?: number} = {}): (body: any, ip: string, gateKey: string, status: number, now: number) => AuditEvent | undefined {
+export function createLoginFailureAuditor(options: {maxKeys?: number} = {}): (body: any, ip: string, gateKey: string, status: number, now: number,
+    reason?: 'concurrency_limit') => AuditEvent | undefined {
     const maxKeys = options.maxKeys ?? BLOCKED_AUDIT_MAX_KEYS;
     const blockedGate = new AuditRateGate(BLOCKED_AUDIT_INTERVAL_MS);
     let lastPrunedAt = Number.NEGATIVE_INFINITY;
-    return (body, ip, gateKey, status, now) => {
-        const blocked = status === 429;
-        if(blocked) {
+    return (body, ip, gateKey, status, now, reason) => {
+        // #251: 동시 처리 상한 429 는 차단이 아니다. 같은 1분 간격으로 묶되 차단 감사의 칸은 따로 둔다.
+        const limited = status === 429 && reason === 'concurrency_limit';
+        const blocked = status === 429 && !limited;
+        if(blocked || limited) {
             // 순회는 간격당 한 번만 한다. 상한에 머무는 동안 요청마다 맵 전체를 훑지 않게 한다.
             if(blockedGate.size() >= maxKeys && now - lastPrunedAt >= BLOCKED_AUDIT_INTERVAL_MS) {
                 blockedGate.prune(now);
                 lastPrunedAt = now;
             }
-            const key = blockedGate.size() >= maxKeys ? OVERFLOW_KEY : gateKey;
+            const key = blockedGate.size() >= maxKeys ? OVERFLOW_KEY : (limited ? `${gateKey}:inflight` : gateKey);
             if(!blockedGate.allow(key, now)) return undefined;
         }
-        const name = loginFailureUsername(body?.['username']);
+        // #265: 본문을 읽기 전에 거절한 요청은 body 가 undefined 다. 빠진 값과 구분해 '(unread)' 로 남긴다.
+        const name = body === undefined ? {username: '(unread)'} : loginFailureUsername(body?.['username']);
         return {
             at: now, actor: {userId: 'system'}, ip,
             type: AUDIT_EVENT_TYPES.login_failure, outcome: 'failure',
-            summary: `login_failure ${name.username}`, detail: {...name, ...(blocked ? {blocked: true} : {})}
+            summary: `login_failure ${name.username}`, detail: {...name, ...(blocked ? {blocked: true} : {}), ...(limited ? {reason} : {})}
         };
     };
 }

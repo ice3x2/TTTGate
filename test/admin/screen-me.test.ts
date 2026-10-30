@@ -1,10 +1,10 @@
 import type {Page} from "playwright";
-import {startAdminApp} from "../helpers/adminApp";
+import {startAdminApp, ADMIN_APP_TEST_TIMEOUT_MS} from "../helpers/adminApp";
 import {RBAC_PASSWORDS} from "../helpers/rbacFixture";
 
 // U3-02 / #104 — 비밀번호 변경 화면과 강제 변경 고정. 테스트마다 rbac fixture 로 앱을 새로 띄운다
 // (앞 케이스가 바꾼 비밀번호가 뒤 케이스로 새지 않는다). 계정 카드 케이스는 U3-05 가 더한다.
-jest.setTimeout(120_000);
+jest.setTimeout(ADMIN_APP_TEST_TIMEOUT_MS);
 
 type Name = keyof typeof RBAC_PASSWORDS;
 

@@ -9,7 +9,10 @@ import {FileCache} from "../../src/util/FileCache";
 import {getFreePort} from "../helpers/network";
 import {createTestRoot, applyTestRoot, cleanupTestRoot} from "../helpers/runtime";
 
-const PREFIX_BYTES = 128 * 1024;
+// 앞 데이터는 cork 된 소켓 버퍼를 채워 뒤 데이터가 파일 캐시에 남게 한다. 그러려면 앞 데이터가
+// 소켓의 highWaterMark 이상이고, 조각 크기(#248: 64KiB 넘는 버퍼는 조각으로 나뉜다) 이하여야 한다.
+// split-last-drain 은 일부러 조각 두 개로 보내, 뒤 조각이 깨진 캐시에 남는 경우를 본다.
+const PIECE_BYTES = 64 * 1024;
 const until = async (condition: () => boolean) => {
     const deadline = Date.now() + 12_000;
     while(!condition()) {
@@ -20,6 +23,7 @@ const until = async (condition: () => boolean) => {
 
 const main = async () => {
     const mode = process.argv[2];
+    const prefixBytes = mode === "split-last-drain" ? 2 * PIECE_BYTES : PIECE_BYTES;
     const root = await createTestRoot("cache-read-19");
     applyTestRoot(root.rootDir);
     const port = await getFreePort();
@@ -52,17 +56,19 @@ const main = async () => {
     try {
         await new Promise<void>((resolve, reject) => server.start((error) => error ? reject(error) : resolve()));
         const victim = await open();
-        const prefix = Buffer.alloc(PREFIX_BYTES, 0x41);
+        const prefix = Buffer.alloc(prefixBytes, 0x41);
         const current = Buffer.alloc(4096, 0x42);
         const follower = Buffer.alloc(6144, 0x43);
         // Use the actual Writable cork boundary, not a replaced write method.
         // Pausing a loopback peer alone does not guarantee local backpressure.
         victim.handler.socket.cork();
+        assert.ok(victim.handler.socket.writableHighWaterMark <= PIECE_BYTES, "prefix must fill the corked socket buffer");
         victim.send("prefix", prefix);
         victim.send("current", current);
         const hasFollower = mode === "followers" || mode === "success";
         if(hasFollower) victim.send("follower", follower);
-        assert.equal(victim.handler.pendingFileCacheBytes, current.length + (hasFollower ? follower.length : 0), JSON.stringify({
+        const queuedPrefix = prefix.length - PIECE_BYTES;
+        assert.equal(victim.handler.pendingFileCacheBytes, queuedPrefix + current.length + (hasFollower ? follower.length : 0), JSON.stringify({
             state: victim.handler.state, writes: victim.writes, pending: victim.handler.pendingWriteBytes,
             queue: (victim.handler as any)._waitQueue.size(), pumping: (victim.handler as any)._inRunWriteBuffer,
             full: (victim.handler as any)._isFullNativeBuffer, nativePending: victim.handler.socket.writableLength,
@@ -94,14 +100,16 @@ const main = async () => {
         if(mode === "success") await until(() => victim.receivedBytes() === prefix.length + current.length + follower.length);
         const received = Buffer.concat(victim.chunks);
         report = {
-            mode, writes: victim.writes, drains, sendLength: victim.handler.sendLength,
+            mode, prefixBytes: prefix.length, pieceBytes: PIECE_BYTES, writes: victim.writes, drains, sendLength: victim.handler.sendLength,
             pending: victim.handler.pendingWriteBytes, cacheBytes: victim.handler.pendingFileCacheBytes,
             ended: victim.handler.isEnd(), ownerRetained: owners.has(victim.handler.id),
+            // #258: 열린 핸들러의 캐시 파일은 기록이 모두 빠지면 0 으로 준다(파일이 없으면 -1).
+            cacheFileSize: fs.existsSync(cache.filePath) ? fs.statSync(cache.filePath).size : -1,
             globalBytes: SocketHandler.globalFileCacheSize - baseGlobal,
             survivorBytes: survivor?.handler.pendingFileCacheBytes ?? 0,
             survivorLive: survivor ? owners.has(survivor.handler.id) && !survivor.handler.isEnd() : true,
             payloadValid: mode === "success" ? received.equals(Buffer.concat([prefix, current, follower]))
-                : received.length <= prefix.length && received.every((byte) => byte === 0x41),
+                : received.length <= PIECE_BYTES && received.every((byte) => byte === 0x41),
         };
     } finally {
         clients.forEach((socket) => socket.destroy());

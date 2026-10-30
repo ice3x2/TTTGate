@@ -1,29 +1,41 @@
 import {ConnectionSecurityOption, DEFAULT_GEO_CONFIG, GeoConfig, GeoMode} from "../../types/TunnelingOption";
 import {ISO_ALPHA2} from "./countries";
+import {normalizeBlocklist} from "./IpBlocklist";
 
 const GEO_MODES: ReadonlyArray<GeoMode> = ['off', 'allow', 'deny'];
 
+/** warnings 는 저장 API 응답으로 알리는 국가 필터 경고, blocklistWarnings 는 설정 파일에서 건너뛴 차단 항목이다. */
 type NormalizeResult =
-    {success: true; value: ConnectionSecurityOption; warnings: string[]} |
+    {success: true; value: ConnectionSecurityOption; warnings: string[]; blocklistWarnings: string[]} |
     {success: false; message: string};
 
+type GeoResult = {success: true; geo: GeoConfig; warnings: string[]} | {success: false; message: string};
+
 // U5-03 / #118 — server.yaml 및 /api/serverOption 저장 경로 공용 connectionSecurity 검증.
+// #286 — 차단 목록은 틀린 항목이 있어도 실패하지 않는다. 그 항목만 건너뛰고 경고로 알린다.
 export function normalizeConnectionSecurity(input: unknown): NormalizeResult {
     if(input === undefined) {
-        return {success: true, value: {geo: {...DEFAULT_GEO_CONFIG}}, warnings: []};
+        return {success: true, value: {geo: {...DEFAULT_GEO_CONFIG}, blocklist: []}, warnings: [], blocklistWarnings: []};
     }
     if(typeof input !== 'object' || input === null || Array.isArray(input)) {
         return {success: false, message: 'connectionSecurity must be an object'};
     }
 
     const source = input as Record<string, unknown>;
-    if(source.geo === undefined) {
-        return {success: true, value: {geo: {...DEFAULT_GEO_CONFIG}}, warnings: []};
+    const geo = normalizeGeo(source.geo);
+    if(!geo.success) return geo;
+    const blocklist = normalizeBlocklist(source.blocklist);
+    return {success: true, value: {geo: geo.geo, blocklist: blocklist.entries}, warnings: geo.warnings, blocklistWarnings: blocklist.warnings};
+}
+
+function normalizeGeo(input: unknown): GeoResult {
+    if(input === undefined) {
+        return {success: true, geo: {...DEFAULT_GEO_CONFIG}, warnings: []};
     }
-    if(typeof source.geo !== 'object' || source.geo === null || Array.isArray(source.geo)) {
+    if(typeof input !== 'object' || input === null || Array.isArray(input)) {
         return {success: false, message: 'connectionSecurity.geo must be an object'};
     }
-    const geoSource = source.geo as Record<string, unknown>;
+    const geoSource = input as Record<string, unknown>;
 
     let mode: GeoMode = DEFAULT_GEO_CONFIG.mode;
     if(geoSource.mode !== undefined) {
@@ -78,6 +90,5 @@ export function normalizeConnectionSecurity(input: unknown): NormalizeResult {
         warnings.push('unknownPolicy=deny with applyToAdmin=true also blocks private and loopback addresses from the admin console');
     }
 
-    const geo: GeoConfig = {mode, countries, applyToAdmin, unknownPolicy};
-    return {success: true, value: {geo}, warnings};
+    return {success: true, geo: {mode, countries, applyToAdmin, unknownPolicy}, warnings};
 }

@@ -1,6 +1,6 @@
 import Environment from "../Environment";
 import File from "../util/File";
-import {ControlProtocolMode, DEFAULT_KEY, DEFAULT_SESSION_TTL_MS, resolveSessionTtlMs, resolveAuditRetentionDays, resolveAuditQueueSize, HttpOption, ServerOption, TunnelingOption, normalizeRateLimit, defaultRateLimit} from "../types/TunnelingOption";
+import {ControlProtocolMode, DEFAULT_KEY, DEFAULT_SESSION_TTL_MS, resolveSessionTtlMs, resolveAuditRetentionDays, resolveAuditQueueSize, resolveLogLevel, resolveCloseStallMs, resolveCloseGraceMs, HttpOption, ServerOption, TunnelingOption, normalizeRateLimit, defaultRateLimit, BlocklistEntry} from "../types/TunnelingOption";
 import YAML from "yaml";
 import Files, {AtomicFileValue} from "../util/Files";
 import ObjectUtil from "../util/ObjectUtil";
@@ -11,6 +11,10 @@ import {createOpaqueToken} from "../commons/ProtocolV2";
 import {redactSecrets} from "../util/SecretRedactor";
 import {createInitialRevisionState, RevisionState} from "./RevisionState";
 import {normalizeConnectionSecurity} from "./security/connectionSecurity";
+import {dropBlocklistPort, dropOrphanBlocklistEntries} from "./security/IpBlocklist";
+
+/** 터널 행을 넣거나 뺀 서버 설정. droppedBlocks 는 그 포트에서 함께 빠진 차단 항목이다(#286, 감사용). */
+type ComposedServerOption = {success: boolean, message: string, serverOption?: ServerOption, droppedBlocks?: BlocklistEntry[]};
 
 const logger = LoggerFactory.getLogger('server', 'ServerOptionStore');
 
@@ -28,7 +32,7 @@ const ROLLBACK_BACKUP_SUFFIX: string = '.bak';
 // 디스크의 server.yaml 에는 하나도 없으면, 그 저장과 같은 배치로 직전 두 파일을 .bak 으로 남긴다.
 // 이전 바이너리는 verificationServerOption 에 허용 목록이 없어 새 필드가 든 yaml 도 읽으므로,
 // .bak 은 수기 편집 손실을 막기 위한 복원 지점이다(설계 §3.1).
-const ROLLBACK_SENSITIVE_TOP_FIELDS = ['connectionSecurity', 'mfaRequiredForSuperusers', 'auditRetentionDays', 'auditQueueSize'] as const;
+const ROLLBACK_SENSITIVE_TOP_FIELDS = ['connectionSecurity', 'mfaRequiredForSuperusers', 'auditRetentionDays', 'auditQueueSize', 'logLevel', 'closeStallMs', 'closeGraceMs'] as const;
 const ROLLBACK_SENSITIVE_TUNNEL_FIELDS = ['ownerId', 'rateLimit'] as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -100,7 +104,7 @@ class ServerOptionStore {
         return this.verificationServerOption(serverOption);
     }
 
-    public composeServerOptionWithTunnelingOption(tunnelingOption: TunnelingOption): {success: boolean, message: string, serverOption?: ServerOption} {
+    public composeServerOptionWithTunnelingOption(tunnelingOption: TunnelingOption): ComposedServerOption {
         if(!this._loadStatus.ready) return {success: false, message: 'server configuration is not ready'};
         const normalizedOption = ObjectUtil.cloneDeep(tunnelingOption);
         const result = this.verificationTunnelingOption(normalizedOption);
@@ -109,15 +113,35 @@ class ServerOptionStore {
         }
         const serverOption = this.serverOption;
         const index = serverOption.tunnelingOptions.findIndex((option) => option.forwardPort == tunnelingOption.forwardPort);
+        let droppedBlocks: BlocklistEntry[] = [];
         if(index < 0) {
             serverOption.tunnelingOptions.push(normalizedOption);
+            // 새 터널 API 는 포트가 비어 있는지 확인한 뒤에 저장하므로 옛 리스너가 이미 없다.
+            droppedBlocks = ServerOptionStore.releasePortBlocks(serverOption, [normalizedOption.forwardPort]);
         } else {
             serverOption.tunnelingOptions[index] = normalizedOption;
         }
-        return {success: true, message: "", serverOption};
+        return {success: true, message: "", serverOption, droppedBlocks};
     }
 
-    public composeServerOptionWithoutTunnelingOption(forwardPort: number): {success: boolean, message: string, serverOption?: ServerOption} {
+    /**
+     * #286 그 포트들에 건 차단 항목을 빼고, 뺀 항목을 돌려준다(감사용). serverOption 을 그 자리에서 바꾼다.
+     * 터널을 지울 때, 그리고 새로 터널이 쓰게 된 포트의 고아 항목(지운 터널의 것)을 새 터널이 물려받지 않게 할 때 쓴다.
+     * 옛 리스너가 아직 도는 포트는 호출자가 ports 에서 뺀다(그 리스너가 도는 동안은 계속 막는다).
+     */
+    public static releasePortBlocks(serverOption: Pick<ServerOption, 'connectionSecurity'>, ports: Iterable<number>): BlocklistEntry[] {
+        const security = serverOption.connectionSecurity;
+        if(!security) return [];
+        let dropped: BlocklistEntry[] = [];
+        for(const port of ports) {
+            const result = dropBlocklistPort(security.blocklist ?? [], port);
+            security.blocklist = result.entries;
+            dropped = [...dropped, ...result.dropped];
+        }
+        return dropped;
+    }
+
+    public composeServerOptionWithoutTunnelingOption(forwardPort: number): ComposedServerOption {
         if(!this._loadStatus.ready) return {success: false, message: 'server configuration is not ready'};
         const serverOption = this.serverOption;
         const index = serverOption.tunnelingOptions.findIndex((option) => option.forwardPort == forwardPort);
@@ -125,7 +149,9 @@ class ServerOptionStore {
             return {success: false, message: `forwardPort ${forwardPort} is not registered`};
         }
         serverOption.tunnelingOptions.splice(index, 1);
-        return {success: true, message: "", serverOption};
+        // #286 그 터널에만 건 차단 항목도 함께 지운다.
+        const droppedBlocks = ServerOptionStore.releasePortBlocks(serverOption, [forwardPort]);
+        return {success: true, message: "", serverOption, droppedBlocks};
     }
 
     public commitPreparedServerOption(
@@ -250,6 +276,10 @@ class ServerOptionStore {
         return false;
     }
 
+    /**
+     * 저장만 하는 간이 헬퍼(테스트 픽스처가 쓴다). 그 포트의 차단 항목도 함께 바뀌지만 감사를 남기지 않고 런타임 판정에도
+     * 반영하지 않는다(#286). 운영 경로는 관리 API(AdminServer)를 거친다.
+     */
     public removeTunnelingOption(forwardPort: number) : boolean {
         const result = this.composeServerOptionWithoutTunnelingOption(forwardPort);
         if(!result.success) {
@@ -258,6 +288,7 @@ class ServerOptionStore {
         return this.commitPreparedServerOption(result.serverOption!).success;
     }
 
+    /** removeTunnelingOption 과 같은 간이 헬퍼다. 새 포트면 그 포트의 고아 차단 항목을 감사 없이 뺀다(#286). */
     public updateTunnelingOption(tunnelingOption: TunnelingOption): boolean {
         const result = this.composeServerOptionWithTunnelingOption(tunnelingOption);
         if(!result.success) {
@@ -384,7 +415,21 @@ class ServerOptionStore {
             candidate.tunnelingOptions.some(option => !this.verificationTunnelingOption(option, 'legacy-load').success)) {
             this._loadStatus = {ready: false, reason: 'validation'}; return;
         }
+        this.dropOrphanBlocklistEntriesAtLoad(candidate);
         this._serverOption = candidate; this._loadStatus = {ready: true, source: 'loaded'};
+    }
+
+    /**
+     * #286 터널이 없는 포트에 건 차단 항목은 나중에 그 포트로 만든 다른 터널에 걸리므로 시작할 때 경고와 함께 뺀다.
+     * 터널 포트를 숫자로 정규화한 뒤(legacy-load)에 판정한다. 저장할 때는 빼지 않는다. 서버 설정 저장으로 터널을 빼도
+     * 그 리스너는 다시 시작할 때까지 돌고 포트를 쥐고 있으므로, 그동안 항목을 남겨 계속 막는다.
+     */
+    private dropOrphanBlocklistEntriesAtLoad(candidate: ServerOption): void {
+        const security = candidate.connectionSecurity;
+        if(!security) return;
+        const result = dropOrphanBlocklistEntries(security.blocklist ?? [], new Set(candidate.tunnelingOptions.map((tunnel) => tunnel.forwardPort)));
+        result.warnings.forEach((warning) => logger.warn(warning));
+        security.blocklist = result.entries;
     }
 
     /**
@@ -449,6 +494,15 @@ class ServerOptionStore {
         const queue = resolveAuditQueueSize(option.auditQueueSize);
         if(!queue.success) return queue;
         option.auditQueueSize = queue.size;
+        const logLevel = resolveLogLevel(option.logLevel);
+        if(!logLevel.success) return logLevel;
+        option.logLevel = logLevel.level;
+        const closeStall = resolveCloseStallMs(option.closeStallMs);
+        if(!closeStall.success) return closeStall;
+        option.closeStallMs = closeStall.ms;
+        const closeGrace = resolveCloseGraceMs(option.closeGraceMs);
+        if(!closeGrace.success) return closeGrace;
+        option.closeGraceMs = closeGrace.ms;
         if(!option.key) {
             return {success: false, message: "key is undefined"};
         }
@@ -501,6 +555,8 @@ class ServerOptionStore {
         if(!connectionSecurity.success) {
             return {success: false, message: connectionSecurity.message};
         }
+        // #286 차단 목록의 틀린 항목은 실패가 아니라 경고다. 그 항목만 빼고 계속한다.
+        connectionSecurity.blocklistWarnings.forEach((warning) => logger.warn(warning));
         option.connectionSecurity = connectionSecurity.value;
         return {success: true, message: "", serverOption: option};
     }
@@ -562,6 +618,8 @@ class ServerOptionStore {
             if(option.destinationPort == undefined) option.destinationPort = 443;
             option.tls = true;
         }
+        // TLS 터널에서 명시적으로 true 일 때만 대상 서버의 인증서 검증을 건너뛴다. 평문 터널에는 뜻이 없으므로 false 로 둔다(#280).
+        option.allowSelfSignedDestinationCert = option.tls === true && option.allowSelfSignedDestinationCert === true;
         if(option.destinationPort == undefined) {
             return {success: false,forwardPort:option.forwardPort, message: "destinationPort is undefined"};
         }

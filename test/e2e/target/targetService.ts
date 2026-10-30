@@ -4,7 +4,14 @@ import {URL} from "url";
 import {Socket} from "net";
 import {WebSocket, WebSocketServer} from "ws";
 
-export type TargetCounters = {requests: number; wsConnections: number; wsMessages: number};
+export type TargetCounters = {requests: number; wsConnections: number; wsMessages: number;
+    /** 지금 열린 TCP 연결 수(#232). */
+    openSockets: number;
+    /** 아직 끝나지 않은 /drip 응답 수(#231·#232). */
+    activeDrips: number;
+    /** 지금 열린 WebSocket 수(#233·#235). */
+    wsOpen: number;
+};
 
 export type TargetService = {
     port: number;
@@ -110,6 +117,8 @@ export function startTargetService(options: {slowDelayMs?: number} = {}): Promis
     let requests = 0;
     let wsConnections = 0;
     let wsMessages = 0;
+    let activeDrips = 0;
+    const sockets = new Set<Socket>();
 
     const wss = new WebSocketServer({noServer: true});
     wss.on("connection", (ws: WebSocket) => {
@@ -129,6 +138,31 @@ export function startTargetService(options: {slowDelayMs?: number} = {}): Promis
             ws.send(`echo:${text}`);
         });
         ws.on("close", () => clearInterval(interval));
+    });
+
+    // #233: 받은 프레임을 그대로(텍스트·바이너리 구분 유지) 되돌려 주는 WebSocket. 텍스트 명령도 받는다.
+    //   push:<n>              → push:1 … push:n 을 먼저 보낸다
+    //   close:<code>:<reason> → 그 코드와 이유로 닫는다
+    const rawWss = new WebSocketServer({noServer: true, maxPayload: 64 * 1024 * 1024});
+    rawWss.on("connection", (ws: WebSocket) => {
+        wsConnections++;
+        ws.on("message", (data, isBinary) => {
+            wsMessages++;
+            if(!isBinary) {
+                const text = data.toString();
+                const push = /^push:(\d+)$/.exec(text);
+                if(push) {
+                    for(let n = 1; n <= Number(push[1]); n++) ws.send(`push:${n}`);
+                    return;
+                }
+                const close = /^close:(\d+):(.*)$/.exec(text);
+                if(close) {
+                    ws.close(Number(close[1]), close[2]);
+                    return;
+                }
+            }
+            ws.send(data, {binary: isBinary});
+        });
     });
 
     const server = http.createServer(async (req, res) => {
@@ -191,6 +225,34 @@ export function startTargetService(options: {slowDelayMs?: number} = {}): Promis
                 res.writeHead(200, {"Content-Type": req.headers["content-type"] ?? "application/octet-stream"});
                 res.end(body);
             }
+        } else if(pathname === "/big-cut") {
+            // #237: mb 만큼 보낸다고 알리고, cutAfterMb 만큼만 보낸 뒤 대상 쪽에서 연결을 끊는다.
+            const mb = Math.min(1024, Math.max(1, Number(parsedUrl.searchParams.get("mb") ?? "64")));
+            const cutAt = Math.min(mb, Math.max(1, Number(parsedUrl.searchParams.get("cutAfterMb") ?? "8"))) * 1048576;
+            res.writeHead(200, {"Content-Type": "application/octet-stream", "Content-Length": String(mb * 1048576)});
+            let offset = 0;
+            const writeNext = () => {
+                while(offset < cutAt) {
+                    const length = Math.min(CHUNK_SIZE, cutAt - offset);
+                    const ok = res.write(bigPayloadChunk(offset, length));
+                    offset += length;
+                    if(!ok) { res.once("drain", writeNext); return; }
+                }
+                res.socket?.destroy();
+            };
+            writeNext();
+        } else if(pathname === "/drip") {
+            // #231·#232: 끊길 때까지 조금씩 계속 보낸다. 전송 도중의 장애를 재현할 때 쓴다.
+            const intervalMs = Math.max(5, Number(parsedUrl.searchParams.get("ms") ?? "50"));
+            const size = Math.min(1048576, Math.max(1, Number(parsedUrl.searchParams.get("size") ?? "16384")));
+            activeDrips++;
+            res.writeHead(200, {"Content-Type": "application/octet-stream"});
+            const chunk = Buffer.alloc(size, 0x61);
+            const timer = setInterval(() => { if(!res.destroyed) res.write(chunk); }, intervalMs);
+            let ended = false;
+            const finish = () => { if(ended) return; ended = true; clearInterval(timer); activeDrips--; };
+            res.on("close", finish);
+            req.socket.on("close", finish);
         } else if(pathname === "/ws-page") {
             res.writeHead(200, {"Content-Type": "text/html; charset=utf-8"});
             res.end(buildWsPageHtml());
@@ -202,11 +264,20 @@ export function startTargetService(options: {slowDelayMs?: number} = {}): Promis
 
     server.on("upgrade", (req: IncomingMessage, socket: Socket, head: Buffer) => {
         const pathname = new URL(req.url ?? "/", "http://127.0.0.1").pathname;
+        if(pathname === "/ws-raw") {
+            rawWss.handleUpgrade(req, socket, head, (ws) => rawWss.emit("connection", ws, req));
+            return;
+        }
         if(pathname !== "/ws") {
             socket.destroy();
             return;
         }
         wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
+    });
+
+    server.on("connection", (socket: Socket) => {
+        sockets.add(socket);
+        socket.on("close", () => sockets.delete(socket));
     });
 
     return new Promise((resolve, reject) => {
@@ -219,13 +290,16 @@ export function startTargetService(options: {slowDelayMs?: number} = {}): Promis
                 port,
                 wsPort: port,
                 counters(): TargetCounters {
-                    return {requests, wsConnections, wsMessages};
+                    return {requests, wsConnections, wsMessages, openSockets: sockets.size, activeDrips,
+                        wsOpen: wss.clients.size + rawWss.clients.size};
                 },
                 async close(): Promise<void> {
                     if(closed) return;
                     closed = true;
                     for(const client of wss.clients) client.terminate();
+                    for(const client of rawWss.clients) client.terminate();
                     await new Promise<void>((closeResolve) => wss.close(() => closeResolve()));
+                    await new Promise<void>((closeResolve) => rawWss.close(() => closeResolve()));
                     server.closeAllConnections?.();
                     await new Promise<void>((closeResolve, closeReject) => {
                         server.close((err) => (err ? closeReject(err) : closeResolve()));

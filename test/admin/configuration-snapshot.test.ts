@@ -1,8 +1,8 @@
 import {withConfigurationServer} from "../component/server/admin/configuration-revision-fixture";
 import {writeWebFixture} from "../helpers/runtime";
-import {startAdminBrowser} from "../helpers/adminBrowser";
+import {startAdminBrowser, ADMIN_BROWSER_TEST_TIMEOUT_MS} from "../helpers/adminBrowser";
 
-jest.setTimeout(60_000);
+jest.setTimeout(ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
 test("an editor retains its read revision when another controller read refreshes the cache", async () => {
     await withConfigurationServer(async ({root, ports, request, snapshot}: any) => {

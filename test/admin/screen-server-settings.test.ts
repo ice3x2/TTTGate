@@ -1,8 +1,11 @@
 import fs from "fs";
 import path from "path";
 import type {Page, Response} from "playwright";
-import {startAdminApp} from "../helpers/adminApp";
+import {startAdminApp, ADMIN_APP_TEST_TIMEOUT_MS} from "../helpers/adminApp";
 import {getFreePort} from "../helpers/network";
+
+// 앱 기동 예산보다 짧으면 부하에서 helper 의 진단 대신 jest 시간 초과로 끝난다(#273).
+jest.setTimeout(ADMIN_APP_TEST_TIMEOUT_MS);
 
 const root = path.resolve(__dirname, "../..");
 
@@ -58,7 +61,7 @@ test("변경이 없으면 Apply 가 잠기고, 값을 바꾸면 풀리며, Reset
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("숫자 입력은 입력란의 원문 문자열을 정수부로 범위와 비교해 자른다", async () => {
     const app = await startAdminApp();
@@ -100,7 +103,7 @@ test("숫자 입력은 입력란의 원문 문자열을 정수부로 범위와 �
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("관리자 TLS 를 켜면 인증서 파일 입력 3개와 Remove CA 가 나타나고, 끄면 사라진다", async () => {
     const app = await startAdminApp();
@@ -130,7 +133,7 @@ test("관리자 TLS 를 켜면 인증서 파일 입력 3개와 Remove CA 가 나
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("터널 TLS·메모리 캐시 한도·Keep-Alive 입력이 id 와 라벨로 연결되어 있다", async () => {
     const app = await startAdminApp();
@@ -144,7 +147,7 @@ test("터널 TLS·메모리 캐시 한도·Keep-Alive 입력이 id 와 라벨로
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("Apply 는 화면의 모든 설정 필드를 저장 요청에 담고 서버가 바꾼 값을 런타임에 적용한다", async () => {
     const app = await startAdminApp();
@@ -196,7 +199,7 @@ test("Apply 는 화면의 모든 설정 필드를 저장 요청에 담고 서버
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("Retry 알림 뒤의 알림은 버튼 문구가 OK 로 돌아온다 (옛 _alert 결함을 의도적으로 고친 차이)", async () => {
     const app = await startAdminApp();
@@ -236,7 +239,7 @@ test("Retry 알림 뒤의 알림은 버튼 문구가 OK 로 돌아온다 (옛 _a
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 describe("U4-09 서버 설정 Security 카드", () => {
     const security = (page: Page) => page.locator("#server-security");
@@ -289,7 +292,7 @@ describe("U4-09 서버 설정 Security 카드", () => {
         } finally {
             await app.close();
         }
-    }, 120_000);
+    }, ADMIN_APP_TEST_TIMEOUT_MS);
 
     // 빈 감사 칸은 JSON 에서 빠져 서버 기본값(보존 90일)이 된다. 오래된 감사가 지워지지 않도록 저장을 막는다.
     test("감사 보존 기간이나 큐 크기 칸이 비면 요청 없이 칸 아래 오류를 보인다", async () => {
@@ -310,7 +313,100 @@ describe("U4-09 서버 설정 Security 카드", () => {
         } finally {
             await app.close();
         }
-    }, 120_000);
+    }, ADMIN_APP_TEST_TIMEOUT_MS);
+});
+
+// #267 REQ-4·AC-3 — 서버 설정에서 로그 레벨을 고르고 저장하면 서버 설정에 반영된다.
+test("로그 레벨은 기본 info 이고, 네 가지 가운데 골라 저장하면 서버 설정에 남는다", async () => {
+    const app = await startAdminApp({fixture: "password"});
+    try {
+        const {page} = app;
+        // 새로 만든 기본 설정에는 logLevel 이 없다(감사 칸과 같다). 화면은 서버 기본값 info 를 보인다.
+        await openServerSettings(page);
+        const select = page.locator("#input-log-level");
+        expect(await select.inputValue()).toBe("info");
+        expect(await select.locator("option").evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value)))
+            .toEqual(["error", "warn", "info", "debug"]);
+        expect(await page.locator('label[for="input-log-level"]').textContent()).toContain("Log level");
+        await waitForApply(page, true);
+        // 저장값이 없는 상태에서 다른 값을 골랐다가 info 로 돌아오면 바뀐 것이 없다. Apply 가 다시 잠긴다.
+        await select.selectOption("warn");
+        await waitForApply(page, false);
+        await select.selectOption("info");
+        await waitForApply(page, true);
+        await select.selectOption("debug");
+        await waitForApply(page, false);
+        const saved = page.waitForResponse((response) => response.request().method() === "POST"
+            && new URL(response.url()).pathname === "/api/serverOption", {timeout: 15_000});
+        await page.getByRole("button", {name: "Apply", exact: true}).click();
+        const request = (await saved).request();
+        expect(JSON.parse(request.postData() ?? "{}").logLevel).toBe("debug");
+        expect((await (await saved).json()).success).toBe(true);
+        const stored = await page.evaluate(async () => (await (await fetch("/api/serverOption", {credentials: "same-origin"})).json()).serverOption);
+        expect(stored.logLevel).toBe("debug");
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, ADMIN_APP_TEST_TIMEOUT_MS);
+
+// #268 REQ-4 — 닫기 기한 두 값을 서버 설정에서 바꾼다. 범위 밖 값은 서버의 400 문구를 보이고, 빈칸은 요청 없이 막는다.
+describe("#268 닫기 기한 카드", () => {
+    const card = (page: Page) => page.locator("#server-connection-close");
+    const modalText = (page: Page, text: string) => page.getByRole("dialog").getByText(text);
+
+    test("기본값을 보이고, 범위 밖 값은 실패 모달로, 고친 값은 저장되어 새로 읽어도 남는다", async () => {
+        const app = await startAdminApp({fixture: "password"});
+        try {
+            const {page} = app;
+            await openServerSettings(page);
+            await card(page).waitFor({state: "visible"});
+            expect(await page.locator("#input-close-stall-ms").inputValue()).toBe("60000");
+            expect(await page.locator("#input-close-grace-ms").inputValue()).toBe("10000");
+            expect(await page.locator('label[for="input-close-stall-ms"]').textContent()).toContain("Close stall timeout (ms)");
+            expect(await page.locator('label[for="input-close-grace-ms"]').textContent()).toContain("Close grace timeout (ms)");
+
+            await page.locator("#input-close-grace-ms").fill("200000");
+            await waitForApply(page, false);
+            await page.getByRole("button", {name: "Apply", exact: true}).click();
+            await modalText(page, "closeGraceMs must be an integer within 1000..120000").waitFor({state: "visible", timeout: 10_000});
+            await page.getByRole("dialog").getByRole("button", {name: "OK", exact: true}).click();
+
+            await page.locator("#input-close-grace-ms").fill("3000");
+            await page.locator("#input-close-stall-ms").fill("120000");
+            const saved = page.waitForResponse((response) => response.request().method() === "POST"
+                && new URL(response.url()).pathname === "/api/serverOption", {timeout: 15_000});
+            await page.getByRole("button", {name: "Apply", exact: true}).click();
+            expect((await (await saved).json()).success).toBe(true);
+            const stored = await page.evaluate(async () => (await (await fetch("/api/serverOption", {credentials: "same-origin"})).json()).serverOption);
+            expect(stored.closeStallMs).toBe(120000);
+            expect(stored.closeGraceMs).toBe(3000);
+            expect(app.errors).toEqual([]);
+        } finally {
+            await app.close();
+        }
+    }, ADMIN_APP_TEST_TIMEOUT_MS);
+
+    // 빈칸은 JSON 에서 빠져 서버 기본값이 된다. 바꾸려던 값이 조용히 기본값으로 돌아가지 않게 저장을 막는다.
+    test("칸이 비면 요청 없이 칸 아래 오류를 보인다", async () => {
+        const app = await startAdminApp({fixture: "password"});
+        try {
+            const {page} = app;
+            await openServerSettings(page);
+            await card(page).waitFor({state: "visible"});
+            let posts = 0;
+            page.on("request", (request) => { if(request.method() === "POST" && new URL(request.url()).pathname === "/api/serverOption") posts++; });
+            await page.locator("#input-close-stall-ms").fill("");
+            await page.locator("#input-close-grace-ms").fill("");
+            await page.getByRole("button", {name: "Apply", exact: true}).click();
+            await card(page).getByText("Enter a time in milliseconds (1000-600000).", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+            await card(page).getByText("Enter a time in milliseconds (1000-120000).", {exact: true}).waitFor({state: "visible"});
+            expect(posts).toBe(0);
+            expect(app.errors).toEqual([]);
+        } finally {
+            await app.close();
+        }
+    }, ADMIN_APP_TEST_TIMEOUT_MS);
 });
 
 test("#136 Keep-Alive 는 0 으로 비활성화할 수 있고 음수는 0 으로 올리며, 0 이 그대로 저장된다", async () => {
@@ -346,4 +442,4 @@ test("#136 Keep-Alive 는 0 으로 비활성화할 수 있고 음수는 0 으로
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);

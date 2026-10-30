@@ -62,8 +62,8 @@ example `C:\TTTGate\config`. Substitute your own installation root in every comm
 | `/opt/tttgate/config/.server.state.json.bak` | Same save as above, when the state file exists | `0600` | Same lifecycle. |
 
 The two `.bak` files hold the configuration as it was on disk immediately before the first save that added a
-new field (`connectionSecurity`, `mfaRequiredForSuperusers`, `auditRetentionDays`, `auditQueueSize`, or a
-tunnel's `ownerId` or `rateLimit`). Keeping them is a manual decision: **retain them for at least 14 days**
+new field (`connectionSecurity`, `mfaRequiredForSuperusers`, `auditRetentionDays`, `auditQueueSize`, `logLevel`,
+`closeStallMs`, `closeGraceMs`, or a tunnel's `ownerId` or `rateLimit`). Keeping them is a manual decision: **retain them for at least 14 days**
 after the upgrade, and remove them yourself once you have accepted the new configuration.
 
 Note that `.server.state.json.bak` records the revision state at that same moment, which the server may

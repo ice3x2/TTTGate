@@ -8,6 +8,7 @@ import type {AuditEvent, AuditTarget} from "../audit/AuditSink";
 import {AUDIT_EVENT_TYPES, AuditEventType} from "../audit/AuditEventTypes";
 import {ClockRngProvider} from "../../util/ClockRng";
 import {truncateAuditValue} from "./auditValue";
+import {parseBlockedAddress} from "../security/IpBlocklist";
 import type {MfaTicketStore, PendingEnrollmentStore} from "../mfa/MfaTickets";
 
 export type {Action, Target};
@@ -76,10 +77,31 @@ export type Route = {
     audit?: ((ctx: RouteContext) => AuditRouteMeta) | false;
     /** 권한 판정 대상(target)을 본문에서 읽는다. 이런 라우트는 본문을 읽은 뒤에만 권한을 판정할 수 있다(#173). */
     targetFromBody?: true;
+    /** 로그인 경로. 본문을 읽기 전에 차단과 동시 처리 칸을 판정한다(#265). password 는 거절도 login_failure 로 감사한다. */
+    loginSlot?: 'password' | 'mfa';
     handler: (ctx: RouteContext) => Promise<void>;
 };
 
 export type RouteHandlers = {[name: string]: (ctx: RouteContext) => Promise<void>};
+
+/**
+ * #286 차단 목록 감사의 대상 id. 넣을 때와 풀 때 같은 id 로 이어지도록 정규화한 주소를 쓴다.
+ * 틀린 문자열은 원문을, 문자열이 아니면(주소가 빠진 요청 등) 'invalid' 를 쓴다.
+ */
+const blocklistAuditId = (raw: unknown): string => {
+    if(typeof raw !== 'string') return 'invalid';
+    const parsed = parseBlockedAddress(raw);
+    return truncateAuditValue(parsed.ok ? parsed.address : raw);
+};
+
+/** 경로 세그먼트를 퍼센트 디코딩한다. 잘못된 인코딩이면 던지지 않고 undefined 를 돌려준다. */
+export const decodedPathSegment = (segment: string): string | undefined => {
+    try {
+        return decodeURIComponent(segment);
+    } catch {
+        return undefined;
+    }
+};
 
 /**
  * 경로 세그먼트의 포트. 1–65535 의 십진 표기만 받는다(앞자리 0, 지수, 16진, 소수, 공백은 거절).
@@ -180,6 +202,7 @@ export type RouteEntry = {
     target?: (ctx: RouteContext) => Target | undefined;
     audit?: ((ctx: RouteContext) => AuditRouteMeta) | false;
     targetFromBody?: true;
+    loginSlot?: Route['loginSlot'];
     handler: string;
 };
 
@@ -187,9 +210,9 @@ export type RouteEntry = {
 // pattern 은 new RegExp(string) 으로 만든다: 정규식 리터럴(/.../)은 '/' 이스케이프가 source 에 그대로
 // 남아 표(이슈 #95)에 적힌 패턴 문자열과 pattern.source 가 어긋나 보이므로 피한다.
 export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
-    {method: 'POST', pattern: new RegExp('^/api/login$'), action: 'public', handler: 'onLogin'},
+    {method: 'POST', pattern: new RegExp('^/api/login$'), action: 'public', loginSlot: 'password', handler: 'onLogin'},
     // U4-08 / #127 2단계 로그인. 세션이 없으므로 audited() 대신 핸들러가 직접 감사한다.
-    {method: 'POST', pattern: new RegExp('^/api/login/mfa$'), action: 'public', handler: 'onLoginMfa'},
+    {method: 'POST', pattern: new RegExp('^/api/login/mfa$'), action: 'public', loginSlot: 'mfa', handler: 'onLoginMfa'},
     {method: 'GET', pattern: new RegExp('^/api/version$'), action: 'public', handler: 'onGetVersion'},
     {method: 'POST', pattern: new RegExp('^/api/logout$'), action: 'session',
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.logout, {kind: 'session', id: SessionStore.sessionIdOf(ctx.session!.key)}), handler: 'onLogout'},
@@ -251,6 +274,14 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
     {method: 'PUT', pattern: new RegExp('^/api/security/geo$'), action: 'security:manage',
         audit: () => auditMeta(AUDIT_EVENT_TYPES.security_geo_updated, {kind: 'security', id: 'geo'}), handler: 'onUpdateSecurityGeo'},
     {method: 'GET', pattern: new RegExp('^/api/security/countries$'), action: 'security:manage', handler: 'onGetSecurityCountries'},
+    // #286 — 관리자 차단 목록. 대상 id 는 요청한 주소(일시 차단에서 옮기면 그 주소)를 정규화한 값이다.
+    {method: 'GET', pattern: new RegExp('^/api/security/blocklist$'), action: 'security:manage', handler: 'onGetSecurityBlocklist'},
+    {method: 'POST', pattern: new RegExp('^/api/security/blocklist$'), action: 'security:manage',
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.security_block_added,
+            {kind: 'security', id: blocklistAuditId(ctx.body?.fromBan?.ip ?? ctx.body?.address)}), handler: 'onAddSecurityBlock'},
+    {method: 'DELETE', pattern: new RegExp('^/api/security/blocklist/(?<address>[^/]+)$'), action: 'security:manage',
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.security_block_removed,
+            {kind: 'security', id: blocklistAuditId(decodedPathSegment(ctx.params.address) ?? ctx.params.address)}), handler: 'onDeleteSecurityBlock'},
     // U2-06 / #98 사용자·그룹 관리. 핸들러 본문은 rbacRoutes.ts 에 있고 표는 여기 한 곳에 모아 둔다.
     {method: 'GET', pattern: new RegExp('^/api/users$'), action: 'user:manage', handler: 'onListUsers'},
     {method: 'POST', pattern: new RegExp('^/api/users$'), action: 'user:manage',
@@ -269,6 +300,16 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
     {method: 'GET', pattern: new RegExp('^/api/groups$'), action: 'group:manage', handler: 'onListGroups'},
     // 그룹 편집 화면의 신뢰 클라이언트 선택지(id·표시 이름만, #155).
     {method: 'GET', pattern: new RegExp('^/api/trustedClients$'), action: 'group:manage', handler: 'onListTrustedClients'},
+    // #212 신뢰 클라이언트 관리·등록 코드. 자격 증명을 만드는 일이라 그룹 관리보다 높은 server:manage 를 요구한다.
+    {method: 'POST', pattern: new RegExp('^/api/trustedClients$'), action: 'server:manage',
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.trusted_client_created, {kind: 'trusted_client', id: truncateAuditValue(String(ctx.body?.clientId))}),
+        handler: 'onCreateTrustedClient'},
+    {method: 'DELETE', pattern: new RegExp('^/api/trustedClients/(?<id>[^/]+)$'), action: 'server:manage',
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.trusted_client_deleted, pathIdTarget('trusted_client')(ctx)), handler: 'onDeleteTrustedClient'},
+    {method: 'POST', pattern: new RegExp('^/api/trustedClients/(?<id>[^/]+)/secret$'), action: 'server:manage',
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.trusted_client_secret_rotated, pathIdTarget('trusted_client')(ctx)), handler: 'onRotateTrustedClientSecret'},
+    {method: 'POST', pattern: new RegExp('^/api/trustedClients/(?<id>[^/]+)/enrollmentCode$'), action: 'server:manage',
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.enrollment_code_issued, pathIdTarget('trusted_client')(ctx)), handler: 'onIssueEnrollmentCode'},
     {method: 'POST', pattern: new RegExp('^/api/groups$'), action: 'group:manage',
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.group_created, {kind: 'group', id: truncateAuditValue(String(ctx.body?.name))}), handler: 'onCreateGroup'},
     {method: 'GET', pattern: new RegExp('^/api/groups/(?<id>[^/]+)$'), action: 'group:manage', handler: 'onGetGroup'},
@@ -295,6 +336,6 @@ export function buildAdminRoutes(handlers: RouteHandlers): readonly Route[] {
             throw new Error(`AdminServer route handler not found: ${entry.handler}`);
         }
         return {method: entry.method, pattern: entry.pattern, action: entry.action, target: entry.target, audit: entry.audit,
-            targetFromBody: entry.targetFromBody, handler};
+            targetFromBody: entry.targetFromBody, loginSlot: entry.loginSlot, handler};
     });
 }

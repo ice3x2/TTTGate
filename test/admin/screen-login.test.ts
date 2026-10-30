@@ -1,6 +1,9 @@
 import type {Page} from "playwright";
-import {ADMIN_TEST_PASSWORD, startAdminApp} from "../helpers/adminApp";
+import {ADMIN_TEST_PASSWORD, startAdminApp, ADMIN_APP_TEST_TIMEOUT_MS} from "../helpers/adminApp";
 import {REGULAR_USER, TEMP_USER} from "../helpers/adminFixture";
+
+// 앱 기동 예산보다 짧으면 부하에서 helper 의 진단 대신 jest 시간 초과로 끝난다(#273).
+jest.setTimeout(ADMIN_APP_TEST_TIMEOUT_MS);
 
 const clickOk = (page: Page) => page.getByRole("button", {name: "OK", exact: true}).click();
 
@@ -29,7 +32,7 @@ test("부트스트랩 화면이 단계별 문구를 보여주고 새로고침 �
 
         await password.fill("short");
         await clickOk(app.page);
-        await expectMessage(app.page, "The password does not meet the server's minimum length.");
+        await expectMessage(app.page, "The password must be 8 to 1024 characters long.");
 
         await password.fill("plainword");
         await clickOk(app.page);
@@ -52,7 +55,7 @@ test("부트스트랩 화면이 단계별 문구를 보여주고 새로고침 �
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("비밀번호 fixture 는 오답에 문구를 보여주고 정답에 상태 화면으로 넘어간다", async () => {
     const app = await startAdminApp({fixture: "password", login: false});
@@ -72,7 +75,7 @@ test("비밀번호 fixture 는 오답에 문구를 보여주고 정답에 상태
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("비밀번호 입력란에서 Enter 를 누르면 로그인 요청 1건으로 제출된다", async () => {
     const app = await startAdminApp({fixture: "password", login: false});
@@ -97,7 +100,7 @@ test("비밀번호 입력란에서 Enter 를 누르면 로그인 요청 1건으�
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("with-tunnels fixture 는 기본 옵션만으로 로그인을 마치고 호출 기록을 돌려준다", async () => {
     const app = await startAdminApp({fixture: "with-tunnels"});
@@ -112,7 +115,7 @@ test("with-tunnels fixture 는 기본 옵션만으로 로그인을 마치고 호
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 // ---- #102 (U2-10) 다사용자 로그인 ----
 
@@ -140,7 +143,7 @@ test("Username 입력란은 비밀번호보다 앞에 있고 autocomplete=userna
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("성공한 username 을 기억해 다음에 채워 둔다", async () => {
     const app = await startAdminApp({fixture: "password", login: false});
@@ -158,7 +161,7 @@ test("성공한 username 을 기억해 다음에 채워 둔다", async () => {
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("username 을 비우면 admin 으로 보낸다", async () => {
     const app = await startAdminApp({fixture: "password", login: false});
@@ -174,7 +177,7 @@ test("username 을 비우면 admin 으로 보낸다", async () => {
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("없는 username 은 비밀번호 오류와 같은 문구다", async () => {
     const app = await startAdminApp({fixture: "password", login: false});
@@ -185,7 +188,7 @@ test("없는 username 은 비밀번호 오류와 같은 문구다", async () => 
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("부트스트랩은 username 힌트를 보이고 형식 오류를 알리며 root 로 첫 슈퍼유저를 만든다", async () => {
     const app = await startAdminApp({fixture: "bootstrap", login: false});
@@ -208,7 +211,7 @@ test("부트스트랩은 username 힌트를 보이고 형식 오류를 알리며
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("일반 유저는 자기 섹션(tunnels)만 드로어에서 본다", async () => {
     const app = await startAdminApp({fixture: "regular-user", login: false});
@@ -224,7 +227,7 @@ test("일반 유저는 자기 섹션(tunnels)만 드로어에서 본다", async 
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("비밀번호 변경이 필요한 사용자는 #/me/password 에 고정되고 Sign out 으로만 나간다", async () => {
     const app = await startAdminApp({fixture: "regular-user", login: false});
@@ -239,7 +242,7 @@ test("비밀번호 변경이 필요한 사용자는 #/me/password 에 고정되�
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("슈퍼유저가 다른 화면에서 Sign out 해도 다음 사용자는 기본 화면에서 시작한다", async () => {
     const app = await startAdminApp({fixture: "regular-user"});
@@ -255,7 +258,7 @@ test("슈퍼유저가 다른 화면에서 Sign out 해도 다음 사용자는 �
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("/api/me 가 401 이면 로그인 화면으로, 네트워크 오류면 Offline 으로 간다", async () => {
     const app = await startAdminApp({fixture: "password", login: false});
@@ -278,4 +281,4 @@ test("/api/me 가 401 이면 로그인 화면으로, 네트워크 오류면 Offl
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);

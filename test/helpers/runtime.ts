@@ -1,4 +1,5 @@
 import fs from "fs/promises";
+import {mkdirSync, rmSync} from "fs";
 import os from "os";
 import Path from "path";
 import Environment from "../../src/Environment";
@@ -69,9 +70,29 @@ const applyTestRoot = (rootDir: string): void => {
     SocketHandler.fileCacheDirPath = Environment.path.serverCacheDir;
 };
 
+/**
+ * 정리 뒤의 루트(#264 AC-2). 기본 루트는 cwd(저장소)라, 테스트가 끝난 뒤에도 돌던 서버 작업(시간 초과로 먼저 끝난
+ * 요청의 처리 등)이 설정을 쓰면 저장소 config/ 에 server.yaml·identity.yaml 이 생긴다. 그런 늦은 쓰기는 여기로 보낸다.
+ */
+const AFTER_CLEANUP_ROOT = Path.join(os.tmpdir(), `tttgate-test-after-cleanup-${process.pid}`);
+let afterCleanupRootRemovalRegistered = false;
+
 const cleanupTestRoot = async (testRoot?: TestRoot): Promise<void> => {
     resetRuntimeState();
     Environment.reset();
+    // 앞 테스트의 늦은 쓰기가 다음 정리 뒤 상태에 남지 않게 매번 비운다. 늦은 쓰기와 겹쳐 지우지 못해도
+    // 부수 작업이므로 테스트를 실패시키지 않는다.
+    try { rmSync(AFTER_CLEANUP_ROOT, {recursive: true, force: true, maxRetries: 3}); } catch {}
+    for(const dir of ["config", "logs", "cert", "web", Path.join("cache", "server"), Path.join("cache", "client")]) {
+        mkdirSync(Path.join(AFTER_CLEANUP_ROOT, dir), {recursive: true});
+    }
+    Environment.configure({rootDir: AFTER_CLEANUP_ROOT});
+    SocketHandler.fileCacheDirPath = Environment.path.serverCacheDir;
+    // 워커가 끝나면 이 프로세스의 sandbox 를 지운다(다른 실행의 sandbox 는 건드리지 않는다).
+    if(!afterCleanupRootRemovalRegistered) {
+        afterCleanupRootRemovalRegistered = true;
+        process.once("exit", () => { try { rmSync(AFTER_CLEANUP_ROOT, {recursive: true, force: true}); } catch {} });
+    }
     if(testRoot) {
         await testRoot.cleanup();
     }

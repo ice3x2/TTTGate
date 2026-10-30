@@ -156,6 +156,8 @@ class ExternalPortServerPool {
 
 
         return new Promise((resolve, reject) => {
+            const protocol = option.protocol ?? 'tcp';
+            const scope = {kind: 'tunnel', port: option.forwardPort, protocol} as const;
             let options = {
                 port: option.forwardPort,
                 tls: option.tls!,
@@ -168,9 +170,10 @@ class ExternalPortServerPool {
                 maxPendingTlsHandshakes: EXTERNAL_MAX_PENDING_TLS_HANDSHAKES,
                 maxPendingTlsHandshakesPerAddress: EXTERNAL_MAX_PENDING_TLS_HANDSHAKES_PER_ADDRESS,
                 addressBucketOf: rateLimitBucketOf,
+                // #287 TLS 포트는 이미 거절하기로 정해진 주소를 핸드셰이크 전에 닫는다.
+                admitBeforeHandshake: (addr: string | undefined) => AdmissionController.instance.admitBeforeHandshake(scope, addr),
                 admit: (addr: string | undefined) => {
-                    const protocol = option.protocol ?? 'tcp';
-                    const decision = AdmissionController.instance.admit({kind: 'tunnel', port: option.forwardPort, protocol}, addr);
+                    const decision = AdmissionController.instance.admit(scope, addr);
                     if(!decision.allowed && decision.reason === 'concurrency-limit' && (protocol === 'http' || protocol === 'https')) {
                         return {...decision, rejectResponse: HTTP_503};
                     }
@@ -480,6 +483,11 @@ class ExternalPortServerPool {
         let handler = this._handlerMap.get(id);
         if(handler) {
             if(handler.closeInitiated) return;
+            // 대상 쪽에서 응답 바이트 없이 닫힌 HTTP 세션은 그냥 끊지 않고 502 로 답한다. 마무리는 HttpHandler 가 맡는다(#284).
+            if(handler instanceof HttpHandler && endLength === 0 && handler.failToReachDestination()) {
+                handler.closeInitiated = true;
+                return;
+            }
             if(handler instanceof HttpHandler && (!Number.isSafeInteger(endLength) || endLength < 0 ||
                 endLength < handler.responseInputLength || (handler.closeWait && handler.endLength !== endLength))) {
                 this.closeIfSatisfiedLength(handler, true);

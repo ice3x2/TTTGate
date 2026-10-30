@@ -24,8 +24,13 @@ export const AUDIT_EVENT_TYPES = {
     tunnel_cert_updated: 'tunnel_cert_updated', tunnel_cert_deleted: 'tunnel_cert_deleted',
     // 서버
     server_option_updated: 'server_option_updated', admin_cert_updated: 'admin_cert_updated',
+    // 신뢰 클라이언트·등록(#212). 코드·비밀값은 감사에 남기지 않는다.
+    trusted_client_created: 'trusted_client_created', trusted_client_deleted: 'trusted_client_deleted',
+    trusted_client_secret_rotated: 'trusted_client_secret_rotated', enrollment_code_issued: 'enrollment_code_issued',
+    client_enrolled: 'client_enrolled', client_enroll_failed: 'client_enroll_failed',
     // 연결 보안 (단위 5 가 기록)
     security_geo_updated: 'security_geo_updated', security_ban_removed: 'security_ban_removed',
+    security_block_added: 'security_block_added', security_block_removed: 'security_block_removed',
     // 가드·런타임
     access_denied: 'access_denied', last_superuser_guard_hit: 'last_superuser_guard_hit',
     conn_limit_hit: 'conn_limit_hit', tunnel_autoexpire: 'tunnel_autoexpire',

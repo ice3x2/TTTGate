@@ -1,9 +1,13 @@
 import type {Page} from "playwright";
-import {startAdminApp, type AdminApp} from "../helpers/adminApp";
+import {startAdminApp, type AdminApp, ADMIN_APP_TEST_TIMEOUT_MS} from "../helpers/adminApp";
 import {RBAC_USER_IDS} from "../helpers/rbacFixture";
 
 // U3-03 / #105 — 사용자 목록·편집 화면과 임시 비밀번호 모달. admin 으로 시작하고, 테스트마다 rbac fixture 로 앱을 새로 띄운다.
-jest.setTimeout(120_000);
+// 테스트마다 앱을 새로 띄운다. 제한은 helper 의 기동 예산에 작업 여유를 더한 값이다(#263·#273).
+jest.setTimeout(ADMIN_APP_TEST_TIMEOUT_MS);
+// 화면 문구 대기 기한. 사용자 저장·삭제·비밀번호 초기화는 서버에서 비밀번호 해시를 거치므로
+// CPU 부하에서 10초를 넘길 수 있다(#263). 기다리는 것은 문구가 나타나는 조건이다.
+const UI_WAIT_MS = 30_000;
 
 const ADMIN_ID = RBAC_USER_IDS.admin;
 const ALICE_ID = RBAC_USER_IDS.alice;
@@ -13,7 +17,7 @@ const DAVE_ID = RBAC_USER_IDS.dave;
 
 const hashIs = (page: Page, expected: string | RegExp) =>
     page.waitForFunction(({exact, pattern}) => exact !== null ? location.hash === exact : new RegExp(pattern).test(location.hash),
-        typeof expected === "string" ? {exact: expected, pattern: ""} : {exact: null, pattern: expected.source}, {timeout: 10_000});
+        typeof expected === "string" ? {exact: expected, pattern: ""} : {exact: null, pattern: expected.source}, {timeout: UI_WAIT_MS});
 
 const cards = (page: Page) => page.locator("li[data-user-id]");
 const card = (page: Page, id: string) => page.locator(`li[data-user-id="${id}"]`);
@@ -24,7 +28,7 @@ const withUsers = async (check: (app: AdminApp) => Promise<void>): Promise<void>
     try {
         await app.page.goto(`${app.url}#/users`);
         await hashIs(app.page, "#/users");
-        await card(app.page, ADMIN_ID).waitFor({state: "visible", timeout: 10_000});
+        await card(app.page, ADMIN_ID).waitFor({state: "visible", timeout: UI_WAIT_MS});
         await check(app);
         expect(app.errors).toEqual([]);
     } finally {
@@ -39,19 +43,19 @@ const openUser = async (page: Page, id: string) => {
     await page.waitForFunction(() => {
         const input = document.querySelector("#user-username") as HTMLInputElement | null;
         return input !== null && input.value !== "";
-    }, undefined, {timeout: 10_000});
+    }, undefined, {timeout: UI_WAIT_MS});
 };
 
 const backToList = async (page: Page) => {
     await page.locator('[aria-label="Back"]').click();
     await hashIs(page, "#/users");
-    await card(page, ADMIN_ID).waitFor({state: "visible", timeout: 10_000});
+    await card(page, ADMIN_ID).waitFor({state: "visible", timeout: UI_WAIT_MS});
 };
 
 const newUser = async (page: Page) => {
     await button(page, "Add user").click();
     await hashIs(page, "#/users/new");
-    await page.locator("#user-username").waitFor({state: "visible", timeout: 10_000});
+    await page.locator("#user-username").waitFor({state: "visible", timeout: UI_WAIT_MS});
 };
 
 test("#/users 는 사용자 카드 5개를 보이고 역할·상태·그룹·임시 비밀번호 표시가 있다", () => withUsers(async ({page}) => {
@@ -103,7 +107,7 @@ test("erin 을 만들면 임시 비밀번호를 한 번 보이고, Done 뒤 편�
     await page.locator("#user-group").selectOption("g_0000000000000001");
     await button(page, "Create user").click();
     const shownUsername = page.locator("#temp-password-username");
-    await shownUsername.waitFor({state: "visible", timeout: 10_000});
+    await shownUsername.waitFor({state: "visible", timeout: UI_WAIT_MS});
     expect(await shownUsername.textContent()).toBe("@erin");
     expect(await page.locator("#temp-password-value").textContent()).toMatch(/^[A-Za-z0-9]{16}$/);
     await button(page, "Done").click();
@@ -112,7 +116,7 @@ test("erin 을 만들면 임시 비밀번호를 한 번 보이고, Done 뒤 편�
     await page.waitForFunction(() => {
         const input = document.querySelector("#user-username") as HTMLInputElement | null;
         return input !== null && input.value === "erin" && input.disabled;
-    }, undefined, {timeout: 10_000});
+    }, undefined, {timeout: UI_WAIT_MS});
     // 모달이 닫히면 비밀번호도 DOM 에서 사라진다.
     expect(await page.locator("#temp-password-value").count()).toBe(0);
     await backToList(page);
@@ -134,7 +138,7 @@ test("직접 정한 임시 비밀번호는 8자 이상이어야 하고, 그 값�
     await page.getByText("Use at least 8 characters.", {exact: true}).waitFor({state: "visible"});
     await password.fill("manual-pass-1234");
     await button(page, "Create user").click();
-    await page.locator("#temp-password-username").waitFor({state: "visible", timeout: 10_000});
+    await page.locator("#temp-password-username").waitFor({state: "visible", timeout: UI_WAIT_MS});
     expect(await page.locator("#temp-password-username").textContent()).toBe("@frank");
     expect(await page.locator("#temp-password-value").textContent()).toBe("manual-pass-1234");
 }));
@@ -149,7 +153,7 @@ test("형식이 틀린 이름은 요청 없이 막고, 이미 있는 이름은 �
     await page.locator("#user-username").fill("alice");
     await button(page, "Create user").click();
     const error = page.locator("#user-form-error");
-    await error.waitFor({state: "visible", timeout: 10_000});
+    await error.waitFor({state: "visible", timeout: UI_WAIT_MS});
     expect(await error.textContent()).toBe("That username is already in use.");
     expect(await page.evaluate(() => location.hash)).toBe("#/users/new");
 }));
@@ -159,7 +163,7 @@ test("alice 를 superuser 로 바꾸면 그룹 선택이 사라지고 저장 뒤
     await page.locator("#user-role").selectOption("superuser");
     await page.locator("#user-group").waitFor({state: "detached"});
     await button(page, "Save").click();
-    await page.getByText("User saved.", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+    await page.getByText("User saved.", {exact: true}).waitFor({state: "visible", timeout: UI_WAIT_MS});
     await backToList(page);
     const text = (await card(page, ALICE_ID).textContent()) ?? "";
     expect(text).toContain("superuser");
@@ -170,7 +174,7 @@ test("bob 을 disabled 로 저장하면 목록 카드에 disabled 가 보인다"
     await openUser(page, BOB_ID);
     await page.locator("#user-status").selectOption("disabled");
     await button(page, "Save").click();
-    await page.getByText("User saved.", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+    await page.getByText("User saved.", {exact: true}).waitFor({state: "visible", timeout: UI_WAIT_MS});
     await backToList(page);
     expect(await card(page, BOB_ID).textContent()).toContain("disabled");
 }));
@@ -183,30 +187,31 @@ test("마지막 슈퍼유저는 강등도 비활성화도 할 수 없다", () =>
     expect(await group.inputValue()).toBe("default");
     await button(page, "Save").click();
     const error = page.locator("#user-form-error");
-    await error.filter({hasText: "At least one active superuser must remain."}).waitFor({state: "visible", timeout: 10_000});
+    await error.filter({hasText: "At least one active superuser must remain."}).waitFor({state: "visible", timeout: UI_WAIT_MS});
 
     await page.locator("#user-role").selectOption("superuser");
     await page.locator("#user-status").selectOption("disabled");
+    // 같은 문구가 다시 나오는지 보려고 저장 응답을 기다린다. 응답이 클릭보다 먼저 올 수 있어 대기를 먼저 건다(#263).
+    const saved = page.waitForResponse((response) => response.request().method() === "PUT", {timeout: UI_WAIT_MS});
     await button(page, "Save").click();
-    // 같은 문구가 다시 나오는지 보려고 저장 응답을 기다린다.
-    await page.waitForResponse((response) => response.request().method() === "PUT", {timeout: 10_000}).catch(() => undefined);
-    await error.filter({hasText: "At least one active superuser must remain."}).waitFor({state: "visible", timeout: 10_000});
+    await saved;
+    await error.filter({hasText: "At least one active superuser must remain."}).waitFor({state: "visible", timeout: UI_WAIT_MS});
 }));
 
 test("터널을 가진 alice 는 지울 수 없고, carol 은 지워진다", () => withUsers(async ({page}) => {
     await openUser(page, ALICE_ID);
     await button(page, "Delete").click();
     await button(page, "Delete user").click();
-    await page.getByText("Reassign this user's tunnels first.", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+    await page.getByText("Reassign this user's tunnels first.", {exact: true}).waitFor({state: "visible", timeout: UI_WAIT_MS});
     expect(await page.evaluate(() => location.hash)).toBe(`#/users/${ALICE_ID}`);
 
     await backToList(page);
     await openUser(page, CAROL_ID);
     await button(page, "Delete").click();
     await button(page, "Delete user").click();
-    await page.getByText("User deleted.", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+    await page.getByText("User deleted.", {exact: true}).waitFor({state: "visible", timeout: UI_WAIT_MS});
     await hashIs(page, "#/users");
-    await page.waitForFunction(() => document.querySelectorAll("li[data-user-id]").length === 4, undefined, {timeout: 10_000});
+    await page.waitForFunction(() => document.querySelectorAll("li[data-user-id]").length === 4, undefined, {timeout: UI_WAIT_MS});
 }));
 
 test("bob 의 비밀번호를 초기화하면 새 임시 비밀번호를 보이고 목록에 temp password 가 붙는다", () => withUsers(async ({page}) => {
@@ -215,7 +220,7 @@ test("bob 의 비밀번호를 초기화하면 새 임시 비밀번호를 보이�
     await page.getByRole("dialog").filter({hasText: "@bob"}).waitFor({state: "visible"});
     await button(page, "Issue password").click();
     const value = page.locator("#temp-password-value");
-    await value.waitFor({state: "visible", timeout: 10_000});
+    await value.waitFor({state: "visible", timeout: UI_WAIT_MS});
     expect((await value.textContent())?.length).toBe(16);
     await button(page, "Done").click();
     await value.waitFor({state: "detached"});
@@ -231,13 +236,13 @@ const createSuperuser = async (page: Page, username: string): Promise<string> =>
     await page.locator("#user-role").selectOption("superuser");
     await page.locator("#user-group").waitFor({state: "detached"});
     await button(page, "Create user").click();
-    await page.locator("#temp-password-value").waitFor({state: "visible", timeout: 10_000});
+    await page.locator("#temp-password-value").waitFor({state: "visible", timeout: UI_WAIT_MS});
     await button(page, "Done").click();
     await hashIs(page, /^#\/users\/u_[0-9a-f]{16}$/);
     await page.waitForFunction((name) => {
         const input = document.querySelector("#user-username") as HTMLInputElement | null;
         return input !== null && input.value === name && input.disabled;
-    }, username, {timeout: 10_000});
+    }, username, {timeout: UI_WAIT_MS});
     return (await page.evaluate(() => location.hash)).slice("#/users/".length);
 };
 
@@ -246,7 +251,7 @@ test("슈퍼유저를 일반 유저로 내리면 고른 그룹으로 옮겨진�
     await page.locator("#user-role").selectOption("regular");
     await page.locator("#user-group").selectOption("g_0000000000000001");
     await button(page, "Save").click();
-    await page.getByText("User saved.", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+    await page.getByText("User saved.", {exact: true}).waitFor({state: "visible", timeout: UI_WAIT_MS});
     await backToList(page);
     const text = (await card(page, id).textContent()) ?? "";
     expect(text).toContain("regular");
@@ -275,7 +280,7 @@ test("임시 비밀번호 모달을 Escape 로 닫아도 Done 과 같이 처리�
     await newUser(page);
     await page.locator("#user-username").fill("gina");
     await button(page, "Create user").click();
-    await page.locator("#temp-password-value").waitFor({state: "visible", timeout: 10_000});
+    await page.locator("#temp-password-value").waitFor({state: "visible", timeout: UI_WAIT_MS});
     await page.keyboard.press("Escape");
     await hashIs(page, /^#\/users\/u_[0-9a-f]{16}$/);
     await page.locator("#temp-password-value").waitFor({state: "detached"});
@@ -289,10 +294,14 @@ test("임시 비밀번호 모달을 Escape 로 닫아도 Done 과 같이 처리�
     });
     await button(page, "Reset password").click();
     await button(page, "Issue password").click();
-    await page.locator("#temp-password-value").waitFor({state: "visible", timeout: 10_000});
+    await page.locator("#temp-password-value").waitFor({state: "visible", timeout: UI_WAIT_MS});
+    // 다시 읽기는 Escape 뒤 곧 오지만 부하에서는 늦다. 놓치지 않게 Escape 전에 대기를 건다(#263).
+    const reloaded = page.waitForRequest((request) =>
+        request.method() === "GET" && new URL(request.url()).pathname === `/api/users/${BOB_ID}`, {timeout: UI_WAIT_MS});
     await page.keyboard.press("Escape");
     await page.locator("#temp-password-value").waitFor({state: "detached"});
-    await page.waitForResponse((response) => new URL(response.url()).pathname === `/api/users/${BOB_ID}`, {timeout: 10_000}).catch(() => undefined);
+    await reloaded;
+    // 두 번째 다시 읽기가 없는지 잠시 본다. 닫힘 처리는 한 번에 끝나므로 짧은 창이면 된다. 그보다 늦은 두 번째는 놓친다.
     await page.waitForTimeout(500);
     expect(reloads).toBe(1);
     expect(await page.evaluate(() => location.hash)).toBe(`#/users/${BOB_ID}`);
@@ -310,12 +319,12 @@ test("사용자 편집 화면의 Sessions 행은 세션 수를 보이고 모두 
         const {page} = app;
         await page.goto(`${app.url}#/users/${ALICE_ID}`);
         const count = page.locator("#user-session-count");
-        await count.filter({hasText: "2 active session(s)"}).waitFor({state: "visible", timeout: 10_000});
+        await count.filter({hasText: "2 active session(s)"}).waitFor({state: "visible", timeout: UI_WAIT_MS});
         await page.locator("#user-end-sessions button").click();
         await page.locator(".end-all-modal").waitFor({state: "visible"});
         await page.locator("#confirm-end-all").click();
-        await page.getByText("Ended 2 session(s).", {exact: true}).waitFor({state: "visible", timeout: 10_000});
-        await count.filter({hasText: "0 active session(s)"}).waitFor({state: "visible", timeout: 10_000});
+        await page.getByText("Ended 2 session(s).", {exact: true}).waitFor({state: "visible", timeout: UI_WAIT_MS});
+        await count.filter({hasText: "0 active session(s)"}).waitFor({state: "visible", timeout: UI_WAIT_MS});
         expect(await page.locator("#user-end-sessions button").isDisabled()).toBe(true);
         expect(app.errors).toEqual([]);
     } finally {
@@ -329,14 +338,14 @@ describe("U4-09 사용자 편집의 Two-factor 행", () => {
         try {
             const {page} = app;
             await page.goto(`${app.url}#/users/${ALICE_ID}`);
-            await page.locator("#user-mfa-status").filter({hasText: "Enabled"}).waitFor({state: "visible", timeout: 10_000});
+            await page.locator("#user-mfa-status").filter({hasText: "Enabled"}).waitFor({state: "visible", timeout: UI_WAIT_MS});
             await page.locator("#user-reset-mfa button").click();
             const modal = page.locator(".reset-mfa-modal");
             await modal.waitFor({state: "visible"});
             expect(await modal.textContent()).toContain("alice");
             await page.locator("#confirm-reset-mfa").click();
-            await page.getByText("Two-factor authentication reset.", {exact: true}).waitFor({state: "visible", timeout: 10_000});
-            await page.locator("#user-mfa-status").filter({hasText: "Off"}).waitFor({state: "visible", timeout: 10_000});
+            await page.getByText("Two-factor authentication reset.", {exact: true}).waitFor({state: "visible", timeout: UI_WAIT_MS});
+            await page.locator("#user-mfa-status").filter({hasText: "Off"}).waitFor({state: "visible", timeout: UI_WAIT_MS});
             expect(await page.locator("#user-reset-mfa button").isDisabled()).toBe(true);
             expect(app.errors).toEqual([]);
         } finally {
@@ -349,10 +358,10 @@ describe("U4-09 사용자 편집의 Two-factor 행", () => {
         try {
             const {page} = app;
             await page.goto(`${app.url}#/users/${BOB_ID}`);
-            await page.locator("#user-mfa-status").filter({hasText: "Off"}).waitFor({state: "visible", timeout: 10_000});
+            await page.locator("#user-mfa-status").filter({hasText: "Off"}).waitFor({state: "visible", timeout: UI_WAIT_MS});
             expect(await page.locator("#user-reset-mfa button").isDisabled()).toBe(true);
             await page.goto(`${app.url}#/users/new`);
-            await page.locator("#user-username").waitFor({state: "visible", timeout: 10_000});
+            await page.locator("#user-username").waitFor({state: "visible", timeout: UI_WAIT_MS});
             expect(await page.locator("#user-mfa").count()).toBe(0);
             expect(app.errors).toEqual([]);
         } finally {

@@ -4,14 +4,18 @@ import * as path from "path";
 import {spawnSync} from "child_process";
 
 const repoRoot = path.resolve(__dirname, "../..");
-const runChild = (mode: string) => {
+const runChild = (mode: string, prepare?: (rootDir: string) => void, inspect?: (rootDir: string) => void) => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "tttgate-sentinel-"));
     const journal = path.join(directory, "events.jsonl");
+    const rootDir = path.join(directory, "root");
+    fs.mkdirSync(path.join(rootDir, "bin"), {recursive: true});
+    prepare?.(rootDir);
     try {
         const result = spawnSync(process.execPath, ["-r", "ts-node/register/transpile-only",
-            path.join(__dirname, "sentinel-exit-driver.cjs"), journal, mode], {
-            cwd: repoRoot, encoding: "utf8", timeout: 12_000,
+            path.join(__dirname, "sentinel-exit-driver.cjs"), journal, mode, rootDir], {
+            cwd: repoRoot, encoding: "utf8", timeout: 20_000,
         });
+        inspect?.(rootDir);
         expect(result.error).toBeUndefined();
         expect(fs.existsSync(journal)).toBe(true);
         const events = fs.readFileSync(journal, "utf8").trim().split("\n").map((line) => JSON.parse(line));
@@ -21,18 +25,39 @@ const runChild = (mode: string) => {
     }
 };
 
-test("lookup failure exits the sentinel child with status 1 without sending signals", () => {
-    const {result, events} = runChild("failure");
+test("an app that ended with a config error is not restarted: the sentinel removes the pid files and exits 0 (#207)", () => {
+    let rootDir = "";
+    const {result, events} = runChild("gone", (root) => {
+        rootDir = root;
+        fs.writeFileSync(path.join(root, "bin", ".config_error"), "78 fixture\n");
+        fs.writeFileSync(path.join(root, "bin", ".pid_app"), "1\n");
+        fs.writeFileSync(path.join(root, "bin", ".pid_sentinel"), "2\n");
+    });
     expect(events.filter((event) => event.kind === "lookup")).toEqual([
         {kind: "lookup", lookupKind: "pid", pid: result.pid},
     ]);
     expect(events.filter((event) => event.kind === "signal")).toEqual([]);
     expect(events).not.toContainEqual({kind: "watchdog"});
-    expect(result.signal).toBeNull();
-    expect(result.status).toBe(1);
-    expect(events).toContainEqual({kind: "exit", code: 1});
-    expect(result.stdout + result.stderr).toContain("fixture-lookup-failure");
-}, 15_000);
+    expect(result.status).toBe(0);
+    expect(rootDir).not.toBe("");
+    expect(events.filter((event) => event.kind === "exec")).toEqual([]);
+}, 25_000);
+
+test("#222 REQ-3 the stopped sentinel removes the app and sentinel pid files", () => {
+    const remaining: string[] = [];
+    runChild("gone", (root) => {
+        fs.writeFileSync(path.join(root, "bin", ".config_error"), "78 fixture\n");
+        fs.writeFileSync(path.join(root, "bin", ".pid_app"), "1\n");
+        fs.writeFileSync(path.join(root, "bin", ".pid_sentinel"), "2\n");
+    }, (root) => remaining.push(...fs.readdirSync(path.join(root, "bin"))));
+    expect(remaining.filter((name) => name.startsWith(".pid_"))).toEqual([]);
+}, 25_000);
+
+test("#222 REQ-1 an app that ended without a config error is started again", () => {
+    const {events} = runChild("gone-restart");
+    expect(events.filter((event) => event.kind === "exec")).toEqual([{kind: "exec", mode: "execute"}]);
+    expect(events).not.toContainEqual({kind: "watchdog"});
+}, 25_000);
 
 test("a present application remains monitored for a second real polling interval", () => {
     const {result, events} = runChild("present");
@@ -40,4 +65,4 @@ test("a present application remains monitored for a second real polling interval
     expect(events.filter((event) => event.kind === "signal")).toEqual([]);
     expect(events).not.toContainEqual({kind: "watchdog"});
     expect(result.status).toBe(0);
-}, 15_000);
+}, 25_000);

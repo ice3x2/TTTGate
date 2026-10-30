@@ -48,6 +48,14 @@ type TunnelDataHandler = TunnelHandler & {
     leftOverBuffer?: Buffer;
     dataHandlerState?: DataHandlerState;
     handlerType?: HandlerType.Data;
+    /** #253: 이 데이터 연결에서 받아 외부 쪽으로 넘긴 바이트 수. 연결이 끊기면 외부 쪽 종료 길이로 쓴다. */
+    forwardedLength?: number;
+    /** #253: 클라이언트가 이 세션의 CloseSession 을 보냈다. 뒤이은 데이터 연결의 끊김은 정상 종료다. */
+    closeReceived?: boolean;
+    /** #254: (클라이언트) 출력이 빌 때 끝점을 닫으려고 기다리는 CloseSession 의 count. 기다리는 동안만 값이 있다. */
+    pendingCloseCount?: number;
+    /** #257: (클라이언트) 정상 종료를 대기 버퍼를 다 보낸 뒤로 미뤘다. Ack 뒤 flush 가 끝나면 닫는다. */
+    endAfterFlush?: boolean;
 }
 
 

@@ -1,32 +1,97 @@
-import ClientApp from "./client/ClientApp";
-import ServerApp from "./server/ServerApp";
+import ClientApp, {resolveClientCliOptions} from "./client/ClientApp";
+import ServerApp, {validateServerCliOptions} from "./server/ServerApp";
 import Environment from "./Environment";
 import Sentinel from "./Sentinel";
 import AppCompositionRoot from "./bootstrap/AppCompositionRoot";
-import CLI from "./util/CLI";
+import CLI, {ParsedCommandLine} from "./util/CLI";
+import {renderHelp, renderVersion} from "./util/CliHelp";
+import {runClientJoin} from "./client/ClientJoin";
+import {saveClientConfig, showClientConfig} from "./client/ClientConfigCommand";
 
 AppCompositionRoot.configureLogger();
 
+/** 명령줄 오류(#204). 아무것도 시작하지 않고 종료 코드 2 로 끝낸다. */
+const reportCliErrors = (parsed: ParsedCommandLine): void => {
+    for(const error of parsed.errors) {
+        process.stderr.write(`TTTGate: ${error}\n`);
+    }
+    process.stderr.write(`Run 'TTTGate${parsed.mode === "none" ? "" : " " + parsed.mode} --help' for usage.\n`);
+    process.exitCode = 2;
+};
 
+/**
+ * 데몬 부모가 자식을 띄우기 전에 부작용 없이 설정을 검사한다(#207 REQ-1·REQ-2).
+ * 자식은 stdio 를 버리므로 여기서 걸러야 오류가 사용자에게 보인다.
+ */
+const validateBeforeDaemon = (parsed: ParsedCommandLine): boolean => {
+    const result = parsed.mode === "client" ? resolveClientCliOptions(parsed.options)
+        : parsed.mode === "server" ? validateServerCliOptions(parsed.options)
+        : {ok: true as const};
+    if(result.ok) return true;
+    process.stderr.write(result.message + "\n");
+    process.exitCode = result.exitCode;
+    return false;
+};
 
 let app = () => {
-    console.log('TTTGate v' + Environment.version.name + ' (' + Environment.version.build + ')');
-    let sentinel : Sentinel = Sentinel.create(Environment.devMode);
     let parsedCli = CLI.parseCommandLine();
+    if(parsedCli.errors.length > 0) {
+        reportCliErrors(parsedCli);
+        return;
+    }
+    const options = parsedCli.options;
+    // #208: 도움말·버전은 배너 없이 출력하고, 모드 분기·Sentinel 보다 먼저 끝낸다(PID·로그 파일을 만들지 않는다).
+    if(options["version"] !== undefined) {
+        console.log(renderVersion());
+        return;
+    }
+    if(options["help"] !== undefined || options["h"] !== undefined || options["help-advanced"] !== undefined) {
+        console.log(renderHelp(parsedCli.mode, options["help-advanced"] !== undefined));
+        return;
+    }
+
     let startType = parsedCli.mode;
+    if(startType == 'none') {
+        console.log(renderVersion());
+        console.log(renderHelp('none', false));
+        return;
+    }
+
+    // #214·#215: join·config 는 설정만 다루고 끝난다. Sentinel·PID 파일을 건드리지 않는다.
+    const command = parsedCli.command.join(" ");
+    if(startType == 'client' && command !== '' && command !== 'run') {
+        const io = {out: (line: string) => console.log(line), err: (line: string) => { process.stderr.write(line + "\n"); }};
+        if(command === 'join') {
+            runClientJoin(parsedCli.positionals[0], options, {configDir: Environment.path.configDir, ...io})
+                .then((code) => { process.exitCode = code; })
+                .catch((error) => { io.err(String(error)); process.exitCode = 1; });
+        } else {
+            process.exitCode = command === 'config show' ? showClientConfig(options, io) : saveClientConfig(options, io);
+        }
+        return;
+    }
+
+    // join·config 의 출력은 스크립트가 읽을 수 있어야 하므로 배너는 실행 모드에서만 찍는다.
+    console.log(renderVersion());
+    let sentinel : Sentinel = Sentinel.create(Environment.devMode);
 
     if(startType == 'stop') {
         console.log('Stop TTTGate processes ...')
         Sentinel.stop();
         return;
     }
-    else if(Sentinel.isSentinelMode() || (!Sentinel.hasExecuteMode() && Sentinel.isDaemonMode())) {
+    else if(Sentinel.isSentinelMode()) {
+        sentinel.start();
+        return;
+    }
+    else if(!Sentinel.hasExecuteMode() && Sentinel.isDaemonMode()) {
+        if(!validateBeforeDaemon(parsedCli)) return;
         sentinel.start();
         return;
     }
     else if(startType == 'server' && !sentinel.start()) {
         AppCompositionRoot.useServerCacheDir();
-        ServerApp.start(parsedCli.options).then(() => {
+        ServerApp.start(options).then(() => {
             console.log('server started');
         }).catch((err) => {
             console.error(err);
@@ -34,45 +99,7 @@ let app = () => {
     }
     else if(startType == 'client' && !sentinel.start()) {
         AppCompositionRoot.useClientCacheDir();
-        ClientApp.start(parsedCli.options);
-    }
-    else if(!Sentinel.isDaemonMode() && !Sentinel.hasExecuteMode()) {
-        console.log('Usage: TTTGate [server|client] [options]');
-        console.log('');
-        console.log('    server: start server');
-        console.log('       -adminPort [port]  : Admin server port');
-        console.log('       -keepAlive [ms]    : Control listener TCP keepalive interval');
-        console.log('       -allowLegacyAdminHttp   : Allow legacy admin HTTP for one process run');
-        console.log('       -allowLegacyAdminRemote : Allow legacy non-loopback admin bind for one process run');
-        console.log('       -trustXForwardedFor     : Read the admin client address from X-Forwarded-For (behind your own proxy)');
-        console.log('       -trustedProxyHops [n]   : Trusted proxies in front of the admin server (default 1)');
-        console.log('       -allowLegacyControlAuth : Allow legacy shared-key control authentication');
-        console.log('                                 RISK: legacy data connections can be hijacked by a guessed handler ID');
-        console.log('       -reset [true|false]: Reset persisted server state');
-        console.log('       -daemon            : Background execution and process monitoring.');
-        console.log('');
-        console.log('    client: start client');
-        console.log('       -addr [host:port]  : server address. (ex: host.com:1234)');
-        console.log('                           The port number is optional.         ');
-        console.log('       -tls               : use tls');
-        console.log('       -name [name]       : client name');
-        console.log('       -clientId [id]     : authenticated client identifier for protocol v2');
-        console.log('       -clientSecret [s]  : protocol v2 shared secret');
-        console.log('       -displayName [n]   : display-only for protocol v2 (server matches its registered name)');
-        console.log('       -key  [key]        : legacy shared key (legacy control auth only)');
-        console.log('       -ca [pem]          : trusted CA/server certificate PEM');
-        console.log('       -serverName [name] : expected TLS server name');
-        console.log('       -allowLegacyFallback : allow legacy v1 fallback during rollback');
-        console.log('                              RISK: a fake server can downgrade and receive the shared key');
-        console.log('       -allowInsecureTls    : disable TLS certificate verification');
-        console.log('       -keepAlive [ms]    : Control connection TCP keepalive interval');
-        console.log('       -bufferLimit [MiB] : Buffer limit size on memory.');
-        console.log('       -save              : Save options to file');
-        console.log('       -daemon            : Background execution and process monitoring.');
-        console.log('');
-        console.log('    stop: stop server or client');
-
-
+        ClientApp.start(options);
     }
 }
 

@@ -11,7 +11,10 @@ describe("release documentation and sample config alignment", () => {
             adminBindHost: "127.0.0.1",
             adminTls: true,
             controlProtocolMode: "mixed",
-            allowLegacyControlAuth: false
+            allowLegacyControlAuth: false,
+            logLevel: "info",
+            closeStallMs: 60000,
+            closeGraceMs: 10000
         });
         expect(serverSample.trustedClients?.[0]).toMatchObject({
             clientId: "client-a",
@@ -25,6 +28,8 @@ describe("release documentation and sample config alignment", () => {
             allowLegacyFallback: false,
             allowInsecureTls: false
         });
+        // #210: displayName 은 name 의 폐기 예정 별칭이다. 샘플에 두면 시작할 때마다 경고가 난다.
+        expect(clientSample.displayName).toBeUndefined();
     });
 
     it("documents the runtime config paths, bootstrap token, and rollout policy in README", () => {
@@ -36,6 +41,17 @@ describe("release documentation and sample config alignment", () => {
         expect(readme).toContain("config/.bootstrap-token");
         expect(readme).toContain("replaceAccessControlAllowOrigin");
         expect(readme).toContain("allowLegacyControlAuth");
+        // #267: 로그 레벨 설정과 허용값을 README 에 적는다.
+        expect(readme).toMatch(/`logLevel`[^\n]*`error`, `warn`, `info` \(default\) and `debug`/);
+        // #268: 닫기 기한 두 값의 범위와 기본값을 README 에 적는다.
+        expect(readme).toMatch(/\| `closeStallMs` \|[^\n]*\| 1000–600000 \| 60000 \|/);
+        expect(readme).toMatch(/\| `closeGraceMs` \|[^\n]*\| 1000–120000 \| 10000 \|/);
+        // 롤백 백업(.bak)을 만드는 새 필드 목록이 코드(ROLLBACK_SENSITIVE_TOP_FIELDS)와 맞아야 한다.
+        const migration = fs.readFileSync(Path.join(process.cwd(), "docs", "guide", "MIGRATION.md"), {encoding: "utf-8"});
+        const store = fs.readFileSync(Path.join(process.cwd(), "src", "server", "ServerOptionStore.ts"), {encoding: "utf-8"});
+        const fields = /ROLLBACK_SENSITIVE_TOP_FIELDS = \[([^\]]*)\]/.exec(store)![1].match(/'[^']+'/g)!.map((field) => field.slice(1, -1));
+        expect(fields.length).toBeGreaterThanOrEqual(7);
+        for(const field of fields) expect(migration).toContain(`\`${field}\``);
         expect(readme).toContain("clientId");
         expect(readme).toContain("clientSecret");
     });

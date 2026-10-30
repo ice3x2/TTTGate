@@ -69,7 +69,13 @@ type ServerOption = {
     /** 감사 파일 보존 기간(일). 기본 90, 0 이면 무제한. */
     auditRetentionDays?: number,
     /** 감사 쓰기 큐 상한. 기본 1000. 가득 차면 CUD API 가 503 으로 실패한다. */
-    auditQueueSize?: number
+    auditQueueSize?: number,
+    /** #267 로그 레벨. 기본 info. 바꾸면 다시 시작하지 않고 모든 로그 출력(파일·콘솔)에 적용한다. */
+    logLevel?: LogLevel,
+    /** #268 닫기를 시작한 연결의 남은 출력이 진행 없이 멈춰 있을 수 있는 시간(ms). 기본 60000, 1000..600000. */
+    closeStallMs?: number,
+    /** #268 FIN 을 보내거나 받은 뒤 상대가 닫기를 기다리는 시간(ms). 기본 10000, 1000..120000. */
+    closeGraceMs?: number
 
 
 }
@@ -85,6 +91,8 @@ type TunnelingOption = {
     allowedClientIds?: Array<string>;
     inactiveOnStartup?: boolean;
     tls?: boolean,
+    /** TLS 터널에서 클라이언트가 대상 서버의 인증서를 검증하지 않는다. 내부망의 자체 서명 서버용이며 기본은 꺼짐이다(#280). */
+    allowSelfSignedDestinationCert?: boolean,
     bufferLimitOnServer?: number,
     bufferLimitOnClient?: number,
     keepAlive: number,
@@ -102,7 +110,13 @@ const DEFAULT_KEY = "hello-TTTGate";
  */
 type GeoMode = 'off' | 'allow' | 'deny';
 type GeoConfig = {mode: GeoMode; countries: string[]; applyToAdmin: boolean; unknownPolicy: 'allow' | 'deny'};
-type ConnectionSecurityOption = {geo: GeoConfig};
+/**
+ * #286 — 관리자가 직접 넣는 영구 차단 항목. address 는 정규화된 주소나 CIDR 대역이고 목록 안에서 유일하다.
+ * port 가 null 이면 모든 터널에, 숫자면 그 외부 포트에만 적용한다. 관리 화면·제어 포트에는 적용하지 않는다.
+ */
+type BlocklistEntry = {address: string; port: number | null; note: string; createdAt: number; createdBy: string};
+/** blocklist 는 이전 설정 파일에 없을 수 있다. normalizeConnectionSecurity 가 늘 채운다. */
+type ConnectionSecurityOption = {geo: GeoConfig; blocklist?: BlocklistEntry[]};
 const DEFAULT_GEO_CONFIG: Readonly<GeoConfig> = Object.freeze({mode: 'off', countries: [], applyToAdmin: true, unknownPolicy: 'allow'});
 
 /**
@@ -202,6 +216,34 @@ const resolveAuditRetentionDays = (value: unknown): {success: true; days: number
     return {success: true, days};
 };
 
+type LogLevel = 'error' | 'warn' | 'info' | 'debug';
+const LOG_LEVELS: readonly LogLevel[] = ['error', 'warn', 'info', 'debug'];
+const DEFAULT_LOG_LEVEL: LogLevel = 'info';
+
+/** #267: 값이 없는 예전 설정은 info 다. 대소문자를 바꾸거나 별칭을 받지 않는다. */
+const resolveLogLevel = (value: unknown): {success: true; level: LogLevel} | {success: false; message: string} => {
+    if(value === undefined) return {success: true, level: DEFAULT_LOG_LEVEL};
+    if(typeof value !== 'string' || !(LOG_LEVELS as readonly string[]).includes(value))
+        return {success: false, message: `logLevel must be one of ${LOG_LEVELS.join(', ')}`};
+    return {success: true, level: value as LogLevel};
+};
+
+/** #268: SocketHandler 의 시작값과 같다(close-deadline-defaults 테스트가 지킨다). */
+const DEFAULT_CLOSE_STALL_MS = 60_000;
+const DEFAULT_CLOSE_GRACE_MS = 10_000;
+const CLOSE_STALL_MS_RANGE = [1_000, 600_000] as const;
+const CLOSE_GRACE_MS_RANGE = [1_000, 120_000] as const;
+
+const resolveCloseDeadline = (name: string, value: unknown, fallback: number, [min, max]: readonly [number, number]):
+    {success: true; ms: number} | {success: false; message: string} => {
+    if(value === undefined) return {success: true, ms: fallback};
+    if(!Number.isInteger(value) || (value as number) < min || (value as number) > max)
+        return {success: false, message: `${name} must be an integer within ${min}..${max}`};
+    return {success: true, ms: value as number};
+};
+const resolveCloseStallMs = (value: unknown) => resolveCloseDeadline('closeStallMs', value, DEFAULT_CLOSE_STALL_MS, CLOSE_STALL_MS_RANGE);
+const resolveCloseGraceMs = (value: unknown) => resolveCloseDeadline('closeGraceMs', value, DEFAULT_CLOSE_GRACE_MS, CLOSE_GRACE_MS_RANGE);
+
 const resolveAuditQueueSize = (value: unknown): {success: true; size: number} | {success: false; message: string} => {
     if(value === undefined) return {success: true, size: DEFAULT_AUDIT_QUEUE_SIZE};
     const [min, max] = AUDIT_QUEUE_SIZE_RANGE;
@@ -215,6 +257,13 @@ const DEFAULT_CLIENT_PORT = 9126;
 const DEFAULT_CLIENT_KEEP_ALIVE = 10000;
 const DEFAULT_CLIENT_MEM_LIMIT_MIB = 128;
 const MIN_CLIENT_MEM_LIMIT_MIB = 16;
+/** 클라이언트 메모리 버퍼 상한(MiB, #206). 명령줄과 client.yaml 이 함께 쓴다. -1 은 제한 없음. */
+const MAX_CLIENT_MEM_LIMIT_MIB = 1048576;
+
+/** -1(제한 없음) 또는 16..1048576 의 정수인지 본다(#206). */
+const isValidClientMemLimit = (value: unknown): value is number =>
+    typeof value === "number" && Number.isInteger(value)
+    && (value === -1 || (value >= MIN_CLIENT_MEM_LIMIT_MIB && value <= MAX_CLIENT_MEM_LIMIT_MIB));
 
 const defaultWarn: NormalizationClientOptionWarner = (msg: string): void => {
     try { console.warn(msg); } catch { /* noop */ }
@@ -281,8 +330,8 @@ const normalizationClientOption = (clientOption: ClientOption, warn: Normalizati
             warn(`normalizationClientOption: globalMemCacheLimit invalid (got: ${rawMem}). Falling back to ${DEFAULT_CLIENT_MEM_LIMIT_MIB}.`);
         }
         out.globalMemCacheLimit = DEFAULT_CLIENT_MEM_LIMIT_MIB;
-    } else if(rawMem !== -1 && rawMem < MIN_CLIENT_MEM_LIMIT_MIB) {
-        warn(`normalizationClientOption: globalMemCacheLimit below minimum ${MIN_CLIENT_MEM_LIMIT_MIB}MiB (got: ${rawMem}). Falling back to ${DEFAULT_CLIENT_MEM_LIMIT_MIB}.`);
+    } else if(!isValidClientMemLimit(rawMem)) {
+        warn(`normalizationClientOption: globalMemCacheLimit must be -1 or an integer within ${MIN_CLIENT_MEM_LIMIT_MIB}..${MAX_CLIENT_MEM_LIMIT_MIB} MiB (got: ${rawMem}). Falling back to ${DEFAULT_CLIENT_MEM_LIMIT_MIB}.`);
         out.globalMemCacheLimit = DEFAULT_CLIENT_MEM_LIMIT_MIB;
     }
 
@@ -304,6 +353,14 @@ export {
     DEFAULT_AUDIT_QUEUE_SIZE,
     resolveAuditRetentionDays,
     resolveAuditQueueSize,
+    LogLevel,
+    LOG_LEVELS,
+    DEFAULT_LOG_LEVEL,
+    resolveLogLevel,
+    DEFAULT_CLOSE_STALL_MS,
+    DEFAULT_CLOSE_GRACE_MS,
+    resolveCloseStallMs,
+    resolveCloseGraceMs,
     normalizationClientOption,
     resolveClientKeepAlive,
     NormalizationClientOptionWarner,
@@ -311,6 +368,8 @@ export {
     DEFAULT_CLIENT_KEEP_ALIVE,
     DEFAULT_CLIENT_MEM_LIMIT_MIB,
     MIN_CLIENT_MEM_LIMIT_MIB,
+    MAX_CLIENT_MEM_LIMIT_MIB,
+    isValidClientMemLimit,
     RateLimitOption,
     RATE_LIMIT_RANGE,
     defaultRateLimit,
@@ -318,5 +377,6 @@ export {
     GeoMode,
     GeoConfig,
     ConnectionSecurityOption,
+    BlocklistEntry,
     DEFAULT_GEO_CONFIG
 };

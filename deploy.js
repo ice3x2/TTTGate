@@ -25,19 +25,29 @@ const runNpm = (args, cwd, nodeEnv = 'development') => {
 const main = () => {
     const browser = ['run', 'test:browser:install'];
     if(process.platform === 'linux' && process.env.GITHUB_ACTIONS === 'true') browser.push('--', '--with-deps');
+    // --skip-tests: the release workflow runs Code Regression first, so packaging does not run the tests again (#290).
+    const skipTests = process.argv.includes('--skip-tests');
     const gates = [
         {cwd: root, args: ['ci', '--include=dev', '--no-audit', '--no-fund']},
         {cwd: admin, args: ['ci', '--include=dev', '--no-audit', '--no-fund']},
-        {cwd: root, args: browser},
+        ...(skipTests ? [] : [{cwd: root, args: browser}]),
         {cwd: admin, args: ['run', 'check']},
         {cwd: root, args: ['run', 'build', '--', '--force']},
-        {cwd: root, args: ['test', '--', '--runInBand'], nodeEnv: 'test'},
+        ...(skipTests ? [] : [{cwd: root, args: ['test', '--', '--runInBand'], nodeEnv: 'test'}]),
         // Browser tests can rebuild admin/dist using test entrypoints.
         {cwd: admin, args: ['run', 'build'], nodeEnv: 'production'},
     ];
+    // A build date left by an earlier local release would make later builds report that date (#290).
+    const buildInfo = Path.join(root, 'build', 'src', 'build-info.js');
+    fs.rmSync(buildInfo, {force: true});
     for(const gate of gates) {
         if(!runNpm(gate.args, gate.cwd, gate.nodeEnv)) return;
     }
+
+    // The runtime reports this build date (src/Environment.ts resolveBuildId). It goes into both the binaries (pkg reads
+    // build/**) and the source distribution (dist.js is a copy of build/src) (#290).
+    const buildDate = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    fs.writeFileSync(buildInfo, `module.exports = {build: "${buildDate}"};\n`);
 
     // Preserve previous distributions until every validation gate has passed.
     const binaryOutput = Path.join(root, 'dist');

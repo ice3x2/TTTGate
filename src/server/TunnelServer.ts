@@ -31,7 +31,15 @@ import {TunnelHandshakePolicyRegistry} from "./TunnelHandshakePolicy";
 import {timingSafeStringEqual} from "../util/timingSafeStringEqual";
 import LoggerFactory  from "../util/logger/LoggerFactory";
 import {SysInfo} from "../commons/SysMonitor";
+import {EnrollmentRegistry} from "./EnrollmentRegistry";
+import {sealEnrollmentPayload} from "../commons/Enrollment";
+import {EnrollmentPayload, EnrollResponseMeta} from "../commons/ProtocolV2";
+import {CONTROL_CERT_SERVER_NAME} from "./CertificationStore";
+import {heartbeatKindOf, HeartbeatPolicyRegistry} from "../commons/Heartbeat";
 const logger = LoggerFactory.getLogger('server', 'TunnelServer');
+
+/** 등록 교환 결과(#212 REQ-11 감사). 코드·비밀값은 담지 않는다. */
+type OnEnrollmentEvent = (event: {success: boolean, clientId?: string, address: string, reason?: string}) => void;
 
 interface OnReceiveDataCallback {
     (id : number, data: Buffer) : void;
@@ -84,6 +92,13 @@ class TunnelServer {
     private readonly _serverOption : {port: number, tls: boolean, key: string, controlProtocolMode: ControlProtocolMode, allowLegacyControlAuth: boolean};
     private _clientHandlerPoolMap : Map<number, ClientHandlerPool> = new Map<number, ClientHandlerPool>();
     private _sessionIDAndCtrlIDMap : Map<number, number> = new Map<number, number>();
+    /**
+     * #266: 풀이 외부 쪽에 처음 넘긴 세션 닫기의 길이(CloseSession·유예 타이머·실패 경로 어느 것이든). 이렇게 닫힌 세션은
+     * 외부 쪽이 배출을 끝낼 때까지 매핑에 남는다. 그 사이 close()·destroyClientHandlerPool 이 길이 0 으로 다시 닫으면
+     * HTTP 외부 연결은 배출 중인 응답을 끊으므로, 두 경로는 이 길이로 닫는다. ExternalPortServerPool 은 처음과 다른
+     * 길이를 받으면 끊으므로 다시 닫을 때도 처음 값과 같아야 한다. 매핑에서 세션을 지울 때 함께 지운다.
+     */
+    private _forwardedCloseLengths : Map<number, number> = new Map<number, number>();
     private _pendingControlHandshakeMap: Map<number, PendingControlHandshake> = new Map<number, PendingControlHandshake>();
 
     private _tunnelServer : TCPServer;
@@ -96,6 +111,8 @@ class TunnelServer {
     private _sessionTtlMs : number = DEFAULT_SESSION_TTL_MS;
     private _sessionTtlCheckIntervalMs : number = DEFAULT_SESSION_HEARTBEAT_CHECK_INTERVAL_MS;
     private _sessionTtlTimer : NodeJS.Timeout | undefined;
+    /** #230: heartbeat 를 지원하는 클라이언트 중 조용해진 제어 연결을 찾는 타이머. */
+    private _heartbeatTimer : NodeJS.Timeout | undefined;
     // P6-T1 개선 1회차 / F3: close() 진입 후 dispatch 된 TTL 콜백 race 가드.
     private _closed : boolean = false;
     private _authTimeouts : Set<NodeJS.Timeout> = new Set<NodeJS.Timeout>();
@@ -115,6 +132,9 @@ class TunnelServer {
     private _nextSelectIdx = 0;
     private _onSessionCloseCallback? : OnSessionCloseCallback;
     private _onReceiveDataCallback? : OnReceiveDataCallback;
+    /** 등록 교환(#212). 응답에 담을 제어 인증서와, 코드를 기억하는 레지스트리. */
+    private readonly _controlCertPem: string;
+    private _enrollment?: {registry: EnrollmentRegistry, onEvent: OnEnrollmentEvent};
 
 
     public set onSessionCloseCallback(value: OnSessionCloseCallback) {
@@ -129,6 +149,7 @@ class TunnelServer {
     private constructor(option:{port: number, tls: boolean, key: string, keepAlive: number, controlProtocolMode: ControlProtocolMode, allowLegacyControlAuth: boolean, trustedClients?: Array<{clientId: string, clientSecret: string, displayName?: string}>}, certInfo: CertInfo) {
         this._serverOption = option;
         this._key = option.key;
+        this._controlCertPem = certInfo.cert.value;
         this._identityRegistry = new IdentityRegistry(option.trustedClients ?? []);
         let tcpServerOption : ServerOption = {
             port: option.port,
@@ -188,6 +209,7 @@ class TunnelServer {
                     this.isRunning = true;
                     this._closed = false;
                     this.startSessionTtlTimer();
+                    this.startHeartbeatTimer();
                     resolve();
                 }
             });
@@ -225,6 +247,33 @@ class TunnelServer {
         }
     }
 
+    private startHeartbeatTimer() : void {
+        if(this._heartbeatTimer || this._closed) return;
+        const policy = HeartbeatPolicyRegistry.current();
+        this._heartbeatTimer = setInterval(() => this.expireSilentControls(policy.timeoutMs), policy.intervalMs);
+        this._heartbeatTimer.unref?.();
+    }
+
+    private stopHeartbeatTimer() : void {
+        if(this._heartbeatTimer) clearInterval(this._heartbeatTimer);
+        this._heartbeatTimer = undefined;
+    }
+
+    /**
+     * #230 REQ-2: heartbeat 를 알린 클라이언트가 timeoutMs 동안 아무 제어 패킷도 보내지 않으면 반쯤 열린 연결로 보고 정리한다.
+     * heartbeat 를 모르는 클라이언트(REQ-3)는 건드리지 않는다.
+     */
+    private expireSilentControls(timeoutMs: number) : void {
+        if(this._closed || !this.isRunning) return;
+        const now = Date.now();
+        for(const [ctrlID, pool] of [...this._clientHandlerPoolMap]) {
+            if(pool.supportsHeartbeat && now - pool.lastControlReceiveAt > timeoutMs) {
+                logger.warn(`Control connection of ${pool.clientId ?? ctrlID} sent nothing for ${now - pool.lastControlReceiveAt}ms. Closing it as half-open.`);
+                this.destroyClientHandlerPool(ctrlID);
+            }
+        }
+    }
+
     private stopSessionTtlTimer() : void {
         if(this._sessionTtlTimer) {
             clearInterval(this._sessionTtlTimer);
@@ -257,8 +306,9 @@ class TunnelServer {
                 if(pool) {
                     pool.sendCloseSession(sessionId, 0);
                 }
-                // 매핑 제거(단일 경로).
-                this._sessionIDAndCtrlIDMap.delete(sessionId);
+                // 매핑 제거와 풀 정리(단일 경로). 매핑만 지우면 뒤이어 오는 terminateSession 이 풀을 찾지 못해
+                // 풀 항목과 데이터 핸들러가 클라이언트가 데이터 연결을 닫을 때까지 남는다(#253).
+                this.terminateSession(sessionId);
             } catch(e) {
                 logger.error("TTL close error", e);
             }
@@ -303,7 +353,10 @@ class TunnelServer {
         // P6-T1 개선 1회차 / F3: 후속 TTL 콜백 race 방지 플래그.
         this._closed = true;
         this.stopSessionTtlTimer();
+        this.stopHeartbeatTimer();
         this._sessionLastActivityMs.clear();
+        const closeLengths = this._forwardedCloseLengths;
+        this._forwardedCloseLengths = new Map<number, number>();
         return new Promise((resolve) => {
             // 모든 auth timeout 정리
             this._authTimeouts.forEach((timeoutId) => {
@@ -311,7 +364,11 @@ class TunnelServer {
             });
             this._authTimeouts.clear();
             this._clientHandlerPoolMap.forEach((handlerPool) => {
-                handlerPool.getAllSessionIDs().forEach((id) => { this._onSessionCloseCallback?.(id, 0) });
+                // CloseSession 을 이미 받은 세션은 그 길이로 닫는다(#266). 나머지는 지금처럼 0 이다.
+                handlerPool.getAllSessionIDs().forEach((id) => { this._onSessionCloseCallback?.(id, closeLengths.get(id) ?? 0) });
+                // 데이터 연결이 끊겨 유예 중인 세션은 풀의 세션 목록에 없다. 타이머가 터질 때와 같은 길이로 외부 쪽을 닫는다(#253).
+                // 매핑 전체를 닫지 않는다. 정상으로 끝나 외부 쪽이 배출 중인 세션도 매핑에 남아 있기 때문이다.
+                for(const drop of handlerPool.takePendingDataDrops()) this._onSessionCloseCallback?.(drop.sessionID, drop.endLength);
                 handlerPool.end();
             });
             this._unauthenticatedHandlerIds.clear();
@@ -494,6 +551,9 @@ class TunnelServer {
             logger.error('sendSyncCtrlAck: ctrlHandler is null');
             return;
         }
+        // 이미 닫혔거나 종료를 요청한 연결에 대기 항목을 만들면 지울 종료 이벤트가 다시 오지 않거나
+        // 보내기가 실패한다(#247, #260).
+        if (ctrlHandler.isEnding) return;
         const handshakeMeta: SyncCtrlAckMeta = {
             protocolVersion: CONTROL_PROTOCOL_V2,
             capabilities: DEFAULT_PROTOCOL_V2_CAPABILITIES,
@@ -505,7 +565,8 @@ class TunnelServer {
         let sendBuffer = CtrlPacket.createSyncCtrlAck(ctrlHandler.id, handshakeMeta).toBuffer();
         ctrlHandler.sendData(sendBuffer, (handler_, success, err) => {
             if(!success) {
-                logger.error(`sendSyncAndSyncSyncCmd Fail - id:${ctrlHandler.id}, remote:(${ctrlHandler.socket.remoteAddress})${ctrlHandler.socket.remotePort}, ${err}`);
+                // 인증 전 연결이므로 debug 로 남긴다(#166).
+                logger.debug(`sendSyncAndSyncSyncCmd Fail - id:${ctrlHandler.id}, remote:(${ctrlHandler.socket.remoteAddress})${ctrlHandler.socket.remotePort}, ${err}`);
                 ctrlHandler.destroy();
                 return;
             }
@@ -524,6 +585,9 @@ class TunnelServer {
         let ctrlHandlerPool = ClientHandlerPool.create(handler.id, handler);
         ctrlHandlerPool.isSessionOwned = (sessionID: number) => this._sessionIDAndCtrlIDMap.get(sessionID) === handler.id;
         ctrlHandlerPool.onSessionCloseCallback = (sessionID: number, endLength:  number) => {
+            if(this._sessionIDAndCtrlIDMap.has(sessionID) && !this._forwardedCloseLengths.has(sessionID)) {
+                this._forwardedCloseLengths.set(sessionID, endLength);
+            }
             this._onSessionCloseCallback?.(sessionID, endLength);
         }
         ctrlHandlerPool.onReceiveDataCallback = (sessionID: number, data: Buffer) => {
@@ -718,6 +782,8 @@ class TunnelServer {
             return;
         }
         for(let i = 0, len = packetList.length; i < len; i++) {
+            // 앞 패킷을 처리하다 연결이 닫혔거나 종료를 요청했으면 같은 묶음의 나머지는 처리하지 않는다(#247, #260).
+            if(handler.isEnding) break;
             let packet = packetList[i];
             this.onReceiveCtrlPacket(handler, packet);
         }
@@ -731,6 +797,7 @@ class TunnelServer {
     public terminateSession(sessionId: number) : void {
         let pool = this.findCtrlHandlerPool(sessionId);
         this._sessionIDAndCtrlIDMap.delete(sessionId);
+        this._forwardedCloseLengths.delete(sessionId);
         // P6-T1 / REQ-09: 세션 종료 시 활동 기록 제거.
         this._sessionLastActivityMs.delete(sessionId);
         if(pool == undefined) {
@@ -770,7 +837,9 @@ class TunnelServer {
     private onReceiveCtrlPacket(handler: TunnelHandler, packet: CtrlPacket) : void  {
         // 인증 전 패킷은 debug 로만 남긴다. 인증 없이 패킷마다 info 로그를 쌓게 하지 않는다(#157).
         const packetLog = 'receive ctrl packet - cmd:' + CtrlCmd[packet.cmd] + ', handler id: ' + handler.id + ', remote: ' + handler.remoteAddress + ':' + handler.remotePort;
-        if(this._unauthenticatedHandlerIds.has(handler.id)) logger.debug(packetLog); else logger.info(packetLog);
+        // #230: heartbeat 는 몇 초마다 오므로 로그를 남기지 않는다.
+        if(heartbeatKindOf(packet)) { /* no log */ }
+        else if(this._unauthenticatedHandlerIds.has(handler.id)) logger.debug(packetLog); else logger.info(packetLog);
         if(this._rejectedHandlerIds.has(handler.id)) return;
         if((packet.cmd == CtrlCmd.SyncCtrl || packet.cmd == CtrlCmd.AckCtrl) && this._clientHandlerPoolMap.has(handler.id)) {
             // 인증된 연결의 핸드셰이크 재전송은 무시한다. 새 pool 을 만들면 기존 세션이 고아가 된다(#165).
@@ -866,16 +935,81 @@ class TunnelServer {
                 capabilities: [],
                 legacy: true
             });
+        } else if(packet.cmd == CtrlCmd.EnrollRequest && !this._clientHandlerPoolMap.has(handler.id)) {
+            this.handleEnrollRequest(handler, packet);
         } else {
             let ctrlID = handler.id;
             let clientHandlerPool = this._clientHandlerPoolMap.get(ctrlID);
             if(!clientHandlerPool) {
-                logger.error(`onHandlerEvent - Not Found ClientHandlerPool. id: ${ctrlID}`);
+                // 인증 전 연결은 누구나 보낼 수 있으므로 debug 로 남긴다(#166, #260).
+                const message = `onHandlerEvent - Not Found ClientHandlerPool. id: ${ctrlID}`;
+                if(this._unauthenticatedHandlerIds.has(ctrlID)) logger.debug(message); else logger.error(message);
                 handler.end_();
                 return;
             }
             clientHandlerPool.delegateReceivePacketOfControlHandler(handler as TunnelControlHandler, packet);
         }
+    }
+
+    public configureEnrollment(registry: EnrollmentRegistry, onEvent: OnEnrollmentEvent): void {
+        this._enrollment = {registry, onEvent};
+    }
+
+    /**
+     * 등록 교환(#212 REQ-5~REQ-8). 인증 전 연결에서만 받는다. 응답을 보내고 연결을 닫는다.
+     * 연결은 끝까지 미인증으로 남아 인증 전 단계의 기한·연결 수 제한을 그대로 받는다.
+     */
+    private handleEnrollRequest(handler: TunnelHandler, packet: CtrlPacket): void {
+        const address = handler.remoteAddress;
+        const meta = packet.enrollRequestMetaResult;
+        let response: EnrollResponseMeta;
+        let clientId: string | undefined;
+        // #221: 발급 때뿐 아니라 교환 때도 모드를 본다. strict 는 TLS 계층이 먼저 막지만 그 한 겹에만 기대지 않는다.
+        // 코드를 소진하지 않고 답한다.
+        if(!this._enrollment || !this._serverOption.tls || this._serverOption.controlProtocolMode === "mtls-strict") {
+            response = {ok: false, reason: "unavailable"};
+        } else {
+            const taken = this._enrollment.registry.take(meta.kind === "valid" ? meta.value.lookup : "", address);
+            const trusted = taken.ok ? this._identityRegistry.findTrustedClient(taken.clientId) : undefined;
+            if(taken.ok && trusted) {
+                clientId = trusted.clientId;
+                const payload: EnrollmentPayload = {clientId: trusted.clientId, clientSecret: trusted.clientSecret,
+                    serverName: CONTROL_CERT_SERVER_NAME, tls: true, ca: this._controlCertPem};
+                response = {ok: true, ...sealEnrollmentPayload(taken.keys, payload)};
+            } else {
+                response = {ok: false, reason: taken.ok ? "rejected" : taken.reason};
+            }
+        }
+        // 제한에 걸린 요청과 등록을 받지 않는 서버의 요청은 감사하지 않는다. 인증 전 연결로 감사 큐를 채우지 못하게 한다.
+        if(response.ok || response.reason === "rejected") {
+            this._enrollment?.onEvent({success: response.ok, clientId, address, reason: response.ok ? undefined : response.reason});
+        }
+        this._rejectedHandlerIds.add(handler.id);
+        handler.sendData(CtrlPacket.createEnrollResponse(response).toBuffer(), () => {
+            const timer = setTimeout(() => {
+                this._authTimeouts.delete(timer);
+                this._rejectedHandlerIds.delete(handler.id);
+                handler.destroy();
+            }, 250);
+            this._authTimeouts.add(timer);
+        });
+    }
+
+    /**
+     * 신뢰 클라이언트 목록을 제어 서버를 다시 시작하지 않고 바꾼다(#212 REQ-3).
+     * 지워졌거나 비밀값이 바뀐 클라이언트의 연결만 끊는다. 끊은 clientId 목록을 돌려준다.
+     */
+    public updateTrustedClients(trustedClients: Array<{clientId: string, clientSecret: string, displayName?: string}>): string[] {
+        const affected = new Set(this._identityRegistry.replaceTrustedClients(trustedClients));
+        const disconnected: string[] = [];
+        for(const [ctrlID, pool] of [...this._clientHandlerPoolMap]) {
+            if(pool.clientId && affected.has(pool.clientId)) {
+                disconnected.push(pool.clientId);
+                this.destroyClientHandlerPool(ctrlID);
+            }
+        }
+        affected.forEach((clientId) => this._enrollment?.registry.revokeClient(clientId));
+        return disconnected;
     }
 
     private isLegacyAuthBlocked(address: string): boolean {
@@ -934,6 +1068,8 @@ class TunnelServer {
             this.onReceiveAllHandler(handler, data);
         } else {
             this.clearUnauthenticatedHandler(handler.id);
+            // 핸드셰이크를 마치지 못하고 닫힌 제어 연결의 대기 항목. 아래 풀 정리는 풀이 없으면 바로 돌아가므로 여기서 지운다(#247).
+            this._pendingControlHandshakeMap.delete(handler.id);
             let handlerType = (handler as TunnelHandler).handlerType;
             if(handlerType == HandlerType.Unknown || handlerType == undefined) {
                 return;
@@ -970,7 +1106,17 @@ class TunnelServer {
         }
         // 중복 세션 정리 방지: 처리된 세션 ID들을 Set으로 추적
         let processedSessionIDs = new Set<number>();
-        
+
+        // 데이터 연결이 끊겨 유예 중인 세션은 close() 와 같이 외부로 넘긴 길이로 닫는다(#253).
+        // 0 으로 닫으면 HTTP 외부 연결은 이미 받은 응답을 끝까지 넘기지 않고 끊는다.
+        for(const drop of handlerPool.takePendingDataDrops()) {
+            this._sessionIDAndCtrlIDMap.delete(drop.sessionID);
+            this._forwardedCloseLengths.delete(drop.sessionID);
+            this._sessionLastActivityMs.delete(drop.sessionID);
+            this._onSessionCloseCallback?.(drop.sessionID, drop.endLength);
+            processedSessionIDs.add(drop.sessionID);
+        }
+
         // 먼저 sessionIDAndCtrlIDMap에서 해당 ctrlID 관련 세션들 정리
         let removeSessionIDs : Array<number> = [];
         this._sessionIDAndCtrlIDMap.forEach((value, key) => {
@@ -983,7 +1129,10 @@ class TunnelServer {
             this._sessionIDAndCtrlIDMap.delete(id);
             // P6-T1 / REQ-09: Pool swap/destroy 시 orphan close 일괄 통보 + 활동 기록 제거.
             this._sessionLastActivityMs.delete(id);
-            this._onSessionCloseCallback?.(id, 0);
+            // CloseSession 을 이미 받아 배출 중인 세션은 그 길이로 닫는다(#266). 나머지는 지금처럼 0 이다.
+            const closeLength = this._forwardedCloseLengths.get(id) ?? 0;
+            this._forwardedCloseLengths.delete(id);
+            this._onSessionCloseCallback?.(id, closeLength);
             processedSessionIDs.add(id);
         }
         
@@ -1096,4 +1245,4 @@ class TunnelServer {
 
 }
 
-export { TunnelServer, ClientStatus};
+export { TunnelServer, ClientStatus, OnEnrollmentEvent};

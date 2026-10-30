@@ -8,10 +8,12 @@ import ConnectOpt from "../util/ConnectOpt";
 import {TunnelControlHandler,TunnelDataHandler,DataHandlerState} from "../types/TunnelHandler";
 import DataStatePacket from "../commons/DataStatePacket";
 import Dequeue from "../util/Dequeue";
-import {ResourcePolicyRegistry} from "../util/ResourcePolicy";
+import {computeWatermarkBytes, ResourcePolicyRegistry} from "../util/ResourcePolicy";
 import LoggerFactory  from "../util/logger/LoggerFactory";
 import {SystemInfoProviderRegistry} from "../commons/SystemInfoProvider";
 import {sysinfoMessagePacket} from "./sysinfoPacket";
+import {HEARTBEAT_CAPABILITY, heartbeatKindOf, heartbeatPacket, HeartbeatPolicyRegistry} from "../commons/Heartbeat";
+import {TTTClientRuntimeRegistry} from "./TTTClientRuntime";
 const logger = LoggerFactory.getLogger('client', 'TunnelClient');
 
 
@@ -74,8 +76,16 @@ class TunnelClient {
     private _pendingDataAttempts = new Map<number, DataAttempt>();
     private _waitBufferQueueMap : Map<number, WaitBufferState> = new Map<number, WaitBufferState>();
     private _waitBufferBytesTotal: number = 0;
+    /** #257: 대기 버퍼 배압이 풀리기를 기다리는 리스너. 대기 버퍼를 비우거나 버리면 부른다. */
+    private _waitReliefListeners = new Map<number, Array<() => void>>();
     private _protocolVersion: number = 1;
     private _legacyMode: boolean = true;
+    /** #230: 서버가 heartbeat 를 알렸는지, ping 타이머, 마지막으로 제어 패킷을 받은 시각. */
+    private _serverHeartbeat = false;
+    private _heartbeatTimer: NodeJS.Timeout | undefined;
+    /** #255: 접속과 핸드셰이크의 기한 타이머. heartbeat 는 핸드셰이크가 끝난 뒤에만 돌기 때문이다. */
+    private _handshakeTimer: NodeJS.Timeout | undefined;
+    private _lastControlReceiveAt = 0;
     private _closeCountSafe = false;
 
 
@@ -148,6 +158,8 @@ class TunnelClient {
             
             // 연결 시도가 성공적으로 시작된 후에만 state 변경
             this._state = CtrlState.Connecting;
+            // OS 접속 기한은 SYN 단계에만 걸린다. TLS 핸드셰이크에 답하지 않는 상대에 묶이지 않게 기한을 둔다(#255).
+            this.armHandshakeDeadline(this._ctrlHandler, TTTClientRuntimeRegistry.current().controlConnectTimeoutMs, 'connect');
             this._ctrlHandler.handlerType = HandlerType.Control;
             this._ctrlHandler.packetStreamer = new CtrlPacketStreamer();
             
@@ -172,6 +184,8 @@ class TunnelClient {
 
 
     private failHandshake(err?: Error) : void {
+        this.stopHeartbeat();
+        this.clearHandshakeDeadline();
         this._closeCountSafe = false;
         this._state = CtrlState.None
         this._ctrlHandler?.end_();
@@ -188,6 +202,8 @@ class TunnelClient {
         if(!dataHandler || !this._ctrlHandler) {
             return false;
         }
+        // 끝점이 다시 열리면(중복 OpenSession) 대기 버퍼를 새로 만든다. 옛 항목의 바이트는 반납한다(#254).
+        this.clearWaitBuffer(sessionID);
         this._waitBufferQueueMap.set(sessionID, {
             queue: new Dequeue<Buffer>(),
             bytes: 0,
@@ -225,7 +241,8 @@ class TunnelClient {
         }
         let dataHandler = this._activatedSessionDataHandlerMap.get(sessionID);
         if(!dataHandler) {
-            this._waitBufferQueueMap.delete(sessionID);
+            // 보낼 곳이 없으니 버린다. 바이트는 반납한다(#254).
+            this.clearWaitBuffer(sessionID);
             return;
         }
         let data = waitState.queue.popFront();
@@ -235,6 +252,12 @@ class TunnelClient {
             data = waitState.queue.popFront();
         }
         this._waitBufferQueueMap.delete(sessionID);
+        this.releaseWaitReliefListeners(sessionID);
+        // 대기 데이터가 남아 미뤄 둔 정상 종료다. 이제 다 보냈으니 닫는다(#257).
+        if(dataHandler.endAfterFlush) {
+            dataHandler.endAfterFlush = false;
+            dataHandler.end_();
+        }
     }
 
     public terminateEndPointSession(sessionID: number, mode: 'graceful' | 'abort' = 'abort') : void {
@@ -242,6 +265,11 @@ class TunnelClient {
         if(mode === 'graceful' && current && current.dataHandlerState === DataHandlerState.OnlineSession && !current.isEnd()) {
             if(this._gracefulDataHandlers.has(current)) return;
             this._gracefulDataHandlers.add(current);
+            // Ack 전에 모아 둔 데이터가 남아 있으면 지금 닫지 않는다. 닫으면 Ack 뒤 flush 가 그 데이터를 버린다(#257).
+            if(!(this._waitBufferQueueMap.get(sessionID)?.queue.isEmpty() ?? true)) {
+                current.endAfterFlush = true;
+                return;
+            }
             current.end_();
             return;
         }
@@ -277,6 +305,8 @@ class TunnelClient {
     private onCtrlHandlerEvent = (handler: SocketHandler, state: SocketState, data?: any) : void => {
         if(handler !== this._ctrlHandler) return;
         if(state == SocketState.Connected && this._ctrlHandler) {
+            // 접속은 끝났다. 이제 SyncCtrlAck 를 받고 AckCtrl 을 보낼 때까지의 기한을 건다(#255).
+            this.armHandshakeDeadline(this._ctrlHandler, TTTClientRuntimeRegistry.current().syncAckTimeoutMs, 'SyncCtrlAck');
             this.sendSyncAndSyncSyncCmd(this._ctrlHandler);
         }
         else if(state == SocketState.Receive && handler == this._ctrlHandler) {
@@ -291,6 +321,8 @@ class TunnelClient {
 
     private closeControlHandler(handler: SocketHandler, error?: Error): void {
         if(handler !== this._ctrlHandler) return;
+        this.stopHeartbeat();
+        this.clearHandshakeDeadline();
         this._closeCountSafe = false;
         this._state = CtrlState.None;
         this._ctrlHandler = undefined;
@@ -327,6 +359,7 @@ class TunnelClient {
             logger.error(`onReceiveFromCtrlHandler - packetStreamer is undefined for handler: ${handler.id}`);
             return;
         }
+        this._lastControlReceiveAt = Date.now();
         const result = handler.packetStreamer.readCtrlPacketResult(data);
         if(result.error) {
             logger.error(`Control protocol ${result.error.kind} failure; closing current connection`);
@@ -334,6 +367,8 @@ class TunnelClient {
             return;
         }
         for(let packet of result.packets) {
+            // #230: heartbeat 는 몇 초마다 오므로 패킷마다 로그를 남기지 않는다.
+            if(heartbeatKindOf(packet)) continue;
             logger.info(`onReceiveFromCtrlHandler - cmd:${CtrlCmd[packet.cmd]}, sessionID:${packet.sessionID}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
             if(this._state == CtrlState.Syncing && packet.cmd == CtrlCmd.SyncCtrlAck) {
                 const metadata = packet.syncCtrlAckMetaResult;
@@ -343,19 +378,23 @@ class TunnelClient {
                 }
                 const syncMeta = metadata.kind === 'valid' ? metadata.value : undefined;
                 this._closeCountSafe = false;
+                this._serverHeartbeat = false;
                 this._id = syncMeta?.controlID ?? packet.ID;
                 if(syncMeta && this._option.clientId && this._option.clientSecret) {
                     this._protocolVersion = syncMeta.protocolVersion;
                     this._legacyMode = false;
                     this._closeCountSafe = syncMeta.protocolVersion === CONTROL_PROTOCOL_V2 && syncMeta.capabilities.includes('close-count-safe') &&
                         DEFAULT_PROTOCOL_V2_CAPABILITIES.includes('close-count-safe');
+                    this._serverHeartbeat = syncMeta.capabilities.includes(HEARTBEAT_CAPABILITY) &&
+                        DEFAULT_PROTOCOL_V2_CAPABILITIES.includes(HEARTBEAT_CAPABILITY);
                     // v2 는 HMAC 증명으로 인증한다. legacy 공유 키는 싣지 않는다(평문·허위 서버로 새지 않게, #161).
                     this.sendAckCtrl(handler, this._id, '', {
                         protocolVersion: CONTROL_PROTOCOL_V2,
                         capabilities: DEFAULT_PROTOCOL_V2_CAPABILITIES,
                         controlID: this._id,
                         clientId: this._option.clientId,
-                        displayName: this._option.displayName || this._option.name,
+                        // #210: 이름은 -name 하나다. v2 서버는 이 값을 표시 이름으로 쓰지 않고 등록된 이름을 쓴다(#162).
+                        displayName: this._option.name,
                         proof: buildHandshakeProof(this._option.clientSecret, this._option.clientId, this._id, syncMeta.challengeNonce)
                     });
                     continue;
@@ -407,14 +446,19 @@ class TunnelClient {
                             this._onEndPointCloseCallback?.(packet.sessionID, 0);
                         }
                     } else {
-                        dataHandler.addOnceDrainListener((drained, success) => {
+                        // 같은 세션의 CloseSession 이 반복되어도 drain 리스너는 하나만 둔다. 출력이 빌 때 마지막 count 로 닫는다(#254).
+                        const waiting = dataHandler.pendingCloseCount !== undefined;
+                        dataHandler.pendingCloseCount = count.value.count;
+                        if(!waiting) dataHandler.addOnceDrainListener((drained, success) => {
+                            const closeCount = dataHandler.pendingCloseCount!;
+                            dataHandler.pendingCloseCount = undefined;
                             if(!dataHandler || drained !== dataHandler || this._activatedSessionDataHandlerMap.get(packet.sessionID) !== dataHandler ||
                                 !success || dataHandler.isEnd() || !dataHandler.isOutputDrained) return;
                             if (dataHandler) {
                                 dataHandler.setBufferSizeLimit(-1);
                                 dataHandler.dataHandlerState = DataHandlerState.Terminated;
                             }
-                            this._onEndPointCloseCallback?.(packet.sessionID, count.value.count);
+                            this._onEndPointCloseCallback?.(packet.sessionID, closeCount);
                         });
                     }
                 } else {
@@ -491,7 +535,16 @@ class TunnelClient {
                 tunnelDataHandler.bindingToken = bindingToken;
                 tunnelDataHandler.handlerType = HandlerType.Data;
                 tunnelDataHandler.dataHandlerState = DataHandlerState.Initializing;
+                const replaced = this._activatedSessionDataHandlerMap.get(sessionID);
                 this._activatedSessionDataHandlerMap.set(sessionID, tunnelDataHandler);
+                // 활성 세션에 NewDataHandler 가 다시 왔다. 옛 연결은 더 쓰지 않으므로 닫는다(#254).
+                // 맵을 먼저 바꿔 두어야 옛 핸들러의 닫힘 이벤트가 새 세션 상태를 지우지 않는다.
+                if(replaced && replaced !== tunnelDataHandler) {
+                    this._gracefulDataHandlers.delete(replaced);
+                    // 옛 연결의 배압으로 끝점 읽기를 멈췄다면 다시 읽게 한다. 데이터는 이제 새 연결로 간다.
+                    replaced.releasePressureReliefListeners();
+                    replaced.destroy();
+                }
                 this._pendingDataAttempts.delete(sessionID);
                 // P6-T1: waitBuffer queue 선할당.
                 if(!this._waitBufferQueueMap.has(sessionID)) {
@@ -610,9 +663,11 @@ class TunnelClient {
                 this.failHandshake(err);
                 return;
             }
+            this.clearHandshakeDeadline();
             this._state = CtrlState.Connected;
             this._onCtrlStateCallback?.(this, 'connected');
             this.sendClientSysinfo(ctrlHandler, id);
+            if(!this._legacyMode && this._serverHeartbeat) this.startHeartbeat(ctrlHandler, id);
         });
     }
 
@@ -709,6 +764,11 @@ class TunnelClient {
         if(dataHandler.dataHandlerState != DataHandlerState.OnlineSession) {
             return this.writeWaitBuffer(sessionID, data);
         }
+        // ResultOfOpenSession 쓰기가 끝나 OnlineSession 이 되었어도, Ack 전에 모아 둔 데이터는 Ack 를 받아야 나간다.
+        // 그 데이터가 남아 있으면 새 데이터를 뒤에 붙인다. 바로 보내면 앞서 온 데이터를 앞질러 순서가 뒤바뀐다(#257).
+        if(!(this._waitBufferQueueMap.get(sessionID)?.queue.isEmpty() ?? true)) {
+            return this.writeWaitBuffer(sessionID, data);
+        }
         dataHandler.sendData(data);
         return true;
     }
@@ -716,6 +776,7 @@ class TunnelClient {
     // 이슈 #129 대응 누락분: 터널 데이터 소켓(서버로 나가는 방향)이 배압 상태면
     // EndPointClientPool이 목적지 소켓 읽기를 멈출 수 있도록 상태를 노출한다.
     public isSessionBackpressured(sessionID: number) : boolean {
+        if(this.isWaitBufferPressured(sessionID)) return true;
         return this._activatedSessionDataHandlerMap.get(sessionID)?.isBackpressured ?? false;
     }
 
@@ -729,10 +790,36 @@ class TunnelClient {
     }
 
     public addSessionPressureReliefListener(sessionID: number, listener: () => void) : void {
+        // 대기 버퍼 때문에 멈췄다면 그 버퍼를 비우거나 버릴 때 다시 읽게 한다(#257).
+        if(this.isWaitBufferPressured(sessionID)) {
+            const listeners = this._waitReliefListeners.get(sessionID) ?? [];
+            listeners.push(listener);
+            this._waitReliefListeners.set(sessionID, listeners);
+            return;
+        }
         const handler = this._activatedSessionDataHandlerMap.get(sessionID);
         if(handler) {
             handler.addOncePressureReliefListener(() => listener());
         }
+    }
+
+    /**
+     * #257: 대기 버퍼가 세션 상한이나 풀 상한의 높은 수위에 닿았는지. 서버 쪽 대기 큐(#163·#183)와 같은 기준이다.
+     * 대기 버퍼는 Ack 를 받을 때까지 쌓이므로, 상한에 닿아 세션을 닫기 전에 목적지 읽기를 멈춘다.
+     */
+    private isWaitBufferPressured(sessionID: number) : boolean {
+        const waitState = this._waitBufferQueueMap.get(sessionID);
+        if(!waitState || waitState.queue.isEmpty()) return false;
+        if(waitState.limitBytes > 0 && waitState.bytes >= computeWatermarkBytes(waitState.limitBytes).high) return true;
+        const policy = ResourcePolicyRegistry.current();
+        return policy.defaultPoolQueueLimitBytes > 0 && this._waitBufferBytesTotal >= computeWatermarkBytes(policy.defaultPoolQueueLimitBytes).high;
+    }
+
+    private releaseWaitReliefListeners(sessionID: number) : void {
+        const listeners = this._waitReliefListeners.get(sessionID);
+        if(!listeners) return;
+        this._waitReliefListeners.delete(sessionID);
+        listeners.forEach((listener) => listener());
     }
 
     private writeWaitBuffer(sessionID: number, data: Buffer) : boolean {
@@ -747,13 +834,68 @@ class TunnelClient {
         return false;
     }
 
+    /**
+     * #230: intervalMs 마다 ping 을 보내고, timeoutMs 동안 아무 제어 패킷도 받지 못하면 연결을 끊는다.
+     * 끊으면 기존 'closed' 흐름을 따라 TTTClient 가 다시 연결한다.
+     */
+    private startHeartbeat(handler: TunnelControlHandler, id: number): void {
+        this.stopHeartbeat();
+        const policy = HeartbeatPolicyRegistry.current();
+        this._lastControlReceiveAt = Date.now();
+        this._heartbeatTimer = setInterval(() => {
+            if(handler !== this._ctrlHandler || this._state !== CtrlState.Connected) {
+                this.stopHeartbeat();
+                return;
+            }
+            const silentMs = Date.now() - this._lastControlReceiveAt;
+            if(silentMs > policy.timeoutMs) {
+                logger.warn(`Control connection heartbeat timed out (no packet for ${silentMs}ms). Closing to reconnect.`);
+                this.closeControlHandler(handler, new Error("Control connection heartbeat timed out"));
+                return;
+            }
+            handler.sendData(heartbeatPacket(id, "ping"));
+        }, policy.intervalMs);
+        this._heartbeatTimer.unref?.();
+    }
+
+    private stopHeartbeat(): void {
+        if(this._heartbeatTimer) clearInterval(this._heartbeatTimer);
+        this._heartbeatTimer = undefined;
+    }
+
+    /**
+     * #255: 기한 안에 다음 단계로 가지 못하면 연결을 닫는다. 닫으면 기존 'closed' 흐름을 따라 TTTClient 가 다시 연결한다.
+     * 새 기한은 앞 기한을 바꾼다(접속 → SyncCtrlAck).
+     * ConnectOpt.connectTimeout 을 쓰지 않고 한 타이머로 두 단계를 다룬다. 단계가 바뀔 때 기한을 이어 걸고,
+     * 어느 단계에서 끝났는지 같은 경로(closeControlHandler)로 닫기 위해서다.
+     */
+    private armHandshakeDeadline(handler: SocketHandler, timeoutMs: number, stage: 'connect' | 'SyncCtrlAck'): void {
+        this.clearHandshakeDeadline();
+        this._handshakeTimer = setTimeout(() => {
+            this._handshakeTimer = undefined;
+            if(handler !== this._ctrlHandler || this._state === CtrlState.Connected) return;
+            logger.warn(`Control connection ${stage} timed out after ${timeoutMs}ms. Closing to reconnect.`);
+            this.closeControlHandler(handler, new Error(`Control connection ${stage} timed out`));
+        }, timeoutMs);
+        this._handshakeTimer.unref?.();
+    }
+
+    private clearHandshakeDeadline(): void {
+        if(this._handshakeTimer) clearTimeout(this._handshakeTimer);
+        this._handshakeTimer = undefined;
+    }
+
     public destroy(): void {
+        this.stopHeartbeat();
+        this.clearHandshakeDeadline();
         this._closeCountSafe = false;
         this._state = CtrlState.None;
         this._ctrlHandler?.destroy();
         this._ctrlHandler = undefined;
         this.destroyAllDataHandler();
         this._waitBufferQueueMap.clear();
+        // 끝난 클라이언트의 목적지는 함께 닫히므로 다시 읽게 하지 않는다. 리스너만 버린다.
+        this._waitReliefListeners.clear();
         this._waitBufferBytesTotal = 0;
     }
 
@@ -783,6 +925,7 @@ class TunnelClient {
             return;
         }
         this._waitBufferQueueMap.delete(sessionID);
+        this.releaseWaitReliefListeners(sessionID);
         this._waitBufferBytesTotal = Math.max(0, this._waitBufferBytesTotal - waitState.bytes);
         waitState.bytes = 0;
         waitState.queue.clear();

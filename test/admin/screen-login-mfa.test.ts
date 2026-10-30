@@ -1,11 +1,11 @@
 import type {Page} from "playwright";
-import {startAdminApp, type AdminApp} from "../helpers/adminApp";
+import {startAdminApp, type AdminApp, ADMIN_APP_TEST_TIMEOUT_MS} from "../helpers/adminApp";
 import {RBAC_PASSWORDS} from "../helpers/rbacFixture";
 import {generate} from "../../src/server/mfa/Totp";
 import {base32Decode} from "../../src/server/mfa/Base32";
 
 // U4-07 / #115 — 로그인 2단계(코드·복구 코드). 'rbac-mfa' 의 alice 만 MFA 가 켜져 있다. 로그인 화면에서 직접 입력한다.
-jest.setTimeout(120_000);
+jest.setTimeout(ADMIN_APP_TEST_TIMEOUT_MS);
 
 const button = (page: Page, name: string) => page.getByRole("button", {name, exact: true});
 

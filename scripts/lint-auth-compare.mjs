@@ -9,7 +9,7 @@
 //   node scripts/lint-auth-compare.mjs [path ...] [--report-dir <dir>]
 //
 // --report-dir <dir>: 리포트 출력 디렉터리를 재지정한다 (테스트 격리용).
-//                     미지정 시 cwd/reports 사용 (기존 CLI 호환).
+//                     미지정 시 cwd/build/reports 를 쓴다. git 이 무시하는 곳이라 lint 가 추적 파일을 바꾸지 않는다(#272).
 //
 // 기본 exit 정책:
 //   - 위반 없음 → exit 0
@@ -17,7 +17,7 @@
 //   - 위반 존재 + STRICT 미설정 → exit 0 (warn 허용; P1-T2 DoD: error 0건)
 //
 // 출력: stdout = JSON Lines (violations + summary)
-//        reports/auth-compare.json = 전체 리포트 파일
+//        build/reports/auth-compare.json = 전체 리포트 파일
 
 import { readFileSync, readdirSync, statSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { join, resolve, relative, sep } from "node:path";
@@ -213,10 +213,10 @@ function main() {
     // eslint-disable-next-line no-console
     console.log(JSON.stringify({ type: "summary", ...summary }));
 
-    // 리포트 파일 (--report-dir 지정 시 테스트 격리 디렉터리 사용, 기본은 cwd/reports)
+    // 리포트 파일 (--report-dir 지정 시 테스트 격리 디렉터리 사용, 기본은 cwd/build/reports — #272)
     const reportDir = parsed.reportDir
         ? resolve(cwd(), parsed.reportDir)
-        : resolve(cwd(), "reports");
+        : resolve(cwd(), "build", "reports");
     if (!existsSync(reportDir)) mkdirSync(reportDir, { recursive: true });
     const reportPath = resolve(reportDir, "auth-compare.json");
     writeFileSync(reportPath, JSON.stringify({ summary, violations: allViolations }, null, 2), { encoding: "utf-8" });

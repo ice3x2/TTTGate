@@ -7,6 +7,8 @@ import {createHash} from "node:crypto";
 import ObjectUtil from "../util/ObjectUtil";
 import LoggerFactory  from "../util/logger/LoggerFactory";
 import fs from "fs";
+import Path from "path";
+import {createPrivateKey, X509Certificate} from "node:crypto";
 import {createInitialRevisionState, RevisionState} from "./RevisionState";
 const logger = LoggerFactory.getLogger('server', 'CertificationStore');
 
@@ -29,6 +31,15 @@ type ExternalCertFileInfo = {
 const ADMIN_CERT_FILE_INFO_FILE_NAME: string = '.adminCert.json';
 const EXTERNAL_CERT_FILE_INFO_FILE_NAME: string = '.externalCert.json';
 const CERT_STATE_FILE_NAME: string = '.cert.state.json';
+/**
+ * 제어 포트 인증서(#212). 예전에는 시작할 때마다 새로 만들어 클라이언트가 CA 로 고정할 수 없었다.
+ * 이제 cert/ 에 저장해 다시 쓰고, 고정 서버 이름 하나만 SAN 에 넣는다. 클라이언트는 이 인증서를 CA 로,
+ * 이 이름을 serverName 으로 쓴다(client join 이 둘 다 받아 간다).
+ */
+const CONTROL_CERT_SERVER_NAME = 'tttgate-control';
+const CONTROL_CERT_FILE_NAME = 'control.cert.pem';
+const CONTROL_KEY_FILE_NAME = 'control.key.pem';
+const CONTROL_CERT_RENEW_BEFORE_MS = 30 * 24 * 3600_000;
 
 class CertificationStore {
 
@@ -78,14 +89,14 @@ class CertificationStore {
     }
 
     public async makeTempCert() {
-        let cert = await CACertGenerator.genCACert();
+        let cert = await CACertGenerator.genCACert({commonName: CONTROL_CERT_SERVER_NAME, altNames: [CONTROL_CERT_SERVER_NAME]});
         return {
             cert: {
-                name: 'temp.cert.pem',
+                name: CONTROL_CERT_FILE_NAME,
                 value: cert.cert
             },
             key: {
-                name: 'temp.key.pem',
+                name: CONTROL_KEY_FILE_NAME,
                 value: cert.key
             },
             ca: {
@@ -93,6 +104,34 @@ class CertificationStore {
                 value: ''
             }
         };
+    }
+
+    /** 저장한 제어 인증서가 쓸 만하면 읽고, 없거나 깨졌거나 만료가 30일 안이면 새로 만들어 저장한다. */
+    private async loadOrCreateControlCert(): Promise<CertInfo> {
+        const certPath = Path.join(Environment.path.certDir, CONTROL_CERT_FILE_NAME);
+        const keyPath = Path.join(Environment.path.certDir, CONTROL_KEY_FILE_NAME);
+        try {
+            const certPem = fs.readFileSync(certPath, 'utf-8');
+            const keyPem = fs.readFileSync(keyPath, 'utf-8');
+            const x509 = new X509Certificate(certPem);
+            const fresh = Date.parse(x509.validTo) - Date.now() > CONTROL_CERT_RENEW_BEFORE_MS;
+            if(fresh && x509.subjectAltName === `DNS:${CONTROL_CERT_SERVER_NAME}` && x509.checkPrivateKey(createPrivateKey(keyPem))) {
+                return {cert: {name: CONTROL_CERT_FILE_NAME, value: certPem}, key: {name: CONTROL_KEY_FILE_NAME, value: keyPem}, ca: {name: '', value: ''}};
+            }
+            logger.info('Control certificate is expiring or has another name. Creating a new one; clients must enroll or pin it again.');
+        } catch (e) {
+            if((e as NodeJS.ErrnoException).code !== 'ENOENT') logger.warn('Cannot use the stored control certificate. Creating a new one.', e);
+        }
+        const created = await this.makeTempCert();
+        try {
+            fs.mkdirSync(Environment.path.certDir, {recursive: true});
+            fs.writeFileSync(certPath, created.cert.value, {encoding: 'utf-8'});
+            fs.writeFileSync(keyPath, created.key.value, {encoding: 'utf-8', mode: 0o600});
+            if(process.platform !== 'win32') fs.chmodSync(keyPath, 0o600);
+        } catch (e) {
+            logger.error('Cannot store the control certificate. It changes at the next start.', e);
+        }
+        return created;
     }
 
     public getTempCert() : CertInfo {
@@ -106,7 +145,6 @@ class CertificationStore {
     public async reset() {
         this._externalCert = {};
         this._adminCert = CertificationStore.makeEmptyCertFileInfo();
-        this._tempCert =  await this.makeTempCert();
         this._revisionState = createInitialRevisionState();
 
         if(this._adminCertFile.exists()) {
@@ -124,11 +162,12 @@ class CertificationStore {
             Files.deleteAll(certDir);
             certDir.mkdirs();
         }
+        this._tempCert = await this.loadOrCreateControlCert();
 
     }
 
     public async load() {
-        this._tempCert = await this.makeTempCert();
+        this._tempCert = await this.loadOrCreateControlCert();
         this._revisionState = this.loadRevisionState();
         await this.loadAdminCert();
         await this.loadExternalCert();
@@ -491,4 +530,4 @@ class CertificationStore {
 
 }
 
-export {CertificationStore, CertInfo, PemData};
+export {CertificationStore, CertInfo, PemData, CONTROL_CERT_SERVER_NAME};

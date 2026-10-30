@@ -1,6 +1,9 @@
 import type {Page} from "playwright";
 import {startAdminBrowser} from "../helpers/adminBrowser";
-import {startAdminApp} from "../helpers/adminApp";
+import {startAdminApp, ADMIN_APP_TEST_TIMEOUT_MS} from "../helpers/adminApp";
+
+// 앱 기동 예산보다 짧으면 부하에서 helper 의 진단 대신 jest 시간 초과로 끝난다(#273).
+jest.setTimeout(ADMIN_APP_TEST_TIMEOUT_MS);
 
 const FIXTURE = "/test/shell-fixture.html";
 
@@ -26,7 +29,7 @@ test("#/status 로 열면 제목과 화면 표식이 status 다", async () => {
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("메뉴 버튼이 드로어를 열고 항목을 고르면 해시와 화면이 바뀌며 초점이 돌아온다", async () => {
     const app = await startAdminBrowser();
@@ -54,7 +57,7 @@ test("메뉴 버튼이 드로어를 열고 항목을 고르면 해시와 화면�
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("Escape 와 오버레이 클릭이 드로어를 닫는다", async () => {
     const app = await startAdminBrowser();
@@ -78,7 +81,7 @@ test("Escape 와 오버레이 클릭이 드로어를 닫는다", async () => {
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("해시마다 제목·화면 표식·뒤로 가기가 규칙대로 바뀐다", async () => {
     const app = await startAdminBrowser();
@@ -110,9 +113,9 @@ test("해시마다 제목·화면 표식·뒤로 가기가 규칙대로 바뀐�
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
-test("본문이 모바일에서 전폭이고 데스크톱에서 1024px 중앙 정렬이다", async () => {
+test("본문이 모바일에서 전폭이고 데스크톱에서 서랍 오른쪽 공간에 1024px 로 중앙 정렬된다", async () => {
     const app = await startAdminBrowser();
     try {
         await app.page.setViewportSize({width: 400, height: 800});
@@ -123,17 +126,21 @@ test("본문이 모바일에서 전폭이고 데스크톱에서 1024px 중앙 �
             await app.page.evaluate(() => document.documentElement.clientWidth));
 
         await app.page.setViewportSize({width: 1280, height: 800});
-        await app.page.waitForFunction(() => document.querySelector("main.shell-main")!.getBoundingClientRect().width === 1024);
-        const box = await app.page.locator("main.shell-main").evaluate((el) => {
-            const rect = el.getBoundingClientRect();
-            return {width: rect.width, left: rect.left};
+        await app.page.waitForFunction(() => document.querySelector("main.shell-main")!.getBoundingClientRect().width === 1024
+            && document.querySelector("#nav-drawer") !== null);
+        // #278: 데스크탑에서는 서랍이 왼쪽에 늘 열려 있으므로, 본문은 서랍을 뺀 나머지 폭의 가운데에 놓인다.
+        const box = await app.page.evaluate(() => {
+            const rect = document.querySelector("main.shell-main")!.getBoundingClientRect();
+            const drawerRight = document.querySelector("#nav-drawer")!.getBoundingClientRect().right;
+            return {width: rect.width, left: rect.left, centredLeft: drawerRight + (document.documentElement.clientWidth - drawerRight - 1024) / 2};
         });
-        expect(box).toEqual({width: 1024, left: 128});
+        expect(box.width).toBe(1024);
+        expect(box.left).toBeCloseTo(box.centredLeft, 0);
         expect(app.errors).toEqual([]);
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
 // ---- #102 (U2-10) 사용자명·Sign out·섹션 필터. 실제 백엔드가 필요하므로 startAdminApp 을 쓴다. ----
 
@@ -159,16 +166,16 @@ test("드로어 하단에 사용자명과 Sign out 이 있고 Sign out 은 세�
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
-test("슈퍼유저 드로어는 NAV 9개를 순서대로 보여 준다", async () => {
+test("슈퍼유저 드로어는 NAV 10개를 순서대로 보여 준다", async () => {
     const app = await startAdminApp({fixture: "password"});
     try {
         await app.page.getByRole("button", {name: "Open menu"}).click();
         await app.page.getByRole("dialog", {name: "Navigation"}).waitFor({state: "visible"});
-        expect(await app.page.locator(".drawer-item").allTextContents()).toEqual(["Status", "Tunnels", "Server settings", "Users", "Groups", "Security", "Audit log", "Sessions", "My account"]);
+        expect(await app.page.locator(".drawer-item").allTextContents()).toEqual(["Status", "Tunnels", "Server settings", "Trusted clients", "Users", "Groups", "Security", "Audit log", "Sessions", "My account"]);
         expect(app.errors).toEqual([]);
     } finally {
         await app.close();
     }
-}, 60_000);
+}, ADMIN_APP_TEST_TIMEOUT_MS);

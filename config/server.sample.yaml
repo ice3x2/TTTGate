@@ -15,6 +15,11 @@ trustedClients:
     displayName: "Client A"
 globalMemCacheLimit: 128
 keepAlive: 10000
+# error, warn, info or debug. You can change it at run time in the admin console.
+logLevel: "info"
+# Close timeouts in milliseconds (closeStallMs 1000-600000, closeGraceMs 1000-120000).
+closeStallMs: 60000
+closeGraceMs: 10000
 tunnelingOptions:
   - forwardPort: 18080
     protocol: "http"
@@ -24,6 +29,8 @@ tunnelingOptions:
       - "client-a"
     inactiveOnStartup: false
     tls: false
+    # TLS tunnels only: true makes the client skip verification of the destination certificate (self-signed). Trusted networks only.
+    allowSelfSignedDestinationCert: false
     bufferLimitOnServer: 8
     bufferLimitOnClient: 8
     keepAlive: -1
