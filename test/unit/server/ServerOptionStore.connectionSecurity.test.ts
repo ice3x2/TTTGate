@@ -121,7 +121,7 @@ describe("ServerOptionStore connectionSecurity normalization", () => {
             const read = reloaded.readServerOption();
             if(!read.success) throw new Error("server option not ready");
             expect(reloaded.commitPreparedServerOption(read.serverOption).success).toBe(true);
-            expect(YAML.parse(Files.toStringSync(configFile)).connectionSecurity.blocklist).toEqual(
+            expect(YAML.parse(Files.toStringSync(configFile) ?? "").connectionSecurity.blocklist).toEqual(
                 [{address: "203.0.113.7", port: null, note: "", createdAt: 1, createdBy: "admin"}]);
         } finally {
             warn.mockRestore();
