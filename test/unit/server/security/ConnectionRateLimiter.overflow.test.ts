@@ -4,7 +4,8 @@ jest.setTimeout(30_000);
 
 // #175 — IPv6 /48 하나로 /64 를 대량으로 만들어 창 표를 넘쳐도 다른 버킷의 카운터가 지워지면 안 된다.
 const CONFIG = {windowMs: 60_000, maxConnections: 3, banMs: 60_000};
-const v6 = (n: number) => `2001:db8:${(n >> 16) & 0xffff}:${n & 0xffff}::1`;
+// 그룹은 16진수로 쓴다. 10진수로 쓰면 10000 이상에서 다섯 자리 그룹이 되어 IPv6 가 아니다(#288).
+const v6 = (n: number) => `2001:db8:${((n >> 16) & 0xffff).toString(16)}:${(n & 0xffff).toString(16)}::1`;
 const v4 = (n: number) => `10.${(n >> 16) & 255}.${(n >> 8) & 255}.${n & 255}`;
 
 describe("ConnectionRateLimiter window table under a /64 flood (#175)", () => {
@@ -31,6 +32,17 @@ describe("ConnectionRateLimiter window table under a /64 flood (#175)", () => {
         // 이미 따로 세던 /64 와 다른 /48 은 영향을 받지 않는다.
         expect(limiter.admit(1, "2001:db8:77:0::5", 2).allowed).toBe(true);
         expect(limiter.admit(1, "2001:db8:78:1::1", 2).allowed).toBe(true);
+    });
+
+    // #287 — TLS 포트는 핸드셰이크 전에 banned 로 판정한다. /48 로 묶어 센 차단도 여기서 보여야 한다.
+    it("banned reports the /48 overflow ban for a new /64 but not for a /64 counted on its own", () => {
+        const limiter = new ConnectionRateLimiter();
+        limiter.configurePort(1, CONFIG);
+        for(let n = 0; n < MAX_TRACKED_SUBNETS_PER_PREFIX; n++) limiter.admit(1, `2001:db8:77:${n.toString(16)}::1`, 0);
+        for(let n = 0; n < 4; n++) limiter.admit(1, `2001:db8:77:${(0x1000 + n).toString(16)}::1`, 1);
+        expect(limiter.banned(1, "2001:db8:77:2000::1", 2)).toMatchObject({allowed: false, reason: "rate-limit-ban"});
+        expect(limiter.banned(1, "2001:db8:77:0::5", 2)).toBeUndefined();
+        expect(limiter.banned(1, "2001:db8:78:1::1", 2)).toBeUndefined();
     });
 
     it("a full table of active IPv4 buckets never turns into a shared bucket that blocks new clients", () => {

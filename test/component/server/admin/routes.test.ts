@@ -68,6 +68,10 @@ const EXPECTED_ROUTES: ReadonlyArray<ExpectedRoute> = [
     {method: "GET", pattern: "^/api/security/geo$", action: "security:manage", hasTarget: false},
     {method: "PUT", pattern: "^/api/security/geo$", action: "security:manage", hasTarget: false},
     {method: "GET", pattern: "^/api/security/countries$", action: "security:manage", hasTarget: false},
+    // #286 관리자 차단 목록
+    {method: "GET", pattern: "^/api/security/blocklist$", action: "security:manage", hasTarget: false},
+    {method: "POST", pattern: "^/api/security/blocklist$", action: "security:manage", hasTarget: false},
+    {method: "DELETE", pattern: "^/api/security/blocklist/(?<address>[^/]+)$", action: "security:manage", hasTarget: false},
     // U2-06 / #98 이 더한 사용자·그룹 관리 라우트. 핸들러는 rbacRoutes.ts 에 있다.
     {method: "GET", pattern: "^/api/users$", action: "user:manage", hasTarget: false},
     {method: "POST", pattern: "^/api/users$", action: "user:manage", hasTarget: false},

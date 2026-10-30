@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>영구 IP 차단 설계</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Noto+Serif+KR:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* 색·글꼴 토큰은 docs/design/admin-design-system.html 에서 가져왔다. */
+:root{
+  --bg-0:#FFFFFF; --bg-1:#FAFBFC; --bg-2:#FFFFFF; --bg-3:#F3F5F9; --bg-mute:#EEF0F5;
+  --line-0:#ECEEF3; --line-1:#D7DBE4; --line-2:#8A94A3;
+  --ink-0:#0E1218; --ink-1:#363D47; --ink-2:#6A7381; --ink-3:#A8B0BD;
+  --signal:#A53424; --signal-fill:#C24A36; --signal-glow:rgba(165,52,36,.10);
+  --pulse:#1A7F5E; --pulse-glow:rgba(26,127,94,.10);
+  --alarm:#7A0D04; --alarm-fill:#B21208; --alarm-glow:rgba(122,13,4,.10);
+  --trace:#1E4F8A; --trace-glow:rgba(30,79,138,.10);
+  --warn:#B5580E; --warn-glow:rgba(181,88,14,.10);
+  --ff-display:'Noto Serif KR','Times New Roman',serif;
+  --ff-ui:'Noto Sans KR','Helvetica Neue',sans-serif;
+  --ff-mono:'JetBrains Mono','Noto Sans KR',ui-monospace,monospace;
+  --r-2:4px; --r-3:8px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg-0:#0E1218; --bg-1:#141922; --bg-2:#181E28; --bg-3:#1F2632; --bg-mute:#232B38;
+    --line-0:#232B38; --line-1:#2F3846; --line-2:#5A6475;
+    --ink-0:#EEF1F6; --ink-1:#C9CFD9; --ink-2:#97A0AE; --ink-3:#5F6878;
+    --signal:#E2735F; --signal-fill:#C24A36; --signal-glow:rgba(226,115,95,.14);
+    --pulse:#4CC39C; --pulse-glow:rgba(76,195,156,.14);
+    --alarm:#F07A6E; --alarm-fill:#B21208; --alarm-glow:rgba(240,122,110,.14);
+    --trace:#7FA8DB; --trace-glow:rgba(127,168,219,.14);
+    --warn:#E39A55; --warn-glow:rgba(227,154,85,.14);
+  }
+}
+:root[data-theme="dark"]{
+  --bg-0:#0E1218; --bg-1:#141922; --bg-2:#181E28; --bg-3:#1F2632; --bg-mute:#232B38;
+  --line-0:#232B38; --line-1:#2F3846; --line-2:#5A6475;
+  --ink-0:#EEF1F6; --ink-1:#C9CFD9; --ink-2:#97A0AE; --ink-3:#5F6878;
+  --signal:#E2735F; --signal-fill:#C24A36; --signal-glow:rgba(226,115,95,.14);
+  --pulse:#4CC39C; --pulse-glow:rgba(76,195,156,.14);
+  --alarm:#F07A6E; --alarm-fill:#B21208; --alarm-glow:rgba(240,122,110,.14);
+  --trace:#7FA8DB; --trace-glow:rgba(127,168,219,.14);
+  --warn:#E39A55; --warn-glow:rgba(227,154,85,.14);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg-0);color:var(--ink-1);font-family:var(--ff-ui);font-size:15px;line-height:1.7;word-break:keep-all;overflow-wrap:anywhere}
+.wrap{max-width:1040px;margin:0 auto;padding:48px 16px 96px}
+header.doc{border-bottom:1px solid var(--line-1);padding-bottom:24px;margin-bottom:8px}
+.eyebrow{font-family:var(--ff-mono);font-size:12px;letter-spacing:.08em;color:var(--signal);text-transform:uppercase}
+h1{font-family:var(--ff-display);font-weight:600;font-size:34px;line-height:1.25;color:var(--ink-0);margin:8px 0 12px}
+.lede{font-size:17px;color:var(--ink-1);max-width:760px;margin:0}
+.meta{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:16px;font-size:13px;color:var(--ink-2)}
+.meta b{color:var(--ink-1);font-weight:500}
+nav.toc{display:flex;flex-wrap:wrap;gap:6px;margin:20px 0 8px}
+nav.toc a{font-size:13px;color:var(--ink-1);text-decoration:none;border:1px solid var(--line-1);border-radius:999px;padding:3px 12px;background:var(--bg-1)}
+nav.toc a:hover{border-color:var(--line-2)}
+section{padding-top:40px}
+h2{font-family:var(--ff-display);font-weight:600;font-size:24px;color:var(--ink-0);margin:0 0 14px;display:flex;gap:12px;align-items:baseline}
+h2 .n{font-family:var(--ff-mono);font-size:13px;color:var(--signal);font-weight:500}
+h3{font-size:16px;color:var(--ink-0);margin:24px 0 8px;font-weight:700}
+p{margin:0 0 12px}
+code,.mono{font-family:var(--ff-mono);font-size:.88em}
+code{background:var(--bg-mute);border-radius:3px;padding:1px 5px;color:var(--ink-0)}
+ul,ol{margin:0 0 12px;padding-left:22px}
+li{margin:3px 0}
+.table-wrap{overflow-x:auto;margin:8px 0 16px;border:1px solid var(--line-1);border-radius:var(--r-3)}
+table{width:100%;border-collapse:collapse;font-size:14px;min-width:560px}
+th,td{text-align:left;vertical-align:top;padding:10px 12px;border-bottom:1px solid var(--line-0)}
+th{background:var(--bg-3);color:var(--ink-0);font-weight:500;font-size:13px}
+tr:last-child td{border-bottom:none}
+.note{border-left:3px solid var(--trace);background:var(--trace-glow);padding:12px 16px;border-radius:0 var(--r-2) var(--r-2) 0;margin:12px 0}
+.warn{border-left:3px solid var(--warn);background:var(--warn-glow);padding:12px 16px;border-radius:0 var(--r-2) var(--r-2) 0;margin:12px 0}
+.tag{display:inline-block;font-size:12px;font-weight:500;border-radius:999px;padding:1px 9px;border:1px solid currentColor;white-space:nowrap}
+.tag.rec{color:var(--pulse);background:var(--pulse-glow)}
+.tag.no{color:var(--ink-2)}
+.tag.q{color:var(--warn);background:var(--warn-glow)}
+
+/* 선택지 카드 */
+.options{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin:12px 0}
+.opt{border:1px solid var(--line-1);border-radius:var(--r-3);padding:16px 18px;background:var(--bg-1)}
+.opt.picked{border-color:var(--pulse);box-shadow:0 0 0 3px var(--pulse-glow)}
+.opt h4{margin:0 0 6px;font-size:15px;color:var(--ink-0);display:flex;justify-content:space-between;gap:8px;align-items:center}
+.opt p{font-size:14px}
+.opt .pc{font-size:13.5px;margin:0;padding-left:18px}
+.opt .pc li.plus::marker{content:"+  ";color:var(--pulse)}
+.opt .pc li.minus::marker{content:"−  ";color:var(--alarm)}
+
+/* 판정 순서 */
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0 4px}
+.step{border:1px solid var(--line-1);background:var(--bg-2);border-radius:var(--r-2);padding:8px 12px;font-size:13.5px}
+.step small{display:block;color:var(--ink-2);font-size:12px}
+.step.new{border-color:var(--signal);background:var(--signal-glow);color:var(--ink-0)}
+.arrow{color:var(--ink-3);font-family:var(--ff-mono)}
+
+/* 화면 목업 */
+.mock{border:1px solid var(--line-1);border-radius:var(--r-3);background:var(--bg-1);padding:20px;margin:12px 0 8px}
+.mock-cap{font-size:12.5px;color:var(--ink-2);margin:0 0 20px}
+.m-card{border:1px solid var(--line-1);border-radius:var(--r-3);background:var(--bg-2);margin-bottom:16px;overflow:hidden}
+.m-card.hl{border-color:var(--signal);box-shadow:0 0 0 3px var(--signal-glow)}
+.m-head{padding:12px 16px;border-bottom:1px solid var(--line-0);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.m-head .t{font-family:var(--ff-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)}
+.m-body{padding:14px 16px}
+.m-body p{font-size:13px;color:var(--ink-2);margin:0 0 10px}
+.m-form{display:grid;grid-template-columns:2fr 1.3fr 2fr auto;gap:10px;align-items:end}
+@media (max-width:720px){.m-form{grid-template-columns:1fr}}
+.m-field label{display:block;font-size:12px;color:var(--ink-2);margin-bottom:4px}
+.m-input{border:1px solid var(--line-1);background:var(--bg-mute);border-radius:var(--r-2);padding:7px 10px;font-size:13px;color:var(--ink-3);font-family:var(--ff-mono);min-height:34px}
+.m-input.sel::after{content:"  ▾";color:var(--ink-2)}
+.btn{display:inline-block;font-size:13px;border-radius:var(--r-2);padding:6px 12px;border:1px solid var(--line-1);background:var(--bg-2);color:var(--ink-0);white-space:nowrap;font-family:var(--ff-ui)}
+.btn.primary{background:var(--signal-fill);border-color:var(--signal-fill);color:#fff}
+.btn.danger{color:var(--alarm);border-color:var(--alarm)}
+.btn.sm{font-size:12px;padding:3px 9px}
+.m-table{width:100%;border-collapse:collapse;font-size:13px;min-width:600px}
+.m-table th{background:transparent;font-size:11.5px;color:var(--ink-2);text-transform:uppercase;letter-spacing:.05em;font-family:var(--ff-mono);font-weight:500;padding:8px 10px}
+.m-table td{padding:9px 10px;border-bottom:1px solid var(--line-0)}
+.m-table td.acts{text-align:right;white-space:nowrap}
+.m-table td.acts .btn{margin-left:6px}
+.m-table .new td{background:var(--signal-glow)}
+.callout{font-size:12.5px;color:var(--signal);margin-top:8px;display:flex;gap:6px}
+.callout::before{content:"●";font-size:9px;line-height:20px}
+
+/* 요구사항 */
+.req{border:1px solid var(--line-1);border-radius:var(--r-3);margin:12px 0;overflow:hidden;background:var(--bg-2)}
+.req-head{display:flex;gap:12px;align-items:baseline;padding:12px 16px;background:var(--bg-3);border-bottom:1px solid var(--line-0)}
+.req-id{font-family:var(--ff-mono);font-size:13px;color:var(--signal);font-weight:600;white-space:nowrap}
+.req-head .s{color:var(--ink-0)}
+.req-body{padding:10px 16px 12px}
+.ac{font-size:14px;margin:0;padding-left:0;list-style:none}
+.ac li{padding:4px 0 4px 54px;position:relative}
+.ac li b{position:absolute;left:0;top:4px;font-family:var(--ff-mono);font-size:12px;color:var(--ink-2);font-weight:500}
+
+/* 질문 */
+.qs{counter-reset:q;list-style:none;padding:0}
+.qs>li{border:1px solid var(--line-1);border-radius:var(--r-3);padding:14px 16px;margin:10px 0;background:var(--bg-1)}
+.qs>li>b{color:var(--ink-0)}
+.qs .ans{margin:8px 0 0;padding:0;list-style:none;display:grid;gap:6px}
+.qs .ans li{font-size:14px;padding-left:22px;position:relative}
+.qs .ans li::before{content:"○";position:absolute;left:0;color:var(--ink-3)}
+.qs .ans li.r::before{content:"●";color:var(--pulse)}
+footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line-1);font-size:13px;color:var(--ink-2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <div class="eyebrow">TTTGate · 설계 · 연결 보안</div>
+  <h1>IP를 영구 차단합니다</h1>
+  <p class="lede">관리자가 IP 주소나 대역을 직접 차단 목록에 넣으면, 서버를 다시 시작해도 그 주소의 접속을 계속 막습니다. 레이트 리밋에 걸린 IP는 버튼 하나로 이 목록에 옮길 수 있습니다.</p>
+  <div class="meta">
+    <span><b>작성일</b> 2026-10-29</span>
+    <span><b>상태</b> 결정 완료 (2026-10-29, 9장의 권장안을 모두 채택)</span>
+    <span><b>기준 코드</b> <code>develop</code> <code>f560bf2</code></span>
+    <span><b>브랜치</b> <code>feat/ip-blocklist</code></span>
+  </div>
+  <nav class="toc" aria-label="목차">
+    <a href="#now">1. 현재 동작</a><a href="#choice">2. 방식 선택</a><a href="#ui">3. 화면</a>
+    <a href="#flow">4. 판정 순서</a><a href="#req">5. 요구사항</a><a href="#api">6. 데이터와 API</a>
+    <a href="#test">7. 검증 계획</a><a href="#out">8. 범위 밖</a><a href="#q">9. 확인할 사항</a>
+  </nav>
+</header>
+
+<section id="now">
+  <h2><span class="n">01</span>현재 동작</h2>
+  <p>지금은 레이트 리밋 차단만 있고, 그 차단은 언제나 일시적입니다. 코드에서 확인한 사실은 아래와 같습니다.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th style="width:28%">항목</th><th>현재 동작</th><th style="width:30%">근거</th></tr></thead>
+    <tbody>
+      <tr><td>차단 시간</td><td>1초 ~ 24시간 (화면에서는 1 ~ 1440분). 기본 10분입니다. 영구는 고를 수 없습니다.</td><td><code>src/types/TunnelingOption.ts</code> <code>RATE_LIMIT_RANGE</code></td></tr>
+      <tr><td>차단 목록 저장</td><td>메모리에만 있습니다. 서버를 다시 시작하면 모두 풀립니다.</td><td><code>ConnectionRateLimiter</code>의 <code>bans</code> 맵</td></tr>
+      <tr><td>터널 리스너를 새로 만들 때</td><td><code>configureTunnel</code>이 그 포트의 상태를 새로 만들어 차단 목록이 비워집니다.</td><td><code>ExternalPortServerPool.ts:181</code></td></tr>
+      <tr><td>차단 범위</td><td>터널(포트)마다 따로 셉니다. 한 터널에서 걸려도 다른 터널에는 접속할 수 있습니다.</td><td><code>ConnectionRateLimiter._ports</code></td></tr>
+      <tr><td>차단 단위</td><td>IPv4는 주소 하나, IPv6는 <code>/64</code> 하나입니다. 몰려오면 <code>/48</code>로 묶습니다.</td><td><code>rateLimitBucketOf</code>, <code>prefixBucketOf</code></td></tr>
+      <tr><td>관리 화면</td><td>Security 화면에서 차단 목록을 보고 하나씩 풀 수 있습니다. 슈퍼유저만 할 수 있습니다.</td><td><code>GET/DELETE /api/security/bans</code>, <code>security:manage</code></td></tr>
+      <tr><td>오래 막는 다른 수단</td><td>국가 단위 허용·차단(geo 필터)만 있습니다. 이 설정은 <code>server.yaml</code>에 저장됩니다.</td><td><code>connectionSecurity.geo</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="choice">
+  <h2><span class="n">02</span>방식 선택</h2>
+  <p>"영구 차단"을 만드는 방법은 두 가지입니다. 이 문서는 <b>B안</b>을 권장합니다.</p>
+  <div class="options">
+    <div class="opt">
+      <h4>A. 차단 시간에 "영구" 추가 <span class="tag no">권장 안 함</span></h4>
+      <p>터널의 레이트 리밋 설정에서 차단 시간으로 "Permanent"를 고르게 합니다.</p>
+      <ul class="pc">
+        <li class="plus">설정 하나만 늘어납니다.</li>
+        <li class="minus">자동 판정으로 영구 차단이 걸립니다. 회사·통신사 NAT 뒤의 정상 사용자도 한 번 몰리면 계속 막힙니다.</li>
+        <li class="minus">차단 표의 상한(포트당 10,000개)이 영구 항목으로 차면 새 차단을 남기지 못합니다. 지금 코드는 "모든 차단은 언젠가 끝난다"를 가정합니다.</li>
+        <li class="minus">터널마다 따로 막으므로, 같은 공격자를 터널 수만큼 막아야 합니다.</li>
+      </ul>
+    </div>
+    <div class="opt picked">
+      <h4>B. 관리자 차단 목록 <span class="tag rec">권장</span></h4>
+      <p>관리자가 IP나 대역을 직접 넣는 목록을 둡니다. 레이트 리밋 차단 행에는 "Block permanently" 버튼을 둡니다.</p>
+      <ul class="pc">
+        <li class="plus">사람이 확인한 주소만 영구로 막습니다. 자동 판정은 지금처럼 일시적입니다.</li>
+        <li class="plus">한 번 넣으면 모든 터널에 적용됩니다. 필요하면 터널 하나로 좁힐 수 있습니다.</li>
+        <li class="plus"><code>server.yaml</code>에 저장되므로 다시 시작해도 남습니다. geo 필터와 같은 방식입니다.</li>
+        <li class="minus">Security 화면에 카드 하나와 API 세 개가 늘어납니다.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="note">B안을 고르면 레이트 리밋 설정은 바꾸지 않습니다. 사용자는 "자동 차단은 잠시, 직접 막은 것은 계속"이라는 한 가지 규칙만 기억하면 됩니다.</div>
+</section>
+
+<section id="ui">
+  <h2><span class="n">03</span>화면</h2>
+  <p>Security 화면의 기존 카드 사이에 "Blocked addresses" 카드를 더합니다. 관리 화면의 글자는 기존처럼 영어로 씁니다. 붉은 테두리가 새로 생기는 부분입니다.</p>
+
+  <div class="mock" role="img" aria-label="Security 화면 목업">
+    <p class="mock-cap">Security 화면 (목업)</p>
+
+    <div class="m-card hl">
+      <div class="m-head"><span class="t">Blocked addresses</span><span style="font-size:12px;color:var(--ink-2)">3 / 1,000</span></div>
+      <div class="m-body">
+        <p>Connections from these addresses are always refused. The list is kept after a restart.</p>
+        <div class="m-form">
+          <div class="m-field"><label>Address or range</label><div class="m-input">203.0.113.7 or 198.51.100.0/24</div></div>
+          <div class="m-field"><label>Applies to</label><div class="m-input sel" style="color:var(--ink-0)">All tunnels</div></div>
+          <div class="m-field"><label>Note (optional)</label><div class="m-input">Why is this blocked?</div></div>
+          <div><span class="btn primary">Block</span></div>
+        </div>
+        <div class="table-wrap" style="margin-top:14px;border:none">
+          <table class="m-table">
+            <thead><tr><th>Address</th><th>Applies to</th><th>Note</th><th>Added</th><th></th></tr></thead>
+            <tbody>
+              <tr class="new"><td class="mono">45.155.205.11</td><td>All tunnels</td><td>From rate-limit ban on 1111</td><td>2026-10-29 · admin</td><td class="acts"><span class="btn sm">Unblock</span></td></tr>
+              <tr><td class="mono">198.51.100.0/24</td><td>All tunnels</td><td>Scanner range</td><td>2026-10-27 · admin</td><td class="acts"><span class="btn sm">Unblock</span></td></tr>
+              <tr><td class="mono">2001:db8:1::/48</td><td class="mono">18080</td><td>—</td><td>2026-10-20 · ops</td><td class="acts"><span class="btn sm">Unblock</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="m-card">
+      <div class="m-head"><span class="t">Banned addresses (rate limit)</span></div>
+      <div class="m-body">
+        <div class="table-wrap" style="border:none;margin:0">
+          <table class="m-table">
+            <thead><tr><th>Port</th><th>Address</th><th>Country</th><th>Remaining</th><th></th></tr></thead>
+            <tbody>
+              <tr><td class="mono">1111</td><td class="mono">45.155.205.11</td><td>NL</td><td class="mono">8m 12s</td><td class="acts"><span class="btn sm">Unban</span><span class="btn sm danger" style="box-shadow:0 0 0 3px var(--signal-glow)">Block permanently</span></td></tr>
+              <tr><td class="mono">18080</td><td class="mono">2001:db8:7:3::/64</td><td>—</td><td class="mono">2m 40s</td><td class="acts"><span class="btn sm">Unban</span><span class="btn sm danger">Block permanently</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout">"Block permanently"를 누르면 확인 창을 띄운 뒤 그 주소를 위 목록에 "All tunnels"로 넣고, 이 행의 일시 차단은 풉니다.</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>사용 흐름</h3>
+  <ol>
+    <li><b>직접 넣기:</b> 주소나 대역을 쓰고 Block을 누릅니다. 서버가 확인해서 형식이 틀리면 입력란 아래에 이유를 보여 줍니다.</li>
+    <li><b>일시 차단에서 옮기기:</b> 레이트 리밋 표에서 "Block permanently"를 누릅니다. 확인 창에는 주소와 "모든 터널에서 계속 막습니다"를 보여 줍니다.</li>
+    <li><b>풀기:</b> Unblock을 누르면 확인 창 없이 바로 풉니다. 실수로 풀어도 다시 넣으면 되므로 마찰을 줄입니다. 결과는 토스트로 알립니다.</li>
+  </ol>
+  <div class="warn"><b>자기 잠금 방지:</b> 차단 목록은 관리 화면 포트에 적용하지 않습니다(<a href="#q">9장 질문 3</a>). 관리자가 실수로 자기 주소를 넣어도 관리 화면에 들어와 풀 수 있습니다.</div>
+</section>
+
+<section id="flow">
+  <h2><span class="n">04</span>판정 순서</h2>
+  <p>터널 연결이 들어오면 <code>AdmissionController.admit</code>이 아래 순서로 판정합니다. 차단 목록은 가장 앞에서 봅니다. 그래야 비용이 큰 국가 조회 전에 거절하고, 영구 차단한 주소가 레이트 리밋 카운터를 쓰지 않습니다.</p>
+  <div class="flow" role="list">
+    <div class="step new" role="listitem">① 차단 목록<small>새로 더함 · <code>ip-blocklist</code></small></div><span class="arrow">→</span>
+    <div class="step" role="listitem">② 레이트 리밋 차단 중?<small><code>rate-limit-ban</code></small></div><span class="arrow">→</span>
+    <div class="step" role="listitem">③ 국가 필터<small><code>geo-deny</code></small></div><span class="arrow">→</span>
+    <div class="step" role="listitem">④ 레이트 리밋 계수<small><code>rate-limit-exceeded</code></small></div><span class="arrow">→</span>
+    <div class="step" role="listitem">⑤ 동시 연결 상한<small><code>concurrency-limit</code></small></div>
+  </div>
+  <p style="font-size:14px;color:var(--ink-2)">주소 대조는 Node 내장 <code>net.BlockList</code>(<code>addAddress</code>·<code>addSubnet</code>·<code>check</code>)를 씁니다. <code>BlockList</code>는 IPv4 주소를 IPv6 규칙(IPv4-mapped 대역)과도 비교합니다. 그래서 규칙을 IPv4·IPv6용으로 나눠 두고, 주소는 같은 종류의 규칙과만 비교합니다. 목록이 바뀌면 새 규칙을 만들어 참조만 바꿉니다.</p>
+</section>
+
+<section id="req">
+  <h2><span class="n">05</span>요구사항</h2>
+  <p>IEEE 29148 형식으로 씁니다. 이슈 본문에도 같은 내용을 옮깁니다.</p>
+
+  <div class="req"><div class="req-head"><span class="req-id">REQ-1</span><span class="s">서버는 관리자가 등록한 차단 목록에 든 주소의 터널 연결을 거절해야 한다(shall).</span></div>
+    <div class="req-body"><ul class="ac">
+      <li><b>AC-1</b>IPv4 주소 <code>203.0.113.7</code>을 넣으면 그 주소의 TCP·HTTP·HTTPS 터널 연결은 모두 거절된다. 다른 주소는 영향이 없다.</li>
+      <li><b>AC-2</b>CIDR <code>198.51.100.0/24</code>를 넣으면 <code>198.51.100.0</code> ~ <code>198.51.100.255</code>가 거절된다.</li>
+      <li><b>AC-3</b>IPv6 주소와 대역(<code>2001:db8:1::/48</code>)도 같게 동작한다. IPv4-mapped 주소(<code>::ffff:203.0.113.7</code>)로 들어와도 IPv4 항목에 걸린다. 16진수 표기(<code>::ffff:cb00:7107</code>)로 넣어도 IPv4로 저장한다. IPv6 대역(예: <code>::/8</code>)은 IPv4 연결을 막지 않는다.</li>
+      <li><b>AC-4</b>거절 사유는 <code>ip-blocklist</code>이다. 거절은 기존 거절 집계 로그(<code>DenialAggregator</code>)에 남고, 레이트 리밋 카운터와 국가 조회 수를 늘리지 않는다.</li>
+    </ul></div></div>
+
+  <div class="req"><div class="req-head"><span class="req-id">REQ-2</span><span class="s">차단 목록은 서버를 다시 시작하거나 터널을 다시 만들어도 유지되어야 한다(shall).</span></div>
+    <div class="req-body"><ul class="ac">
+      <li><b>AC-1</b>목록은 <code>server.yaml</code>의 <code>connectionSecurity.blocklist</code>에 저장된다. 서버를 다시 시작한 뒤에도 같은 주소가 거절된다.</li>
+      <li><b>AC-2</b>터널을 저장하거나 외부 포트를 바꿔 리스너를 새로 만들어도 차단은 유지된다.</li>
+      <li><b>AC-3</b>저장된 항목 중 형식이 틀린 것은 시작할 때 건너뛰고 경고 로그를 남긴다. 나머지 항목과 서버 시작은 영향을 받지 않는다. 건너뛴 항목은 다음 저장 때 파일에서도 빠지며, 경고에 그 사실을 적는다.</li>
+      <li><b>AC-4</b>국가 필터 저장(<code>PUT /api/security/geo</code>)은 차단 목록을 지우지 않는다. 서버 설정 저장(<code>/api/serverOption</code>)은 요청에 담긴 차단 목록을 무시한다. 다만 그 저장이 새 포트에 터널을 더하면 그 포트의 고아 항목만 뺀다(REQ-3 AC-2).</li>
+    </ul></div></div>
+
+  <div class="req"><div class="req-head"><span class="req-id">REQ-3</span><span class="s">항목은 모든 터널 또는 터널 하나에 적용되어야 한다(shall).</span></div>
+    <div class="req-body"><ul class="ac">
+      <li><b>AC-1</b>"All tunnels" 항목은 지금 있는 터널과 나중에 만드는 터널 모두에 적용된다.</li>
+      <li><b>AC-2</b>포트를 고른 항목은 그 터널의 연결만 거절한다. 항목은 포트 번호가 아니라 터널을 따라간다. 그 터널의 외부 포트를 바꾸면 항목도 새 포트로 옮기고, 터널을 지우면 항목도 지운다. 옮기거나 지우는 동안에도 옛 리스너가 멈출 때까지 그 포트에서 계속 막는다. 터널이 없는 포트에는 항목을 넣을 수 없다(422 <code>no tunnel uses port N</code>). 설정 파일에 그런 항목이 있으면 시작할 때 경고와 함께 뺀다. 저장할 때는 빼지 않는다(서버 설정 저장으로 터널을 빼도 그 리스너는 다시 시작할 때까지 돌므로, 그동안 항목을 남겨 계속 막는다). 그 포트로 새 터널을 만들면 남아 있던 항목을 뺀다(새 터널이 물려받지 않는다). 다만 서버 설정 저장으로 같은 포트에 터널을 다시 더할 때 옛 리스너가 아직 돌고 있으면 항목을 남긴다. 이때 다시 더한 터널이 그 항목을 물려받는다(더 막는 쪽이라 안전하다). 풀려면 차단 목록에서 직접 푼다.</li>
+      <li><b>AC-3</b>관리 화면 포트와 제어 포트(클라이언트 접속)에는 적용하지 않는다.</li>
+    </ul></div></div>
+
+  <div class="req"><div class="req-head"><span class="req-id">REQ-4</span><span class="s">관리자는 Security 화면에서 항목을 보고, 넣고, 풀 수 있어야 한다(shall).</span></div>
+    <div class="req-body"><ul class="ac">
+      <li><b>AC-1</b>각 항목은 주소(또는 대역), 적용 범위, 메모, 넣은 시각, 넣은 사용자를 보여 준다.</li>
+      <li><b>AC-2</b>틀린 주소, 0.0.0.0/0·::/0·::ffff:0:0/96처럼 모든 주소를 덮는 대역, 이미 목록에 있는 주소(적용 범위가 달라도 같다), 200자를 넘는 메모는 저장하지 않고 이유를 보여 준다. 중복이면 기존 적용 범위를 함께 보여 준다.</li>
+      <li><b>AC-3</b>항목 수 상한은 1,000개다. 상한에 이르면 Block 버튼을 끄고 이유를 보여 준다.</li>
+      <li><b>AC-4</b>넣거나 풀면 바로 적용된다. 서버를 다시 시작할 필요가 없다.</li>
+      <li><b>AC-5</b>이 기능은 <code>security:manage</code> 권한(슈퍼유저)만 쓸 수 있다. 일반 사용자의 요청은 403을 받는다.</li>
+    </ul></div></div>
+
+  <div class="req"><div class="req-head"><span class="req-id">REQ-5</span><span class="s">레이트 리밋 차단 행에서 그 주소를 차단 목록으로 옮길 수 있어야 한다(shall).</span></div>
+    <div class="req-body"><ul class="ac">
+      <li><b>AC-1</b>"Block permanently"를 누르고 확인하면 그 주소(IPv6는 표에 보인 <code>/64</code>·<code>/48</code> 대역)가 "All tunnels" 항목으로 들어가고, 메모에는 출처 포트가 들어간다. 그 주소가 포트 하나에만 걸린 항목으로 이미 있으면 그 항목을 "All tunnels"로 넓힌다.</li>
+      <li><b>AC-2</b>같은 동작에서 그 행의 일시 차단을 푼다. 표에서 행이 사라진다.</li>
+      <li><b>AC-3</b>이미 "All tunnels"로 목록에 있는 주소이면 새로 넣지 않고 "already blocked"(409)를 알린다. 그 주소는 이미 영구 차단되어 있으므로 그 행의 일시 차단은 풀고, 그 사실을 감사 detail(<code>fromBan</code>, <code>unbanned</code>)에 남긴다.</li>
+    </ul></div></div>
+
+  <div class="req"><div class="req-head"><span class="req-id">REQ-6</span><span class="s">넣기와 풀기는 감사 로그에 남아야 한다(shall).</span></div>
+    <div class="req-body"><ul class="ac">
+      <li><b>AC-1</b>넣으면 <code>security_block_added</code>, 풀면 <code>security_block_removed</code> 이벤트가 남는다. 대상 id는 정규화한 주소이고, detail에는 적용 범위와 메모가 들어간다. 없는 항목을 풀면 200 <code>{removed: false}</code>이고 감사 detail에 <code>removed: false</code>가 남는다(일시 차단 해제 API와 같다).</li>
+      <li><b>AC-2</b>개별 거절은 감사 로그에 남기지 않는다. 기존 거절 집계와 같은 방식이다.</li>
+      <li><b>AC-3</b>터널을 지워 그 터널의 항목이 함께 빠지면 <code>tunnel_deleted</code> detail에 <code>droppedBlocks</code>(주소·메모)를, 외부 포트를 바꿔 항목을 옮기면 터널 저장 감사 detail에 <code>movedBlocks</code>(주소·옛 포트·새 포트)를 남긴다. 새 터널을 만들어(서버 설정 저장으로 더한 경우 포함) 그 포트의 고아 항목이 빠지면 그 저장의 감사 detail에 <code>droppedBlocks</code>를 남긴다. 터널 소유자는 <code>security:manage</code> 없이도 자기 터널을 지우기 때문이다.</li>
+    </ul></div></div>
+</section>
+
+<section id="api">
+  <h2><span class="n">06</span>데이터와 API</h2>
+  <h3>저장 형식 (<code>server.yaml</code>)</h3>
+<pre style="background:var(--bg-3);border:1px solid var(--line-1);border-radius:var(--r-3);padding:14px 16px;overflow-x:auto;font-family:var(--ff-mono);font-size:13px;line-height:1.6;color:var(--ink-0)">connectionSecurity:
+  geo: { ... }            # 지금과 같음
+  blocklist:
+    - address: 198.51.100.0/24
+      port: null           # null = All tunnels, 숫자 = 그 외부 포트만
+      note: Scanner range
+      createdAt: 1793145600000
+      createdBy: admin</pre>
+  <p>지금 <code>PUT /api/security/geo</code>는 <code>connectionSecurity</code> 전체를 덮어씁니다. 차단 목록이 함께 지워지지 않도록 geo 저장은 <code>geo</code>만 바꾸게 고칩니다.</p>
+
+  <h3>API (모두 <code>security:manage</code>)</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th style="width:36%">요청</th><th>동작</th><th style="width:22%">감사</th></tr></thead>
+    <tbody>
+      <tr><td><code>GET /api/security/blocklist</code></td><td>항목 목록과 상한을 돌려준다.</td><td>—</td></tr>
+      <tr><td><code>POST /api/security/blocklist</code></td><td><code>{address, port?, note?, fromBan?: {port, ip}}</code>로 하나를 넣는다. <code>fromBan</code>이 있으면 그 일시 차단을 함께 푼다. 잘못된 입력은 422, 중복은 409. 중복이어도 <code>fromBan</code>의 주소가 이미 "All tunnels"로 막혀 있으면 그 일시 차단은 푼다.</td><td><code>security_block_added</code></td></tr>
+      <tr><td><code>DELETE /api/security/blocklist/:address</code></td><td>하나를 푼다. 주소는 URL 인코딩한다(<code>/</code> 포함).</td><td><code>security_block_removed</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="test">
+  <h2><span class="n">07</span>검증 계획</h2>
+  <p>테스트를 먼저 쓰고 실패를 확인한 뒤 구현합니다.</p>
+  <ul>
+    <li><b>단위:</b> 주소 정규화와 대조(IPv4, IPv6, CIDR, mapped, 틀린 입력), 입력 검증(전체 대역, 중복, 상한), 판정 순서(차단 목록 거절이 카운터를 늘리지 않음).</li>
+    <li><b>관리 API:</b> 넣기·풀기·목록, 권한 403, 감사 이벤트, geo 저장 뒤에도 목록이 남는지.</li>
+    <li><b>컴포넌트·E2E:</b> 실제 터널에서 차단 주소 거절, 서버를 다시 시작한 뒤 유지, 리스너를 새로 만든 뒤 유지.</li>
+    <li><b>관리 화면:</b> 카드 표시, 입력 오류 표시, "Block permanently" 흐름(목록 추가와 일시 차단 해제).</li>
+  </ul>
+</section>
+
+<section id="out">
+  <h2><span class="n">08</span>범위 밖</h2>
+  <ul>
+    <li>레이트 리밋 일시 차단을 디스크에 저장하는 것 (지금처럼 다시 시작하면 풀립니다)</li>
+    <li>만료일이 있는 수동 차단, 외부 차단 목록 파일·URL 가져오기</li>
+    <li>허용 목록(이 주소만 접속 허용)</li>
+    <li>일반 사용자가 자기 터널에만 차단을 거는 기능</li>
+  </ul>
+</section>
+
+<section id="q">
+  <h2><span class="n">09</span>확인할 사항</h2>
+  <p>2026-10-29에 사용자가 네 질문 모두 권장안(초록 점)으로 정했습니다.</p>
+  <ol class="qs">
+    <li><b>1. 방식</b> <span class="tag rec">권장안으로 결정</span>
+      <ul class="ans"><li class="r">B. 관리자 차단 목록 + "Block permanently" 버튼</li><li>A. 차단 시간에 "영구" 추가</li><li>A와 B 둘 다</li></ul></li>
+    <li><b>2. 이미 연결된 세션</b> <span class="tag rec">권장안으로 결정</span>
+      <ul class="ans"><li class="r">새 연결만 거절하고, 이미 맺은 연결은 그대로 둔다 (레이트 리밋 차단과 같음)</li><li>넣는 즉시 그 주소의 기존 연결도 끊는다</li></ul></li>
+    <li><b>3. 관리 화면 포트에도 적용</b> <span class="tag rec">권장안으로 결정</span>
+      <ul class="ans"><li class="r">적용하지 않는다 (관리자가 자기를 잠그지 않음)</li><li>적용하되, 요청한 관리자 자신의 주소는 넣지 못하게 막는다</li></ul></li>
+    <li><b>4. 항목 수 상한</b> <span class="tag rec">권장안으로 결정</span>
+      <ul class="ans"><li class="r">1,000개</li><li>10,000개</li></ul></li>
+  </ol>
+</section>
+
+<footer>
+  이 문서의 요구사항은 GitHub 이슈(REQ·AC)로 옮겨 TDD로 구현합니다.
+</footer>
+</div>
+</body>
+</html>

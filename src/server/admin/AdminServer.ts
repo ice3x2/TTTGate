@@ -23,17 +23,19 @@ import {AdminSecurityPolicyRegistry, clientAddressFromForwardedFor, evaluateAdmi
 import {timingSafeStringEqual} from "../../util/timingSafeStringEqual";
 import {computeBackoffMs} from "./loginBackoff";
 import crypto from "crypto";
-import {DEFAULT_GEO_CONFIG, GeoConfig, ServerOption, TrustedClient, TunnelingOption} from "../../types/TunnelingOption";
+import {BlocklistEntry, DEFAULT_GEO_CONFIG, GeoConfig, ServerOption, TrustedClient, TunnelingOption} from "../../types/TunnelingOption";
 import {AdmissionController} from "../security/AdmissionController";
+import {moveBlocklistPort, withPortAlias} from "../security/IpBlocklist";
 import {rateLimitBucketOf} from "../security/ConnectionRateLimiter";
 import {normalizeConnectionSecurity} from "../security/connectionSecurity";
 import {listCountries} from "../security/countries";
-import {auditEventOf, AuditRouteMeta, buildAdminRoutes, errorLabelOf, isTunnelActivationRequested, parseActiveTimeout, parsePathId, parsePathPort, Route, RouteContext} from "./routes";
+import {auditEventOf, AuditRouteMeta, buildAdminRoutes, decodedPathSegment, errorLabelOf, isTunnelActivationRequested, parseActiveTimeout, parsePathId, parsePathPort, Route, RouteContext} from "./routes";
 import {createLoginFailureAuditor} from "./loginFailureAudit";
 import {bodyRejectionEvent, isBodyRejectionAuditable} from "./bodyRejectionAudit";
 import {truncateAuditValue} from "./auditValue";
 import {rbacRouteHandlers} from "./rbacRoutes";
 import {keepTrustedClients, maskTrustedClientSecrets, trustedClientRouteHandlers} from "./trustedClientRoutes";
+import {blocklistRouteHandlers, updateConnectionSecurity} from "./blocklistRoutes";
 import {MfaTicketStore, PendingEnrollmentStore} from "../mfa/MfaTickets";
 import {mfaLoginHandler} from "./mfaLoginRoutes";
 import {auditRouteHandlers} from "./auditRoutes";
@@ -49,14 +51,9 @@ import {AUDIT_EVENT_TYPES} from "../audit/AuditEventTypes";
 const logger = LoggerFactory.getLogger('server', 'AdminServer');
 const MFA_NOW = (): number => ClockRngProvider.current().now();
 
-/** 경로 세그먼트를 퍼센트 디코딩한다. 잘못된 인코딩이면 던지지 않고 undefined 를 돌려준다. */
-const decodedPathSegment = (segment: string): string | undefined => {
-    try {
-        return decodeURIComponent(segment);
-    } catch {
-        return undefined;
-    }
-};
+/** #286 설정에서 빠진 차단 항목을 감사 detail(droppedBlocks)에 남길 모양(주소·메모)으로 바꾼다. */
+const auditBlocks = (entries: readonly BlocklistEntry[] | undefined): Array<{address: string; note: string}> =>
+    (entries ?? []).map((entry) => ({address: entry.address, note: entry.note}));
 
 type LoginAttemptState = {
     failedCount: number;
@@ -207,6 +204,11 @@ class AdminServer {
             onGetSecurityGeo: this.onGetSecurityGeo,
             onUpdateSecurityGeo: this.onUpdateSecurityGeo,
             onGetSecurityCountries: this.onGetSecurityCountries,
+            // #286: 관리자 차단 목록. 핸들러는 blocklistRoutes.ts 가 갖는다.
+            ...blocklistRouteHandlers({
+                applyConnectionSecurity: (next) => this._tttServer?.applyConnectionSecurity(next),
+                fail: (res, status, payload) => this.sendApiFailure(res, status, payload)
+            }),
             // U2-06 / #98: 사용자·그룹 핸들러는 rbacRoutes.ts 가 갖는다(AdminServer.ts 를 2,000줄 아래로 유지).
             ...rbacRouteHandlers,
             // #212: 신뢰 클라이언트 관리. 저장·적용은 서버 옵션과 같은 커밋·되돌리기 경로를 쓴다.
@@ -662,6 +664,19 @@ class AdminServer {
                 return;
             }
             requestedServerOption.trustedClients = keptTrustedClients;
+            // #286: 차단 목록은 /api/security/blocklist 로만 바꾼다. 화면이 보낸 값은 무시하고 지금 값을 지킨다.
+            // 요청이 터널 목록을 바꿔 새 포트에 터널을 더하면, 그 포트에 남아 있던 고아 항목은 새 터널이 물려받지 않게 뺀다.
+            // 다만 서버 설정 저장으로 뺀 터널의 리스너가 아직 도는 포트는 남긴다(다시 시작할 때까지 그 리스너에서 계속 막는다).
+            const requestedSecurity = requestedServerOption.connectionSecurity;
+            let droppedBlocks: BlocklistEntry[] = [];
+            if(requestedSecurity === undefined || (typeof requestedSecurity === 'object' && requestedSecurity !== null && !Array.isArray(requestedSecurity))) {
+                requestedServerOption.connectionSecurity = {...requestedSecurity, blocklist: currentServerOption.connectionSecurity?.blocklist ?? []};
+                const currentPorts = new Set(currentServerOption.tunnelingOptions.map((tunnel) => tunnel.forwardPort));
+                const requestedTunnels: unknown[] = Array.isArray(requestedServerOption.tunnelingOptions) ? requestedServerOption.tunnelingOptions : [];
+                const newPorts = requestedTunnels.map((tunnel) => Number((tunnel as {forwardPort?: unknown} | null)?.forwardPort))
+                    .filter((port) => Number.isInteger(port) && !currentPorts.has(port) && this._tttServer?.externalServerStatus?.(port)?.online !== true);
+                droppedBlocks = ServerOptionStore.releasePortBlocks(requestedServerOption, newPorts);
+            }
             let prepareResult = serverOptionStore.prepareServerOption(ObjectUtil.cloneDeep(requestedServerOption));
             if(!prepareResult.success || !prepareResult.serverOption) {
                 this.sendApiFailure(res, 400, {message: prepareResult.message || 'Invalid server option', updated: false});
@@ -787,6 +802,7 @@ class AdminServer {
                 });
                 return;
             }
+            if(droppedBlocks.length > 0) ctx.auditDetail({droppedBlocks: auditBlocks(droppedBlocks)});
             this.sendApiSuccess(res, {
                 partial: runtimeResult.partial,
                 updated: true,
@@ -813,11 +829,12 @@ class AdminServer {
             tunnelingOption.ownerId = admission.ownerId;
             ctx.auditDetail({ownerId: admission.ownerId});
             if(certInfo !== undefined || previousForwardPort !== undefined) {
-                await this.applyCompoundTunnelingOption(res, tunnelingOption, certInfo, expectedCertificateRevision, previousForwardPort);
+                await this.applyCompoundTunnelingOption(res, tunnelingOption, certInfo, expectedCertificateRevision, previousForwardPort, ctx.auditDetail);
                 return;
             }
             let previousOption = serverOptionStore.getTunnelingOption(tunnelingOption.forwardPort);
             let composeResult = serverOptionStore.composeServerOptionWithTunnelingOption(ObjectUtil.cloneDeep(tunnelingOption));
+            const droppedBlocks = auditBlocks(composeResult.droppedBlocks);
             if(!composeResult.success || !composeResult.serverOption) {
                 this.sendApiFailure(res, 400, {
                     message: 'Tunneling options update failed.',
@@ -845,6 +862,8 @@ class AdminServer {
                 });
                 return;
             }
+            // #286 새 터널이면 그 포트에 남아 있던 고아 차단 항목이 빠졌을 수 있다. 리스너를 열기 전에 판정에 반영한다.
+            if(!previousOption) this._tttServer?.applyConnectionSecurity?.(serverOptionStore.serverOption.connectionSecurity);
             let runtimeResult = await this.applyRuntimeSafely('tunneling option', `external-listener:${tunnelingOption.forwardPort}`,
                 () => this._tttServer?.applyTunnelingOption(serverOptionStore.getTunnelingOption(tunnelingOption.forwardPort)!, previousOption)) ?? {
                 success: false,
@@ -872,6 +891,7 @@ class AdminServer {
                 });
                 return;
             }
+            if(droppedBlocks.length > 0) ctx.auditDetail({droppedBlocks});
             this.sendApiSuccess(res, {
                 forwardPort: tunnelingOption.forwardPort,
                 revisionState: commitResult.revisionState
@@ -892,7 +912,7 @@ class AdminServer {
     }
 
     private async applyCompoundTunnelingOption(res: ServerResponse, option: TunnelingOption, certInfo: CertInfo | undefined,
-        expectedCertificateRevision: unknown, previousForwardPort?: number): Promise<void> {
+        expectedCertificateRevision: unknown, previousForwardPort?: number, auditDetail: (patch: Record<string, unknown>) => void = () => {}): Promise<void> {
         const store = ServerOptionStore.instance, certificates = CertificationStore.instance;
         if(previousForwardPort !== undefined && (!Number.isSafeInteger(previousForwardPort) || previousForwardPort < 1 || previousForwardPort > 65535 || !store.getTunnelingOption(previousForwardPort))) {
             this.sendApiFailure(res, 400, {message: 'The original configured row does not exist.'}); return;
@@ -910,10 +930,21 @@ class AdminServer {
             this.sendApiFailure(res, 400, {message: 'Invalid certificate.'}); return;
         }
         const composed = store.composeServerOptionWithTunnelingOption(ObjectUtil.cloneDeep(option));
+        const droppedBlocks = auditBlocks(composed.droppedBlocks);
         if(!composed.success || !composed.serverOption) {
             this.sendApiFailure(res, 400, {message: 'Tunneling options update failed.'}); return;
         }
-        if(rename) composed.serverOption.tunnelingOptions = composed.serverOption.tunnelingOptions.filter(row => row.forwardPort !== previousForwardPort);
+        let movedBlocks: Array<{address: string; from: number; to: number}> = [];
+        if(rename) {
+            composed.serverOption.tunnelingOptions = composed.serverOption.tunnelingOptions.filter(row => row.forwardPort !== previousForwardPort);
+            // #286 그 터널에만 건 차단 항목도 새 포트로 옮기고, 옮긴 항목을 감사에 남긴다.
+            const security = composed.serverOption.connectionSecurity;
+            if(security) {
+                const moved = moveBlocklistPort(security.blocklist ?? [], previousForwardPort!, option.forwardPort);
+                security.blocklist = moved.entries;
+                movedBlocks = moved.moved.map((entry) => ({address: entry.address, from: previousForwardPort!, to: option.forwardPort}));
+            }
+        }
         if(!previousOption && !await UsablePortChecker.check(option.forwardPort)) {
             this.sendApiFailure(res, 400, {message: `${option.forwardPort} is an unusable port number.`}); return;
         }
@@ -940,11 +971,16 @@ class AdminServer {
         let runtime: Awaited<ReturnType<TTTServer['applyTunnelingOption']>> =
             {success: false, partial: false, failedScopes: ['server-runtime'], warnings: [], restartRequiredScopes: []};
         try {
+            // #286 옛 리스너는 멈출 때까지 연결을 받으므로, 그동안 옮긴 차단 항목을 옛 포트에도 건다.
+            if(rename) this._tttServer?.applyConnectionSecurity?.(withPortAlias(store.serverOption.connectionSecurity, option.forwardPort, previousForwardPort!));
+            // 새 터널이면 그 포트에 남아 있던 고아 항목이 빠졌으므로 리스너를 열기 전에 반영한다.
+            else if(!previousOption) this._tttServer?.applyConnectionSecurity?.(store.serverOption.connectionSecurity);
             if(this._tttServer) runtime = await this._tttServer.applyTunnelingOption(store.getTunnelingOption(option.forwardPort)!, previousOption, certInfo,
                 rename ? previousForwardPort : undefined);
             if(runtime.success && rename && !await this._tttServer!.stopExternalPortServer(previousForwardPort!, true)) {
                 runtime.success = false; runtime.failedScopes.push(`external-listener:${previousForwardPort}`);
             }
+            if(runtime.success && rename) this._tttServer?.applyConnectionSecurity?.(store.serverOption.connectionSecurity);
         } catch(error) {
             logger.error('compound runtime apply failed', error);
             runtime = {success: false, partial: false, failedScopes: [`external-listener:${option.forwardPort}`], warnings: [], restartRequiredScopes: []};
@@ -959,6 +995,9 @@ class AdminServer {
             }
             this.sendApiFailure(res, 400, {message: 'Unable to apply compound tunneling option.', partial: recoveryFailures.length > 0,
                 failedScopes: [...runtime.failedScopes, ...recoveryFailures], revisionState: store.revisionState, certificateRevisionState: certificates.revisionState}); return;
+        }
+        if(movedBlocks.length > 0 || droppedBlocks.length > 0) {
+            auditDetail({...(movedBlocks.length > 0 ? {movedBlocks} : {}), ...(droppedBlocks.length > 0 ? {droppedBlocks} : {})});
         }
         this.sendApiSuccess(res, {forwardPort: option.forwardPort, revisionState: store.revisionState, certificateRevisionState: certificates.revisionState});
     }
@@ -1012,6 +1051,8 @@ class AdminServer {
             const committedBefore = serverOptionStore.captureCommittedState();
             const runtimeBefore = this._tttServer?.captureRuntimeState?.();
             let composeResult = serverOptionStore.composeServerOptionWithoutTunnelingOption(forwardPort);
+            // #286 그 터널에만 건 차단 항목도 함께 빠진다. 터널 소유자는 security:manage 없이도 지우므로 풀린 차단을 감사에 남긴다.
+            const droppedBlocks = auditBlocks(composeResult.droppedBlocks);
             if(!composeResult.success || !composeResult.serverOption) {
                 this.sendApiFailure(res, 400, {message: `External port(${forwardPort}) server already removed.`, forwardPort});
                 return;
@@ -1053,6 +1094,9 @@ class AdminServer {
             } else {
                 warnings.push(`listener ${forwardPort} was already offline`);
             }
+            // #286 지운 터널에만 건 차단 항목도 빠졌다. 리스너가 멈춘 뒤에 반영해 그때까지는 그 포트에서도 막는다.
+            this._tttServer?.applyConnectionSecurity?.(composeResult.serverOption.connectionSecurity);
+            if(droppedBlocks.length > 0) ctx.auditDetail({droppedBlocks});
             this.sendApiSuccess(res, {forwardPort, warnings, revisionState: commitResult.revisionState});
         });
     }
@@ -1732,21 +1776,12 @@ class AdminServer {
             return;
         }
         const value = normalized.value;
-        let committed = false;
-        await ServerOptionStore.instance.runConfigurationMutation(async () => {
-            const store = ServerOptionStore.instance;
-            const read = store.readServerOption();
-            if(!read.success) return;
-            const serverOption = read.serverOption;
-            serverOption.connectionSecurity = value;
-            committed = store.commitPreparedServerOption(serverOption).success;
-        });
-        if(!committed) {
+        // #286: 국가 필터만 바꾼다. 차단 목록은 지금 값을 그대로 둔다.
+        const update = await updateConnectionSecurity((next) => this._tttServer?.applyConnectionSecurity(next), (current) => ({...current, geo: value.geo}));
+        if(update !== 'applied') {
             this.sendApiFailure(res, 500, {message: 'Unable to commit server option.'});
             return;
         }
-        // 런타임 반영은 applyServerOption 이 아니라 이 전용 진입점으로만 한다(#118 U5-03).
-        this._tttServer?.applyConnectionSecurity(value);
         // 감사 메타는 요청 전에 계산되므로 정규화된 값은 여기서 더한다.
         ctx.auditDetail({...value.geo});
         this.sendApiSuccess(res, {geo: value.geo, warnings: normalized.warnings});

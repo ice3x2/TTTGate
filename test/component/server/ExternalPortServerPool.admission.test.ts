@@ -94,6 +94,33 @@ describe("ExternalPortServerPool admission wiring", () => {
         second.destroy();
     });
 
+    // #286 REQ-2 AC-2 — 리스너를 내렸다가 다른 포트로 다시 열어도(외부 포트 변경) 차단 목록은 남는다.
+    it("keeps refusing a blocklisted address after the listener is recreated on another port", async () => {
+        AdmissionController.instance.configureConnectionSecurity({
+            geo: {mode: "off", countries: [], applyToAdmin: true, unknownPolicy: "allow"},
+            blocklist: [{address: "127.0.0.1", port: null, note: "", createdAt: 1, createdBy: "admin"}]
+        });
+        const option = (forwardPort: number) => ({
+            forwardPort,
+            protocol: "tcp" as const,
+            destinationAddress: "127.0.0.1",
+            destinationPort: 18080,
+            keepAlive: 0,
+            rateLimit: {enabled: true, windowMs: 60000, maxConnections: 30, banMs: 60000, customized: false}
+        });
+        const firstPort = await getFreePort();
+        await expect(pool.startServer(option(firstPort))).resolves.toBe(true);
+        // 거절은 바로 닫힌다. 부하가 큰 전체 실행에서 흔들리지 않게 기한은 넉넉히 둔다.
+        expect((await connectAndCollectUntilClose(firstPort, 3_000)).length).toBe(0);
+        expect(pool.getServerStatus(firstPort).sessions).toBe(0);
+
+        await expect(pool.stop(firstPort)).resolves.toBe(true);
+        const secondPort = await getFreePort();
+        await expect(pool.startServer(option(secondPort))).resolves.toBe(true);
+        expect((await connectAndCollectUntilClose(secondPort, 3_000)).length).toBe(0);
+        expect(pool.getServerStatus(secondPort).sessions).toBe(0);
+    });
+
     it("reports sessionCount as 0 for a controller with no concurrency provider configured", () => {
         AdmissionController.resetForTest();
         expect(AdmissionController.instance.sessionCount(1)).toBe(0);

@@ -49,7 +49,7 @@ const startService = async (serverOption: ServerOption, adminCertInfo: CertInfo)
     AppCompositionRoot.applyGlobalMemLimitMiB(serverOption.globalMemCacheLimit ?? 128);
     applyStartupRuntimeOptions(serverOption);
     logger.info("Start service with option: " + JSON.stringify(redactSecrets(serverOption), null, 2));
-    AdmissionController.instance.configureGeo(serverOption.connectionSecurity?.geo ?? DEFAULT_GEO_CONFIG);
+    AdmissionController.instance.configureConnectionSecurity(serverOption.connectionSecurity ?? {geo: DEFAULT_GEO_CONFIG});
     tttServer = TTTServer.create(serverOption);
     // 감사 싱크는 AdminServer 보다 먼저 등록해 첫 요청의 감사 이벤트도 파일에 남게 한다.
     const auditSink = new FileAuditSink({

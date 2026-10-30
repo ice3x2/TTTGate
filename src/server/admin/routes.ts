@@ -8,6 +8,7 @@ import type {AuditEvent, AuditTarget} from "../audit/AuditSink";
 import {AUDIT_EVENT_TYPES, AuditEventType} from "../audit/AuditEventTypes";
 import {ClockRngProvider} from "../../util/ClockRng";
 import {truncateAuditValue} from "./auditValue";
+import {parseBlockedAddress} from "../security/IpBlocklist";
 import type {MfaTicketStore, PendingEnrollmentStore} from "../mfa/MfaTickets";
 
 export type {Action, Target};
@@ -82,6 +83,25 @@ export type Route = {
 };
 
 export type RouteHandlers = {[name: string]: (ctx: RouteContext) => Promise<void>};
+
+/**
+ * #286 차단 목록 감사의 대상 id. 넣을 때와 풀 때 같은 id 로 이어지도록 정규화한 주소를 쓴다.
+ * 틀린 문자열은 원문을, 문자열이 아니면(주소가 빠진 요청 등) 'invalid' 를 쓴다.
+ */
+const blocklistAuditId = (raw: unknown): string => {
+    if(typeof raw !== 'string') return 'invalid';
+    const parsed = parseBlockedAddress(raw);
+    return truncateAuditValue(parsed.ok ? parsed.address : raw);
+};
+
+/** 경로 세그먼트를 퍼센트 디코딩한다. 잘못된 인코딩이면 던지지 않고 undefined 를 돌려준다. */
+export const decodedPathSegment = (segment: string): string | undefined => {
+    try {
+        return decodeURIComponent(segment);
+    } catch {
+        return undefined;
+    }
+};
 
 /**
  * 경로 세그먼트의 포트. 1–65535 의 십진 표기만 받는다(앞자리 0, 지수, 16진, 소수, 공백은 거절).
@@ -254,6 +274,14 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
     {method: 'PUT', pattern: new RegExp('^/api/security/geo$'), action: 'security:manage',
         audit: () => auditMeta(AUDIT_EVENT_TYPES.security_geo_updated, {kind: 'security', id: 'geo'}), handler: 'onUpdateSecurityGeo'},
     {method: 'GET', pattern: new RegExp('^/api/security/countries$'), action: 'security:manage', handler: 'onGetSecurityCountries'},
+    // #286 — 관리자 차단 목록. 대상 id 는 요청한 주소(일시 차단에서 옮기면 그 주소)를 정규화한 값이다.
+    {method: 'GET', pattern: new RegExp('^/api/security/blocklist$'), action: 'security:manage', handler: 'onGetSecurityBlocklist'},
+    {method: 'POST', pattern: new RegExp('^/api/security/blocklist$'), action: 'security:manage',
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.security_block_added,
+            {kind: 'security', id: blocklistAuditId(ctx.body?.fromBan?.ip ?? ctx.body?.address)}), handler: 'onAddSecurityBlock'},
+    {method: 'DELETE', pattern: new RegExp('^/api/security/blocklist/(?<address>[^/]+)$'), action: 'security:manage',
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.security_block_removed,
+            {kind: 'security', id: blocklistAuditId(decodedPathSegment(ctx.params.address) ?? ctx.params.address)}), handler: 'onDeleteSecurityBlock'},
     // U2-06 / #98 사용자·그룹 관리. 핸들러 본문은 rbacRoutes.ts 에 있고 표는 여기 한 곳에 모아 둔다.
     {method: 'GET', pattern: new RegExp('^/api/users$'), action: 'user:manage', handler: 'onListUsers'},
     {method: 'POST', pattern: new RegExp('^/api/users$'), action: 'user:manage',

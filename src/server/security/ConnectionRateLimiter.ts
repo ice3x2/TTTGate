@@ -1,4 +1,5 @@
 import {ADMIT, AdmissionDecision, AdmissionDenial} from "./AdmissionPolicy";
+import {ipv6Groups} from "./address";
 
 export type RateLimitConfig = {windowMs: number; maxConnections: number; banMs: number};
 
@@ -17,13 +18,10 @@ export function rateLimitBucketOf(ip: string): string {
     if(!address.includes(':')) return address;
     // 목록에 보인 버킷 문자열(…::/64)도 같은 버킷으로 읽는다. 압축 표기가 달라도 같은 접두로 정규화한다.
     if(address.endsWith('/64')) return rateLimitBucketOf(address.slice(0, -3));
-    const [head, tail] = address.includes('::') ? address.split('::') : [address, undefined];
-    const headParts = head ? head.split(':') : [];
-    const tailParts = tail === undefined ? [] : (tail ? tail.split(':') : []);
-    const groups = tail === undefined ? headParts : [...headParts, ...Array(Math.max(0, 8 - headParts.length - tailParts.length)).fill('0'), ...tailParts];
-    const prefix = groups.slice(0, 4).map((group) => (parseInt(group || '0', 16) || 0).toString(16));
-    while(prefix.length < 4) prefix.push('0');
-    return `${prefix.join(':')}::/64`;
+    // IPv6 가 아닌 문자열은 바꾸지 않는다. 억지로 읽으면 관계없는 버킷과 겹친다(일시 차단 해제 API 가 입력을 그대로 넘긴다, #288).
+    const groups = ipv6Groups(address);
+    if(!groups) return address;
+    return `${groups.slice(0, 4).map((group) => group.toString(16)).join(':')}::/64`;
 }
 
 /**
@@ -66,37 +64,40 @@ export class ConnectionRateLimiter {
         });
     }
 
+    /**
+     * 이 주소가 지금 차단 중이면 그 거절을 돌려준다. admit 이 세는 것과 같은 키를 본다. 따로 세는 버킷이 아니면
+     * /48 로 묶어 센 차단(#175)도 본다. TLS 포트는 핸드셰이크 전에 이 판정만 쓴다(#287).
+     */
     public banned(port: number, address: string, now: number): AdmissionDenial | undefined {
         const ip = rateLimitBucketOf(address);
         const state = this._ports.get(port);
         if (!state) return undefined;
 
-        const ban = state.bans.get(ip);
-        if (!ban) return undefined;
-
-        if (ban.until > now) {
-            state.rejectedBans++;
-            return {allowed: false, reason: 'rate-limit-ban', retryAfterMs: ban.until - now};
-        }
-
-        state.bans.delete(ip);
-        return undefined;
+        const direct = this.activeBan(state, ip, now);
+        if (direct) return direct;
+        const key = this.windowKeyOf(state, ip);
+        return key !== ip ? this.activeBan(state, key, now) : undefined;
     }
 
+    /**
+     * 차단 판정과 세기를 한 번에 한다(banned 다음 count). 판정 로직은 두 메서드에만 있고 이것은 그 조합이다.
+     * AdmissionController 는 차단 판정을 국가 필터보다 먼저 따로 하므로 이것 대신 둘을 나눠 부른다(#287).
+     */
     public admit(port: number, address: string, now: number): AdmissionDecision {
+        return this.banned(port, address, now) ?? this.count(port, address, now);
+    }
+
+    /**
+     * 차단 판정(banned)을 이미 한 연결을 창에 세고, 넘치면 차단한다. AdmissionController 는 차단 판정을 국가 필터보다
+     * 먼저 따로 하므로 이 메서드로 세기만 한다(#287). 그 밖에는 admit 을 쓴다.
+     */
+    public count(port: number, address: string, now: number): AdmissionDecision {
         const ip = rateLimitBucketOf(address);
         const state = this._ports.get(port);
         if (!state) return ADMIT;
 
-        const banDecision = this.banned(port, ip, now);
-        if (banDecision) return banDecision;
-
         const {windowMs, maxConnections, banMs} = state.config;
         const key = this.windowKeyOf(state, ip);
-        if (key !== ip) {
-            const overflowBan = this.activeBan(state, key, now);
-            if (overflowBan) return overflowBan;
-        }
 
         let arr = state.windows.get(key);
         if (!arr) {
