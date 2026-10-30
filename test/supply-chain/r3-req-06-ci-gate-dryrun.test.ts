@@ -65,6 +65,14 @@ describe("R3-REQ-06 CI supply-chain gate (static)", () => {
         expect(content).toMatch(/jest test\/supply-chain/);
     });
 
+    // 바이너리 빌드 도구(개발 의존성, 예: pkg-fetch → undici)의 critical 권고도 릴리스를 막는다(#293).
+    test("루트 전체 트리(개발 의존성 포함)의 CRITICAL 감사 단계 존재", () => {
+        const workflow = parseYaml(fs.readFileSync(workflowPath, "utf8"));
+        const steps = workflow.jobs["audit-runtime"].steps.filter((step: any) => String(step.run ?? "").trim() === "npm audit --audit-level=critical");
+        expect(steps).toHaveLength(1);
+        expect(steps[0].env?.NODE_ENV).toBe("development");
+    });
+
     // 판정 단계가 먼저 돌아야 막힐 때 그 사유와 예외 경고가 로그에 남는다. jest 가 먼저 실패하면 뒤 단계는 건너뛴다(#293).
     test("판정 단계가 온라인 jest 단계보다 먼저 돈다", () => {
         const workflow = parseYaml(fs.readFileSync(workflowPath, "utf8"));
@@ -85,6 +93,7 @@ describe("R3-REQ-06 CI supply-chain gate (static)", () => {
         const runs: string[] = workflow.jobs["audit-runtime"].steps.filter((step: any) => step.run).map((step: any) => step.run.trim());
         expect(runs).toContain("npm audit --omit=dev --audit-level=critical");
         expect(runs).toContain("node scripts/supply-chain-gate.cjs --server-gate");
+
         const script = fs.readFileSync(path.join(path.dirname(workflowPath), "../../scripts/supply-chain-gate.cjs"), "utf8");
         expect(script).toContain('runNpm(["audit", "--omit=dev", "--audit-level=moderate", "--json"])');
     });

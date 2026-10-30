@@ -103,7 +103,7 @@ const evaluateGate = (report, level, reviewed = REVIEWED_ADVISORIES, now = Date.
             else if(!hasValidReviewWindow(review, now)) blocking.add(`${label} (review window invalid)`);
             else if(!(Date.parse(review.reviewBy) > now)) blocking.add(`${label} (review expired ${review.reviewBy})`);
             // 예외는 검토할 때의 등급까지만 덮는다. 등급이 적혀 있지 않거나 올라가면 다시 검토하게 막는다.
-            else if(!SEVERITY_ORDER.includes(review.severity)) blocking.add(`${label} (reviewed severity missing)`);
+            else if(!["moderate", "high"].includes(review.severity)) blocking.add(`${label} (reviewed severity missing)`);
             else if(SEVERITY_ORDER.indexOf(advisory.severity) > SEVERITY_ORDER.indexOf(review.severity)) {
                 blocking.add(`${label} (reviewed as ${review.severity}, now ${advisory.severity})`);
             }

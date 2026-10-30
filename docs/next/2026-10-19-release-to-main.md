@@ -1,10 +1,15 @@
-# 핸드오프 — `refactor/admin` 을 `main` 으로 병합한 뒤 (열린 일 없음)
+# 핸드오프 — `refactor/admin` 을 `main` 으로 병합한 뒤
 
 작성 2026-10-19 · 이 문서는 `docs/next/2026-10-16-wave8-audit-store.md` 를 대신한다. 그 문서의 "다음 행동(#120 재구현)"은 이미 끝났으므로 따르지 마라. 함정 목록(§6)은 지금도 유효하다.
 
 ## 0. 다음 세션의 첫 행동
 
-**남은 일이 없다.** 열린 이슈·PR·Dependabot 경고가 모두 0건이다(2026-10-21 기준).
+**2026-10-31 기준 남은 일이 있다.** #293(공급망 감사 실패)을 main 에 병합한 뒤 다음 두 가지를 확인하고 이슈를 닫는다.
+
+1. main 에서 Supply Chain Audit 을 수동 실행해 모든 작업이 성공하는지 본다: `gh workflow run supply-chain-audit.yml --ref main`
+2. 2.0.0 초안 릴리스(공개 전)에는 node-forge 1.4.0 이 들어 있다. 공개하지 말고 태그를 고친 main 으로 다시 올려 초안을 다시 만든다: `git push origin :refs/tags/2.0.0` → `git tag -f 2.0.0 <main 커밋>` → `git push origin 2.0.0`. Release 워크플로가 성공하고 초안에 파일 7개가 있는지 확인한다.
+
+2026-10-21 에는 열린 이슈·PR·Dependabot 경고가 모두 0건이었다.
 
 - `refactor/admin` 은 `main` 에 세 번 병합됐다: PR #185(`6a295dc`, 에픽 #125 와 #130~#191), PR #193(`137e4a9`, #192 개발 의존성 정리와 jest 30), PR #196(`dc6a0a3`, 테스트 불안정 해소 #194·#195·#197~#199).
 - 남은 운영 의존성 경고 `node-forge` GHSA-86w9-cpqp-85rv 2건은 수정 버전이 없어 '감수 가능한 위험'으로 닫았다. #180 의 검토 예외(`scripts/supply-chain-gate.cjs`)에 **재검토 기한 2027-01-31** 이 있다. 그 전에 node-forge 새 버전이 나오면 올려라. → 2026-10-31 #293 에서 수정 버전(1.4.2)으로 올리고 이 예외를 지웠다. 개발 의존성의 low 권고(`deepmerge`, `jest` 계열)는 수정 버전이 없어 남아 있다(개발 의존성이라 서버 감사(`--omit=dev`)에 들어가지 않는다).
@@ -27,7 +32,7 @@ gh api "repos/ice3x2/TTTGate/dependabot/alerts?state=open" --jq length
 | 열린 이슈·PR·Dependabot 경고 | 0 · 0 · 0 |
 | 테스트 도구 | jest 30, ts-jest 29.4, `tsconfig.jest.json`, `test/setup/forgeBigInteger.ts`(setupFiles) |
 | 남은 워크트리·작업 브랜치·stash | 없음 |
-| 릴리스 태그·바이너리 | 만들지 않았다. `build-release*.yml` 은 수동 실행(`workflow_dispatch`)이다 |
+| 릴리스 태그·바이너리 | 2026-10-31: 태그 `2.0.0` 과 초안 릴리스가 있다(공개 전, 다시 만들어야 함 — §0). `release.yml` 이 태그 push 로 돈다 |
 
 ### 2026-10-16 이후에 한 일
 

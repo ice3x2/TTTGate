@@ -90,6 +90,10 @@ describe("server HIGH gate with reviewed advisories (#180)", () => {
         void _omit;
         const report = reportOf({forge: {name: "forge", severity: "moderate", via: [advisory("forge", "moderate", "GHSA-aaaa-bbbb-cccc")]}});
         expect(gate.evaluateGate(report, "moderate", [withoutSeverity], NOW).blocking).toEqual(["forge GHSA-aaaa-bbbb-cccc (reviewed severity missing)"]);
+        // 예외 등급은 moderate·high 만 유효하다. critical 로 적은 예외가 high 권고를 덮지 못하게 한다.
+        const high = reportOf({forge: {name: "forge", severity: "high", via: [advisory("forge", "high", "GHSA-aaaa-bbbb-cccc")]}});
+        expect(gate.evaluateGate(high, "high", [{...REVIEWED[0], severity: "critical"}], NOW).blocking).toEqual(["forge GHSA-aaaa-bbbb-cccc (reviewed severity missing)"]);
+        expect(gate.evaluateGate(report, "moderate", [{...REVIEWED[0], severity: "low"}], NOW).blocking).toEqual(["forge GHSA-aaaa-bbbb-cccc (reviewed severity missing)"]);
     });
 
     // 검토일이 미래이거나 없거나, 재검토일이 검토일에서 180일을 넘으면 기한 제한을 우회하므로 막는다(#293).

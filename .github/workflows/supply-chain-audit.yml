@@ -48,6 +48,12 @@ jobs:
         env:
           NODE_ENV: development
 
+      - name: Audit full root tree including build tools (CRITICAL gate)
+        # 바이너리 빌드 도구(pkg-fetch → undici 등)는 개발 의존성이라 --omit=dev 감사에 들어가지 않는다(#293).
+        run: npm audit --audit-level=critical
+        env:
+          NODE_ENV: development
+
       - name: Online production audit regression
         run: npx jest --runInBand --runTestsByPath test/supply-chain/r3-req-03-critical-fixed.test.ts test/supply-chain/r3-req-04-medium-cleared.test.ts
         env:
