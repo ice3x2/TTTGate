@@ -37,6 +37,9 @@ const main = () => {
         // Browser tests can rebuild admin/dist using test entrypoints.
         {cwd: admin, args: ['run', 'build'], nodeEnv: 'production'},
     ];
+    // A build date left by an earlier local release would make later builds report that date (#290).
+    const buildInfo = Path.join(root, 'build', 'src', 'build-info.js');
+    fs.rmSync(buildInfo, {force: true});
     for(const gate of gates) {
         if(!runNpm(gate.args, gate.cwd, gate.nodeEnv)) return;
     }
@@ -44,7 +47,7 @@ const main = () => {
     // The runtime reports this build date (src/Environment.ts resolveBuildId). It goes into both the binaries (pkg reads
     // build/**) and the source distribution (dist.js is a copy of build/src) (#290).
     const buildDate = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    fs.writeFileSync(Path.join(root, 'build', 'src', 'build-info.js'), `module.exports = {build: "${buildDate}"};\n`);
+    fs.writeFileSync(buildInfo, `module.exports = {build: "${buildDate}"};\n`);
 
     // Preserve previous distributions until every validation gate has passed.
     const binaryOutput = Path.join(root, 'dist');

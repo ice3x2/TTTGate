@@ -24,10 +24,14 @@ test("quoted environment control preserves substitution characters literally", (
 // #290 — 릴리스 워크플로는 태그 이름을 환경 변수로만 읽고, 다른 어떤 셸 단계보다 먼저 검사한다.
 test("release.yml validates before all shell consumers and has no inline tag interpolation", () => {
     const workflow = parse(fs.readFileSync(path.join(root, ".github/workflows/release.yml"), "utf8"));
-    expect(workflow.jobs.release.env.RELEASE_VERSION).toBe("${{ github.ref_name }}");
-    const runs = workflow.jobs.release.steps.filter((step: any) => step.run);
-    expect(runs[0].run.trim()).toBe('node scripts/validate-release-version.cjs "$RELEASE_VERSION" --match-package');
-    for(const step of runs) expect(step.run).not.toContain("${{");
+    // 태그 확인은 맨 앞 작업(tag)이 하고, 패키징 작업은 그 작업이 통과해야 돈다.
+    expect(workflow.jobs.tag.env.RELEASE_VERSION).toBe("${{ github.ref_name }}");
+    expect(workflow.jobs.tag.steps.filter((step: any) => step.run)[0].run.trim())
+        .toBe('node scripts/validate-release-version.cjs "$RELEASE_VERSION" --match-package');
+    expect(workflow.jobs.release.needs).toContain("tag");
+    for(const job of ["tag", "release"]) {
+        for(const step of workflow.jobs[job].steps.filter((item: any) => item.run)) expect(step.run).not.toContain("${{");
+    }
 });
 
 test.each([payload, "../outside", "", "v1\nnext", "v1\n", "v1\r\n", "v1;printf marker"])("invalid version %j stops before heading or archive creation", version => fixture(directory => {

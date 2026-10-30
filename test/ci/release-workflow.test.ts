@@ -26,15 +26,21 @@ describe("release workflow (#290)", () => {
     test("grants write access only to the job that creates the release (REQ-3, AC-1)", () => {
         const workflow = read();
         expect(workflow.permissions).toEqual({contents: "read"});
+        expect(workflow.jobs.tag.permissions).toEqual({contents: "read"});
         expect(workflow.jobs.regression.permissions).toEqual({contents: "read"});
         expect(workflow.jobs.release.permissions).toEqual({contents: "write"});
     });
 
-    test("reuses Code Regression and packages only after it passes (REQ-4, AC-2)", () => {
+    // 태그 확인을 테스트보다 먼저 한다. 브랜치에서 잘못 실행하면 테스트(20~50분)를 기다리지 않고 바로 멈춘다.
+    test("checks the tag first, then reuses Code Regression, and packages only after both pass (REQ-4, REQ-6, AC-2)", () => {
         const workflow = read();
-        expect(Object.keys(workflow.jobs)).toEqual(["regression", "release"]);
+        expect(Object.keys(workflow.jobs)).toEqual(["tag", "regression", "release"]);
+        const tagRuns = workflow.jobs.tag.steps.filter((step: any) => step.run).map((step: any) => step.run.trim());
+        expect(tagRuns).toEqual(['node scripts/validate-release-version.cjs "$RELEASE_VERSION" --match-package']);
+        expect(workflow.jobs.tag.env.RELEASE_VERSION).toBe("${{ github.ref_name }}");
+        expect(workflow.jobs.regression.needs).toEqual(["tag"]);
         expect(workflow.jobs.regression.uses).toBe("./.github/workflows/code-regression.yml");
-        expect(workflow.jobs.release.needs).toEqual(["regression"]);
+        expect(workflow.jobs.release.needs).toEqual(["tag", "regression"]);
         expect(workflow.jobs.release.if).toBeUndefined();
         const regression = parseYaml(fs.readFileSync(path.join(directory, "code-regression.yml"), "utf8"));
         expect(regression.on.workflow_call).toEqual({});
@@ -47,7 +53,6 @@ describe("release workflow (#290)", () => {
         expect(job.env.RELEASE_VERSION).toBe("${{ github.ref_name }}");
         const runs: string[] = job.steps.filter((step: any) => step.run).map((step: any) => step.run.trim());
         expect(runs).toEqual([
-            'node scripts/validate-release-version.cjs "$RELEASE_VERSION" --match-package',
             "npm run dist -- --skip-tests",
             'node scripts/archive-source.cjs "$RELEASE_VERSION"',
             'node scripts/archive-binaries.cjs "$RELEASE_VERSION"',

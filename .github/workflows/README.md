@@ -20,9 +20,9 @@
    ```
 
 3. Release 워크플로가 자동으로 돕니다. 순서는 다음과 같습니다.
-   1. Code Regression 의 네 작업을 병렬로 돌립니다(약 25분). 하나라도 실패하면 패키징하지 않습니다.
-   2. 태그가 `package.json`·`package-build.json` 의 `version` 과 같은지 확인합니다. 다르면 여기서 멈춥니다.
-   3. `npm run dist -- --skip-tests` 로 빌드하고 바이너리를 만듭니다. 테스트는 1단계에서 이미 돌렸으므로 다시 돌리지 않습니다.
+   1. 태그가 `package.json`·`package-build.json` 의 `version` 과 같은지 확인합니다. 다르면 여기서 멈춥니다.
+   2. Code Regression 의 네 작업을 병렬로 돌립니다(보통 20~50분). 하나라도 실패하면 패키징하지 않습니다. 스트레스 테스트(`npm run test:stress`)는 여기에 들어가지 않으므로, 필요하면 릴리스 전에 따로 돌립니다.
+   3. `npm run dist -- --skip-tests` 로 빌드하고 바이너리를 만듭니다. 테스트는 2단계에서 이미 돌렸으므로 다시 돌리지 않습니다.
    4. 소스 배포판과 바이너리를 압축하고, 릴리스 노트를 써서 초안 릴리스에 올립니다.
 4. **Releases** 화면에서 초안 릴리스를 확인합니다. 릴리스 노트를 고친 뒤 **Publish release** 를 눌러 공개합니다.
 
@@ -36,7 +36,7 @@ git push origin 2.0.0
 
 ### 수동 실행
 
-Actions 화면에서 **Release** 를 고르고 **Run workflow** 를 누릅니다. **Use workflow from** 에서 브랜치가 아니라 **버전 태그**를 고릅니다. 브랜치를 고르면 2단계(태그 확인)에서 멈춥니다.
+Actions 화면에서 **Release** 를 고르고 **Run workflow** 를 누릅니다. **Use workflow from** 에서 브랜치가 아니라 **버전 태그**를 고릅니다. 브랜치를 고르면 1단계(태그 확인)에서 바로 멈춥니다.
 
 ```bash
 gh workflow run release.yml --ref 2.0.0
