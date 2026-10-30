@@ -55,16 +55,8 @@ const runNpm = (args, cwd = process.cwd()) => spawnSync("npm", args, {
  * reviewBy 는 reviewedOn 에서 180일 안이어야 한다(테스트가 지킨다).
  * 예외의 전제(영향 API 미사용)는 test/supply-chain/reviewed-advisories.test.ts 가 지킨다.
  */
-const REVIEWED_ADVISORIES = [
-    {
-        id: "GHSA-86w9-cpqp-85rv",
-        package: "node-forge",
-        reviewedOn: "2026-10-19",
-        reviewBy: "2027-01-31",
-        reason: "RSA PKCS#1 v1.5 signature verification flaw. TTTGate only generates certificates and parses PEM with node-forge; " +
-            "it never verifies signatures with it (TLS verification is done by Node/OpenSSL). No patched release exists (<= 1.4.0).",
-    },
-];
+// #293: GHSA-86w9-cpqp-85rv(node-forge) 는 수정 버전 1.4.1 이 나와 예외를 지우고 1.4.2 로 올렸다.
+const REVIEWED_ADVISORIES = [];
 
 const GHSA_PATTERN = /GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}/i;
 const BLOCKING_SEVERITIES = ["high", "critical"];

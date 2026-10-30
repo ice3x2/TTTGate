@@ -39,9 +39,16 @@ jobs:
       contents: read
     uses: ./.github/workflows/code-regression.yml
 
+  # #293: 알려진 HIGH 권고가 든 채로 릴리스가 나가지 않게 온라인 공급망 감사를 돌린다.
+  supply-chain:
+    needs: [tag]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/supply-chain-audit.yml
+
   release:
     name: Package and create draft release
-    needs: [tag, regression]
+    needs: [tag, regression, supply-chain]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:

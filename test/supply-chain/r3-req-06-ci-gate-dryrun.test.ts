@@ -20,10 +20,11 @@ const repoRoot = path.resolve(__dirname, "..", "..");
 const workflowPath = path.join(repoRoot, ".github", "workflows", "supply-chain-audit.yml");
 
 describe("R3-REQ-06 CI supply-chain gate (static)", () => {
-    test("online audit jobs run only on schedule or explicit dispatch", () => {
+    // #293: 릴리스 워크플로가 태그 push 로 부를 때도 돈다(불린 워크플로의 github 문맥은 부른 쪽 것이다). PR 에서는 돌지 않는다.
+    test("online audit jobs run on schedule, explicit dispatch, or a release tag", () => {
         const workflow = parseYaml(fs.readFileSync(workflowPath, "utf8"));
         for(const job of [workflow.jobs["audit-runtime"], workflow.jobs["audit-admin"]]) {
-            expect(job.if).toBe("github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'");
+            expect(job.if).toBe("github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')");
             expect(JSON.stringify(job)).not.toMatch(/\|\| echo|grep -q/);
         }
     });

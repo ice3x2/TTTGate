@@ -28,22 +28,37 @@ describe("release workflow (#290)", () => {
         expect(workflow.permissions).toEqual({contents: "read"});
         expect(workflow.jobs.tag.permissions).toEqual({contents: "read"});
         expect(workflow.jobs.regression.permissions).toEqual({contents: "read"});
+        expect(workflow.jobs["supply-chain"].permissions).toEqual({contents: "read"});
         expect(workflow.jobs.release.permissions).toEqual({contents: "write"});
     });
 
     // 태그 확인을 테스트보다 먼저 한다. 브랜치에서 잘못 실행하면 테스트(20~50분)를 기다리지 않고 바로 멈춘다.
     test("checks the tag first, then reuses Code Regression, and packages only after both pass (REQ-4, REQ-6, AC-2)", () => {
         const workflow = read();
-        expect(Object.keys(workflow.jobs)).toEqual(["tag", "regression", "release"]);
+        expect(Object.keys(workflow.jobs)).toEqual(["tag", "regression", "supply-chain", "release"]);
         const tagRuns = workflow.jobs.tag.steps.filter((step: any) => step.run).map((step: any) => step.run.trim());
         expect(tagRuns).toEqual(['node scripts/validate-release-version.cjs "$RELEASE_VERSION" --match-package']);
         expect(workflow.jobs.tag.env.RELEASE_VERSION).toBe("${{ github.ref_name }}");
         expect(workflow.jobs.regression.needs).toEqual(["tag"]);
         expect(workflow.jobs.regression.uses).toBe("./.github/workflows/code-regression.yml");
-        expect(workflow.jobs.release.needs).toEqual(["tag", "regression"]);
+        expect(workflow.jobs.release.needs).toEqual(["tag", "regression", "supply-chain"]);
         expect(workflow.jobs.release.if).toBeUndefined();
         const regression = parseYaml(fs.readFileSync(path.join(directory, "code-regression.yml"), "utf8"));
         expect(regression.on.workflow_call).toEqual({});
+    });
+
+    // #293: 알려진 HIGH 권고가 든 채로 릴리스가 나가지 않게, 패키징 전에 온라인 공급망 감사를 돌린다.
+    test("runs the online supply-chain audit before packaging (#293 REQ-5, AC-4)", () => {
+        const workflow = read();
+        const job = workflow.jobs["supply-chain"];
+        expect(job.uses).toBe("./.github/workflows/supply-chain-audit.yml");
+        expect(job.needs).toEqual(["tag"]);
+        const audit = parseYaml(fs.readFileSync(path.join(directory, "supply-chain-audit.yml"), "utf8"));
+        expect(audit.on.workflow_call).toEqual({});
+        // 불린 워크플로의 github 문맥은 부른 쪽 것이다. 태그 push 로 불렸을 때 온라인 감사가 건너뛰어지면 안 된다.
+        for(const name of ["audit-runtime", "audit-admin"]) {
+            expect(audit.jobs[name].if).toBe("github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')");
+        }
     });
 
     test("validates the tag against package.json, packages without re-running tests and archives everything (REQ-5, REQ-6)", () => {

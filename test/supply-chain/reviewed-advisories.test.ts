@@ -56,8 +56,9 @@ describe("server HIGH gate with reviewed advisories (#180)", () => {
         expect(gate.evaluateHighGate(reportOf({x: {name: "x", severity: "moderate", via: [advisory("x", "moderate", "GHSA-9999-8888-7777")]}}), REVIEWED, NOW).blocking).toEqual([]);
     });
 
+    // #293: 수정 버전이 나오면 예외를 지우고 업그레이드로 푼다. 그래서 목록은 비어 있을 수 있다.
     it("every reviewed advisory in the repository has an id, package, reason and a future-dated review", () => {
-        expect(gate.REVIEWED_ADVISORIES.length).toBeGreaterThan(0);
+        expect(Array.isArray(gate.REVIEWED_ADVISORIES)).toBe(true);
         for(const entry of gate.REVIEWED_ADVISORIES) {
             expect(entry.id).toMatch(/^GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}$/);
             expect(typeof entry.package).toBe("string");
