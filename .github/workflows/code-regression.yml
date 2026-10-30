@@ -5,6 +5,8 @@ on:
   push:
     branches: [main]
   workflow_dispatch: {}
+  # #290: 릴리스 워크플로가 같은 테스트 작업을 다시 쓴다.
+  workflow_call: {}
 
 permissions:
   contents: read
@@ -17,8 +19,8 @@ jobs:
     env:
       NODE_ENV: development
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '24'
           cache: npm
@@ -38,8 +40,8 @@ jobs:
     env:
       NODE_ENV: development
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '24'
           cache: npm
@@ -56,8 +58,8 @@ jobs:
     env:
       NODE_ENV: development
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '24'
           cache: npm
@@ -72,8 +74,8 @@ jobs:
     env:
       NODE_ENV: development
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '24'
           cache: npm
