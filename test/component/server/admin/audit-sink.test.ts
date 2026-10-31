@@ -11,6 +11,7 @@ import {ADMIN_ROUTES, RouteContext} from "../../../../src/server/admin/routes";
 import {AUDIT_EVENT_TYPE_LIST} from "../../../../src/server/audit/AuditEventTypes";
 import {AuditEvent, AuditSink, AuditSinkRegistry} from "../../../../src/server/audit/AuditSink";
 import {getFreePort, startEchoServer} from "../../../helpers/network";
+import net from "node:net";
 import {httpRequest} from "../../../helpers/http";
 import {applyTestRoot, cleanupTestRoot, createTestRoot} from "../../../helpers/runtime";
 
@@ -53,6 +54,7 @@ type Fixture = {
     freePort: () => Promise<number>;
     /** #135: JSON 으로 직렬화하지 않은 본문을 그대로 보낸다. */
     raw: (method: string, target: string, body: string, headers?: Record<string, string>) => Promise<ApiResponse>;
+    port: number;
 };
 
 const authOf = (response: ApiResponse): {auth: Auth; sessionKey: string} => {
@@ -129,7 +131,7 @@ const withAuditServer = async (check: (fixture: Fixture) => Promise<void>): Prom
                 auth: bootstrap.auth!, sessionKey: bootstrap.sessionKey!,
                 userId: bootstrap.body.user.id, mustChangePassword: bootstrap.body.mustChangePassword
             },
-            request, login, freePort: getFreePort, raw
+            request, login, freePort: getFreePort, raw, port
         });
         // #109 K3 확장 — 이 시나리오가 실제로 기록한 type 전수가 상수 목록 안에 있어야 한다.
         expect(sink.allEvents.map((event) => event.type).filter((type) => !AUDIT_EVENT_TYPE_LIST.includes(type))).toEqual([]);
@@ -141,6 +143,47 @@ const withAuditServer = async (check: (fixture: Fixture) => Promise<void>): Prom
         }
     }
 };
+
+type ChunkedOutcome = {status?: number; writeError?: string; closedAfterMs: number; acceptedBytes: number};
+
+/**
+ * #297: 원시 소켓으로 요청을 보내고 본문을 조각으로 나눠 쓴다. 응답을 받아도 멈추지 않고 sendBytes 까지 보낸다.
+ * 응답 상태, 쓰기 오류, 오류 없이 써진 바이트 수, 연결이 닫힐 때까지 걸린 시간을 돌려준다.
+ * sendBytes 가 contentLength 보다 작으면 그만큼만 보내고 멈춘다(서버의 시간 제한을 볼 때 쓴다).
+ */
+const sendInChunks = (port: number, target: string, headers: Record<string, string>,
+    contentLength: number, sendBytes = contentLength, chunkBytes = 64 * 1024, gapMs = 10): Promise<ChunkedOutcome> =>
+    new Promise((resolve) => {
+        const startedAt = Date.now();
+        const outcome: ChunkedOutcome = {closedAfterMs: -1, acceptedBytes: 0};
+        const socket = net.connect({host: "127.0.0.1", port});
+        const guard = setTimeout(() => socket.destroy(), 20_000);
+        let received = "";
+        socket.on("data", (chunk) => {
+            received += chunk.toString("latin1");
+            outcome.status ??= Number(/^HTTP\/1\.1 (\d{3})/.exec(received)?.[1]) || undefined;
+        });
+        socket.on("error", (error: any) => { outcome.writeError ??= error.code ?? String(error); });
+        socket.on("close", () => {
+            clearTimeout(guard);
+            outcome.closedAfterMs = Date.now() - startedAt;
+            resolve(outcome);
+        });
+        let sent = 0;
+        const writeNext = () => {
+            if(socket.destroyed || sent >= sendBytes) return;
+            const size = Math.min(chunkBytes, sendBytes - sent);
+            sent += size;
+            socket.write(Buffer.alloc(size, 0x78), (error) => {
+                if(error) { outcome.writeError ??= (error as any).code ?? String(error); return; }
+                outcome.acceptedBytes += size;
+                setTimeout(writeNext, gapMs);
+            });
+        };
+        const head = [`POST ${target} HTTP/1.1`, "Host: 127.0.0.1", "Content-Type: application/json", `Content-Length: ${contentLength}`,
+            ...Object.entries(headers).map(([name, value]) => `${name}: ${value}`)].join("\r\n");
+        socket.write(`${head}\r\n\r\n`, () => writeNext());
+    });
 
 const tunnelBody = (forwardPort: number, destinationPort: number, store: ServerOptionStore) => ({
     forwardPort, protocol: "tcp", tls: false, destinationAddress: "127.0.0.1", destinationPort, keepAlive: 0,
@@ -569,6 +612,48 @@ describe("audit-sink: 본문 파싱 단계에서 실패한 CUD 요청(#135)", ()
         try { status = (await f.raw("POST", "/api/users", huge, bob.auth!)).status; } catch { status = undefined; }
         expect(status).toBe(403);
         expect(rejected(f)).toEqual([]);
+    }));
+
+    // #297: 본문을 읽기 전에 거절해도 남은 본문을 버리며 읽은 뒤 닫는다. 그래야 클라이언트가 리셋 대신 거절 응답을 받는다.
+    const regularUser = async (f: Fixture) => {
+        const created = await IdentityStore.instance.createUser({
+            username: "bob", displayName: "Bob", role: "regular", mustChangePassword: false, password: REGULAR_PASSWORD
+        });
+        expect(created.success).toBe(true);
+        return (await f.login({username: "bob", password: REGULAR_PASSWORD})).auth!;
+    };
+
+    it("#297 권한 없는 사용자가 1MiB 본문을 나눠 보내도 쓰기 오류 없이 403 을 받고 서버가 연결을 닫는다", async () => withAuditServer(async (f) => {
+        const auth = await regularUser(f);
+        f.sink.events.length = 0;
+        const outcome = await sendInChunks(f.port, "/api/users", auth, 1024 * 1024);
+        expect({status: outcome.status, writeError: outcome.writeError, acceptedBytes: outcome.acceptedBytes})
+            .toEqual({status: 403, writeError: undefined, acceptedBytes: 1024 * 1024});
+        expect(outcome.closedAfterMs).toBeGreaterThanOrEqual(0);
+        expect(rejected(f)).toEqual([]);
+        expect(f.sink.events.filter((event) => event.type === "access_denied")).toHaveLength(1);
+    }));
+
+    it("#297 차단된 로그인이 큰 본문을 나눠 보내도 429 를 받는다", async () => withAuditServer(async (f) => {
+        for(let i = 0; i < 5; i += 1) expect((await f.login({username: "admin", password: `wrong-${i}`})).status).toBe(401);
+        const outcome = await sendInChunks(f.port, "/api/login", {}, 1024 * 1024);
+        expect({status: outcome.status, writeError: outcome.writeError, acceptedBytes: outcome.acceptedBytes})
+            .toEqual({status: 429, writeError: undefined, acceptedBytes: 1024 * 1024});
+    }));
+
+    it("#297 2MiB 를 넘는 본문이면 서버가 다 읽지 않고 연결을 끊는다", async () => withAuditServer(async (f) => {
+        const auth = await regularUser(f);
+        const outcome = await sendInChunks(f.port, "/api/users", auth, 8 * 1024 * 1024, 8 * 1024 * 1024, 256 * 1024, 0);
+        expect(outcome.writeError).toBeDefined();
+        expect(outcome.acceptedBytes).toBeLessThan(8 * 1024 * 1024);
+    }));
+
+    it("#297 본문을 보내다 멈추면 서버가 5초 남짓 뒤 연결을 끊는다", async () => withAuditServer(async (f) => {
+        const auth = await regularUser(f);
+        const outcome = await sendInChunks(f.port, "/api/users", auth, 1024 * 1024, 64 * 1024);
+        expect(outcome.status).toBe(403);
+        expect(outcome.closedAfterMs).toBeGreaterThanOrEqual(4_500);
+        expect(outcome.closedAfterMs).toBeLessThan(9_000);
     }));
 
     it("#173 access_denied 감사의 경로와 경로 id 대상은 길이를 자른다", async () => withAuditServer(async (f) => {
