@@ -29,10 +29,10 @@ describe("2026-10 advisories are fixed by upgrades (#293)", () => {
         expect(numeric(range)).toBeGreaterThanOrEqual(numeric("1.4.2"));
     });
 
-    test.each(["package-lock.json", "admin/package-lock.json"])("%s installs node-forge 1.4.1 or later everywhere", (file) => {
+    test.each(["package-lock.json", "admin/package-lock.json"])("%s installs node-forge 1.4.2 or later everywhere", (file) => {
         const versions = installed(file, "node-forge");
         expect(versions.length).toBeGreaterThan(0);
-        for(const version of versions) expect({version, patched: numeric(version) >= numeric("1.4.1")}).toEqual({version, patched: true});
+        for(const version of versions) expect({version, patched: numeric(version) >= numeric("1.4.2")}).toEqual({version, patched: true});
     });
 
     test("the root lockfile installs undici 7.30.1 or later everywhere", () => {
