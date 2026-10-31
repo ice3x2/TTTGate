@@ -4,7 +4,7 @@
 
 ## 0. 다음 세션의 첫 행동
 
-**2026-10-31 기준 남은 일은 하나다.** Dependabot 경고 중 `undici` 8건·`vite` 5건은 main 잠금 파일이 이미 고친 버전(`undici` 7.30.1, `vite` 6.4.5)이다. Dependabot 이 main 을 다시 검사하면 닫혀야 한다. 닫히지 않았으면 원인을 확인한다. `deepmerge` 2건은 수정 버전이 없어 남는다.
+**2026-10-31 기준 남은 확인은 하나다.** Dependabot 경고 중 `undici` 8건·`vite` 5건은 main 잠금 파일은 이미 고친 버전(`undici` 7.30.1, `vite` 6.4.5)을 쓴다. Dependabot 이 main 을 다시 검사하면 닫혀야 한다. 닫히지 않았으면 원인을 확인한다. `deepmerge` 2건은 수정 버전이 없어 남는다.
 
 #293(공급망 감사 실패)은 2026-10-31 에 닫았다.
 
@@ -34,7 +34,7 @@ gh api "repos/ice3x2/TTTGate/dependabot/alerts?state=open" --jq length
 | 작업 흐름 | 작업 브랜치를 `develop` 에 병합하고, `develop` 을 `main` 에 병합한다(예: PR #291 → PR #292) |
 | 열린 이슈·PR·Dependabot 경고 | 2026-10-31: 이슈 #244, PR 없음, 경고 15건(재검사 뒤 2건만 남아야 함 — §0) |
 | 테스트 도구 | jest 30, ts-jest 29.4, `tsconfig.jest.json`, `test/setup/forgeBigInteger.ts`(setupFiles) |
-| 남은 워크트리·작업 브랜치·stash | 없음(2026-10-31 정리) |
+| 남은 워크트리·작업 브랜치·stash | 없음(2026-10-31 정리. `fix/supply-chain-advisories`·`docs/handoff-293-done` 의 로컬·원격 브랜치도 지웠다) |
 | 릴리스 태그·바이너리 | 태그 `2.0.0`(`55a39ac`)과 초안 릴리스(파일 7개, 공개 전). `release.yml` 이 태그 push 로 돈다 |
 
 ### 2026-10-16 이후에 한 일
