@@ -8,6 +8,8 @@ on:
       - 'package-lock.json'
       - 'admin/package.json'
       - 'admin/package-lock.json'
+      - 'package-build.json'
+      - 'scripts/supply-chain-gate.cjs'
       - '.github/workflows/supply-chain-audit.yml'
   push:
     branches: [main]

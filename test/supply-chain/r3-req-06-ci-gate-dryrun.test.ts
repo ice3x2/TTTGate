@@ -39,6 +39,8 @@ describe("R3-REQ-06 CI supply-chain gate (static)", () => {
         const on = yaml.on ?? yaml[true as unknown as string];
         expect(on).toBeDefined();
         expect(on.pull_request).toBeDefined();
+        // 판정 스크립트와 소스 배포판 manifest 를 바꾼 PR 에서도 감사 워크플로가 돈다(#293).
+        expect(on.pull_request.paths).toEqual(expect.arrayContaining(["scripts/supply-chain-gate.cjs", "package-build.json"]));
     });
 
     test("moderate 차단 게이트 존재 (검토 예외만 통과하는 서버 게이트, #180, #293)", () => {

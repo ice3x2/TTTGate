@@ -29,7 +29,7 @@ describe("R3-REQ-03 CRITICAL cleared on production chain", () => {
         expect(criticalHits).toEqual([]);
     }, 60_000);
 
-    onlineTest("npm audit --omit=dev --audit-level=high → form-data 차단 0건, 그 밖의 HIGH 는 검토 예외만(#180)", () => {
+    onlineTest("npm audit --omit=dev → form-data 는 검토 예외 밖 moderate 이상 0건, 그 밖의 HIGH 는 검토 예외만(#180, #293)", () => {
         const report = audit("high");
         expect(formDataBlocking(report)).toEqual([]);
         expect(evaluateGate(report, "high").blocking).toEqual([]);

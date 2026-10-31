@@ -33,7 +33,7 @@ describe("release workflow (#290)", () => {
     });
 
     // 태그 확인을 테스트보다 먼저 한다. 브랜치에서 잘못 실행하면 테스트(20~50분)를 기다리지 않고 바로 멈춘다.
-    test("checks the tag first, then reuses Code Regression, and packages only after both pass (REQ-4, REQ-6, AC-2)", () => {
+    test("checks the tag first, then reuses Code Regression, and packages only after tag, regression and supply-chain all pass (REQ-4, REQ-6, AC-2)", () => {
         const workflow = read();
         expect(Object.keys(workflow.jobs)).toEqual(["tag", "regression", "supply-chain", "release"]);
         const tagRuns = workflow.jobs.tag.steps.filter((step: any) => step.run).map((step: any) => step.run.trim());
