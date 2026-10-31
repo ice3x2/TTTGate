@@ -1,7 +1,8 @@
 import * as fs from "fs";
 import * as path from "path";
 
-// #180 — 수정 버전이 없는 권고는 검토한 예외로만 HIGH 게이트를 통과시킨다. 그 밖의 HIGH·CRITICAL 과 기한 지난 예외는 막는다.
+// #180·#293 — 수정 버전이 없는 권고는 검토한 예외로만 판정을 통과한다(서버 moderate 이상, 루트 전체 트리 high 이상).
+// critical 과 기한 지난 예외는 막는다.
 const repoRoot = path.resolve(__dirname, "..", "..");
 const gate = require("../../scripts/supply-chain-gate.cjs");
 
@@ -11,7 +12,7 @@ const reportOf = (vulnerabilities: Record<string, any>) => ({auditReportVersion:
 const REVIEWED = [{id: "GHSA-aaaa-bbbb-cccc", package: "forge", severity: "high", reviewedOn: "2026-10-01", reviewBy: "2027-01-31", reason: "unused API"}];
 const NOW = Date.parse("2026-10-19T00:00:00Z");
 
-describe("server HIGH gate with reviewed advisories (#180)", () => {
+describe("evaluateGate with reviewed advisories (#180, #293)", () => {
     it("passes when every HIGH advisory is reviewed and not expired", () => {
         const result = gate.evaluateGate(reportOf({forge: {name: "forge", severity: "high", via: [advisory("forge", "high", "GHSA-aaaa-bbbb-cccc")]}}), "high", REVIEWED, NOW);
         expect(result.blocking).toEqual([]);
@@ -184,5 +185,43 @@ describe("ip-address is patched (#180)", () => {
             const [major, minor, patch] = version.split(".").map(Number);
             expect(major * 1e6 + minor * 1e3 + patch).toBeGreaterThanOrEqual(10 * 1e6 + 7 * 1e3 + 1);
         }
+    });
+});
+
+// #293: 판정 명령(runGate)이 검토 예외를 쓰는지, 루트 전체 트리 판정이 예외를 서버 운영 트리의 설치 경로에만 적용하는지 본다.
+describe("runGate with reviewed advisories (#293)", () => {
+    const entryOf = (nodes: string[]) => ({name: "undici", severity: "high", nodes, via: [advisory("undici", "high", "GHSA-aaaa-bbbb-cccc")]});
+    const auditJson = (vulnerabilities: Record<string, any>) => JSON.stringify({auditReportVersion: 2, vulnerabilities,
+        metadata: {vulnerabilities: {info: 0, low: 0, moderate: 0, high: Object.keys(vulnerabilities).length, critical: 0, total: Object.keys(vulnerabilities).length}}});
+    const reviewedUndici = [{...REVIEWED[0], package: "undici"}];
+    // 서버 판정(--omit=dev)과 전체 트리 판정에 서로 다른 보고서를 돌려주는 가짜 npm.
+    const runnerOf = (server: Record<string, any>, full: Record<string, any>) => (args: string[]) => {
+        const vulnerabilities = args.includes("--omit=dev") ? server : full;
+        return {status: Object.keys(vulnerabilities).length ? 1 : 0, stdout: auditJson(vulnerabilities), stderr: ""};
+    };
+
+    it("the full-tree gate accepts a reviewed high advisory installed only where the server runtime has it", () => {
+        const run = runnerOf({undici: entryOf(["node_modules/undici"])}, {undici: entryOf(["node_modules/undici"])});
+        expect(gate.runGate("--full-tree-gate", {run, reviewed: reviewedUndici, now: NOW}))
+            .toEqual({scope: "full-tree", blocking: [], accepted: ["undici GHSA-aaaa-bbbb-cccc"]});
+    });
+
+    it("the full-tree gate blocks the same advisory when a build tool also installs the package", () => {
+        const run = runnerOf({undici: entryOf(["node_modules/undici"])},
+            {undici: entryOf(["node_modules/undici", "node_modules/@yao-pkg/pkg-fetch/node_modules/undici"])});
+        expect(gate.runGate("--full-tree-gate", {run, reviewed: reviewedUndici, now: NOW}).blocking)
+            .toEqual(["undici GHSA-aaaa-bbbb-cccc (exception covers server runtime only)"]);
+    });
+
+    it("the full-tree gate blocks a reviewed advisory of a dev-only package", () => {
+        const run = runnerOf({}, {undici: entryOf(["node_modules/@yao-pkg/pkg-fetch/node_modules/undici"])});
+        expect(gate.runGate("--full-tree-gate", {run, reviewed: reviewedUndici, now: NOW}).blocking)
+            .toEqual(["undici GHSA-aaaa-bbbb-cccc (exception covers server runtime only)"]);
+    });
+
+    it("the server gate applies reviewed advisories without a tree restriction", () => {
+        const run = runnerOf({undici: entryOf(["node_modules/undici"])}, {});
+        expect(gate.runGate("--server-gate", {run, reviewed: reviewedUndici, now: NOW}))
+            .toEqual({scope: "server", blocking: [], accepted: ["undici GHSA-aaaa-bbbb-cccc"]});
     });
 });

@@ -96,6 +96,7 @@ describe("R3-REQ-06 CI supply-chain gate (static)", () => {
         const workflow = parseYaml(fs.readFileSync(workflowPath, "utf8"));
         const runs: string[] = workflow.jobs["audit-runtime"].steps.map((step: any) => String(step.run ?? "").trim());
         const gate = runs.indexOf("node scripts/supply-chain-gate.cjs --server-gate");
+        const fullTree = runs.indexOf("node scripts/supply-chain-gate.cjs --full-tree-gate");
         const critical = runs.indexOf("npm audit --omit=dev --audit-level=critical");
         const online = runs.findIndex((run) => run.includes("r3-req-04-medium-cleared.test.ts"));
         expect(gate).toBeGreaterThanOrEqual(0);
@@ -103,6 +104,8 @@ describe("R3-REQ-06 CI supply-chain gate (static)", () => {
         expect(online).toBeGreaterThanOrEqual(0);
         expect(critical).toBeLessThan(online);
         expect(gate).toBeLessThan(online);
+        expect(fullTree).toBeGreaterThanOrEqual(0);
+        expect(fullTree).toBeLessThan(online);
     });
 
     // runtime-only audit 는 --omit=dev 로 빌드 의존성 노이즈를 뺀다. 주석이 아니라 실제 run 단계와 판정 스크립트를 본다(#293).
