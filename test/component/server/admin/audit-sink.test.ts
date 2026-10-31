@@ -149,11 +149,10 @@ type ChunkedOutcome = {status?: number; head: string; writeError?: string; close
 /**
  * #297: 원시 소켓으로 요청을 보내고 본문을 조각으로 나눠 쓴다. 응답을 받아도 멈추지 않고 sendBytes 까지 보낸다.
  * 응답 상태와 헤더, 쓰기 오류, 오류 없이 써진 바이트 수, 연결이 닫힐 때까지 걸린 시간을 돌려준다.
- * trailer 는 본문 뒤에 이어 쓸 바이트다(같은 연결로 다음 요청을 이어 보낼 때 쓴다).
  * sendBytes 가 contentLength 보다 작으면 그만큼만 보내고 멈춘다(서버의 시간 제한을 볼 때 쓴다).
  */
 const sendInChunks = (port: number, target: string, headers: Record<string, string>,
-    contentLength: number, sendBytes = contentLength, chunkBytes = 64 * 1024, gapMs = 10, trailer = ""): Promise<ChunkedOutcome> =>
+    contentLength: number, sendBytes = contentLength, chunkBytes = 64 * 1024, gapMs = 10): Promise<ChunkedOutcome> =>
     new Promise((resolve) => {
         const startedAt = Date.now();
         const outcome: ChunkedOutcome = {head: "", closedAfterMs: -1, acceptedBytes: 0};
@@ -174,8 +173,7 @@ const sendInChunks = (port: number, target: string, headers: Record<string, stri
         });
         let sent = 0;
         const writeNext = () => {
-            if(socket.destroyed) return;
-            if(sent >= sendBytes) { if(trailer) socket.write(trailer, () => undefined); return; }
+            if(socket.destroyed || sent >= sendBytes) return;
             const size = Math.min(chunkBytes, sendBytes - sent);
             sent += size;
             socket.write(Buffer.alloc(size, 0x78), (error) => {
@@ -188,6 +186,21 @@ const sendInChunks = (port: number, target: string, headers: Record<string, stri
             ...Object.entries(headers).map(([name, value]) => `${name}: ${value}`)].join("\r\n");
         socket.write(`${head}\r\n\r\n`, () => writeNext());
     });
+
+const rawRequest = (target: string, headers: Record<string, string>, body: string): string =>
+    [`POST ${target} HTTP/1.1`, "Host: 127.0.0.1", "Content-Type: application/json", `Content-Length: ${Buffer.byteLength(body)}`,
+        ...Object.entries(headers).map(([name, value]) => `${name}: ${value}`)].join("\r\n") + "\r\n\r\n" + body;
+
+/** #297: 여러 요청을 한 번의 write 로 이어 보내고, 연결이 닫히면 받은 바이트를 돌려준다. */
+const sendPipelined = (port: number, requests: string[]): Promise<string> => new Promise((resolve) => {
+    const socket = net.connect({host: "127.0.0.1", port});
+    const guard = setTimeout(() => socket.destroy(), 20_000);
+    let received = "";
+    socket.on("data", (chunk) => { received += chunk.toString("latin1"); });
+    socket.on("error", () => undefined);
+    socket.on("close", () => { clearTimeout(guard); resolve(received); });
+    socket.write(requests.join(""));
+});
 
 const tunnelBody = (forwardPort: number, destinationPort: number, store: ServerOptionStore) => ({
     forwardPort, protocol: "tcp", tls: false, destinationAddress: "127.0.0.1", destinationPort, keepAlive: 0,
@@ -644,9 +657,13 @@ describe("audit-sink: 본문 파싱 단계에서 실패한 CUD 요청(#135)", ()
 
     it("#297 차단된 로그인이 큰 본문을 나눠 보내도 429 를 받는다", async () => withAuditServer(async (f) => {
         for(let i = 0; i < 5; i += 1) expect((await f.login({username: "admin", password: `wrong-${i}`})).status).toBe(401);
+        f.sink.events.length = 0;
         const outcome = await sendInChunks(f.port, "/api/login", {}, 1024 * 1024);
         expect({status: outcome.status, writeError: outcome.writeError, acceptedBytes: outcome.acceptedBytes})
             .toEqual({status: 429, writeError: undefined, acceptedBytes: 1024 * 1024});
+        expect(outcome.closedAfterMs).toBeLessThan(4_000);
+        expect(outcome.head).toMatch(/\r\nConnection: close/i);
+        expect(f.sink.events.filter((event) => event.type === "login_failure")).toHaveLength(1);
     }));
 
     it("#297 상한(2MiB)까지의 본문은 끝까지 받고 403 을 준다", async () => withAuditServer(async (f) => {
@@ -658,12 +675,27 @@ describe("audit-sink: 본문 파싱 단계에서 실패한 CUD 요청(#135)", ()
 
     it("#297 거절한 연결에 이어 보낸 요청은 실행하지 않는다", async () => withAuditServer(async (f) => {
         const auth = await regularUser(f);
-        const piped = JSON.stringify({username: "piped", role: "regular"});
-        const next = [`POST /api/users HTTP/1.1`, "Host: 127.0.0.1", "Content-Type: application/json", `Content-Length: ${Buffer.byteLength(piped)}`,
-            ...Object.entries(f.admin.auth).map(([name, value]) => `${name}: ${value}`)].join("\r\n") + "\r\n\r\n" + piped;
-        const outcome = await sendInChunks(f.port, "/api/users", auth, 1024, 1024, 1024, 0, next);
-        expect(outcome.status).toBe(403);
-        expect(IdentityStore.instance.userByUsername("piped")).toBeUndefined();
+        const create = jest.spyOn(IdentityStore.instance, "createUser");
+        try {
+            const received = await sendPipelined(f.port, [
+                rawRequest("/api/users", auth, JSON.stringify({username: "x".repeat(1024)})),
+                rawRequest("/api/users", f.admin.auth, JSON.stringify({username: "piped", role: "regular"}))
+            ]);
+            expect(received).toMatch(/^HTTP\/1\.1 403 /);
+            // 이어 보낸 요청이 실행됐다면 비동기로 끝날 시간을 준다.
+            await new Promise((resolve) => setTimeout(resolve, 300));
+            expect(create).not.toHaveBeenCalled();
+            expect(IdentityStore.instance.userByUsername("piped")).toBeUndefined();
+        } finally {
+            create.mockRestore();
+        }
+    }));
+
+    it("#297 상한(2MiB)을 넘으면 끝까지 받지 않고 끊는다", async () => withAuditServer(async (f) => {
+        const auth = await regularUser(f);
+        const outcome = await sendInChunks(f.port, "/api/users", auth, 3 * 1024 * 1024, 3 * 1024 * 1024, 64 * 1024, 5);
+        // 그때까지 온 데이터는 다 읽은 뒤 끊으므로 리셋이 아니라 종료로 올 수 있다. 끝까지 보내지 못한 것으로 판정한다.
+        expect(outcome.acceptedBytes).toBeLessThan(3 * 1024 * 1024);
     }));
 
     it("#297 2MiB 를 넘는 본문이면 서버가 다 읽지 않고 연결을 끊는다", async () => withAuditServer(async (f) => {

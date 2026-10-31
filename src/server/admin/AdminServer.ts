@@ -1606,7 +1606,7 @@ class AdminServer {
         res.end = ((chunk?: any, encoding?: any, callback?: any) => {
             if(typeof chunk === 'function') [callback, chunk] = [chunk, undefined];
             else if(typeof encoding === 'function') [callback, encoding] = [encoding, undefined];
-            if(chunk !== undefined) res.write(chunk, encoding);
+            if(chunk != null) res.write(chunk, encoding);
             endResponse = () => end(callback);
             return res;
         }) as typeof res.end;
@@ -1617,7 +1617,8 @@ class AdminServer {
             settled = true;
             clearTimeout(timer);
             res.end = end;
-            if(complete) endResponse?.(); else req.socket.destroy();
+            // 응답을 다 쓰지 못한 채(send 실패) 본문이 끝났으면 응답을 끝낼 수 없으므로 끊는다.
+            if(complete && endResponse) endResponse(); else req.socket.destroy();
         };
         const timer = setTimeout(() => settle(false), REJECTED_BODY_DRAIN_TIMEOUT_MS);
         timer.unref();
