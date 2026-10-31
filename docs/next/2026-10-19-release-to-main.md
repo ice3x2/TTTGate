@@ -4,15 +4,13 @@
 
 ## 0. 다음 세션의 첫 행동
 
-**2026-10-31 기준 남은 일이 있다.** #293(공급망 감사 실패)의 PR #294 는 `develop` 을 향한다. 다음 순서로 마치고 이슈를 닫는다.
+**2026-10-31 기준 남은 확인은 하나다.** Dependabot 경고 중 `undici` 8건·`vite` 5건은 main 잠금 파일은 이미 고친 버전(`undici` 7.30.1, `vite` 6.4.5)을 쓴다. Dependabot 이 main 을 다시 검사하면 닫혀야 한다. 닫히지 않았으면 원인을 확인한다. `deepmerge` 2건은 수정 버전이 없어 남는다.
 
-1. PR #294 를 `develop` 에 병합하고, `develop` → `main` PR 을 만들어 병합한다.
-2. main 에서 Supply Chain Audit 을 수동 실행해 모든 작업이 성공하는지 본다: `gh workflow run supply-chain-audit.yml --ref main`
-3. 2.0.0 초안 릴리스(공개 전)에는 node-forge 1.4.0 이 들어 있다. **공개하지 않는다.** 옛 초안과 태그를 지우고 고친 main 에서 다시 만든다.
-   - `gh release delete 2.0.0 --repo ice3x2/TTTGate --yes --cleanup-tag`
-   - `git tag -f 2.0.0 <main 커밋>` → `git push origin 2.0.0` (`--cleanup-tag` 는 원격 태그만 지우므로 로컬 태그는 `-f` 로 덮는다)
-   - Release 워크플로가 성공하고, 초안이 하나뿐이며 파일 7개가 있는지 확인한다.
-4. Dependabot 경고 중 `undici`·`vite`(13건)는 main 병합 뒤 닫혀야 한다. `deepmerge` 2건은 수정 버전이 없어 남는다.
+#293(공급망 감사 실패)은 2026-10-31 에 닫았다.
+
+- PR #294 → `develop`(`abdf6aa`), PR #295 → `main`(`55a39ac`).
+- main 에서 Supply Chain Audit 을 수동 실행해 모든 작업이 성공했다(run 41156505680).
+- 공개 전 2.0.0 초안(node-forge 1.4.0)을 지우고 `55a39ac` 에서 다시 만들었다(run 41156636343). 초안은 하나이고 파일 7개, 바이너리의 node-forge 는 1.4.2 다. **2.0.0 은 아직 초안이다.** 공개는 사용자가 정한다.
 
 2026-10-21 에는 열린 이슈·PR·Dependabot 경고가 모두 0건이었다.
 
@@ -32,12 +30,12 @@ gh api "repos/ice3x2/TTTGate/dependabot/alerts?state=open" --jq length
 
 | 항목 | 값 |
 |---|---|
-| `main` | `af114a3` — PR #292(`develop` → `main`, 2.0.0) 병합 커밋(2026-10-30) |
+| `main` | `55a39ac` — PR #295(`develop` → `main`, #293) 병합 커밋(2026-10-31) |
 | 작업 흐름 | 작업 브랜치를 `develop` 에 병합하고, `develop` 을 `main` 에 병합한다(예: PR #291 → PR #292) |
-| 열린 이슈·PR·Dependabot 경고 | 2026-10-31: 이슈 #293·#244, PR #294, 경고 15건(§0 4번) |
+| 열린 이슈·PR·Dependabot 경고 | 2026-10-31: 이슈 #244, PR 없음, 경고 15건(재검사 뒤 2건만 남아야 함 — §0) |
 | 테스트 도구 | jest 30, ts-jest 29.4, `tsconfig.jest.json`, `test/setup/forgeBigInteger.ts`(setupFiles) |
-| 남은 워크트리·작업 브랜치·stash | 2026-10-31: 작업 트리 `C:\Work\git\_Snoworca\TTTGate-wt\supply`(브랜치 `fix/supply-chain-advisories`). #293 을 마치면 지운다 |
-| 릴리스 태그·바이너리 | 2026-10-31: 태그 `2.0.0` 과 초안 릴리스가 있다(공개 전, 다시 만들어야 함 — §0). `release.yml` 이 태그 push 로 돈다 |
+| 남은 워크트리·작업 브랜치·stash | 없음(2026-10-31 정리. `fix/supply-chain-advisories`·`docs/handoff-293-done` 의 로컬·원격 브랜치도 지웠다) |
+| 릴리스 태그·바이너리 | 태그 `2.0.0`(`55a39ac`)과 초안 릴리스(파일 7개, 공개 전). `release.yml` 이 태그 push 로 돈다 |
 
 ### 2026-10-16 이후에 한 일
 
