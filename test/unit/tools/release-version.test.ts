@@ -84,8 +84,8 @@ test.each(["2.0.1", "v2.0.0", "main"])("--match-package rejects %s when package.
 }));
 
 test("the package version is the one being released", () => {
-    expect(JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).version).toBe("2.0.0");
-    expect(JSON.parse(fs.readFileSync(path.join(root, "package-build.json"), "utf8")).version).toBe("2.0.0");
+    expect(JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).version).toBe("2.0.1");
+    expect(JSON.parse(fs.readFileSync(path.join(root, "package-build.json"), "utf8")).version).toBe("2.0.1");
     const lock = JSON.parse(fs.readFileSync(path.join(root, "package-lock.json"), "utf8"));
-    expect([lock.version, lock.packages[""].version]).toEqual(["2.0.0", "2.0.0"]);
+    expect([lock.version, lock.packages[""].version]).toEqual(["2.0.1", "2.0.1"]);
 });
