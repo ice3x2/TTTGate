@@ -50,14 +50,10 @@ jobs:
         env:
           NODE_ENV: development
 
-      - name: Audit full root tree including build tools (CRITICAL gate)
-        # 바이너리 빌드 도구(pkg-fetch → undici 등)는 개발 의존성이라 --omit=dev 감사에 들어가지 않는다(#293).
-        run: npm audit --audit-level=critical
-        env:
-          NODE_ENV: development
-
-      - name: Audit full root tree including build tools (HIGH report; command errors fail)
-        run: node scripts/supply-chain-gate.cjs --high-report
+      - name: Audit full root tree including build tools (HIGH gate)
+        # 바이너리 빌드 도구(pkg-fetch → undici 등)는 개발 의존성이라 --omit=dev 감사에 들어가지 않는다.
+        # 빌드 도구는 바이너리를 내려받으므로 high 이상을 검토 예외 없이 막는다(#293).
+        run: npm audit --audit-level=high
         env:
           NODE_ENV: development
 

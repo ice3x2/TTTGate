@@ -67,19 +67,20 @@ describe("R3-REQ-06 CI supply-chain gate (static)", () => {
         expect(content).toMatch(/jest test\/supply-chain/);
     });
 
-    // 바이너리 빌드 도구(개발 의존성, 예: pkg-fetch → undici)의 critical 권고도 릴리스를 막는다(#293).
-    test("루트 전체 트리(개발 의존성 포함)의 CRITICAL 감사 단계 존재", () => {
+    // 바이너리 빌드 도구(개발 의존성, 예: pkg-fetch → undici)의 high 이상 권고도 예외 없이 릴리스를 막는다(#293, 사용자 결정).
+    test("루트 전체 트리(개발 의존성 포함)의 HIGH 차단 단계 존재", () => {
         const workflow = parseYaml(fs.readFileSync(workflowPath, "utf8"));
-        const steps = workflow.jobs["audit-runtime"].steps.filter((step: any) => String(step.run ?? "").trim() === "npm audit --audit-level=critical");
+        const steps = workflow.jobs["audit-runtime"].steps.filter((step: any) => String(step.run ?? "").trim() === "npm audit --audit-level=high");
         expect(steps).toHaveLength(1);
         expect(steps[0].env?.NODE_ENV).toBe("development");
     });
 
-    // 루트 전체 트리와 관리 화면의 high 는 막지 않고 경고로 남긴다. 같은 보고 명령을 쓴다(#293).
-    test("루트 전체 트리와 관리 화면의 HIGH 보고 단계 존재", () => {
+    // 관리 화면의 high 는 막지 않고 경고로 남긴다. 루트는 high 를 막으므로 보고 단계를 두지 않는다(#293).
+    test("관리 화면만 HIGH 보고 단계를 쓴다", () => {
         const workflow = parseYaml(fs.readFileSync(workflowPath, "utf8"));
         const runsOf = (job: string): string[] => workflow.jobs[job].steps.map((step: any) => String(step.run ?? "").trim());
-        expect(runsOf("audit-runtime")).toContain("node scripts/supply-chain-gate.cjs --high-report");
+        expect(runsOf("audit-runtime")).not.toContain("node scripts/supply-chain-gate.cjs --high-report");
+        expect(runsOf("audit-runtime")).not.toContain("npm audit --audit-level=critical");
         expect(runsOf("audit-admin")).toContain("node ../scripts/supply-chain-gate.cjs --high-report");
     });
 

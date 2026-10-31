@@ -41,7 +41,8 @@ jobs:
 
   # #293: 알려진 권고가 든 채로 릴리스가 나가지 않게 온라인 공급망 감사를 돌린다. 서버 운영 의존성은 검토 예외
   # (scripts/supply-chain-gate.cjs) 밖의 moderate 이상이 있으면 막고, critical 은 예외 없이 막는다.
-  # 관리 화면과, 빌드 도구(개발 의존성)를 포함한 루트 전체 트리는 critical 이 있으면 막고(예외 없음), high 는 경고만 남긴다.
+  # 빌드 도구(개발 의존성)를 포함한 루트 전체 트리는 high 이상이 있으면 막는다(예외 없음).
+  # 관리 화면은 critical 이 있으면 막고(예외 없음), high 는 경고만 남긴다.
   supply-chain:
     needs: [tag]
     permissions:
