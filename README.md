@@ -80,7 +80,7 @@ Server options:
 - `-keepAlive [ms]`: control listener TCP keepalive interval.
 - `-allowLegacyAdminHttp`: allow legacy non-TLS admin mode for one process run.
 - `-allowLegacyAdminRemote`: allow legacy non-loopback admin bind for one process run.
-- `-trustXForwardedFor`: read the admin client address from `X-Forwarded-For`. Use it only behind a reverse proxy that you control. Note that the console does not yet accept pages served through a proxy (see [Admin Web Console](#admin-web-console)).
+- `-trustXForwardedFor`: read the admin client address from `X-Forwarded-For`. Use it only behind a reverse proxy that you control. To open the console through the proxy, also add the proxy address to `adminAllowedOrigins` (see [Admin Web Console](#admin-web-console)).
 - `-trustedProxyHops [n]`: number of trusted proxies in front of the admin server (1–16, default 1). The address is taken from the right end of `X-Forwarded-For`, skipping this many entries, because clients can write anything on the left.
   - Set it to the **exact** number of proxies. A larger value lets a client choose its own address again and evade the login lockout. A smaller value puts every admin behind the same proxy address, so one lockout locks out everyone and MFA tickets can fail when that address changes.
   - Let only the proxy reach the admin port. If clients can connect directly, they also control the rightmost value.
@@ -136,6 +136,7 @@ These keys in `config/server.yaml` control the console:
 | `adminPort` | `9300` | Port of the console. `-adminPort <port>` changes it and saves the new port to `server.yaml`. |
 | `adminBindHost` | `127.0.0.1` | Address the console listens on. Only a loopback address (`127.0.0.1`, `::1`, `localhost`) is allowed, unless you start the server with `-allowLegacyAdminRemote`. |
 | `adminTls` | `true` | Serve the console over HTTPS. `false` is allowed only with `-allowLegacyAdminHttp`. |
+| `adminAllowedOrigins` | `[]` | Extra page addresses (origins) that can use the console, for a reverse proxy or a domain name. See [Open the Console from Another Computer](#open-the-console-from-another-computer). |
 
 With these defaults, open `https://127.0.0.1:9300/` in a browser on the server host.
 
@@ -145,7 +146,7 @@ To remove the warning, use your own certificate. In **Server settings**, keep **
 
 If `adminBindHost` is not a loopback address or `adminTls` is `false`, the server does not start without the matching flag. It prints the reason and the flags it needs, for example `Refusing insecure admin policy: ...`. The flags apply only to the run that you start with them.
 
-The console accepts a login or a change only from a page whose address is `127.0.0.1`, `::1`, `localhost` or the `adminBindHost` address, with the `adminPort` port. Other addresses get `403 Forbidden origin`.
+The console accepts a login or a change only from a page whose address is `127.0.0.1`, `::1`, `localhost` or the `adminBindHost` address, with the `adminPort` port, or from an origin listed in `adminAllowedOrigins`. Other addresses get `403 Forbidden origin`.
 
 ### Open the Console from Another Computer
 
@@ -161,8 +162,38 @@ The console listens only on the server host by default. Use one of these ways:
 2. **Bind to the server IP address (not recommended).** Set `adminBindHost` to an IP address of the server that other hosts can reach (for example `192.168.0.10`) and start the server with `-allowLegacyAdminRemote`. Open the console with exactly that address and port (`https://192.168.0.10:9300/`).
    - `0.0.0.0`, `::` and host names do not work: the server starts, but the login fails with `403 Forbidden origin`.
    - **Risk:** anyone who can reach the port can try passwords. The login lockout applies. Turn on two-factor authentication for admin accounts, keep `adminTls: true` and limit the port with a firewall.
+3. **Reverse proxy with a domain name.** Keep `adminBindHost: 127.0.0.1` and let an HTTPS proxy on the same host forward to the console.
+   1. Add the address that users open to `config/server.yaml`. Use the exact scheme, host and port. Only `https://` origins are accepted, because the session cookie of an HTTPS console is `Secure` and browsers drop it on `http://` pages. Paths and wildcards are not accepted.
 
-A reverse proxy or a domain name in front of the console is not supported at this time, because the console checks the page address as described above. `-trustXForwardedFor` and `-trustedProxyHops` only change which client address the login lockout and the audit log use.
+      ```yaml
+      adminAllowedOrigins:
+        - "https://admin.example.com"
+      ```
+
+   2. Configure the proxy. Example for nginx:
+
+      ```nginx
+      server {
+          listen 443 ssl;
+          server_name admin.example.com;
+          # ssl_certificate and ssl_certificate_key for admin.example.com
+
+          location / {
+              proxy_pass https://127.0.0.1:9300;
+              proxy_ssl_verify off;   # the console uses a self-signed certificate by default
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_hide_header Strict-Transport-Security;
+          }
+      }
+      ```
+
+   3. Start the server with `-trustXForwardedFor -trustedProxyHops 1` (one proxy), so that the login lockout and the audit log use the real client address.
+   - Restart the server after you edit `server.yaml`. A change made through the server option API (`/api/serverOption`) applies to the next request without a restart. The **Server settings** screen keeps the list as it is.
+   - The console sends `Strict-Transport-Security` with `includeSubDomains`. The example hides it, so that it does not apply to every subdomain of the proxy domain. Send your own HSTS header from the proxy if you need one.
+   - Use a host name whose other subdomains you control. A page on another subdomain of the same site can set cookies for the console.
+   - Serve the console at the root path `/`. The console calls `/api/...` and sets its cookies for the path `/`.
+
+With an SSH tunnel or a reverse proxy, the console sees every connection from `127.0.0.1`. The country filter of the admin console (**Security** → **Apply to admin console**) therefore decides on the proxy or tunnel address, not on the real client address. Apply country limits on the proxy instead (for example nginx `allow`/`deny` or a GeoIP module). `-trustXForwardedFor` changes the client address that the login lockout, the audit log, the session list and the binding of two-factor login tickets use. It does not change the country filter.
 
 ### First Admin Login
 

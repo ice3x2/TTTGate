@@ -2,6 +2,7 @@
     import {onMount} from 'svelte';
     import _ from 'lodash';
     import ServerOptionCtrl from '../controller/ServerOptionCtrl';
+    import {adminBaseUrl} from '../controller/adminAddress';
     import CertificationCtrl from '../controller/CertificationCtrl';
     import ObjectUtil from '../controller/ObjectUtil';
     import InvalidSession from '../controller/InvalidSession';
@@ -100,7 +101,8 @@
 
     const keepAliveOf = (value: number | null): number | null => value === null ? null : Math.max(0, Math.trunc(value));
 
-    const adminAddress = () => `${serverOption.adminTls ? 'https' : 'http'}://${location.hostname}:${serverOption.adminPort}/`;
+    // 이슈 303: 프록시를 거쳐 연 화면은 프록시 주소에 머문다(adminBaseUrl). previousAdminPort 는 이 화면을 연 때의 관리 포트다.
+    const adminAddress = (previousAdminPort: number | undefined) => adminBaseUrl(location, serverOption, previousAdminPort);
 
     const load = async () => {
         try {
@@ -184,13 +186,14 @@
     };
 
     const checkServerRestart = async () => {
+        const previousAdminPort = lastServerOption.adminPort;
         loading = true;
         let success = false;
         try {
             success = await ServerOptionCtrl.instance.checkChangeServerOption($state.snapshot(lastServerOption), $state.snapshot(serverOption));
         } catch(e) {
             alert(`Error: Server status could not be determined.${serverOption.adminTls ? '(It could be a TSL certificate error.)' : ''}`, 'OK', () => {
-                location.href = adminAddress();
+                location.href = adminAddress(previousAdminPort);
             });
             return;
         }
@@ -200,7 +203,7 @@
                 lastServerOption = _.cloneDeep($state.snapshot(serverOption));
                 lastAdminCert = _.cloneDeep($state.snapshot(adminCert));
                 originalAdminCert = _.cloneDeep($state.snapshot(adminCert));
-                location.href = adminAddress();
+                location.href = adminAddress(previousAdminPort);
             });
         } else {
             alert('New server options cannot be applied.', 'OK', () => {

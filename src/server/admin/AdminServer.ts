@@ -669,6 +669,10 @@ class AdminServer {
                 return;
             }
             requestedServerOption.trustedClients = keptTrustedClients;
+            // #303: 관리 화면은 허용 Origin 을 편집하지 않는다. 요청에 없으면 지금 값을 지킨다.
+            if(requestedServerOption.adminAllowedOrigins === undefined) {
+                requestedServerOption.adminAllowedOrigins = currentServerOption.adminAllowedOrigins ?? [];
+            }
             // #286: 차단 목록은 /api/security/blocklist 로만 바꾼다. 화면이 보낸 값은 무시하고 지금 값을 지킨다.
             // 요청이 터널 목록을 바꿔 새 포트에 터널을 더하면, 그 포트에 남아 있던 고아 항목은 새 터널이 물려받지 않게 뺀다.
             // 다만 서버 설정 저장으로 뺀 터널의 리스너가 아직 도는 포트는 남긴다(다시 시작할 때까지 그 리스너에서 계속 막는다).
@@ -2097,12 +2101,10 @@ class AdminServer {
             if(this._bindHost && this._bindHost.length > 0 && this._bindHost !== '0.0.0.0' && this._bindHost !== '::') {
                 allowedHosts.add(this._bindHost.toLowerCase());
             }
-            if(!allowedHosts.has(host)) return false;
             // listen 포트를 알고 있을 때만 포트 일치 강제. listen 전이면(_port < 0) hostname 일치로 폴백.
-            if(this._port > 0) {
-                return originPort === this._port;
-            }
-            return true;
+            if(allowedHosts.has(host) && (this._port <= 0 || originPort === this._port)) return true;
+            // #303: 역방향 프록시·도메인 주소는 server.yaml 의 adminAllowedOrigins 와 스킴·호스트·포트가 모두 같아야 한다.
+            return ServerOptionStore.instance.adminAllowedOrigins.includes(u.origin);
         } catch {
             return false;
         }

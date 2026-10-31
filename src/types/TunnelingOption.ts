@@ -72,6 +72,8 @@ type ServerOption = {
     auditQueueSize?: number,
     /** #267 로그 레벨. 기본 info. 바꾸면 다시 시작하지 않고 모든 로그 출력(파일·콘솔)에 적용한다. */
     logLevel?: LogLevel,
+    /** #303 관리 화면을 역방향 프록시·도메인으로 열 때 허용할 Origin(스킴·호스트·포트). 기본 빈 목록. 바꾸면 다음 요청부터 적용한다. */
+    adminAllowedOrigins?: string[],
     /** #268 닫기를 시작한 연결의 남은 출력이 진행 없이 멈춰 있을 수 있는 시간(ms). 기본 60000, 1000..600000. */
     closeStallMs?: number,
     /** #268 FIN 을 보내거나 받은 뒤 상대가 닫기를 기다리는 시간(ms). 기본 10000, 1000..120000. */
@@ -228,6 +230,31 @@ const resolveLogLevel = (value: unknown): {success: true; level: LogLevel} | {su
     return {success: true, level: value as LogLevel};
 };
 
+/**
+ * #303: 각 항목은 경로·쿼리·조각·사용자 정보가 없는 https Origin 이다. 와일드카드는 받지 않는다.
+ * http 는 받지 않는다. TLS 관리 서버의 세션 쿠키는 Secure 라서 http 페이지에서는 브라우저가 버리고 로그인이 되풀이된다.
+ * 비교하기 쉽게 URL.origin 형태(호스트 소문자, 기본 포트 생략)로 정규화한다. 없으면 빈 목록이다.
+ */
+const resolveAdminAllowedOrigins = (value: unknown): {success: true; origins: string[]} | {success: false; message: string} => {
+    if(value === undefined) return {success: true, origins: []};
+    const invalid = (detail: string) => ({success: false as const,
+        message: `adminAllowedOrigins must be a list of https origins like https://admin.example.com (${detail})`});
+    if(!Array.isArray(value)) return invalid('not a list');
+    const origins: string[] = [];
+    for(const item of value) {
+        if(typeof item !== 'string' || item.trim().length === 0 || item.includes('*')) return invalid(`bad entry: ${String(item)}`);
+        const text = item.trim();
+        let url: URL;
+        try { url = new URL(text); } catch { return invalid(`bad entry: ${text}`); }
+        if(url.protocol !== 'https:' || url.username || url.password || url.search || url.hash
+            || url.pathname !== '/' || !/^https:\/\/[^/?#]+\/?$/i.test(text)) {
+            return invalid(`bad entry: ${text}`);
+        }
+        origins.push(url.origin);
+    }
+    return {success: true, origins};
+};
+
 /** #268: SocketHandler 의 시작값과 같다(close-deadline-defaults 테스트가 지킨다). */
 const DEFAULT_CLOSE_STALL_MS = 60_000;
 const DEFAULT_CLOSE_GRACE_MS = 10_000;
@@ -357,6 +384,7 @@ export {
     LOG_LEVELS,
     DEFAULT_LOG_LEVEL,
     resolveLogLevel,
+    resolveAdminAllowedOrigins,
     DEFAULT_CLOSE_STALL_MS,
     DEFAULT_CLOSE_GRACE_MS,
     resolveCloseStallMs,

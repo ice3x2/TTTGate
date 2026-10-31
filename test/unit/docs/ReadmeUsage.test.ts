@@ -28,6 +28,16 @@ describe("README usage documentation (#302)", () => {
         expect(readme).toContain("ssh -L 9300:127.0.0.1:9300");
     });
 
+    // #303 — 역방향 프록시·도메인으로 여는 방법(허용 Origin, 프록시 설정 예, 적용 시점)을 적는다.
+    it("explains how to open the console through a reverse proxy", () => {
+        expect(readme).toContain("`adminAllowedOrigins`");
+        expect(readme).toContain("proxy_pass https://127.0.0.1:9300;");
+        expect(readme).toMatch(/restart the server after you edit `server\.yaml`/i);
+        expect(readme).not.toContain("is not supported at this time");
+        // 국가 필터는 소켓 주소(프록시·SSH 터널이면 127.0.0.1)로 판정한다. 국가 제한은 프록시에서 걸어야 한다.
+        expect(readme).toMatch(/country filter[^\n]*(proxy|tunnel)/i);
+    });
+
     it("explains the first admin setup with the bootstrap token", () => {
         expect(readme).toContain("config/.bootstrap-token");
         expect(readme).toContain("**Bootstrap token**");
