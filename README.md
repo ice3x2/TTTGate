@@ -193,7 +193,7 @@ The console listens only on the server host by default. Use one of these ways:
    - Use a host name whose other subdomains you control. A page on another subdomain of the same site can set cookies for the console.
    - Serve the console at the root path `/`. The console calls `/api/...` and sets its cookies for the path `/`.
 
-With an SSH tunnel or a reverse proxy, the console sees every connection from `127.0.0.1`. The country filter of the admin console (**Security** → **Apply to admin console**) therefore decides on the proxy or tunnel address, not on the real client address. Apply country limits on the proxy instead (for example nginx `allow`/`deny` or a GeoIP module). `-trustXForwardedFor` changes only the address that the login lockout and the audit log use.
+With an SSH tunnel or a reverse proxy, the console sees every connection from `127.0.0.1`. The country filter of the admin console (**Security** → **Apply to admin console**) therefore decides on the proxy or tunnel address, not on the real client address. Apply country limits on the proxy instead (for example nginx `allow`/`deny` or a GeoIP module). `-trustXForwardedFor` changes the client address that the login lockout, the audit log, the session list and the binding of two-factor login tickets use. It does not change the country filter.
 
 ### First Admin Login
 
