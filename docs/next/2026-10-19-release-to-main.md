@@ -32,7 +32,7 @@ gh api "repos/ice3x2/TTTGate/dependabot/alerts?state=open" --jq length
 
 | 항목 | 값 |
 |---|---|
-| `main` | `af114a3` — PR #292(`develop` → `main`, 2.0.0) 병합 커밋(2026-10-31) |
+| `main` | `af114a3` — PR #292(`develop` → `main`, 2.0.0) 병합 커밋(2026-10-30) |
 | 작업 흐름 | 작업 브랜치를 `develop` 에 병합하고, `develop` 을 `main` 에 병합한다(예: PR #291 → PR #292) |
 | 열린 이슈·PR·Dependabot 경고 | 2026-10-31: 이슈 #293·#244, PR #294, 경고 15건(§0 4번) |
 | 테스트 도구 | jest 30, ts-jest 29.4, `tsconfig.jest.json`, `test/setup/forgeBigInteger.ts`(setupFiles) |

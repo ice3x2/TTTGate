@@ -1871,7 +1871,7 @@ npm --prefix admin run build
 npm run test:admin
 npm test -- --runInBand
 npx jest --runInBand test/supply-chain              # 공급망 게이트(`npm audit --omit=dev --audit-level=moderate` 0건 등)
-node scripts/supply-chain-gate.cjs --admin-high-report   # admin 디렉터리에서 실행: cd admin 뒤 `node ../scripts/supply-chain-gate.cjs --admin-high-report`
+node scripts/supply-chain-gate.cjs --high-report   # admin 디렉터리에서 실행: cd admin 뒤 `node ../scripts/supply-chain-gate.cjs --high-report`
 git status --short admin/package.json admin/package-lock.json   # 둘 다 커밋에 포함되었는지
 git log -1 --format=%B   # Co-Authored-By, Generated, 🤖 등 서명 0건 확인
 ```

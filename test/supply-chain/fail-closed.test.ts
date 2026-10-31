@@ -51,13 +51,18 @@ test.each([
             url: "https://github.com/advisories/GHSA-4444-5555-6666", severity: "critical", range: "*"}]}},
         metadata: {vulnerabilities: {info: 0, low: 0, moderate: 0, high: 0, critical: 1, total: 1}},
     }), "1"],
+    ["CRITICAL advisory in the report command", "critical-report", JSON.stringify({
+        auditReportVersion: 2,
+        vulnerabilities: {"fixture-critical": {severity: "critical"}},
+        metadata: {vulnerabilities: {info: 0, low: 0, moderate: 0, high: 0, critical: 1, total: 1}},
+    }), "1"],
     ["report-only HIGH advisory", "admin-report", JSON.stringify({
         auditReportVersion: 2,
         vulnerabilities: {"fixture-high": {severity: "high"}},
         metadata: {vulnerabilities: {info: 0, low: 0, moderate: 0, high: 1, critical: 0, total: 1}},
     }), "1"],
 ])("blocks %s in the actual gate", (_label, suite, output, status) => {
-    const result = runWithFakeNpm(output, status, suite === "admin-report" ? [
+    const result = runWithFakeNpm(output, status, suite === "admin-report" || suite === "critical-report" ? [
         path.join(repoRoot, "scripts/supply-chain-gate.cjs"), "--high-report",
     ] : [
         path.join(repoRoot, "node_modules/jest/bin/jest.js"), "--runInBand", "--runTestsByPath",
@@ -67,6 +72,11 @@ test.each([
     if(suite === "admin-report") {
         expect(result.status).toBe(0);
         expect(result.stdout).toContain("::warning::HIGH advisories (report only): fixture-high");
+        return;
+    }
+    if(suite === "critical-report") {
+        expect(result.status).toBe(1);
+        expect(result.stderr).toContain("CRITICAL advisories: fixture-critical");
         return;
     }
     expect(result.status).toBe(1);
