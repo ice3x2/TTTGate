@@ -76,6 +76,9 @@ const ADMIN_JSON_BODY_LIMIT_BYTES = 1 * 1024 * 1024; // 1MiB
 // #265: 로그인 본문 상한. 비밀번호(최대 1024자)와 MFA 코드면 충분하다. 칸을 잡은 채 큰 본문을 들고 있지 않게 한다.
 const LOGIN_JSON_BODY_LIMIT_BYTES = 16 * 1024;
 const ADMIN_REQUEST_IDLE_TIMEOUT_MS = 10_000;
+// #297: 본문을 읽기 전에 거절한 요청의 남은 본문을 버리며 읽는 상한. JSON 본문 상한을 조금 넘는 요청도 거절 응답을 받게 2배로 둔다.
+const REJECTED_BODY_DRAIN_LIMIT_BYTES = 2 * ADMIN_JSON_BODY_LIMIT_BYTES;
+const REJECTED_BODY_DRAIN_TIMEOUT_MS = 5_000;
 const ADMIN_PROCESSING_IDLE_TIMEOUT_MS = 120_000;
 const ADMIN_HEADERS_TIMEOUT_MS = 15_000;
 const ADMIN_REQUEST_TIMEOUT_MS = 30_000;
@@ -259,6 +262,8 @@ class AdminServer {
     }
 
     private async route(req: IncomingMessage, res: ServerResponse)  {
+        // #297: 거절한 연결에 이어 들어온 요청은 실행하지 않는다. 그 연결은 거절 응답 뒤 닫히므로 이 요청의 응답은 나가지 못한다.
+        if(AdminServer._rejectedSockets.has(req.socket)) { req.resume(); return; }
         let url = req.url;
         url = url == undefined ? "" : url;
         const pathname = this.pathname(url);
@@ -1410,9 +1415,7 @@ class AdminServer {
         const {req, res} = ctx;
         const bucket = this.buildLoginAttemptKey(req);
         const reject = (payload: {code?: string, message: string}, reason?: 'concurrency_limit'): false => {
-            // 읽지 않은 본문이 남은 연결은 다시 쓰지 않는다(#173 의 denyIfUnauthorized 와 같다).
-            res.setHeader('Connection', 'close');
-            this.sendApiFailure(res, 429, payload);
+            AdminServer.sendRejectionWhileDiscardingBody(req, res, () => this.sendApiFailure(res, 429, payload));
             const event = kind === 'password' ? this._loginFailureAudit(undefined, ctx.ip, bucket, 429, this.now(), reason) : undefined;
             if(event) this.emitAudit(event);
             return false;
@@ -1582,6 +1585,51 @@ class AdminServer {
             type: AUDIT_EVENT_TYPES.login_success, target: {kind: 'user', id: user.id},
             outcome: 'success', summary: `login_success ${user.id}`
         });
+    }
+
+    /** #297: 거절 응답을 보낸 연결. 이 연결로 이어 들어온 요청은 route() 가 실행하지 않는다. */
+    private static readonly _rejectedSockets = new WeakSet<object>();
+
+    /**
+     * #297: 본문을 읽기 전에 거절한 요청의 응답을 보낸다. 응답 바이트는 바로 쓰므로 클라이언트는 본문을 다 보내기 전에
+     * 거절을 안다(#265). 응답을 끝내는 일(res.end)만 남은 본문을 저장하지 않고 버리며 다 읽은 뒤로 미룬다.
+     * 읽지 않은 데이터를 남긴 채 연결을 닫으면 운영체제가 RST 를 보내 클라이언트가 거절 응답을 잃기 때문이다.
+     * 응답에는 `Connection: close` 를 붙여 연결을 다시 쓰지 않는다. 버린 양이 상한을 넘거나 제한 시간 안에
+     * 본문이 끝나지 않거나 클라이언트가 끊으면 연결을 바로 끊는다. send 는 Content-Length 를 붙여 응답해야 한다.
+     */
+    private static sendRejectionWhileDiscardingBody(req: IncomingMessage, res: ServerResponse, send: () => void): void {
+        AdminServer._rejectedSockets.add(req.socket);
+        res.setHeader('Connection', 'close');
+        const end = res.end.bind(res);
+        let endResponse: (() => void) | undefined;
+        // 응답 바이트는 바로 쓰고, 끝내기와 그 콜백만 미룬다.
+        res.end = ((chunk?: any, encoding?: any, callback?: any) => {
+            if(typeof chunk === 'function') [callback, chunk] = [chunk, undefined];
+            else if(typeof encoding === 'function') [callback, encoding] = [encoding, undefined];
+            if(chunk != null) res.write(chunk, encoding);
+            endResponse = () => end(callback);
+            return res;
+        }) as typeof res.end;
+        let discarded = 0;
+        let settled = false;
+        const settle = (complete: boolean) => {
+            if(settled) return;
+            settled = true;
+            clearTimeout(timer);
+            res.end = end;
+            // 응답을 다 쓰지 못한 채(send 실패) 본문이 끝났으면 응답을 끝낼 수 없으므로 끊는다.
+            if(complete && endResponse) endResponse(); else req.socket.destroy();
+        };
+        const timer = setTimeout(() => settle(false), REJECTED_BODY_DRAIN_TIMEOUT_MS);
+        timer.unref();
+        req.on('data', (chunk: Buffer) => {
+            if(discarded + chunk.length > REJECTED_BODY_DRAIN_LIMIT_BYTES) { settle(false); return; }
+            discarded += chunk.length;
+        });
+        req.on('end', () => settle(true));
+        req.on('error', () => settle(false));
+        req.on('close', () => settle(false));
+        send();
     }
 
     /**
@@ -1902,8 +1950,10 @@ class AdminServer {
             message: typeof payload.message == "string" ? payload.message : "",
             ...payload
         };
-        res.writeHead(statusCode, {'Content-Type': 'application/json'});
-        res.end(JSON.stringify(body));
+        const json = JSON.stringify(body);
+        // 길이를 알리면 클라이언트는 연결이 닫히기 전에도 응답 끝을 안다(#297 의 sendRejectionWhileDiscardingBody 가 기댄다).
+        res.writeHead(statusCode, {'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(json)});
+        res.end(json);
     }
 
     private sendApiSuccess(res: ServerResponse, payload: {[key: string]: any} = {}, statusCode: number = 200): void {
@@ -1942,18 +1992,17 @@ class AdminServer {
             if(this._exposeAuthzTiming && !beforeBody) ctx.res.setHeader('X-Authz-Us', String(Number(elapsed / 1000n)));
             return false;
         }
-        // 읽지 않은 본문이 남은 연결은 재사용하지 않는다. 남겨 두면 idle timeout 까지 소켓을 붙잡는다.
-        if(beforeBody && ctx.req.method !== 'GET') ctx.res.setHeader('Connection', 'close');
         this.emitAudit(auditEventOf(ctx, {
             // 상태 코드는 403(권한 없음)과 404(대상 숨김)를 가른다. code 는 민감 키라 status 로 담는다(#186).
             type: AUDIT_EVENT_TYPES.access_denied, summary: `access_denied ${action}`,
             detail: {action, path: truncateAuditValue(pathname), status: decision.status}
         }, 'failure'));
-        this.sendApiFailure(ctx.res, decision.status, {
+        const send = () => this.sendApiFailure(ctx.res, decision.status, {
             code: decision.code,
             message: decision.code === 'mfa_enrollment_required' ? 'Enable two-factor authentication first.'
                 : decision.status === 403 ? 'Forbidden' : 'Not Found'
         });
+        if(beforeBody && ctx.req.method !== 'GET') AdminServer.sendRejectionWhileDiscardingBody(ctx.req, ctx.res, send); else send();
         return true;
     }
 
