@@ -6,7 +6,8 @@
  */
 import {installedVersions, numericVersion, readRepoJson} from "../helpers/SupplyChainGate";
 
-// 상위 패키지(jest·test-exclude)가 이 버전 이상을 받아들이면 package.json 의 overrides 항목과 이 표를 지운다.
+// 잠금 파일 검사는 계속 둔다. 상위 패키지(jest·test-exclude, 그리고 남아 있다면 rimraf)가 모두 이 버전 이상을 받아들이면
+// package.json 의 overrides 항목과 아래 "the root overrides" 검사만 지운다.
 const FIXED_VERSIONS = [["glob", "14.0.2"], ["minimatch", "11.0.1"]];
 
 describe("2026-11 development advisories are fixed by overrides (#300)", () => {
