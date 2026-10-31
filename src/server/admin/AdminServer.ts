@@ -262,6 +262,8 @@ class AdminServer {
     }
 
     private async route(req: IncomingMessage, res: ServerResponse)  {
+        // #297: 거절한 연결에 이어 들어온 요청은 실행하지 않는다. 그 연결은 거절 응답 뒤 닫히므로 이 요청의 응답은 나가지 못한다.
+        if(AdminServer._rejectedSockets.has(req.socket)) { req.resume(); return; }
         let url = req.url;
         url = url == undefined ? "" : url;
         const pathname = this.pathname(url);
@@ -1585,6 +1587,9 @@ class AdminServer {
         });
     }
 
+    /** #297: 거절 응답을 보낸 연결. 이 연결로 이어 들어온 요청은 route() 가 실행하지 않는다. */
+    private static readonly _rejectedSockets = new WeakSet<object>();
+
     /**
      * #297: 본문을 읽기 전에 거절한 요청의 응답을 보낸다. 응답 바이트는 바로 쓰므로 클라이언트는 본문을 다 보내기 전에
      * 거절을 안다(#265). 응답을 끝내는 일(res.end)만 남은 본문을 저장하지 않고 버리며 다 읽은 뒤로 미룬다.
@@ -1593,12 +1598,16 @@ class AdminServer {
      * 본문이 끝나지 않거나 클라이언트가 끊으면 연결을 바로 끊는다. send 는 Content-Length 를 붙여 응답해야 한다.
      */
     private static sendRejectionWhileDiscardingBody(req: IncomingMessage, res: ServerResponse, send: () => void): void {
+        AdminServer._rejectedSockets.add(req.socket);
         res.setHeader('Connection', 'close');
         const end = res.end.bind(res);
         let endResponse: (() => void) | undefined;
-        res.end = ((chunk?: any) => {
-            if(chunk !== undefined && typeof chunk !== 'function') res.write(chunk);
-            endResponse = () => end();
+        // 응답 바이트는 바로 쓰고, 끝내기와 그 콜백만 미룬다.
+        res.end = ((chunk?: any, encoding?: any, callback?: any) => {
+            if(typeof chunk === 'function') [callback, chunk] = [chunk, undefined];
+            else if(typeof encoding === 'function') [callback, encoding] = [encoding, undefined];
+            if(chunk !== undefined) res.write(chunk, encoding);
+            endResponse = () => end(callback);
             return res;
         }) as typeof res.end;
         let discarded = 0;
@@ -1613,8 +1622,8 @@ class AdminServer {
         const timer = setTimeout(() => settle(false), REJECTED_BODY_DRAIN_TIMEOUT_MS);
         timer.unref();
         req.on('data', (chunk: Buffer) => {
+            if(discarded + chunk.length > REJECTED_BODY_DRAIN_LIMIT_BYTES) { settle(false); return; }
             discarded += chunk.length;
-            if(discarded > REJECTED_BODY_DRAIN_LIMIT_BYTES) settle(false);
         });
         req.on('end', () => settle(true));
         req.on('error', () => settle(false));
