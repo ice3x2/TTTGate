@@ -1,6 +1,6 @@
 {
   "name": "TTTGate",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "",
   "main": "package.js",
   "bin": {
@@ -57,7 +57,6 @@
     "fs-extra": "^11.1.1",
     "jest": "^30.5.2",
     "playwright": "1.63.0",
-    "rimraf": "^5.0.1",
     "supertest": "^6.3.3",
     "ts-jest": "^29.4.15",
     "ts-node": "^10.9.1",
@@ -81,7 +80,9 @@
   "overrides": {
     "form-data": "^4.0.4",
     "ip-address": "^10.7.1",
-    "argparse": "^2.0.1"
+    "argparse": "^2.0.1",
+    "glob": "^14.0.2",
+    "minimatch": "^11.0.1"
   },
   "engines": {
     "node": ">=24.0.0"

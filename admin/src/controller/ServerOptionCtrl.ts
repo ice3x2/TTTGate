@@ -2,6 +2,7 @@ import { type ServerOption, type CertInfo, type ApiResult } from "./Types";
 import type {TunnelingStatus, Options} from "./Options";
 import InvalidSession from "./InvalidSession";
 import {adminRequest} from "./AdminRequest";
+import {adminBaseUrl} from "./adminAddress";
 
 
 export type ConfigurationSnapshot<T> = {value: T, readonly revision: number};
@@ -81,14 +82,14 @@ class ServerOptionCtrl {
                 let newHash = '';
 
                 try {
-                    newHash = await this.getServerOptionHash(newServerOption.adminTls ? 'https' : 'http', newServerOption.adminPort);
+                    newHash = await this.getServerOptionHash(adminBaseUrl(window.location, newServerOption, oldServerOptions.adminPort));
                 } catch (err) {
                     if(startTick + timeout < new Date().getTime()) {
                         clearInterval(interval);
                         reject(err);
                     }
                     try {
-                        newHash = await this.getServerOptionHash(oldServerOptions.adminTls ? 'https' : 'http', oldServerOptions.adminPort);
+                        newHash = await this.getServerOptionHash(adminBaseUrl(window.location, oldServerOptions, oldServerOptions.adminPort));
                     } catch (err2) {
                         newHash = '';
                         if(startTick + timeout < new Date().getTime()) {
@@ -107,17 +108,9 @@ class ServerOptionCtrl {
     }
 
 
-    public async getServerOptionHash(protocol?: 'http' | 'https', port?: number | string) : Promise<string> {
-        let host = window.location.hostname;
-        let hostPort = window.location.port;
-        if(!protocol) {
-            protocol = window.location.protocol.replace(':','') as 'http' | 'https';
-        }
-        if(port) {
-            hostPort = port.toString();
-        }
-
-        let res = await fetch(`${protocol}://${host}:${hostPort}/api/serverOptionHash`, {
+    /** baseUrl 은 관리 서버 주소(끝에 /)다. 없으면 지금 페이지의 출처다. */
+    public async getServerOptionHash(baseUrl: string = '/') : Promise<string> {
+        let res = await fetch(`${baseUrl}api/serverOptionHash`, {
             method: "GET",
             headers: {
                 'Connection': 'close'

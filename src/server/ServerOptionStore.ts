@@ -1,6 +1,6 @@
 import Environment from "../Environment";
 import File from "../util/File";
-import {ControlProtocolMode, DEFAULT_KEY, DEFAULT_SESSION_TTL_MS, resolveSessionTtlMs, resolveAuditRetentionDays, resolveAuditQueueSize, resolveLogLevel, resolveCloseStallMs, resolveCloseGraceMs, HttpOption, ServerOption, TunnelingOption, normalizeRateLimit, defaultRateLimit, BlocklistEntry} from "../types/TunnelingOption";
+import {ControlProtocolMode, DEFAULT_KEY, DEFAULT_SESSION_TTL_MS, resolveSessionTtlMs, resolveAuditRetentionDays, resolveAuditQueueSize, resolveLogLevel, resolveAdminAllowedOrigins, resolveCloseStallMs, resolveCloseGraceMs, HttpOption, ServerOption, TunnelingOption, normalizeRateLimit, defaultRateLimit, BlocklistEntry} from "../types/TunnelingOption";
 import YAML from "yaml";
 import Files, {AtomicFileValue} from "../util/Files";
 import ObjectUtil from "../util/ObjectUtil";
@@ -32,7 +32,7 @@ const ROLLBACK_BACKUP_SUFFIX: string = '.bak';
 // 디스크의 server.yaml 에는 하나도 없으면, 그 저장과 같은 배치로 직전 두 파일을 .bak 으로 남긴다.
 // 이전 바이너리는 verificationServerOption 에 허용 목록이 없어 새 필드가 든 yaml 도 읽으므로,
 // .bak 은 수기 편집 손실을 막기 위한 복원 지점이다(설계 §3.1).
-const ROLLBACK_SENSITIVE_TOP_FIELDS = ['connectionSecurity', 'mfaRequiredForSuperusers', 'auditRetentionDays', 'auditQueueSize', 'logLevel', 'closeStallMs', 'closeGraceMs'] as const;
+const ROLLBACK_SENSITIVE_TOP_FIELDS = ['connectionSecurity', 'mfaRequiredForSuperusers', 'auditRetentionDays', 'auditQueueSize', 'logLevel', 'closeStallMs', 'closeGraceMs', 'adminAllowedOrigins'] as const;
 const ROLLBACK_SENSITIVE_TUNNEL_FIELDS = ['ownerId', 'rateLimit'] as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -89,6 +89,12 @@ class ServerOptionStore {
 
     public set onServerOptionUpdateCallback(callback: ServerOptionUpdateCallback | undefined)  {
         this._serverOptionUpdateCallback = callback;
+    }
+
+    /** #303 관리 서버가 요청마다 읽는다. 설정 전체를 복사하지 않으려고 따로 둔다. 설정이 준비되지 않았으면 아무것도 허용하지 않는다. */
+    public get adminAllowedOrigins(): ReadonlyArray<string> {
+        if(!this._loadStatus.ready) return [];
+        return this._serverOption.adminAllowedOrigins ?? [];
     }
 
     public get revisionState(): RevisionState {
@@ -497,6 +503,9 @@ class ServerOptionStore {
         const logLevel = resolveLogLevel(option.logLevel);
         if(!logLevel.success) return logLevel;
         option.logLevel = logLevel.level;
+        const allowedOrigins = resolveAdminAllowedOrigins(option.adminAllowedOrigins);
+        if(!allowedOrigins.success) return allowedOrigins;
+        option.adminAllowedOrigins = allowedOrigins.origins;
         const closeStall = resolveCloseStallMs(option.closeStallMs);
         if(!closeStall.success) return closeStall;
         option.closeStallMs = closeStall.ms;
