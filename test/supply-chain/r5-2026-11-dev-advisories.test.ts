@@ -1,5 +1,5 @@
 /**
- * #300 — 2026-10-31 에 공개된 개발 의존성 권고. 상위 패키지(jest·test-exclude·rimraf)가 고친 주 버전을 받아들이지 않아
+ * #300 — 2026-10-31 에 공개된 개발 의존성 권고. 상위 패키지(jest·test-exclude, #301 전에는 rimraf 도)가 고친 주 버전을 받아들이지 않아
  * 루트 package.json 의 overrides 로 강제한다. NO-MOCK: 실 매니페스트와 잠금 파일.
  *   - glob GHSA-3g3m-2fjr-6pw4 (>= 9.0.0, <= 14.0.1)
  *   - minimatch GHSA-g3hv-75wg-m249 (< 11.0.1)
