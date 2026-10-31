@@ -191,8 +191,11 @@ describe("ip-address is patched (#180)", () => {
 // #293: 판정 명령(runGate)이 검토 예외를 쓰는지, 루트 전체 트리 판정이 예외를 서버 운영 트리의 설치 경로에만 적용하는지 본다.
 describe("runGate with reviewed advisories (#293)", () => {
     const entryOf = (nodes: string[]) => ({name: "undici", severity: "high", nodes, via: [advisory("undici", "high", "GHSA-aaaa-bbbb-cccc")]});
-    const auditJson = (vulnerabilities: Record<string, any>) => JSON.stringify({auditReportVersion: 2, vulnerabilities,
-        metadata: {vulnerabilities: {info: 0, low: 0, moderate: 0, high: Object.keys(vulnerabilities).length, critical: 0, total: Object.keys(vulnerabilities).length}}});
+    const auditJson = (vulnerabilities: Record<string, any>) => {
+        const count = (severity: string) => Object.values(vulnerabilities).filter((entry: any) => entry.severity === severity).length;
+        return JSON.stringify({auditReportVersion: 2, vulnerabilities, metadata: {vulnerabilities: {info: 0, low: count("low"), moderate: count("moderate"),
+            high: count("high"), critical: count("critical"), total: Object.keys(vulnerabilities).length}}});
+    };
     const reviewedUndici = [{...REVIEWED[0], package: "undici"}];
     // 서버 판정(--omit=dev)과 전체 트리 판정에 서로 다른 보고서를 돌려주는 가짜 npm.
     const runnerOf = (server: Record<string, any>, full: Record<string, any>) => (args: string[]) => {
@@ -217,6 +220,20 @@ describe("runGate with reviewed advisories (#293)", () => {
         const run = runnerOf({}, {undici: entryOf(["node_modules/@yao-pkg/pkg-fetch/node_modules/undici"])});
         expect(gate.runGate("--full-tree-gate", {run, reviewed: reviewedUndici, now: NOW}).blocking)
             .toEqual(["undici GHSA-aaaa-bbbb-cccc (exception covers server runtime only)"]);
+    });
+
+    it("the full-tree gate follows a string via from a build tool to its own copy of the package", () => {
+        const wrapper = {name: "@yao-pkg/pkg-fetch", severity: "high", nodes: ["node_modules/@yao-pkg/pkg-fetch"], via: ["undici"]};
+        const run = runnerOf({undici: entryOf(["node_modules/undici"])},
+            {"@yao-pkg/pkg-fetch": wrapper, undici: entryOf(["node_modules/undici", "node_modules/@yao-pkg/pkg-fetch/node_modules/undici"])});
+        expect(gate.runGate("--full-tree-gate", {run, reviewed: reviewedUndici, now: NOW}).blocking)
+            .toEqual(["undici GHSA-aaaa-bbbb-cccc (exception covers server runtime only)"]);
+    });
+
+    it("the full-tree gate blocks a reviewed critical advisory", () => {
+        const critical = {...entryOf(["node_modules/undici"]), severity: "critical", via: [advisory("undici", "critical", "GHSA-aaaa-bbbb-cccc")]};
+        const run = runnerOf({undici: critical}, {undici: critical});
+        expect(gate.runGate("--full-tree-gate", {run, reviewed: reviewedUndici, now: NOW}).blocking).toEqual(["undici GHSA-aaaa-bbbb-cccc"]);
     });
 
     it("the full-tree gate fails closed when the server-tree audit fails", () => {
