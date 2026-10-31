@@ -76,11 +76,11 @@ The old repository-root `config.yaml` is no longer used.
 
 Server options:
 
-- `-adminPort [port]`: admin console port.
+- `-adminPort [port]`: admin console port. The new port is saved to `server.yaml`. See [Admin Web Console](#admin-web-console).
 - `-keepAlive [ms]`: control listener TCP keepalive interval.
 - `-allowLegacyAdminHttp`: allow legacy non-TLS admin mode for one process run.
 - `-allowLegacyAdminRemote`: allow legacy non-loopback admin bind for one process run.
-- `-trustXForwardedFor`: read the admin client address from `X-Forwarded-For`. Use it only behind a reverse proxy that you control.
+- `-trustXForwardedFor`: read the admin client address from `X-Forwarded-For`. Use it only behind a reverse proxy that you control. Note that the console does not yet accept pages served through a proxy (see [Admin Web Console](#admin-web-console)).
 - `-trustedProxyHops [n]`: number of trusted proxies in front of the admin server (1–16, default 1). The address is taken from the right end of `X-Forwarded-For`, skipping this many entries, because clients can write anything on the left.
   - Set it to the **exact** number of proxies. A larger value lets a client choose its own address again and evade the login lockout. A smaller value puts every admin behind the same proxy address, so one lockout locks out everyone and MFA tickets can fail when that address changes.
   - Let only the proxy reach the admin port. If clients can connect directly, they also control the rightmost value.
@@ -123,10 +123,63 @@ When the server closes a tunnelled connection, it first sends the remaining outp
 - Increase `closeStallMs` when slow users download large files. The slowest reader the server waits for is about (one third of the kernel send buffer) / `closeStallMs`. On Linux with the default 60000 this is about 25 KiB/s.
 - Decrease them on a small server to free connections sooner.
 
+## Admin Web Console
+
+The server includes a web admin console. Use it to manage tunnels, users and groups, trusted clients, certificates and server settings.
+
+### Open the Console
+
+These keys in `config/server.yaml` control the console:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `adminPort` | `9300` | Port of the console. `-adminPort <port>` changes it and saves the new port to `server.yaml`. |
+| `adminBindHost` | `127.0.0.1` | Address the console listens on. Only a loopback address (`127.0.0.1`, `::1`, `localhost`) is allowed, unless you start the server with `-allowLegacyAdminRemote`. |
+| `adminTls` | `true` | Serve the console over HTTPS. `false` is allowed only with `-allowLegacyAdminHttp`. |
+
+With these defaults, open `https://127.0.0.1:9300/` in a browser on the server host.
+
+When no admin certificate is stored (for example on the first start), the server creates a self-signed certificate for the console (`Testing CA - DO NOT TRUST`, valid for one year). It is not renewed automatically. The browser shows a certificate warning. Make sure that you opened the correct address, then continue.
+
+To remove the warning, use your own certificate. In **Server settings**, keep **Admin TLS** checked and select the private key (**Key**) and the certificate (**Cert**) files. **CA** is optional. When the key and the certificate match, the server uses the new certificate at once. You do not need to press **Apply** or restart the server.
+
+If `adminBindHost` is not a loopback address or `adminTls` is `false`, the server does not start without the matching flag. It prints the reason and the flags it needs, for example `Refusing insecure admin policy: ...`. The flags apply only to the run that you start with them.
+
+The console accepts a login or a change only from a page whose address is `127.0.0.1`, `::1`, `localhost` or the `adminBindHost` address, with the `adminPort` port. Other addresses get `403 Forbidden origin`.
+
+### Open the Console from Another Computer
+
+The console listens only on the server host by default. Use one of these ways:
+
+1. **SSH tunnel (recommended).** You do not change the server. On your computer, run:
+
+   ```shell
+   ssh -L 9300:127.0.0.1:9300 user@server.example.com
+   ```
+
+   Keep the SSH session open, then open `https://127.0.0.1:9300/` on your computer. Use the same local port as `adminPort`. Another local port gets `403 Forbidden origin`.
+2. **Bind to the server IP address (not recommended).** Set `adminBindHost` to an IP address of the server that other hosts can reach (for example `192.168.0.10`) and start the server with `-allowLegacyAdminRemote`. Open the console with exactly that address and port (`https://192.168.0.10:9300/`).
+   - `0.0.0.0`, `::` and host names do not work: the server starts, but the login fails with `403 Forbidden origin`.
+   - **Risk:** anyone who can reach the port can try passwords. The login lockout applies. Turn on two-factor authentication for admin accounts, keep `adminTls: true` and limit the port with a firewall.
+
+A reverse proxy or a domain name in front of the console is not supported at this time, because the console checks the page address as described above. `-trustXForwardedFor` and `-trustedProxyHops` only change which client address the login lockout and the audit log use.
+
 ### First Admin Login
 
-On a fresh install, the server writes a one-time bootstrap token to `config/.bootstrap-token`.
-Use that token when setting the first admin password through the admin API/UI. The token is deleted after the first successful password setup.
+On a fresh install, the server has no admin account. It writes a one-time bootstrap token to `config/.bootstrap-token`. When it creates the token, it writes the file path to the log. The token stays the same when you restart the server before the first setup.
+
+1. Open the admin console.
+2. Enter a username for the first superuser and a password, then press **OK**.
+   - Username: 3–32 characters (letters, digits, `.`, `_`, `-`). Upper-case letters are changed to lower case. An empty username means `admin`.
+   - Password: at least 8 characters and at most 1024 characters, not counting spaces at the start and the end.
+3. The **Bootstrap token** field appears. On the server, read the token (`cat config/.bootstrap-token`), paste it into the field, and press **OK** again.
+4. The server creates the superuser, deletes `config/.bootstrap-token`, and signs you in. Next time, sign in with the username and password.
+
+Who can do the first setup:
+
+- Only a person who knows the token. On Linux the file mode is 0600, so only the account that runs the server (and root) can read the token. In practice, only an operator of the server host can set the first password.
+- The server does not check where the request comes from. With the default `adminBindHost: 127.0.0.1`, the console is reachable only on the server host or through an SSH tunnel. If you open the console to other hosts, the token still protects the first setup.
+- Every failed attempt counts as a failed login, also the first **OK** without a token. After 5 failed logins within 1 minute from one address range (IPv4 /24, IPv6 /64), the server answers `429` for 1 minute.
 
 ## Client Startup
 
