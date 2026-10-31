@@ -8,6 +8,7 @@
  *   3) moderate 게이트 Step 이 판정 스크립트(--server-gate)를 부르고, 온라인 jest 단계보다 먼저 돈다(#293)
  *   4) crypto-js 서버 체인 부재 검증 Step 존재
  *   5) R3 테스트 실행 Step 존재
+ *   6) 빌드 도구를 포함한 루트 전체 트리의 high 판정 Step(--full-tree-gate) 존재(#293)
  *
  * 의도 실패 증명: CRITICAL 게이트는 npm audit 의 exit code 계약(--audit-level >= found → exit 1)으로,
  *   moderate 게이트는 판정 스크립트로 막는다(fail-closed.test.ts 가 종료 코드를 본다).
@@ -67,12 +68,16 @@ describe("R3-REQ-06 CI supply-chain gate (static)", () => {
         expect(content).toMatch(/jest test\/supply-chain/);
     });
 
-    // 바이너리 빌드 도구(개발 의존성, 예: pkg-fetch → undici)의 high 이상 권고도 예외 없이 릴리스를 막는다(#293, 사용자 결정).
-    test("루트 전체 트리(개발 의존성 포함)의 HIGH 차단 단계 존재", () => {
+    // 바이너리 빌드 도구(개발 의존성, 예: pkg-fetch → undici)의 high 이상 권고도 릴리스를 막는다(#293, 사용자 결정).
+    // 검토 예외는 서버 판정과 같은 목록을 쓴다. 그래야 서버 운영 의존성의 high 예외가 이 단계에서 다시 막히지 않는다.
+    test("루트 전체 트리(개발 의존성 포함)의 HIGH 판정 단계 존재", () => {
         const workflow = parseYaml(fs.readFileSync(workflowPath, "utf8"));
-        const steps = workflow.jobs["audit-runtime"].steps.filter((step: any) => String(step.run ?? "").trim() === "npm audit --audit-level=high");
+        const steps = workflow.jobs["audit-runtime"].steps.filter((step: any) => String(step.run ?? "").trim() === "node scripts/supply-chain-gate.cjs --full-tree-gate");
         expect(steps).toHaveLength(1);
         expect(steps[0].env?.NODE_ENV).toBe("development");
+        expect(steps[0]["continue-on-error"]).toBeUndefined();
+        const script = fs.readFileSync(path.join(repoRoot, "scripts", "supply-chain-gate.cjs"), "utf8");
+        expect(script).toContain('["audit", "--audit-level=high", "--json"]');
     });
 
     // 관리 화면의 high 는 막지 않고 경고로 남긴다. 루트는 high 를 막으므로 보고 단계를 두지 않는다(#293).
@@ -82,6 +87,8 @@ describe("R3-REQ-06 CI supply-chain gate (static)", () => {
         expect(runsOf("audit-runtime")).not.toContain("node scripts/supply-chain-gate.cjs --high-report");
         expect(runsOf("audit-runtime")).not.toContain("npm audit --audit-level=critical");
         expect(runsOf("audit-admin")).toContain("node ../scripts/supply-chain-gate.cjs --high-report");
+        expect(runsOf("audit-admin")).toContain("npm audit --audit-level=critical");
+        expect(runsOf("audit-runtime")).not.toContain("npm audit --audit-level=high");
     });
 
     // 판정 단계가 먼저 돌아야 막힐 때 그 사유와 예외 경고가 로그에 남는다. jest 가 먼저 실패하면 뒤 단계는 건너뛴다(#293).
@@ -106,6 +113,6 @@ describe("R3-REQ-06 CI supply-chain gate (static)", () => {
         expect(runs).toContain("node scripts/supply-chain-gate.cjs --server-gate");
 
         const script = fs.readFileSync(path.join(path.dirname(workflowPath), "../../scripts/supply-chain-gate.cjs"), "utf8");
-        expect(script).toContain('runNpm(["audit", "--omit=dev", "--audit-level=moderate", "--json"])');
+        expect(script).toContain('["audit", "--omit=dev", "--audit-level=moderate", "--json"]');
     });
 });

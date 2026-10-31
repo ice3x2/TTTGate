@@ -114,16 +114,23 @@ const evaluateGate = (report, level, reviewed = REVIEWED_ADVISORIES, now = Date.
 
 module.exports = {readAuditReport, readDependencyTree, runNpm, evaluateGate, REVIEWED_ADVISORIES};
 
-if(require.main === module && process.argv[2] === "--server-gate") {
-    // moderate 이상을 판정한다. 예외로 통과한 권고는 모두 경고로 남긴다(#293).
-    const report = readAuditReport(runNpm(["audit", "--omit=dev", "--audit-level=moderate", "--json"]));
-    const {blocking, accepted} = evaluateGate(report, "moderate");
+// 검토 예외를 쓰는 판정 명령(#293). 예외로 통과한 권고는 모두 경고로 남긴다.
+// --server-gate: 서버 운영 의존성의 moderate 이상. --full-tree-gate: 빌드 도구(개발 의존성)를 포함한 루트 전체 트리의 high 이상.
+const GATES = {
+    "--server-gate": {scope: "server", level: "moderate", args: ["audit", "--omit=dev", "--audit-level=moderate", "--json"]},
+    "--full-tree-gate": {scope: "full-tree", level: "high", args: ["audit", "--audit-level=high", "--json"]},
+};
+
+if(require.main === module && GATES[process.argv[2]] !== undefined) {
+    const gate = GATES[process.argv[2]];
+    const report = readAuditReport(runNpm(gate.args));
+    const {blocking, accepted} = evaluateGate(report, gate.level);
     for(const label of accepted) console.log(`::warning::reviewed advisory accepted until its review date: ${label}`);
-    if(blocking.length) throw new Error(`Blocked server advisories: ${blocking.join(", ")}`);
-    console.log("No blocked server advisories");
+    if(blocking.length) throw new Error(`Blocked ${gate.scope} advisories: ${blocking.join(", ")}`);
+    console.log(`No blocked ${gate.scope} advisories`);
 } else if(require.main === module) {
-    // 지금 디렉터리의 전체 트리(관리 화면, 빌드 도구를 포함한 루트)에서 critical 은 막고 high 는 경고로 남긴다(#293).
-    if(process.argv[2] !== "--high-report") throw new Error("Expected --high-report or --server-gate");
+    // 관리 화면 트리에서 critical 은 막고 high 는 경고로 남긴다.
+    if(process.argv[2] !== "--high-report") throw new Error(`Expected --high-report or ${Object.keys(GATES).join(" or ")}`);
     const report = readAuditReport(runNpm(["audit", "--audit-level=high", "--json"]));
     const entries = Object.entries(report.vulnerabilities);
     const critical = entries.filter(([, entry]) => entry.severity === "critical").map(([name]) => name);

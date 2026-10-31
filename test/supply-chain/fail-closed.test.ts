@@ -116,3 +116,24 @@ test("the server gate CLI passes a clean report", () => {
         metadata: {vulnerabilities: {info: 0, low: 0, moderate: 0, high: 0, critical: 0, total: 0}}}), "0");
     expect({status: result.status, stdout: result.stdout.trim()}).toEqual({status: 0, stdout: "No blocked server advisories"});
 }, 35_000);
+
+// #293: 루트 전체 트리 판정(--full-tree-gate)은 빌드 도구를 포함해 high 이상을 막는다. 검토 예외는 서버 판정과 같은 목록을 쓴다.
+test("the full-tree gate CLI blocks an unreviewed high advisory in a build tool", () => {
+    const result = runWithFakeNpm(JSON.stringify({auditReportVersion: 2,
+        vulnerabilities: {undici: {name: "undici", severity: "high", via: [{source: 1, name: "undici", dependency: "undici", title: "fixture",
+            url: "https://github.com/advisories/GHSA-aaaa-1111-bbbb", severity: "high", range: "*"}]}},
+        metadata: {vulnerabilities: {info: 0, low: 0, moderate: 0, high: 1, critical: 0, total: 1}}}), "1",
+    [path.join(repoRoot, "scripts/supply-chain-gate.cjs"), "--full-tree-gate"]);
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Blocked full-tree advisories: undici GHSA-aaaa-1111-bbbb");
+}, 35_000);
+
+test("the full-tree gate CLI passes a report with only a moderate advisory", () => {
+    const result = runWithFakeNpm(JSON.stringify({auditReportVersion: 2,
+        vulnerabilities: {x: {name: "x", severity: "moderate", via: [{source: 1, name: "x", dependency: "x", title: "fixture",
+            url: "https://github.com/advisories/GHSA-cccc-2222-dddd", severity: "moderate", range: "*"}]}},
+        metadata: {vulnerabilities: {info: 0, low: 0, moderate: 1, high: 0, critical: 0, total: 1}}}), "0",
+    [path.join(repoRoot, "scripts/supply-chain-gate.cjs"), "--full-tree-gate"]);
+    expect({status: result.status, stdout: result.stdout.trim()}).toEqual({status: 0, stdout: "No blocked full-tree advisories"});
+}, 35_000);
