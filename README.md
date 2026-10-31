@@ -193,6 +193,8 @@ The console listens only on the server host by default. Use one of these ways:
    - Use a host name whose other subdomains you control. A page on another subdomain of the same site can set cookies for the console.
    - Serve the console at the root path `/`. The console calls `/api/...` and sets its cookies for the path `/`.
 
+With an SSH tunnel or a reverse proxy, the console sees every connection from `127.0.0.1`. The country filter of the admin console (**Security** → **Apply to admin console**) therefore decides on the proxy or tunnel address, not on the real client address. Apply country limits on the proxy instead (for example nginx `allow`/`deny` or a GeoIP module). `-trustXForwardedFor` changes only the address that the login lockout and the audit log use.
+
 ### First Admin Login
 
 On a fresh install, the server has no admin account. It writes a one-time bootstrap token to `config/.bootstrap-token`. When it creates the token, it writes the file path to the log. The token stays the same when you restart the server before the first setup.

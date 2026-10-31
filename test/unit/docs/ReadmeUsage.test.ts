@@ -34,6 +34,8 @@ describe("README usage documentation (#302)", () => {
         expect(readme).toContain("proxy_pass https://127.0.0.1:9300;");
         expect(readme).toMatch(/restart the server after you edit `server\.yaml`/i);
         expect(readme).not.toContain("is not supported at this time");
+        // 국가 필터는 소켓 주소(프록시·SSH 터널이면 127.0.0.1)로 판정한다. 국가 제한은 프록시에서 걸어야 한다.
+        expect(readme).toMatch(/country filter[^\n]*(proxy|tunnel)/i);
     });
 
     it("explains the first admin setup with the bootstrap token", () => {
