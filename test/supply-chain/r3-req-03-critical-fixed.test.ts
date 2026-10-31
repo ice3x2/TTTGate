@@ -14,6 +14,10 @@ import {audit, onlineTest} from "../helpers/SupplyChainGate";
 import * as path from "path";
 
 const repoRoot = path.resolve(__dirname, "..", "..");
+const {evaluateGate} = require("../../scripts/supply-chain-gate.cjs");
+/** form-data 에 검토 예외 밖의 moderate 이상 권고가 남았는지(#293 REQ-4a). */
+const formDataBlocking = (report: unknown, reviewed?: unknown[], now?: number): string[] =>
+    evaluateGate(report, "moderate", reviewed, now).blocking.filter((label: string) => label.startsWith("form-data "));
 
 describe("R3-REQ-03 CRITICAL cleared on production chain", () => {
     onlineTest("npm audit --omit=dev --audit-level=critical → 0건", () => {
@@ -25,12 +29,24 @@ describe("R3-REQ-03 CRITICAL cleared on production chain", () => {
         expect(criticalHits).toEqual([]);
     }, 60_000);
 
-    onlineTest("npm audit --omit=dev --audit-level=high → form-data 0건, node-forge 는 검토 예외만(#180)", () => {
+    onlineTest("npm audit --omit=dev → form-data 는 검토 예외 밖 moderate 이상 0건, 그 밖의 HIGH 는 검토 예외만(#180, #293)", () => {
         const report = audit("high");
-        expect(report.vulnerabilities["form-data"]).toBeUndefined();
-        const {evaluateHighGate} = require("../../scripts/supply-chain-gate.cjs");
-        expect(evaluateHighGate(report).blocking).toEqual([]);
+        expect(formDataBlocking(report)).toEqual([]);
+        expect(evaluateGate(report, "high").blocking).toEqual([]);
     }, 60_000);
+
+    // #293 REQ-4a: form-data 도 다른 의존성처럼 검토 예외를 따른다. low 하나나 검토한 권고로 릴리스가 막히지 않는다.
+    test("form-data check follows reviewed exceptions and ignores low", () => {
+        const advisory = (severity: string, ghsa: string) =>
+            ({source: 1, name: "form-data", dependency: "form-data", title: "form-data advisory", url: `https://github.com/advisories/${ghsa}`, severity, range: "*"});
+        const reportOf = (severity: string) => ({auditReportVersion: 2,
+            vulnerabilities: {"form-data": {name: "form-data", severity, via: [advisory(severity, "GHSA-1111-2222-3333")]}}});
+        const reviewed = [{id: "GHSA-1111-2222-3333", package: "form-data", severity: "moderate", reviewedOn: "2026-10-31", reviewBy: "2027-04-01", reason: "unused API"}];
+        const now = Date.parse("2026-11-01T00:00:00Z");
+        expect(formDataBlocking(reportOf("low"), [], now)).toEqual([]);
+        expect(formDataBlocking(reportOf("moderate"), reviewed, now)).toEqual([]);
+        expect(formDataBlocking(reportOf("moderate"), [], now)).toEqual(["form-data GHSA-1111-2222-3333"]);
+    });
 
     test("form-data overrides 설정 존재 (production 트리 트랜지티브 고정)", () => {
         const fs = require("fs");

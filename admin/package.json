@@ -18,12 +18,12 @@
     "svelte-check": "^4.1.4",
     "tslib": "^2.8.1",
     "typescript": "^5.9.3",
-    "vite": "^6.0.7"
+    "vite": "^6.4.5"
   },
   "dependencies": {
     "@types/lodash": "^4.14.200",
     "lodash": "^4.17.21",
-    "node-forge": "^1.4.0",
+    "node-forge": "^1.4.2",
     "qrcode": "1.5.4"
   },
   "engines": {

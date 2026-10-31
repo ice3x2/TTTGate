@@ -23,19 +23,7 @@ test("unreachable audit registry fails the online medium gate", () => {
 
 // A temporary npm executable emits protocol fixtures. These check the real
 // gate's assertions and child-process plumbing, not registry advisory accuracy.
-test.each([
-    ["empty npm ls output", "r3-req-02-crypto-js-removed", "", "0"],
-    ["vulnerable audit", "r3-req-04-medium-cleared", JSON.stringify({
-        auditReportVersion: 2,
-        vulnerabilities: {lodash: {severity: "critical"}},
-        metadata: {vulnerabilities: {info: 0, low: 0, moderate: 0, high: 0, critical: 1, total: 1}},
-    }), "1"],
-    ["report-only HIGH advisory", "admin-report", JSON.stringify({
-        auditReportVersion: 2,
-        vulnerabilities: {"fixture-high": {severity: "high"}},
-        metadata: {vulnerabilities: {info: 0, low: 0, moderate: 0, high: 1, critical: 0, total: 1}},
-    }), "1"],
-])("blocks %s in the actual gate", (_label, suite, output, status) => {
+const runWithFakeNpm = (output: string, status: string, args: string[]) => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "tttgate-supply-"));
     try {
         const emitter = path.join(directory, "emit.cjs");
@@ -48,25 +36,104 @@ test.each([
         // Windows environment names are case insensitive; avoid duplicate Path/PATH.
         const pathKey = Object.keys(environment).find((key) => key.toLowerCase() === "path") || "PATH";
         environment[pathKey] = directory + path.delimiter + environment[pathKey];
-        const result = spawnSync(process.execPath, suite === "admin-report" ? [
-            path.join(repoRoot, "scripts/supply-chain-gate.cjs"), "--admin-high-report",
-        ] : [
-            path.join(repoRoot, "node_modules/jest/bin/jest.js"), "--runInBand", "--runTestsByPath",
-            `test/supply-chain/${suite}.test.ts`,
-        ], {cwd: repoRoot, encoding: "utf8", timeout: 30_000,
+        return spawnSync(process.execPath, args, {cwd: repoRoot, encoding: "utf8", timeout: 30_000,
             env: {...environment, SUPPLY_CHAIN_ONLINE: "1", FIXTURE_OUTPUT: output, FIXTURE_STATUS: status}});
-        expect(result.error).toBeUndefined();
-        if(suite === "admin-report") {
-            expect(result.status).toBe(0);
-            expect(result.stdout).toContain("::warning::");
-            expect(result.stdout).toContain("fixture-high");
-            return;
-        }
-        expect(result.status).toBe(1);
-        expect(result.stderr).toContain("FAIL");
-        expect(result.stderr).toContain(suite === "r3-req-02-crypto-js-removed"
-            ? "empty output" : "lodash");
     } finally {
         fs.rmSync(directory, {recursive: true, force: true});
     }
+};
+
+test.each([
+    ["empty npm ls output", "r3-req-02-crypto-js-removed", "", "0"],
+    ["vulnerable audit", "r3-req-04-medium-cleared", JSON.stringify({
+        auditReportVersion: 2,
+        vulnerabilities: {lodash: {name: "lodash", severity: "critical", via: [{source: 1, name: "lodash", dependency: "lodash", title: "fixture",
+            url: "https://github.com/advisories/GHSA-4444-5555-6666", severity: "critical", range: "*"}]}},
+        metadata: {vulnerabilities: {info: 0, low: 0, moderate: 0, high: 0, critical: 1, total: 1}},
+    }), "1"],
+    ["CRITICAL advisory in the report command", "critical-report", JSON.stringify({
+        auditReportVersion: 2,
+        vulnerabilities: {"fixture-critical": {severity: "critical"}},
+        metadata: {vulnerabilities: {info: 0, low: 0, moderate: 0, high: 0, critical: 1, total: 1}},
+    }), "1"],
+    ["report-only HIGH advisory", "admin-report", JSON.stringify({
+        auditReportVersion: 2,
+        vulnerabilities: {"fixture-high": {severity: "high"}},
+        metadata: {vulnerabilities: {info: 0, low: 0, moderate: 0, high: 1, critical: 0, total: 1}},
+    }), "1"],
+])("blocks %s in the actual gate", (_label, suite, output, status) => {
+    const result = runWithFakeNpm(output, status, suite === "admin-report" || suite === "critical-report" ? [
+        path.join(repoRoot, "scripts/supply-chain-gate.cjs"), "--high-report",
+    ] : [
+        path.join(repoRoot, "node_modules/jest/bin/jest.js"), "--runInBand", "--runTestsByPath",
+        `test/supply-chain/${suite}.test.ts`,
+    ]);
+    expect(result.error).toBeUndefined();
+    if(suite === "admin-report") {
+        expect(result.status).toBe(0);
+        expect(result.stdout).toContain("::warning::HIGH advisories (report only): fixture-high");
+        return;
+    }
+    if(suite === "critical-report") {
+        expect(result.status).toBe(1);
+        expect(result.stderr).toContain("CRITICAL advisories: fixture-critical");
+        return;
+    }
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("FAIL");
+    expect(result.stderr).toContain(suite === "r3-req-02-crypto-js-removed"
+        ? "empty output" : "lodash GHSA-4444-5555-6666");
+}, 35_000);
+
+// #293: 서버 판정 명령(--server-gate)은 moderate 수준으로 판정하고, 막을 때 종료 코드 1 과 사유를 낸다.
+// 예외로 통과한 권고는 ::warning:: 으로 남긴다(단위 판정은 reviewed-advisories.test.ts 가 본다).
+const runServerGate = (output: string, status: string) =>
+    runWithFakeNpm(output, status, [path.join(repoRoot, "scripts/supply-chain-gate.cjs"), "--server-gate"]);
+
+test("the server gate CLI blocks an unreviewed moderate advisory with its reason", () => {
+    const result = runServerGate(JSON.stringify({
+        auditReportVersion: 2,
+        vulnerabilities: {lodash: {name: "lodash", severity: "moderate", via: [{source: 1, name: "lodash", dependency: "lodash", title: "fixture",
+            url: "https://github.com/advisories/GHSA-1111-2222-3333", severity: "moderate", range: "*"}]}},
+        metadata: {vulnerabilities: {info: 0, low: 0, moderate: 1, high: 0, critical: 0, total: 1}},
+    }), "1");
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Blocked server advisories: lodash GHSA-1111-2222-3333");
+}, 35_000);
+
+// low 권고는 서버 판정 대상이 아니므로 통과한다(npm 은 --audit-level=moderate 에서 low 만 있으면 0 으로 끝난다).
+test("the server gate CLI passes a report with only a low advisory", () => {
+    const result = runServerGate(JSON.stringify({auditReportVersion: 2,
+        vulnerabilities: {x: {name: "x", severity: "low", via: [{source: 1, name: "x", dependency: "x", title: "fixture",
+            url: "https://github.com/advisories/GHSA-7777-8888-9999", severity: "low", range: "*"}]}},
+        metadata: {vulnerabilities: {info: 0, low: 1, moderate: 0, high: 0, critical: 0, total: 1}}}), "0");
+    expect({status: result.status, stdout: result.stdout.trim()}).toEqual({status: 0, stdout: "No blocked server advisories"});
+}, 35_000);
+
+test("the server gate CLI passes a clean report", () => {
+    const result = runServerGate(JSON.stringify({auditReportVersion: 2, vulnerabilities: {},
+        metadata: {vulnerabilities: {info: 0, low: 0, moderate: 0, high: 0, critical: 0, total: 0}}}), "0");
+    expect({status: result.status, stdout: result.stdout.trim()}).toEqual({status: 0, stdout: "No blocked server advisories"});
+}, 35_000);
+
+// #293: 루트 전체 트리 판정(--full-tree-gate)은 빌드 도구를 포함해 high 이상을 막는다. 검토 예외는 서버 판정과 같은 목록을 쓰되, 취약하다고 보고된 설치 경로가 모두 서버 운영 트리에 있을 때만 적용한다.
+test("the full-tree gate CLI blocks an unreviewed high advisory in a build tool", () => {
+    const result = runWithFakeNpm(JSON.stringify({auditReportVersion: 2,
+        vulnerabilities: {undici: {name: "undici", severity: "high", via: [{source: 1, name: "undici", dependency: "undici", title: "fixture",
+            url: "https://github.com/advisories/GHSA-aaaa-1111-bbbb", severity: "high", range: "*"}]}},
+        metadata: {vulnerabilities: {info: 0, low: 0, moderate: 0, high: 1, critical: 0, total: 1}}}), "1",
+    [path.join(repoRoot, "scripts/supply-chain-gate.cjs"), "--full-tree-gate"]);
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Blocked full-tree advisories: undici GHSA-aaaa-1111-bbbb");
+}, 35_000);
+
+test("the full-tree gate CLI passes a report with only a moderate advisory", () => {
+    const result = runWithFakeNpm(JSON.stringify({auditReportVersion: 2,
+        vulnerabilities: {x: {name: "x", severity: "moderate", via: [{source: 1, name: "x", dependency: "x", title: "fixture",
+            url: "https://github.com/advisories/GHSA-cccc-2222-dddd", severity: "moderate", range: "*"}]}},
+        metadata: {vulnerabilities: {info: 0, low: 0, moderate: 1, high: 0, critical: 0, total: 1}}}), "0",
+    [path.join(repoRoot, "scripts/supply-chain-gate.cjs"), "--full-tree-gate"]);
+    expect({status: result.status, stdout: result.stdout.trim()}).toEqual({status: 0, stdout: "No blocked full-tree advisories"});
 }, 35_000);

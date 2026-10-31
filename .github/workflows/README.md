@@ -3,8 +3,8 @@
 | 워크플로 | 파일 | 언제 도는가 | 하는 일 |
 |---|---|---|---|
 | Code Regression | `code-regression.yml` | 모든 PR, main 에 push, 수동 실행, 릴리스 워크플로가 부를 때 | 빌드·린트·단위 테스트, 컴포넌트 테스트, 타입 검사, 관리 화면·터널·브라우저 E2E 를 네 작업으로 나눠 병렬로 돌립니다. |
-| Release | `release.yml` | 버전 태그를 push 할 때, 수동 실행 | Code Regression 을 통과하면 소스 배포판과 다섯 플랫폼 바이너리를 만들어 초안(draft) 릴리스에 올립니다. |
-| Supply Chain Audit | `supply-chain-audit.yml` | 의존성 파일이 바뀐 main 대상 PR, main 에 push, 매주 월요일, 수동 실행 | 의존성 보안 권고(advisory)와 SBOM 을 확인합니다. |
+| Release | `release.yml` | 버전 태그를 push 할 때, 수동 실행 | Code Regression 과 온라인 공급망 감사를 통과하면 소스 배포판과 다섯 플랫폼 바이너리를 만들어 초안(draft) 릴리스에 올립니다. |
+| Supply Chain Audit | `supply-chain-audit.yml` | 의존성 파일·판정 스크립트(`scripts/supply-chain-gate.cjs`)·이 워크플로가 바뀐 PR(대상: `main`, `refactor/safecode`), main 에 push, 매주 월요일, 수동 실행, 릴리스 워크플로가 부를 때 | 의존성 보안 권고(advisory)를 확인합니다. 온라인 감사는 매주 월요일, 수동 실행, 릴리스 때 돕니다. |
 
 ## 릴리스 만들기
 
@@ -21,7 +21,7 @@
 
 3. Release 워크플로가 자동으로 돕니다. 순서는 다음과 같습니다.
    1. 태그가 `package.json`·`package-build.json` 의 `version` 과 같은지 확인합니다. 다르면 여기서 멈춥니다.
-   2. Code Regression 의 네 작업을 병렬로 돌립니다(보통 20~50분). 하나라도 실패하면 패키징하지 않습니다. 스트레스 테스트(`npm run test:stress`)는 여기에 들어가지 않으므로, 필요하면 릴리스 전에 따로 돌립니다.
+   2. Code Regression 의 네 작업과 공급망 감사(온라인 감사 두 작업과 공급망 회귀 테스트)를 병렬로 돌립니다(보통 20~50분). 하나라도 실패하면 패키징하지 않습니다. 스트레스 테스트(`npm run test:stress`)는 여기에 들어가지 않으므로, 필요하면 릴리스 전에 따로 돌립니다.
    3. `npm run dist -- --skip-tests` 로 빌드하고 바이너리를 만듭니다. 테스트는 2단계에서 이미 돌렸으므로 다시 돌리지 않습니다.
    4. 소스 배포판과 바이너리를 압축하고, 릴리스 노트를 써서 초안 릴리스에 올립니다.
 4. **Releases** 화면에서 초안 릴리스를 확인합니다. 릴리스 노트를 고친 뒤 **Publish release** 를 눌러 공개합니다.
@@ -90,3 +90,26 @@ node app.js client -addr <server_address>
 | `npm run dist` | 모든 단계를 거쳐 소스 배포판과 바이너리를 만듭니다. |
 | `npm run dist -- --skip-binaries` | 바이너리는 만들지 않습니다. |
 | `npm run dist -- --skip-tests` | 브라우저 설치와 전체 테스트를 건너뜁니다. 같은 커밋이 Code Regression 을 통과했을 때만 씁니다(Release 워크플로가 이렇게 씁니다). |
+
+## 공급망 감사로 막혔을 때
+
+주간 감사나 릴리스가 공급망 감사에서 실패하면 다음 순서로 처리합니다.
+
+1. 실패 로그에서 권고 번호(GHSA-…)와 패키지를 확인합니다. 로컬에서는 다음 명령으로 같은 판정을 봅니다.
+   - 서버 운영 의존성: `node scripts/supply-chain-gate.cjs --server-gate`
+   - 관리 화면: `cd admin && node ../scripts/supply-chain-gate.cjs --high-report`
+   - 빌드 도구를 포함한 루트 전체 트리: `node scripts/supply-chain-gate.cjs --full-tree-gate`
+2. 수정 버전이 있으면 그 버전으로 올립니다. 이것이 기본입니다. 소스 배포판도 같은 버전을 쓰도록 `package-build.json` 의 범위도 함께 올립니다.
+3. 수정 버전이 없으면, TTTGate 가 영향받는 API 를 쓰는지 검토합니다. 쓰지 않을 때만 `scripts/supply-chain-gate.cjs` 의 `REVIEWED_ADVISORIES` 에 예외를 올립니다.
+   - 권고 번호, 패키지, 검토일(`reviewedOn`), 재검토일(`reviewBy`), 이유를 적습니다. 검토일은 오늘(UTC 기준, 당일 포함) 이전이어야 하고, 재검토일은 검토일에서 180일 안이어야 합니다. 어기면 `(review window invalid)` 를 붙여 막습니다.
+   - 검토할 때의 등급(`severity`, `moderate` 또는 `high`)도 적습니다. 권고 등급이 high 로 올라가면 `(reviewed as X, now Y)` 를 붙여 다시 막습니다. 영향 API 를 다시 검토한 뒤 등급을 고칩니다. critical 로 올라가면 접미사 없이 막고, 예외로 풀 수 없습니다(4번). 등급이 없거나 잘못된 값이면 `(reviewed severity missing)` 을 붙여 막습니다.
+   - 예외는 서버 판정(`--server-gate`, moderate 이상)과 루트 전체 트리 판정(`--full-tree-gate`, high 이상)에 함께 쓰입니다. critical 은 예외로도 통과하지 않습니다.
+   - 재검토일 당일 UTC 00:00 부터 다시 막힙니다(로그에 `review expired` 가 붙습니다). 그 사이에 수정 버전이 나오면 올리고 예외를 지웁니다. 수정 버전이 아직 없으면 영향 API 를 다시 검토한 뒤 `reviewedOn` 과 `reviewBy` 를 새 날짜로 바꿉니다.
+   - 로그 항목에 권고 번호가 없거나 `(unresolved via)` 가 붙으면 예외로 풀 수 없습니다. 권고를 특정할 수 없기 때문입니다. 업그레이드나 `overrides` 로 풉니다.
+   - 예외를 올릴 때는 영향 API 를 쓰지 않음을 지키는 테스트를 `test/supply-chain/reviewed-advisories.test.ts` 에 함께 더합니다.
+   - 예외로 통과한 권고는 감사 로그에 경고(`reviewed advisory accepted`)로 남습니다. 예외를 처음 올린 뒤에는 `--server-gate` 와 `--full-tree-gate` 를 실제로 돌려 이 경고가 두 판정에 모두 나오는지 확인합니다.
+   - 한 예외에 문제가 여럿이면 첫 사유 하나만 표시합니다. 판정 순서는 기간 오류 → 만료 → 등급 누락 → 등급 상승 → 서버 운영 트리 제한(루트 전체 트리 판정만)입니다. 하나를 고친 뒤 다시 돌려 남은 사유가 없는지 확인합니다.
+4. 수정 버전이 없는 critical 은 예외로 풀 수 없습니다. 그 의존성을 다른 패키지로 바꾸거나 빼고, 하위 의존성이면 `overrides` 로 고친 버전을 강제합니다. 어느 쪽도 어려우면 정보보호팀과 검토합니다.
+5. 관리 화면 감사는 critical 만 막고 high 는 경고로 남깁니다. 검토 예외는 서버 운영 의존성에만 올리므로, 관리 화면의 high 경고는 업그레이드(필요하면 `overrides`)로 풉니다.
+
+빌드 도구(예: `@yao-pkg/pkg-fetch` 와 그 하위 의존성)는 개발 의존성이라 서버 판정(`--omit=dev`)에 들어가지 않습니다. 대신 루트 전체 트리 판정(`--full-tree-gate`)이 high 이상을 막습니다. 빌드 도구는 바이너리를 내려받기 때문입니다. 이 판정은 서버 판정과 같은 검토 예외를 씁니다. 서버 운영 의존성의 high 예외가 여기서 다시 막히지 않게 하기 위해서입니다. 다만 예외는 npm audit 이 그 패키지에서 취약하다고 보고한 설치 경로(`nodes`)가 모두 서버 운영 트리에 있을 때만 적용됩니다. 빌드 도구가 같은 패키지를 따로 설치해 그 경로가 보고되면 `(exception covers server runtime only)` 를 붙여 막습니다. npm 은 이 경로를 권고마다가 아니라 패키지마다 합쳐 보고하므로, 빌드 도구의 사본이 다른 권고로만 취약해도 함께 막힙니다. 그래서 빌드 도구의 high 는 업그레이드나 `overrides` 로 풉니다. 수정 버전이 없으면 4번처럼 다른 패키지로 바꾸거나 빼고, 어려우면 정보보호팀과 검토합니다.

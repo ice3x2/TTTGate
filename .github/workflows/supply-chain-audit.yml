@@ -8,17 +8,21 @@ on:
       - 'package-lock.json'
       - 'admin/package.json'
       - 'admin/package-lock.json'
+      - 'package-build.json'
+      - 'scripts/supply-chain-gate.cjs'
       - '.github/workflows/supply-chain-audit.yml'
   push:
     branches: [main]
   schedule:
-    # 매주 월요일 00:00 UTC — SBOM 및 누적 advisory 감지
+    # 매주 월요일 00:00 UTC — 누적 advisory 감지
     - cron: '0 0 * * 1'
   workflow_dispatch: {}
+  # #293: 릴리스 워크플로가 패키징 전에 부른다. 불린 워크플로의 github 문맥은 부른 쪽 것(태그 push)이다.
+  workflow_call: {}
 
 jobs:
   audit-runtime:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
     name: Runtime audit (server production chain)
     runs-on: ubuntu-latest
     steps:
@@ -34,21 +38,30 @@ jobs:
         env:
           NODE_ENV: development
 
-      - name: Online production audit regression
-        run: npx jest --runInBand --runTestsByPath test/supply-chain/r3-req-03-critical-fixed.test.ts test/supply-chain/r3-req-04-medium-cleared.test.ts
-        env:
-          SUPPLY_CHAIN_ONLINE: "1"
-
+      # 판정 단계를 jest 단계보다 먼저 돌린다. 막힐 때 그 사유와 예외 경고가 로그에 남는다(#293).
       - name: Audit production tree (CRITICAL gate)
         run: npm audit --omit=dev --audit-level=critical
         env:
           NODE_ENV: development
 
-      - name: Audit production tree (HIGH gate, reviewed advisories only)
-        # npm audit --omit=dev --audit-level=high 결과를 검토 예외(scripts/supply-chain-gate.cjs)와 대조한다(#180).
-        run: node scripts/supply-chain-gate.cjs --server-high-gate
+      - name: Audit production tree (moderate gate, reviewed advisories only)
+        # npm audit --omit=dev --audit-level=moderate 결과를 검토 예외(scripts/supply-chain-gate.cjs)와 대조한다(#180, #293).
+        run: node scripts/supply-chain-gate.cjs --server-gate
         env:
           NODE_ENV: development
+
+      - name: Audit full root tree including build tools (HIGH gate, reviewed advisories only)
+        # 바이너리 빌드 도구(pkg-fetch → undici 등)는 개발 의존성이라 --omit=dev 감사에 들어가지 않는다.
+        # 빌드 도구는 바이너리를 내려받으므로 high 이상을 막는다. 검토 예외는 서버 판정과 같은 목록을 쓰되,
+        # npm audit 이 그 패키지에서 취약하다고 보고한 설치 경로(nodes)가 모두 서버 운영 트리에 있을 때만 적용한다(#293).
+        run: node scripts/supply-chain-gate.cjs --full-tree-gate
+        env:
+          NODE_ENV: development
+
+      - name: Online production audit regression
+        run: npx jest --runInBand --runTestsByPath test/supply-chain/r3-req-03-critical-fixed.test.ts test/supply-chain/r3-req-04-medium-cleared.test.ts
+        env:
+          SUPPLY_CHAIN_ONLINE: "1"
 
       - name: crypto-js 서버 체인 미포함 확인
         run: npx jest --runInBand --runTestsByPath test/supply-chain/r3-req-02-crypto-js-removed.test.ts # R3-REQ-02
@@ -56,7 +69,7 @@ jobs:
           NODE_ENV: development
 
   audit-admin:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
     name: Admin audit (frontend chain)
     runs-on: ubuntu-latest
     steps:
@@ -80,7 +93,7 @@ jobs:
 
       - name: Audit admin (HIGH report; command errors fail)
         working-directory: admin
-        run: node ../scripts/supply-chain-gate.cjs --admin-high-report
+        run: node ../scripts/supply-chain-gate.cjs --high-report
 
   tests:
     name: Supply-chain regression tests

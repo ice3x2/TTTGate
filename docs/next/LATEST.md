@@ -1,6 +1,6 @@
 # 최신 핸드오프
 
-`C:\Work\git\_Snoworca\TTTGate\docs\next\2026-10-19-release-to-main.md` — 2026-10-21 갱신 · 열린 이슈·PR·Dependabot 경고가 모두 0건이다. `refactor/admin` 은 `main` 에 병합됐다(PR #185 `6a295dc`, PR #193 `137e4a9`, PR #196 `dc6a0a3`). node-forge 검토 예외의 재검토 기한은 2027-01-31 이다
+`C:\Work\git\_Snoworca\TTTGate\docs\next\2026-10-19-release-to-main.md` — 2026-10-31 갱신 · #293 병합 뒤 main 감사 수동 실행과 2.0.0 초안 재생성이 남았다(§0). 2026-10-21 에는 열린 이슈·PR·Dependabot 경고가 모두 0건이었다. `refactor/admin` 은 `main` 에 병합됐다(PR #185 `6a295dc`, PR #193 `137e4a9`, PR #196 `dc6a0a3`). node-forge 는 #293 에서 1.4.2 로 올렸고 검토 예외는 지웠다
 
 **함정 전체 목록은 2026-10-16 문서 §6 에, 확정 결정 11건·루프 절차는 2026-09-15 문서에 있다.**
 
