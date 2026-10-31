@@ -5,17 +5,13 @@
  *   - undici 7.30.1 미만: 바이너리 빌드 도구(@yao-pkg/pkg-fetch)가 Node 바이너리를 내려받을 때 쓴다(TLS 검증 우회 등)
  *   - vite 6.4.3 이하: 관리 화면 개발 서버
  */
-import * as fs from "fs";
-import * as path from "path";
-import {installedVersions, numericVersion} from "../helpers/SupplyChainGate";
+import {installedVersions, numericVersion, readRepoJson} from "../helpers/SupplyChainGate";
 
-const repoRoot = path.resolve(__dirname, "..", "..");
-const readJson = (file: string) => JSON.parse(fs.readFileSync(path.join(repoRoot, file), "utf8"));
 const gate = require("../../scripts/supply-chain-gate.cjs");
 
 describe("2026-10 advisories are fixed by upgrades (#293)", () => {
     test.each(["package.json", "admin/package.json", "package-build.json"])("%s requires node-forge 1.4.2 or later", (file) => {
-        const range = readJson(file).dependencies["node-forge"];
+        const range = readRepoJson(file).dependencies["node-forge"];
         expect(range).toMatch(/^\^/);
         expect(numericVersion(range)).toBeGreaterThanOrEqual(numericVersion("1.4.2"));
     });
