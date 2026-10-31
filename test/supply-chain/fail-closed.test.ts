@@ -117,7 +117,7 @@ test("the server gate CLI passes a clean report", () => {
     expect({status: result.status, stdout: result.stdout.trim()}).toEqual({status: 0, stdout: "No blocked server advisories"});
 }, 35_000);
 
-// #293: 루트 전체 트리 판정(--full-tree-gate)은 빌드 도구를 포함해 high 이상을 막는다. 검토 예외는 서버 판정과 같은 목록을 쓴다.
+// #293: 루트 전체 트리 판정(--full-tree-gate)은 빌드 도구를 포함해 high 이상을 막는다. 검토 예외는 서버 판정과 같은 목록을 쓰되, 서버 운영 트리에만 설치된 패키지에만 적용한다.
 test("the full-tree gate CLI blocks an unreviewed high advisory in a build tool", () => {
     const result = runWithFakeNpm(JSON.stringify({auditReportVersion: 2,
         vulnerabilities: {undici: {name: "undici", severity: "high", via: [{source: 1, name: "undici", dependency: "undici", title: "fixture",

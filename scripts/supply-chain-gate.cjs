@@ -79,7 +79,8 @@ const isInstalledOnlyIn = (entry, serverNodes) =>
 /**
  * npm audit 보고서에서 level 이상 등급의 권고를 모아 검토 예외와 대조한다(level: moderate·high, #293).
  * 다른 패키지를 가리키는 via(문자열)는 그 패키지의 권고로 따라간다. CRITICAL 은 예외로도 통과하지 않는다.
- * serverNodes 를 주면 예외는 그 패키지의 설치 경로(nodes)가 모두 서버 운영 트리에 있을 때만 적용한다.
+ * serverNodes 를 주면 예외는 npm audit 이 그 패키지에서 취약하다고 보고한 설치 경로(nodes)가 모두 서버 운영 트리에 있을 때만
+ * 적용한다. nodes 는 권고마다가 아니라 패키지마다 합쳐 보고되므로, 다른 권고로 취약한 빌드 도구 사본이 있어도 막는다.
  */
 const evaluateGate = (report, level, reviewed = REVIEWED_ADVISORIES, now = Date.now(), serverNodes = undefined) => {
     if(!["moderate", "high"].includes(level)) throw new Error(`Unsupported gate level: ${level}`);
