@@ -214,13 +214,16 @@ describe("ServerOptionStore 감사 옵션 검증", () => {
     // #303 — adminAllowedOrigins 는 정확한 Origin(스킴·호스트·포트)의 목록이다. 없으면 빈 목록, 형식이 틀리면 저장 전에 거부한다.
     it("adminAllowedOrigins 를 생략하면 빈 목록이고, 올바른 Origin 은 정규화해 둔다", () => {
         expect(verify({adminAllowedOrigins: undefined}).option.adminAllowedOrigins).toEqual([]);
-        const ok = verify({adminAllowedOrigins: [" https://Admin.Example.com ", "https://admin.example.com:8443/", "http://10.0.0.5:9300", "https://admin.example.com:443"]});
+        const ok = verify({adminAllowedOrigins: [" https://Admin.Example.com ", "HTTPS://admin.example.com:8443/", "https://[2001:db8::7]:9300",
+            "https://관리.example.com", "https://admin.example.com:443"]});
         expect(ok.result.success).toBe(true);
-        expect(ok.option.adminAllowedOrigins).toEqual(["https://admin.example.com", "https://admin.example.com:8443", "http://10.0.0.5:9300", "https://admin.example.com"]);
+        expect(ok.option.adminAllowedOrigins).toEqual(["https://admin.example.com", "https://admin.example.com:8443", "https://[2001:db8::7]:9300",
+            "https://xn--zb0b93v.example.com", "https://admin.example.com"]);
     });
 
     it("adminAllowedOrigins 의 형식이 틀리면 실패한다", () => {
-        for(const wrong of [["https://admin.example.com/console"], ["https://*.example.com"], ["admin.example.com"], ["ftp://admin.example.com"],
+        // http:// 는 받지 않는다. TLS 관리 서버의 세션 쿠키는 Secure 라서 http 페이지에서는 브라우저가 버린다.
+        for(const wrong of [["http://admin.example.com"], ["http://10.0.0.5:9300"], ["https://admin.example.com/console"], ["https://*.example.com"], ["admin.example.com"], ["ftp://admin.example.com"],
             ["https://user:pw@admin.example.com"], ["https://admin.example.com?x=1"], ["https://admin.example.com#x"], ["*"], [""], [1],
             "https://admin.example.com", null]) {
             const result = verify({adminAllowedOrigins: wrong}).result;

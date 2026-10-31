@@ -25,6 +25,12 @@ describe("adminAllowedOrigins (#303)", () => {
         expect(await loginFrom(ports[0], PROXY_ORIGIN)).toEqual({status: 403, message: "Forbidden origin"});
         expect((await saveOrigins(request, snapshot, [PROXY_ORIGIN])).statusCode).toBe(200);
         expect((await loginFrom(ports[0], PROXY_ORIGIN)).status).toBe(401);
+        // 요청의 Origin 도 같은 방식으로 정규화한다(기본 포트 443 을 적어도 같은 Origin 이다).
+        expect((await loginFrom(ports[0], `${PROXY_ORIGIN}:443`)).status).toBe(401);
+        // CORS 응답 헤더도 같은 판정을 따른다.
+        const read = await request("GET", "/api/serverOption", undefined, 0, {Origin: PROXY_ORIGIN});
+        expect(read.statusCode).toBe(200);
+        expect(read.headers["access-control-allow-origin"]).toBe(PROXY_ORIGIN);
         for(const other of ["https://admin.example.com:8443", "http://admin.example.com", "https://evil.example"]) {
             expect(await loginFrom(ports[0], other)).toEqual({status: 403, message: "Forbidden origin"});
         }

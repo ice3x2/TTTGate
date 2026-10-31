@@ -91,9 +91,9 @@ class ServerOptionStore {
         this._serverOptionUpdateCallback = callback;
     }
 
-    /** #303 관리 서버가 요청마다 읽는다. 설정 전체를 복사하지 않으려고 따로 둔다. */
+    /** #303 관리 서버가 요청마다 읽는다. 설정 전체를 복사하지 않으려고 따로 둔다. 설정이 준비되지 않았으면 아무것도 허용하지 않는다. */
     public get adminAllowedOrigins(): ReadonlyArray<string> {
-        this.assertReady();
+        if(!this._loadStatus.ready) return [];
         return this._serverOption.adminAllowedOrigins ?? [];
     }
 

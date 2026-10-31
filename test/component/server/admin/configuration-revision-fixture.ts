@@ -37,9 +37,9 @@ export const withConfigurationServer = async (check: (fixture: any) => Promise<v
         const cookies = login.headers["set-cookie"] as string[];
         const cookie = cookies.map((value) => value.split(";")[0]).join("; ");
         const csrf = cookies.find((value) => value.startsWith("csrfToken="))!.split(";")[0].slice("csrfToken=".length);
-        const request = (method: string, endpoint: string, body?: object, index = 0) => httpRequest({
+        const request = (method: string, endpoint: string, body?: object, index = 0, extraHeaders: Record<string, string> = {}) => httpRequest({
             port: ports[index], path: endpoint, method,
-            headers: {"Content-Type": "application/json", Cookie: cookie, "X-CSRF-Token": csrf,
+            headers: {"Content-Type": "application/json", Cookie: cookie, "X-CSRF-Token": csrf, ...extraHeaders,
                 ...(body === undefined ? {} : {"Content-Length": String(Buffer.byteLength(JSON.stringify(body)))})},
             body: body === undefined ? undefined : JSON.stringify(body),
         });
