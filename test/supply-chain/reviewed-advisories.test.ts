@@ -219,6 +219,13 @@ describe("runGate with reviewed advisories (#293)", () => {
             .toEqual(["undici GHSA-aaaa-bbbb-cccc (exception covers server runtime only)"]);
     });
 
+    it("the full-tree gate fails closed when the server-tree audit fails", () => {
+        const run = (args: string[]) => args.includes("--omit=dev")
+            ? {status: 1, stdout: "", stderr: "registry unreachable"}
+            : {status: 1, stdout: auditJson({undici: entryOf(["node_modules/undici"])}), stderr: ""};
+        expect(() => gate.runGate("--full-tree-gate", {run, reviewed: reviewedUndici, now: NOW})).toThrow("Supply-chain command returned empty output");
+    });
+
     it("the server gate applies reviewed advisories without a tree restriction", () => {
         const run = runnerOf({undici: entryOf(["node_modules/undici"])}, {});
         expect(gate.runGate("--server-gate", {run, reviewed: reviewedUndici, now: NOW}))

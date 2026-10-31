@@ -52,8 +52,9 @@ const runNpm = (args, cwd = process.cwd()) => spawnSync("npm", args, {
 /**
  * #180: 수정 버전이 없어 업그레이드로 풀 수 없고, TTTGate 가 영향받는 API 를 쓰지 않음을 검토한 권고.
  * 서버 판정(moderate 이상)과 루트 전체 트리 판정(high 이상)은 이 목록의 권고만 통과시킨다(#293). 전체 트리 판정에서는
- * 서버 운영 트리에 있는 설치 경로에만 예외를 적용하므로, 빌드 도구에 든 같은 패키지는 막힌다. reviewBy 날짜의 UTC 00:00 에 만료되어 다시 막고 재검토를 강제한다.
- * reviewedOn 은 오늘 이전이고 reviewBy 는 reviewedOn 에서 180일 안이어야 한다(판정이 지킨다). severity 는 검토할 때의 등급이며, 권고 등급이 그보다
+ * npm audit 이 그 패키지에서 취약하다고 보고한 설치 경로(nodes)가 모두 서버 운영 트리에 있을 때만 예외를 적용하므로,
+ * 빌드 도구에 든 같은 패키지의 취약한 사본이 있으면 막힌다. reviewBy 날짜의 UTC 00:00 에 만료되어 다시 막고 재검토를 강제한다.
+ * reviewedOn 은 오늘(UTC, 당일 포함) 이전이고 reviewBy 는 reviewedOn 에서 180일 안이어야 한다(판정이 지킨다). severity 는 검토할 때의 등급이며, 권고 등급이 그보다
  * 오르면 다시 막는다(#293). 항목 형식: {id, package, severity, reviewedOn, reviewBy, reason}.
  * 항목을 더할 때는 그 권고의 영향 API 를 쓰지 않음을 지키는 테스트를 test/supply-chain/reviewed-advisories.test.ts 에 함께 더한다.
  */
