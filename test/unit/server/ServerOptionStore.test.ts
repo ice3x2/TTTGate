@@ -210,6 +210,24 @@ describe("ServerOptionStore 감사 옵션 검증", () => {
         expect(wrong.result.message).toBe("logLevel must be one of error, warn, info, debug");
         expect(verify({logLevel: 3}).result.success).toBe(false);
     });
+
+    // #303 — adminAllowedOrigins 는 정확한 Origin(스킴·호스트·포트)의 목록이다. 없으면 빈 목록, 형식이 틀리면 저장 전에 거부한다.
+    it("adminAllowedOrigins 를 생략하면 빈 목록이고, 올바른 Origin 은 정규화해 둔다", () => {
+        expect(verify({adminAllowedOrigins: undefined}).option.adminAllowedOrigins).toEqual([]);
+        const ok = verify({adminAllowedOrigins: [" https://Admin.Example.com ", "https://admin.example.com:8443/", "http://10.0.0.5:9300", "https://admin.example.com:443"]});
+        expect(ok.result.success).toBe(true);
+        expect(ok.option.adminAllowedOrigins).toEqual(["https://admin.example.com", "https://admin.example.com:8443", "http://10.0.0.5:9300", "https://admin.example.com"]);
+    });
+
+    it("adminAllowedOrigins 의 형식이 틀리면 실패한다", () => {
+        for(const wrong of [["https://admin.example.com/console"], ["https://*.example.com"], ["admin.example.com"], ["ftp://admin.example.com"],
+            ["https://user:pw@admin.example.com"], ["https://admin.example.com?x=1"], ["https://admin.example.com#x"], ["*"], [""], [1],
+            "https://admin.example.com", null]) {
+            const result = verify({adminAllowedOrigins: wrong}).result;
+            expect({wrong, success: result.success}).toEqual({wrong, success: false});
+            expect(result.message).toMatch(/^adminAllowedOrigins /);
+        }
+    });
 });
 
 describe("ServerOptionStore mfaRequiredForSuperusers (#112 U4-04)", () => {
