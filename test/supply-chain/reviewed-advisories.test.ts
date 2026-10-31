@@ -124,6 +124,9 @@ describe("server HIGH gate with reviewed advisories (#180)", () => {
     // #293: 수정 버전이 나오면 예외를 지우고 업그레이드로 푼다. 그래서 목록은 비어 있을 수 있다.
     it("every reviewed advisory in the repository has an id, package, reviewed severity, reason and a review date within 180 days", () => {
         expect(Array.isArray(gate.REVIEWED_ADVISORIES)).toBe(true);
+        // 같은 권고의 예외가 둘이면 판정은 앞의 것만 쓴다. 재검토 때 옛 항목을 지우지 않는 실수를 막는다.
+        const keys = gate.REVIEWED_ADVISORIES.map((entry: any) => `${String(entry.id).toLowerCase()} ${entry.package}`);
+        expect(new Set(keys).size).toBe(keys.length);
         for(const entry of gate.REVIEWED_ADVISORIES) {
             expect(entry.id).toMatch(/^GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}$/);
             expect(typeof entry.package).toBe("string");

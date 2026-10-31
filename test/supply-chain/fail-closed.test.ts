@@ -102,6 +102,15 @@ test("the server gate CLI blocks an unreviewed moderate advisory with its reason
     expect(result.stderr).toContain("Blocked server advisories: lodash GHSA-1111-2222-3333");
 }, 35_000);
 
+// low 권고는 서버 판정 대상이 아니므로 통과한다(npm 은 --audit-level=moderate 에서 low 만 있으면 0 으로 끝난다).
+test("the server gate CLI passes a report with only a low advisory", () => {
+    const result = runServerGate(JSON.stringify({auditReportVersion: 2,
+        vulnerabilities: {x: {name: "x", severity: "low", via: [{source: 1, name: "x", dependency: "x", title: "fixture",
+            url: "https://github.com/advisories/GHSA-7777-8888-9999", severity: "low", range: "*"}]}},
+        metadata: {vulnerabilities: {info: 0, low: 1, moderate: 0, high: 0, critical: 0, total: 1}}}), "0");
+    expect({status: result.status, stdout: result.stdout.trim()}).toEqual({status: 0, stdout: "No blocked server advisories"});
+}, 35_000);
+
 test("the server gate CLI passes a clean report", () => {
     const result = runServerGate(JSON.stringify({auditReportVersion: 2, vulnerabilities: {},
         metadata: {vulnerabilities: {info: 0, low: 0, moderate: 0, high: 0, critical: 0, total: 0}}}), "0");

@@ -447,7 +447,7 @@ git log -1 --format=%B   # 서명 0건, 제목에 단계 표식 없음 확인
 - `src/server/ServerOptionStore.ts:339-402` `verificationServerOption`: 제자리 정규화, `{success, message, serverOption}` 반환, `warnings` 채널 없음.
 - `src/types/TunnelingOption.ts:52-68` `type ServerOption`(`connectionSecurity` 없음).
 - `dependencies` 에 `@types/*` 가 함께 있는 것이 이 저장소의 관례다. `scripts.lint` 는 `node scripts/lint-auth-compare.mjs src --strict`(비밀값 비교는 `timingSafeStringEqual` 만 허용).
-- `test/supply-chain/r3-req-04-medium-cleared.test.ts` 가 `npm audit --omit=dev --audit-level=moderate` 0건 게이트다. `scripts/supply-chain-gate.cjs` 가 감사와 의존성 트리를 검사한다. `test/unit/tools/source-archives.test.ts`·`binary-archives.test.ts` 는 배포 산출물 크기·구성을 검사하므로 의존성 추가 뒤 함께 돌려 통과를 확인한다.
+- `test/supply-chain/r3-req-04-medium-cleared.test.ts` 가 `npm audit --omit=dev --audit-level=moderate` 에서 검토 예외 밖의 moderate 이상 0건을 확인한다(#293). `scripts/supply-chain-gate.cjs` 가 감사와 의존성 트리를 검사한다. `test/unit/tools/source-archives.test.ts`·`binary-archives.test.ts` 는 배포 산출물 크기·구성을 검사하므로 의존성 추가 뒤 함께 돌려 통과를 확인한다.
 - `geoip-lite@2.0.3` 의 unpackedSize 는 약 110MB(설치 후 실측 111MB)로 대부분이 city DB 다. 런타임은 `data/geoip-country.dat`·`geoip-country6.dat` 두 파일만 읽는다(city DB 가 없으면 country 로 폴백). 배포 바이너리 동봉은 U5-10 이 두 파일만 넣는다.
 - 컴포넌트 테스트 본보기: `test/component/server/admin/AdminServer.security.test.ts`(`new AdminServer({} as any, false)` → `listen(0)`, `test/helpers/http.ts` `httpRequest`, 맨 위 `jest.setTimeout(30_000)`).
 - TLS 외부 포트(`tls: true`)와 관리자 포트의 차이: `AdminServer` 의 `'connection'` 이벤트는 TLS 핸드셰이크 **전** 원시 소켓에서 발생하므로 국가 차단이 핸드셰이크 비용을 막는다. 반면 U5-02 가 판정을 끼운 외부 포트의 `TCPServer.onBind` 는 `tls.createServer` 가 핸드셰이크를 끝낸 뒤에 불리므로, TLS 외부 포트에서는 국가 차단이 핸드셰이크 비용을 막지 못한다. 이는 설계 §2 의 결정을 따른 결과이며 이 이슈에서 바꾸지 않는다.

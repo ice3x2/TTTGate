@@ -94,7 +94,6 @@ const evaluateGate = (report, level, reviewed = REVIEWED_ADVISORIES, now = Date.
         // 기준 등급 이상 항목인데 그 근거 권고를 찾지 못하면(보고서에 없는 패키지를 가리킴) 통과시키지 않는다.
         if(advisories.length === 0) blocking.add(`${name} (unresolved via)`);
         for(const advisory of advisories) {
-            if(!blockingSeverities.includes(advisory.severity)) continue;
             const id = GHSA_PATTERN.exec(String(advisory.url ?? ""))?.[0];
             const pkg = advisory.name ?? advisory.dependency ?? name;
             const label = `${pkg} ${id ?? advisory.title ?? "unknown advisory"}`;
