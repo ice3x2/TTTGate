@@ -46,7 +46,7 @@ In the examples, `./TTTGate-linux-x64` is the Linux x64 binary. Use the binary f
 
 2. On the server host, open `https://127.0.0.1:9300/`. From another computer, open an SSH tunnel first (see [Open the Console from Another Computer](#open-the-console-from-another-computer)).
 3. Create the first admin account with the token in `config/.bootstrap-token` (see [First Admin Login](#first-admin-login)).
-4. A new server starts with the control port TLS off (`tls: false`). Turn it on in **Server settings** → **Tunnel TLS**, or set `tls: true` in `config/server.yaml`. Also make sure that `controlProtocolMode` is not `mtls-strict`. In the console, open **Trusted clients**, add a client, and copy the command that the console shows.
+4. A new server starts with the control port TLS off (`tls: false`). In **Server settings**, check **Tunnel TLS** and press **Apply**. It applies at once, without a restart. Or stop the server, set `tls: true` in `config/server.yaml`, and start it again. Also make sure that `controlProtocolMode` is not `mtls-strict`. In the console, open **Trusted clients**, add a client, and copy the command that the console shows.
 5. On the client host, run the copied command, then start the client in the background:
 
    ```shell
@@ -649,7 +649,7 @@ TTTGate 는 서버와 클라이언트가 짝을 이뤄 내부망의 TCP/HTTP 서
 
 2. 서버 호스트에서 `https://127.0.0.1:9300/` 을 연다. 다른 컴퓨터에서 열려면 먼저 SSH 터널을 만든다([다른 컴퓨터에서 관리 화면 열기](#다른-컴퓨터에서-관리-화면-열기) 참고).
 3. `config/.bootstrap-token` 의 토큰으로 첫 관리자 계정을 만든다([첫 관리자 로그인](#첫-관리자-로그인) 참고).
-4. 새 서버는 제어 포트 TLS 가 꺼진 상태(`tls: false`)로 시작한다. **Server settings** → **Tunnel TLS** 를 켜거나 `config/server.yaml` 에 `tls: true` 를 정한다. `controlProtocolMode` 가 `mtls-strict` 가 아닌지도 확인한다. 관리 화면에서 **Trusted clients** 를 열고 클라이언트를 추가한 뒤, 화면에 나온 명령을 복사한다.
+4. 새 서버는 제어 포트 TLS 가 꺼진 상태(`tls: false`)로 시작한다. **Server settings** 에서 **Tunnel TLS** 를 켜고 **Apply** 를 누른다. 서버를 다시 시작하지 않아도 바로 적용된다. 또는 서버를 멈추고 `config/server.yaml` 에 `tls: true` 를 정한 뒤 다시 시작한다. `controlProtocolMode` 가 `mtls-strict` 가 아닌지도 확인한다. 관리 화면에서 **Trusted clients** 를 열고 클라이언트를 추가한 뒤, 화면에 나온 명령을 복사한다.
 5. 클라이언트 호스트에서 복사한 명령을 실행하고, 클라이언트를 백그라운드로 시작한다.
 
    ```shell
