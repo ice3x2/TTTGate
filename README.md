@@ -46,7 +46,7 @@ In the examples, `./TTTGate-linux-x64` is the Linux x64 binary. Use the binary f
 
 2. On the server host, open `https://127.0.0.1:9300/`. From another computer, open an SSH tunnel first (see [Open the Console from Another Computer](#open-the-console-from-another-computer)).
 3. Create the first admin account with the token in `config/.bootstrap-token` (see [First Admin Login](#first-admin-login)).
-4. Make sure that the control port uses TLS (`tls: true` in `config/server.yaml`) and that `controlProtocolMode` is not `mtls-strict`. In the console, open **Trusted clients**, add a client, and copy the command that the console shows.
+4. A new server starts with the control port TLS off (`tls: false`). Turn it on in **Server settings** → **Tunnel TLS**, or set `tls: true` in `config/server.yaml`. Also make sure that `controlProtocolMode` is not `mtls-strict`. In the console, open **Trusted clients**, add a client, and copy the command that the console shows.
 5. On the client host, run the copied command, then start the client in the background:
 
    ```shell
@@ -326,7 +326,7 @@ Each option applies to the `server` mode.
 |---|---|---|---|---|
 | `-adminPort <port>` | Whole number 1–65535 | `9300` | Saved to `server.yaml` (`adminPort`) | Port of the admin console. A bad value stops the server with exit code 1 (`Invalid admin port number (1 ~ 65535)`). Example: `server -adminPort 9400`. |
 | `-keepAlive <ms>` | Whole number, 0 or more | `10000` | Saved to `server.yaml` (`keepAlive`) | TCP keepalive interval of the control listener. A negative or non-numeric value stops the server with exit code 1 (`Invalid keep alive time`). Example: `server -keepAlive 30000`. |
-| `-trustXForwardedFor` | Flag | Off | This run only | Read the admin client address from `X-Forwarded-For`. Use it only behind a reverse proxy that you control. To open the console through the proxy, also add the proxy address to `adminAllowedOrigins`. The server logs a warning at startup while it is on. Example: `server -trustXForwardedFor -trustedProxyHops 1`. |
+| `-trustXForwardedFor` | Flag | Off | This run only | Read the admin client address from `X-Forwarded-For`. Use it only behind a reverse proxy that you control. To open the console through the proxy, also add the address that users open (for example `https://admin.example.com`) to `adminAllowedOrigins`. The server logs a warning at startup while it is on. Example: `server -trustXForwardedFor -trustedProxyHops 1`. |
 | `-trustedProxyHops <n>` | Whole number 1–16 | `1` | This run only | Number of trusted proxies in front of the admin server. See the notes below. A bad value gives a startup warning, and the server uses 1. Without `-trustXForwardedFor`, it has no effect and gives a warning. |
 | `-reset` | Flag | Off | Action at this start | Delete every file in the `config/` directory (`server.yaml`, `.key`, `.bootstrap-token` and the other stored state) and the stored certificates, then start with defaults. `-reset` and `-reset true` reset. `-reset false` does nothing. **Risk:** tunnels, trusted clients and admin accounts are lost. With `-daemon`, the sentinel restarts the app with the same options, so every automatic restart resets again. Do not combine `-reset` with `-daemon`. |
 | `-allowLegacyAdminHttp` | Flag | Off | This run only | Allow `adminTls: false` (legacy non-TLS admin mode). **Risk:** the admin console and its session cookies travel in plain text. Shown by `--help-advanced`. |
@@ -359,7 +359,7 @@ Notes on `-trustedProxyHops`:
 | `-cert <path\|pem>` | Run commands | File path or PEM text | None | Saved by `-save` (a path as a path, PEM text as text) | Client certificate for mutual TLS. Turns TLS on. The path rules of `-ca` apply. |
 | `-privateKey <path\|pem>` | Run commands | File path or PEM text | None | Saved by `-save` (a path as a path, PEM text as text) | Private key of `-cert`. Turns TLS on. The path rules of `-ca` apply. Error messages do not show the path, because the value can be key text that was put in the wrong place. |
 | `-save` | `client`, `client run` | Flag | Off | Writes `config/client.yaml` | Save the resolved options to `config/client.yaml`, then start the client. See the notes below. `-save false` writes nothing. |
-| `--code <code>` | `client join` | 12 Crockford Base32 characters, for example `7Q4K-M2XP-AB01` | None (required) | Used once | Enrollment code from the admin console. It uses digits and the letters A–Z except `U`. `I` and `L` are read as `1`, and `O` as `0`. Dashes, spaces and case are ignored. The code works once and, by default, expires after 15 minutes. The `ttlMinutes` field of the admin API (1–1440) can change this. |
+| `--code <code>` | `client join` | 12 Crockford Base32 characters, for example `7Q4K-M2XP-AB01` | None (required) | Used once | Enrollment code from the admin console. It uses digits and the letters A–Z except `I`, `L`, `O` and `U`. When you type it, `I` and `L` are read as `1`, and `O` as `0`. Dashes, spaces and case are ignored. The code works once and, by default, expires after 15 minutes. The `ttlMinutes` field of the admin API (1–1440) can change this. |
 | `--force` | `client join` | Flag | Off | This run only | Replace an existing `config/client.yaml`. The old file is kept as `client.yaml.bak`. Without it, an existing file stops `client join` with exit code 78. |
 | `-bufferLimit <MiB>` | Run commands | `-1` (no limit) or a whole number 16–1048576 | `128` | Saved by `-save` (as `globalMemCacheLimit`) | Memory buffer limit. Another value is an error (exit code 2). Example: `-bufferLimit 256`. |
 | `-keepAlive <ms>` | Run commands | Whole number, 0 or more | `10000` | Saved by `-save` | TCP keepalive interval of the control connection. A bad or negative value gives a warning, and the client uses 10000. |
@@ -649,7 +649,7 @@ TTTGate 는 서버와 클라이언트가 짝을 이뤄 내부망의 TCP/HTTP 서
 
 2. 서버 호스트에서 `https://127.0.0.1:9300/` 을 연다. 다른 컴퓨터에서 열려면 먼저 SSH 터널을 만든다([다른 컴퓨터에서 관리 화면 열기](#다른-컴퓨터에서-관리-화면-열기) 참고).
 3. `config/.bootstrap-token` 의 토큰으로 첫 관리자 계정을 만든다([첫 관리자 로그인](#첫-관리자-로그인) 참고).
-4. 제어 포트가 TLS 를 쓰는지(`config/server.yaml` 의 `tls: true`), `controlProtocolMode` 가 `mtls-strict` 가 아닌지 확인한다. 관리 화면에서 **Trusted clients** 를 열고 클라이언트를 추가한 뒤, 화면에 나온 명령을 복사한다.
+4. 새 서버는 제어 포트 TLS 가 꺼진 상태(`tls: false`)로 시작한다. **Server settings** → **Tunnel TLS** 를 켜거나 `config/server.yaml` 에 `tls: true` 를 정한다. `controlProtocolMode` 가 `mtls-strict` 가 아닌지도 확인한다. 관리 화면에서 **Trusted clients** 를 열고 클라이언트를 추가한 뒤, 화면에 나온 명령을 복사한다.
 5. 클라이언트 호스트에서 복사한 명령을 실행하고, 클라이언트를 백그라운드로 시작한다.
 
    ```shell
@@ -929,7 +929,7 @@ TTTGate <server|client|stop> [command] [options]
 |---|---|---|---|---|
 | `-adminPort <port>` | 정수 1–65535 | `9300` | `server.yaml` 에 저장(`adminPort`) | 관리 화면의 포트. 잘못된 값이면 서버가 종료 코드 1 로 멈춘다(`Invalid admin port number (1 ~ 65535)`). 예: `server -adminPort 9400`. |
 | `-keepAlive <ms>` | 0 이상의 정수 | `10000` | `server.yaml` 에 저장(`keepAlive`) | 제어 리스너의 TCP keepalive 간격. 음수나 숫자가 아닌 값이면 서버가 종료 코드 1 로 멈춘다(`Invalid keep alive time`). 예: `server -keepAlive 30000`. |
-| `-trustXForwardedFor` | 플래그 | 꺼짐 | 이번 실행만 | 관리 화면 클라이언트의 주소를 `X-Forwarded-For` 에서 읽는다. 직접 관리하는 역방향 프록시 뒤에서만 쓴다. 프록시를 거쳐 관리 화면을 열려면 프록시 주소도 `adminAllowedOrigins` 에 넣는다. 켜져 있으면 시작할 때 경고를 남긴다. 예: `server -trustXForwardedFor -trustedProxyHops 1`. |
+| `-trustXForwardedFor` | 플래그 | 꺼짐 | 이번 실행만 | 관리 화면 클라이언트의 주소를 `X-Forwarded-For` 에서 읽는다. 직접 관리하는 역방향 프록시 뒤에서만 쓴다. 프록시를 거쳐 관리 화면을 열려면 사용자가 여는 주소(예: `https://admin.example.com`)도 `adminAllowedOrigins` 에 넣는다. 켜져 있으면 시작할 때 경고를 남긴다. 예: `server -trustXForwardedFor -trustedProxyHops 1`. |
 | `-trustedProxyHops <n>` | 정수 1–16 | `1` | 이번 실행만 | 관리 서버 앞에 있는 신뢰 프록시의 수. 아래 참고 사항을 읽는다. 잘못된 값이면 시작할 때 경고를 남기고 1 을 쓴다. `-trustXForwardedFor` 없이 쓰면 효과가 없고 경고를 남긴다. |
 | `-reset` | 플래그 | 꺼짐 | 이번 시작 때 한 번 동작 | `config/` 디렉터리의 모든 파일(`server.yaml`, `.key`, `.bootstrap-token` 등 저장된 상태)과 저장된 인증서를 지우고 기본값으로 시작한다. `-reset` 과 `-reset true` 는 초기화하고, `-reset false` 는 아무것도 하지 않는다. **위험:** 터널, 신뢰 클라이언트, 관리자 계정이 모두 사라진다. `-daemon` 과 함께 쓰면 감시 프로세스가 같은 옵션으로 앱을 다시 띄우므로, 자동 재시작 때마다 다시 초기화된다. `-daemon` 과 함께 쓰지 않는다. |
 | `-allowLegacyAdminHttp` | 플래그 | 꺼짐 | 이번 실행만 | `adminTls: false`(TLS 없는 레거시 관리 모드)를 허용한다. **위험:** 관리 화면과 세션 쿠키가 평문으로 오간다. `--help-advanced` 에 나온다. |
@@ -962,7 +962,7 @@ TTTGate <server|client|stop> [command] [options]
 | `-cert <path\|pem>` | 실행 계열 명령 | 파일 경로 또는 PEM 본문 | 없음 | `-save` 로 저장(경로는 경로로, PEM 본문은 본문으로) | 상호 TLS 에 쓰는 클라이언트 인증서. TLS 를 켠다. 경로 규칙은 `-ca` 와 같다. |
 | `-privateKey <path\|pem>` | 실행 계열 명령 | 파일 경로 또는 PEM 본문 | 없음 | `-save` 로 저장(경로는 경로로, PEM 본문은 본문으로) | `-cert` 의 개인 키. TLS 를 켠다. 경로 규칙은 `-ca` 와 같다. 잘못 넣은 키 본문일 수도 있으므로 오류 메시지에 경로를 보여 주지 않는다. |
 | `-save` | `client`, `client run` | 플래그 | 꺼짐 | `config/client.yaml` 에 씀 | 최종 옵션을 `config/client.yaml` 에 저장한 뒤 클라이언트를 시작한다. 아래 참고 사항을 읽는다. `-save false` 는 아무것도 쓰지 않는다. |
-| `--code <code>` | `client join` | Crockford Base32 글자 12개. 예: `7Q4K-M2XP-AB01` | 없음(필수) | 한 번 사용 | 관리 화면에서 받은 등록 코드. 숫자와 `U` 를 뺀 영문자 A–Z 로 이루어진다. `I` 와 `L` 은 `1` 로, `O` 는 `0` 으로 읽는다. 대시, 공백, 대소문자는 무시한다. 코드는 한 번만 쓸 수 있고 기본으로 15분 뒤에 만료된다. 관리 API 의 `ttlMinutes`(1–1440)로 이 기한을 바꿀 수 있다. |
+| `--code <code>` | `client join` | Crockford Base32 글자 12개. 예: `7Q4K-M2XP-AB01` | 없음(필수) | 한 번 사용 | 관리 화면에서 받은 등록 코드. 숫자와, `I`·`L`·`O`·`U` 를 뺀 영문자 A–Z 로 이루어진다. 입력할 때 `I` 와 `L` 은 `1` 로, `O` 는 `0` 으로 읽는다. 대시, 공백, 대소문자는 무시한다. 코드는 한 번만 쓸 수 있고 기본으로 15분 뒤에 만료된다. 관리 API 의 `ttlMinutes`(1–1440)로 이 기한을 바꿀 수 있다. |
 | `--force` | `client join` | 플래그 | 꺼짐 | 이번 실행만 | 이미 있는 `config/client.yaml` 을 바꾼다. 이전 파일은 `client.yaml.bak` 으로 남는다. 이 옵션이 없으면 파일이 이미 있을 때 `client join` 이 종료 코드 78 로 멈춘다. |
 | `-bufferLimit <MiB>` | 실행 계열 명령 | `-1`(제한 없음) 또는 정수 16–1048576 | `128` | `-save` 로 저장(`globalMemCacheLimit`) | 메모리 버퍼 상한. 그 밖의 값은 오류다(종료 코드 2). 예: `-bufferLimit 256`. |
 | `-keepAlive <ms>` | 실행 계열 명령 | 0 이상의 정수 | `10000` | `-save` 로 저장 | 제어 연결의 TCP keepalive 간격. 잘못된 값이나 음수면 경고를 남기고 10000 을 쓴다. |
