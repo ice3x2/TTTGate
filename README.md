@@ -46,7 +46,7 @@ In the examples, `./TTTGate-linux-x64` is the Linux x64 binary. Use the binary f
 
 2. On the server host, open `https://127.0.0.1:9300/`. From another computer, open an SSH tunnel first (see [Open the Console from Another Computer](#open-the-console-from-another-computer)).
 3. Create the first admin account with the token in `config/.bootstrap-token` (see [First Admin Login](#first-admin-login)).
-4. Make sure that the control port uses TLS (`tls: true` in `config/server.yaml`). In the console, open **Trusted clients**, add a client, and copy the command that the console shows.
+4. Make sure that the control port uses TLS (`tls: true` in `config/server.yaml`) and that `controlProtocolMode` is not `mtls-strict`. In the console, open **Trusted clients**, add a client, and copy the command that the console shows.
 5. On the client host, run the copied command, then start the client in the background:
 
    ```shell
@@ -135,7 +135,7 @@ The old repository-root `config.yaml` is no longer used.
 
 - `-adminPort`, `-keepAlive` and `-allowLegacyControlAuth` write their value to `config/server.yaml`. The next start uses the saved value without the option.
 - All other server options apply only to the run that you start with them.
-- `-reset` is an action. It deletes the stored server state at that start.
+- `-reset` is an action. It deletes the stored server state at that start. With `-daemon`, the sentinel restarts the app with the same options, so every automatic restart resets again. Do not combine `-reset` with `-daemon`.
 
 ### Admin Web Console
 
@@ -237,9 +237,9 @@ Who can do the first setup:
 
 #### Enroll with a Code
 
-This is the recommended way. The control port must use TLS (`tls: true` in `config/server.yaml`).
+This is the recommended way. The control port must use TLS (`tls: true` in `config/server.yaml`), and `controlProtocolMode` must not be `mtls-strict`. Otherwise the server does not issue a code.
 
-1. In the admin console, open **Trusted clients**, add the client, and copy the command that it shows. You can also press **Enrollment code** on an existing client. The code works once and expires after 15 minutes.
+1. In the admin console, open **Trusted clients**, add the client, and copy the command that it shows. You can also press **Enrollment code** on an existing client. The code works once and, by default, expires after 15 minutes.
 2. On the client host, run the command:
 
    ```shell
@@ -294,7 +294,7 @@ TTTGate <server|client|stop> [command] [options]
 
 - **Mode word.** The first word that is not an option and not an option value is the mode: `server`, `client` or `stop`. Options can come before or after the mode. `TTTGate -adminPort 9400 server` and `TTTGate server -adminPort 9400` are the same. Write the mode in lower case.
 - **Commands.** Only `client` has commands: `run`, `join <addr>`, `config show` and `config save`. Write them right after `client`. Any other extra word is an error (`unexpected argument '...'`).
-- **Dashes.** An option can start with any number of dashes. `-addr`, `--addr` and `---addr` are the same. The help shows one dash, and two dashes when the name contains a dash (`--yes-insecure`).
+- **Dashes.** An option can start with any number of dashes. `-addr`, `--addr` and `---addr` are the same. The help shows one dash, and two dashes when the name contains a dash (`--yes-insecure`). The help options are an exception: the help always shows `--help`, `--help-advanced` and `--version` with two dashes.
 - **Names are case-sensitive.** `-adminport` is an unknown option. The program suggests `-adminPort`.
 - **Values.** An option that takes a value reads the next word (`-addr gw.example.com`) or the text after `=` (`-addr=gw.example.com`). The next word is used even when it starts with a dash, so `-bufferLimit -1` works. An empty value is an error (`option '-addr' needs a value`).
 - **Flags.** A flag without a value is on. A flag also accepts one truth word, as the next word or after `=`: `true`, `false`, `1`, `0`, `yes`, `no`, `on`, `off` (any case). `false`, `0`, `no` and `off` turn the flag off. Examples: `-tls false`, `-reset=no`, `-requireCsrfHeader off`. Any other value after `=` is an error.
@@ -328,10 +328,10 @@ Each option applies to the `server` mode.
 | `-keepAlive <ms>` | Whole number, 0 or more | `10000` | Saved to `server.yaml` (`keepAlive`) | TCP keepalive interval of the control listener. A negative or non-numeric value stops the server with exit code 1 (`Invalid keep alive time`). Example: `server -keepAlive 30000`. |
 | `-trustXForwardedFor` | Flag | Off | This run only | Read the admin client address from `X-Forwarded-For`. Use it only behind a reverse proxy that you control. To open the console through the proxy, also add the proxy address to `adminAllowedOrigins`. The server logs a warning at startup while it is on. Example: `server -trustXForwardedFor -trustedProxyHops 1`. |
 | `-trustedProxyHops <n>` | Whole number 1–16 | `1` | This run only | Number of trusted proxies in front of the admin server. See the notes below. A bad value gives a startup warning, and the server uses 1. Without `-trustXForwardedFor`, it has no effect and gives a warning. |
-| `-reset` | Flag | Off | Action at this start | Delete every file in the `config/` directory (`server.yaml`, `.key`, `.bootstrap-token` and the other stored state) and the stored certificates, then start with defaults. `-reset` and `-reset true` reset. `-reset false` does nothing. **Risk:** tunnels, trusted clients and admin accounts are lost. |
+| `-reset` | Flag | Off | Action at this start | Delete every file in the `config/` directory (`server.yaml`, `.key`, `.bootstrap-token` and the other stored state) and the stored certificates, then start with defaults. `-reset` and `-reset true` reset. `-reset false` does nothing. **Risk:** tunnels, trusted clients and admin accounts are lost. With `-daemon`, the sentinel restarts the app with the same options, so every automatic restart resets again. Do not combine `-reset` with `-daemon`. |
 | `-allowLegacyAdminHttp` | Flag | Off | This run only | Allow `adminTls: false` (legacy non-TLS admin mode). **Risk:** the admin console and its session cookies travel in plain text. Shown by `--help-advanced`. |
 | `-allowLegacyAdminRemote` | Flag | Off | This run only | Allow a non-loopback `adminBindHost`. **Risk:** the admin console is reachable from other hosts. Shown by `--help-advanced`. |
-| `-allowLegacyControlAuth` | Flag | Off (`allowLegacyControlAuth: false`) | Saved to `server.yaml` (`allowLegacyControlAuth`) | Allow legacy shared-key control authentication. It stays on in later runs until you start once with `-allowLegacyControlAuth false` or edit `server.yaml`. **Risk:** legacy data connections carry no binding token, so anyone who guesses a data handler ID can take over a session and read or inject external user traffic. The server logs a warning at startup while it is on. Shown by `--help-advanced`. |
+| `-allowLegacyControlAuth` | Flag | Off (`allowLegacyControlAuth: false`) | Saved to `server.yaml` (`allowLegacyControlAuth`) | Allow legacy shared-key control authentication. It stays on in later runs until you start once with `-allowLegacyControlAuth false` or edit `server.yaml`. **Risk:** legacy data connections carry no binding token. Anyone who guesses a data handler ID can take over a session. That person can then read or inject external user traffic. The server logs a warning at startup while it is on. Shown by `--help-advanced`. |
 | `-requireCsrfHeader false` | Flag | On | This run only | `-requireCsrfHeader false` turns off the CSRF header check of the admin API. **Risk:** other web pages can send admin requests with the session cookie. Shown by `--help-advanced`. |
 | `-daemon` | Exact flag | Off | This run only | Run in the background with process monitoring. See [Run in the Background](#run-in-the-background). |
 
@@ -349,23 +349,23 @@ Notes on `-trustedProxyHops`:
 | Option | Commands | Value | Default | How long it lasts | Details |
 |---|---|---|---|---|---|
 | `-addr <host:port>` | Run commands | `host`, `host:port`, `IPv4:port`, `[IPv6]:port` or an IPv6 address without a port. An optional `tls://` or `tcp://` prefix selects the transport. Port 1–65535. No path or query. | Host `localhost`, port `9126` | Saved by `-save` (as `host` and `port`) | Server address. Example: `-addr tls://gw.example.com:9126`, `-addr [2001:db8::7]:9126`. A bad address, or a prefix that disagrees with `-tls`, is an error (exit code 2). |
-| `-tls` | Run commands | Flag | Off | Saved by `-save` | Use TLS on the control connection. `-ca`, `-serverName`, `-cert` and `-privateKey` on the command line also turn TLS on. Together with `-tls false` or `tcp://`, they are an error (exit code 2). |
+| `-tls` | Run commands | Flag | Off | Saved by `-save` | Use TLS on the control connection. `-ca`, `-serverName`, `-cert` and `-privateKey` on the command line also turn TLS on. These four options together with `-tls false` or `tcp://` are an error (exit code 2). |
 | `-clientId <id>` | Run commands | Text | None | Saved by `-save` | Protocol v2 client identifier. It must match a trusted client on the server. |
 | `-clientSecret <secret>` | Run commands | Text | None | Saved by `-save` | Protocol v2 shared secret. Not recommended: other users of the host can read command lines, and the client logs a warning. You cannot use it together with `-clientSecretFile` (exit code 2). |
 | `-clientSecretFile <path>` | Run commands | File path. A relative path starts at the working directory. | None | The secret (not the path) is saved by `-save` | Read the protocol v2 shared secret from a file. The file holds only the secret. Spaces and line breaks at the ends are removed. A missing, unreadable or empty file stops the client with exit code 78. Example: `-clientSecretFile /etc/tttgate/client-a.secret`. |
 | `-name <name>` | Run commands | Text | A random tunnel name | Saved by `-save` | Client name for legacy connections and local logs. A v2 server always shows the name registered for the `clientId`. Alias: `-displayName` (deprecated, gives a warning). Different values for `-name` and `-displayName` are an error (exit code 2). |
-| `-ca <path\|pem>` | Run commands | File path or PEM text | None | Saved by `-save` (as a path) | Trusted CA or pinned server certificate. Turns TLS on. A relative path on the command line starts at the working directory. A relative path in `client.yaml` starts at the `config/` directory. A file that is missing or has no certificate stops the client with exit code 78. |
+| `-ca <path\|pem>` | Run commands | File path or PEM text | None | Saved by `-save` (a path as a path, PEM text as text) | Trusted CA or pinned server certificate. Turns TLS on. A relative path on the command line starts at the working directory. A relative path in `client.yaml` starts at the `config/` directory. A file that is missing or has no certificate stops the client with exit code 78. |
 | `-serverName <name>` | Run commands | Text | None | Saved by `-save` | Expected TLS server name. Turns TLS on. Clients that pin the control port certificate use `tttgate-control`. |
-| `-cert <path\|pem>` | Run commands | File path or PEM text | None | Saved by `-save` (as a path) | Client certificate for mutual TLS. Turns TLS on. The path rules of `-ca` apply. |
-| `-privateKey <path\|pem>` | Run commands | File path or PEM text | None | Saved by `-save` (as a path) | Private key of `-cert`. Turns TLS on. The path rules of `-ca` apply. Error messages do not show the path, because the value can be key text that was put in the wrong place. |
+| `-cert <path\|pem>` | Run commands | File path or PEM text | None | Saved by `-save` (a path as a path, PEM text as text) | Client certificate for mutual TLS. Turns TLS on. The path rules of `-ca` apply. |
+| `-privateKey <path\|pem>` | Run commands | File path or PEM text | None | Saved by `-save` (a path as a path, PEM text as text) | Private key of `-cert`. Turns TLS on. The path rules of `-ca` apply. Error messages do not show the path, because the value can be key text that was put in the wrong place. |
 | `-save` | `client`, `client run` | Flag | Off | Writes `config/client.yaml` | Save the resolved options to `config/client.yaml`, then start the client. See the notes below. `-save false` writes nothing. |
-| `--code <code>` | `client join` | 12 letters or digits, for example `7Q4K-M2XP-AB01` | None (required) | Used once | Enrollment code from the admin console. Dashes and spaces are ignored, and case does not matter. `O` is read as `0`, and `I` and `L` as `1`. The code works once and expires after 15 minutes. |
+| `--code <code>` | `client join` | 12 Crockford Base32 characters, for example `7Q4K-M2XP-AB01` | None (required) | Used once | Enrollment code from the admin console. It uses digits and the letters A–Z except `U`. `I` and `L` are read as `1`, and `O` as `0`. Dashes, spaces and case are ignored. The code works once and, by default, expires after 15 minutes. The `ttlMinutes` field of the admin API (1–1440) can change this. |
 | `--force` | `client join` | Flag | Off | This run only | Replace an existing `config/client.yaml`. The old file is kept as `client.yaml.bak`. Without it, an existing file stops `client join` with exit code 78. |
 | `-bufferLimit <MiB>` | Run commands | `-1` (no limit) or a whole number 16–1048576 | `128` | Saved by `-save` (as `globalMemCacheLimit`) | Memory buffer limit. Another value is an error (exit code 2). Example: `-bufferLimit 256`. |
 | `-keepAlive <ms>` | Run commands | Whole number, 0 or more | `10000` | Saved by `-save` | TCP keepalive interval of the control connection. A bad or negative value gives a warning, and the client uses 10000. |
 | `-key <key>` | Run commands | Text | Built-in legacy key | Saved by `-save` | Legacy shared key. It is used only with explicit legacy control auth. **Risk:** the key is sent to any server that answers with the legacy protocol. On the command line, it gives a warning. Shown by `--help-advanced`. |
 | `-allowLegacyFallback` | Run commands | Flag | Off | This run only. Never saved | Allow v1 fallback, only when the server explicitly enables legacy auth. **Risk:** a fake server can answer with the legacy protocol and receive the shared key. The client logs a warning at startup while it is on. Shown by `--help-advanced`. |
-| `-allowInsecureTls` | Run commands | Flag | Off | This run only. Never saved | Disable certificate verification. **Risk:** anyone on the network path can impersonate the server. Keep it off outside break-glass scenarios. Shown by `--help-advanced`. |
+| `-allowInsecureTls` | Run commands | Flag | Off | This run only. Never saved | Disable certificate verification. **Risk:** anyone on the network path can impersonate the server. Keep it off except in an emergency. Shown by `--help-advanced`. |
 | `--yes-insecure` | Run commands | Flag | Off | This run only | Accept `allowInsecureTls` or `allowLegacyFallback` written in `client.yaml` for this run. Without it, such a file stops the client with exit code 78 (`REFUSE-INSECURE-YAML`). Alias: `--yesInsecure`. Shown by `--help-advanced`. |
 | `-daemon` | `client`, `client run` | Exact flag | Off | This run only | Run in the background with process monitoring. See [Run in the Background](#run-in-the-background). |
 
@@ -373,7 +373,7 @@ Notes on `-save` and `client config save`:
 
 - They write the resolved options, not only the options that you typed. This includes the secret from `-clientSecret`, `-clientSecretFile` or `TTTGATE_CLIENT_SECRET`.
 - `allowInsecureTls` and `allowLegacyFallback` are never saved.
-- The file keeps paths, not file contents. A relative path from the command line is saved as an absolute path, so the next start finds the same file.
+- The file keeps paths, not file contents. PEM text that you give directly is saved as text. A relative path from the command line is saved as an absolute path, so the next start finds the same file.
 - On Linux the file mode is 0600.
 
 #### Where Client Values Come From
@@ -401,7 +401,7 @@ The server reads its options from `config/server.yaml`. `-adminPort`, `-keepAliv
 `-daemon` starts two background processes: the app and a sentinel that watches it.
 
 - Before it starts them, the program checks the options and the config file. For the server, it checks `server.yaml` (YAML syntax and admin security policy). For the client, it resolves all options and files. Errors show in your terminal.
-- It first stops the TTTGate processes that this installation recorded (an old daemon or a foreground run), when it can confirm them.
+- When this installation recorded a TTTGate process (an old daemon or a foreground run), the program first stops it. It stops the process only when it confirms that it is the recorded process.
 - The sentinel checks the app every 3 seconds. When the app is gone, the sentinel starts it again after 3 seconds.
 - A daemon whose app stops with a configuration error is not restarted. The reason is in `logs/`. Fix the configuration and start again.
 - Stop the daemon with `TTTGate stop`.
@@ -412,7 +412,7 @@ The server reads its options from `config/server.yaml`. `-adminPort`, `-keepAliv
 |---|---|
 | `TTTGate` (no arguments) | The version and the list of modes |
 | `TTTGate --help`, `TTTGate -h` | The list of modes |
-| `TTTGate server --help` | Server options in groups: Admin, Proxy, Identity, Run, Tuning |
+| `TTTGate server --help` | Server options in groups: Admin, Proxy, Run, Tuning. Risky options appear only with `--help-advanced` |
 | `TTTGate client --help` | Client commands and options in groups: Connection, Identity, TLS trust, Run, Tuning |
 | `TTTGate stop --help` | The `stop` usage |
 | `--help-advanced` | The same as `--help`, plus legacy and risky options with a `RISK:` line, and aliases |
@@ -427,11 +427,9 @@ The program checks the whole command line before it starts anything. With `-daem
 | Code | Meaning |
 |---|---|
 | 0 | Normal end, help, version |
-| 1 | Error while running. Server option errors also use 1. `client join`: the server refused the code, the answer could not be verified, or a network error |
+| 1 | Error while running. Server option errors also use 1. `client join`: the server refused the code, too many failed attempts from this address (wait 15 minutes), the server does not accept enrollment, the answer could not be verified, or a network error |
 | 2 | Command-line error: unknown option or mode, missing or bad value, options that conflict |
 | 78 | Configuration file error: insecure fields in `client.yaml`, a CA, certificate, key or secret file that is missing or not valid. `client join`: `client.yaml` exists without `--force`, or the files cannot be written |
-
-A daemon whose app stops with a configuration error is not restarted. The reason is in `logs/`. Fix the configuration and start again.
 
 #### Command-Line Examples
 
@@ -560,7 +558,7 @@ Read this before you replace a running server with this version.
 2. **Existing clients.** Clients of earlier versions (1.0.10 and older) authenticate with the shared key only. This version turns that off by default, so every tunnel disconnects until you do one of these:
    - Start the server with `-allowLegacyControlAuth` (or set `allowLegacyControlAuth: true`) for the rollout window. Then upgrade the clients with `clientId` and `clientSecret` (see [Mixed-Version Rollout Policy](#mixed-version-rollout-policy)). The flag saves `allowLegacyControlAuth: true` to `server.yaml`. When the window ends, start once with `-allowLegacyControlAuth false` or set the value to `false`.
    - Upgrade the clients first. Do not do this when you have the tunnels in step 3.
-3. **Tunnels to a destination with an untrusted certificate.** A client of this version verifies the certificate of the destination server. Clients of earlier versions (1.0.10 and older) did not. This applies to tunnels with **Secure tunneling Server/Client** checked (`tls: true`) and to every HTTPS tunnel. After you upgrade a client, such a tunnel to a destination with a self-signed (or otherwise untrusted) certificate fails with a certificate error, for example `self-signed certificate`. If you have such tunnels, do one of these:
+3. **Tunnels to a destination with an untrusted certificate.** A client of this version verifies the certificate of the destination server. Clients of earlier versions (1.0.10 and older) did not. This applies to tunnels with **Secure tunneling Server/Client** checked (`tls: true`) and to every HTTPS tunnel. After you upgrade a client, such a tunnel fails when its destination has a self-signed (or otherwise untrusted) certificate. The error is a certificate error, for example `self-signed certificate`. If you have such tunnels, do one of these:
    - Upgrade the server first, with `-allowLegacyControlAuth` as in step 2, so that 1.0.10 clients stay connected. In the admin console, open each such tunnel and check **Skip certificate verification (allow self-signed)** (`allowSelfSignedDestinationCert: true`). Then upgrade the clients with `clientId` and `clientSecret` as in step 2. A server of an earlier version cannot send this option, so do not upgrade the clients first.
    - Give the destination a certificate from a public CA that Node.js trusts, and that matches the destination host of the tunnel. The client's `-ca` option applies only to the control connection, not to destinations. A certificate for a DNS name fails when the tunnel uses an IP address, and the other way round.
 
@@ -576,7 +574,7 @@ The server logs a warning at startup for each of these:
 
 #### Other Changes to Be Aware Of
 
-- Saving an **Online** tunnel (a new port, other settings or a new certificate) keeps its activation switch and its timer. In 1.0.10, saving reset them: a tunnel with **Inactive on startup** checked was switched off, any other tunnel was switched on, and the timer started again. **Inactive on startup** applies when the server starts, when a tunnel is created, and when you save a tunnel that is not **Online** (the tunnel list shows **Error**, for example after a port bind failure).
+- Saving an **Online** tunnel (a new port, other settings or a new certificate) keeps its activation switch and its timer. In 1.0.10, saving reset them: a tunnel with **Inactive on startup** checked was switched off, any other tunnel was switched on, and the timer started again. **Inactive on startup** applies when the server starts and when a tunnel is created. It also applies when you save a tunnel that is not **Online** (the tunnel list shows **Error**, for example after a port bind failure).
 - HTTP tunnels reject a request whose header block is larger than 64 KiB (earlier: 8 MiB) with `431`.
 - Admin passwords are limited to 1024 characters (leading and trailing whitespace is not counted). A longer password cannot be set, and a login with a longer password fails without a password check. If you use a longer password, change it before you upgrade.
 - The admin server handles at most 5 login requests (`/api/login` and `/api/login/mfa` together) at the same time from one network (IPv4 /24, IPv6 /64). More requests get `429` with code `login_concurrency_limit`. Try again after the earlier requests finish.
@@ -587,9 +585,9 @@ The server logs a warning at startup for each of these:
 - Default rollout target: `controlProtocolMode: mixed`.
 - Secure target state: `controlProtocolMode: mtls-strict`.
 - Legacy shared-key control auth stays off unless you use `-allowLegacyControlAuth` deliberately.
-- Client-side `allowLegacyFallback` should remain `false` unless you are in an approved rollback window.
+- Keep client-side `allowLegacyFallback` set to `false` unless you are in an approved rollback window.
 - Both legacy switches weaken session binding and key secrecy (see [Command-Line Reference](#command-line-reference)). Turn them off when the rollback window ends.
-- Unauthenticated tunnel connections, including those still in the TLS handshake, close at the handshake deadline (15 s by default, sized for a 0.5-core server that swaps).
+- Unauthenticated tunnel connections close at the handshake deadline. This includes connections that are still in the TLS handshake. The deadline is 15 s by default, sized for a 0.5-core server that swaps.
 - A session whose data connection does not arrive closes after 60 s.
 - The client gives up on an unreachable endpoint after 45 s.
 
@@ -607,7 +605,7 @@ Recommended cutover order:
 
 - New tunnel configs default to `false`.
 - Existing saved configs with the field unset keep the legacy reflection behavior until you set the field explicitly.
-- Credential-bearing backends should move to explicit allowlists instead of origin reflection.
+- Move credential-bearing backends to explicit allowlists instead of origin reflection.
 
 ## 한국어
 
@@ -651,7 +649,7 @@ TTTGate 는 서버와 클라이언트가 짝을 이뤄 내부망의 TCP/HTTP 서
 
 2. 서버 호스트에서 `https://127.0.0.1:9300/` 을 연다. 다른 컴퓨터에서 열려면 먼저 SSH 터널을 만든다([다른 컴퓨터에서 관리 화면 열기](#다른-컴퓨터에서-관리-화면-열기) 참고).
 3. `config/.bootstrap-token` 의 토큰으로 첫 관리자 계정을 만든다([첫 관리자 로그인](#첫-관리자-로그인) 참고).
-4. 제어 포트가 TLS 를 쓰는지 확인한다(`config/server.yaml` 의 `tls: true`). 관리 화면에서 **Trusted clients** 를 열고 클라이언트를 추가한 뒤, 화면에 나온 명령을 복사한다.
+4. 제어 포트가 TLS 를 쓰는지(`config/server.yaml` 의 `tls: true`), `controlProtocolMode` 가 `mtls-strict` 가 아닌지 확인한다. 관리 화면에서 **Trusted clients** 를 열고 클라이언트를 추가한 뒤, 화면에 나온 명령을 복사한다.
 5. 클라이언트 호스트에서 복사한 명령을 실행하고, 클라이언트를 백그라운드로 시작한다.
 
    ```shell
@@ -740,7 +738,7 @@ net.ipv4.tcp_wmem = 4096 16384 1048576
 
 - `-adminPort`, `-keepAlive`, `-allowLegacyControlAuth` 는 값을 `config/server.yaml` 에 저장한다. 다음에는 옵션 없이 시작해도 저장된 값을 쓴다.
 - 나머지 서버 옵션은 그 옵션을 주고 시작한 실행에만 적용된다.
-- `-reset` 은 동작이다. 그 실행을 시작할 때 저장된 서버 상태를 지운다.
+- `-reset` 은 동작이다. 그 실행을 시작할 때 저장된 서버 상태를 지운다. `-daemon` 과 함께 쓰면 감시 프로세스가 같은 옵션으로 앱을 다시 띄우므로, 자동 재시작 때마다 다시 초기화된다. `-daemon` 과 함께 쓰지 않는다.
 
 ### 웹 관리 화면
 
@@ -819,7 +817,7 @@ net.ipv4.tcp_wmem = 4096 16384 1048576
 
 SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연결이 `127.0.0.1` 에서 온 것으로 보인다. 그래서 관리 화면의 국가 필터(**Security** → **Apply to admin console**)는 실제 클라이언트 주소가 아니라 프록시나 터널의 주소로 판정한다. 국가 제한은 프록시에서 건다(예: nginx `allow`/`deny` 나 GeoIP 모듈).
 
-`-trustXForwardedFor` 는 로그인 잠금, 감사 로그, 세션 목록, 2단계 로그인 티켓의 묶음이 쓰는 클라이언트 주소를 바꾼다. 국가 필터는 바꾸지 않는다.
+`-trustXForwardedFor` 는 로그인 잠금, 감사 로그, 세션 목록이 쓰는 클라이언트 주소와 2단계 로그인 티켓을 묶어 두는 클라이언트 주소를 바꾼다. 국가 필터는 바꾸지 않는다.
 
 #### 첫 관리자 로그인
 
@@ -842,9 +840,9 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 
 #### 코드로 등록하기
 
-권장하는 방법이다. 제어 포트가 TLS 를 써야 한다(`config/server.yaml` 의 `tls: true`).
+권장하는 방법이다. 제어 포트가 TLS 를 써야 하고(`config/server.yaml` 의 `tls: true`), `controlProtocolMode` 가 `mtls-strict` 가 아니어야 한다. 그렇지 않으면 서버가 코드를 발급하지 않는다.
 
-1. 관리 화면에서 **Trusted clients** 를 열고 클라이언트를 추가한 뒤, 화면에 나온 명령을 복사한다. 이미 있는 클라이언트라면 **Enrollment code** 를 눌러도 된다. 코드는 한 번만 쓸 수 있고 15분 뒤에 만료된다.
+1. 관리 화면에서 **Trusted clients** 를 열고 클라이언트를 추가한 뒤, 화면에 나온 명령을 복사한다. 이미 있는 클라이언트라면 **Enrollment code** 를 눌러도 된다. 코드는 한 번만 쓸 수 있고 기본으로 15분 뒤에 만료된다.
 2. 클라이언트 호스트에서 그 명령을 실행한다.
 
    ```shell
@@ -899,7 +897,7 @@ TTTGate <server|client|stop> [command] [options]
 
 - **모드 단어.** 옵션도 아니고 옵션의 값도 아닌 첫 단어가 모드다. 모드는 `server`, `client`, `stop` 가운데 하나다. 옵션은 모드 앞에 와도 되고 뒤에 와도 된다. `TTTGate -adminPort 9400 server` 와 `TTTGate server -adminPort 9400` 은 같다. 모드는 소문자로 쓴다.
 - **명령.** 명령이 있는 모드는 `client` 뿐이다. `run`, `join <addr>`, `config show`, `config save` 를 `client` 바로 뒤에 쓴다. 그 밖의 단어가 남으면 오류다(`unexpected argument '...'`).
-- **대시.** 옵션 앞의 대시 개수는 상관없다. `-addr`, `--addr`, `---addr` 은 같다. 도움말은 대시 하나로 보여 주고, 이름에 대시가 들어간 옵션만 대시 둘로 보여 준다(`--yes-insecure`).
+- **대시.** 옵션 앞의 대시 개수는 상관없다. `-addr`, `--addr`, `---addr` 은 같다. 도움말은 대시 하나로 보여 주고, 이름에 대시가 들어간 옵션만 대시 둘로 보여 준다(`--yes-insecure`). 다만 `--help`, `--help-advanced`, `--version` 은 예외로, 도움말에서 언제나 대시 둘로 보여 준다.
 - **이름은 대소문자를 가린다.** `-adminport` 는 모르는 옵션이다. 프로그램은 `-adminPort` 를 제안한다.
 - **값.** 값을 받는 옵션은 다음 단어(`-addr gw.example.com`)나 `=` 뒤의 글자(`-addr=gw.example.com`)를 값으로 읽는다. 다음 단어가 대시로 시작해도 값으로 읽으므로 `-bufferLimit -1` 이 동작한다. 값이 비어 있으면 오류다(`option '-addr' needs a value`).
 - **플래그.** 값 없이 쓴 플래그는 켜진다. 플래그는 다음 단어나 `=` 뒤에 진릿값 단어 하나를 받을 수 있다. `true`, `false`, `1`, `0`, `yes`, `no`, `on`, `off`(대소문자 무관) 가운데 하나이고, `false`, `0`, `no`, `off` 는 플래그를 끈다. 예: `-tls false`, `-reset=no`, `-requireCsrfHeader off`. `=` 뒤에 그 밖의 값을 쓰면 오류다.
@@ -933,10 +931,10 @@ TTTGate <server|client|stop> [command] [options]
 | `-keepAlive <ms>` | 0 이상의 정수 | `10000` | `server.yaml` 에 저장(`keepAlive`) | 제어 리스너의 TCP keepalive 간격. 음수나 숫자가 아닌 값이면 서버가 종료 코드 1 로 멈춘다(`Invalid keep alive time`). 예: `server -keepAlive 30000`. |
 | `-trustXForwardedFor` | 플래그 | 꺼짐 | 이번 실행만 | 관리 화면 클라이언트의 주소를 `X-Forwarded-For` 에서 읽는다. 직접 관리하는 역방향 프록시 뒤에서만 쓴다. 프록시를 거쳐 관리 화면을 열려면 프록시 주소도 `adminAllowedOrigins` 에 넣는다. 켜져 있으면 시작할 때 경고를 남긴다. 예: `server -trustXForwardedFor -trustedProxyHops 1`. |
 | `-trustedProxyHops <n>` | 정수 1–16 | `1` | 이번 실행만 | 관리 서버 앞에 있는 신뢰 프록시의 수. 아래 참고 사항을 읽는다. 잘못된 값이면 시작할 때 경고를 남기고 1 을 쓴다. `-trustXForwardedFor` 없이 쓰면 효과가 없고 경고를 남긴다. |
-| `-reset` | 플래그 | 꺼짐 | 이번 시작 때 한 번 동작 | `config/` 디렉터리의 모든 파일(`server.yaml`, `.key`, `.bootstrap-token` 등 저장된 상태)과 저장된 인증서를 지우고 기본값으로 시작한다. `-reset` 과 `-reset true` 는 초기화하고, `-reset false` 는 아무것도 하지 않는다. **위험:** 터널, 신뢰 클라이언트, 관리자 계정이 모두 사라진다. |
+| `-reset` | 플래그 | 꺼짐 | 이번 시작 때 한 번 동작 | `config/` 디렉터리의 모든 파일(`server.yaml`, `.key`, `.bootstrap-token` 등 저장된 상태)과 저장된 인증서를 지우고 기본값으로 시작한다. `-reset` 과 `-reset true` 는 초기화하고, `-reset false` 는 아무것도 하지 않는다. **위험:** 터널, 신뢰 클라이언트, 관리자 계정이 모두 사라진다. `-daemon` 과 함께 쓰면 감시 프로세스가 같은 옵션으로 앱을 다시 띄우므로, 자동 재시작 때마다 다시 초기화된다. `-daemon` 과 함께 쓰지 않는다. |
 | `-allowLegacyAdminHttp` | 플래그 | 꺼짐 | 이번 실행만 | `adminTls: false`(TLS 없는 레거시 관리 모드)를 허용한다. **위험:** 관리 화면과 세션 쿠키가 평문으로 오간다. `--help-advanced` 에 나온다. |
 | `-allowLegacyAdminRemote` | 플래그 | 꺼짐 | 이번 실행만 | 루프백이 아닌 `adminBindHost` 를 허용한다. **위험:** 다른 호스트에서 관리 화면에 접근할 수 있다. `--help-advanced` 에 나온다. |
-| `-allowLegacyControlAuth` | 플래그 | 꺼짐(`allowLegacyControlAuth: false`) | `server.yaml` 에 저장(`allowLegacyControlAuth`) | 레거시 공유 키 제어 인증을 허용한다. `-allowLegacyControlAuth false` 로 한 번 시작하거나 `server.yaml` 을 고치기 전까지는 다음 실행에서도 켜진 채로 남는다. **위험:** 레거시 데이터 연결에는 묶음 토큰이 없다. 그래서 데이터 핸들러 ID 를 맞힌 사람은 누구나 세션을 가로채 외부 사용자의 트래픽을 읽거나 끼워 넣을 수 있다. 켜져 있으면 시작할 때 경고를 남긴다. `--help-advanced` 에 나온다. |
+| `-allowLegacyControlAuth` | 플래그 | 꺼짐(`allowLegacyControlAuth: false`) | `server.yaml` 에 저장(`allowLegacyControlAuth`) | 레거시 공유 키 제어 인증을 허용한다. `-allowLegacyControlAuth false` 로 한 번 시작하거나 `server.yaml` 을 고치기 전까지는 다음 실행에서도 켜진 채로 남는다. **위험:** 레거시 데이터 연결에는 바인딩 토큰이 없다. 그래서 데이터 핸들러 ID 를 맞힌 사람은 누구나 세션을 가로채 외부 사용자의 트래픽을 읽거나 끼워 넣을 수 있다. 켜져 있으면 시작할 때 경고를 남긴다. `--help-advanced` 에 나온다. |
 | `-requireCsrfHeader false` | 플래그 | 켜짐 | 이번 실행만 | `-requireCsrfHeader false` 는 관리 API 의 CSRF 헤더 검사를 끈다. **위험:** 다른 웹 페이지가 세션 쿠키를 실어 관리 요청을 보낼 수 있다. `--help-advanced` 에 나온다. |
 | `-daemon` | 정확히 써야 하는 플래그 | 꺼짐 | 이번 실행만 | 프로세스 감시와 함께 백그라운드로 돌린다. [백그라운드로 실행하기](#백그라운드로-실행하기)를 참고한다. |
 
@@ -954,17 +952,17 @@ TTTGate <server|client|stop> [command] [options]
 | 옵션 | 명령 | 값 | 기본값 | 유지 범위 | 설명 |
 |---|---|---|---|---|---|
 | `-addr <host:port>` | 실행 계열 명령 | `host`, `host:port`, `IPv4:port`, `[IPv6]:port`, 또는 포트 없는 IPv6 주소. 앞에 `tls://` 나 `tcp://` 를 붙여 전송 방식을 고를 수 있다. 포트는 1–65535. 경로와 쿼리는 쓸 수 없다. | 호스트 `localhost`, 포트 `9126` | `-save` 로 저장(`host` 와 `port`) | 서버 주소. 예: `-addr tls://gw.example.com:9126`, `-addr [2001:db8::7]:9126`. 잘못된 주소나 `-tls` 와 어긋나는 접두사는 오류다(종료 코드 2). |
-| `-tls` | 실행 계열 명령 | 플래그 | 꺼짐 | `-save` 로 저장 | 제어 연결에 TLS 를 쓴다. 명령줄의 `-ca`, `-serverName`, `-cert`, `-privateKey` 도 TLS 를 켠다. 이 옵션을 `-tls false` 나 `tcp://` 와 함께 쓰면 오류다(종료 코드 2). |
+| `-tls` | 실행 계열 명령 | 플래그 | 꺼짐 | `-save` 로 저장 | 제어 연결에 TLS 를 쓴다. 명령줄의 `-ca`, `-serverName`, `-cert`, `-privateKey` 도 TLS 를 켠다. 이 네 옵션을 `-tls false` 나 `tcp://` 와 함께 쓰면 오류다(종료 코드 2). |
 | `-clientId <id>` | 실행 계열 명령 | 문자열 | 없음 | `-save` 로 저장 | 프로토콜 v2 클라이언트 식별자. 서버의 신뢰 클라이언트와 같아야 한다. |
 | `-clientSecret <secret>` | 실행 계열 명령 | 문자열 | 없음 | `-save` 로 저장 | 프로토콜 v2 공유 비밀값. 권장하지 않는다. 같은 호스트의 다른 사용자가 명령줄을 볼 수 있고, 클라이언트가 경고를 남긴다. `-clientSecretFile` 과 함께 쓸 수 없다(종료 코드 2). |
 | `-clientSecretFile <path>` | 실행 계열 명령 | 파일 경로. 상대 경로는 작업 디렉터리 기준이다. | 없음 | `-save` 로 저장(경로가 아니라 비밀값) | 프로토콜 v2 공유 비밀값을 파일에서 읽는다. 파일에는 비밀값만 둔다. 앞뒤 공백과 줄바꿈은 지운다. 파일이 없거나 읽을 수 없거나 비어 있으면 클라이언트가 종료 코드 78 로 멈춘다. 예: `-clientSecretFile /etc/tttgate/client-a.secret`. |
 | `-name <name>` | 실행 계열 명령 | 문자열 | 무작위 터널 이름 | `-save` 로 저장 | 레거시 연결과 로컬 로그에 쓰는 클라이언트 이름. v2 서버는 언제나 그 `clientId` 로 등록된 이름을 보여 준다. 별칭: `-displayName`(폐기 예정, 경고가 난다). `-name` 과 `-displayName` 의 값이 다르면 오류다(종료 코드 2). |
-| `-ca <path\|pem>` | 실행 계열 명령 | 파일 경로 또는 PEM 본문 | 없음 | `-save` 로 저장(경로로) | 신뢰할 CA 또는 고정할 서버 인증서. TLS 를 켠다. 명령줄의 상대 경로는 작업 디렉터리 기준이고, `client.yaml` 의 상대 경로는 `config/` 디렉터리 기준이다. 파일이 없거나 인증서가 들어 있지 않으면 클라이언트가 종료 코드 78 로 멈춘다. |
+| `-ca <path\|pem>` | 실행 계열 명령 | 파일 경로 또는 PEM 본문 | 없음 | `-save` 로 저장(경로는 경로로, PEM 본문은 본문으로) | 신뢰할 CA 또는 고정할 서버 인증서. TLS 를 켠다. 명령줄의 상대 경로는 작업 디렉터리 기준이고, `client.yaml` 의 상대 경로는 `config/` 디렉터리 기준이다. 파일이 없거나 인증서가 들어 있지 않으면 클라이언트가 종료 코드 78 로 멈춘다. |
 | `-serverName <name>` | 실행 계열 명령 | 문자열 | 없음 | `-save` 로 저장 | 기대하는 TLS 서버 이름. TLS 를 켠다. 제어 포트 인증서를 고정한 클라이언트는 `tttgate-control` 을 쓴다. |
-| `-cert <path\|pem>` | 실행 계열 명령 | 파일 경로 또는 PEM 본문 | 없음 | `-save` 로 저장(경로로) | 상호 TLS 에 쓰는 클라이언트 인증서. TLS 를 켠다. 경로 규칙은 `-ca` 와 같다. |
-| `-privateKey <path\|pem>` | 실행 계열 명령 | 파일 경로 또는 PEM 본문 | 없음 | `-save` 로 저장(경로로) | `-cert` 의 개인 키. TLS 를 켠다. 경로 규칙은 `-ca` 와 같다. 잘못 넣은 키 본문일 수도 있으므로 오류 메시지에 경로를 보여 주지 않는다. |
+| `-cert <path\|pem>` | 실행 계열 명령 | 파일 경로 또는 PEM 본문 | 없음 | `-save` 로 저장(경로는 경로로, PEM 본문은 본문으로) | 상호 TLS 에 쓰는 클라이언트 인증서. TLS 를 켠다. 경로 규칙은 `-ca` 와 같다. |
+| `-privateKey <path\|pem>` | 실행 계열 명령 | 파일 경로 또는 PEM 본문 | 없음 | `-save` 로 저장(경로는 경로로, PEM 본문은 본문으로) | `-cert` 의 개인 키. TLS 를 켠다. 경로 규칙은 `-ca` 와 같다. 잘못 넣은 키 본문일 수도 있으므로 오류 메시지에 경로를 보여 주지 않는다. |
 | `-save` | `client`, `client run` | 플래그 | 꺼짐 | `config/client.yaml` 에 씀 | 최종 옵션을 `config/client.yaml` 에 저장한 뒤 클라이언트를 시작한다. 아래 참고 사항을 읽는다. `-save false` 는 아무것도 쓰지 않는다. |
-| `--code <code>` | `client join` | 영문자나 숫자 12개. 예: `7Q4K-M2XP-AB01` | 없음(필수) | 한 번 사용 | 관리 화면에서 받은 등록 코드. 대시와 공백은 무시하고 대소문자는 가리지 않는다. `O` 는 `0` 으로, `I` 와 `L` 은 `1` 로 읽는다. 코드는 한 번만 쓸 수 있고 15분 뒤에 만료된다. |
+| `--code <code>` | `client join` | Crockford Base32 글자 12개. 예: `7Q4K-M2XP-AB01` | 없음(필수) | 한 번 사용 | 관리 화면에서 받은 등록 코드. 숫자와 `U` 를 뺀 영문자 A–Z 로 이루어진다. `I` 와 `L` 은 `1` 로, `O` 는 `0` 으로 읽는다. 대시, 공백, 대소문자는 무시한다. 코드는 한 번만 쓸 수 있고 기본으로 15분 뒤에 만료된다. 관리 API 의 `ttlMinutes`(1–1440)로 이 기한을 바꿀 수 있다. |
 | `--force` | `client join` | 플래그 | 꺼짐 | 이번 실행만 | 이미 있는 `config/client.yaml` 을 바꾼다. 이전 파일은 `client.yaml.bak` 으로 남는다. 이 옵션이 없으면 파일이 이미 있을 때 `client join` 이 종료 코드 78 로 멈춘다. |
 | `-bufferLimit <MiB>` | 실행 계열 명령 | `-1`(제한 없음) 또는 정수 16–1048576 | `128` | `-save` 로 저장(`globalMemCacheLimit`) | 메모리 버퍼 상한. 그 밖의 값은 오류다(종료 코드 2). 예: `-bufferLimit 256`. |
 | `-keepAlive <ms>` | 실행 계열 명령 | 0 이상의 정수 | `10000` | `-save` 로 저장 | 제어 연결의 TCP keepalive 간격. 잘못된 값이나 음수면 경고를 남기고 10000 을 쓴다. |
@@ -978,7 +976,7 @@ TTTGate <server|client|stop> [command] [options]
 
 - 입력한 옵션만이 아니라 최종 옵션 전체를 쓴다. `-clientSecret`, `-clientSecretFile`, `TTTGATE_CLIENT_SECRET` 에서 온 비밀값도 함께 저장된다.
 - `allowInsecureTls` 와 `allowLegacyFallback` 은 저장하지 않는다.
-- 파일 내용이 아니라 경로를 저장한다. 명령줄에서 준 상대 경로는 절대 경로로 저장해서, 다음 실행에서도 같은 파일을 찾게 한다.
+- 파일 내용이 아니라 경로를 저장한다. 직접 준 PEM 본문은 본문 그대로 저장한다. 명령줄에서 준 상대 경로는 절대 경로로 저장해서, 다음 실행에서도 같은 파일을 찾게 한다.
 - Linux 에서 파일 권한은 0600 이다.
 
 #### 클라이언트 값의 우선순위
@@ -1006,7 +1004,7 @@ TTTGate <server|client|stop> [command] [options]
 `-daemon` 은 백그라운드 프로세스 두 개를 띄운다. 하나는 앱이고, 다른 하나는 앱을 지켜보는 감시 프로세스(sentinel)다.
 
 - 띄우기 전에 옵션과 설정 파일을 검사한다. 서버는 `server.yaml`(YAML 문법과 관리 화면 보안 정책)을, 클라이언트는 모든 옵션과 참조 파일을 검사한다. 오류는 터미널에 그대로 보인다.
-- 이 설치본이 기록한 TTTGate 프로세스(이전 데몬이나 포그라운드 실행)가 있으면, 확인할 수 있는 것부터 먼저 멈춘다.
+- 이 설치본이 기록한 TTTGate 프로세스(이전 데몬이나 포그라운드 실행)가 있으면, 기록한 그 프로세스라고 확인될 때만 먼저 멈춘다.
 - 감시 프로세스는 3초마다 앱을 확인한다. 앱이 사라지면 3초 뒤에 다시 띄운다.
 - 앱이 설정 오류로 멈추면 데몬은 다시 띄우지 않는다. 이유는 `logs/` 에 있다. 설정을 고친 뒤 다시 시작한다.
 - 데몬은 `TTTGate stop` 으로 멈춘다.
@@ -1017,7 +1015,7 @@ TTTGate <server|client|stop> [command] [options]
 |---|---|
 | `TTTGate`(인자 없음) | 버전과 모드 목록 |
 | `TTTGate --help`, `TTTGate -h` | 모드 목록 |
-| `TTTGate server --help` | 서버 옵션을 Admin, Proxy, Identity, Run, Tuning 묶음으로 보여 준다 |
+| `TTTGate server --help` | 서버 옵션을 Admin, Proxy, Run, Tuning 묶음으로 보여 준다. 위험한 옵션은 `--help-advanced` 에만 나온다 |
 | `TTTGate client --help` | 클라이언트 명령과 옵션을 Connection, Identity, TLS trust, Run, Tuning 묶음으로 보여 준다 |
 | `TTTGate stop --help` | `stop` 사용법 |
 | `--help-advanced` | `--help` 내용에 더해 레거시 옵션과 위험한 옵션(`RISK:` 줄 포함), 별칭을 보여 준다 |
@@ -1032,11 +1030,9 @@ TTTGate <server|client|stop> [command] [options]
 | 코드 | 뜻 |
 |---|---|
 | 0 | 정상 종료, 도움말, 버전 |
-| 1 | 실행 중 오류. 서버 옵션 오류도 1 을 쓴다. `client join`: 서버가 코드를 거부했거나, 응답을 검증하지 못했거나, 네트워크 오류 |
+| 1 | 실행 중 오류. 서버 옵션 오류도 1 을 쓴다. `client join`: 서버가 코드를 거부했거나, 이 주소에서 실패가 너무 많았거나(15분 뒤 다시 시도), 서버가 등록을 받지 않거나, 응답을 검증하지 못했거나, 네트워크 오류 |
 | 2 | 명령줄 오류: 모르는 옵션이나 모드, 빠지거나 잘못된 값, 서로 충돌하는 옵션 |
 | 78 | 설정 파일 오류: `client.yaml` 의 안전하지 않은 필드, 없거나 올바르지 않은 CA·인증서·키·비밀값 파일. `client join`: `--force` 없이 `client.yaml` 이 이미 있거나, 파일을 쓸 수 없음 |
-
-앱이 설정 오류로 멈추면 데몬은 다시 띄우지 않는다. 이유는 `logs/` 에 있다. 설정을 고친 뒤 다시 시작한다.
 
 #### 명령줄 예시
 
@@ -1139,7 +1135,7 @@ TLS 와 비밀값 파일로 클라이언트를 직접 실행한다.
 
 확인하지 못한 프로세스는 멈추지 않고, pid 와 pid 파일을 담은 경고를 남긴다.
 
-- **같은 사용자로 실행한다.** TTTGate 는 시작한 사용자와 같은 사용자로 멈추고 시작한다. 관리자 권한이 없는 사용자는 관리자가 시작한 데몬을 멈출 수 없고, Windows 에서는 그 데몬을 확인할 수도 없다.
+- **같은 사용자로 실행한다.** TTTGate 를 시작한 사용자와 같은 사용자로 멈추고 다시 시작한다. 관리자 권한이 없는 사용자는 관리자가 시작한 데몬을 멈출 수 없고, Windows 에서는 그 데몬을 확인할 수도 없다.
 - **이전 데몬이 돌고 있으면 시작을 거부한다.** `-daemon` 이 멈추지 못한 TTTGate 프로세스를 찾으면 두 번째 쌍을 띄우지 않는다(포트가 부딪친다). pid 와 pid 파일을 알려 주고 종료 코드 1 로 끝난다. 그 프로세스를 멈추거나, 그 pid 가 TTTGate 가 아니면 pid 파일을 지운 뒤 다시 시작한다.
 
 ### 기존 서버 업그레이드
@@ -1173,7 +1169,7 @@ TLS 와 비밀값 파일로 클라이언트를 직접 실행한다.
 
 #### 자동으로 조정되는 값
 
-다음 값을 조정할 때마다 서버는 시작할 때 경고를 남긴다.
+서버는 시작할 때 다음 값을 조정하면 값마다 경고를 남긴다.
 
 - **터널별 속도 제한**은 `rateLimit` 필드 없이 저장된 터널에서는 꺼진 채로 남는다. 프로토콜 기본값(TCP: 60초에 연결 30개, HTTP/HTTPS: 300개, 넘으면 10분 차단)이 함께 저장되므로, 관리 화면에서 터널마다 켜기만 하면 된다. 새 터널은 켜진 상태로 시작한다.
 - **세션 유휴 TTL** 은 파일에 `sessionTtlMs` 가 없으면 꺼진 채로 남는다(`sessionTtlMs: 0`). 새로 설치하면 트래픽이 한 시간 없을 때 세션을 닫는다. 켜려면 `sessionTtlMs`(1000–3600000 ms)를 정한다. 켜면 keepalive 없이 오래 쉬는 SSH 나 데이터베이스 연결이 닫힌다. `sessionTtlMs` 를 빼고 `PUT /api/serverOption` 을 호출하면 값이 한 시간으로 돌아간다. 관리 화면은 언제나 현재 값을 보낸다.
@@ -1193,7 +1189,7 @@ TLS 와 비밀값 파일로 클라이언트를 직접 실행한다.
 - 안전한 최종 상태: `controlProtocolMode: mtls-strict`.
 - 레거시 공유 키 제어 인증은 `-allowLegacyControlAuth` 를 일부러 쓰지 않는 한 꺼져 있다.
 - 클라이언트 쪽 `allowLegacyFallback` 은 승인된 롤백 기간이 아니면 `false` 로 둔다.
-- 두 레거시 스위치는 모두 세션 묶음과 키의 비밀성을 약하게 만든다([명령줄 레퍼런스](#명령줄-레퍼런스) 참고). 롤백 기간이 끝나면 끈다.
+- 두 레거시 스위치는 모두 세션 바인딩과 키의 비밀성을 약하게 만든다([명령줄 레퍼런스](#명령줄-레퍼런스) 참고). 롤백 기간이 끝나면 끈다.
 - 인증되지 않은 터널 연결은 TLS 핸드셰이크 중인 것까지 포함해 핸드셰이크 기한에 닫힌다(기본 15초, 스왑을 쓰는 0.5코어 서버에 맞춘 값).
 - 데이터 연결이 오지 않는 세션은 60초 뒤에 닫힌다.
 - 클라이언트는 닿지 않는 엔드포인트를 45초 뒤에 포기한다.
