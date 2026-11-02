@@ -10,6 +10,7 @@ import {ClockRngProvider} from "../../util/ClockRng";
 import {truncateAuditValue} from "./auditValue";
 import {parseBlockedAddress} from "../security/IpBlocklist";
 import type {MfaTicketStore, PendingEnrollmentStore} from "../mfa/MfaTickets";
+import {DEFAULT_ENROLLMENT_TTL_MS} from "../EnrollmentRegistry";
 
 export type {Action, Target};
 
@@ -139,7 +140,7 @@ const auditMeta = (type: AuditEventType, target?: AuditTarget, detail?: Record<s
 
 /** #313: 감사 메타는 검증 전에 만든다. 없으면 기본 15분, 정수와 null 은 그대로, 그 밖의 본문 값은 남기지 않는다. */
 const enrollmentTtlForAudit = (value: unknown): number | null | 'invalid' =>
-    value === undefined ? 15 : value === null || Number.isInteger(value) ? value as number | null : 'invalid';
+    value === undefined ? DEFAULT_ENROLLMENT_TTL_MS / 60_000 : value === null || Number.isInteger(value) ? value as number | null : 'invalid';
 
 /**
  * POST /api/tunneling/active/:port 가 활성화를 요구했는지 판정한다.

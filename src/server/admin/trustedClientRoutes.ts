@@ -6,6 +6,7 @@ import {IdentityStore} from "../rbac/IdentityStore";
 import {TrustedClient} from "../../types/TunnelingOption";
 import {RouteContext} from "./routes";
 import ObjectUtil from "../../util/ObjectUtil";
+import {MAX_ENROLLMENT_TTL_MS} from "../EnrollmentRegistry";
 
 /**
  * 신뢰 클라이언트 관리 API(#212 REQ-1·1a·2·4·7). 비밀값은 서버가 만들고 응답에 싣지 않는다.
@@ -13,7 +14,7 @@ import ObjectUtil from "../../util/ObjectUtil";
  */
 const CLIENT_ID_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
 const MAX_DISPLAY_NAME_LENGTH = 128;
-const MAX_ENROLLMENT_TTL_MINUTES = 30 * 24 * 60;
+const MAX_ENROLLMENT_TTL_MINUTES = MAX_ENROLLMENT_TTL_MS / 60_000;
 
 type TrustedClientRouteDeps = {
     tttServer: () => TTTServer | undefined;
