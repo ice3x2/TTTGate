@@ -112,6 +112,23 @@ describe("enrollment follows the control port mode (#221)", () => {
         await expectFreshCodeWorks();
     });
 
+    // #313: 제어 서버를 다시 만들기 전의 단계(감사 설정 적용)도 기다린다. 그 틈의 발급도 곧 무효가 되므로 거절한다.
+    test("issuing while earlier steps of a control change are applied is refused", async () => {
+        const real = (TTTServer as any).applyAuditOption;
+        let during: Awaited<ReturnType<TTTServer["issueEnrollmentCode"]>> | undefined;
+        const spy = jest.spyOn(TTTServer as any, "applyAuditOption").mockImplementation(async (...args: unknown[]) => {
+            during = await server.issueEnrollmentCode("edge", null);
+            return real.apply(TTTServer, args);
+        });
+        try {
+            await apply({keepAlive: 5000});
+        } finally {
+            spy.mockRestore();
+        }
+        expect(during).toEqual({ok: false, reason: "superseded"});
+        await expectFreshCodeWorks();
+    });
+
     test("issuing while a failed change is being rolled back is refused", async () => {
         const state = server.captureRuntimeState();
         await apply({keepAlive: 5000});

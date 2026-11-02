@@ -450,6 +450,18 @@ class TTTServer {
     }
 
     public async applyServerOption(nextOption: ServerOption, previousOption: ServerOption): Promise<RuntimeApplyResult> {
+        // #313: 제어 서버를 다시 만드는 변경이면 어떤 await 보다 먼저 코드를 무효로 하고 발급을 멈춘다.
+        // 다시 만들기 전의 단계(감사 설정 등)를 기다리는 동안 낸 코드도 곧 무효가 되기 때문이다.
+        const requiresTunnelRestart = this.controlOptionsChanged(nextOption, previousOption);
+        if(requiresTunnelRestart) this.beginControlRebuild();
+        try {
+            return await this.applyServerOptionSteps(nextOption, previousOption, requiresTunnelRestart);
+        } finally {
+            this._rebuildingControl = false;
+        }
+    }
+
+    private async applyServerOptionSteps(nextOption: ServerOption, previousOption: ServerOption, requiresTunnelRestart: boolean): Promise<RuntimeApplyResult> {
         const ttl = resolveSessionTtlMs(nextOption.sessionTtlMs);
         if(!ttl.success) return {success: false, partial: false, failedScopes: ['session-ttl'], warnings: [ttl.message], restartRequiredScopes: []};
         const securityOf = (option: ServerOption) => ({geo: option.connectionSecurity?.geo ?? DEFAULT_GEO_CONFIG, blocklist: option.connectionSecurity?.blocklist ?? []});
@@ -473,8 +485,6 @@ class TTTServer {
             AppCompositionRoot.applyGlobalMemLimitMiB(nextOption.globalMemCacheLimit ?? 128);
         }
 
-        const requiresTunnelRestart = this.controlOptionsChanged(nextOption, previousOption);
-
         if(!requiresTunnelRestart) {
             // 앞선 복원이 실패해 레지스트리가 저장된 목록과 다를 수 있으면(플래그) 바뀌지 않았어도 다시 넣어 맞춘다.
             if(this._dirtyTrustedClients || this.trustedClientsChanged(nextOption, previousOption)) {
@@ -495,7 +505,6 @@ class TTTServer {
         }
 
         const oldTunnelServer = this._tunnelServer;
-        this.beginControlRebuild();
         try {
             this._dirtyControl = true;
             await oldTunnelServer.close();
@@ -531,8 +540,6 @@ class TTTServer {
                 failedScopes: ["tunnel-control"],
                 restartRequiredScopes
             };
-        } finally {
-            this._rebuildingControl = false;
         }
     }
 
