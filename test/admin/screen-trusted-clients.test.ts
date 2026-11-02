@@ -190,6 +190,38 @@ test("#313 the chosen expiry is sent, keeps focus, and does not carry over to an
     expect(await page.locator(".enroll-modal").textContent()).toMatch(/Expires \d{4}-\d{2}-\d{2}/);
 }));
 
+// #313: 응답이 거꾸로 도착해도 마지막으로 고른 기한의 코드가 남고, 발급이 실패하면 선택이 마지막 성공 값으로 돌아간다.
+test("#313 the last choice wins over a late response, and a failed issue restores the choice", () => withApp({fixture: "rbac"}, async (app) => {
+    const {page} = app;
+    await app.serverOption({tls: true, port: 9126});
+    await openClients(page);
+    await rowOf(page, "client-a").locator(".client-code").click();
+    const select = page.locator(".enroll-modal #enroll-ttl");
+    await select.waitFor({state: "visible"});
+    const issued = async () => (await app.calls()).filter((call) => call.method === "issueEnrollmentCode").length;
+    const start = await issued();
+
+    await app.enrollmentDelays([1500, 0]);
+    await select.selectOption("never");
+    await select.selectOption("60");
+    await waitUntil(async () => (await issued()) >= start + 2, {timeoutMs: 5000, label: "both requests sent"});
+    await page.waitForTimeout(2000);
+    expect(await select.inputValue()).toBe("60");
+    expect(await page.locator(".enroll-modal #enroll-never-warning").count()).toBe(0);
+    expect(await page.locator(".enroll-modal").textContent()).toMatch(/Expires \d{4}-\d{2}-\d{2}/);
+
+    await app.serverOption({tls: false});
+    await select.selectOption("1440");
+    await waitUntil(async () => (await select.inputValue()) === "60", {timeoutMs: 5000, label: "choice restored after a failed issue"});
+
+    // 요청 자체가 실패해도(네트워크 오류) 선택을 되돌린다.
+    await app.serverOption({tls: true});
+    await page.route("**/enrollmentCode", (route) => route.abort());
+    await select.selectOption("10080");
+    await waitUntil(async () => (await select.inputValue()) === "60", {timeoutMs: 5000, label: "choice restored after a network error"});
+    await page.unroute("**/enrollmentCode");
+}));
+
 test("#225 after expiry, Issue new code shows a new, live command", () => withApp({fixture: "rbac"}, async (app) => {
     const {page} = app;
     await app.serverOption({tls: true, port: 9126});

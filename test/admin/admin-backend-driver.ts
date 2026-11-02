@@ -39,6 +39,8 @@ const rbac = fixture === "rbac" || fixture === "rbac-no-audit" || fixture === "r
 // U4-07: 테스트가 TOTP 코드를 계산할 수 있게 서버 시계는 실시각 + 누적 offset 이다(advanceClock IPC 가 offset 을 늘린다).
 let clockOffset = 0;
 let enrollmentCodeCount = 0;
+/** #313: 다음 발급 응답들을 이 순서대로 늦춘다(ms). 응답이 거꾸로 도착하는 상황을 만든다. */
+let enrollmentDelays: number[] = [];
 // 'rbac-mfa' 의 alice 복구 코드 평문. identity.yaml 에는 해시만 있다.
 let mfaRecoveryCodes: string[] = [];
 
@@ -103,6 +105,8 @@ const stub = {
     // #213: 등록 코드 발급. 실제 TTTServer 와 같은 판정(TLS·등록 여부)을 저장소 값으로 흉내 낸다.
     async issueEnrollmentCode(clientId: string, ttlMs?: number | null) {
         record("issueEnrollmentCode", [clientId, ttlMs]);
+        const delay = enrollmentDelays.shift() ?? 0;
+        if(delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
         const option = ServerOptionStore.instance.serverOption;
         if(option.tls !== true) return {ok: false, reason: "tls-required"};
         if(!(option.trustedClients ?? []).some((client) => client.clientId === clientId)) return {ok: false, reason: "unknown-client"};
@@ -284,6 +288,10 @@ const stub = {
         }
         if(message && message.type === "mfaRecoveryCodes") {
             process.send?.({type: "mfaRecoveryCodes", codes: message.username === "alice" ? mfaRecoveryCodes : []});
+        }
+        if(message && message.type === "enrollmentDelays") {
+            enrollmentDelays = [...message.delays];
+            process.send?.({type: "enrollmentDelays"});
         }
         if(message && message.type === "advanceClock") {
             clockOffset += message.ms;

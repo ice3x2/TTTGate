@@ -137,6 +137,10 @@ const tunnelWriteAction = (ctx: RouteContext): Action =>
 const auditMeta = (type: AuditEventType, target?: AuditTarget, detail?: Record<string, unknown>): AuditRouteMeta =>
     ({type, target, summary: target ? `${type} ${target.id}` : type, detail});
 
+/** #313: 감사 메타는 검증 전에 만든다. 없으면 기본 15분, 정수와 null 은 그대로, 그 밖의 본문 값은 남기지 않는다. */
+const enrollmentTtlForAudit = (value: unknown): number | null | 'invalid' =>
+    value === undefined ? 15 : value === null || Number.isInteger(value) ? value as number | null : 'invalid';
+
 /**
  * POST /api/tunneling/active/:port 가 활성화를 요구했는지 판정한다.
  * 핸들러와 감사 메타가 이 함수 하나만 부르게 해, 감사 기록이 실제 동작과 갈리지 않게 한다.
@@ -311,7 +315,7 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
     {method: 'POST', pattern: new RegExp('^/api/trustedClients/(?<id>[^/]+)/enrollmentCode$'), action: 'server:manage',
         // #313: 발급한 코드의 만료(분)를 남긴다. 없으면 기본 15분, null 은 만료 없음이다.
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.enrollment_code_issued, pathIdTarget('trusted_client')(ctx),
-            {ttlMinutes: ctx.body?.ttlMinutes === undefined ? 15 : ctx.body.ttlMinutes}), handler: 'onIssueEnrollmentCode'},
+            {ttlMinutes: enrollmentTtlForAudit(ctx.body?.ttlMinutes)}), handler: 'onIssueEnrollmentCode'},
     {method: 'POST', pattern: new RegExp('^/api/groups$'), action: 'group:manage',
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.group_created, {kind: 'group', id: truncateAuditValue(String(ctx.body?.name))}), handler: 'onCreateGroup'},
     {method: 'GET', pattern: new RegExp('^/api/groups/(?<id>[^/]+)$'), action: 'group:manage', handler: 'onGetGroup'},

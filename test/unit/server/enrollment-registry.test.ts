@@ -43,6 +43,33 @@ describe("EnrollmentRegistry", () => {
         expect(registry.take(revoked.lookup, "10.0.0.1").ok).toBe(false);
     });
 
+    // #313: 키 파생은 비동기다. 늦게 끝난 옛 발급이나, 파생 중에 들어온 무효화(클라이언트 삭제·제어 서버 재생성)는 코드를 남기지 않는다.
+    test("an issue that finishes after a newer issue or a revoke stores nothing and reports it", async () => {
+        const gates: Array<() => void> = [];
+        const derive = (code: string) => new Promise<Awaited<ReturnType<typeof deriveEnrollmentKeys>>>((resolve) =>
+            gates.push(() => resolve(deriveEnrollmentKeys(code))));
+        const registry = new EnrollmentRegistry(clock, derive);
+        const older = registry.issue("edge", null);
+        const newer = registry.issue("edge", 60_000);
+        gates[1]();
+        const fresh = await newer;
+        gates[0]();
+        expect(await older).toBeNull();
+        expect(fresh).not.toBeNull();
+        expect(registry.take((await deriveEnrollmentKeys(fresh!.code)).lookup, "10.0.0.1").ok).toBe(true);
+
+        const deleted = registry.issue("gone", null);
+        registry.revokeClient("gone");
+        gates[2]();
+        expect(await deleted).toBeNull();
+
+        const rebuilt = registry.issue("edge", null);
+        registry.revokeAll();
+        gates[3]();
+        expect(await rebuilt).toBeNull();
+        expect((registry as any)._pending.size).toBe(0);
+    });
+
     // 실패한 take 는 만료된 코드를 지운다. 만료 없는 코드(null)는 지우지 않아야 한다(null <= now 는 참이라 쉽게 틀린다).
     test("pruning after a failed take keeps codes without expiry, and revokeAll drops them", async () => {
         const registry = new EnrollmentRegistry(clock);

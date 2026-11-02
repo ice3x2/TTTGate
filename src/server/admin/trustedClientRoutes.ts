@@ -134,6 +134,8 @@ const trustedClientRouteHandlers = (deps: TrustedClientRouteDeps) => {
             ctx.ok({code: issued.code, expiresAt: issued.expiresAt, controlPort: ServerOptionStore.instance.serverOption.port});
         } else if(issued.reason === "unknown-client") {
             ctx.fail(404, "CLIENT_NOT_FOUND", `trusted client '${clientId}' does not exist`);
+        } else if(issued.reason === "superseded") {
+            ctx.fail(409, "ENROLLMENT_SUPERSEDED", "a newer enrollment code request or a revocation replaced this request");
         } else if(issued.reason === "tls-required") {
             ctx.fail(409, "TLS_REQUIRED", "turn on TLS for the control port to use enrollment codes");
         } else {

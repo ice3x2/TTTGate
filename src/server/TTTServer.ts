@@ -99,12 +99,14 @@ class TTTServer {
      * 평문으로는 비밀값을 보내지 않고, strict 는 클라이언트 인증서 없는 등록 연결을 받지 않는다.
      * ttlMs 가 null 이면 만료 없는 코드다(#313). 없으면 기본 15분이다.
      */
-    public async issueEnrollmentCode(clientId: string, ttlMs?: number | null): Promise<{ok: true, code: string, expiresAt: number | null} | {ok: false, reason: 'tls-required' | 'strict-mode' | 'unknown-client'}> {
+    public async issueEnrollmentCode(clientId: string, ttlMs?: number | null): Promise<{ok: true, code: string, expiresAt: number | null} | {ok: false, reason: 'tls-required' | 'strict-mode' | 'unknown-client' | 'superseded'}> {
         const applied = this._appliedServerOption;
         if(applied.tls !== true) return {ok: false, reason: 'tls-required'};
         if(applied.controlProtocolMode === 'mtls-strict') return {ok: false, reason: 'strict-mode'};
         if(!(applied.trustedClients ?? []).some((client) => client.clientId === clientId)) return {ok: false, reason: 'unknown-client'};
         const issued = await this._enrollment.issue(clientId, ttlMs);
+        // #313: 발급하는 사이에 더 새 발급이나 무효화가 있었다. 이 코드는 남지 않았다.
+        if(issued === null) return {ok: false, reason: 'superseded'};
         return {ok: true, ...issued};
     }
 

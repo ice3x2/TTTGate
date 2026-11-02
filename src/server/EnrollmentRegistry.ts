@@ -22,14 +22,27 @@ const isExpired = (pending: PendingEnrollment, now: number): boolean => pending.
 class EnrollmentRegistry {
     private readonly _pending = new Map<string, PendingEnrollment>();
     private readonly _failures = new Map<string, {count: number, since: number}>();
+    /**
+     * 클라이언트별 발급 세대(#313). 키 파생은 비동기라 발급이 겹치면 끝나는 순서가 바뀐다. 발급을 시작할 때와
+     * 무효화할 때 세대를 올리고, 파생이 끝났을 때 세대가 바뀌었으면 코드를 남기지 않는다. 가장 나중에 시작한 발급만 남는다.
+     */
+    private readonly _generations = new Map<string, number>();
+    private _globalGeneration = 0;
 
-    constructor(private readonly _now: () => number = Date.now) {}
+    constructor(private readonly _now: () => number = Date.now,
+                private readonly _derive: (code: string) => Promise<EnrollmentKeys> = deriveEnrollmentKeys) {}
 
-    /** 코드를 발급한다. 같은 클라이언트의 이전 코드는 무효가 된다. ttl 은 1분~30일로 맞추고, null 이면 만료 없음이다(#313). */
-    public async issue(clientId: string, ttlMs: number | null = DEFAULT_ENROLLMENT_TTL_MS): Promise<{code: string, expiresAt: number | null}> {
+    /**
+     * 코드를 발급한다. 같은 클라이언트의 이전 코드는 무효가 된다. ttl 은 1분~30일로 맞추고, null 이면 만료 없음이다(#313).
+     * 파생하는 사이에 더 새 발급이나 무효화가 있었으면 아무것도 남기지 않고 null 을 돌려준다.
+     */
+    public async issue(clientId: string, ttlMs: number | null = DEFAULT_ENROLLMENT_TTL_MS): Promise<{code: string, expiresAt: number | null} | null> {
+        const generation = this.nextGeneration(clientId);
+        const globalGeneration = this._globalGeneration;
         const code = generateEnrollmentCode();
-        const keys = await deriveEnrollmentKeys(code);
-        this.revokeClient(clientId);
+        const keys = await this._derive(code);
+        if(this._generations.get(clientId) !== generation || this._globalGeneration !== globalGeneration) return null;
+        this.removeClientCodes(clientId);
         const expiresAt = ttlMs === null ? null
             : this._now() + Math.min(MAX_ENROLLMENT_TTL_MS, Math.max(MIN_ENROLLMENT_TTL_MS, Math.floor(ttlMs)));
         this._pending.set(keys.lookup, {clientId, keys, expiresAt});
@@ -59,19 +72,32 @@ class EnrollmentRegistry {
     }
 
     public revokeClient(clientId: string): void {
-        for(const [lookup, pending] of this._pending) {
-            if(pending.clientId === clientId) this._pending.delete(lookup);
-        }
+        this.nextGeneration(clientId);
+        this.removeClientCodes(clientId);
     }
 
-    /** 발급한 코드를 모두 무효로 한다(#221 — 제어 포트의 TLS·모드가 바뀔 때). 실패 기록은 둔다. */
+    /** 발급한 코드를 모두 무효로 한다(#221 — 제어 포트의 TLS·모드가 바뀌거나 제어 서버를 다시 만들 때). 실패 기록은 둔다. */
     public revokeAll(): void {
+        this._globalGeneration++;
         this._pending.clear();
     }
 
     public clear(): void {
+        this._globalGeneration++;
         this._pending.clear();
         this._failures.clear();
+    }
+
+    private nextGeneration(clientId: string): number {
+        const next = (this._generations.get(clientId) ?? 0) + 1;
+        this._generations.set(clientId, next);
+        return next;
+    }
+
+    private removeClientCodes(clientId: string): void {
+        for(const [lookup, pending] of this._pending) {
+            if(pending.clientId === clientId) this._pending.delete(lookup);
+        }
     }
 
     /** 창이 지난 실패 기록을 지운다. Map 은 넣은 순서라 앞에서부터 보다가 아직 유효한 기록에서 멈춘다. */

@@ -105,6 +105,8 @@ describe("trusted client admin API", () => {
         expect(metaOf({ttlMinutes: null}).detail).toEqual({ttlMinutes: null});
         expect(metaOf({}).detail).toEqual({ttlMinutes: 15});
         expect(metaOf({ttlMinutes: 10080}).detail).toEqual({ttlMinutes: 10080});
+        // 감사 메타는 검증 전에 만든다. 정수와 null 이 아닌 값은 본문을 그대로 남기지 않는다.
+        for(const wrong of ["x".repeat(1000), {nested: true}, 1.5, true]) expect(metaOf({ttlMinutes: wrong}).detail).toEqual({ttlMinutes: "invalid"});
     });
 
     // #313: ttlMinutes 는 1–43200(30일) 정수이거나 null(만료 없음)이다.
