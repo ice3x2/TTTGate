@@ -410,6 +410,50 @@ test("#313 a failed confirmation marks the code as no longer valid", () => withA
     expect(await select.inputValue()).toBe("15");
 }));
 
+// #313: 확인은 같은 요청을 다시 보내도 결과가 같다. 응답만 잃었으면 한 번 더 보내 실제 결과를 받는다.
+test("#313 a lost confirmation response is retried once", () => withApp({fixture: "rbac"}, async (app) => {
+    const {page} = app;
+    await app.serverOption({tls: true, port: 9126});
+    await openClients(page);
+    await rowOf(page, "client-a").locator(".client-code").click();
+    const select = page.locator(".enroll-modal #enroll-ttl");
+    await select.waitFor({state: "visible"});
+    const start = (await enrollmentCalls(app)).ttls.length;
+    await page.route("**/enrollmentCode/confirm", async (route) => {
+        await route.fetch();
+        await route.fulfill({status: 502, contentType: "text/html", body: "<html>Bad Gateway</html>"});
+    }, {times: 1});
+    await select.selectOption("never");
+    await page.locator(".enroll-modal #enroll-never-warning").waitFor({state: "visible", timeout: 10_000});
+    const {ttls, confirms} = await enrollmentCalls(app);
+    expect(ttls.slice(start)).toEqual([null]);
+    expect(confirms).toHaveLength(2);
+    expect(await page.locator("#enroll-copy button").isEnabled()).toBe(true);
+}));
+
+// #313: 확인 결과를 끝내 모르면 서버에는 만료 없는 코드가 있을 수 있다. 기본 15분 코드로 다시 받아 그 코드를 대체한다.
+test("#313 an unknown confirmation result is replaced by a default-expiry code", () => withApp({fixture: "rbac"}, async (app) => {
+    const {page} = app;
+    await app.serverOption({tls: true, port: 9126});
+    await openClients(page);
+    await rowOf(page, "client-a").locator(".client-code").click();
+    const select = page.locator(".enroll-modal #enroll-ttl");
+    await select.waitFor({state: "visible"});
+    const start = (await enrollmentCalls(app)).ttls.length;
+    await page.route("**/enrollmentCode/confirm", async (route) => {
+        await route.fetch();
+        await route.fulfill({status: 502, contentType: "text/html", body: "<html>Bad Gateway</html>"});
+    });
+    await select.selectOption("never");
+    await waitUntil(async () => (await enrollmentCalls(app)).ttls.length >= start + 2, {timeoutMs: 10_000, label: "replacement issued"});
+    await waitUntil(() => rowOf(page, "client-a").locator(".client-code").isEnabled(), {timeoutMs: 5000, label: "screen idle"});
+    expect((await enrollmentCalls(app)).ttls.slice(start)).toEqual([null, 15 * 60_000]);
+    expect(await select.inputValue()).toBe("15");
+    expect(await page.locator(".enroll-modal #enroll-never-warning").count()).toBe(0);
+    expect(await page.locator("#enroll-copy button").isEnabled()).toBe(true);
+    await page.unroute("**/enrollmentCode/confirm");
+}));
+
 // #313: 새 코드를 받는 동안에는 곧 무효가 될 옛 명령을 복사하지 못하게 한다.
 test("#313 Copy command is off while a new code is on its way", () => withApp({fixture: "rbac"}, async (app) => {
     const {page} = app;

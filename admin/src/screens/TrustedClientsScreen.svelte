@@ -99,6 +99,8 @@
     const shown = (clientId: string): boolean => !disposed && enrollOpen && enrollFor === clientId;
     /** 기본(15분)보다 긴 기한은 코드를 보여 줄 때 확인해야 적용된다. */
     const needsConfirm = (value: string): boolean => value === 'never' || Number(value) > Number(DEFAULT_TTL);
+    /** 서버가 답하지 못했거나(네트워크 오류) 중간에서 실패했다(5xx). 요청이 적용되었는지 알 수 없다. 409·400 은 서버가 답한 확실한 실패다. */
+    const resultUnknown = (status: number): boolean => status === 0 || status >= 500;
     const ttlMinutesOf = (value: string): number | null => value === 'never' ? null : Number(value);
 
     const failed = (error: unknown): void => {
@@ -141,6 +143,8 @@
         }
         issuing = true;
         const chosen = ttl;
+        /** 확인 결과를 끝내 몰랐다. 서버에는 만료 없는 코드가 있을 수 있으므로 기본 기한 코드로 대체한다. */
+        let replaceWithDefault = false;
         try {
             await run(async () => {
                 const result = await TrustedClientsCtrl.instance.issueCode(clientId, ttlMinutesOf(chosen));
@@ -159,7 +163,15 @@
                 now = Date.now();
                 if(open) enrollOpen = true;
                 if(needsConfirm(chosen) && shown(clientId)) {
-                    const confirmed = await TrustedClientsCtrl.instance.confirmCode(clientId, result.issueId);
+                    let confirmed = await TrustedClientsCtrl.instance.confirmCode(clientId, result.issueId);
+                    // 확인은 같은 요청을 다시 보내도 결과가 같다. 응답만 잃었으면 한 번 더 보내 실제 결과를 받는다.
+                    if(!confirmed.success && resultUnknown(confirmed.status)) confirmed = await TrustedClientsCtrl.instance.confirmCode(clientId, result.issueId);
+                    if(!confirmed.success && resultUnknown(confirmed.status)) {
+                        invalidated = true;
+                        replaceWithDefault = true;
+                        toast.push({tone: 'alarm', message: 'Could not confirm the expiry. A new 15-minute code replaces this one.'});
+                        return;
+                    }
                     if(!confirmed.success) {
                         // 그 코드는 대체되었거나 무효다. 응답만 잃었다면 서버에서는 긴 기한일 수 있으니 다시 받게 한다.
                         ttl = issuedTtl;
@@ -176,6 +188,12 @@
         }
         const next = queuedTtl;
         queuedTtl = undefined;
+        // 창이 닫혔어도 대체한다. 대체한 코드는 임시 발급이라 아무도 보지 않으면 15분 뒤 사라진다.
+        if(replaceWithDefault) {
+            ttl = DEFAULT_TTL;
+            await issue(clientId);
+            return;
+        }
         if(!shown(clientId)) return;
         if(next !== undefined && next !== issuedTtl) {
             ttl = next;
