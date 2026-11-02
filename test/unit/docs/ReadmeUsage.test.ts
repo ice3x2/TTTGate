@@ -107,21 +107,72 @@ describe("README in English and Korean (#310)", () => {
 
     // #316: 관리 화면을 다른 컴퓨터에서 여는 방법, 원격 서버의 부트스트랩 토큰, 관리자 계정 복구를 두 절 모두 적는다.
     // #303 뒤로 0.0.0.0 바인드는 adminAllowedOrigins 와 함께 동작한다. 예전의 "쓸 수 없다" 문장은 틀렸다.
-    it.each([
-        ["English", () => english, {wrong: "`0.0.0.0`, `::` and host names do not work", refused: /connection refused/i, timeout: /time(s|d)? out/i,
-            noReset: /do not use `-reset`/i, lastSuperuser: /last (active )?superuser/i, staysUntilSetup: /token stays the same/i}],
-        ["한국어", () => korean, {wrong: "`0.0.0.0`, `::`, 호스트 이름은 쓸 수 없다", refused: /연결 거부/, timeout: /시간 초과/,
-            noReset: /`-reset` 은 쓰지 않는다/, lastSuperuser: /마지막 (활성 )?슈퍼유저/, staysUntilSetup: /토큰이 바뀌지 않는다/}],
-    ] as const)("explains remote console access, the bootstrap token and account recovery in the %s section", (_label, section, words) => {
+    // 다른 절에 이미 있는 글귀로는 회귀를 잡지 못하므로, 새로 쓴 소절(방법 2, 증상 표, 첫 로그인, 계정 복구)을 잘라 그 안에서 찾는다.
+    const subsectionOf = (section: string, heading: string): string => {
+        const start = section.indexOf(`\n#### ${heading}\n`);
+        if(start < 0) return "";
+        const next = section.slice(start + 1).search(/\n#{2,4} /);
+        return next < 0 ? section.slice(start) : section.slice(start, start + 1 + next);
+    };
+    const between = (text: string, from: string, to: string): string => {
+        const start = text.indexOf(from);
+        if(start < 0) return "";
+        const end = text.indexOf(to, start + from.length);
+        return end < 0 ? "" : text.slice(start, end);
+    };
+    type Expectation = {heading: string; contains: string[]; matches: RegExp[]; absent: string[]};
+    const remoteAccessFacts: Array<[string, () => string, {wrong: string; method2: [string, string, string]; parts: Expectation[]}]> = [
+        ["English", () => english, {
+            wrong: "`0.0.0.0`, `::` and host names do not work",
+            method2: ["Open the Console from Another Computer", "2. **Expose the console port directly", "\n3. **"],
+            parts: [
+                {heading: "Open the Console", contains: ["https://[::1]:9300"], matches: [], absent: ["`127.0.0.1`, `::1`, `localhost` or the `adminBindHost`"]},
+                {heading: "method 2", contains: ["adminBindHost: 0.0.0.0", "\"https://192.0.2.10:9300\"", "cd ~/TTTGate/bin",
+                    "./TTTGate-linux-x64 server -daemon -allowLegacyAdminRemote", "./TTTGate-linux-x64 stop", "network security group", "security list",
+                    "one IPv4 address of the server", "or an IPv6 address, still need an entry"], matches: [/flag is not saved/], absent: []},
+                {heading: "If the Console Does Not Open", contains: ["| Symptom | Cause | What to do |", "connection refused", "times out",
+                    "`403 Forbidden origin`", "`Refusing insecure admin policy: ...`", "or the IPv4 `adminBindHost` address"],
+                    matches: [/certificate warning[^\n]*outside the server host[^\n]*your own certificate/], absent: []},
+                {heading: "First Admin Login", contains: ["cat ../config/.bootstrap-token", "~/TTTGate/config/.bootstrap-token",
+                    "ssh user@server.example.com 'cat ~/TTTGate/config/.bootstrap-token'", "sudo cat"], matches: [/token stays the same/], absent: []},
+                {heading: "Recover Admin Accounts", contains: ["**My account**", "**Change password**", "**Reset password**", "**Reset MFA**",
+                    "~/identity.yaml.$(date +%Y%m%d%H%M%S).bak", "rm ~/TTTGate/config/identity.yaml", "rm -f ~/TTTGate/config/.key"],
+                    matches: [/creates the `admin` account with the old password/, /do not use `-reset`/i, /last active superuser/], absent: []},
+                {heading: "Configuration Files", contains: ["When `config/identity.yaml` does not exist, the server creates the `admin` account"],
+                    matches: [], absent: []},
+            ]}],
+        ["한국어", () => korean, {
+            wrong: "`0.0.0.0`, `::`, 호스트 이름은 쓸 수 없다",
+            method2: ["다른 컴퓨터에서 관리 화면 열기", "2. **관리 화면 포트를 직접 열기", "\n3. **"],
+            parts: [
+                {heading: "관리 화면 열기", contains: ["https://[::1]:9300"], matches: [], absent: ["`127.0.0.1`, `::1`, `localhost` 또는 `adminBindHost`"]},
+                {heading: "method 2", contains: ["adminBindHost: 0.0.0.0", "\"https://192.0.2.10:9300\"", "cd ~/TTTGate/bin",
+                    "./TTTGate-linux-x64 server -daemon -allowLegacyAdminRemote", "./TTTGate-linux-x64 stop", "네트워크 보안 그룹", "보안 목록",
+                    "서버의 IPv4 주소 하나", "IPv6 주소처럼"], matches: [/플래그는 저장되지 않/], absent: []},
+                {heading: "관리 화면이 열리지 않을 때", contains: ["| 증상 | 원인 | 조치 |", "연결 거부", "시간 초과",
+                    "`403 Forbidden origin`", "`Refusing insecure admin policy: ...`", "IPv4 주소인 `adminBindHost`"],
+                    matches: [/인증서 경고[^\n]*서버 호스트 밖[^\n]*직접 준비한 인증서/], absent: []},
+                {heading: "첫 관리자 로그인", contains: ["cat ../config/.bootstrap-token", "~/TTTGate/config/.bootstrap-token",
+                    "ssh user@server.example.com 'cat ~/TTTGate/config/.bootstrap-token'", "sudo cat"], matches: [/토큰이 바뀌지 않는다/], absent: []},
+                {heading: "관리자 계정 복구", contains: ["**My account**", "**Change password**", "**Reset password**", "**Reset MFA**",
+                    "~/identity.yaml.$(date +%Y%m%d%H%M%S).bak", "rm ~/TTTGate/config/identity.yaml", "rm -f ~/TTTGate/config/.key"],
+                    matches: [/`\.key` 의 예전 비밀번호로 `admin` 계정을 다시 만든다/, /`-reset` 은 쓰지 않는다/, /마지막 활성 슈퍼유저/], absent: []},
+                {heading: "설정 파일", contains: ["`config/identity.yaml` 이 없으면 `.key` 로 `admin` 계정을 만든다"], matches: [], absent: []},
+            ]}],
+    ];
+    it.each(remoteAccessFacts)("explains remote console access, the bootstrap token and account recovery in the %s section", (_label, section, facts) => {
         const text = section();
-        expect(text).not.toContain(words.wrong);
-        for(const fact of ["adminBindHost: 0.0.0.0", "\"https://192.0.2.10:9300\"", "./TTTGate-linux-x64 server -daemon -allowLegacyAdminRemote",
-            "./TTTGate-linux-x64 stop", "Azure", "AWS", "OCI", "403 Forbidden origin", "Refusing insecure admin policy",
-            "~/TTTGate/config/.bootstrap-token", "ssh user@server.example.com 'cat ~/TTTGate/config/.bootstrap-token'",
-            "**My account**", "**Change password**", "**Reset password**", "**Reset MFA**", "config/identity.yaml", "config/.key"]) {
-            expect({fact, found: text.includes(fact)}).toEqual({fact, found: true});
+        expect(text).not.toContain(facts.wrong);
+        const [method2Heading, method2Start, method2End] = facts.method2;
+        for(const part of facts.parts) {
+            const slice = part.heading === "method 2" ? between(subsectionOf(text, method2Heading), method2Start, method2End)
+                : part.heading === "Configuration Files" || part.heading === "설정 파일" ? between(text, `\n### ${part.heading}\n`, "\n### ")
+                : subsectionOf(text, part.heading);
+            expect({part: part.heading, sliced: slice.length > 0}).toEqual({part: part.heading, sliced: true});
+            for(const fact of part.contains) expect({part: part.heading, fact, found: slice.includes(fact)}).toEqual({part: part.heading, fact, found: true});
+            for(const pattern of part.matches) expect({part: part.heading, pattern: String(pattern), found: pattern.test(slice)}).toEqual({part: part.heading, pattern: String(pattern), found: true});
+            for(const fact of part.absent) expect({part: part.heading, fact, found: slice.includes(fact)}).toEqual({part: part.heading, fact, found: false});
         }
-        for(const pattern of [words.refused, words.timeout, words.noReset, words.lastSuperuser, words.staysUntilSetup]) expect(text).toMatch(pattern);
     });
 
     it.each([["English", "Command-Line Reference", () => english], ["한국어", "명령줄 레퍼런스", () => korean]])(

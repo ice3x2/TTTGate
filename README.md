@@ -110,7 +110,7 @@ The socket buffer cap above prevents the last case.
 | `config/server.sample.yaml`, `config/client.sample.yaml` | Tracked samples |
 | `config/.bootstrap-token` | One-time token for the first admin login |
 | `config/identity.yaml` | Admin users, groups and two-factor settings |
-| `config/.key` | Admin password hash of older versions. The server reads it only when `config/identity.yaml` does not exist or cannot be read. When the file does not exist, the server creates the `admin` account from `.key` |
+| `config/.key` | Admin password hash of older versions. The server reads it only when `config/identity.yaml` does not exist or cannot be read. When `config/identity.yaml` does not exist, the server creates the `admin` account from `.key` |
 | `config/server-ca.pem` | Server certificate that `client join` writes for the client |
 
 The old repository-root `config.yaml` is no longer used.
@@ -163,10 +163,10 @@ If `adminBindHost` is not a loopback address or `adminTls` is `false`, the serve
 
 The console accepts a login or a change only from these pages:
 
-- a page whose address is `127.0.0.1`, `::1`, `localhost` or the `adminBindHost` address, with the `adminPort` port
+- a page whose address is `127.0.0.1`, `localhost` or the `adminBindHost` IPv4 address, with the `adminPort` port
 - a page whose origin is listed in `adminAllowedOrigins`
 
-Other addresses get `403 Forbidden origin`.
+Other addresses get `403 Forbidden origin`. This includes IPv6 addresses. To open the console at `https://[::1]:9300`, add `"https://[::1]:9300"` to `adminAllowedOrigins`.
 
 #### Open the Console from Another Computer
 
@@ -191,7 +191,7 @@ By default, the console listens only on the server host. Use one of these ways:
       ```
 
       - `0.0.0.0` (all IPv4 addresses) and `::` (all addresses) work only together with `adminAllowedOrigins`. Without an entry, the login fails with `403 Forbidden origin`. Only `127.0.0.1` and `localhost` with the console port work without an entry.
-      - When `adminBindHost` is one IP address of the server (for example `192.0.2.10`), `https://192.0.2.10:9300` works without an entry. Other addresses, for example a DNS name, still need an entry.
+      - When `adminBindHost` is one IPv4 address of the server (for example `192.0.2.10`), `https://192.0.2.10:9300` works without an entry. Other addresses, for example a DNS name or an IPv6 address, still need an entry.
       - The rules for entries are the same as in method 3: only `https://` origins, the exact scheme, host and port, no paths and no wildcards. Leave out the port only when it is 443. An entry that breaks these rules stops the server at startup. With `-daemon`, the reason is in `logs/`.
    2. Start the server from the `bin` folder with `-allowLegacyAdminRemote`. The flag is not saved. Give it every time that you start the server. Without it, the server stops with `Refusing insecure admin policy: ...`. With `-daemon`, the sentinel restarts the app with the same options.
 
@@ -244,9 +244,9 @@ With an SSH tunnel or a reverse proxy, the console sees every connection from `1
 |---|---|---|
 | The browser shows connection refused. | The server does not run, or the console listens only on the server host (`adminBindHost: 127.0.0.1`), or the port is wrong. | Start the server. Check `adminBindHost` and `adminPort` in `config/server.yaml`. Use an SSH tunnel, or expose the port (method 2 above). |
 | The connection times out. | A firewall or a cloud network rule blocks the port, or the host is down. | Allow the console port in the firewall of the operating system and in the cloud network rule (Azure, AWS, OCI and others). |
-| The login fails with `403 Forbidden origin`. | The address that you opened is not in `adminAllowedOrigins`. It is also not `127.0.0.1`, `localhost` or the `adminBindHost` address with the console port. | Add the exact address (scheme, host and port) to `adminAllowedOrigins`, then restart the server. With an SSH tunnel, use the same local port as `adminPort`. |
+| The login fails with `403 Forbidden origin`. | The address that you opened is not in `adminAllowedOrigins`. It is also not `127.0.0.1`, `localhost` or the IPv4 `adminBindHost` address with the console port. | Add the exact address (scheme, host and port) to `adminAllowedOrigins`, then restart the server. With an SSH tunnel, use the same local port as `adminPort`. |
 | The server stops with `Refusing insecure admin policy: ...`. | `adminBindHost` is not a loopback address or `adminTls` is `false`, and the server started without the matching flag. | Start the server with the flag that the message names, for example `-allowLegacyAdminRemote`. For `adminTls: false`, set `adminTls: true` instead if you can. |
-| The browser shows a certificate warning. | The console uses the self-signed certificate that the server created. | Make sure that you opened the correct address, then continue. Or use your own certificate (see [Open the Console](#open-the-console)). |
+| The browser shows a certificate warning. | The console uses the self-signed certificate that the server created. | When you open the console from outside the server host, use your own certificate (see [Open the Console](#open-the-console)). Do not get used to skipping the warning on a console that other hosts can reach. On the server host or through an SSH tunnel, make sure that you opened the correct address, then continue. |
 
 #### First Admin Login
 
@@ -256,7 +256,7 @@ On a fresh install, the server has no admin account. It writes a one-time bootst
 2. Enter a username for the first superuser and a password, then press **OK**.
    - Username: 3–32 characters (letters, digits, `.`, `_`, `-`). Upper-case letters are changed to lower case. An empty username means `admin`.
    - Password: at least 8 characters and at most 1024 characters, not counting spaces at the start and the end.
-3. The **Bootstrap token** field appears. On the server, read the token (`cat config/.bootstrap-token`). Paste it into the field and press **OK** again.
+3. The **Bootstrap token** field appears. On the server, read the token. In the installation folder (the parent of `bin`), run `cat config/.bootstrap-token`. In the `bin` folder, run `cat ../config/.bootstrap-token`. Paste the token into the field and press **OK** again.
 4. The server creates the superuser, deletes `config/.bootstrap-token`, and signs you in. Next time, sign in with the username and password.
 
 Where to find the token:
@@ -268,6 +268,8 @@ Where to find the token:
   ```shell
   ssh user@server.example.com 'cat ~/TTTGate/config/.bootstrap-token'
   ```
+
+- When a service account without a login shell runs the server, sign in with your own account and use `sudo`. Write the full path, because `~` is your home folder, not the home folder of the service account: `ssh -t user@server.example.com 'sudo cat /opt/TTTGate/config/.bootstrap-token'`.
 
 Who can do the first setup:
 
@@ -287,8 +289,19 @@ Use the first case that matches.
    - If the user also lost the authenticator app, the superuser presses **Reset MFA** on the same screen.
 3. **No superuser can sign in.** Reset the account store on the server host. Then the server starts the first admin setup again.
    1. Stop the server: `./TTTGate-linux-x64 stop` in the `bin` folder.
-   2. Copy `config/identity.yaml` to a safe place, for example `cp ~/TTTGate/config/identity.yaml ~/identity.yaml.bak`. The file contains password hashes. Keep the copy private.
+   2. Copy `config/identity.yaml` to a safe place. The time in the file name keeps an older copy safe. The file contains password hashes. Keep the copy private.
+
+      ```shell
+      cp -p ~/TTTGate/config/identity.yaml ~/identity.yaml.$(date +%Y%m%d%H%M%S).bak
+      ```
+
    3. Delete `config/identity.yaml`. If `config/.key` exists, delete it too.
+
+      ```shell
+      rm ~/TTTGate/config/identity.yaml
+      rm -f ~/TTTGate/config/.key
+      ```
+
    4. Start the server again with the same options as usual, for example `-allowLegacyAdminRemote` for method 2. The server creates a new token in `config/.bootstrap-token`. Do the [First Admin Login](#first-admin-login). When `mfaRequiredForSuperusers` is on in `server.yaml`, the new superuser must set up two-factor authentication at the first login.
 
    Before you do this, read these warnings:
@@ -782,7 +795,7 @@ net.ipv4.tcp_wmem = 4096 16384 1048576
 | `config/server.sample.yaml`, `config/client.sample.yaml` | 저장소에 포함된 샘플 |
 | `config/.bootstrap-token` | 첫 관리자 로그인에 쓰는 일회용 토큰 |
 | `config/identity.yaml` | 관리자 사용자, 그룹, 2단계 인증 설정 |
-| `config/.key` | 예전 버전의 관리자 비밀번호 해시. 서버는 `config/identity.yaml` 이 없거나 읽을 수 없을 때만 이 파일을 읽는다. `identity.yaml` 이 없으면 `.key` 로 `admin` 계정을 만든다 |
+| `config/.key` | 예전 버전의 관리자 비밀번호 해시. 서버는 `config/identity.yaml` 이 없거나 읽을 수 없을 때만 이 파일을 읽는다. `config/identity.yaml` 이 없으면 `.key` 로 `admin` 계정을 만든다 |
 | `config/server-ca.pem` | `client join` 이 클라이언트에 써 두는 서버 인증서 |
 
 예전에 저장소 최상위에 두던 `config.yaml` 은 더 이상 쓰지 않는다.
@@ -835,10 +848,10 @@ net.ipv4.tcp_wmem = 4096 16384 1048576
 
 관리 화면은 다음 페이지에서 온 로그인과 변경만 받는다.
 
-- 주소가 `127.0.0.1`, `::1`, `localhost` 또는 `adminBindHost` 이고 포트가 `adminPort` 인 페이지
+- 주소가 `127.0.0.1`, `localhost` 또는 IPv4 주소인 `adminBindHost` 이고 포트가 `adminPort` 인 페이지
 - origin 이 `adminAllowedOrigins` 에 있는 페이지
 
-그 밖의 주소에는 `403 Forbidden origin` 으로 답한다.
+그 밖의 주소에는 `403 Forbidden origin` 으로 답한다. IPv6 주소도 마찬가지다. `https://[::1]:9300` 으로 관리 화면을 열려면 `adminAllowedOrigins` 에 `"https://[::1]:9300"` 을 넣는다.
 
 #### 다른 컴퓨터에서 관리 화면 열기
 
@@ -863,7 +876,7 @@ net.ipv4.tcp_wmem = 4096 16384 1048576
       ```
 
       - `0.0.0.0`(모든 IPv4 주소)과 `::`(모든 주소)은 `adminAllowedOrigins` 와 함께 써야 동작한다. 목록에 없는 주소로 열면 로그인이 `403 Forbidden origin` 으로 실패한다. 목록 없이도 되는 주소는 관리 화면 포트를 쓰는 `127.0.0.1` 과 `localhost` 뿐이다.
-      - `adminBindHost` 가 서버의 IP 주소 하나(예: `192.0.2.10`)이면 `https://192.0.2.10:9300` 은 목록에 없어도 된다. DNS 이름처럼 다른 주소로 열려면 목록에 적어야 한다.
+      - `adminBindHost` 가 서버의 IPv4 주소 하나(예: `192.0.2.10`)이면 `https://192.0.2.10:9300` 은 목록에 없어도 된다. DNS 이름이나 IPv6 주소처럼 다른 주소로 열려면 목록에 적어야 한다.
       - 항목 규칙은 방법 3과 같다. `https://` origin 만 받고, 스킴·호스트·포트가 정확히 같아야 하며, 경로와 와일드카드는 받지 않는다. 포트는 443일 때만 생략한다. 규칙에 맞지 않는 항목이 있으면 서버가 시작할 때 멈춘다. `-daemon` 으로 시작했다면 그 이유는 `logs/` 에 남는다.
    2. `bin` 폴더에서 서버를 `-allowLegacyAdminRemote` 와 함께 시작한다. 이 플래그는 저장되지 않으므로 서버를 시작할 때마다 줘야 한다. 빠뜨리면 서버가 `Refusing insecure admin policy: ...` 를 출력하고 멈춘다. `-daemon` 으로 시작하면 감시 프로세스가 같은 옵션으로 앱을 다시 시작한다.
 
@@ -916,9 +929,9 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 |---|---|---|
 | 브라우저가 연결 거부를 알린다. | 서버가 실행 중이 아니거나, 관리 화면이 서버 호스트에서 오는 연결만 받거나(`adminBindHost: 127.0.0.1`), 포트가 틀렸다. | 서버를 시작한다. `config/server.yaml` 의 `adminBindHost` 와 `adminPort` 를 확인한다. SSH 터널을 쓰거나 포트를 직접 연다(위의 방법 2). |
 | 연결이 시간 초과로 끝난다. | 방화벽이나 클라우드 네트워크 규칙이 포트를 막고 있거나, 호스트가 꺼져 있다. | 운영체제 방화벽과 클라우드 네트워크 규칙(Azure, AWS, OCI 등)에서 관리 화면 포트를 허용한다. |
-| 로그인이 `403 Forbidden origin` 으로 실패한다. | 연 주소가 관리 화면 포트를 쓰는 `127.0.0.1`, `localhost`, `adminBindHost` 주소가 아니고, `adminAllowedOrigins` 에도 없다. | 연 주소를 스킴·호스트·포트까지 정확히 `adminAllowedOrigins` 에 넣고 서버를 다시 시작한다. SSH 터널이면 로컬 포트를 `adminPort` 와 같게 한다. |
+| 로그인이 `403 Forbidden origin` 으로 실패한다. | 연 주소가 관리 화면 포트를 쓰는 `127.0.0.1`, `localhost`, IPv4 주소인 `adminBindHost` 가 아니고, `adminAllowedOrigins` 에도 없다. | 연 주소를 스킴·호스트·포트까지 정확히 `adminAllowedOrigins` 에 넣고 서버를 다시 시작한다. SSH 터널이면 로컬 포트를 `adminPort` 와 같게 한다. |
 | 서버가 `Refusing insecure admin policy: ...` 를 출력하고 멈춘다. | `adminBindHost` 가 루프백 주소가 아니거나 `adminTls` 가 `false` 인데, 그에 맞는 플래그 없이 시작했다. | 메시지가 알려 주는 플래그(예: `-allowLegacyAdminRemote`)를 붙여 다시 시작한다. 원인이 `adminTls: false` 라면 되도록 `adminTls: true` 로 되돌린다. |
-| 브라우저에 인증서 경고가 뜬다. | 서버가 만든 자체 서명 인증서를 쓰고 있다. | 올바른 주소를 열었는지 확인한 뒤 계속 진행한다. 직접 준비한 인증서를 써도 된다([관리 화면 열기](#관리-화면-열기) 참고). |
+| 브라우저에 인증서 경고가 뜬다. | 서버가 만든 자체 서명 인증서를 쓰고 있다. | 서버 호스트 밖에서 관리 화면을 연다면 직접 준비한 인증서를 쓴다([관리 화면 열기](#관리-화면-열기) 참고). 다른 호스트가 접속할 수 있는 관리 화면에서 경고를 넘기는 습관을 들이지 않는다. 서버 호스트에서 열거나 SSH 터널로 열 때는 올바른 주소인지 확인한 뒤 계속 진행한다. |
 
 #### 첫 관리자 로그인
 
@@ -928,7 +941,7 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 2. 첫 슈퍼유저의 사용자 이름과 비밀번호를 넣고 **OK** 를 누른다.
    - 사용자 이름: 3–32자(영문자, 숫자, `.`, `_`, `-`). 대문자는 소문자로 바뀐다. 비워 두면 `admin` 이 된다.
    - 비밀번호: 앞뒤 공백을 빼고 8자 이상 1024자 이하.
-3. **Bootstrap token** 입력란이 나타난다. 서버에서 토큰을 읽어(`cat config/.bootstrap-token`) 입력란에 붙여 넣고 **OK** 를 다시 누른다.
+3. **Bootstrap token** 입력란이 나타난다. 서버에서 토큰을 읽는다. 설치 폴더(`bin` 의 상위 폴더)에서는 `cat config/.bootstrap-token`, `bin` 폴더에서는 `cat ../config/.bootstrap-token` 을 실행한다. 읽은 토큰을 입력란에 붙여 넣고 **OK** 를 다시 누른다.
 4. 서버가 슈퍼유저를 만들고, `config/.bootstrap-token` 을 지우고, 로그인시킨다. 다음부터는 사용자 이름과 비밀번호로 로그인한다.
 
 토큰 파일 찾기:
@@ -940,6 +953,8 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
   ```shell
   ssh user@server.example.com 'cat ~/TTTGate/config/.bootstrap-token'
   ```
+
+- 로그인 셸이 없는 서비스 계정이 서버를 실행한다면, 내 계정으로 접속해 `sudo` 로 읽는다. 이때 `~` 는 서비스 계정이 아니라 내 홈 폴더를 가리키므로 전체 경로를 쓴다. 예: `ssh -t user@server.example.com 'sudo cat /opt/TTTGate/config/.bootstrap-token'`.
 
 첫 설정을 할 수 있는 사람:
 
@@ -959,8 +974,19 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
    - 사용자가 인증 앱도 잃어버렸다면, 슈퍼유저가 같은 화면에서 **Reset MFA** 를 누른다.
 3. **로그인할 수 있는 슈퍼유저가 없다.** 서버 호스트에서 계정 저장소를 초기화한다. 그러면 서버가 첫 관리자 설정을 다시 시작한다.
    1. 서버를 멈춘다. `bin` 폴더에서 `./TTTGate-linux-x64 stop` 을 실행한다.
-   2. `config/identity.yaml` 을 안전한 곳에 복사해 둔다. 예: `cp ~/TTTGate/config/identity.yaml ~/identity.yaml.bak`. 이 파일에는 비밀번호 해시가 들어 있으므로 사본을 남이 보지 못하게 보관한다.
+   2. `config/identity.yaml` 을 안전한 곳에 복사해 둔다. 파일 이름에 시각을 넣으면 예전 사본을 덮어쓰지 않는다. 이 파일에는 비밀번호 해시가 들어 있으므로 사본을 남이 보지 못하게 보관한다.
+
+      ```shell
+      cp -p ~/TTTGate/config/identity.yaml ~/identity.yaml.$(date +%Y%m%d%H%M%S).bak
+      ```
+
    3. `config/identity.yaml` 을 지운다. `config/.key` 가 있으면 그것도 지운다.
+
+      ```shell
+      rm ~/TTTGate/config/identity.yaml
+      rm -f ~/TTTGate/config/.key
+      ```
+
    4. 평소와 같은 옵션으로 서버를 다시 시작한다(예: 방법 2라면 `-allowLegacyAdminRemote`). 서버가 `config/.bootstrap-token` 에 새 토큰을 만든다. [첫 관리자 로그인](#첫-관리자-로그인)을 진행한다. `server.yaml` 에서 `mfaRequiredForSuperusers` 가 켜져 있으면, 새 슈퍼유저는 첫 로그인 때 2단계 인증을 설정해야 한다.
 
    진행하기 전에 다음 주의 사항을 읽는다.
