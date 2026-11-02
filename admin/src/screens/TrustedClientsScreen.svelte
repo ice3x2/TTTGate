@@ -82,6 +82,7 @@
     /**
      * 발급 요청은 한 번에 하나만 보낸다. 겹쳐 보내면 서버가 받는 순서와 화면의 최신이 어긋나, 화면에는 무효가 된 코드가
      * 남고 보이지 않는 코드가 서버에 남을 수 있다. 요청 중에 고른 기한은 queuedTtl 에 두었다가 앞 요청이 끝나면 보낸다.
+     * 그사이 창을 닫았으면 보내지 않는다. 사용자가 보지 못하는 코드를 발급하면 안 된다.
      */
     let issuing = false;
     let queuedTtl: string | undefined;
@@ -146,7 +147,7 @@
         }
         const next = queuedTtl;
         queuedTtl = undefined;
-        if(next !== undefined && next !== issuedTtl) {
+        if(next !== undefined && next !== issuedTtl && enrollOpen && enrollFor === clientId) {
             ttl = next;
             await issue(clientId);
         }
