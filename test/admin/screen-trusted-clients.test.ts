@@ -294,6 +294,27 @@ test("#313 leaving the screen during a request falls back to the default expiry"
     expect((await ttls()).slice(start)).toEqual([60 * 60_000, 15 * 60_000]);
 }));
 
+// #313: 발급이 실패하면 서버에서는 화면의 코드도 이미 무효일 수 있다(다른 발급, 설정 변경, 삭제). 복사하지 못하게 하고 다시 받게 한다.
+test("#313 a failed issue marks the shown command as no longer valid", () => withApp({fixture: "rbac"}, async (app) => {
+    const {page} = app;
+    await app.serverOption({tls: true, port: 9126});
+    await openClients(page);
+    await rowOf(page, "client-a").locator(".client-code").click();
+    const select = page.locator(".enroll-modal #enroll-ttl");
+    await select.waitFor({state: "visible"});
+    await app.serverOption({tls: false});
+    await select.selectOption("60");
+    await page.locator("#enroll-reissue button").waitFor({state: "visible", timeout: 5000});
+    expect(await page.locator("#enroll-copy").count()).toBe(0);
+    expect(await page.locator(".enroll-modal #enroll-command.expired").count()).toBe(1);
+    expect(await page.locator(".enroll-modal").textContent()).toContain("This code no longer works");
+
+    await app.serverOption({tls: true});
+    await page.locator("#enroll-reissue button").click();
+    await page.locator("#enroll-copy button").waitFor({state: "visible", timeout: 5000});
+    expect(await page.locator(".enroll-modal #enroll-command.expired").count()).toBe(0);
+}));
+
 // #313: 새 코드를 받는 동안에는 곧 무효가 될 옛 명령을 복사하지 못하게 한다.
 test("#313 Copy command is off while a new code is on its way", () => withApp({fixture: "rbac"}, async (app) => {
     const {page} = app;
