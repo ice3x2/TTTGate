@@ -82,6 +82,11 @@ describe("trusted client API authorization and audit (#220)", () => {
             const event = sink.events.find((candidate) => candidate.type === type)!;
             expect([type, event.target, event.outcome]).toEqual([type, {kind: "trusted_client", id: "edge-1"}, "success"]);
         }
+        // #313: 확인 기록은 발급 기록과 issueId 로 짝지어지고, 실제로 적용된 만료를 남긴다(null 은 만료 없음).
+        const issuedEvent = sink.events.find((event) => event.type === "enrollment_code_issued")!;
+        const confirmedEvent = sink.events.find((event) => event.type === "enrollment_code_confirmed")!;
+        expect(issuedEvent.detail?.issueId).toEqual(expect.any(Number));
+        expect(confirmedEvent.detail).toEqual({issueId: issuedEvent.detail?.issueId, expiresAt: null});
         const dump = JSON.stringify(sink.events);
         expect(dump).not.toContain(secret);
         expect(dump).not.toContain(code);

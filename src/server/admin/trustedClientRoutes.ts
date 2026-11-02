@@ -143,6 +143,8 @@ const trustedClientRouteHandlers = (deps: TrustedClientRouteDeps) => {
                 {provisional: provisional === true});
         });
         if(issued.ok) {
+            // 확인 기록과 짝지을 수 있게 발급 번호를 감사에 남긴다.
+            ctx.auditDetail({issueId: issued.issueId});
             ctx.ok({code: issued.code, expiresAt: issued.expiresAt, issueId: issued.issueId, controlPort: ServerOptionStore.instance.serverOption.port});
         } else if(issued.reason === "unknown-client") {
             ctx.fail(404, "CLIENT_NOT_FOUND", `trusted client '${clientId}' does not exist`);
@@ -173,6 +175,8 @@ const trustedClientRouteHandlers = (deps: TrustedClientRouteDeps) => {
             confirmed = await server.confirmEnrollmentCode(clientId, issueId);
         });
         if(confirmed.ok) {
+            // 실제로 적용된 만료를 감사에 남긴다(null 은 만료 없음).
+            ctx.auditDetail({expiresAt: confirmed.expiresAt});
             ctx.ok({expiresAt: confirmed.expiresAt});
         } else if(confirmed.reason === "unknown-client") {
             ctx.fail(404, "CLIENT_NOT_FOUND", `trusted client '${clientId}' does not exist`);
