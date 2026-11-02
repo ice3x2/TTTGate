@@ -315,6 +315,48 @@ test("#313 a failed issue marks the shown command as no longer valid", () => wit
     expect(await page.locator(".enroll-modal #enroll-command.expired").count()).toBe(0);
 }));
 
+// #313: 긴 기한의 발급이 응답만 잃었으면 서버에는 아무도 보지 못한 코드가 남았을 수 있다. 창을 닫으면 기본 기한으로 다시 받는다.
+test("#313 closing the window after a lost long-expiry response falls back to the default expiry", () => withApp({fixture: "rbac"}, async (app) => {
+    const {page} = app;
+    await app.serverOption({tls: true, port: 9126});
+    await openClients(page);
+    await rowOf(page, "client-a").locator(".client-code").click();
+    const select = page.locator(".enroll-modal #enroll-ttl");
+    await select.waitFor({state: "visible"});
+    const ttls = async () => (await app.calls()).filter((call) => call.method === "issueEnrollmentCode").map((call) => call.args[1]);
+    const start = (await ttls()).length;
+    // 서버는 처리하지만 응답은 프록시 오류로 바뀐다.
+    await page.route("**/enrollmentCode", async (route) => {
+        await route.fetch();
+        await route.fulfill({status: 502, contentType: "text/html", body: "<html>Bad Gateway</html>"});
+    });
+    await select.selectOption("never");
+    await page.locator("#enroll-reissue button").waitFor({state: "visible", timeout: 5000});
+    await page.unroute("**/enrollmentCode");
+    await page.keyboard.press("Escape");
+    await page.locator(".enroll-modal").waitFor({state: "hidden"});
+    await waitUntil(async () => (await ttls()).length >= start + 2, {timeoutMs: 10_000, label: "fallback issue sent"});
+    expect((await ttls()).slice(start)).toEqual([null, 15 * 60_000]);
+}));
+
+// #313: 본 코드는 창을 닫아도 그대로 둔다. 사용자가 복사해 둔 명령이 무효가 되면 안 된다.
+test("#313 closing the window keeps a code the admin has seen", () => withApp({fixture: "rbac"}, async (app) => {
+    const {page} = app;
+    await app.serverOption({tls: true, port: 9126});
+    await openClients(page);
+    await rowOf(page, "client-a").locator(".client-code").click();
+    const select = page.locator(".enroll-modal #enroll-ttl");
+    await select.waitFor({state: "visible"});
+    const ttls = async () => (await app.calls()).filter((call) => call.method === "issueEnrollmentCode").map((call) => call.args[1]);
+    const start = (await ttls()).length;
+    await select.selectOption("never");
+    await page.locator(".enroll-modal #enroll-never-warning").waitFor({state: "visible", timeout: 5000});
+    await page.keyboard.press("Escape");
+    await page.locator(".enroll-modal").waitFor({state: "hidden"});
+    await page.waitForTimeout(1000);
+    expect((await ttls()).slice(start)).toEqual([null]);
+}));
+
 // #313: 새 코드를 받는 동안에는 곧 무효가 될 옛 명령을 복사하지 못하게 한다.
 test("#313 Copy command is off while a new code is on its way", () => withApp({fixture: "rbac"}, async (app) => {
     const {page} = app;

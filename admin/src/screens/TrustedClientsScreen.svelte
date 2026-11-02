@@ -46,6 +46,7 @@
             const target = returnFocusTo;
             returnFocusTo = null;
             if(target) queueMicrotask(() => target.focus());
+            queueMicrotask(() => settleClosed());
         }
     });
     const rememberTrigger = (e?: Event): void => {
@@ -94,7 +95,15 @@
     let queuedTtl: string | undefined;
     /** 화면을 떠났다. 창은 닫히지 않은 채 사라지므로, 응답을 받은 뒤에는 창을 닫은 것과 같게 다룬다. */
     let disposed = false;
-    onDestroy(() => { disposed = true; });
+    /**
+     * 긴 기한으로 보낸 요청이 실패했다. 응답만 잃었으면 서버에 아무도 보지 못한 코드가 남았을 수 있다.
+     * 받아서 보여 준 코드는 사용자가 복사했을 수 있으므로 이 표시를 끈다.
+     */
+    let unconfirmedLongCode = false;
+    onDestroy(() => {
+        disposed = true;
+        settleClosed();
+    });
     const ttlMinutesOf = (value: string): number | null => value === 'never' ? null : Number(value);
 
     const failed = (error: unknown): void => {
@@ -144,6 +153,7 @@
             await run(async () => {
                 const result = await TrustedClientsCtrl.instance.issueCode(clientId, ttlMinutesOf(chosen));
                 if(!result.success) {
+                    if(chosen !== DEFAULT_TTL) unconfirmedLongCode = true;
                     ttl = issuedTtl;
                     invalidated = true;
                     toast.push({tone: 'alarm', message: result.message});
@@ -151,6 +161,7 @@
                 }
                 issuedTtl = chosen;
                 invalidated = false;
+                unconfirmedLongCode = false;
                 enrollFor = clientId;
                 enrollCode = {code: result.code, expiresAt: result.expiresAt, controlPort: result.controlPort};
                 now = Date.now();
@@ -162,7 +173,7 @@
         const next = queuedTtl;
         queuedTtl = undefined;
         if(disposed || !(enrollOpen && enrollFor === clientId)) {
-            if(!fallback && issuedTtl !== DEFAULT_TTL) {
+            if(!fallback && (issuedTtl !== DEFAULT_TTL || unconfirmedLongCode)) {
                 ttl = DEFAULT_TTL;
                 await issue(clientId, false, true);
             }
@@ -172,6 +183,16 @@
             ttl = next;
             await issue(clientId);
         }
+    };
+
+    /**
+     * 창이 닫혔거나 화면을 떠났다. 응답을 잃은 긴 기한의 코드가 남았을 수 있으면 기본 기한으로 한 번 다시 받는다.
+     * 요청 중이면 그 요청이 끝난 뒤 issue 가 같은 일을 한다.
+     */
+    const settleClosed = (): void => {
+        if(issuing || !unconfirmedLongCode) return;
+        ttl = DEFAULT_TTL;
+        void issue(enrollFor, false, true);
     };
 
     /** 새 창을 열 때는 기한을 기본(15분)으로 되돌린다. 이전 창에서 고른 값이 다른 클라이언트로 넘어가지 않게 한다. */
