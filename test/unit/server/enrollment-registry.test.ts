@@ -43,6 +43,17 @@ describe("EnrollmentRegistry", () => {
         expect(registry.take(revoked.lookup, "10.0.0.1").ok).toBe(false);
     });
 
+    // 실패한 take 는 만료된 코드를 지운다. 만료 없는 코드(null)는 지우지 않아야 한다(null <= now 는 참이라 쉽게 틀린다).
+    test("pruning after a failed take keeps codes without expiry, and revokeAll drops them", async () => {
+        const registry = new EnrollmentRegistry(clock);
+        const kept = await deriveEnrollmentKeys((await registry.issue("edge", null)).code);
+        expect(registry.take("not-a-lookup", "10.0.0.2")).toEqual({ok: false, reason: "rejected"});
+        expect(registry.take(kept.lookup, "10.0.0.1").ok).toBe(true);
+        const dropped = await deriveEnrollmentKeys((await registry.issue("edge", null)).code);
+        registry.revokeAll();
+        expect(registry.take(dropped.lookup, "10.0.0.1").ok).toBe(false);
+    });
+
     test("a new code for the same client invalidates the previous one", async () => {
         const registry = new EnrollmentRegistry(clock);
         const first = await deriveEnrollmentKeys((await registry.issue("edge")).code);

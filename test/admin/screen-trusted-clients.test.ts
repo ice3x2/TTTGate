@@ -1,6 +1,7 @@
 import type {Page} from "playwright";
 import {startAdminApp, type AdminApp, ADMIN_APP_TEST_TIMEOUT_MS} from "../helpers/adminApp";
 import {RBAC_PASSWORDS} from "../helpers/rbacFixture";
+import {waitUntil} from "../helpers/smokeProcess";
 
 // #213 신뢰 클라이언트 화면과 "등록 명령 복사"
 jest.setTimeout(ADMIN_APP_TEST_TIMEOUT_MS);
@@ -146,9 +147,47 @@ test("#313 the code modal chooses the expiry, including no expiry", () => withAp
     expect(await modal.textContent()).toContain("Never expires");
     await modal.locator("#enroll-never-warning").waitFor({state: "visible"});
     await page.evaluate(() => { const real = Date.now; Date.now = () => real() + 365 * 24 * 3600_000; });
-    await page.waitForTimeout(1500);
+    // 화면은 1초마다 now 를 갱신한다. 그 사이 "Expired" 로 바뀌지 않는지 갱신을 두 번 넘겨 본다.
+    await page.waitForFunction(() => { const w = window as any; w.__ticks = (w.__ticks ?? 0) + 1; return w.__ticks > 2; }, undefined, {polling: 1000, timeout: 10_000});
     expect(await page.locator(".enroll-modal #enroll-command.expired").count()).toBe(0);
     expect(await page.locator("#enroll-reissue").count()).toBe(0);
+    // 경고는 선택 칸의 설명으로 연결된다.
+    expect(await select.getAttribute("aria-describedby")).toBe("enroll-never-warning");
+}));
+
+// #313: 숫자 기한은 그 분 수로 요청하고, 키보드로 바꿔도 선택 칸이 포커스를 잃지 않는다.
+// 다른 클라이언트의 창을 새로 열면 고른 값이 넘어가지 않고 15분으로 돌아간다.
+test("#313 the chosen expiry is sent, keeps focus, and does not carry over to another client", () => withApp({fixture: "rbac"}, async (app) => {
+    const {page} = app;
+    await app.serverOption({tls: true, port: 9126});
+    await openClients(page);
+    await rowOf(page, "client-a").locator(".client-code").click();
+    const select = page.locator(".enroll-modal #enroll-ttl");
+    await select.waitFor({state: "visible"});
+    const issuedTtls = async () => (await app.calls()).filter((call) => call.method === "issueEnrollmentCode").map((call) => call.args[1]);
+    await select.selectOption("10080");
+    await waitUntil(async () => (await issuedTtls()).includes(10080 * 60_000), {timeoutMs: 5000, label: "7 days requested"});
+
+    await select.focus();
+    await page.keyboard.press("ArrowDown");
+    await waitUntil(async () => (await issuedTtls()).includes(43200 * 60_000), {timeoutMs: 5000, label: "30 days requested"});
+    expect(await page.evaluate(() => document.activeElement?.id)).toBe("enroll-ttl");
+
+    await select.selectOption("never");
+    await waitUntil(async () => ((await page.locator(".enroll-modal").textContent()) ?? "").includes("Never expires"), {timeoutMs: 5000, label: "never expires shown"});
+    await page.keyboard.press("Escape");
+    await page.locator(".enroll-modal").waitFor({state: "hidden"});
+
+    const issuedBefore = (await app.calls()).filter((call) => call.method === "issueEnrollmentCode").length;
+    await rowOf(page, "client-b").locator(".client-code").click();
+    await page.locator(".enroll-modal").waitFor({state: "visible"});
+    await waitUntil(async () => (await issuedTtls()).length > issuedBefore, {timeoutMs: 5000, label: "client-b code issued"});
+    const last = (await app.calls()).filter((call) => call.method === "issueEnrollmentCode").pop()!;
+    expect(last.args).toEqual(["client-b", 15 * 60_000]);
+    expect(await page.locator(".enroll-modal #enroll-ttl").inputValue()).toBe("15");
+    // 선택지 이름에도 "Never expires" 가 있으므로, 만료 없음 안내가 없고 만료 시각이 보이는지로 판정한다.
+    expect(await page.locator(".enroll-modal #enroll-never-warning").count()).toBe(0);
+    expect(await page.locator(".enroll-modal").textContent()).toMatch(/Expires \d{4}-\d{2}-\d{2}/);
 }));
 
 test("#225 after expiry, Issue new code shows a new, live command", () => withApp({fixture: "rbac"}, async (app) => {

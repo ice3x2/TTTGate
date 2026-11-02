@@ -1,6 +1,7 @@
 import {withConfigurationServer} from "./configuration-revision-fixture";
 import {IdentityStore} from "../../../../src/server/rbac/IdentityStore";
 import {getFreePort} from "../../../helpers/network";
+import {ADMIN_ROUTES} from "../../../../src/server/admin/routes";
 
 jest.setTimeout(60_000);
 
@@ -97,6 +98,15 @@ describe("trusted client admin API", () => {
         expect((await f.request("POST", `/api/trustedClients/nobody/enrollmentCode`, {})).statusCode).toBe(404);
     }));
 
+    // #313: 감사 기록은 발급한 코드의 만료를 남긴다(없으면 기본 15분, null 은 만료 없음).
+    test("#313 the enrollment_code_issued audit records the chosen expiry", () => {
+        const route = ADMIN_ROUTES.find((candidate) => candidate.handler === "onIssueEnrollmentCode")!;
+        const metaOf = (body: object) => (route.audit as any)({params: {id: "edge-1"}, body});
+        expect(metaOf({ttlMinutes: null}).detail).toEqual({ttlMinutes: null});
+        expect(metaOf({}).detail).toEqual({ttlMinutes: 15});
+        expect(metaOf({ttlMinutes: 10080}).detail).toEqual({ttlMinutes: 10080});
+    });
+
     // #313: ttlMinutes 는 1–43200(30일) 정수이거나 null(만료 없음)이다.
     test("#313 enrollment codes take 1..43200 minutes or null for no expiry", async () => withConfigurationServer(async f => {
         await f.request("POST", "/api/trustedClients", {clientId: "edge-2", expectedRevision: await revision(f)});
@@ -108,7 +118,7 @@ describe("trusted client admin API", () => {
         const month = await f.request("POST", `/api/trustedClients/edge-2/enrollmentCode`, {ttlMinutes: 43200});
         expect(month.statusCode).toBe(200);
         expect(body(month).expiresAt - Date.now()).toBeGreaterThan(43199 * 60_000);
-        for(const wrong of [43201, 0, 1.5, "60"]) {
+        for(const wrong of [43201, 0, 1.5, -1, "60", true]) {
             const rejected = await f.request("POST", `/api/trustedClients/edge-2/enrollmentCode`, {ttlMinutes: wrong});
             expect({wrong, status: rejected.statusCode, code: body(rejected).code}).toEqual({wrong, status: 400, code: "INVALID_TTL"});
         }

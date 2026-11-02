@@ -75,8 +75,13 @@
         {value: '15', label: '15 minutes'}, {value: '60', label: '1 hour'}, {value: '1440', label: '24 hours'},
         {value: '10080', label: '7 days'}, {value: '43200', label: '30 days'}, {value: 'never', label: 'Never expires'}
     ];
-    let ttl = $state('15');
-    const ttlMinutes = (): number | null => ttl === 'never' ? null : Number(ttl);
+    const DEFAULT_TTL = '15';
+    let ttl = $state(DEFAULT_TTL);
+    /** 마지막으로 발급에 성공한 기한. 발급이 실패하면 선택 칸을 이 값으로 되돌린다. */
+    let issuedTtl = DEFAULT_TTL;
+    /** 요청 순번. 선택을 빠르게 바꾸면 요청이 겹치므로 가장 최근 요청의 응답만 화면에 반영한다. */
+    let issueSeq = 0;
+    const ttlMinutesOf = (value: string): number | null => value === 'never' ? null : Number(value);
 
     const failed = (error: unknown): void => {
         if(error instanceof InvalidSession) session.invalidate();
@@ -111,16 +116,28 @@
     };
 
     const issue = (clientId: string) => run(async () => {
-        const result = await TrustedClientsCtrl.instance.issueCode(clientId, ttlMinutes());
+        const chosen = ttl;
+        const seq = ++issueSeq;
+        const result = await TrustedClientsCtrl.instance.issueCode(clientId, ttlMinutesOf(chosen));
+        if(seq !== issueSeq) return;
         if(!result.success) {
+            ttl = issuedTtl;
             toast.push({tone: 'alarm', message: result.message});
             return;
         }
+        issuedTtl = chosen;
         enrollFor = clientId;
         enrollCode = {code: result.code, expiresAt: result.expiresAt, controlPort: result.controlPort};
         now = Date.now();
         enrollOpen = true;
     });
+
+    /** 새 창을 열 때는 기한을 기본(15분)으로 되돌린다. 이전 창에서 고른 값이 다른 클라이언트로 넘어가지 않게 한다. */
+    const openCode = (clientId: string) => {
+        ttl = DEFAULT_TTL;
+        issuedTtl = DEFAULT_TTL;
+        return issue(clientId);
+    };
 
     const create = () => run(async () => {
         const clientId = newId.trim();
@@ -135,7 +152,7 @@
         await load();
         if(tls) {
             pending = false;
-            await issue(clientId);
+            await openCode(clientId);
         }
     });
 
@@ -165,7 +182,7 @@
             toast.push({tone: 'pulse', message: `New secret for ${clientId}. Its connection was closed; enroll it again.`});
             if(tls) {
                 pending = false;
-                await issue(clientId);
+                await openCode(clientId);
             }
         });
     };
@@ -228,7 +245,7 @@
                         </div>
                         <div style="display: flex; flex-wrap: wrap; gap: var(--s-2);">
                             {#if tls}
-                                <Button size="sm" class="client-code" disabled={pending} onclick={(e) => { rememberTrigger(e); void issue(client.clientId); }}>Enrollment code</Button>
+                                <Button size="sm" class="client-code" disabled={pending} onclick={(e) => { rememberTrigger(e); void openCode(client.clientId); }}>Enrollment code</Button>
                             {/if}
                             <Button size="sm" class="client-rotate" disabled={pending} onclick={(e) => { rememberTrigger(e); target = client.clientId; rotateOpen = true; }}>New secret</Button>
                             <Button variant="danger" size="sm" class="client-delete" disabled={pending} onclick={() => { target = client.clientId; deleteOpen = true; }}>Delete</Button>
@@ -244,6 +261,7 @@
     <div style="display: flex; flex-direction: column; gap: var(--s-3);">
         <p style="margin: 0;">Run this on the client host. The code works once.</p>
         <code id="enroll-command" class:expired class="mono" style="overflow-wrap: anywhere; user-select: all; opacity: {expired ? 0.45 : 1};">{command}</code>
+        <div aria-live="polite" style="display: contents;">
         {#if enrollCode}
             {#if enrollCode.expiresAt === null}
                 <p style="margin: 0; color: var(--ink-2);">Never expires</p>
@@ -252,8 +270,10 @@
                 <p style="margin: 0; color: var(--ink-2);">{expired ? 'Expired' : 'Expires'} {formatLocal(enrollCode.expiresAt, false)}</p>
             {/if}
         {/if}
+        </div>
         <Field label="Code expires after" for="enroll-ttl">
-            <Select id="enroll-ttl" options={TTL_OPTIONS} bind:value={ttl} disabled={pending} onchange={() => { void issue(enrollFor); }} />
+            <Select id="enroll-ttl" options={TTL_OPTIONS} bind:value={ttl} describedby={enrollCode?.expiresAt === null ? 'enroll-never-warning' : undefined}
+                onchange={() => { void issue(enrollFor); }} />
         </Field>
     </div>
     {#snippet footer()}

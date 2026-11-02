@@ -309,7 +309,9 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
     {method: 'POST', pattern: new RegExp('^/api/trustedClients/(?<id>[^/]+)/secret$'), action: 'server:manage',
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.trusted_client_secret_rotated, pathIdTarget('trusted_client')(ctx)), handler: 'onRotateTrustedClientSecret'},
     {method: 'POST', pattern: new RegExp('^/api/trustedClients/(?<id>[^/]+)/enrollmentCode$'), action: 'server:manage',
-        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.enrollment_code_issued, pathIdTarget('trusted_client')(ctx)), handler: 'onIssueEnrollmentCode'},
+        // #313: 발급한 코드의 만료(분)를 남긴다. 없으면 기본 15분, null 은 만료 없음이다.
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.enrollment_code_issued, pathIdTarget('trusted_client')(ctx),
+            {ttlMinutes: ctx.body?.ttlMinutes === undefined ? 15 : ctx.body.ttlMinutes}), handler: 'onIssueEnrollmentCode'},
     {method: 'POST', pattern: new RegExp('^/api/groups$'), action: 'group:manage',
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.group_created, {kind: 'group', id: truncateAuditValue(String(ctx.body?.name))}), handler: 'onCreateGroup'},
     {method: 'GET', pattern: new RegExp('^/api/groups/(?<id>[^/]+)$'), action: 'group:manage', handler: 'onGetGroup'},

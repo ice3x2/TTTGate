@@ -97,8 +97,8 @@ class TTTServer {
     /**
      * 신뢰 클라이언트의 등록 코드를 발급한다(#212 REQ-4·REQ-8). 제어 연결이 TLS 가 아니거나 mtls-strict 면 발급하지 않는다:
      * 평문으로는 비밀값을 보내지 않고, strict 는 클라이언트 인증서 없는 등록 연결을 받지 않는다.
+     * ttlMs 가 null 이면 만료 없는 코드다(#313). 없으면 기본 15분이다.
      */
-    /** ttlMs 가 null 이면 만료 없는 코드다(#313). 없으면 기본 15분이다. */
     public async issueEnrollmentCode(clientId: string, ttlMs?: number | null): Promise<{ok: true, code: string, expiresAt: number | null} | {ok: false, reason: 'tls-required' | 'strict-mode' | 'unknown-client'}> {
         const applied = this._appliedServerOption;
         if(applied.tls !== true) return {ok: false, reason: 'tls-required'};
@@ -289,9 +289,14 @@ class TTTServer {
             .some(key => (next as any)[key] !== (previous as any)[key]);
     }
 
-    /** 제어 포트의 TLS 나 모드가 바뀌면 발급한 등록 코드는 의미가 없으므로 모두 무효로 한다(#221 REQ-2). */
+    /**
+     * 제어 포트의 TLS 나 모드가 바뀌면 발급한 등록 코드는 의미가 없으므로 모두 무효로 한다(#221 REQ-2).
+     * 제어 서버를 다시 만드는 다른 변경(포트·keepAlive 등)에도 무효로 한다. 화면의 명령은 옛 설정을 가리키고,
+     * 만료 없는 코드(#313)는 그렇지 않으면 다시 시작할 때까지 남는다.
+     */
     private revokeEnrollmentsIfModeChanged(next: ServerOption, previous: ServerOption): void {
-        if((next.tls === true) !== (previous.tls === true) || (next.controlProtocolMode ?? "mixed") !== (previous.controlProtocolMode ?? "mixed")) {
+        if(this.controlOptionsChanged(next, previous) || (next.tls === true) !== (previous.tls === true)
+            || (next.controlProtocolMode ?? "mixed") !== (previous.controlProtocolMode ?? "mixed")) {
             this._enrollment.revokeAll();
         }
     }

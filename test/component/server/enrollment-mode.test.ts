@@ -74,4 +74,14 @@ describe("enrollment follows the control port mode (#221)", () => {
         if(!fresh.ok) throw new Error(fresh.reason);
         expect(await requestEnrollment({host: "127.0.0.1", port, code: fresh.code})).toMatchObject({ok: true});
     });
+
+    // #313: 제어 서버를 다시 만드는 변경(포트·keepAlive 등)에도 발급한 코드를 무효로 한다. 만료 없는 코드는 그렇지 않으면 끝까지 남는다.
+    test.each([["the port", "port"], ["keepAlive", "keepAlive"]])("changing %s rebuilds the control server and invalidates a code without expiry", async (_label, field) => {
+        const issued = await server.issueEnrollmentCode("edge", null);
+        if(!issued.ok) throw new Error(issued.reason);
+        expect(issued.expiresAt).toBeNull();
+        if(field === "port") port = await getFreePort();
+        await apply(field === "port" ? {port} : {keepAlive: 5000});
+        expect(await requestEnrollment({host: "127.0.0.1", port, code: issued.code})).toMatchObject({ok: false, category: "rejected"});
+    });
 });
