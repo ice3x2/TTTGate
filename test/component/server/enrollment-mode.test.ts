@@ -84,4 +84,18 @@ describe("enrollment follows the control port mode (#221)", () => {
         await apply(field === "port" ? {port} : {keepAlive: 5000});
         expect(await requestEnrollment({host: "127.0.0.1", port, code: issued.code})).toMatchObject({ok: false, category: "rejected"});
     });
+
+    // #313: 제어 서버를 다시 만드는 동안에는 아직 옛 설정으로 발급을 받는다. 그 틈에 발급한 코드도 새 설정이 적용되면 무효다.
+    test("a code issued while the control server is being rebuilt is invalidated too", async () => {
+        const oldControl = server.tunnelServer as any;
+        const realClose = oldControl.close.bind(oldControl);
+        let during: Awaited<ReturnType<TTTServer["issueEnrollmentCode"]>> | undefined;
+        oldControl.close = async () => {
+            during = await server.issueEnrollmentCode("edge", null);
+            return realClose();
+        };
+        await apply({keepAlive: 5000});
+        if(!during?.ok) throw new Error(`not issued during the rebuild: ${JSON.stringify(during)}`);
+        expect(await requestEnrollment({host: "127.0.0.1", port, code: during.code})).toMatchObject({ok: false, category: "rejected"});
+    });
 });

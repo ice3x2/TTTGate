@@ -498,6 +498,8 @@ class TTTServer {
             this._tunnelServer = nextTunnelServer;
             this.syncAllowedClientMaps(nextOption);
             this.recordAppliedServerOption(nextOption, true);
+            // #313: 다시 만드는 동안에는 옛 설정으로 발급을 받았다. 그 틈에 나간 코드도 무효로 한다.
+            this._enrollment.revokeAll();
             this._dirtyControl = false;
             // 새 제어 서버는 nextOption 의 목록으로 만들었으므로 레지스트리도 맞다.
             this._dirtyTrustedClients = false;
