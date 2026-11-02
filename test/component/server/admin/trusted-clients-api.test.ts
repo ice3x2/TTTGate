@@ -102,11 +102,21 @@ describe("trusted client admin API", () => {
     test("#313 the enrollment_code_issued audit records the chosen expiry", () => {
         const route = ADMIN_ROUTES.find((candidate) => candidate.handler === "onIssueEnrollmentCode")!;
         const metaOf = (body: object) => (route.audit as any)({params: {id: "edge-1"}, body});
-        expect(metaOf({ttlMinutes: null}).detail).toEqual({ttlMinutes: null});
-        expect(metaOf({}).detail).toEqual({ttlMinutes: 15});
-        expect(metaOf({ttlMinutes: 10080}).detail).toEqual({ttlMinutes: 10080});
+        expect(metaOf({ttlMinutes: null}).detail).toEqual({ttlMinutes: null, provisional: false});
+        expect(metaOf({}).detail).toEqual({ttlMinutes: 15, provisional: false});
+        expect(metaOf({ttlMinutes: 10080}).detail).toEqual({ttlMinutes: 10080, provisional: false});
+        // 임시 발급은 확인할 때까지 기본 기한이다. 감사자가 실제 기한을 가릴 수 있게 남긴다.
+        expect(metaOf({ttlMinutes: null, provisional: true}).detail).toEqual({ttlMinutes: null, provisional: true});
         // 감사 메타는 검증 전에 만든다. 정수와 null 이 아닌 값은 본문을 그대로 남기지 않는다.
-        for(const wrong of ["x".repeat(1000), {nested: true}, 1.5, true]) expect(metaOf({ttlMinutes: wrong}).detail).toEqual({ttlMinutes: "invalid"});
+        for(const wrong of ["x".repeat(1000), {nested: true}, 1.5, true]) expect(metaOf({ttlMinutes: wrong}).detail).toEqual({ttlMinutes: "invalid", provisional: false});
+    });
+
+    // #313: 확인 감사는 어느 발급을 확인했는지(issueId) 남겨 발급 기록과 짝짓게 한다.
+    test("#313 the enrollment_code_confirmed audit records the issue it confirms", () => {
+        const route = ADMIN_ROUTES.find((candidate) => candidate.handler === "onConfirmEnrollmentCode")!;
+        const metaOf = (body: object) => (route.audit as any)({params: {id: "edge-1"}, body});
+        expect(metaOf({issueId: 7}).detail).toEqual({issueId: 7});
+        for(const wrong of ["x".repeat(1000), 1.5, -1, null]) expect(metaOf({issueId: wrong}).detail).toEqual({issueId: "invalid"});
     });
 
     // #313: 발급하는 사이에 더 새 발급이나 무효화가 있으면 서버는 superseded 를 돌려주고, API 는 409 ENROLLMENT_SUPERSEDED 로 알린다.
