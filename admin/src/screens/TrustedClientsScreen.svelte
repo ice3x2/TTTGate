@@ -69,7 +69,7 @@
     };
     const command = $derived(enrollCode ? `TTTGate client join ${hostPart(address)}:${enrollCode.controlPort} --code ${enrollCode.code}` : '');
     /**
-     * #313: 발급이 실패했다. 실패 사유(다른 발급, 제어 포트 설정 변경, 클라이언트 삭제)는 대개 화면의 코드도 이미 무효라는 뜻이고,
+     * 이슈 313: 발급이 실패했다. 실패 사유(다른 발급, 제어 포트 설정 변경, 클라이언트 삭제)는 대개 화면의 코드도 이미 무효라는 뜻이고,
      * 응답만 잃었을 수도 있다. 만료된 코드처럼 복사를 막고 다시 받게 한다.
      */
     let invalidated = $state(false);
