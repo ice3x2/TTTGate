@@ -98,6 +98,11 @@ describe("README in English and Korean (#310)", () => {
         expect(text).toMatch(/30 days|30일/);
         expect(text).toMatch(/`ttlMinutes`[^\n]*(43200|1–43200)/);
         expect(text).not.toMatch(/1–1440/);
+        // 관리 화면의 두 단계 발급: 임시로 받고 보여 줄 때 확인한다. 확인하지 않으면 15분 뒤 사라진다.
+        expect(text).toMatch(/`provisional: true`/);
+        expect(text).toMatch(/`POST \/api\/trustedClients\/<id>\/enrollmentCode\/confirm`/);
+        // 비밀값 교체(New secret)도 코드를 무효로 한다.
+        expect(text).toMatch(/\*\*Never expires\*\*[^\n]*(new secret|비밀값)/i);
     });
 
     it.each([["English", "Command-Line Reference", () => english], ["한국어", "명령줄 레퍼런스", () => korean]])(

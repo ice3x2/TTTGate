@@ -319,7 +319,7 @@
                 <p style="margin: 0; color: var(--ink-2);">This code no longer works. Issue a new code.</p>
             {:else if enrollCode.expiresAt === null}
                 <p style="margin: 0; color: var(--ink-2);">Never expires</p>
-                <p id="enroll-never-warning" style="margin: 0;">This code stays valid until it is used, a new code is issued, the client is deleted, the control port settings change, or the server restarts. Treat it like a password.</p>
+                <p id="enroll-never-warning" style="margin: 0;">This code stays valid until it is used, a new code is issued, the client gets a new secret, the client is deleted, the control port settings change, or the server restarts. Treat it like a password.</p>
             {:else}
                 <p style="margin: 0; color: var(--ink-2);">{expired ? 'Expired' : 'Expires'} {formatLocal(enrollCode.expiresAt, false)}</p>
             {/if}
