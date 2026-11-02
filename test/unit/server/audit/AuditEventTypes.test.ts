@@ -21,12 +21,14 @@ const EXPECTED_TYPES = [
     "audit_retention_pruned",
     // #212 신뢰 클라이언트·등록
     "trusted_client_created", "trusted_client_deleted", "trusted_client_secret_rotated",
-    "enrollment_code_issued", "client_enrolled", "client_enroll_failed"
+    "enrollment_code_issued", "client_enrolled", "client_enroll_failed",
+    // #313 임시 발급한 등록 코드에 고른 기한을 적용
+    "enrollment_code_confirmed"
 ];
 
 describe("AuditEventTypes", () => {
-    it("표의 이름 50 개를 모두 담는다", () => {
-        expect(AUDIT_EVENT_TYPE_LIST).toHaveLength(50);
+    it("표의 이름 51 개를 모두 담는다", () => {
+        expect(AUDIT_EVENT_TYPE_LIST).toHaveLength(51);
         expect([...AUDIT_EVENT_TYPE_LIST].sort()).toEqual([...EXPECTED_TYPES].sort());
     });
 

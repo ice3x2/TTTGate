@@ -47,7 +47,8 @@ describe("trusted client API authorization and audit (#220)", () => {
             ["POST", "/api/trustedClients", {clientId: "intruder", expectedRevision: rev}],
             ["DELETE", "/api/trustedClients/edge-1", {expectedRevision: rev}],
             ["POST", "/api/trustedClients/edge-1/secret", {expectedRevision: rev}],
-            ["POST", "/api/trustedClients/edge-1/enrollmentCode", {}]
+            ["POST", "/api/trustedClients/edge-1/enrollmentCode", {}],
+            ["POST", "/api/trustedClients/edge-1/enrollmentCode/confirm", {issueId: 1}]
         ];
         for(const [method, endpoint, body] of attempts) {
             const response = await asRegular(method, endpoint, body);
@@ -64,13 +65,14 @@ describe("trusted client API authorization and audit (#220)", () => {
         expect((await f.request("POST", "/api/trustedClients/edge-1/secret", {expectedRevision: await revision(f)})).statusCode).toBe(200);
         const read = await f.snapshot();
         expect((await f.request("POST", "/api/serverOption", {...read.serverOption, tls: true, expectedRevision: read.revisionState.currentRevision})).statusCode).toBe(200);
-        const issued = await f.request("POST", "/api/trustedClients/edge-1/enrollmentCode", {});
+        const issued = await f.request("POST", "/api/trustedClients/edge-1/enrollmentCode", {ttlMinutes: null, provisional: true});
         expect(issued.statusCode).toBe(200);
         const code = JSON.parse(issued.body).code as string;
+        expect((await f.request("POST", "/api/trustedClients/edge-1/enrollmentCode/confirm", {issueId: JSON.parse(issued.body).issueId})).statusCode).toBe(200);
         const secret = f.store.serverOption.trustedClients[0].clientSecret as string;
         expect((await f.request("DELETE", "/api/trustedClients/edge-1", {expectedRevision: await revision(f)})).statusCode).toBe(200);
 
-        const expected = ["trusted_client_created", "trusted_client_secret_rotated", "enrollment_code_issued", "trusted_client_deleted"];
+        const expected = ["trusted_client_created", "trusted_client_secret_rotated", "enrollment_code_issued", "enrollment_code_confirmed", "trusted_client_deleted"];
         await waitFor(() => {
             const types = sink.events.map((event) => event.type);
             if(!expected.every((type) => types.includes(type as any))) throw new Error(`audit pending: ${types.join(",")}`);

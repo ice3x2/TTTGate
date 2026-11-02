@@ -317,6 +317,9 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
         // #313: 발급한 코드의 만료(분)를 남긴다. 없으면 기본 15분, null 은 만료 없음이다.
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.enrollment_code_issued, pathIdTarget('trusted_client')(ctx),
             {ttlMinutes: enrollmentTtlForAudit(ctx.body?.ttlMinutes)}), handler: 'onIssueEnrollmentCode'},
+    // #313: 임시로 발급한 코드를 보여 준 뒤 고른 기한을 적용한다.
+    {method: 'POST', pattern: new RegExp('^/api/trustedClients/(?<id>[^/]+)/enrollmentCode/confirm$'), action: 'server:manage',
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.enrollment_code_confirmed, pathIdTarget('trusted_client')(ctx)), handler: 'onConfirmEnrollmentCode'},
     {method: 'POST', pattern: new RegExp('^/api/groups$'), action: 'group:manage',
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.group_created, {kind: 'group', id: truncateAuditValue(String(ctx.body?.name))}), handler: 'onCreateGroup'},
     {method: 'GET', pattern: new RegExp('^/api/groups/(?<id>[^/]+)$'), action: 'group:manage', handler: 'onGetGroup'},

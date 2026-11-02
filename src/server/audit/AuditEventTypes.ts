@@ -27,6 +27,8 @@ export const AUDIT_EVENT_TYPES = {
     // 신뢰 클라이언트·등록(#212). 코드·비밀값은 감사에 남기지 않는다.
     trusted_client_created: 'trusted_client_created', trusted_client_deleted: 'trusted_client_deleted',
     trusted_client_secret_rotated: 'trusted_client_secret_rotated', enrollment_code_issued: 'enrollment_code_issued',
+    // #313: 임시로 발급한 등록 코드에 고른 기한을 적용했다.
+    enrollment_code_confirmed: 'enrollment_code_confirmed',
     client_enrolled: 'client_enrolled', client_enroll_failed: 'client_enroll_failed',
     // 연결 보안 (단위 5 가 기록)
     security_geo_updated: 'security_geo_updated', security_ban_removed: 'security_ban_removed',

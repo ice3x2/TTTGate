@@ -87,6 +87,7 @@ const EXPECTED_ROUTES: ReadonlyArray<ExpectedRoute> = [
     {method: "DELETE", pattern: "^/api/trustedClients/(?<id>[^/]+)$", action: "server:manage", hasTarget: false},
     {method: "POST", pattern: "^/api/trustedClients/(?<id>[^/]+)/secret$", action: "server:manage", hasTarget: false},
     {method: "POST", pattern: "^/api/trustedClients/(?<id>[^/]+)/enrollmentCode$", action: "server:manage", hasTarget: false},
+    {method: "POST", pattern: "^/api/trustedClients/(?<id>[^/]+)/enrollmentCode/confirm$", action: "server:manage", hasTarget: false},
     {method: "POST", pattern: "^/api/groups$", action: "group:manage", hasTarget: false},
     {method: "GET", pattern: "^/api/groups/(?<id>[^/]+)$", action: "group:manage", hasTarget: false},
     {method: "PUT", pattern: "^/api/groups/(?<id>[^/]+)$", action: "group:manage", hasTarget: false},

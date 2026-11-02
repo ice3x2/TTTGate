@@ -125,14 +125,21 @@ const trustedClientRouteHandlers = (deps: TrustedClientRouteDeps) => {
             ctx.fail(400, "INVALID_TTL", `ttlMinutes must be null (no expiry) or an integer within 1..${MAX_ENROLLMENT_TTL_MINUTES}`);
             return;
         }
+        // #313: provisional 이면 확인(confirm)할 때까지 기본 15분만 유효하다. 관리 화면이 코드를 보여 준 뒤 확인한다.
+        const provisional = ctx.body?.provisional;
+        if(provisional !== undefined && typeof provisional !== "boolean") {
+            ctx.fail(400, "INVALID_PROVISIONAL", "provisional must be true or false");
+            return;
+        }
         const server = deps.tttServer();
         if(!server) {
             ctx.fail(503, "SERVER_NOT_READY", "the tunnel server is not running");
             return;
         }
-        const issued = await server.issueEnrollmentCode(clientId, ttlMinutes === undefined ? undefined : ttlMinutes === null ? null : ttlMinutes * 60_000);
+        const issued = await server.issueEnrollmentCode(clientId, ttlMinutes === undefined ? undefined : ttlMinutes === null ? null : ttlMinutes * 60_000,
+            {provisional: provisional === true});
         if(issued.ok) {
-            ctx.ok({code: issued.code, expiresAt: issued.expiresAt, controlPort: ServerOptionStore.instance.serverOption.port});
+            ctx.ok({code: issued.code, expiresAt: issued.expiresAt, issueId: issued.issueId, controlPort: ServerOptionStore.instance.serverOption.port});
         } else if(issued.reason === "unknown-client") {
             ctx.fail(404, "CLIENT_NOT_FOUND", `trusted client '${clientId}' does not exist`);
         } else if(issued.reason === "superseded") {
@@ -144,7 +151,30 @@ const trustedClientRouteHandlers = (deps: TrustedClientRouteDeps) => {
         }
     };
 
-    return {onCreateTrustedClient, onDeleteTrustedClient, onRotateTrustedClientSecret, onIssueEnrollmentCode};
+    /** 임시로 발급한 코드에 고른 기한을 적용한다(#313). 더 새 발급이나 무효화로 그 코드가 없으면 409 다. */
+    const onConfirmEnrollmentCode = async (ctx: RouteContext): Promise<void> => {
+        const clientId = ctx.params.id ?? "";
+        const issueId = ctx.body?.issueId;
+        if(!Number.isInteger(issueId) || issueId < 1) {
+            ctx.fail(400, "INVALID_ISSUE_ID", "issueId must be the positive integer returned when the code was issued");
+            return;
+        }
+        const server = deps.tttServer();
+        if(!server) {
+            ctx.fail(503, "SERVER_NOT_READY", "the tunnel server is not running");
+            return;
+        }
+        const confirmed = server.confirmEnrollmentCode(clientId, issueId);
+        if(confirmed.ok) {
+            ctx.ok({expiresAt: confirmed.expiresAt});
+        } else if(confirmed.reason === "unknown-client") {
+            ctx.fail(404, "CLIENT_NOT_FOUND", `trusted client '${clientId}' does not exist`);
+        } else {
+            ctx.fail(409, "ENROLLMENT_SUPERSEDED", "this code was replaced, revoked or has expired; issue a new code");
+        }
+    };
+
+    return {onCreateTrustedClient, onDeleteTrustedClient, onRotateTrustedClientSecret, onIssueEnrollmentCode, onConfirmEnrollmentCode};
 };
 
 export {trustedClientRouteHandlers, TrustedClientRouteDeps, CLIENT_ID_PATTERN, MASKED_SECRET, maskTrustedClientSecrets, keepTrustedClients};

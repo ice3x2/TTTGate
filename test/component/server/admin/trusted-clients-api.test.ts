@@ -122,6 +122,38 @@ describe("trusted client admin API", () => {
         }
     }));
 
+    // #313: 관리 화면은 provisional 로 받는다. 코드를 보여 준 뒤 확인해야 고른 기한이 되고, 확인이 없으면 기본 15분 뒤 사라진다.
+    test("#313 a provisional code keeps the default expiry until it is confirmed", async () => withConfigurationServer(async f => {
+        await f.request("POST", "/api/trustedClients", {clientId: "edge-4", expectedRevision: await revision(f)});
+        const read = await f.snapshot();
+        expect((await f.request("POST", "/api/serverOption", {...read.serverOption, tls: true, expectedRevision: read.revisionState.currentRevision})).statusCode).toBe(200);
+        const confirmPath = "/api/trustedClients/edge-4/enrollmentCode/confirm";
+
+        const first = await f.request("POST", "/api/trustedClients/edge-4/enrollmentCode", {ttlMinutes: null, provisional: true});
+        expect(first.statusCode).toBe(200);
+        const left = body(first).expiresAt - Date.now();
+        expect(left).toBeGreaterThan(14 * 60_000);
+        expect(left).toBeLessThanOrEqual(15 * 60_000);
+        expect(Number.isInteger(body(first).issueId)).toBe(true);
+
+        const second = await f.request("POST", "/api/trustedClients/edge-4/enrollmentCode", {ttlMinutes: null, provisional: true});
+        const stale = await f.request("POST", confirmPath, {issueId: body(first).issueId});
+        expect({status: stale.statusCode, code: body(stale).code}).toEqual({status: 409, code: "ENROLLMENT_SUPERSEDED"});
+        const confirmed = await f.request("POST", confirmPath, {issueId: body(second).issueId});
+        expect(confirmed.statusCode).toBe(200);
+        expect(body(confirmed).expiresAt).toBeNull();
+
+        for(const wrong of ["yes", 1, null]) {
+            const rejected = await f.request("POST", "/api/trustedClients/edge-4/enrollmentCode", {provisional: wrong});
+            expect({wrong, status: rejected.statusCode, code: body(rejected).code}).toEqual({wrong, status: 400, code: "INVALID_PROVISIONAL"});
+        }
+        for(const wrong of [undefined, "1", 1.5, -1]) {
+            const rejected = await f.request("POST", confirmPath, {issueId: wrong});
+            expect({wrong, status: rejected.statusCode, code: body(rejected).code}).toEqual({wrong, status: 400, code: "INVALID_ISSUE_ID"});
+        }
+        expect((await f.request("POST", "/api/trustedClients/nobody/enrollmentCode/confirm", {issueId: 1})).statusCode).toBe(404);
+    }));
+
     // #313: ttlMinutes 는 1–43200(30일) 정수이거나 null(만료 없음)이다.
     test("#313 enrollment codes take 1..43200 minutes or null for no expiry", async () => withConfigurationServer(async f => {
         await f.request("POST", "/api/trustedClients", {clientId: "edge-2", expectedRevision: await revision(f)});

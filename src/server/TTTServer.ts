@@ -102,18 +102,25 @@ class TTTServer {
     /**
      * 신뢰 클라이언트의 등록 코드를 발급한다(#212 REQ-4·REQ-8). 제어 연결이 TLS 가 아니거나 mtls-strict 면 발급하지 않는다:
      * 평문으로는 비밀값을 보내지 않고, strict 는 클라이언트 인증서 없는 등록 연결을 받지 않는다.
-     * ttlMs 가 null 이면 만료 없는 코드다(#313). 없으면 기본 15분이다.
+     * ttlMs 가 null 이면 만료 없는 코드다(#313). 없으면 기본 15분이다. provisional 이면 확인할 때까지 기본 기한만 유효하다.
      */
-    public async issueEnrollmentCode(clientId: string, ttlMs?: number | null): Promise<{ok: true, code: string, expiresAt: number | null} | {ok: false, reason: 'tls-required' | 'strict-mode' | 'unknown-client' | 'superseded'}> {
+    public async issueEnrollmentCode(clientId: string, ttlMs?: number | null, options: {provisional?: boolean} = {}): Promise<{ok: true, code: string, expiresAt: number | null, issueId: number} | {ok: false, reason: 'tls-required' | 'strict-mode' | 'unknown-client' | 'superseded'}> {
         if(this._rebuildingControl) return {ok: false, reason: 'superseded'};
         const applied = this._appliedServerOption;
         if(applied.tls !== true) return {ok: false, reason: 'tls-required'};
         if(applied.controlProtocolMode === 'mtls-strict') return {ok: false, reason: 'strict-mode'};
         if(!(applied.trustedClients ?? []).some((client) => client.clientId === clientId)) return {ok: false, reason: 'unknown-client'};
-        const issued = await this._enrollment.issue(clientId, ttlMs);
+        const issued = await this._enrollment.issue(clientId, ttlMs, options);
         // #313: 발급하는 사이에 더 새 발급이나 무효화가 있었다. 이 코드는 남지 않았다.
         if(issued === null) return {ok: false, reason: 'superseded'};
         return {ok: true, ...issued};
+    }
+
+    /** 임시로 발급한 코드에 고른 기한을 적용한다(#313). 그 클라이언트의 현재 코드가 아니면 superseded 다. */
+    public confirmEnrollmentCode(clientId: string, issueId: number): {ok: true, expiresAt: number | null} | {ok: false, reason: 'unknown-client' | 'superseded'} {
+        if(!(this._appliedServerOption.trustedClients ?? []).some((client) => client.clientId === clientId)) return {ok: false, reason: 'unknown-client'};
+        const confirmed = this._enrollment.confirm(clientId, issueId);
+        return confirmed === null ? {ok: false, reason: 'superseded'} : {ok: true, ...confirmed};
     }
 
     private onConcurrencyDenied = (port: number, denial: ConcurrencyDenial, now: number): void => {
