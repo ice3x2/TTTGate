@@ -337,7 +337,7 @@
         {/if}
         </div>
         <Field label="Code expires after" for="enroll-ttl">
-            <Select id="enroll-ttl" options={TTL_OPTIONS} bind:value={ttl} describedby={enrollCode?.expiresAt === null ? 'enroll-never-warning' : undefined}
+            <Select id="enroll-ttl" options={TTL_OPTIONS} bind:value={ttl} describedby={!invalidated && enrollCode?.expiresAt === null ? 'enroll-never-warning' : undefined}
                 onchange={() => { void issue(enrollFor); }} />
         </Field>
     </div>

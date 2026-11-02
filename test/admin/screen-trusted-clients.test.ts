@@ -302,12 +302,17 @@ test("#313 a failed issue marks the shown command as no longer valid", () => wit
     await rowOf(page, "client-a").locator(".client-code").click();
     const select = page.locator(".enroll-modal #enroll-ttl");
     await select.waitFor({state: "visible"});
+    await select.selectOption("never");
+    await page.locator(".enroll-modal #enroll-never-warning").waitFor({state: "visible", timeout: 5000});
     await app.serverOption({tls: false});
     await select.selectOption("60");
     await page.locator("#enroll-reissue button").waitFor({state: "visible", timeout: 5000});
     expect(await page.locator("#enroll-copy").count()).toBe(0);
     expect(await page.locator(".enroll-modal #enroll-command.expired").count()).toBe(1);
     expect(await page.locator(".enroll-modal").textContent()).toContain("This code no longer works");
+    // 선택 칸의 설명은 화면에 있는 요소만 가리킨다.
+    const describedby = await select.getAttribute("aria-describedby");
+    if(describedby) expect(await page.locator(`#${describedby}`).count()).toBe(1);
 
     await app.serverOption({tls: true});
     await page.locator("#enroll-reissue button").click();
