@@ -138,6 +138,18 @@ describe("enrollment follows the control port mode (#221)", () => {
         await expectFreshCodeWorks();
     });
 
+    // #313: 만료 없는 코드도 그 클라이언트의 비밀값을 바꾸거나 클라이언트를 지우면 무효다(README 의 무효화 조건).
+    // 지운 뒤 같은 id 로 다시 만들어도 옛 코드로는 새 비밀값을 받지 못한다.
+    test.each([
+        ["a new secret", [[{clientId: "edge", clientSecret: "edge-secret-2"}]]],
+        ["deleting the client and adding it again", [[{clientId: "other", clientSecret: "other-secret"}], [{clientId: "edge", clientSecret: "edge-secret-3"}]]]
+    ])("%s invalidates a code without expiry", async (_label, steps) => {
+        const issued = await server.issueEnrollmentCode("edge", null);
+        if(!issued.ok) throw new Error(issued.reason);
+        for(const trustedClients of steps) await apply({trustedClients});
+        expect(await requestEnrollment({host: "127.0.0.1", port, code: issued.code})).toMatchObject({ok: false, category: "rejected"});
+    });
+
     // #313: 앞선 적용이 끝나지 못해 설정이 같아도 제어 서버를 다시 만드는 복원이 있다. 다시 만들면 코드는 모두 무효다.
     test("a rollback that rebuilds the control server with the same settings invalidates codes", async () => {
         const state = server.captureRuntimeState();
