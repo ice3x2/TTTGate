@@ -408,6 +408,30 @@ test("#313 a failed confirmation marks the code as no longer valid", () => withA
     expect(await page.locator("#enroll-copy").count()).toBe(0);
     expect(await page.locator(".enroll-modal").textContent()).toContain("This code no longer works");
     expect(await select.inputValue()).toBe("15");
+    // 무효인 명령은 글자를 직접 골라 복사할 수도 없다.
+    expect(await page.locator(".enroll-modal #enroll-command").evaluate((element) => getComputedStyle(element).userSelect)).toBe("none");
+}));
+
+// #313: 2xx 인데 본문을 읽지 못한 확인 응답도 결과를 모르는 것이다. 서버는 이미 확인했을 수 있으므로 기본 기한 코드로 대체한다.
+test("#313 a garbled confirmation response counts as an unknown result", () => withApp({fixture: "rbac"}, async (app) => {
+    const {page} = app;
+    await app.serverOption({tls: true, port: 9126});
+    await openClients(page);
+    await rowOf(page, "client-a").locator(".client-code").click();
+    const select = page.locator(".enroll-modal #enroll-ttl");
+    await select.waitFor({state: "visible"});
+    const start = (await enrollmentCalls(app)).ttls.length;
+    await page.route("**/enrollmentCode/confirm", async (route) => {
+        await route.fetch();
+        await route.fulfill({status: 200, contentType: "text/html", body: "<html>garbled</html>"});
+    });
+    try {
+        await select.selectOption("never");
+        await waitUntil(async () => (await enrollmentCalls(app)).ttls.length >= start + 2, {timeoutMs: 10_000, label: "replacement issued"});
+        expect((await enrollmentCalls(app)).ttls.slice(start)).toEqual([null, 15 * 60_000]);
+    } finally {
+        await page.unroute("**/enrollmentCode/confirm");
+    }
 }));
 
 // #313: 확인은 같은 요청을 다시 보내도 결과가 같다. 응답만 잃었으면 한 번 더 보내 실제 결과를 받는다.

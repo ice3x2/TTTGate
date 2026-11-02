@@ -99,8 +99,11 @@
     const shown = (clientId: string): boolean => !disposed && enrollOpen && enrollFor === clientId;
     /** 기본(15분)보다 긴 기한은 코드를 보여 줄 때 확인해야 적용된다. */
     const needsConfirm = (value: string): boolean => value === 'never' || Number(value) > Number(DEFAULT_TTL);
-    /** 서버가 답하지 못했거나(네트워크 오류) 중간에서 실패했다(5xx). 요청이 적용되었는지 알 수 없다. 409·400 은 서버가 답한 확실한 실패다. */
-    const resultUnknown = (status: number): boolean => status === 0 || status >= 500;
+    /**
+     * 요청이 적용되었는지 알 수 없다. 서버가 답하지 못했거나(네트워크 오류), 중간에서 실패했거나(5xx),
+     * 2xx 인데 본문을 읽지 못했다. 409·400 은 서버가 답한 확실한 실패다.
+     */
+    const resultUnknown = (status: number): boolean => status === 0 || status >= 500 || (status >= 200 && status < 300);
     const ttlMinutesOf = (value: string): number | null => value === 'never' ? null : Number(value);
 
     const failed = (error: unknown): void => {
@@ -329,7 +332,7 @@
 <Modal bind:open={enrollOpen} title={`Enroll ${enrollFor}`} class="enroll-modal">
     <div style="display: flex; flex-direction: column; gap: var(--s-3);">
         <p style="margin: 0;">Run this on the client host. The code works once.</p>
-        <code id="enroll-command" class:expired class="mono" style="overflow-wrap: anywhere; user-select: all; opacity: {expired || pending ? 0.45 : 1};">{command}</code>
+        <code id="enroll-command" class:expired class="mono" style="overflow-wrap: anywhere; user-select: {expired || pending ? 'none' : 'all'}; opacity: {expired || pending ? 0.45 : 1};">{command}</code>
         <div aria-live="polite" style="display: contents;">
         {#if enrollCode}
             {#if invalidated}
