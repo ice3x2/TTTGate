@@ -91,6 +91,20 @@ describe("README in English and Korean (#310)", () => {
     const tableRows = (text: string) => text.split("\n").filter((line) => line.startsWith("|"));
     const commandLines = ["server", "client", "stop", ...Object.entries(COMMANDS).flatMap(([mode, list]) => list.map((command) => `${mode} ${command.path.join(" ")}`))];
 
+    // #313: 등록 코드의 만료는 화면에서 고르고(최대 30일), 만료 없음도 줄 수 있다. 두 절 모두 적는다.
+    it.each([["English", () => english], ["한국어", () => korean]])("explains the enrollment code expiry choices in the %s section", (_label, section) => {
+        const text = section();
+        for(const fact of ["**Code expires after**", "**Never expires**"]) expect({fact, found: text.includes(fact)}).toEqual({fact, found: true});
+        expect(text).toMatch(/30 days|30일/);
+        expect(text).toMatch(/`ttlMinutes`[^\n]*(43200|1–43200)/);
+        expect(text).not.toMatch(/1–1440/);
+        // 관리 화면의 두 단계 발급: 임시로 받고 보여 줄 때 확인한다. 확인하지 않으면 15분 뒤 사라진다.
+        expect(text).toMatch(/`provisional: true`/);
+        expect(text).toMatch(/`POST \/api\/trustedClients\/<id>\/enrollmentCode\/confirm`/);
+        // 비밀값 교체(New secret)도 코드를 무효로 한다.
+        expect(text).toMatch(/\*\*Never expires\*\*[^\n]*(new secret|비밀값)/i);
+    });
+
     it.each([["English", "Command-Line Reference", () => english], ["한국어", "명령줄 레퍼런스", () => korean]])(
         "documents every option and command as its own table row in the %s CLI reference", (_label, heading, section) => {
         const reference = referenceOf(section(), heading);

@@ -41,6 +41,11 @@ class TTTServer {
     private _appliedExternal: Record<number, {option: TunnelingOption, cert: CertInfo, configurationRevision: number, certificateRevision: number}> = {};
     private _appliedScopeRevisions: Record<string, number> = {};
     private _dirtyControl = false;
+    /**
+     * #313: 제어 서버를 다시 만드는 중이다. 그동안에는 등록 코드를 발급하지 않는다. 그 틈의 발급은 옛 설정으로 검사되어,
+     * 바로 무효가 될 코드를 성공으로 돌려주거나 무효화를 피해 남는다.
+     */
+    private _rebuildingControl = false;
     /** #271: 신뢰 클라이언트를 바꾸기 시작해 적용을 다 마치지 못했다. 복원할 때 이전 목록으로 되돌린다. */
     private _dirtyTrustedClients = false;
     private _dirtyExternal = new Set<number>();
@@ -97,14 +102,25 @@ class TTTServer {
     /**
      * 신뢰 클라이언트의 등록 코드를 발급한다(#212 REQ-4·REQ-8). 제어 연결이 TLS 가 아니거나 mtls-strict 면 발급하지 않는다:
      * 평문으로는 비밀값을 보내지 않고, strict 는 클라이언트 인증서 없는 등록 연결을 받지 않는다.
+     * ttlMs 가 null 이면 만료 없는 코드다(#313). 없으면 기본 15분이다. provisional 이면 확인할 때까지 기본 기한만 유효하다.
      */
-    public async issueEnrollmentCode(clientId: string, ttlMs?: number): Promise<{ok: true, code: string, expiresAt: number} | {ok: false, reason: 'tls-required' | 'strict-mode' | 'unknown-client'}> {
+    public async issueEnrollmentCode(clientId: string, ttlMs?: number | null, options: {provisional?: boolean} = {}): Promise<{ok: true, code: string, expiresAt: number | null, issueId: number} | {ok: false, reason: 'tls-required' | 'strict-mode' | 'unknown-client' | 'superseded'}> {
+        if(this._rebuildingControl) return {ok: false, reason: 'superseded'};
         const applied = this._appliedServerOption;
         if(applied.tls !== true) return {ok: false, reason: 'tls-required'};
         if(applied.controlProtocolMode === 'mtls-strict') return {ok: false, reason: 'strict-mode'};
         if(!(applied.trustedClients ?? []).some((client) => client.clientId === clientId)) return {ok: false, reason: 'unknown-client'};
-        const issued = await this._enrollment.issue(clientId, ttlMs);
+        const issued = await this._enrollment.issue(clientId, ttlMs, options);
+        // #313: 발급하는 사이에 더 새 발급이나 무효화가 있었다. 이 코드는 남지 않았다.
+        if(issued === null) return {ok: false, reason: 'superseded'};
         return {ok: true, ...issued};
+    }
+
+    /** 임시로 발급한 코드에 고른 기한을 적용한다(#313). 그 클라이언트의 현재 코드가 아니면 superseded 다. */
+    public confirmEnrollmentCode(clientId: string, issueId: number): {ok: true, expiresAt: number | null} | {ok: false, reason: 'unknown-client' | 'superseded'} {
+        if(!(this._appliedServerOption.trustedClients ?? []).some((client) => client.clientId === clientId)) return {ok: false, reason: 'unknown-client'};
+        const confirmed = this._enrollment.confirm(clientId, issueId);
+        return confirmed === null ? {ok: false, reason: 'superseded'} : {ok: true, ...confirmed};
     }
 
     private onConcurrencyDenied = (port: number, denial: ConcurrencyDenial, now: number): void => {
@@ -288,11 +304,15 @@ class TTTServer {
             .some(key => (next as any)[key] !== (previous as any)[key]);
     }
 
-    /** 제어 포트의 TLS 나 모드가 바뀌면 발급한 등록 코드는 의미가 없으므로 모두 무효로 한다(#221 REQ-2). */
-    private revokeEnrollmentsIfModeChanged(next: ServerOption, previous: ServerOption): void {
-        if((next.tls === true) !== (previous.tls === true) || (next.controlProtocolMode ?? "mixed") !== (previous.controlProtocolMode ?? "mixed")) {
-            this._enrollment.revokeAll();
-        }
+    /**
+     * 제어 서버를 다시 만들기 시작한다. 발급한 등록 코드는 모두 무효로 하고, 다 만들 때까지 새로 발급하지 않는다.
+     * TLS·모드가 바뀌면 코드는 의미가 없다(#221 REQ-2). 포트·keepAlive 등 다른 변경이나 같은 설정으로 다시 만드는 복원에서도
+     * 무효로 한다. 화면의 명령은 옛 서버를 가리키고, 만료 없는 코드(#313)는 그렇지 않으면 다시 시작할 때까지 남는다.
+     * 첫 await 전에 불러야 한다. 그래야 무효화와 다시 만들기 사이에 발급이 끼어들지 못한다.
+     */
+    private beginControlRebuild(): void {
+        this._enrollment.revokeAll();
+        this._rebuildingControl = true;
     }
 
     private trustedClientsChanged(next: ServerOption, previous: ServerOption): boolean {
@@ -334,8 +354,8 @@ class TTTServer {
 
     public async restoreRuntimeState(state: ReturnType<TTTServer['captureRuntimeState']>): Promise<string[]> {
         const failures: string[] = [];
-        this.revokeEnrollmentsIfModeChanged(state.serverOption, this._appliedServerOption);
         if(this._dirtyControl || this.controlOptionsChanged(this._appliedServerOption, state.serverOption)) {
+            this.beginControlRebuild();
             try {
                 await this._tunnelServer.close();
                 const restored = this.createTunnelServer(state.serverOption);
@@ -346,6 +366,7 @@ class TTTServer {
                 // 새 제어 서버는 이전 목록으로 만들었으므로 신뢰 클라이언트도 되돌린 것이다.
                 this._dirtyTrustedClients = false;
             } catch(error) { logger.error('control runtime restore failed', error); failures.push('tunnel-control-restore'); }
+            finally { this._rebuildingControl = false; }
         } else if(this._dirtyTrustedClients || this.trustedClientsChanged(this._appliedServerOption, state.serverOption)) {
             // #271: 적용 도중 예외가 나면 레지스트리만 새 목록이고 _appliedServerOption 은 옛 값일 수 있다. 같은 목록을 다시 넣는 것은 안전하다.
             // 다시 넣다가 또 예외가 나도 나머지 복원은 이어 간다. 플래그는 남겨 다음 복원에서 다시 시도한다.
@@ -436,6 +457,18 @@ class TTTServer {
     }
 
     public async applyServerOption(nextOption: ServerOption, previousOption: ServerOption): Promise<RuntimeApplyResult> {
+        // #313: 제어 서버를 다시 만드는 변경이면 어떤 await 보다 먼저 코드를 무효로 하고 발급을 멈춘다.
+        // 다시 만들기 전의 단계(감사 설정 등)를 기다리는 동안 낸 코드도 곧 무효가 되기 때문이다.
+        const requiresTunnelRestart = this.controlOptionsChanged(nextOption, previousOption);
+        if(requiresTunnelRestart) this.beginControlRebuild();
+        try {
+            return await this.applyServerOptionSteps(nextOption, previousOption, requiresTunnelRestart);
+        } finally {
+            this._rebuildingControl = false;
+        }
+    }
+
+    private async applyServerOptionSteps(nextOption: ServerOption, previousOption: ServerOption, requiresTunnelRestart: boolean): Promise<RuntimeApplyResult> {
         const ttl = resolveSessionTtlMs(nextOption.sessionTtlMs);
         if(!ttl.success) return {success: false, partial: false, failedScopes: ['session-ttl'], warnings: [ttl.message], restartRequiredScopes: []};
         const securityOf = (option: ServerOption) => ({geo: option.connectionSecurity?.geo ?? DEFAULT_GEO_CONFIG, blocklist: option.connectionSecurity?.blocklist ?? []});
@@ -458,9 +491,6 @@ class TTTServer {
         if(previousOption.globalMemCacheLimit !== nextOption.globalMemCacheLimit) {
             AppCompositionRoot.applyGlobalMemLimitMiB(nextOption.globalMemCacheLimit ?? 128);
         }
-
-        const requiresTunnelRestart = this.controlOptionsChanged(nextOption, previousOption);
-        this.revokeEnrollmentsIfModeChanged(nextOption, previousOption);
 
         if(!requiresTunnelRestart) {
             // 앞선 복원이 실패해 레지스트리가 저장된 목록과 다를 수 있으면(플래그) 바뀌지 않았어도 다시 넣어 맞춘다.

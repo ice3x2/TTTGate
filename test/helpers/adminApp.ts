@@ -17,6 +17,10 @@ export type AdminApp = {
     rootDir: string;
     errors: string[];
     calls(): Promise<Array<{method: string; args: any[]}>>;
+    /** #313: 다음 등록 코드 발급 응답들을 이 순서대로 늦춘다(ms). */
+    enrollmentDelays(delays: number[]): Promise<void>;
+    /** #313: 다음 확인(confirm) 응답들을 이 순서대로 늦추거나(delayMs) 실패시킨다(fail, 409 ENROLLMENT_SUPERSEDED). */
+    confirmOutcomes(outcomes: Array<{delayMs?: number, fail?: boolean}>): Promise<void>;
     token(): Promise<string>;
     /** U4-06: 서버의 현재 세션 목록(드라이버가 저장소를 읽는다). 요청 세션이 없으므로 current 는 늘 false 다. */
     sessions(): Promise<Array<{id: string; userId: string; username: string; createdAt: number; lastSeenAt: number; ip: string; userAgent: string}>>;
@@ -110,6 +114,8 @@ export const startAdminApp = async (options: {fixture?: AdminFixture; login?: bo
     const mfaSecret = async (username: string) => (await ask<{secret?: string}>({type: "mfaSecret", username})).secret;
     const mfaRecoveryCodes = async (username: string) => (await ask<{codes: string[]}>({type: "mfaRecoveryCodes", username})).codes;
     const advanceClock = async (ms: number) => (await ask<{offset: number}>({type: "advanceClock", ms})).offset;
+    const enrollmentDelays = async (delays: number[]): Promise<void> => { await ask({type: "enrollmentDelays", delays}); };
+    const confirmOutcomes = async (outcomes: Array<{delayMs?: number, fail?: boolean}>): Promise<void> => { await ask({type: "confirmOutcomes", outcomes}); };
     const serverOption = async (patch: Record<string, unknown>): Promise<void> => {
         const result = await ask<{ok: boolean}>({type: "serverOption", patch});
         if(!result.ok) throw new Error(`serverOption patch was rejected: ${JSON.stringify(patch)}`);
@@ -173,7 +179,7 @@ export const startAdminApp = async (options: {fixture?: AdminFixture; login?: bo
 
         const ownedBrowser = browser;
         return {
-            page, url: ownedBrowser.url, origin, rootDir: root.rootDir, errors: ownedBrowser.errors, calls, token, sessions, seedAudit, seedBan, mfaSecret, mfaRecoveryCodes, advanceClock, serverOption,
+            page, url: ownedBrowser.url, origin, rootDir: root.rootDir, errors: ownedBrowser.errors, calls, token, sessions, seedAudit, seedBan, mfaSecret, mfaRecoveryCodes, advanceClock, serverOption, enrollmentDelays, confirmOutcomes,
             async close(): Promise<void> {
                 try { await ownedBrowser.close(); }
                 finally {

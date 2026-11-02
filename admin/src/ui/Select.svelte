@@ -5,6 +5,7 @@
         options,
         disabled = false,
         class: className = '',
+        describedby,
         onchange,
     }: {
         value?: string;
@@ -12,11 +13,13 @@
         options: Array<{value: string; label: string}>;
         disabled?: boolean;
         class?: string;
+        /** aria-describedby 로 연결할 설명 요소의 id. */
+        describedby?: string;
         onchange?: (value: string) => void;
     } = $props();
 </script>
 
-<select class="select {className}" {id} {disabled} bind:value onchange={() => onchange?.(value)}>
+<select class="select {className}" {id} {disabled} aria-describedby={describedby} bind:value onchange={() => onchange?.(value)}>
     {#each options as o (o.value)}
         <option value={o.value}>{o.label}</option>
     {/each}

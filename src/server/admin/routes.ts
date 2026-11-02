@@ -10,6 +10,7 @@ import {ClockRngProvider} from "../../util/ClockRng";
 import {truncateAuditValue} from "./auditValue";
 import {parseBlockedAddress} from "../security/IpBlocklist";
 import type {MfaTicketStore, PendingEnrollmentStore} from "../mfa/MfaTickets";
+import {DEFAULT_ENROLLMENT_TTL_MS} from "../EnrollmentRegistry";
 
 export type {Action, Target};
 
@@ -136,6 +137,12 @@ const tunnelWriteAction = (ctx: RouteContext): Action =>
 /** summary 는 '<type> <target.id>' 로 고정한다(설계 §4.6). 한 곳에서만 만든다. */
 const auditMeta = (type: AuditEventType, target?: AuditTarget, detail?: Record<string, unknown>): AuditRouteMeta =>
     ({type, target, summary: target ? `${type} ${target.id}` : type, detail});
+
+/** #313: 감사 메타는 검증 전에 만든다. 없으면 기본 15분, 정수와 null 은 그대로, 그 밖의 본문 값은 남기지 않는다. */
+const enrollmentTtlForAudit = (value: unknown): number | null | 'invalid' =>
+    value === undefined ? DEFAULT_ENROLLMENT_TTL_MS / 60_000 : value === null || Number.isInteger(value) ? value as number | null : 'invalid';
+/** #313: 확인한 발급 번호. 감사 메타는 검증 전에 만들므로 양의 정수가 아니면 본문을 남기지 않는다. */
+const enrollmentIssueIdForAudit = (value: unknown): number | 'invalid' => Number.isInteger(value) && (value as number) >= 1 ? value as number : 'invalid';
 
 /**
  * POST /api/tunneling/active/:port 가 활성화를 요구했는지 판정한다.
@@ -309,7 +316,13 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
     {method: 'POST', pattern: new RegExp('^/api/trustedClients/(?<id>[^/]+)/secret$'), action: 'server:manage',
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.trusted_client_secret_rotated, pathIdTarget('trusted_client')(ctx)), handler: 'onRotateTrustedClientSecret'},
     {method: 'POST', pattern: new RegExp('^/api/trustedClients/(?<id>[^/]+)/enrollmentCode$'), action: 'server:manage',
-        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.enrollment_code_issued, pathIdTarget('trusted_client')(ctx)), handler: 'onIssueEnrollmentCode'},
+        // #313: 발급한 코드의 만료(분)를 남긴다. 없으면 기본 15분, null 은 만료 없음이다.
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.enrollment_code_issued, pathIdTarget('trusted_client')(ctx),
+            {ttlMinutes: enrollmentTtlForAudit(ctx.body?.ttlMinutes), provisional: ctx.body?.provisional === true}), handler: 'onIssueEnrollmentCode'},
+    // #313: 임시로 발급한 코드를 보여 준 뒤 고른 기한을 적용한다.
+    {method: 'POST', pattern: new RegExp('^/api/trustedClients/(?<id>[^/]+)/enrollmentCode/confirm$'), action: 'server:manage',
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.enrollment_code_confirmed, pathIdTarget('trusted_client')(ctx),
+            {issueId: enrollmentIssueIdForAudit(ctx.body?.issueId)}), handler: 'onConfirmEnrollmentCode'},
     {method: 'POST', pattern: new RegExp('^/api/groups$'), action: 'group:manage',
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.group_created, {kind: 'group', id: truncateAuditValue(String(ctx.body?.name))}), handler: 'onCreateGroup'},
     {method: 'GET', pattern: new RegExp('^/api/groups/(?<id>[^/]+)$'), action: 'group:manage', handler: 'onGetGroup'},

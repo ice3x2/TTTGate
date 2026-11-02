@@ -1,6 +1,7 @@
 import {withConfigurationServer} from "./configuration-revision-fixture";
 import {IdentityStore} from "../../../../src/server/rbac/IdentityStore";
 import {getFreePort} from "../../../helpers/network";
+import {ADMIN_ROUTES} from "../../../../src/server/admin/routes";
 
 jest.setTimeout(60_000);
 
@@ -95,5 +96,110 @@ describe("trusted client admin API", () => {
         expect(value.expiresAt - Date.now()).toBeGreaterThan(29 * 60_000);
         expect(value.controlPort).toBe(f.store.serverOption.port);
         expect((await f.request("POST", `/api/trustedClients/nobody/enrollmentCode`, {})).statusCode).toBe(404);
+    }));
+
+    // #313: 감사 기록은 발급한 코드의 만료를 남긴다(없으면 기본 15분, null 은 만료 없음).
+    test("#313 the enrollment_code_issued audit records the chosen expiry", () => {
+        const route = ADMIN_ROUTES.find((candidate) => candidate.handler === "onIssueEnrollmentCode")!;
+        const metaOf = (body: object) => (route.audit as any)({params: {id: "edge-1"}, body});
+        expect(metaOf({ttlMinutes: null}).detail).toEqual({ttlMinutes: null, provisional: false});
+        expect(metaOf({}).detail).toEqual({ttlMinutes: 15, provisional: false});
+        expect(metaOf({ttlMinutes: 10080}).detail).toEqual({ttlMinutes: 10080, provisional: false});
+        // 임시 발급은 확인할 때까지 기본 기한이다. 감사자가 실제 기한을 가릴 수 있게 남긴다.
+        expect(metaOf({ttlMinutes: null, provisional: true}).detail).toEqual({ttlMinutes: null, provisional: true});
+        // 감사 메타는 검증 전에 만든다. 정수와 null 이 아닌 값은 본문을 그대로 남기지 않는다.
+        for(const wrong of ["x".repeat(1000), {nested: true}, 1.5, true]) expect(metaOf({ttlMinutes: wrong}).detail).toEqual({ttlMinutes: "invalid", provisional: false});
+    });
+
+    // #313: 확인 감사는 어느 발급을 확인했는지(issueId) 남겨 발급 기록과 짝짓게 한다.
+    test("#313 the enrollment_code_confirmed audit records the issue it confirms", () => {
+        const route = ADMIN_ROUTES.find((candidate) => candidate.handler === "onConfirmEnrollmentCode")!;
+        const metaOf = (body: object) => (route.audit as any)({params: {id: "edge-1"}, body});
+        expect(metaOf({issueId: 7}).detail).toEqual({issueId: 7});
+        for(const wrong of ["x".repeat(1000), 1.5, -1, null]) expect(metaOf({issueId: wrong}).detail).toEqual({issueId: "invalid"});
+    });
+
+    // #313: 발급하는 사이에 더 새 발급이나 무효화가 있으면 서버는 superseded 를 돌려주고, API 는 409 ENROLLMENT_SUPERSEDED 로 알린다.
+    test("#313 a superseded issue answers 409 ENROLLMENT_SUPERSEDED", async () => withConfigurationServer(async f => {
+        await f.request("POST", "/api/trustedClients", {clientId: "edge-3", expectedRevision: await revision(f)});
+        const original = f.tunnel.issueEnrollmentCode;
+        f.tunnel.issueEnrollmentCode = async () => ({ok: false, reason: "superseded"});
+        try {
+            const answer = await f.request("POST", `/api/trustedClients/edge-3/enrollmentCode`, {ttlMinutes: null});
+            expect({status: answer.statusCode, code: body(answer).code}).toEqual({status: 409, code: "ENROLLMENT_SUPERSEDED"});
+        } finally {
+            f.tunnel.issueEnrollmentCode = original;
+        }
+    }));
+
+    // #313: 관리 화면은 provisional 로 받는다. 코드를 보여 준 뒤 확인해야 고른 기한이 되고, 확인이 없으면 기본 15분 뒤 사라진다.
+    test("#313 a provisional code keeps the default expiry until it is confirmed", async () => withConfigurationServer(async f => {
+        await f.request("POST", "/api/trustedClients", {clientId: "edge-4", expectedRevision: await revision(f)});
+        const read = await f.snapshot();
+        expect((await f.request("POST", "/api/serverOption", {...read.serverOption, tls: true, expectedRevision: read.revisionState.currentRevision})).statusCode).toBe(200);
+        const confirmPath = "/api/trustedClients/edge-4/enrollmentCode/confirm";
+
+        const first = await f.request("POST", "/api/trustedClients/edge-4/enrollmentCode", {ttlMinutes: null, provisional: true});
+        expect(first.statusCode).toBe(200);
+        const left = body(first).expiresAt - Date.now();
+        expect(left).toBeGreaterThan(14 * 60_000);
+        expect(left).toBeLessThanOrEqual(15 * 60_000);
+        expect(Number.isInteger(body(first).issueId)).toBe(true);
+
+        const second = await f.request("POST", "/api/trustedClients/edge-4/enrollmentCode", {ttlMinutes: null, provisional: true});
+        const stale = await f.request("POST", confirmPath, {issueId: body(first).issueId});
+        expect({status: stale.statusCode, code: body(stale).code}).toEqual({status: 409, code: "ENROLLMENT_SUPERSEDED"});
+        const confirmed = await f.request("POST", confirmPath, {issueId: body(second).issueId});
+        expect(confirmed.statusCode).toBe(200);
+        expect(body(confirmed).expiresAt).toBeNull();
+
+        for(const wrong of ["yes", 1, null]) {
+            const rejected = await f.request("POST", "/api/trustedClients/edge-4/enrollmentCode", {provisional: wrong});
+            expect({wrong, status: rejected.statusCode, code: body(rejected).code}).toEqual({wrong, status: 400, code: "INVALID_PROVISIONAL"});
+        }
+        for(const wrong of [undefined, "1", 1.5, -1]) {
+            const rejected = await f.request("POST", confirmPath, {issueId: wrong});
+            expect({wrong, status: rejected.statusCode, code: body(rejected).code}).toEqual({wrong, status: 400, code: "INVALID_ISSUE_ID"});
+        }
+        expect((await f.request("POST", "/api/trustedClients/nobody/enrollmentCode/confirm", {issueId: 1})).statusCode).toBe(404);
+    }));
+
+    // #313: 발급과 확인은 진행 중인 설정 변경이 끝난 뒤에 한다. 그 변경이 제어 포트를 바꾸면, 그 사이 낸 코드는 성공으로 나간 직후 무효가 된다.
+    test("#313 issuing and confirming wait for a configuration change in progress", async () => withConfigurationServer(async f => {
+        await f.request("POST", "/api/trustedClients", {clientId: "edge-5", expectedRevision: await revision(f)});
+        const read = await f.snapshot();
+        expect((await f.request("POST", "/api/serverOption", {...read.serverOption, tls: true, expectedRevision: read.revisionState.currentRevision})).statusCode).toBe(200);
+        const issued = await f.request("POST", "/api/trustedClients/edge-5/enrollmentCode", {ttlMinutes: null, provisional: true});
+
+        // 확인을 먼저 한다. 발급을 먼저 하면 앞의 코드가 대체되어 확인할 것이 없다.
+        for(const [path, payload] of [["/api/trustedClients/edge-5/enrollmentCode/confirm", {issueId: body(issued).issueId}], ["/api/trustedClients/edge-5/enrollmentCode", {}]] as const) {
+            let release!: () => void;
+            const held = new Promise<void>((resolve) => { release = resolve; });
+            const mutation = f.store.runConfigurationMutation(() => held);
+            let settled = false;
+            const answer = f.request("POST", path, payload).then((response: any) => { settled = true; return response; });
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            expect({path, settled}).toEqual({path, settled: false});
+            release();
+            await mutation;
+            expect((await answer).statusCode).toBe(200);
+        }
+    }));
+
+    // #313: ttlMinutes 는 1–43200(30일) 정수이거나 null(만료 없음)이다.
+    test("#313 enrollment codes take 1..43200 minutes or null for no expiry", async () => withConfigurationServer(async f => {
+        await f.request("POST", "/api/trustedClients", {clientId: "edge-2", expectedRevision: await revision(f)});
+        const read = await f.snapshot();
+        expect((await f.request("POST", "/api/serverOption", {...read.serverOption, tls: true, expectedRevision: read.revisionState.currentRevision})).statusCode).toBe(200);
+        const never = await f.request("POST", `/api/trustedClients/edge-2/enrollmentCode`, {ttlMinutes: null});
+        expect(never.statusCode).toBe(200);
+        expect(body(never).expiresAt).toBeNull();
+        const month = await f.request("POST", `/api/trustedClients/edge-2/enrollmentCode`, {ttlMinutes: 43200});
+        expect(month.statusCode).toBe(200);
+        expect(body(month).expiresAt - Date.now()).toBeGreaterThan(43199 * 60_000);
+        for(const wrong of [43201, 0, 1.5, -1, "60", true]) {
+            const rejected = await f.request("POST", `/api/trustedClients/edge-2/enrollmentCode`, {ttlMinutes: wrong});
+            expect({wrong, status: rejected.statusCode, code: body(rejected).code}).toEqual({wrong, status: 400, code: "INVALID_TTL"});
+        }
     }));
 });
