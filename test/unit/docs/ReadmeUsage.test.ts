@@ -105,6 +105,25 @@ describe("README in English and Korean (#310)", () => {
         expect(text).toMatch(/\*\*Never expires\*\*[^\n]*(new secret|비밀값)/i);
     });
 
+    // #316: 관리 화면을 다른 컴퓨터에서 여는 방법, 원격 서버의 부트스트랩 토큰, 관리자 계정 복구를 두 절 모두 적는다.
+    // #303 뒤로 0.0.0.0 바인드는 adminAllowedOrigins 와 함께 동작한다. 예전의 "쓸 수 없다" 문장은 틀렸다.
+    it.each([
+        ["English", () => english, {wrong: "`0.0.0.0`, `::` and host names do not work", refused: /connection refused/i, timeout: /time(s|d)? out/i,
+            noReset: /do not use `-reset`/i, lastSuperuser: /last (active )?superuser/i, staysUntilSetup: /token stays the same/i}],
+        ["한국어", () => korean, {wrong: "`0.0.0.0`, `::`, 호스트 이름은 쓸 수 없다", refused: /연결 거부/, timeout: /시간 초과/,
+            noReset: /`-reset` 은 쓰지 않는다/, lastSuperuser: /마지막 (활성 )?슈퍼유저/, staysUntilSetup: /토큰이 바뀌지 않는다/}],
+    ] as const)("explains remote console access, the bootstrap token and account recovery in the %s section", (_label, section, words) => {
+        const text = section();
+        expect(text).not.toContain(words.wrong);
+        for(const fact of ["adminBindHost: 0.0.0.0", "\"https://192.0.2.10:9300\"", "./TTTGate-linux-x64 server -daemon -allowLegacyAdminRemote",
+            "./TTTGate-linux-x64 stop", "Azure", "AWS", "OCI", "403 Forbidden origin", "Refusing insecure admin policy",
+            "~/TTTGate/config/.bootstrap-token", "ssh user@server.example.com 'cat ~/TTTGate/config/.bootstrap-token'",
+            "**My account**", "**Change password**", "**Reset password**", "**Reset MFA**", "config/identity.yaml", "config/.key"]) {
+            expect({fact, found: text.includes(fact)}).toEqual({fact, found: true});
+        }
+        for(const pattern of [words.refused, words.timeout, words.noReset, words.lastSuperuser, words.staysUntilSetup]) expect(text).toMatch(pattern);
+    });
+
     it.each([["English", "Command-Line Reference", () => english], ["한국어", "명령줄 레퍼런스", () => korean]])(
         "documents every option and command as its own table row in the %s CLI reference", (_label, heading, section) => {
         const reference = referenceOf(section(), heading);
