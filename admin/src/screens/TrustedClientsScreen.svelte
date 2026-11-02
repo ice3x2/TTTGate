@@ -281,7 +281,7 @@
 <Modal bind:open={enrollOpen} title={`Enroll ${enrollFor}`} class="enroll-modal">
     <div style="display: flex; flex-direction: column; gap: var(--s-3);">
         <p style="margin: 0;">Run this on the client host. The code works once.</p>
-        <code id="enroll-command" class:expired class="mono" style="overflow-wrap: anywhere; user-select: all; opacity: {expired ? 0.45 : 1};">{command}</code>
+        <code id="enroll-command" class:expired class="mono" style="overflow-wrap: anywhere; user-select: all; opacity: {expired || pending ? 0.45 : 1};">{command}</code>
         <div aria-live="polite" style="display: contents;">
         {#if enrollCode}
             {#if enrollCode.expiresAt === null}
@@ -302,7 +302,7 @@
         {#if expired}
             <span id="enroll-reissue"><Button variant="primary" disabled={pending} onclick={() => { void issue(enrollFor); }}>Issue new code</Button></span>
         {:else}
-            <span id="enroll-copy"><Button variant="primary" onclick={() => { void copy(); }}>Copy command</Button></span>
+            <span id="enroll-copy"><Button variant="primary" disabled={pending} onclick={() => { void copy(); }}>Copy command</Button></span>
         {/if}
     {/snippet}
 </Modal>

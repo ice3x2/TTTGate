@@ -269,6 +269,25 @@ test("#313 a late response does not reopen a closed code window", () => withApp(
     expect(await page.locator(".enroll-modal").isVisible()).toBe(false);
 }));
 
+// #313: 새 코드를 받는 동안에는 곧 무효가 될 옛 명령을 복사하지 못하게 한다.
+test("#313 Copy command is off while a new code is on its way", () => withApp({fixture: "rbac"}, async (app) => {
+    const {page} = app;
+    await app.serverOption({tls: true, port: 9126});
+    await openClients(page);
+    await rowOf(page, "client-a").locator(".client-code").click();
+    const select = page.locator(".enroll-modal #enroll-ttl");
+    await select.waitFor({state: "visible"});
+    const copy = page.locator("#enroll-copy button");
+    expect(await copy.isEnabled()).toBe(true);
+    const issued = async () => (await app.calls()).filter((call) => call.method === "issueEnrollmentCode").length;
+    const start = await issued();
+    await app.enrollmentDelays([1500]);
+    await select.selectOption("60");
+    await waitUntil(async () => (await issued()) > start, {timeoutMs: 5000, label: "request sent"});
+    expect(await copy.isDisabled()).toBe(true);
+    await waitUntil(() => copy.isEnabled(), {timeoutMs: 10_000, label: "copy back on"});
+}));
+
 // #313: 요청 중에 고른 기한은 창을 닫으면 버린다. 닫힌 창 뒤에서 사용자가 보지 못한 코드를 발급하면 안 된다.
 test("#313 a choice queued during a request is dropped when the code window closes", () => withApp({fixture: "rbac"}, async (app) => {
     const {page} = app;
