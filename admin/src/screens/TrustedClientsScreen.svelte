@@ -1,5 +1,5 @@
 <script lang="ts">
-    import {onMount} from 'svelte';
+    import {onDestroy, onMount} from 'svelte';
     import InvalidSession from '../controller/InvalidSession';
     import ServerOptionCtrl from '../controller/ServerOptionCtrl';
     import TrustedClientsCtrl from '../controller/TrustedClientsCtrl';
@@ -87,6 +87,9 @@
      */
     let issuing = false;
     let queuedTtl: string | undefined;
+    /** 화면을 떠났다. 창은 닫히지 않은 채 사라지므로, 응답을 받은 뒤에는 창을 닫은 것과 같게 다룬다. */
+    let disposed = false;
+    onDestroy(() => { disposed = true; });
     const ttlMinutesOf = (value: string): number | null => value === 'never' ? null : Number(value);
 
     const failed = (error: unknown): void => {
@@ -151,7 +154,7 @@
         }
         const next = queuedTtl;
         queuedTtl = undefined;
-        if(!(enrollOpen && enrollFor === clientId)) {
+        if(disposed || !(enrollOpen && enrollFor === clientId)) {
             if(!fallback && issuedTtl !== DEFAULT_TTL) {
                 ttl = DEFAULT_TTL;
                 await issue(clientId, false, true);

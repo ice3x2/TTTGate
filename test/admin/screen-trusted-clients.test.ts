@@ -274,6 +274,26 @@ test("#313 a late response does not reopen a closed code window", () => withApp(
     expect(await page.locator(".enroll-modal").isVisible()).toBe(false);
 }));
 
+// #313: 요청 중에 다른 화면으로 가도 창을 닫은 것과 같다. 기억해 둔 선택은 버리고, 긴 기한의 코드는 기본 기한으로 바꾼다.
+test("#313 leaving the screen during a request falls back to the default expiry", () => withApp({fixture: "rbac"}, async (app) => {
+    const {page} = app;
+    await app.serverOption({tls: true, port: 9126});
+    await openClients(page);
+    await rowOf(page, "client-a").locator(".client-code").click();
+    const select = page.locator(".enroll-modal #enroll-ttl");
+    await select.waitFor({state: "visible"});
+    const ttls = async () => (await app.calls()).filter((call) => call.method === "issueEnrollmentCode").map((call) => call.args[1]);
+    const start = (await ttls()).length;
+    await app.enrollmentDelays([1500]);
+    await select.selectOption("60");
+    await waitUntil(async () => (await ttls()).length > start, {timeoutMs: 5000, label: "request sent"});
+    await select.selectOption("never");
+    await page.evaluate(() => { location.hash = "#/status"; });
+    await waitUntil(async () => (await ttls()).length >= start + 2, {timeoutMs: 10_000, label: "fallback issue sent"});
+    await page.waitForTimeout(1000);
+    expect((await ttls()).slice(start)).toEqual([60 * 60_000, 15 * 60_000]);
+}));
+
 // #313: 새 코드를 받는 동안에는 곧 무효가 될 옛 명령을 복사하지 못하게 한다.
 test("#313 Copy command is off while a new code is on its way", () => withApp({fixture: "rbac"}, async (app) => {
     const {page} = app;
