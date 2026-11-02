@@ -83,19 +83,41 @@ describe("enrollment follows the control port mode (#221)", () => {
         if(field === "port") port = await getFreePort();
         await apply(field === "port" ? {port} : {keepAlive: 5000});
         expect(await requestEnrollment({host: "127.0.0.1", port, code: issued.code})).toMatchObject({ok: false, category: "rejected"});
+        await expectFreshCodeWorks();
     });
 
-    // #313: 제어 서버를 다시 만드는 동안에는 아직 옛 설정으로 발급을 받는다. 그 틈에 발급한 코드도 새 설정이 적용되면 무효다.
-    test("a code issued while the control server is being rebuilt is invalidated too", async () => {
-        const oldControl = server.tunnelServer as any;
-        const realClose = oldControl.close.bind(oldControl);
-        let during: Awaited<ReturnType<TTTServer["issueEnrollmentCode"]>> | undefined;
-        oldControl.close = async () => {
-            during = await server.issueEnrollmentCode("edge", null);
+    /** 다시 만든 제어 서버가 새 코드는 받는지 확인한다. 모든 등록을 거부해도 무효화 테스트는 통과하기 때문이다. */
+    const expectFreshCodeWorks = async () => {
+        const fresh = await server.issueEnrollmentCode("edge");
+        if(!fresh.ok) throw new Error(fresh.reason);
+        expect(await requestEnrollment({host: "127.0.0.1", port, code: fresh.code})).toMatchObject({ok: true});
+    };
+
+    /** 제어 서버의 close() 안에서 발급을 시도해, 다시 만드는 동안의 발급 결과를 돌려준다. */
+    const issueDuringClose = (control: any) => {
+        const realClose = control.close.bind(control);
+        const result: {issued?: Awaited<ReturnType<TTTServer["issueEnrollmentCode"]>>} = {};
+        control.close = async () => {
+            result.issued = await server.issueEnrollmentCode("edge", null);
             return realClose();
         };
+        return result;
+    };
+
+    // #313: 제어 서버를 다시 만드는 동안에는 발급하지 않는다. 그 틈의 발급은 옛 설정으로 검사되어, 쓸 수 없는 코드를 성공으로 돌려주거나 무효화를 피한다.
+    test("issuing while the control server is being rebuilt is refused", async () => {
+        const during = issueDuringClose(server.tunnelServer);
         await apply({keepAlive: 5000});
-        if(!during?.ok) throw new Error(`not issued during the rebuild: ${JSON.stringify(during)}`);
-        expect(await requestEnrollment({host: "127.0.0.1", port, code: during.code})).toMatchObject({ok: false, category: "rejected"});
+        expect(during.issued).toEqual({ok: false, reason: "superseded"});
+        await expectFreshCodeWorks();
+    });
+
+    test("issuing while a failed change is being rolled back is refused", async () => {
+        const state = server.captureRuntimeState();
+        await apply({keepAlive: 5000});
+        const during = issueDuringClose(server.tunnelServer);
+        expect(await server.restoreRuntimeState(state)).toEqual([]);
+        expect(during.issued).toEqual({ok: false, reason: "superseded"});
+        await expectFreshCodeWorks();
     });
 });

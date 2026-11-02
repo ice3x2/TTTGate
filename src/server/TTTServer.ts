@@ -41,6 +41,11 @@ class TTTServer {
     private _appliedExternal: Record<number, {option: TunnelingOption, cert: CertInfo, configurationRevision: number, certificateRevision: number}> = {};
     private _appliedScopeRevisions: Record<string, number> = {};
     private _dirtyControl = false;
+    /**
+     * #313: 제어 서버를 다시 만드는 중이다. 그동안에는 등록 코드를 발급하지 않는다. 그 틈의 발급은 옛 설정으로 검사되어,
+     * 바로 무효가 될 코드를 성공으로 돌려주거나 무효화를 피해 남는다.
+     */
+    private _rebuildingControl = false;
     /** #271: 신뢰 클라이언트를 바꾸기 시작해 적용을 다 마치지 못했다. 복원할 때 이전 목록으로 되돌린다. */
     private _dirtyTrustedClients = false;
     private _dirtyExternal = new Set<number>();
@@ -100,6 +105,7 @@ class TTTServer {
      * ttlMs 가 null 이면 만료 없는 코드다(#313). 없으면 기본 15분이다.
      */
     public async issueEnrollmentCode(clientId: string, ttlMs?: number | null): Promise<{ok: true, code: string, expiresAt: number | null} | {ok: false, reason: 'tls-required' | 'strict-mode' | 'unknown-client' | 'superseded'}> {
+        if(this._rebuildingControl) return {ok: false, reason: 'superseded'};
         const applied = this._appliedServerOption;
         if(applied.tls !== true) return {ok: false, reason: 'tls-required'};
         if(applied.controlProtocolMode === 'mtls-strict') return {ok: false, reason: 'strict-mode'};
@@ -344,6 +350,7 @@ class TTTServer {
         const failures: string[] = [];
         this.revokeEnrollmentsIfModeChanged(state.serverOption, this._appliedServerOption);
         if(this._dirtyControl || this.controlOptionsChanged(this._appliedServerOption, state.serverOption)) {
+            this._rebuildingControl = true;
             try {
                 await this._tunnelServer.close();
                 const restored = this.createTunnelServer(state.serverOption);
@@ -354,6 +361,7 @@ class TTTServer {
                 // 새 제어 서버는 이전 목록으로 만들었으므로 신뢰 클라이언트도 되돌린 것이다.
                 this._dirtyTrustedClients = false;
             } catch(error) { logger.error('control runtime restore failed', error); failures.push('tunnel-control-restore'); }
+            finally { this._rebuildingControl = false; }
         } else if(this._dirtyTrustedClients || this.trustedClientsChanged(this._appliedServerOption, state.serverOption)) {
             // #271: 적용 도중 예외가 나면 레지스트리만 새 목록이고 _appliedServerOption 은 옛 값일 수 있다. 같은 목록을 다시 넣는 것은 안전하다.
             // 다시 넣다가 또 예외가 나도 나머지 복원은 이어 간다. 플래그는 남겨 다음 복원에서 다시 시도한다.
@@ -490,6 +498,7 @@ class TTTServer {
         }
 
         const oldTunnelServer = this._tunnelServer;
+        this._rebuildingControl = true;
         try {
             this._dirtyControl = true;
             await oldTunnelServer.close();
@@ -498,8 +507,6 @@ class TTTServer {
             this._tunnelServer = nextTunnelServer;
             this.syncAllowedClientMaps(nextOption);
             this.recordAppliedServerOption(nextOption, true);
-            // #313: 다시 만드는 동안에는 옛 설정으로 발급을 받았다. 그 틈에 나간 코드도 무효로 한다.
-            this._enrollment.revokeAll();
             this._dirtyControl = false;
             // 새 제어 서버는 nextOption 의 목록으로 만들었으므로 레지스트리도 맞다.
             this._dirtyTrustedClients = false;
@@ -527,6 +534,8 @@ class TTTServer {
                 failedScopes: ["tunnel-control"],
                 restartRequiredScopes
             };
+        } finally {
+            this._rebuildingControl = false;
         }
     }
 
