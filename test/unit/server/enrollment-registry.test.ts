@@ -88,6 +88,58 @@ describe("EnrollmentRegistry", () => {
         expect(registry.take(dropped.lookup, "10.0.0.1").ok).toBe(false);
     });
 
+    // #313: 관리 화면은 임시로 발급한다. 코드를 보여 준 뒤 확인해야 고른 기한이 되고, 확인이 없으면 기본 15분 뒤 사라진다.
+    describe("provisional issue", () => {
+        const takeAfter = async (registry: EnrollmentRegistry, code: string, ms: number) => {
+            now += ms;
+            return registry.take((await deriveEnrollmentKeys(code)).lookup, "10.0.0.1");
+        };
+
+        test("a long expiry starts at the default 15 minutes until it is confirmed", async () => {
+            const registry = new EnrollmentRegistry(clock);
+            const issued = await registry.issue("edge", null, {provisional: true});
+            if(!issued) throw new Error("superseded");
+            expect(issued.expiresAt).toBe(now + 15 * 60_000);
+            expect((await takeAfter(registry, issued.code, 15 * 60_000 + 1)).ok).toBe(false);
+        });
+
+        test("confirming the shown code applies the chosen expiry", async () => {
+            const registry = new EnrollmentRegistry(clock);
+            const issued = await registry.issue("edge", null, {provisional: true});
+            if(!issued) throw new Error("superseded");
+            expect(registry.confirm("edge", issued.issueId)).toEqual({expiresAt: null});
+            expect((await takeAfter(registry, issued.code, 365 * 24 * 3600_000)).ok).toBe(true);
+
+            const week = await registry.issue("edge", 7 * 24 * 3600_000, {provisional: true});
+            if(!week) throw new Error("superseded");
+            expect(registry.confirm("edge", week.issueId)).toEqual({expiresAt: now + 7 * 24 * 3600_000});
+        });
+
+        test("an expiry within the default needs no confirmation", async () => {
+            const registry = new EnrollmentRegistry(clock);
+            const issued = await registry.issue("edge", 5 * 60_000, {provisional: true});
+            if(!issued) throw new Error("superseded");
+            expect(issued.expiresAt).toBe(now + 5 * 60_000);
+            expect(registry.confirm("edge", issued.issueId)).toEqual({expiresAt: now + 5 * 60_000});
+        });
+
+        test("only the current, unexpired code of the client can be confirmed", async () => {
+            const registry = new EnrollmentRegistry(clock);
+            const first = await registry.issue("edge", null, {provisional: true});
+            const second = await registry.issue("edge", null, {provisional: true});
+            if(!first || !second) throw new Error("superseded");
+            expect(registry.confirm("edge", first.issueId)).toBeNull();
+            expect(registry.confirm("other", second.issueId)).toBeNull();
+            now += 15 * 60_000 + 1;
+            expect(registry.confirm("edge", second.issueId)).toBeNull();
+
+            const third = await registry.issue("edge", null, {provisional: true});
+            if(!third) throw new Error("superseded");
+            registry.revokeClient("edge");
+            expect(registry.confirm("edge", third.issueId)).toBeNull();
+        });
+    });
+
     test("a new code for the same client invalidates the previous one", async () => {
         const registry = new EnrollmentRegistry(clock);
         const first = await deriveEnrollmentKeys((await issueOk(registry, "edge")).code);

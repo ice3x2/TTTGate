@@ -13,8 +13,19 @@ const FAILURE_WINDOW_MS = 15 * 60_000;
 /** 실패를 기록하는 주소 묶음 수의 상한. 넘으면 가장 오래된 기록부터 버린다(인증 전 요청으로 메모리를 늘리지 못하게). */
 const MAX_TRACKED_FAILURE_BUCKETS = 10_000;
 
-/** expiresAt 이 null 이면 만료 없음이다(#313). 쓰이거나, 새로 발급하거나, 지우거나, 서버를 다시 시작할 때까지 유효하다. */
-type PendingEnrollment = {clientId: string, keys: EnrollmentKeys, expiresAt: number | null};
+/**
+ * expiresAt 이 null 이면 만료 없음이다(#313). 쓰이거나, 새로 발급하거나, 지우거나, 서버를 다시 시작할 때까지 유효하다.
+ * 임시 발급이면 chosenExpiresAt 에 고른 만료를 두고, confirm 할 때 expiresAt 에 옮긴다.
+ */
+type PendingEnrollment = {clientId: string, keys: EnrollmentKeys, expiresAt: number | null, issueId: number, chosenExpiresAt: number | null};
+type IssuedEnrollment = {code: string, expiresAt: number | null, issueId: number};
+type IssueOptions = {
+    /**
+     * 임시로 발급한다(#313). 기본(15분)보다 긴 기한은 confirm 할 때까지 기본 기한만 유효하다.
+     * 관리 화면은 코드를 보여 준 뒤에 확인한다. 그래서 아무도 보지 못한 긴 기한의 코드는 15분 뒤 사라진다.
+     */
+    provisional?: boolean
+};
 type TakeResult = {ok: true, clientId: string, keys: EnrollmentKeys} | {ok: false, reason: "rejected" | "throttled"};
 
 const isExpired = (pending: PendingEnrollment, now: number): boolean => pending.expiresAt !== null && pending.expiresAt <= now;
@@ -36,17 +47,34 @@ class EnrollmentRegistry {
      * 코드를 발급한다. 같은 클라이언트의 이전 코드는 무효가 된다. ttl 은 1분~30일로 맞추고, null 이면 만료 없음이다(#313).
      * 파생하는 사이에 더 새 발급이나 무효화가 있었으면 아무것도 남기지 않고 null 을 돌려준다.
      */
-    public async issue(clientId: string, ttlMs: number | null = DEFAULT_ENROLLMENT_TTL_MS): Promise<{code: string, expiresAt: number | null} | null> {
+    public async issue(clientId: string, ttlMs: number | null = DEFAULT_ENROLLMENT_TTL_MS, options: IssueOptions = {}): Promise<IssuedEnrollment | null> {
         const generation = this.nextGeneration(clientId);
         const globalGeneration = this._globalGeneration;
         const code = generateEnrollmentCode();
         const keys = await this._derive(code);
         if(this._generations.get(clientId) !== generation || this._globalGeneration !== globalGeneration) return null;
         this.removeClientCodes(clientId);
-        const expiresAt = ttlMs === null ? null
-            : this._now() + Math.min(MAX_ENROLLMENT_TTL_MS, Math.max(MIN_ENROLLMENT_TTL_MS, Math.floor(ttlMs)));
-        this._pending.set(keys.lookup, {clientId, keys, expiresAt});
-        return {code, expiresAt};
+        const now = this._now();
+        const chosenExpiresAt = ttlMs === null ? null
+            : now + Math.min(MAX_ENROLLMENT_TTL_MS, Math.max(MIN_ENROLLMENT_TTL_MS, Math.floor(ttlMs)));
+        const defaultExpiresAt = now + DEFAULT_ENROLLMENT_TTL_MS;
+        const expiresAt = options.provisional && (chosenExpiresAt === null || chosenExpiresAt > defaultExpiresAt) ? defaultExpiresAt : chosenExpiresAt;
+        this._pending.set(keys.lookup, {clientId, keys, expiresAt, issueId: generation, chosenExpiresAt});
+        return {code, expiresAt, issueId: generation};
+    }
+
+    /**
+     * 임시로 발급한 코드에 고른 만료를 적용한다(#313). 그 클라이언트의 현재 코드이고 아직 유효해야 한다.
+     * 더 새 발급·무효화·만료로 그 코드가 없으면 null 이다.
+     */
+    public confirm(clientId: string, issueId: number): {expiresAt: number | null} | null {
+        const now = this._now();
+        for(const pending of this._pending.values()) {
+            if(pending.clientId !== clientId || pending.issueId !== issueId || isExpired(pending, now)) continue;
+            pending.expiresAt = pending.chosenExpiresAt;
+            return {expiresAt: pending.expiresAt};
+        }
+        return null;
     }
 
     /** 조회값으로 코드를 소진한다. 실패 사유(없음·만료·소진)는 구분하지 않는다. */
