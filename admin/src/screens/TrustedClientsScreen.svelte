@@ -82,7 +82,8 @@
     /**
      * 발급 요청은 한 번에 하나만 보낸다. 겹쳐 보내면 서버가 받는 순서와 화면의 최신이 어긋나, 화면에는 무효가 된 코드가
      * 남고 보이지 않는 코드가 서버에 남을 수 있다. 요청 중에 고른 기한은 queuedTtl 에 두었다가 앞 요청이 끝나면 보낸다.
-     * 그사이 창을 닫았으면 보내지 않는다. 사용자가 보지 못하는 코드를 발급하면 안 된다.
+     * 그사이 창을 닫았으면 보내지 않는다. 이미 보낸 요청은 거둘 수 없으므로, 닫힌 창에 기본보다 긴 기한의 코드가 오면
+     * 기본 기한으로 한 번 다시 받는다. 아무도 보지 못한 긴 기한의 코드를 남기지 않고, 창을 그냥 닫았을 때와 같게 한다.
      */
     let issuing = false;
     let queuedTtl: string | undefined;
@@ -120,8 +121,11 @@
         return snapshot.revision;
     };
 
-    /** 코드를 받는다. open 이 참일 때만 창을 연다. 창 안에서 다시 받는 경우 늦게 온 응답이 닫은 창을 다시 열면 안 된다. */
-    const issue = async (clientId: string, open = false): Promise<void> => {
+    /**
+     * 코드를 받는다. open 이 참일 때만 창을 연다. 창 안에서 다시 받는 경우 늦게 온 응답이 닫은 창을 다시 열면 안 된다.
+     * fallback 은 닫힌 창 때문에 기본 기한으로 다시 받는 요청이다. 이 요청이 실패해도 또 다시 받지 않는다.
+     */
+    const issue = async (clientId: string, open = false, fallback = false): Promise<void> => {
         if(issuing) {
             queuedTtl = ttl;
             return;
@@ -147,7 +151,14 @@
         }
         const next = queuedTtl;
         queuedTtl = undefined;
-        if(next !== undefined && next !== issuedTtl && enrollOpen && enrollFor === clientId) {
+        if(!(enrollOpen && enrollFor === clientId)) {
+            if(!fallback && issuedTtl !== DEFAULT_TTL) {
+                ttl = DEFAULT_TTL;
+                await issue(clientId, false, true);
+            }
+            return;
+        }
+        if(next !== undefined && next !== issuedTtl) {
             ttl = next;
             await issue(clientId);
         }
