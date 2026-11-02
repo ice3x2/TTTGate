@@ -161,5 +161,7 @@ export type ApiResult<T> = ({success: true} & T) | ApiFailure;
 
 /** #213 신뢰 클라이언트 목록 항목. 비밀값은 서버가 내보내지 않는다. */
 export type TrustedClientView = {clientId: string; displayName?: string};
-/** #213 등록 코드. expiresAt 은 epoch ms, controlPort 는 명령에 넣을 제어 포트다. */
-export type EnrollmentCodeView = {code: string; expiresAt: number; controlPort: number};
+/** #213 등록 코드. expiresAt 은 epoch ms(null 이면 만료 없음, #313), controlPort 는 명령에 넣을 제어 포트다. */
+export type EnrollmentCodeView = {code: string; expiresAt: number | null; controlPort: number};
+/** #313: 임시로 받은 코드. issueId 로 고른 기한을 확인한다. */
+export type IssuedEnrollmentCode = EnrollmentCodeView & {issueId: number};

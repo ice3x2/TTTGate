@@ -7,30 +7,74 @@ import {rateLimitBucketOf} from "./security/ConnectionRateLimiter";
  */
 const DEFAULT_ENROLLMENT_TTL_MS = 15 * 60_000;
 const MIN_ENROLLMENT_TTL_MS = 60_000;
-const MAX_ENROLLMENT_TTL_MS = 24 * 3600_000;
+const MAX_ENROLLMENT_TTL_MS = 30 * 24 * 3600_000;
 const MAX_ENROLLMENT_FAILURES = 10;
 const FAILURE_WINDOW_MS = 15 * 60_000;
 /** 실패를 기록하는 주소 묶음 수의 상한. 넘으면 가장 오래된 기록부터 버린다(인증 전 요청으로 메모리를 늘리지 못하게). */
 const MAX_TRACKED_FAILURE_BUCKETS = 10_000;
 
-type PendingEnrollment = {clientId: string, keys: EnrollmentKeys, expiresAt: number};
+/**
+ * expiresAt 이 null 이면 만료 없음이다(#313). 쓰이거나, 새로 발급하거나, 지우거나, 서버를 다시 시작할 때까지 유효하다.
+ * 임시 발급이면 chosenExpiresAt 에 고른 만료를 두고, confirm 할 때 expiresAt 에 옮긴다.
+ */
+type PendingEnrollment = {clientId: string, keys: EnrollmentKeys, expiresAt: number | null, issueId: number, chosenExpiresAt: number | null};
+type IssuedEnrollment = {code: string, expiresAt: number | null, issueId: number};
+type IssueOptions = {
+    /**
+     * 임시로 발급한다(#313). 기본(15분)보다 긴 기한은 confirm 할 때까지 기본 기한만 유효하다.
+     * 관리 화면은 코드를 보여 준 뒤에 확인한다. 그래서 아무도 보지 못한 긴 기한의 코드는 15분 뒤 사라진다.
+     */
+    provisional?: boolean
+};
 type TakeResult = {ok: true, clientId: string, keys: EnrollmentKeys} | {ok: false, reason: "rejected" | "throttled"};
+
+const isExpired = (pending: PendingEnrollment, now: number): boolean => pending.expiresAt !== null && pending.expiresAt <= now;
 
 class EnrollmentRegistry {
     private readonly _pending = new Map<string, PendingEnrollment>();
     private readonly _failures = new Map<string, {count: number, since: number}>();
+    /**
+     * 클라이언트별 발급 세대(#313). 키 파생은 비동기라 발급이 겹치면 끝나는 순서가 바뀐다. 발급을 시작할 때와
+     * 무효화할 때 세대를 올리고, 파생이 끝났을 때 세대가 바뀌었으면 코드를 남기지 않는다. 가장 나중에 시작한 발급만 남는다.
+     */
+    private readonly _generations = new Map<string, number>();
+    private _globalGeneration = 0;
 
-    constructor(private readonly _now: () => number = Date.now) {}
+    constructor(private readonly _now: () => number = Date.now,
+                private readonly _derive: (code: string) => Promise<EnrollmentKeys> = deriveEnrollmentKeys) {}
 
-    /** 코드를 발급한다. 같은 클라이언트의 이전 코드는 무효가 된다. ttl 은 1분~24시간으로 맞춘다. */
-    public async issue(clientId: string, ttlMs: number = DEFAULT_ENROLLMENT_TTL_MS): Promise<{code: string, expiresAt: number}> {
+    /**
+     * 코드를 발급한다. 같은 클라이언트의 이전 코드는 무효가 된다. ttl 은 1분~30일로 맞추고, null 이면 만료 없음이다(#313).
+     * 파생하는 사이에 더 새 발급이나 무효화가 있었으면 아무것도 남기지 않고 null 을 돌려준다.
+     */
+    public async issue(clientId: string, ttlMs: number | null = DEFAULT_ENROLLMENT_TTL_MS, options: IssueOptions = {}): Promise<IssuedEnrollment | null> {
+        const generation = this.nextGeneration(clientId);
+        const globalGeneration = this._globalGeneration;
         const code = generateEnrollmentCode();
-        const keys = await deriveEnrollmentKeys(code);
-        this.revokeClient(clientId);
-        const lifetime = Math.min(MAX_ENROLLMENT_TTL_MS, Math.max(MIN_ENROLLMENT_TTL_MS, Math.floor(ttlMs)));
-        const expiresAt = this._now() + lifetime;
-        this._pending.set(keys.lookup, {clientId, keys, expiresAt});
-        return {code, expiresAt};
+        const keys = await this._derive(code);
+        if(this._generations.get(clientId) !== generation || this._globalGeneration !== globalGeneration) return null;
+        this.removeClientCodes(clientId);
+        const now = this._now();
+        const chosenExpiresAt = ttlMs === null ? null
+            : now + Math.min(MAX_ENROLLMENT_TTL_MS, Math.max(MIN_ENROLLMENT_TTL_MS, Math.floor(ttlMs)));
+        const defaultExpiresAt = now + DEFAULT_ENROLLMENT_TTL_MS;
+        const expiresAt = options.provisional && (chosenExpiresAt === null || chosenExpiresAt > defaultExpiresAt) ? defaultExpiresAt : chosenExpiresAt;
+        this._pending.set(keys.lookup, {clientId, keys, expiresAt, issueId: generation, chosenExpiresAt});
+        return {code, expiresAt, issueId: generation};
+    }
+
+    /**
+     * 임시로 발급한 코드에 고른 만료를 적용한다(#313). 그 클라이언트의 현재 코드이고 아직 유효해야 한다.
+     * 더 새 발급·무효화·만료로 그 코드가 없으면 null 이다.
+     */
+    public confirm(clientId: string, issueId: number): {expiresAt: number | null} | null {
+        const now = this._now();
+        for(const pending of this._pending.values()) {
+            if(pending.clientId !== clientId || pending.issueId !== issueId || isExpired(pending, now)) continue;
+            pending.expiresAt = pending.chosenExpiresAt;
+            return {expiresAt: pending.expiresAt};
+        }
+        return null;
     }
 
     /** 조회값으로 코드를 소진한다. 실패 사유(없음·만료·소진)는 구분하지 않는다. */
@@ -42,7 +86,7 @@ class EnrollmentRegistry {
 
         const pending = this._pending.get(lookup);
         if(pending) this._pending.delete(lookup);
-        if(!pending || pending.expiresAt <= now) {
+        if(!pending || isExpired(pending, now)) {
             const current = this._failures.get(bucket) ?? {count: 0, since: now};
             current.count++;
             this._failures.set(bucket, current);
@@ -56,19 +100,32 @@ class EnrollmentRegistry {
     }
 
     public revokeClient(clientId: string): void {
-        for(const [lookup, pending] of this._pending) {
-            if(pending.clientId === clientId) this._pending.delete(lookup);
-        }
+        this.nextGeneration(clientId);
+        this.removeClientCodes(clientId);
     }
 
-    /** 발급한 코드를 모두 무효로 한다(#221 — 제어 포트의 TLS·모드가 바뀔 때). 실패 기록은 둔다. */
+    /** 발급한 코드를 모두 무효로 한다(#221 — 제어 포트의 TLS·모드가 바뀌거나 제어 서버를 다시 만들 때). 실패 기록은 둔다. */
     public revokeAll(): void {
+        this._globalGeneration++;
         this._pending.clear();
     }
 
     public clear(): void {
+        this._globalGeneration++;
         this._pending.clear();
         this._failures.clear();
+    }
+
+    private nextGeneration(clientId: string): number {
+        const next = (this._generations.get(clientId) ?? 0) + 1;
+        this._generations.set(clientId, next);
+        return next;
+    }
+
+    private removeClientCodes(clientId: string): void {
+        for(const [lookup, pending] of this._pending) {
+            if(pending.clientId === clientId) this._pending.delete(lookup);
+        }
     }
 
     /** 창이 지난 실패 기록을 지운다. Map 은 넣은 순서라 앞에서부터 보다가 아직 유효한 기록에서 멈춘다. */
@@ -81,7 +138,7 @@ class EnrollmentRegistry {
 
     private pruneExpired(now: number): void {
         for(const [lookup, pending] of this._pending) {
-            if(pending.expiresAt <= now) this._pending.delete(lookup);
+            if(isExpired(pending, now)) this._pending.delete(lookup);
         }
     }
 }

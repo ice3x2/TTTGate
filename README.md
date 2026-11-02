@@ -239,7 +239,9 @@ Who can do the first setup:
 
 This is the recommended way. The control port must use TLS (`tls: true` in `config/server.yaml`), and `controlProtocolMode` must not be `mtls-strict`. Otherwise the server does not issue a code.
 
-1. In the admin console, open **Trusted clients**, add the client, and copy the command that it shows. You can also press **Enrollment code** on an existing client. The code works once and, by default, expires after 15 minutes.
+1. In the admin console, open **Trusted clients**, add the client, and copy the command that it shows. You can also press **Enrollment code** on an existing client. The code works once and, by default, expires after 15 minutes. To change this, choose another value in **Code expires after** in the same window: 15 minutes, 1 hour, 24 hours, 7 days, 30 days or **Never expires**. The console issues a new code with that expiry, and the old code stops working.
+   - A code with **Never expires** stays valid until it is used, a new code is issued for the client, the client gets a new secret (**New secret**), the client is deleted, the control port settings change, or the server restarts. Codes are kept only in memory. Treat such a code like a password.
+   - The console gets each code in two steps. First it gets a code that is valid for 15 minutes. When the window shows the code, the console applies the expiry that you chose. If the window closes or the response is lost before the code is shown, the longer expiry does not apply, and the code expires after 15 minutes.
 2. On the client host, run the command:
 
    ```shell
@@ -359,7 +361,7 @@ Notes on `-trustedProxyHops`:
 | `-cert <path\|pem>` | Run commands | File path or PEM text | None | Saved by `-save` (a path as a path, PEM text as text) | Client certificate for mutual TLS. Turns TLS on. The path rules of `-ca` apply. |
 | `-privateKey <path\|pem>` | Run commands | File path or PEM text | None | Saved by `-save` (a path as a path, PEM text as text) | Private key of `-cert`. Turns TLS on. The path rules of `-ca` apply. Error messages do not show the path, because the value can be key text that was put in the wrong place. |
 | `-save` | `client`, `client run` | Flag | Off | Writes `config/client.yaml` | Save the resolved options to `config/client.yaml`, then start the client. See the notes below. `-save false` writes nothing. |
-| `--code <code>` | `client join` | 12 Crockford Base32 characters, for example `7Q4K-M2XP-AB01` | None (required) | Used once | Enrollment code from the admin console. It uses digits and the letters A–Z except `I`, `L`, `O` and `U`. When you type it, `I` and `L` are read as `1`, and `O` as `0`. Dashes, spaces and case are ignored. The code works once and, by default, expires after 15 minutes. The `ttlMinutes` field of the admin API (1–1440) can change this. |
+| `--code <code>` | `client join` | 12 Crockford Base32 characters, for example `7Q4K-M2XP-AB01` | None (required) | Used once | Enrollment code from the admin console. It uses digits and the letters A–Z except `I`, `L`, `O` and `U`. When you type it, `I` and `L` are read as `1`, and `O` as `0`. Dashes, spaces and case are ignored. The code works once and, by default, expires after 15 minutes. Choose another expiry in **Code expires after** in the console, up to 30 days or **Never expires**. The `ttlMinutes` field of the admin API takes 1–43200 (30 days), or `null` for no expiry. A script can send `ttlMinutes` alone. The console also sends `provisional: true`. Then an expiry longer than 15 minutes applies only after `POST /api/trustedClients/<id>/enrollmentCode/confirm` with the `issueId` from the response. |
 | `--force` | `client join` | Flag | Off | This run only | Replace an existing `config/client.yaml`. The old file is kept as `client.yaml.bak`. Without it, an existing file stops `client join` with exit code 78. |
 | `-bufferLimit <MiB>` | Run commands | `-1` (no limit) or a whole number 16–1048576 | `128` | Saved by `-save` (as `globalMemCacheLimit`) | Memory buffer limit. Another value is an error (exit code 2). Example: `-bufferLimit 256`. |
 | `-keepAlive <ms>` | Run commands | Whole number, 0 or more | `10000` | Saved by `-save` | TCP keepalive interval of the control connection. A bad or negative value gives a warning, and the client uses 10000. |
@@ -842,7 +844,9 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 
 권장하는 방법이다. 제어 포트가 TLS 를 써야 하고(`config/server.yaml` 의 `tls: true`), `controlProtocolMode` 가 `mtls-strict` 가 아니어야 한다. 그렇지 않으면 서버가 코드를 발급하지 않는다.
 
-1. 관리 화면에서 **Trusted clients** 를 열고 클라이언트를 추가한 뒤, 화면에 나온 명령을 복사한다. 이미 있는 클라이언트라면 **Enrollment code** 를 눌러도 된다. 코드는 한 번만 쓸 수 있고 기본으로 15분 뒤에 만료된다.
+1. 관리 화면에서 **Trusted clients** 를 열고 클라이언트를 추가한 뒤, 화면에 나온 명령을 복사한다. 이미 있는 클라이언트라면 **Enrollment code** 를 눌러도 된다. 코드는 한 번만 쓸 수 있고 기본으로 15분 뒤에 만료된다. 기한을 바꾸려면 같은 창의 **Code expires after** 에서 15분, 1시간, 24시간, 7일, 30일, **Never expires**(만료 없음) 가운데 하나를 고른다. 그러면 그 기한으로 새 코드를 발급하고, 이전 코드는 더 이상 쓸 수 없다.
+   - **Never expires** 코드는 쓰이거나, 그 클라이언트에 새 코드를 발급하거나, 비밀값을 바꾸거나(**New secret**), 클라이언트를 지우거나, 제어 포트 설정이 바뀌거나, 서버를 다시 시작할 때까지 유효하다. 코드는 메모리에만 있다. 이런 코드는 비밀번호처럼 다룬다.
+   - 관리 화면은 코드를 두 단계로 받는다. 먼저 15분 동안 유효한 코드를 받고, 창에 코드를 보여 줄 때 고른 기한을 적용한다. 코드를 보여 주기 전에 창이 닫히거나 응답이 사라지면 긴 기한은 적용되지 않고, 코드는 15분 뒤 만료된다.
 2. 클라이언트 호스트에서 그 명령을 실행한다.
 
    ```shell
@@ -962,7 +966,7 @@ TTTGate <server|client|stop> [command] [options]
 | `-cert <path\|pem>` | 실행 계열 명령 | 파일 경로 또는 PEM 본문 | 없음 | `-save` 로 저장(경로는 경로로, PEM 본문은 본문으로) | 상호 TLS 에 쓰는 클라이언트 인증서. TLS 를 켠다. 경로 규칙은 `-ca` 와 같다. |
 | `-privateKey <path\|pem>` | 실행 계열 명령 | 파일 경로 또는 PEM 본문 | 없음 | `-save` 로 저장(경로는 경로로, PEM 본문은 본문으로) | `-cert` 의 개인 키. TLS 를 켠다. 경로 규칙은 `-ca` 와 같다. 잘못 넣은 키 본문일 수도 있으므로 오류 메시지에 경로를 보여 주지 않는다. |
 | `-save` | `client`, `client run` | 플래그 | 꺼짐 | `config/client.yaml` 에 씀 | 최종 옵션을 `config/client.yaml` 에 저장한 뒤 클라이언트를 시작한다. 아래 참고 사항을 읽는다. `-save false` 는 아무것도 쓰지 않는다. |
-| `--code <code>` | `client join` | Crockford Base32 글자 12개. 예: `7Q4K-M2XP-AB01` | 없음(필수) | 한 번 사용 | 관리 화면에서 받은 등록 코드. 숫자와, `I`·`L`·`O`·`U` 를 뺀 영문자 A–Z 로 이루어진다. 입력할 때 `I` 와 `L` 은 `1` 로, `O` 는 `0` 으로 읽는다. 대시, 공백, 대소문자는 무시한다. 코드는 한 번만 쓸 수 있고 기본으로 15분 뒤에 만료된다. 관리 API 의 `ttlMinutes`(1–1440)로 이 기한을 바꿀 수 있다. |
+| `--code <code>` | `client join` | Crockford Base32 글자 12개. 예: `7Q4K-M2XP-AB01` | 없음(필수) | 한 번 사용 | 관리 화면에서 받은 등록 코드. 숫자와, `I`·`L`·`O`·`U` 를 뺀 영문자 A–Z 로 이루어진다. 입력할 때 `I` 와 `L` 은 `1` 로, `O` 는 `0` 으로 읽는다. 대시, 공백, 대소문자는 무시한다. 코드는 한 번만 쓸 수 있고 기본으로 15분 뒤에 만료된다. 관리 화면의 **Code expires after** 에서 30일까지, 또는 **Never expires**(만료 없음)로 바꿀 수 있다. 관리 API 의 `ttlMinutes` 는 1–43200(30일) 또는 만료 없음을 뜻하는 `null` 을 받는다. 스크립트는 `ttlMinutes` 만 보내도 된다. 관리 화면은 `provisional: true` 도 함께 보낸다. 이때 15분보다 긴 기한은 응답의 `issueId` 로 `POST /api/trustedClients/<id>/enrollmentCode/confirm` 을 보낸 뒤에 적용된다. |
 | `--force` | `client join` | 플래그 | 꺼짐 | 이번 실행만 | 이미 있는 `config/client.yaml` 을 바꾼다. 이전 파일은 `client.yaml.bak` 으로 남는다. 이 옵션이 없으면 파일이 이미 있을 때 `client join` 이 종료 코드 78 로 멈춘다. |
 | `-bufferLimit <MiB>` | 실행 계열 명령 | `-1`(제한 없음) 또는 정수 16–1048576 | `128` | `-save` 로 저장(`globalMemCacheLimit`) | 메모리 버퍼 상한. 그 밖의 값은 오류다(종료 코드 2). 예: `-bufferLimit 256`. |
 | `-keepAlive <ms>` | 실행 계열 명령 | 0 이상의 정수 | `10000` | `-save` 로 저장 | 제어 연결의 TCP keepalive 간격. 잘못된 값이나 음수면 경고를 남기고 10000 을 쓴다. |

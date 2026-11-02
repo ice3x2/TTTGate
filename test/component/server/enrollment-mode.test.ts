@@ -74,4 +74,90 @@ describe("enrollment follows the control port mode (#221)", () => {
         if(!fresh.ok) throw new Error(fresh.reason);
         expect(await requestEnrollment({host: "127.0.0.1", port, code: fresh.code})).toMatchObject({ok: true});
     });
+
+    // #313: 제어 서버를 다시 만드는 변경(포트·keepAlive 등)에도 발급한 코드를 무효로 한다. 만료 없는 코드는 그렇지 않으면 끝까지 남는다.
+    test.each([["the port", "port"], ["keepAlive", "keepAlive"]])("changing %s rebuilds the control server and invalidates a code without expiry", async (_label, field) => {
+        const issued = await server.issueEnrollmentCode("edge", null);
+        if(!issued.ok) throw new Error(issued.reason);
+        expect(issued.expiresAt).toBeNull();
+        if(field === "port") port = await getFreePort();
+        await apply(field === "port" ? {port} : {keepAlive: 5000});
+        expect(await requestEnrollment({host: "127.0.0.1", port, code: issued.code})).toMatchObject({ok: false, category: "rejected"});
+        await expectFreshCodeWorks();
+    });
+
+    /** 다시 만든 제어 서버가 새 코드는 받는지 확인한다. 모든 등록을 거부해도 무효화 테스트는 통과하기 때문이다. */
+    const expectFreshCodeWorks = async () => {
+        const fresh = await server.issueEnrollmentCode("edge");
+        if(!fresh.ok) throw new Error(fresh.reason);
+        expect(await requestEnrollment({host: "127.0.0.1", port, code: fresh.code})).toMatchObject({ok: true});
+    };
+
+    /** 제어 서버의 close() 안에서 발급을 시도해, 다시 만드는 동안의 발급 결과를 돌려준다. */
+    const issueDuringClose = (control: any) => {
+        const realClose = control.close.bind(control);
+        const result: {issued?: Awaited<ReturnType<TTTServer["issueEnrollmentCode"]>>} = {};
+        control.close = async () => {
+            result.issued = await server.issueEnrollmentCode("edge", null);
+            return realClose();
+        };
+        return result;
+    };
+
+    // #313: 제어 서버를 다시 만드는 동안에는 발급하지 않는다. 그 틈의 발급은 옛 설정으로 검사되어, 쓸 수 없는 코드를 성공으로 돌려주거나 무효화를 피한다.
+    test("issuing while the control server is being rebuilt is refused", async () => {
+        const during = issueDuringClose(server.tunnelServer);
+        await apply({keepAlive: 5000});
+        expect(during.issued).toEqual({ok: false, reason: "superseded"});
+        await expectFreshCodeWorks();
+    });
+
+    // #313: 제어 서버를 다시 만들기 전의 단계(감사 설정 적용)도 기다린다. 그 틈의 발급도 곧 무효가 되므로 거절한다.
+    test("issuing while earlier steps of a control change are applied is refused", async () => {
+        const real = (TTTServer as any).applyAuditOption;
+        let during: Awaited<ReturnType<TTTServer["issueEnrollmentCode"]>> | undefined;
+        const spy = jest.spyOn(TTTServer as any, "applyAuditOption").mockImplementation(async (...args: unknown[]) => {
+            during = await server.issueEnrollmentCode("edge", null);
+            return real.apply(TTTServer, args);
+        });
+        try {
+            await apply({keepAlive: 5000});
+        } finally {
+            spy.mockRestore();
+        }
+        expect(during).toEqual({ok: false, reason: "superseded"});
+        await expectFreshCodeWorks();
+    });
+
+    test("issuing while a failed change is being rolled back is refused", async () => {
+        const state = server.captureRuntimeState();
+        await apply({keepAlive: 5000});
+        const during = issueDuringClose(server.tunnelServer);
+        expect(await server.restoreRuntimeState(state)).toEqual([]);
+        expect(during.issued).toEqual({ok: false, reason: "superseded"});
+        await expectFreshCodeWorks();
+    });
+
+    // #313: 만료 없는 코드도 그 클라이언트의 비밀값을 바꾸거나 클라이언트를 지우면 무효다(README 의 무효화 조건).
+    // 지운 뒤 같은 id 로 다시 만들어도 옛 코드로는 새 비밀값을 받지 못한다.
+    test.each([
+        ["a new secret", [[{clientId: "edge", clientSecret: "edge-secret-2"}]]],
+        ["deleting the client and adding it again", [[{clientId: "other", clientSecret: "other-secret"}], [{clientId: "edge", clientSecret: "edge-secret-3"}]]]
+    ])("%s invalidates a code without expiry", async (_label, steps) => {
+        const issued = await server.issueEnrollmentCode("edge", null);
+        if(!issued.ok) throw new Error(issued.reason);
+        for(const trustedClients of steps) await apply({trustedClients});
+        expect(await requestEnrollment({host: "127.0.0.1", port, code: issued.code})).toMatchObject({ok: false, category: "rejected"});
+    });
+
+    // #313: 앞선 적용이 끝나지 못해 설정이 같아도 제어 서버를 다시 만드는 복원이 있다. 다시 만들면 코드는 모두 무효다.
+    test("a rollback that rebuilds the control server with the same settings invalidates codes", async () => {
+        const state = server.captureRuntimeState();
+        const issued = await server.issueEnrollmentCode("edge", null);
+        if(!issued.ok) throw new Error(issued.reason);
+        (server as any)._dirtyControl = true;
+        expect(await server.restoreRuntimeState(state)).toEqual([]);
+        expect(await requestEnrollment({host: "127.0.0.1", port, code: issued.code})).toMatchObject({ok: false, category: "rejected"});
+        await expectFreshCodeWorks();
+    });
 });
