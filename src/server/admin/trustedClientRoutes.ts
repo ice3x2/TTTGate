@@ -164,7 +164,7 @@ const trustedClientRouteHandlers = (deps: TrustedClientRouteDeps) => {
             ctx.fail(503, "SERVER_NOT_READY", "the tunnel server is not running");
             return;
         }
-        const confirmed = server.confirmEnrollmentCode(clientId, issueId);
+        const confirmed = await server.confirmEnrollmentCode(clientId, issueId);
         if(confirmed.ok) {
             ctx.ok({expiresAt: confirmed.expiresAt});
         } else if(confirmed.reason === "unknown-client") {

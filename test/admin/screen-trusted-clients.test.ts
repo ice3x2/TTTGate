@@ -377,6 +377,39 @@ test("#313 a shown long-expiry code is confirmed and kept when the window closes
     expect(confirms).toHaveLength(1);
 }));
 
+// #313: 고른 기한은 코드를 창에 보여 준 다음에 확인한다. 보여 주기 전에 확인하면, 그 사이 창을 닫았을 때 아무도 못 본 긴 기한의 코드가 남는다.
+test("#313 the new code is shown before its long expiry is confirmed", () => withApp({fixture: "rbac"}, async (app) => {
+    const {page} = app;
+    await app.serverOption({tls: true, port: 9126});
+    await openClients(page);
+    await rowOf(page, "client-a").locator(".client-code").click();
+    const select = page.locator(".enroll-modal #enroll-ttl");
+    await select.waitFor({state: "visible"});
+    const before = await commandText(page);
+    await app.confirmOutcomes([{delayMs: 2000}]);
+    await select.selectOption("never");
+    await waitUntil(async () => (await enrollmentCalls(app)).confirms.length === 1, {timeoutMs: 5000, label: "confirm sent"});
+    // 확인 응답은 아직 오지 않았다. 새 코드는 이미 보여야 한다.
+    expect(await commandText(page)).not.toBe(before);
+    await page.locator(".enroll-modal #enroll-never-warning").waitFor({state: "visible", timeout: 10_000});
+}));
+
+// #313: 확인이 실패하면 그 코드는 대체되었거나 무효다(또는 응답만 잃었다). 복사하지 못하게 하고 다시 받게 하며, 선택을 되돌린다.
+test("#313 a failed confirmation marks the code as no longer valid", () => withApp({fixture: "rbac"}, async (app) => {
+    const {page} = app;
+    await app.serverOption({tls: true, port: 9126});
+    await openClients(page);
+    await rowOf(page, "client-a").locator(".client-code").click();
+    const select = page.locator(".enroll-modal #enroll-ttl");
+    await select.waitFor({state: "visible"});
+    await app.confirmOutcomes([{fail: true}]);
+    await select.selectOption("never");
+    await page.locator("#enroll-reissue button").waitFor({state: "visible", timeout: 5000});
+    expect(await page.locator("#enroll-copy").count()).toBe(0);
+    expect(await page.locator(".enroll-modal").textContent()).toContain("This code no longer works");
+    expect(await select.inputValue()).toBe("15");
+}));
+
 // #313: 새 코드를 받는 동안에는 곧 무효가 될 옛 명령을 복사하지 못하게 한다.
 test("#313 Copy command is off while a new code is on its way", () => withApp({fixture: "rbac"}, async (app) => {
     const {page} = app;

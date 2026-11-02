@@ -43,6 +43,8 @@ let enrollmentCodeCount = 0;
 let enrollmentDelays: number[] = [];
 /** #313: 클라이언트별 마지막 발급. 확인(confirm)은 이 발급일 때만 고른 기한을 돌려준다. */
 const issuedEnrollments = new Map<string, {issueId: number, chosenExpiresAt: number | null}>();
+/** #313: 다음 확인 응답들의 지연과 실패. */
+let confirmOutcomes: Array<{delayMs?: number, fail?: boolean}> = [];
 // 'rbac-mfa' 의 alice 복구 코드 평문. identity.yaml 에는 해시만 있다.
 let mfaRecoveryCodes: string[] = [];
 
@@ -122,8 +124,11 @@ const stub = {
         issuedEnrollments.set(clientId, {issueId: enrollmentCodeCount, chosenExpiresAt});
         return {ok: true, code: `7Q4K-M2XP-${String(enrollmentCodeCount).padStart(4, "0")}`, expiresAt, issueId: enrollmentCodeCount};
     },
-    confirmEnrollmentCode(clientId: string, issueId: number) {
+    async confirmEnrollmentCode(clientId: string, issueId: number) {
         record("confirmEnrollmentCode", [clientId, issueId]);
+        const outcome = confirmOutcomes.shift() ?? {};
+        if((outcome.delayMs ?? 0) > 0) await new Promise((resolve) => setTimeout(resolve, outcome.delayMs));
+        if(outcome.fail) return {ok: false, reason: "superseded"};
         const issued = issuedEnrollments.get(clientId);
         if(!issued || issued.issueId !== issueId) return {ok: false, reason: "superseded"};
         return {ok: true, expiresAt: issued.chosenExpiresAt};
@@ -300,6 +305,10 @@ const stub = {
         }
         if(message && message.type === "mfaRecoveryCodes") {
             process.send?.({type: "mfaRecoveryCodes", codes: message.username === "alice" ? mfaRecoveryCodes : []});
+        }
+        if(message && message.type === "confirmOutcomes") {
+            confirmOutcomes = [...message.outcomes];
+            process.send?.({type: "confirmOutcomes"});
         }
         if(message && message.type === "enrollmentDelays") {
             enrollmentDelays = [...message.delays];

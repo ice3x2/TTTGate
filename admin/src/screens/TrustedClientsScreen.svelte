@@ -152,25 +152,24 @@
                 }
                 // 창이 닫혔거나 화면을 떠났으면 확인하지 않는다. 임시 코드는 기본 15분 뒤 사라진다.
                 if(open ? disposed : !shown(clientId)) return;
-                let expiresAt = result.expiresAt;
-                let applied = chosen;
-                if(needsConfirm(chosen)) {
-                    const confirmed = await TrustedClientsCtrl.instance.confirmCode(clientId, result.issueId);
-                    if(confirmed.success) {
-                        expiresAt = confirmed.expiresAt;
-                    } else {
-                        // 코드는 받았지만 고른 기한은 적용되지 않았다. 기본 기한으로 보여 준다.
-                        applied = DEFAULT_TTL;
-                        ttl = DEFAULT_TTL;
-                        toast.push({tone: 'alarm', message: `${confirmed.message} This code expires in 15 minutes.`});
-                    }
-                }
-                issuedTtl = applied;
+                // 먼저 보여 준다. 고른 기한은 보여 준 코드에만 확인한다.
                 invalidated = false;
                 enrollFor = clientId;
-                enrollCode = {code: result.code, expiresAt, controlPort: result.controlPort};
+                enrollCode = {code: result.code, expiresAt: result.expiresAt, controlPort: result.controlPort};
                 now = Date.now();
                 if(open) enrollOpen = true;
+                if(needsConfirm(chosen) && shown(clientId)) {
+                    const confirmed = await TrustedClientsCtrl.instance.confirmCode(clientId, result.issueId);
+                    if(!confirmed.success) {
+                        // 그 코드는 대체되었거나 무효다. 응답만 잃었다면 서버에서는 긴 기한일 수 있으니 다시 받게 한다.
+                        ttl = issuedTtl;
+                        invalidated = true;
+                        toast.push({tone: 'alarm', message: confirmed.message});
+                        return;
+                    }
+                    enrollCode = {...enrollCode, expiresAt: confirmed.expiresAt};
+                }
+                issuedTtl = chosen;
             });
         } finally {
             issuing = false;
