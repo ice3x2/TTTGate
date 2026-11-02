@@ -41,6 +41,8 @@ let clockOffset = 0;
 let enrollmentCodeCount = 0;
 /** #313: 다음 발급 응답들을 이 순서대로 늦춘다(ms). 응답이 거꾸로 도착하는 상황을 만든다. */
 let enrollmentDelays: number[] = [];
+/** #313: 클라이언트별 마지막 발급. 확인(confirm)은 이 발급일 때만 고른 기한을 돌려준다. */
+const issuedEnrollments = new Map<string, {issueId: number, chosenExpiresAt: number | null}>();
 // 'rbac-mfa' 의 alice 복구 코드 평문. identity.yaml 에는 해시만 있다.
 let mfaRecoveryCodes: string[] = [];
 
@@ -103,8 +105,8 @@ const stub = {
         return OK();
     },
     // #213: 등록 코드 발급. 실제 TTTServer 와 같은 판정(TLS·등록 여부)을 저장소 값으로 흉내 낸다.
-    async issueEnrollmentCode(clientId: string, ttlMs?: number | null) {
-        record("issueEnrollmentCode", [clientId, ttlMs]);
+    async issueEnrollmentCode(clientId: string, ttlMs?: number | null, options: {provisional?: boolean} = {}) {
+        record("issueEnrollmentCode", [clientId, ttlMs, options]);
         const delay = enrollmentDelays.shift() ?? 0;
         if(delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
         const option = ServerOptionStore.instance.serverOption;
@@ -112,9 +114,19 @@ const stub = {
         if(!(option.trustedClients ?? []).some((client) => client.clientId === clientId)) return {ok: false, reason: "unknown-client"};
         // #225: 재발급 결과를 구별할 수 있게 호출마다 다른 코드를 준다.
         enrollmentCodeCount++;
-        // #313: null 은 만료 없음이다(실제 EnrollmentRegistry 와 같다).
-        const expiresAt = ttlMs === null ? null : Date.now() + clockOffset + (ttlMs ?? 15 * 60_000);
-        return {ok: true, code: `7Q4K-M2XP-${String(enrollmentCodeCount).padStart(4, "0")}`, expiresAt};
+        // #313: null 은 만료 없음이다. 임시 발급은 확인할 때까지 기본 15분이다(실제 EnrollmentRegistry 와 같다).
+        const now = Date.now() + clockOffset;
+        const chosenExpiresAt = ttlMs === null ? null : now + (ttlMs ?? 15 * 60_000);
+        const defaultExpiresAt = now + 15 * 60_000;
+        const expiresAt = options.provisional && (chosenExpiresAt === null || chosenExpiresAt > defaultExpiresAt) ? defaultExpiresAt : chosenExpiresAt;
+        issuedEnrollments.set(clientId, {issueId: enrollmentCodeCount, chosenExpiresAt});
+        return {ok: true, code: `7Q4K-M2XP-${String(enrollmentCodeCount).padStart(4, "0")}`, expiresAt, issueId: enrollmentCodeCount};
+    },
+    confirmEnrollmentCode(clientId: string, issueId: number) {
+        record("confirmEnrollmentCode", [clientId, issueId]);
+        const issued = issuedEnrollments.get(clientId);
+        if(!issued || issued.issueId !== issueId) return {ok: false, reason: "superseded"};
+        return {ok: true, expiresAt: issued.chosenExpiresAt};
     },
     async applyTunnelingOption(...args: unknown[]) {
         record("applyTunnelingOption", args);

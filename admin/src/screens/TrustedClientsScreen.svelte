@@ -46,7 +46,6 @@
             const target = returnFocusTo;
             returnFocusTo = null;
             if(target) queueMicrotask(() => target.focus());
-            queueMicrotask(() => settleClosed());
         }
     });
     const rememberTrigger = (e?: Event): void => {
@@ -88,22 +87,18 @@
     /**
      * 발급 요청은 한 번에 하나만 보낸다. 겹쳐 보내면 서버가 받는 순서와 화면의 최신이 어긋나, 화면에는 무효가 된 코드가
      * 남고 보이지 않는 코드가 서버에 남을 수 있다. 요청 중에 고른 기한은 queuedTtl 에 두었다가 앞 요청이 끝나면 보낸다.
-     * 그사이 창을 닫았으면 보내지 않는다. 이미 보낸 요청은 거둘 수 없으므로, 닫힌 창에 기본보다 긴 기한의 코드가 오면
-     * 기본 기한으로 한 번 다시 받는다. 아무도 보지 못한 긴 기한의 코드를 남기지 않고, 창을 그냥 닫았을 때와 같게 한다.
+     * 그사이 창을 닫았으면 보내지 않는다. 코드는 임시로 받고, 창에 보여 줄 때만 고른 기한을 확인한다. 그래서 닫힌 창에 온
+     * 긴 기한의 코드는 확인되지 않고 기본 15분 뒤 사라진다. 아무도 보지 못한 긴 기한의 코드가 남지 않는다.
      */
     let issuing = false;
     let queuedTtl: string | undefined;
     /** 화면을 떠났다. 창은 닫히지 않은 채 사라지므로, 응답을 받은 뒤에는 창을 닫은 것과 같게 다룬다. */
     let disposed = false;
-    /**
-     * 긴 기한으로 보낸 요청이 실패했다. 응답만 잃었으면 서버에 아무도 보지 못한 코드가 남았을 수 있다.
-     * 받아서 보여 준 코드는 사용자가 복사했을 수 있으므로 이 표시를 끈다.
-     */
-    let unconfirmedLongCode = false;
-    onDestroy(() => {
-        disposed = true;
-        settleClosed();
-    });
+    onDestroy(() => { disposed = true; });
+    /** 그 클라이언트의 코드 창이 보이고 있다. 보이지 않는 창에 온 코드는 확인하지 않는다. */
+    const shown = (clientId: string): boolean => !disposed && enrollOpen && enrollFor === clientId;
+    /** 기본(15분)보다 긴 기한은 코드를 보여 줄 때 확인해야 적용된다. */
+    const needsConfirm = (value: string): boolean => value === 'never' || Number(value) > Number(DEFAULT_TTL);
     const ttlMinutesOf = (value: string): number | null => value === 'never' ? null : Number(value);
 
     const failed = (error: unknown): void => {
@@ -138,11 +133,8 @@
         return snapshot.revision;
     };
 
-    /**
-     * 코드를 받는다. open 이 참일 때만 창을 연다. 창 안에서 다시 받는 경우 늦게 온 응답이 닫은 창을 다시 열면 안 된다.
-     * fallback 은 닫힌 창 때문에 기본 기한으로 다시 받는 요청이다. 이 요청이 실패해도 또 다시 받지 않는다.
-     */
-    const issue = async (clientId: string, open = false, fallback = false): Promise<void> => {
+    /** 코드를 받는다. open 이 참일 때만 창을 연다. 창 안에서 다시 받는 경우 늦게 온 응답이 닫은 창을 다시 열면 안 된다. */
+    const issue = async (clientId: string, open = false): Promise<void> => {
         if(issuing) {
             queuedTtl = ttl;
             return;
@@ -153,17 +145,30 @@
             await run(async () => {
                 const result = await TrustedClientsCtrl.instance.issueCode(clientId, ttlMinutesOf(chosen));
                 if(!result.success) {
-                    if(chosen !== DEFAULT_TTL) unconfirmedLongCode = true;
                     ttl = issuedTtl;
                     invalidated = true;
                     toast.push({tone: 'alarm', message: result.message});
                     return;
                 }
-                issuedTtl = chosen;
+                // 창이 닫혔거나 화면을 떠났으면 확인하지 않는다. 임시 코드는 기본 15분 뒤 사라진다.
+                if(open ? disposed : !shown(clientId)) return;
+                let expiresAt = result.expiresAt;
+                let applied = chosen;
+                if(needsConfirm(chosen)) {
+                    const confirmed = await TrustedClientsCtrl.instance.confirmCode(clientId, result.issueId);
+                    if(confirmed.success) {
+                        expiresAt = confirmed.expiresAt;
+                    } else {
+                        // 코드는 받았지만 고른 기한은 적용되지 않았다. 기본 기한으로 보여 준다.
+                        applied = DEFAULT_TTL;
+                        ttl = DEFAULT_TTL;
+                        toast.push({tone: 'alarm', message: `${confirmed.message} This code expires in 15 minutes.`});
+                    }
+                }
+                issuedTtl = applied;
                 invalidated = false;
-                unconfirmedLongCode = false;
                 enrollFor = clientId;
-                enrollCode = {code: result.code, expiresAt: result.expiresAt, controlPort: result.controlPort};
+                enrollCode = {code: result.code, expiresAt, controlPort: result.controlPort};
                 now = Date.now();
                 if(open) enrollOpen = true;
             });
@@ -172,27 +177,11 @@
         }
         const next = queuedTtl;
         queuedTtl = undefined;
-        if(disposed || !(enrollOpen && enrollFor === clientId)) {
-            if(!fallback && (issuedTtl !== DEFAULT_TTL || unconfirmedLongCode)) {
-                ttl = DEFAULT_TTL;
-                await issue(clientId, false, true);
-            }
-            return;
-        }
+        if(!shown(clientId)) return;
         if(next !== undefined && next !== issuedTtl) {
             ttl = next;
             await issue(clientId);
         }
-    };
-
-    /**
-     * 창이 닫혔거나 화면을 떠났다. 응답을 잃은 긴 기한의 코드가 남았을 수 있으면 기본 기한으로 한 번 다시 받는다.
-     * 요청 중이면 그 요청이 끝난 뒤 issue 가 같은 일을 한다.
-     */
-    const settleClosed = (): void => {
-        if(issuing || !unconfirmedLongCode) return;
-        ttl = DEFAULT_TTL;
-        void issue(enrollFor, false, true);
     };
 
     /** 새 창을 열 때는 기한을 기본(15분)으로 되돌린다. 이전 창에서 고른 값이 다른 클라이언트로 넘어가지 않게 한다. */

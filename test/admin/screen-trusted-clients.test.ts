@@ -102,14 +102,16 @@ test("REQ-1 delete is refused while a tunnel or group allows the client, and wor
 
 // #225 화면의 나머지 흐름
 /**
- * 등록 코드 발급 응답이 브라우저에 도착한 순서(응답의 expiresAt; 만료 없음이면 null).
+ * 등록 코드 발급 응답이 브라우저에 도착한 순서. 그 요청이 보낸 ttlMinutes(만료 없음이면 null)로 적는다.
+ * 임시 발급은 고른 기한과 관계없이 15분으로 답하므로 응답 값으로는 요청을 가리지 못한다.
  * 고정 대기 대신 실제 도착을 기다리고, 요청이 겹쳤는지를 도착 순서로 가린다.
  */
 const recordEnrollmentResponses = (page: Page) => {
     const arrived: Array<number | null> = [];
     page.on("response", (response) => {
-        if(!response.url().includes("/enrollmentCode")) return;
-        void response.json().then((body: any) => { arrived.push(body?.expiresAt ?? null); }).catch(() => { arrived.push(null); });
+        // 확인 요청(/enrollmentCode/confirm)은 세지 않는다.
+        if(!new URL(response.url()).pathname.endsWith("/enrollmentCode")) return;
+        arrived.push(response.request().postDataJSON()?.ttlMinutes ?? null);
     });
     return arrived;
 };
@@ -158,6 +160,10 @@ test("#313 the code modal chooses the expiry, including no expiry", () => withAp
     await page.waitForFunction((old) => document.querySelector("#enroll-command")?.textContent?.trim() !== old, before, {timeout: 5000});
     const modal = page.locator(".enroll-modal");
     expect(await modal.textContent()).toContain("Never expires");
+    // 임시로 받은 뒤, 코드를 보여 주며 고른 기한을 확인한다.
+    const calls = await app.calls();
+    expect(calls.filter((call) => call.method === "issueEnrollmentCode").at(-1)!.args[2]).toEqual({provisional: true});
+    expect(calls.filter((call) => call.method === "confirmEnrollmentCode").map((call) => call.args[0])).toEqual(["client-a"]);
     await modal.locator("#enroll-never-warning").waitFor({state: "visible"});
     // 경고는 README 와 같이 코드가 무효가 되는 경우를 모두 알린다.
     const warning = await modal.locator("#enroll-never-warning").textContent();
@@ -200,7 +206,7 @@ test("#313 the chosen expiry is sent, keeps focus, and does not carry over to an
     await page.locator(".enroll-modal").waitFor({state: "visible"});
     await waitUntil(async () => (await issuedTtls()).length > issuedBefore, {timeoutMs: 5000, label: "client-b code issued"});
     const last = (await app.calls()).filter((call) => call.method === "issueEnrollmentCode").pop()!;
-    expect(last.args).toEqual(["client-b", 15 * 60_000]);
+    expect(last.args).toEqual(["client-b", 15 * 60_000, {provisional: true}]);
     expect(await page.locator(".enroll-modal #enroll-ttl").inputValue()).toBe("15");
     // 선택지 이름에도 "Never expires" 가 있으므로, 만료 없음 안내가 없고 만료 시각이 보이는지로 판정한다.
     expect(await page.locator(".enroll-modal #enroll-never-warning").count()).toBe(0);
@@ -229,8 +235,7 @@ test("#313 the last choice wins over a late response, and a failed issue restore
     // 응답이 도착한 뒤 화면이 처리를 마칠 때(버튼이 다시 켜짐)까지 기다린 다음 확인한다.
     await waitUntil(() => rowOf(page, "client-a").locator(".client-code").isEnabled(), {timeoutMs: 5000, label: "screen idle"});
     // 직렬이면 늦은 첫 요청(만료 없음)의 응답이 먼저 온다. 겹쳐 보냈다면 지연 없는 60분 응답이 먼저 온다.
-    expect(arrived[0]).toBeNull();
-    expect(typeof arrived[1]).toBe("number");
+    expect(arrived.slice(0, 2)).toEqual([null, 60]);
     expect((await issued()).slice(start)).toEqual([null, 60 * 60_000]);
     expect(await select.inputValue()).toBe("60");
     expect(await page.locator(".enroll-modal #enroll-never-warning").count()).toBe(0);
@@ -248,50 +253,60 @@ test("#313 the last choice wins over a late response, and a failed issue restore
     await page.unroute("**/enrollmentCode");
 }));
 
-// #313: 창에서 기한을 바꾼 뒤 응답이 오기 전에 창을 닫으면, 늦게 온 응답이 창을 다시 열지 않는다.
-test("#313 a late response does not reopen a closed code window", () => withApp({fixture: "rbac"}, async (app) => {
+/** 발급(issueEnrollmentCode)이 받은 기한(ms, null 은 만료 없음)과 확인(confirmEnrollmentCode) 호출을 읽는다. */
+const enrollmentCalls = async (app: {calls: () => Promise<Array<{method: string, args: any[]}>>}) => {
+    const calls = await app.calls();
+    return {
+        ttls: calls.filter((call) => call.method === "issueEnrollmentCode").map((call) => call.args[1]),
+        confirms: calls.filter((call) => call.method === "confirmEnrollmentCode").map((call) => call.args)
+    };
+};
+
+// #313: 창에서 기한을 바꾼 뒤 응답이 오기 전에 창을 닫으면, 늦게 온 응답이 창을 다시 열지 않고 고른 기한을 확인하지도 않는다.
+// 확인하지 않은 코드는 기본 15분 뒤 사라지므로, 아무도 보지 못한 만료 없는 코드가 남지 않는다.
+test("#313 a late response neither reopens a closed code window nor confirms the long expiry", () => withApp({fixture: "rbac"}, async (app) => {
     const {page} = app;
     await app.serverOption({tls: true, port: 9126});
     await openClients(page);
     await rowOf(page, "client-a").locator(".client-code").click();
     const select = page.locator(".enroll-modal #enroll-ttl");
     await select.waitFor({state: "visible"});
-    const issued = async () => (await app.calls()).filter((call) => call.method === "issueEnrollmentCode").length;
-    const start = await issued();
+    const start = (await enrollmentCalls(app)).ttls.length;
     await app.enrollmentDelays([1500]);
     await select.selectOption("never");
-    await waitUntil(async () => (await issued()) > start, {timeoutMs: 5000, label: "request sent"});
+    await waitUntil(async () => (await enrollmentCalls(app)).ttls.length > start, {timeoutMs: 5000, label: "request sent"});
     const arrived = recordEnrollmentResponses(page);
     await page.keyboard.press("Escape");
     await page.locator(".enroll-modal").waitFor({state: "hidden"});
     await waitUntil(async () => arrived.length >= 1, {timeoutMs: 10_000, label: "late response arrived"});
     await waitUntil(() => rowOf(page, "client-a").locator(".client-code").isEnabled(), {timeoutMs: 5000, label: "screen idle"});
+    await page.waitForTimeout(500);
     expect(await page.locator(".enroll-modal").isVisible()).toBe(false);
-    // 아무도 보지 못한 만료 없는 코드를 남기지 않는다. 기본 기한(15분)으로 한 번 다시 받아, 창을 그냥 닫았을 때와 같게 한다.
-    const ttls = async () => (await app.calls()).filter((call) => call.method === "issueEnrollmentCode").slice(start).map((call) => call.args[1]);
-    await waitUntil(async () => (await ttls()).length >= 2, {timeoutMs: 10_000, label: "fallback issue sent"});
-    expect(await ttls()).toEqual([null, 15 * 60_000]);
-    expect(await page.locator(".enroll-modal").isVisible()).toBe(false);
+    const {ttls, confirms} = await enrollmentCalls(app);
+    expect(ttls.slice(start)).toEqual([null]);
+    expect(confirms).toEqual([]);
 }));
 
-// #313: 요청 중에 다른 화면으로 가도 창을 닫은 것과 같다. 기억해 둔 선택은 버리고, 긴 기한의 코드는 기본 기한으로 바꾼다.
-test("#313 leaving the screen during a request falls back to the default expiry", () => withApp({fixture: "rbac"}, async (app) => {
+// #313: 요청 중에 다른 화면으로 가도 창을 닫은 것과 같다. 기억해 둔 선택은 보내지 않고, 늦게 온 코드는 확인하지 않는다.
+test("#313 leaving the screen during a request sends nothing more", () => withApp({fixture: "rbac"}, async (app) => {
     const {page} = app;
     await app.serverOption({tls: true, port: 9126});
     await openClients(page);
     await rowOf(page, "client-a").locator(".client-code").click();
     const select = page.locator(".enroll-modal #enroll-ttl");
     await select.waitFor({state: "visible"});
-    const ttls = async () => (await app.calls()).filter((call) => call.method === "issueEnrollmentCode").map((call) => call.args[1]);
-    const start = (await ttls()).length;
+    const start = (await enrollmentCalls(app)).ttls.length;
     await app.enrollmentDelays([1500]);
     await select.selectOption("60");
-    await waitUntil(async () => (await ttls()).length > start, {timeoutMs: 5000, label: "request sent"});
+    await waitUntil(async () => (await enrollmentCalls(app)).ttls.length > start, {timeoutMs: 5000, label: "request sent"});
+    const arrived = recordEnrollmentResponses(page);
     await select.selectOption("never");
     await page.evaluate(() => { location.hash = "#/status"; });
-    await waitUntil(async () => (await ttls()).length >= start + 2, {timeoutMs: 10_000, label: "fallback issue sent"});
+    await waitUntil(async () => arrived.length >= 1, {timeoutMs: 10_000, label: "late response arrived"});
     await page.waitForTimeout(1000);
-    expect((await ttls()).slice(start)).toEqual([60 * 60_000, 15 * 60_000]);
+    const {ttls, confirms} = await enrollmentCalls(app);
+    expect(ttls.slice(start)).toEqual([60 * 60_000]);
+    expect(confirms).toEqual([]);
 }));
 
 // #313: 발급이 실패하면 서버에서는 화면의 코드도 이미 무효일 수 있다(다른 발급, 설정 변경, 삭제). 복사하지 못하게 하고 다시 받게 한다.
@@ -320,16 +335,14 @@ test("#313 a failed issue marks the shown command as no longer valid", () => wit
     expect(await page.locator(".enroll-modal #enroll-command.expired").count()).toBe(0);
 }));
 
-// #313: 긴 기한의 발급이 응답만 잃었으면 서버에는 아무도 보지 못한 코드가 남았을 수 있다. 창을 닫으면 기본 기한으로 다시 받는다.
-test("#313 closing the window after a lost long-expiry response falls back to the default expiry", () => withApp({fixture: "rbac"}, async (app) => {
+// #313: 화면은 임시로 받고, 코드를 보여 줄 때 고른 기한을 확인한다. 응답을 잃은 코드는 확인하지 않으므로 기본 15분 뒤 사라진다.
+test("#313 a long-expiry code whose response was lost is never confirmed", () => withApp({fixture: "rbac"}, async (app) => {
     const {page} = app;
     await app.serverOption({tls: true, port: 9126});
     await openClients(page);
     await rowOf(page, "client-a").locator(".client-code").click();
     const select = page.locator(".enroll-modal #enroll-ttl");
     await select.waitFor({state: "visible"});
-    const ttls = async () => (await app.calls()).filter((call) => call.method === "issueEnrollmentCode").map((call) => call.args[1]);
-    const start = (await ttls()).length;
     // 서버는 처리하지만 응답은 프록시 오류로 바뀐다.
     await page.route("**/enrollmentCode", async (route) => {
         await route.fetch();
@@ -340,26 +353,28 @@ test("#313 closing the window after a lost long-expiry response falls back to th
     await page.unroute("**/enrollmentCode");
     await page.keyboard.press("Escape");
     await page.locator(".enroll-modal").waitFor({state: "hidden"});
-    await waitUntil(async () => (await ttls()).length >= start + 2, {timeoutMs: 10_000, label: "fallback issue sent"});
-    expect((await ttls()).slice(start)).toEqual([null, 15 * 60_000]);
+    await page.waitForTimeout(1000);
+    expect((await enrollmentCalls(app)).confirms).toEqual([]);
 }));
 
-// #313: 본 코드는 창을 닫아도 그대로 둔다. 사용자가 복사해 둔 명령이 무효가 되면 안 된다.
-test("#313 closing the window keeps a code the admin has seen", () => withApp({fixture: "rbac"}, async (app) => {
+// #313: 본 코드는 고른 기한으로 확인하고, 창을 닫아도 그대로 둔다. 사용자가 복사해 둔 명령이 무효가 되면 안 된다.
+test("#313 a shown long-expiry code is confirmed and kept when the window closes", () => withApp({fixture: "rbac"}, async (app) => {
     const {page} = app;
     await app.serverOption({tls: true, port: 9126});
     await openClients(page);
     await rowOf(page, "client-a").locator(".client-code").click();
     const select = page.locator(".enroll-modal #enroll-ttl");
     await select.waitFor({state: "visible"});
-    const ttls = async () => (await app.calls()).filter((call) => call.method === "issueEnrollmentCode").map((call) => call.args[1]);
-    const start = (await ttls()).length;
+    const start = (await enrollmentCalls(app)).ttls.length;
     await select.selectOption("never");
     await page.locator(".enroll-modal #enroll-never-warning").waitFor({state: "visible", timeout: 5000});
+    expect((await enrollmentCalls(app)).confirms).toEqual([["client-a", expect.any(Number)]]);
     await page.keyboard.press("Escape");
     await page.locator(".enroll-modal").waitFor({state: "hidden"});
     await page.waitForTimeout(1000);
-    expect((await ttls()).slice(start)).toEqual([null]);
+    const {ttls, confirms} = await enrollmentCalls(app);
+    expect(ttls.slice(start)).toEqual([null]);
+    expect(confirms).toHaveLength(1);
 }));
 
 // #313: 새 코드를 받는 동안에는 곧 무효가 될 옛 명령을 복사하지 못하게 한다.
@@ -381,7 +396,7 @@ test("#313 Copy command is off while a new code is on its way", () => withApp({f
     await waitUntil(() => copy.isEnabled(), {timeoutMs: 10_000, label: "copy back on"});
 }));
 
-// #313: 요청 중에 고른 기한은 창을 닫으면 버린다. 닫힌 창 뒤에서 사용자가 보지 못한 긴 기한의 코드를 남기지 않는다.
+// #313: 요청 중에 고른 기한은 창을 닫으면 버린다. 닫힌 창에 온 코드는 확인하지 않는다.
 test("#313 a choice queued during a request is dropped when the code window closes", () => withApp({fixture: "rbac"}, async (app) => {
     const {page} = app;
     await app.serverOption({tls: true, port: 9126});
@@ -389,21 +404,20 @@ test("#313 a choice queued during a request is dropped when the code window clos
     await rowOf(page, "client-a").locator(".client-code").click();
     const select = page.locator(".enroll-modal #enroll-ttl");
     await select.waitFor({state: "visible"});
-    const ttls = async () => (await app.calls()).filter((call) => call.method === "issueEnrollmentCode").map((call) => call.args[1]);
-    const start = (await ttls()).length;
+    const start = (await enrollmentCalls(app)).ttls.length;
     await app.enrollmentDelays([1500]);
     await select.selectOption("60");
-    await waitUntil(async () => (await ttls()).length > start, {timeoutMs: 5000, label: "request sent"});
+    await waitUntil(async () => (await enrollmentCalls(app)).ttls.length > start, {timeoutMs: 5000, label: "request sent"});
     const arrived = recordEnrollmentResponses(page);
     await select.selectOption("never");
     await page.keyboard.press("Escape");
     await page.locator(".enroll-modal").waitFor({state: "hidden"});
     await waitUntil(async () => arrived.length >= 1, {timeoutMs: 10_000, label: "late response arrived"});
     await waitUntil(() => rowOf(page, "client-a").locator(".client-code").isEnabled(), {timeoutMs: 5000, label: "screen idle"});
-    // 60분 응답은 닫힌 창에 왔으므로 기본 기한으로 한 번 다시 받는다. 기억해 둔 "만료 없음"은 보내지 않는다.
-    await waitUntil(async () => (await ttls()).length >= start + 2, {timeoutMs: 10_000, label: "fallback issue sent"});
     await page.waitForTimeout(1000);
-    expect((await ttls()).slice(start)).toEqual([60 * 60_000, 15 * 60_000]);
+    const {ttls, confirms} = await enrollmentCalls(app);
+    expect(ttls.slice(start)).toEqual([60 * 60_000]);
+    expect(confirms).toEqual([]);
 }));
 
 test("#225 after expiry, Issue new code shows a new, live command", () => withApp({fixture: "rbac"}, async (app) => {
