@@ -120,4 +120,15 @@ describe("enrollment follows the control port mode (#221)", () => {
         expect(during.issued).toEqual({ok: false, reason: "superseded"});
         await expectFreshCodeWorks();
     });
+
+    // #313: 앞선 적용이 끝나지 못해 설정이 같아도 제어 서버를 다시 만드는 복원이 있다. 다시 만들면 코드는 모두 무효다.
+    test("a rollback that rebuilds the control server with the same settings invalidates codes", async () => {
+        const state = server.captureRuntimeState();
+        const issued = await server.issueEnrollmentCode("edge", null);
+        if(!issued.ok) throw new Error(issued.reason);
+        (server as any)._dirtyControl = true;
+        expect(await server.restoreRuntimeState(state)).toEqual([]);
+        expect(await requestEnrollment({host: "127.0.0.1", port, code: issued.code})).toMatchObject({ok: false, category: "rejected"});
+        await expectFreshCodeWorks();
+    });
 });

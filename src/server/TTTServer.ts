@@ -298,15 +298,14 @@ class TTTServer {
     }
 
     /**
-     * 제어 포트의 TLS 나 모드가 바뀌면 발급한 등록 코드는 의미가 없으므로 모두 무효로 한다(#221 REQ-2).
-     * 제어 서버를 다시 만드는 다른 변경(포트·keepAlive 등)에도 무효로 한다. 화면의 명령은 옛 설정을 가리키고,
-     * 만료 없는 코드(#313)는 그렇지 않으면 다시 시작할 때까지 남는다.
+     * 제어 서버를 다시 만들기 시작한다. 발급한 등록 코드는 모두 무효로 하고, 다 만들 때까지 새로 발급하지 않는다.
+     * TLS·모드가 바뀌면 코드는 의미가 없다(#221 REQ-2). 포트·keepAlive 등 다른 변경이나 같은 설정으로 다시 만드는 복원에서도
+     * 무효로 한다. 화면의 명령은 옛 서버를 가리키고, 만료 없는 코드(#313)는 그렇지 않으면 다시 시작할 때까지 남는다.
+     * 첫 await 전에 불러야 한다. 그래야 무효화와 다시 만들기 사이에 발급이 끼어들지 못한다.
      */
-    private revokeEnrollmentsIfModeChanged(next: ServerOption, previous: ServerOption): void {
-        if(this.controlOptionsChanged(next, previous) || (next.tls === true) !== (previous.tls === true)
-            || (next.controlProtocolMode ?? "mixed") !== (previous.controlProtocolMode ?? "mixed")) {
-            this._enrollment.revokeAll();
-        }
+    private beginControlRebuild(): void {
+        this._enrollment.revokeAll();
+        this._rebuildingControl = true;
     }
 
     private trustedClientsChanged(next: ServerOption, previous: ServerOption): boolean {
@@ -348,9 +347,8 @@ class TTTServer {
 
     public async restoreRuntimeState(state: ReturnType<TTTServer['captureRuntimeState']>): Promise<string[]> {
         const failures: string[] = [];
-        this.revokeEnrollmentsIfModeChanged(state.serverOption, this._appliedServerOption);
         if(this._dirtyControl || this.controlOptionsChanged(this._appliedServerOption, state.serverOption)) {
-            this._rebuildingControl = true;
+            this.beginControlRebuild();
             try {
                 await this._tunnelServer.close();
                 const restored = this.createTunnelServer(state.serverOption);
@@ -476,7 +474,6 @@ class TTTServer {
         }
 
         const requiresTunnelRestart = this.controlOptionsChanged(nextOption, previousOption);
-        this.revokeEnrollmentsIfModeChanged(nextOption, previousOption);
 
         if(!requiresTunnelRestart) {
             // 앞선 복원이 실패해 레지스트리가 저장된 목록과 다를 수 있으면(플래그) 바뀌지 않았어도 다시 넣어 맞춘다.
@@ -498,7 +495,7 @@ class TTTServer {
         }
 
         const oldTunnelServer = this._tunnelServer;
-        this._rebuildingControl = true;
+        this.beginControlRebuild();
         try {
             this._dirtyControl = true;
             await oldTunnelServer.close();
