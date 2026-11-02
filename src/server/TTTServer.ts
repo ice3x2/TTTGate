@@ -98,7 +98,8 @@ class TTTServer {
      * 신뢰 클라이언트의 등록 코드를 발급한다(#212 REQ-4·REQ-8). 제어 연결이 TLS 가 아니거나 mtls-strict 면 발급하지 않는다:
      * 평문으로는 비밀값을 보내지 않고, strict 는 클라이언트 인증서 없는 등록 연결을 받지 않는다.
      */
-    public async issueEnrollmentCode(clientId: string, ttlMs?: number): Promise<{ok: true, code: string, expiresAt: number} | {ok: false, reason: 'tls-required' | 'strict-mode' | 'unknown-client'}> {
+    /** ttlMs 가 null 이면 만료 없는 코드다(#313). 없으면 기본 15분이다. */
+    public async issueEnrollmentCode(clientId: string, ttlMs?: number | null): Promise<{ok: true, code: string, expiresAt: number | null} | {ok: false, reason: 'tls-required' | 'strict-mode' | 'unknown-client'}> {
         const applied = this._appliedServerOption;
         if(applied.tls !== true) return {ok: false, reason: 'tls-required'};
         if(applied.controlProtocolMode === 'mtls-strict') return {ok: false, reason: 'strict-mode'};

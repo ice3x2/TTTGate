@@ -13,7 +13,7 @@ import ObjectUtil from "../../util/ObjectUtil";
  */
 const CLIENT_ID_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
 const MAX_DISPLAY_NAME_LENGTH = 128;
-const MAX_ENROLLMENT_TTL_MINUTES = 24 * 60;
+const MAX_ENROLLMENT_TTL_MINUTES = 30 * 24 * 60;
 
 type TrustedClientRouteDeps = {
     tttServer: () => TTTServer | undefined;
@@ -119,8 +119,9 @@ const trustedClientRouteHandlers = (deps: TrustedClientRouteDeps) => {
     const onIssueEnrollmentCode = async (ctx: RouteContext): Promise<void> => {
         const clientId = ctx.params.id ?? "";
         const ttlMinutes = ctx.body?.ttlMinutes;
-        if(ttlMinutes !== undefined && (!Number.isInteger(ttlMinutes) || ttlMinutes < 1 || ttlMinutes > MAX_ENROLLMENT_TTL_MINUTES)) {
-            ctx.fail(400, "INVALID_TTL", `ttlMinutes must be an integer within 1..${MAX_ENROLLMENT_TTL_MINUTES}`);
+        // #313: ttlMinutes 는 1..30일(분) 정수이거나 null(만료 없음)이다. 없으면 기본 15분이다.
+        if(ttlMinutes !== undefined && ttlMinutes !== null && (!Number.isInteger(ttlMinutes) || ttlMinutes < 1 || ttlMinutes > MAX_ENROLLMENT_TTL_MINUTES)) {
+            ctx.fail(400, "INVALID_TTL", `ttlMinutes must be null (no expiry) or an integer within 1..${MAX_ENROLLMENT_TTL_MINUTES}`);
             return;
         }
         const server = deps.tttServer();
@@ -128,7 +129,7 @@ const trustedClientRouteHandlers = (deps: TrustedClientRouteDeps) => {
             ctx.fail(503, "SERVER_NOT_READY", "the tunnel server is not running");
             return;
         }
-        const issued = await server.issueEnrollmentCode(clientId, ttlMinutes === undefined ? undefined : ttlMinutes * 60_000);
+        const issued = await server.issueEnrollmentCode(clientId, ttlMinutes === undefined ? undefined : ttlMinutes === null ? null : ttlMinutes * 60_000);
         if(issued.ok) {
             ctx.ok({code: issued.code, expiresAt: issued.expiresAt, controlPort: ServerOptionStore.instance.serverOption.port});
         } else if(issued.reason === "unknown-client") {

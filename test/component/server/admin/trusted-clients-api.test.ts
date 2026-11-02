@@ -96,4 +96,21 @@ describe("trusted client admin API", () => {
         expect(value.controlPort).toBe(f.store.serverOption.port);
         expect((await f.request("POST", `/api/trustedClients/nobody/enrollmentCode`, {})).statusCode).toBe(404);
     }));
+
+    // #313: ttlMinutes 는 1–43200(30일) 정수이거나 null(만료 없음)이다.
+    test("#313 enrollment codes take 1..43200 minutes or null for no expiry", async () => withConfigurationServer(async f => {
+        await f.request("POST", "/api/trustedClients", {clientId: "edge-2", expectedRevision: await revision(f)});
+        const read = await f.snapshot();
+        expect((await f.request("POST", "/api/serverOption", {...read.serverOption, tls: true, expectedRevision: read.revisionState.currentRevision})).statusCode).toBe(200);
+        const never = await f.request("POST", `/api/trustedClients/edge-2/enrollmentCode`, {ttlMinutes: null});
+        expect(never.statusCode).toBe(200);
+        expect(body(never).expiresAt).toBeNull();
+        const month = await f.request("POST", `/api/trustedClients/edge-2/enrollmentCode`, {ttlMinutes: 43200});
+        expect(month.statusCode).toBe(200);
+        expect(body(month).expiresAt - Date.now()).toBeGreaterThan(43199 * 60_000);
+        for(const wrong of [43201, 0, 1.5, "60"]) {
+            const rejected = await f.request("POST", `/api/trustedClients/edge-2/enrollmentCode`, {ttlMinutes: wrong});
+            expect({wrong, status: rejected.statusCode, code: body(rejected).code}).toEqual({wrong, status: 400, code: "INVALID_TTL"});
+        }
+    }));
 });

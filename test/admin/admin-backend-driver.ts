@@ -101,14 +101,16 @@ const stub = {
         return OK();
     },
     // #213: 등록 코드 발급. 실제 TTTServer 와 같은 판정(TLS·등록 여부)을 저장소 값으로 흉내 낸다.
-    async issueEnrollmentCode(clientId: string, ttlMs?: number) {
+    async issueEnrollmentCode(clientId: string, ttlMs?: number | null) {
         record("issueEnrollmentCode", [clientId, ttlMs]);
         const option = ServerOptionStore.instance.serverOption;
         if(option.tls !== true) return {ok: false, reason: "tls-required"};
         if(!(option.trustedClients ?? []).some((client) => client.clientId === clientId)) return {ok: false, reason: "unknown-client"};
         // #225: 재발급 결과를 구별할 수 있게 호출마다 다른 코드를 준다.
         enrollmentCodeCount++;
-        return {ok: true, code: `7Q4K-M2XP-${String(enrollmentCodeCount).padStart(4, "0")}`, expiresAt: Date.now() + clockOffset + (ttlMs ?? 15 * 60_000)};
+        // #313: null 은 만료 없음이다(실제 EnrollmentRegistry 와 같다).
+        const expiresAt = ttlMs === null ? null : Date.now() + clockOffset + (ttlMs ?? 15 * 60_000);
+        return {ok: true, code: `7Q4K-M2XP-${String(enrollmentCodeCount).padStart(4, "0")}`, expiresAt};
     },
     async applyTunnelingOption(...args: unknown[]) {
         record("applyTunnelingOption", args);

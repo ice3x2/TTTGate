@@ -7,14 +7,17 @@ import {rateLimitBucketOf} from "./security/ConnectionRateLimiter";
  */
 const DEFAULT_ENROLLMENT_TTL_MS = 15 * 60_000;
 const MIN_ENROLLMENT_TTL_MS = 60_000;
-const MAX_ENROLLMENT_TTL_MS = 24 * 3600_000;
+const MAX_ENROLLMENT_TTL_MS = 30 * 24 * 3600_000;
 const MAX_ENROLLMENT_FAILURES = 10;
 const FAILURE_WINDOW_MS = 15 * 60_000;
 /** 실패를 기록하는 주소 묶음 수의 상한. 넘으면 가장 오래된 기록부터 버린다(인증 전 요청으로 메모리를 늘리지 못하게). */
 const MAX_TRACKED_FAILURE_BUCKETS = 10_000;
 
-type PendingEnrollment = {clientId: string, keys: EnrollmentKeys, expiresAt: number};
+/** expiresAt 이 null 이면 만료 없음이다(#313). 쓰이거나, 새로 발급하거나, 지우거나, 서버를 다시 시작할 때까지 유효하다. */
+type PendingEnrollment = {clientId: string, keys: EnrollmentKeys, expiresAt: number | null};
 type TakeResult = {ok: true, clientId: string, keys: EnrollmentKeys} | {ok: false, reason: "rejected" | "throttled"};
+
+const isExpired = (pending: PendingEnrollment, now: number): boolean => pending.expiresAt !== null && pending.expiresAt <= now;
 
 class EnrollmentRegistry {
     private readonly _pending = new Map<string, PendingEnrollment>();
@@ -22,13 +25,13 @@ class EnrollmentRegistry {
 
     constructor(private readonly _now: () => number = Date.now) {}
 
-    /** 코드를 발급한다. 같은 클라이언트의 이전 코드는 무효가 된다. ttl 은 1분~24시간으로 맞춘다. */
-    public async issue(clientId: string, ttlMs: number = DEFAULT_ENROLLMENT_TTL_MS): Promise<{code: string, expiresAt: number}> {
+    /** 코드를 발급한다. 같은 클라이언트의 이전 코드는 무효가 된다. ttl 은 1분~30일로 맞추고, null 이면 만료 없음이다(#313). */
+    public async issue(clientId: string, ttlMs: number | null = DEFAULT_ENROLLMENT_TTL_MS): Promise<{code: string, expiresAt: number | null}> {
         const code = generateEnrollmentCode();
         const keys = await deriveEnrollmentKeys(code);
         this.revokeClient(clientId);
-        const lifetime = Math.min(MAX_ENROLLMENT_TTL_MS, Math.max(MIN_ENROLLMENT_TTL_MS, Math.floor(ttlMs)));
-        const expiresAt = this._now() + lifetime;
+        const expiresAt = ttlMs === null ? null
+            : this._now() + Math.min(MAX_ENROLLMENT_TTL_MS, Math.max(MIN_ENROLLMENT_TTL_MS, Math.floor(ttlMs)));
         this._pending.set(keys.lookup, {clientId, keys, expiresAt});
         return {code, expiresAt};
     }
@@ -42,7 +45,7 @@ class EnrollmentRegistry {
 
         const pending = this._pending.get(lookup);
         if(pending) this._pending.delete(lookup);
-        if(!pending || pending.expiresAt <= now) {
+        if(!pending || isExpired(pending, now)) {
             const current = this._failures.get(bucket) ?? {count: 0, since: now};
             current.count++;
             this._failures.set(bucket, current);
@@ -81,7 +84,7 @@ class EnrollmentRegistry {
 
     private pruneExpired(now: number): void {
         for(const [lookup, pending] of this._pending) {
-            if(pending.expiresAt <= now) this._pending.delete(lookup);
+            if(isExpired(pending, now)) this._pending.delete(lookup);
         }
     }
 }

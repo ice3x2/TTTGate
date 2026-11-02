@@ -128,6 +128,29 @@ test("#225 an existing row issues a code; the command uses the address as typed 
     expect(second.split(" ").pop()).not.toBe(first.split(" ").pop());
 }));
 
+// #313: 모달에서 만료를 고르면 그 기한으로 새 코드를 받는다. 만료 없음은 "Never expires" 와 안내를 보이고 시간이 지나도 흐려지지 않는다.
+test("#313 the code modal chooses the expiry, including no expiry", () => withApp({fixture: "rbac"}, async (app) => {
+    const {page} = app;
+    await app.serverOption({tls: true, port: 9126});
+    await openClients(page);
+    await page.locator("#clients-address").fill("gw.example.com");
+    await rowOf(page, "client-a").locator(".client-code").click();
+    const select = page.locator(".enroll-modal #enroll-ttl");
+    await select.waitFor({state: "visible"});
+    expect(await select.inputValue()).toBe("15");
+    const before = await commandText(page);
+
+    await select.selectOption("never");
+    await page.waitForFunction((old) => document.querySelector("#enroll-command")?.textContent?.trim() !== old, before, {timeout: 5000});
+    const modal = page.locator(".enroll-modal");
+    expect(await modal.textContent()).toContain("Never expires");
+    await modal.locator("#enroll-never-warning").waitFor({state: "visible"});
+    await page.evaluate(() => { const real = Date.now; Date.now = () => real() + 365 * 24 * 3600_000; });
+    await page.waitForTimeout(1500);
+    expect(await page.locator(".enroll-modal #enroll-command.expired").count()).toBe(0);
+    expect(await page.locator("#enroll-reissue").count()).toBe(0);
+}));
+
 test("#225 after expiry, Issue new code shows a new, live command", () => withApp({fixture: "rbac"}, async (app) => {
     const {page} = app;
     await app.serverOption({tls: true, port: 9126});

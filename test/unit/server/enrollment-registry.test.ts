@@ -16,13 +16,31 @@ describe("EnrollmentRegistry", () => {
         expect(registry.take(keys.lookup, "10.0.0.1")).toEqual({ok: false, reason: "rejected"});
     });
 
-    test("an expired code is rejected, and the lifetime is capped at 24 hours", async () => {
+    test("an expired code is rejected, and the lifetime is capped at 30 days", async () => {
         const registry = new EnrollmentRegistry(clock);
         const short = await registry.issue("edge", 60_000);
         const keys = await deriveEnrollmentKeys(short.code);
         now += 60_001;
         expect(registry.take(keys.lookup, "10.0.0.1")).toEqual({ok: false, reason: "rejected"});
-        expect((await registry.issue("edge", 7 * 24 * 3600_000)).expiresAt).toBe(now + 24 * 3600_000);
+        expect((await registry.issue("edge", 60 * 24 * 3600_000)).expiresAt).toBe(now + 30 * 24 * 3600_000);
+    });
+
+    // #313: null 은 만료 없음이다. 쓰이거나, 새로 발급하거나, 클라이언트를 지울 때까지 유효하다.
+    test("a code without expiry stays valid over time until it is used, replaced or revoked", async () => {
+        const registry = new EnrollmentRegistry(clock);
+        const never = await registry.issue("edge", null);
+        expect(never.expiresAt).toBeNull();
+        now += 365 * 24 * 3600_000;
+        const keys = await deriveEnrollmentKeys(never.code);
+        expect(registry.take(keys.lookup, "10.0.0.1").ok).toBe(true);
+
+        const replaced = await deriveEnrollmentKeys((await registry.issue("edge", null)).code);
+        await registry.issue("edge", null);
+        expect(registry.take(replaced.lookup, "10.0.0.1").ok).toBe(false);
+
+        const revoked = await deriveEnrollmentKeys((await registry.issue("other", null)).code);
+        registry.revokeClient("other");
+        expect(registry.take(revoked.lookup, "10.0.0.1").ok).toBe(false);
     });
 
     test("a new code for the same client invalidates the previous one", async () => {

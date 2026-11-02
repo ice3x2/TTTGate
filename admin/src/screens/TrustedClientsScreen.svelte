@@ -8,6 +8,7 @@
     import Card from '../ui/Card.svelte';
     import Field from '../ui/Field.svelte';
     import Modal from '../ui/Modal.svelte';
+    import Select from '../ui/Select.svelte';
     import TextInput from '../ui/TextInput.svelte';
     import {toast} from '../ui/toast';
     import {useSession} from '../shell/session';
@@ -67,7 +68,15 @@
         return trimmed.includes(':') && !trimmed.startsWith('[') ? `[${trimmed}]` : trimmed;
     };
     const command = $derived(enrollCode ? `TTTGate client join ${hostPart(address)}:${enrollCode.controlPort} --code ${enrollCode.code}` : '');
-    const expired = $derived(!!enrollCode && enrollCode.expiresAt <= now);
+    const expired = $derived(!!enrollCode && enrollCode.expiresAt !== null && enrollCode.expiresAt <= now);
+
+    // 이슈 313: 등록 코드의 만료. 값은 분이고 never 는 만료 없음이다. 바꾸면 그 기한으로 새 코드를 받는다.
+    const TTL_OPTIONS = [
+        {value: '15', label: '15 minutes'}, {value: '60', label: '1 hour'}, {value: '1440', label: '24 hours'},
+        {value: '10080', label: '7 days'}, {value: '43200', label: '30 days'}, {value: 'never', label: 'Never expires'}
+    ];
+    let ttl = $state('15');
+    const ttlMinutes = (): number | null => ttl === 'never' ? null : Number(ttl);
 
     const failed = (error: unknown): void => {
         if(error instanceof InvalidSession) session.invalidate();
@@ -102,7 +111,7 @@
     };
 
     const issue = (clientId: string) => run(async () => {
-        const result = await TrustedClientsCtrl.instance.issueCode(clientId);
+        const result = await TrustedClientsCtrl.instance.issueCode(clientId, ttlMinutes());
         if(!result.success) {
             toast.push({tone: 'alarm', message: result.message});
             return;
@@ -236,8 +245,16 @@
         <p style="margin: 0;">Run this on the client host. The code works once.</p>
         <code id="enroll-command" class:expired class="mono" style="overflow-wrap: anywhere; user-select: all; opacity: {expired ? 0.45 : 1};">{command}</code>
         {#if enrollCode}
-            <p style="margin: 0; color: var(--ink-2);">{expired ? 'Expired' : 'Expires'} {formatLocal(enrollCode.expiresAt, false)}</p>
+            {#if enrollCode.expiresAt === null}
+                <p style="margin: 0; color: var(--ink-2);">Never expires</p>
+                <p id="enroll-never-warning" style="margin: 0;">This code stays valid until it is used, a new code is issued, or the server restarts. Keep it secret.</p>
+            {:else}
+                <p style="margin: 0; color: var(--ink-2);">{expired ? 'Expired' : 'Expires'} {formatLocal(enrollCode.expiresAt, false)}</p>
+            {/if}
         {/if}
+        <Field label="Code expires after" for="enroll-ttl">
+            <Select id="enroll-ttl" options={TTL_OPTIONS} bind:value={ttl} disabled={pending} onchange={() => { void issue(enrollFor); }} />
+        </Field>
     </div>
     {#snippet footer()}
         <Button onclick={() => (enrollOpen = false)}>Close</Button>

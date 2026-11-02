@@ -32,8 +32,10 @@ class TrustedClientsCtrl {
         return adminRequest(`/api/trustedClients/${encodeURIComponent(clientId)}/secret`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({expectedRevision})});
     }
 
-    public issueCode(clientId: string): Promise<ApiResult<EnrollmentCodeView>> {
-        return adminRequest(`/api/trustedClients/${encodeURIComponent(clientId)}/enrollmentCode`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({})});
+    /** ttlMinutes: 없으면 서버 기본(15분), null 이면 만료 없음(#313). */
+    public issueCode(clientId: string, ttlMinutes?: number | null): Promise<ApiResult<EnrollmentCodeView>> {
+        return adminRequest(`/api/trustedClients/${encodeURIComponent(clientId)}/enrollmentCode`, {method: "POST", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(ttlMinutes === undefined ? {} : {ttlMinutes})});
     }
 }
 
