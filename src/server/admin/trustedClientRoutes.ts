@@ -136,8 +136,12 @@ const trustedClientRouteHandlers = (deps: TrustedClientRouteDeps) => {
             ctx.fail(503, "SERVER_NOT_READY", "the tunnel server is not running");
             return;
         }
-        const issued = await server.issueEnrollmentCode(clientId, ttlMinutes === undefined ? undefined : ttlMinutes === null ? null : ttlMinutes * 60_000,
-            {provisional: provisional === true});
+        // 설정 변경과 한 줄로 세운다. 진행 중인 변경이 제어 포트를 바꾸면, 그 사이 낸 코드는 성공으로 나간 직후 무효가 된다.
+        let issued!: Awaited<ReturnType<TTTServer["issueEnrollmentCode"]>>;
+        await ServerOptionStore.instance.runConfigurationMutation(async () => {
+            issued = await server.issueEnrollmentCode(clientId, ttlMinutes === undefined ? undefined : ttlMinutes === null ? null : ttlMinutes * 60_000,
+                {provisional: provisional === true});
+        });
         if(issued.ok) {
             ctx.ok({code: issued.code, expiresAt: issued.expiresAt, issueId: issued.issueId, controlPort: ServerOptionStore.instance.serverOption.port});
         } else if(issued.reason === "unknown-client") {
@@ -164,7 +168,10 @@ const trustedClientRouteHandlers = (deps: TrustedClientRouteDeps) => {
             ctx.fail(503, "SERVER_NOT_READY", "the tunnel server is not running");
             return;
         }
-        const confirmed = await server.confirmEnrollmentCode(clientId, issueId);
+        let confirmed!: Awaited<ReturnType<TTTServer["confirmEnrollmentCode"]>>;
+        await ServerOptionStore.instance.runConfigurationMutation(async () => {
+            confirmed = await server.confirmEnrollmentCode(clientId, issueId);
+        });
         if(confirmed.ok) {
             ctx.ok({expiresAt: confirmed.expiresAt});
         } else if(confirmed.reason === "unknown-client") {

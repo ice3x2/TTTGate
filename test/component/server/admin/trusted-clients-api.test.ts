@@ -164,6 +164,28 @@ describe("trusted client admin API", () => {
         expect((await f.request("POST", "/api/trustedClients/nobody/enrollmentCode/confirm", {issueId: 1})).statusCode).toBe(404);
     }));
 
+    // #313: 발급과 확인은 진행 중인 설정 변경이 끝난 뒤에 한다. 그 변경이 제어 포트를 바꾸면, 그 사이 낸 코드는 성공으로 나간 직후 무효가 된다.
+    test("#313 issuing and confirming wait for a configuration change in progress", async () => withConfigurationServer(async f => {
+        await f.request("POST", "/api/trustedClients", {clientId: "edge-5", expectedRevision: await revision(f)});
+        const read = await f.snapshot();
+        expect((await f.request("POST", "/api/serverOption", {...read.serverOption, tls: true, expectedRevision: read.revisionState.currentRevision})).statusCode).toBe(200);
+        const issued = await f.request("POST", "/api/trustedClients/edge-5/enrollmentCode", {ttlMinutes: null, provisional: true});
+
+        // 확인을 먼저 한다. 발급을 먼저 하면 앞의 코드가 대체되어 확인할 것이 없다.
+        for(const [path, payload] of [["/api/trustedClients/edge-5/enrollmentCode/confirm", {issueId: body(issued).issueId}], ["/api/trustedClients/edge-5/enrollmentCode", {}]] as const) {
+            let release!: () => void;
+            const held = new Promise<void>((resolve) => { release = resolve; });
+            const mutation = f.store.runConfigurationMutation(() => held);
+            let settled = false;
+            const answer = f.request("POST", path, payload).then((response: any) => { settled = true; return response; });
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            expect({path, settled}).toEqual({path, settled: false});
+            release();
+            await mutation;
+            expect((await answer).statusCode).toBe(200);
+        }
+    }));
+
     // #313: ttlMinutes 는 1–43200(30일) 정수이거나 null(만료 없음)이다.
     test("#313 enrollment codes take 1..43200 minutes or null for no expiry", async () => withConfigurationServer(async f => {
         await f.request("POST", "/api/trustedClients", {clientId: "edge-2", expectedRevision: await revision(f)});
