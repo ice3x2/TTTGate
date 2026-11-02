@@ -174,7 +174,8 @@ test("#313 the chosen expiry is sent, keeps focus, and does not carry over to an
     expect(await page.evaluate(() => document.activeElement?.id)).toBe("enroll-ttl");
 
     await select.selectOption("never");
-    await waitUntil(async () => ((await page.locator(".enroll-modal").textContent()) ?? "").includes("Never expires"), {timeoutMs: 5000, label: "never expires shown"});
+    // 선택지 이름에도 "Never expires" 가 있으므로, 응답이 왔는지는 안내 문단으로 본다.
+    await page.locator(".enroll-modal #enroll-never-warning").waitFor({state: "visible", timeout: 5000});
     await page.keyboard.press("Escape");
     await page.locator(".enroll-modal").waitFor({state: "hidden"});
 
@@ -220,6 +221,25 @@ test("#313 the last choice wins over a late response, and a failed issue restore
     await select.selectOption("10080");
     await waitUntil(async () => (await select.inputValue()) === "60", {timeoutMs: 5000, label: "choice restored after a network error"});
     await page.unroute("**/enrollmentCode");
+}));
+
+// #313: 창에서 기한을 바꾼 뒤 응답이 오기 전에 창을 닫으면, 늦게 온 응답이 창을 다시 열지 않는다.
+test("#313 a late response does not reopen a closed code window", () => withApp({fixture: "rbac"}, async (app) => {
+    const {page} = app;
+    await app.serverOption({tls: true, port: 9126});
+    await openClients(page);
+    await rowOf(page, "client-a").locator(".client-code").click();
+    const select = page.locator(".enroll-modal #enroll-ttl");
+    await select.waitFor({state: "visible"});
+    const issued = async () => (await app.calls()).filter((call) => call.method === "issueEnrollmentCode").length;
+    const start = await issued();
+    await app.enrollmentDelays([1500]);
+    await select.selectOption("never");
+    await waitUntil(async () => (await issued()) > start, {timeoutMs: 5000, label: "request sent"});
+    await page.keyboard.press("Escape");
+    await page.locator(".enroll-modal").waitFor({state: "hidden"});
+    await page.waitForTimeout(2500);
+    expect(await page.locator(".enroll-modal").isVisible()).toBe(false);
 }));
 
 test("#225 after expiry, Issue new code shows a new, live command", () => withApp({fixture: "rbac"}, async (app) => {

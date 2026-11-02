@@ -115,7 +115,8 @@
         return snapshot.revision;
     };
 
-    const issue = (clientId: string) => run(async () => {
+    /** 코드를 받는다. open 이 참일 때만 창을 연다. 창 안에서 다시 받는 경우 늦게 온 응답이 닫은 창을 다시 열면 안 된다. */
+    const issue = (clientId: string, open = false) => run(async () => {
         const chosen = ttl;
         const seq = ++issueSeq;
         const result = await TrustedClientsCtrl.instance.issueCode(clientId, ttlMinutesOf(chosen));
@@ -129,14 +130,14 @@
         enrollFor = clientId;
         enrollCode = {code: result.code, expiresAt: result.expiresAt, controlPort: result.controlPort};
         now = Date.now();
-        enrollOpen = true;
+        if(open) enrollOpen = true;
     });
 
     /** 새 창을 열 때는 기한을 기본(15분)으로 되돌린다. 이전 창에서 고른 값이 다른 클라이언트로 넘어가지 않게 한다. */
     const openCode = (clientId: string) => {
         ttl = DEFAULT_TTL;
         issuedTtl = DEFAULT_TTL;
-        return issue(clientId);
+        return issue(clientId, true);
     };
 
     const create = () => run(async () => {
