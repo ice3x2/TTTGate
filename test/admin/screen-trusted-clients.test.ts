@@ -101,6 +101,19 @@ test("REQ-1 delete is refused while a tunnel or group allows the client, and wor
 }));
 
 // #225 화면의 나머지 흐름
+/**
+ * 등록 코드 발급 응답이 브라우저에 도착한 순서(응답의 expiresAt; 만료 없음이면 null).
+ * 고정 대기 대신 실제 도착을 기다리고, 요청이 겹쳤는지를 도착 순서로 가린다.
+ */
+const recordEnrollmentResponses = (page: Page) => {
+    const arrived: Array<number | null> = [];
+    page.on("response", (response) => {
+        if(!response.url().includes("/enrollmentCode")) return;
+        void response.json().then((body: any) => { arrived.push(body?.expiresAt ?? null); }).catch(() => { arrived.push(null); });
+    });
+    return arrived;
+};
+
 const commandText = async (page: Page) => (await page.locator(".enroll-modal #enroll-command").textContent())?.trim() ?? "";
 
 test("#225 an existing row issues a code; the command uses the address as typed and Esc returns focus to the button", () => withApp({fixture: "rbac"}, async (app) => {
@@ -199,14 +212,21 @@ test("#313 the last choice wins over a late response, and a failed issue restore
     await rowOf(page, "client-a").locator(".client-code").click();
     const select = page.locator(".enroll-modal #enroll-ttl");
     await select.waitFor({state: "visible"});
-    const issued = async () => (await app.calls()).filter((call) => call.method === "issueEnrollmentCode").length;
-    const start = await issued();
+    const issued = async () => (await app.calls()).filter((call) => call.method === "issueEnrollmentCode").map((call) => call.args[1]);
+    const arrived = recordEnrollmentResponses(page);
+    const start = (await issued()).length;
 
+    // 앞 요청(만료 없음)이 늦게 끝나는 동안 60분을 고른다. 앞 요청이 끝나기 전에는 다음 요청을 보내지 않고,
+    // 끝난 뒤 마지막 선택(60분)으로 보낸다. 그래서 서버가 받는 순서와 화면의 최신이 늘 같다.
     await app.enrollmentDelays([1500, 0]);
     await select.selectOption("never");
+    await waitUntil(async () => (await issued()).length === start + 1, {timeoutMs: 5000, label: "first request sent"});
     await select.selectOption("60");
-    await waitUntil(async () => (await issued()) >= start + 2, {timeoutMs: 5000, label: "both requests sent"});
-    await page.waitForTimeout(2000);
+    await waitUntil(async () => arrived.length >= 2, {timeoutMs: 10_000, label: "both responses arrived"});
+    // 직렬이면 늦은 첫 요청(만료 없음)의 응답이 먼저 온다. 겹쳐 보냈다면 지연 없는 60분 응답이 먼저 온다.
+    expect(arrived[0]).toBeNull();
+    expect(typeof arrived[1]).toBe("number");
+    expect((await issued()).slice(start)).toEqual([null, 60 * 60_000]);
     expect(await select.inputValue()).toBe("60");
     expect(await page.locator(".enroll-modal #enroll-never-warning").count()).toBe(0);
     expect(await page.locator(".enroll-modal").textContent()).toMatch(/Expires \d{4}-\d{2}-\d{2}/);
@@ -236,9 +256,11 @@ test("#313 a late response does not reopen a closed code window", () => withApp(
     await app.enrollmentDelays([1500]);
     await select.selectOption("never");
     await waitUntil(async () => (await issued()) > start, {timeoutMs: 5000, label: "request sent"});
+    const arrived = recordEnrollmentResponses(page);
     await page.keyboard.press("Escape");
     await page.locator(".enroll-modal").waitFor({state: "hidden"});
-    await page.waitForTimeout(2500);
+    await waitUntil(async () => arrived.length >= 1, {timeoutMs: 10_000, label: "late response arrived"});
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     expect(await page.locator(".enroll-modal").isVisible()).toBe(false);
 }));
 

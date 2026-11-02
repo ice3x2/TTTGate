@@ -109,6 +109,19 @@ describe("trusted client admin API", () => {
         for(const wrong of ["x".repeat(1000), {nested: true}, 1.5, true]) expect(metaOf({ttlMinutes: wrong}).detail).toEqual({ttlMinutes: "invalid"});
     });
 
+    // #313: 발급하는 사이에 더 새 발급이나 무효화가 있으면 서버는 superseded 를 돌려주고, API 는 409 ENROLLMENT_SUPERSEDED 로 알린다.
+    test("#313 a superseded issue answers 409 ENROLLMENT_SUPERSEDED", async () => withConfigurationServer(async f => {
+        await f.request("POST", "/api/trustedClients", {clientId: "edge-3", expectedRevision: await revision(f)});
+        const original = f.tunnel.issueEnrollmentCode;
+        f.tunnel.issueEnrollmentCode = async () => ({ok: false, reason: "superseded"});
+        try {
+            const answer = await f.request("POST", `/api/trustedClients/edge-3/enrollmentCode`, {ttlMinutes: null});
+            expect({status: answer.statusCode, code: body(answer).code}).toEqual({status: 409, code: "ENROLLMENT_SUPERSEDED"});
+        } finally {
+            f.tunnel.issueEnrollmentCode = original;
+        }
+    }));
+
     // #313: ttlMinutes 는 1–43200(30일) 정수이거나 null(만료 없음)이다.
     test("#313 enrollment codes take 1..43200 minutes or null for no expiry", async () => withConfigurationServer(async f => {
         await f.request("POST", "/api/trustedClients", {clientId: "edge-2", expectedRevision: await revision(f)});

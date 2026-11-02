@@ -79,8 +79,12 @@
     let ttl = $state(DEFAULT_TTL);
     /** 마지막으로 발급에 성공한 기한. 발급이 실패하면 선택 칸을 이 값으로 되돌린다. */
     let issuedTtl = DEFAULT_TTL;
-    /** 요청 순번. 선택을 빠르게 바꾸면 요청이 겹치므로 가장 최근 요청의 응답만 화면에 반영한다. */
-    let issueSeq = 0;
+    /**
+     * 발급 요청은 한 번에 하나만 보낸다. 겹쳐 보내면 서버가 받는 순서와 화면의 최신이 어긋나, 화면에는 무효가 된 코드가
+     * 남고 보이지 않는 코드가 서버에 남을 수 있다. 요청 중에 고른 기한은 queuedTtl 에 두었다가 앞 요청이 끝나면 보낸다.
+     */
+    let issuing = false;
+    let queuedTtl: string | undefined;
     const ttlMinutesOf = (value: string): number | null => value === 'never' ? null : Number(value);
 
     const failed = (error: unknown): void => {
@@ -116,22 +120,37 @@
     };
 
     /** 코드를 받는다. open 이 참일 때만 창을 연다. 창 안에서 다시 받는 경우 늦게 온 응답이 닫은 창을 다시 열면 안 된다. */
-    const issue = (clientId: string, open = false) => run(async () => {
-        const chosen = ttl;
-        const seq = ++issueSeq;
-        const result = await TrustedClientsCtrl.instance.issueCode(clientId, ttlMinutesOf(chosen));
-        if(seq !== issueSeq) return;
-        if(!result.success) {
-            ttl = issuedTtl;
-            toast.push({tone: 'alarm', message: result.message});
+    const issue = async (clientId: string, open = false): Promise<void> => {
+        if(issuing) {
+            queuedTtl = ttl;
             return;
         }
-        issuedTtl = chosen;
-        enrollFor = clientId;
-        enrollCode = {code: result.code, expiresAt: result.expiresAt, controlPort: result.controlPort};
-        now = Date.now();
-        if(open) enrollOpen = true;
-    });
+        issuing = true;
+        const chosen = ttl;
+        try {
+            await run(async () => {
+                const result = await TrustedClientsCtrl.instance.issueCode(clientId, ttlMinutesOf(chosen));
+                if(!result.success) {
+                    ttl = issuedTtl;
+                    toast.push({tone: 'alarm', message: result.message});
+                    return;
+                }
+                issuedTtl = chosen;
+                enrollFor = clientId;
+                enrollCode = {code: result.code, expiresAt: result.expiresAt, controlPort: result.controlPort};
+                now = Date.now();
+                if(open) enrollOpen = true;
+            });
+        } finally {
+            issuing = false;
+        }
+        const next = queuedTtl;
+        queuedTtl = undefined;
+        if(next !== undefined && next !== issuedTtl) {
+            ttl = next;
+            await issue(clientId);
+        }
+    };
 
     /** 새 창을 열 때는 기한을 기본(15분)으로 되돌린다. 이전 창에서 고른 값이 다른 클라이언트로 넘어가지 않게 한다. */
     const openCode = (clientId: string) => {
