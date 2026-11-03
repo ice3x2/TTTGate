@@ -281,15 +281,15 @@ Who can do the first setup:
 
 Use the first case that matches.
 
-1. **You know your password.** Open **My account** and press **Change password**. If you lost your authenticator app, choose **Use a recovery code instead** at the two-factor step of the login.
+1. **You know your password.** Open **My account** and press **Change password**. If you lost your authenticator app, choose **Use a recovery code instead** at the two-factor step of the login. After you sign in, open **My account**. Under **Two-factor authentication**, press **Disable** and enter your password. Then press **Set up** and register a new app. Each recovery code works only once.
 2. **Another superuser can sign in.** That superuser opens **Users**, selects your account and presses **Reset password**.
    - The console shows a temporary password once. Give it to the user in a safe way.
    - The server ends the sessions of that user. At the next login, the user must set a new password.
    - The audit log records `temp_password_issued`.
    - If the user also lost the authenticator app, the superuser presses **Reset MFA** on the same screen.
-3. **No superuser can sign in.** Reset the account store on the server host. Then the server starts the first admin setup again.
-   1. Stop the server: `./TTTGate-linux-x64 stop` in the `bin` folder.
-   2. Copy `config/identity.yaml` to a safe place. The time in the file name keeps an older copy safe. The file contains password hashes. Keep the copy private.
+3. **No superuser can sign in.** Reset the account store on the server host. Then the server starts the first admin setup again. The commands below use `~/TTTGate`. Replace `~/TTTGate` with your installation folder, for example `/opt/TTTGate`. With a wrong folder, `rm -f` does nothing and shows no error, and the old `admin` account can come back from `.key`.
+   1. Stop the server: `./TTTGate-linux-x64 stop` in the `bin` folder. If a service manager such as systemd runs the server, stop the service with that manager instead, so that it does not start the server again.
+   2. Copy `config/identity.yaml` to a safe place. The time in the file name keeps an older copy safe. The file contains password hashes and two-factor secrets. Keep the copy safe and delete it when you no longer need it.
 
       ```shell
       cp -p ~/TTTGate/config/identity.yaml ~/identity.yaml.$(date +%Y%m%d%H%M%S).bak
@@ -966,15 +966,15 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 
 아래에서 처음으로 들어맞는 경우를 따른다.
 
-1. **비밀번호를 안다.** **My account** 에서 **Change password** 를 누른다. 인증 앱을 잃어버렸다면 로그인의 2단계 인증 단계에서 **Use a recovery code instead** 를 고른다.
+1. **비밀번호를 안다.** **My account** 에서 **Change password** 를 누른다. 인증 앱을 잃어버렸다면 로그인 중 2단계 인증 화면에서 **Use a recovery code instead** 를 고른다. 로그인한 뒤 **My account** 의 **Two-factor authentication** 에서 **Disable** 을 누르고 비밀번호를 넣는다. 그다음 **Set up** 을 눌러 새 앱을 등록한다. 복구 코드는 하나당 한 번만 쓸 수 있다.
 2. **로그인할 수 있는 다른 슈퍼유저가 있다.** 그 슈퍼유저가 **Users** 에서 해당 계정을 고르고 **Reset password** 를 누른다.
    - 관리 화면은 임시 비밀번호를 한 번만 보여 준다. 안전한 방법으로 사용자에게 전한다.
    - 서버는 그 사용자의 세션을 모두 끊는다. 사용자는 다음 로그인 때 새 비밀번호를 정해야 한다.
    - 감사 로그에 `temp_password_issued` 가 남는다.
    - 사용자가 인증 앱도 잃어버렸다면, 슈퍼유저가 같은 화면에서 **Reset MFA** 를 누른다.
-3. **로그인할 수 있는 슈퍼유저가 없다.** 서버 호스트에서 계정 저장소를 초기화한다. 그러면 서버가 첫 관리자 설정을 다시 시작한다.
-   1. 서버를 멈춘다. `bin` 폴더에서 `./TTTGate-linux-x64 stop` 을 실행한다.
-   2. `config/identity.yaml` 을 안전한 곳에 복사해 둔다. 파일 이름에 시각을 넣으면 예전 사본을 덮어쓰지 않는다. 이 파일에는 비밀번호 해시가 들어 있으므로 사본을 남이 보지 못하게 보관한다.
+3. **로그인할 수 있는 슈퍼유저가 없다.** 서버 호스트에서 계정 저장소를 초기화한다. 그러면 서버가 첫 관리자 설정을 다시 시작한다. 아래 명령은 `~/TTTGate` 를 기준으로 한다. `~/TTTGate` 는 실제 설치 폴더로 바꾼다(예: `/opt/TTTGate`). 경로가 틀리면 `rm -f` 는 오류 없이 아무 일도 하지 않고, 예전 `admin` 계정이 `.key` 로 되살아날 수 있다.
+   1. 서버를 멈춘다. `bin` 폴더에서 `./TTTGate-linux-x64 stop` 을 실행한다. systemd 같은 서비스 관리자가 서버를 실행한다면, 서버가 다시 뜨지 않도록 그 관리자로 서비스를 멈춘다.
+   2. `config/identity.yaml` 을 안전한 곳에 복사해 둔다. 파일 이름에 시각을 넣으면 예전 사본을 덮어쓰지 않는다. 이 파일에는 비밀번호 해시와 2단계 인증 비밀값이 들어 있다. 사본은 안전하게 보관하고, 더 필요 없으면 지운다.
 
       ```shell
       cp -p ~/TTTGate/config/identity.yaml ~/identity.yaml.$(date +%Y%m%d%H%M%S).bak
