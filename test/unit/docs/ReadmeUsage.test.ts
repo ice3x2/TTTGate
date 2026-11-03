@@ -120,25 +120,27 @@ describe("README in English and Korean (#310)", () => {
         const end = text.indexOf(to, start + from.length);
         return end < 0 ? "" : text.slice(start, end);
     };
-    type Expectation = {heading: string; contains: string[]; matches: RegExp[]; absent: string[]};
+    type Expectation = {heading: string; contains: string[]; matches: RegExp[]; absent: string[]; before?: [string, string]};
     const remoteAccessFacts: Array<[string, () => string, {wrong: string; method2: [string, string, string]; parts: Expectation[]}]> = [
         ["English", () => english, {
             wrong: "`0.0.0.0`, `::` and host names do not work",
             method2: ["Open the Console from Another Computer", "2. **Expose the console port directly", "\n3. **"],
             parts: [
-                {heading: "Open the Console", contains: ["https://[::1]:9300"], matches: [], absent: ["`127.0.0.1`, `::1`, `localhost` or the `adminBindHost`"]},
+                {heading: "Open the Console", contains: ["https://[::1]:9300", "an IPv4 address or a host name in `adminBindHost`"], matches: [], absent: ["`127.0.0.1`, `::1`, `localhost` or the `adminBindHost`"]},
                 {heading: "method 2", contains: ["adminBindHost: 0.0.0.0", "\"https://192.0.2.10:9300\"", "cd ~/TTTGate/bin",
                     "./TTTGate-linux-x64 server -daemon -allowLegacyAdminRemote", "./TTTGate-linux-x64 stop", "network security group", "security list",
-                    "one IPv4 address of the server", "or an IPv6 address, still need an entry"], matches: [/flag is not saved/], absent: []},
+                    "one IPv4 address or one host name of the server", "or an IPv6 address, still need an entry"], matches: [/flag is not saved/], absent: []},
                 {heading: "If the Console Does Not Open", contains: ["| Symptom | Cause | What to do |", "connection refused", "times out",
-                    "`403 Forbidden origin`", "`Refusing insecure admin policy: ...`", "or the IPv4 `adminBindHost` address"],
+                    "`403 Forbidden origin`", "`Refusing insecure admin policy: ...`", "an IPv4 address or a host name in `adminBindHost`"],
                     matches: [/certificate warning[^\n]*outside the server host[^\n]*your own certificate/], absent: []},
                 {heading: "First Admin Login", contains: ["cat ../config/.bootstrap-token", "~/TTTGate/config/.bootstrap-token",
                     "ssh user@server.example.com 'cat ~/TTTGate/config/.bootstrap-token'", "sudo cat"], matches: [/A restart that reuses the token does not write this line again/], absent: []},
                 {heading: "Recover Admin Accounts", contains: ["**My account**", "**Change password**", "**Reset password**", "**Reset MFA**",
                     "~/identity.yaml.$(date +%Y%m%d%H%M%S).bak", "rm ~/TTTGate/config/identity.yaml", "rm -f ~/TTTGate/config/.key",
                     "The file contains password hashes and two-factor secrets.", "delete it when you no longer need it",
-                    "Replace `~/TTTGate` with your installation folder", "systemd", "**Two-factor authentication**", "**Disable**", "**Set up**"],
+                    "Replace `~/TTTGate` with your installation folder", "systemd", "**Two-factor authentication**", "**Disable**", "**Set up**", "a superuser cannot use **Disable**", "If no recovery code is left",
+                    "If no other superuser can sign in, follow case 3."],
+                    before: ["All users, groups and two-factor settings are lost.", "\n   1. Stop the server"],
                     matches: [/creates the `admin` account with the old password/, /do not use `-reset`/i, /last active superuser/,
                         /wrong (folder|path)[^\n]*does nothing/, /All users, groups and two-factor settings are lost/, /tunnel owner refers to a user that no longer exists/], absent: []},
                 {heading: "Configuration Files", contains: ["When `config/identity.yaml` does not exist, the server creates the `admin` account"],
@@ -148,20 +150,22 @@ describe("README in English and Korean (#310)", () => {
             wrong: "`0.0.0.0`, `::`, 호스트 이름은 쓸 수 없다",
             method2: ["다른 컴퓨터에서 관리 화면 열기", "2. **관리 화면 포트를 직접 열기", "\n3. **"],
             parts: [
-                {heading: "관리 화면 열기", contains: ["https://[::1]:9300"], matches: [], absent: ["`127.0.0.1`, `::1`, `localhost` 또는 `adminBindHost`"]},
+                {heading: "관리 화면 열기", contains: ["https://[::1]:9300", "`adminBindHost` 에 적은 IPv4 주소나 호스트 이름"], matches: [], absent: ["`127.0.0.1`, `::1`, `localhost` 또는 `adminBindHost`"]},
                 {heading: "method 2", contains: ["adminBindHost: 0.0.0.0", "\"https://192.0.2.10:9300\"", "cd ~/TTTGate/bin",
                     "./TTTGate-linux-x64 server -daemon -allowLegacyAdminRemote", "./TTTGate-linux-x64 stop", "네트워크 보안 그룹", "보안 목록",
-                    "서버의 IPv4 주소 하나", "IPv6 주소처럼"], matches: [/플래그는 저장되지 않/], absent: []},
+                    "서버의 IPv4 주소나 호스트 이름 하나", "IPv6 주소처럼", "`adminAllowedOrigins` 에 적지 않아도 되는 주소는"], matches: [/플래그는 저장되지 않/], absent: []},
                 {heading: "관리 화면이 열리지 않을 때", contains: ["| 증상 | 원인 | 조치 |", "연결 거부", "시간 초과",
-                    "`403 Forbidden origin`", "`Refusing insecure admin policy: ...`", "IPv4 주소인 `adminBindHost`"],
+                    "`403 Forbidden origin`", "`Refusing insecure admin policy: ...`", "`adminBindHost` 에 적은 IPv4 주소나 호스트 이름"],
                     matches: [/인증서 경고[^\n]*서버 호스트 밖[^\n]*직접 준비한 인증서/], absent: []},
                 {heading: "첫 관리자 로그인", contains: ["cat ../config/.bootstrap-token", "~/TTTGate/config/.bootstrap-token",
                     "ssh user@server.example.com 'cat ~/TTTGate/config/.bootstrap-token'", "sudo cat"], matches: [/기존 토큰을 다시 쓰는 재시작에서는 이 줄을 다시 남기지 않는다/], absent: []},
                 {heading: "관리자 계정 복구", contains: ["**My account**", "**Change password**", "**Reset password**", "**Reset MFA**",
                     "~/identity.yaml.$(date +%Y%m%d%H%M%S).bak", "rm ~/TTTGate/config/identity.yaml", "rm -f ~/TTTGate/config/.key",
                     "이 파일에는 비밀번호 해시와 2단계 인증 비밀값이 들어 있다", "더 필요 없으면 지운다",
-                    "`~/TTTGate` 는 실제 설치 폴더로 바꾼다", "systemd", "**Two-factor authentication**", "**Disable**", "**Set up**",
+                    "`~/TTTGate` 는 실제 설치 폴더로 바꾼다", "systemd", "**Two-factor authentication**", "**Disable**", "**Set up**", "슈퍼유저는 **Disable** 을 쓸 수 없다", "남은 복구 코드가 없으면",
+                    "로그인할 수 있는 다른 슈퍼유저가 없으면 3번 경우를 따른다.",
                     "로그인 중 2단계 인증 화면에서"],
+                    before: ["모든 사용자, 그룹, 2단계 인증 설정이 사라진다.", "\n   1. 서버를 멈춘다"],
                     matches: [/경로가 틀리면[^\n]*아무 일도 하지 않/, /모든 사용자, 그룹, 2단계 인증 설정이 사라진다/, /터널 소유자가 더는 없는 사용자를 가리킨다/, /`\.key` 의 예전 비밀번호로 `admin` 계정을 다시 만든다/, /`-reset` 은 쓰지 않는다/, /마지막 활성 슈퍼유저/], absent: []},
                 {heading: "설정 파일", contains: ["`config/identity.yaml` 이 없으면 `.key` 로 `admin` 계정을 만든다"], matches: [], absent: []},
             ]}],
@@ -178,6 +182,11 @@ describe("README in English and Korean (#310)", () => {
             for(const fact of part.contains) expect({part: part.heading, fact, found: slice.includes(fact)}).toEqual({part: part.heading, fact, found: true});
             for(const pattern of part.matches) expect({part: part.heading, pattern: String(pattern), found: pattern.test(slice)}).toEqual({part: part.heading, pattern: String(pattern), found: true});
             for(const fact of part.absent) expect({part: part.heading, fact, found: slice.includes(fact)}).toEqual({part: part.heading, fact, found: false});
+            // 경고는 절차보다 먼저 읽어야 한다.
+            if(part.before) {
+                const [first, then] = part.before.map((needle) => slice.indexOf(needle));
+                expect({part: part.heading, order: part.before, ok: first >= 0 && then >= 0 && first < then}).toEqual({part: part.heading, order: part.before, ok: true});
+            }
         }
     });
 
