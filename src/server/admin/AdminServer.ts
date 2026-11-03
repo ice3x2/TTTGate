@@ -2088,10 +2088,15 @@ class AdminServer {
     /**
      * #318: 호스트를 비교할 수 있는 형태로 맞춘다. URL 의 IPv6 호스트 이름은 대괄호가 붙고([::1]),
      * 설정 값은 대문자나 생략하지 않은 0 으로 적을 수 있다. IPv6 는 대괄호를 벗기고 URL 이 쓰는 줄인 소문자 표기로 바꾼다.
+     * 대괄호는 IPv6 일 때만 벗긴다. 영역 식별자(fe80::1%eth0)가 붙은 주소는 URL 로 적을 수 없으므로 소문자로만 바꾼다.
      */
     private static comparableHost(host: string): string {
-        const bare = host.toLowerCase().replace(/^\[(.*)\]$/, '$1');
-        return isIPv6(bare) ? new URL(`https://[${bare}]`).hostname.slice(1, -1) : bare;
+        const lower = host.toLowerCase();
+        const bracketed = lower.startsWith('[') && lower.endsWith(']');
+        const bare = bracketed ? lower.slice(1, -1) : lower;
+        if(!isIPv6(bare)) return lower;
+        const asUrl = `https://[${bare}]`;
+        return URL.canParse(asUrl) ? new URL(asUrl).hostname.slice(1, -1) : bare;
     }
 
     /**

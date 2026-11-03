@@ -66,6 +66,24 @@ describe("adminAllowedOrigins (#303)", () => {
         expect(allowed(`https://[fd00::10]:${ports[0]}`)).toBe(true);
         api._bindHost = "::";
         expect(allowed(`https://[::]:${ports[0]}`)).toBe(false);
+        api._bindHost = "0:0:0:0:0:0:0:0";
+        expect(allowed(`https://[::]:${ports[0]}`)).toBe(false);
+        api._bindHost = "[fd00::10]";
+        expect(allowed(`https://[fd00::10]:${ports[0]}`)).toBe(true);
+        // IPv4 를 담은 IPv6 표기는 루프백이 아니다.
+        api._bindHost = "127.0.0.1";
+        expect(allowed(`https://[::ffff:127.0.0.1]:${ports[0]}`)).toBe(false);
+    }));
+
+    // #318: 영역 식별자가 붙은 링크 로컬 주소는 URL 로 표기할 수 없다. 이 바인드 주소 때문에 다른 Origin 판정이 깨지면 안 된다.
+    test("a link-local adminBindHost with a zone id does not break the check for other origins (#318)", async () => withConfigurationServer(async ({apis, ports}) => {
+        const api = apis[0] as any;
+        api._bindHost = "fe80::1%eth0";
+        expect(api.isOriginAllowed(`https://127.0.0.1:${ports[0]}`)).toBe(true);
+        expect(api.isOriginAllowed(`https://[::1]:${ports[0]}`)).toBe(true);
+        // 대괄호는 IPv6 주소에서만 벗긴다. IPv6 가 아닌 값은 그대로 두므로 다른 호스트와 같아지지 않는다.
+        api._bindHost = "[foo]";
+        expect(api.isOriginAllowed(`https://foo:${ports[0]}`)).toBe(false);
     }));
 
     test("a wrong origin is 400 and server.yaml does not change (REQ-2)", async () => withConfigurationServer(async ({request, snapshot, store, root}) => {
