@@ -288,7 +288,7 @@ Use the first case that matches.
    - The server ends the sessions of that user. At the next login, the user must set a new password.
    - The audit log records `temp_password_issued`.
    - If the user also lost the authenticator app, the superuser presses **Reset MFA** on the same screen. This also ends the sessions of that user.
-3. **No superuser can sign in (the password is forgotten, or two-factor authentication is lost and no recovery code is left).** Reset the account store on the server host. Then the server starts the first admin setup again. The commands below use `~/TTTGate`. Replace `~/TTTGate` with your installation folder, for example `/opt/TTTGate`. With a wrong folder, `rm -f` does nothing and shows no error, and the old `admin` account can come back from `.key`.
+3. **No superuser can sign in (the password is forgotten, or two-factor authentication is lost and no recovery code is left).** Reset the account store on the server host. Then the server starts the first admin setup again. The commands below use `~/TTTGate`. Replace `~/TTTGate` with your installation folder, for example `/opt/TTTGate`. If `cp` or `rm` reports `No such file or directory`, the folder is wrong. Stop and fix the path. If `.key` is not deleted, the old `admin` account comes back. `config/identity.yaml` has file mode 0600. If a service account runs the server, run the commands as that account, or use `sudo` with full paths, for example `/opt/TTTGate/config/identity.yaml`. Keep the backup in a folder that only administrators can read.
 
    Before you do this, read these warnings:
 
@@ -975,7 +975,7 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
    - 서버는 그 사용자의 세션을 모두 끊는다. 사용자는 다음 로그인 때 새 비밀번호를 정해야 한다.
    - 감사 로그에 `temp_password_issued` 가 남는다.
    - 사용자가 인증 앱도 잃어버렸다면, 슈퍼유저가 같은 화면에서 **Reset MFA** 를 누른다. 이때도 그 사용자의 세션이 모두 끊긴다.
-3. **로그인할 수 있는 슈퍼유저가 없다(비밀번호를 잊었거나, 2단계 인증을 잃었고 남은 복구 코드도 없다).** 서버 호스트에서 계정 저장소를 초기화한다. 그러면 서버가 첫 관리자 설정을 다시 시작한다. 아래 명령은 `~/TTTGate` 를 기준으로 한다. `~/TTTGate` 는 실제 설치 폴더로 바꾼다(예: `/opt/TTTGate`). 경로가 틀리면 `rm -f` 는 오류 없이 아무 일도 하지 않고, 예전 `admin` 계정이 `.key` 로 되살아날 수 있다.
+3. **로그인할 수 있는 슈퍼유저가 없다(비밀번호를 잊었거나, 2단계 인증을 잃었고 남은 복구 코드도 없다).** 서버 호스트에서 계정 저장소를 초기화한다. 그러면 서버가 첫 관리자 설정을 다시 시작한다. 아래 명령은 `~/TTTGate` 를 기준으로 한다. `~/TTTGate` 는 실제 설치 폴더로 바꾼다(예: `/opt/TTTGate`). `cp` 나 `rm` 이 `No such file or directory` 를 출력하면 폴더가 틀린 것이다. 멈추고 경로를 고친다. `.key` 가 지워지지 않으면 예전 `admin` 계정이 되살아난다. `config/identity.yaml` 의 파일 권한은 0600 이다. 서비스 계정이 서버를 실행한다면 그 계정으로 명령을 실행하거나, `sudo` 와 함께 전체 경로(예: `/opt/TTTGate/config/identity.yaml`)를 쓴다. 백업은 관리자만 읽을 수 있는 폴더에 둔다.
 
    진행하기 전에 다음 주의 사항을 읽는다.
 
