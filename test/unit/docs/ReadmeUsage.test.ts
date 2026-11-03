@@ -126,7 +126,7 @@ describe("README in English and Korean (#310)", () => {
             wrong: "`0.0.0.0`, `::` and host names do not work",
             method2: ["Open the Console from Another Computer", "2. **Expose the console port directly", "\n3. **"],
             parts: [
-                {heading: "Open the Console", contains: ["https://[::1]:9300", "an IPv4 address or a host name in `adminBindHost`"], matches: [], absent: ["`127.0.0.1`, `::1`, `localhost` or the `adminBindHost`"]},
+                {heading: "Open the Console", contains: ["https://[::1]:9300", "an IPv4 address or a host name in `adminBindHost` (not `0.0.0.0` or `::`)"], matches: [], absent: ["`127.0.0.1`, `::1`, `localhost` or the `adminBindHost`"]},
                 {heading: "method 2", contains: ["adminBindHost: 0.0.0.0", "\"https://192.0.2.10:9300\"", "cd ~/TTTGate/bin",
                     "./TTTGate-linux-x64 server -daemon -allowLegacyAdminRemote", "./TTTGate-linux-x64 stop", "network security group", "the security group (AWS)", "security list", "`server configuration is not ready`",
                     "one IPv4 address or one host name of the server", "or an IPv6 address, still need an entry"], matches: [/flag is not saved/], absent: ["With `-daemon`, the reason is in `logs/`."]},
@@ -139,7 +139,8 @@ describe("README in English and Korean (#310)", () => {
                     "~/identity.yaml.$(date +%Y%m%d%H%M%S).bak", "rm ~/TTTGate/config/identity.yaml", "rm -f ~/TTTGate/config/.key",
                     "The file contains password hashes and two-factor secrets.", "delete it when you no longer need it",
                     "Replace `~/TTTGate` with your installation folder", "systemd", "**Two-factor authentication**", "**Disable**", "**Set up**", "a superuser cannot use **Disable**", "If no recovery code is left",
-                    "If no other superuser can sign in, follow case 3."],
+                    "If no other superuser can sign in either, follow case 3.", "select your own account and press **Reset MFA**",
+                    "This also ends the sessions of that user.", "**No superuser can sign in, and no recovery code is left.**"],
                     before: ["All users, groups and two-factor settings are lost.", "Delete `config/.key` too.", "Do not use `-reset` for this."]
                         .map((warning): [string, string] => [warning, "\n   1. Stop the server"]),
                     matches: [/creates the `admin` account with the old password/, /do not use `-reset`/i, /last active superuser/,
@@ -151,10 +152,11 @@ describe("README in English and Korean (#310)", () => {
             wrong: "`0.0.0.0`, `::`, 호스트 이름은 쓸 수 없다",
             method2: ["다른 컴퓨터에서 관리 화면 열기", "2. **관리 화면 포트를 직접 열기", "\n3. **"],
             parts: [
-                {heading: "관리 화면 열기", contains: ["https://[::1]:9300", "`adminBindHost` 에 적은 IPv4 주소나 호스트 이름"], matches: [], absent: ["`127.0.0.1`, `::1`, `localhost` 또는 `adminBindHost`"]},
+                {heading: "관리 화면 열기", contains: ["https://[::1]:9300", "`adminBindHost` 에 적은 IPv4 주소나 호스트 이름(`0.0.0.0`, `::` 제외)"], matches: [], absent: ["`127.0.0.1`, `::1`, `localhost` 또는 `adminBindHost`"]},
                 {heading: "method 2", contains: ["adminBindHost: 0.0.0.0", "\"https://192.0.2.10:9300\"", "cd ~/TTTGate/bin",
                     "./TTTGate-linux-x64 server -daemon -allowLegacyAdminRemote", "./TTTGate-linux-x64 stop", "네트워크 보안 그룹", "AWS 는 보안 그룹", "보안 목록", "`server configuration is not ready`",
-                    "서버의 IPv4 주소나 호스트 이름 하나", "IPv6 주소처럼", "`adminAllowedOrigins` 에 적지 않아도 되는 주소는"], matches: [/플래그는 저장되지 않/], absent: ["`-daemon` 으로 시작했다면 그 이유는 `logs/` 에 남는다."]},
+                    "서버의 IPv4 주소나 호스트 이름 하나", "IPv6 주소처럼", "`adminAllowedOrigins` 에 적지 않아도 되는 주소는",
+                    "`0.0.0.0`(모든 IPv4 주소)와 `::`(모든 주소)는", "접속하는 쪽 주소"], matches: [/플래그는 저장되지 않/], absent: ["`-daemon` 으로 시작했다면 그 이유는 `logs/` 에 남는다.", "원본 주소"]},
                 {heading: "관리 화면이 열리지 않을 때", contains: ["| 증상 | 원인 | 조치 |", "연결 거부", "시간 초과",
                     "`403 Forbidden origin`", "`Refusing insecure admin policy: ...`", "`adminBindHost` 에 적은 IPv4 주소나 호스트 이름", "`server configuration is not ready`"],
                     matches: [/인증서 경고[^\n]*서버 호스트 밖[^\n]*직접 준비한 인증서/], absent: []},
@@ -164,7 +166,8 @@ describe("README in English and Korean (#310)", () => {
                     "~/identity.yaml.$(date +%Y%m%d%H%M%S).bak", "rm ~/TTTGate/config/identity.yaml", "rm -f ~/TTTGate/config/.key",
                     "이 파일에는 비밀번호 해시와 2단계 인증 비밀값이 들어 있다", "더 필요 없으면 지운다",
                     "`~/TTTGate` 는 실제 설치 폴더로 바꾼다", "systemd", "**Two-factor authentication**", "**Disable**", "**Set up**", "슈퍼유저는 **Disable** 을 쓸 수 없다", "남은 복구 코드가 없으면",
-                    "로그인할 수 있는 다른 슈퍼유저가 없으면 3번 경우를 따른다.",
+                    "로그인할 수 있는 다른 슈퍼유저도 없으면 3번 경우를 따른다.", "**Users** 에서 내 계정을 고르고 **Reset MFA** 를 누른다",
+                    "이때도 그 사용자의 세션이 모두 끊긴다.", "**로그인할 수 있는 슈퍼유저가 없고, 남은 복구 코드도 없다.**",
                     "로그인 중 2단계 인증 화면에서"],
                     before: ["모든 사용자, 그룹, 2단계 인증 설정이 사라진다.", "`config/.key` 도 반드시 지운다.", "이 작업에 `-reset` 은 쓰지 않는다."]
                         .map((warning): [string, string] => [warning, "\n   1. 서버를 멈춘다"]),

@@ -163,7 +163,7 @@ If `adminBindHost` is not a loopback address or `adminTls` is `false`, the serve
 
 The console accepts a login or a change only from these pages:
 
-- a page with the `adminPort` port at one of these addresses: `127.0.0.1`, `localhost`, or an IPv4 address or a host name in `adminBindHost`
+- a page with the `adminPort` port at one of these addresses: `127.0.0.1`, `localhost`, or an IPv4 address or a host name in `adminBindHost` (not `0.0.0.0` or `::`)
 - a page whose origin is listed in `adminAllowedOrigins`
 
 Other addresses get `403 Forbidden origin`. This includes IPv6 addresses. To open the console at `https://[::1]:9300`, add `"https://[::1]:9300"` to `adminAllowedOrigins`.
@@ -244,7 +244,7 @@ With an SSH tunnel or a reverse proxy, the console sees every connection from `1
 |---|---|---|
 | The browser shows connection refused. | The server does not run, or the console listens only on the server host (`adminBindHost: 127.0.0.1`), or the port is wrong. | Start the server. Check `adminBindHost` and `adminPort` in `config/server.yaml`. Use an SSH tunnel, or expose the port (method 2 above). |
 | The connection times out. | A firewall or a cloud network rule blocks the port, or the host is down. | Allow the console port in the firewall of the operating system and in the cloud network rule (Azure, AWS, OCI and others). |
-| The login fails with `403 Forbidden origin`. | The address that you opened is not in `adminAllowedOrigins`. It is also not one of these addresses with the console port: `127.0.0.1`, `localhost`, or an IPv4 address or a host name in `adminBindHost`. | Add the exact address (scheme, host and port) to `adminAllowedOrigins`, then restart the server. With an SSH tunnel, use the same local port as `adminPort`. |
+| The login fails with `403 Forbidden origin`. | The address that you opened is not in `adminAllowedOrigins`. It is also not one of these addresses with the console port: `127.0.0.1`, `localhost`, or an IPv4 address or a host name in `adminBindHost` (not `0.0.0.0` or `::`). | Add the exact address (scheme, host and port) to `adminAllowedOrigins`, then restart the server. With an SSH tunnel, use the same local port as `adminPort`. |
 | The server stops with `server configuration is not ready`. | A value in `config/server.yaml` breaks a rule, for example an `adminAllowedOrigins` entry. With `-daemon`, the message is only in `logs/`. | Check the `adminAllowedOrigins` entries against the rules in method 2 above. Fix the entry, then start the server again. |
 | The server stops with `Refusing insecure admin policy: ...`. | `adminBindHost` is not a loopback address or `adminTls` is `false`, and the server started without the matching flag. | Start the server with the flag that the message names, for example `-allowLegacyAdminRemote`. For `adminTls: false`, set `adminTls: true` instead if you can. |
 | The browser shows a certificate warning. | The console uses the self-signed certificate that the server created. | When you open the console from outside the server host, use your own certificate (see [Open the Console](#open-the-console)). Do not get used to skipping the warning on a console that other hosts can reach. On the server host or through an SSH tunnel, make sure that you opened the correct address, then continue. |
@@ -282,13 +282,13 @@ Who can do the first setup:
 
 Use the first case that matches.
 
-1. **You know your password.** Open **My account** and press **Change password**. If you lost your authenticator app, choose **Use a recovery code instead** at the two-factor step of the login. After you sign in, open **My account**. Under **Two-factor authentication**, press **Disable** and enter your password. Then press **Set up** and register a new app. Each recovery code works only once. If `mfaRequiredForSuperusers` is on in `server.yaml`, a superuser cannot use **Disable**. In that case, ask another superuser to press **Reset MFA** (case 2). If no recovery code is left, follow case 2. If no other superuser can sign in, follow case 3.
+1. **You know your password.** Open **My account** and press **Change password**. If you lost your authenticator app, choose **Use a recovery code instead** at the two-factor step of the login. After you sign in, open **My account**. Under **Two-factor authentication**, press **Disable** and enter your password. Then press **Set up** and register a new app. Each recovery code works only once. If `mfaRequiredForSuperusers` is on in `server.yaml`, a superuser cannot use **Disable**. In that case, open **Users**, select your own account and press **Reset MFA**. The server ends your sessions. Sign in again. The server then asks you to set up a new app. If no recovery code is left, follow case 2. If no other superuser can sign in either, follow case 3.
 2. **Another superuser can sign in.** That superuser opens **Users**, selects your account and presses **Reset password**.
    - The console shows a temporary password once. Give it to the user in a safe way.
    - The server ends the sessions of that user. At the next login, the user must set a new password.
    - The audit log records `temp_password_issued`.
-   - If the user also lost the authenticator app, the superuser presses **Reset MFA** on the same screen.
-3. **No superuser can sign in.** Reset the account store on the server host. Then the server starts the first admin setup again. The commands below use `~/TTTGate`. Replace `~/TTTGate` with your installation folder, for example `/opt/TTTGate`. With a wrong folder, `rm -f` does nothing and shows no error, and the old `admin` account can come back from `.key`.
+   - If the user also lost the authenticator app, the superuser presses **Reset MFA** on the same screen. This also ends the sessions of that user.
+3. **No superuser can sign in, and no recovery code is left.** Reset the account store on the server host. Then the server starts the first admin setup again. The commands below use `~/TTTGate`. Replace `~/TTTGate` with your installation folder, for example `/opt/TTTGate`. With a wrong folder, `rm -f` does nothing and shows no error, and the old `admin` account can come back from `.key`.
 
    Before you do this, read these warnings:
 
@@ -850,7 +850,7 @@ net.ipv4.tcp_wmem = 4096 16384 1048576
 
 관리 화면은 다음 페이지에서 온 로그인과 변경만 받는다.
 
-- 주소가 `127.0.0.1`, `localhost` 또는 `adminBindHost` 에 적은 IPv4 주소나 호스트 이름이고, 포트가 `adminPort` 인 페이지
+- 주소가 `127.0.0.1`, `localhost` 또는 `adminBindHost` 에 적은 IPv4 주소나 호스트 이름(`0.0.0.0`, `::` 제외)이고, 포트가 `adminPort` 인 페이지
 - origin 이 `adminAllowedOrigins` 에 있는 페이지
 
 그 밖의 주소에는 `403 Forbidden origin` 으로 답한다. IPv6 주소도 마찬가지다. `https://[::1]:9300` 으로 관리 화면을 열려면 `adminAllowedOrigins` 에 `"https://[::1]:9300"` 을 넣는다.
@@ -877,7 +877,7 @@ net.ipv4.tcp_wmem = 4096 16384 1048576
         - "https://admin.example.com:9300"
       ```
 
-      - `0.0.0.0`(모든 IPv4 주소)과 `::`(모든 주소)은 `adminAllowedOrigins` 와 함께 써야 동작한다. 목록에 없는 주소로 열면 로그인이 `403 Forbidden origin` 으로 실패한다. `adminAllowedOrigins` 에 적지 않아도 되는 주소는 관리 화면 포트를 쓰는 `127.0.0.1` 과 `localhost` 뿐이다.
+      - `0.0.0.0`(모든 IPv4 주소)와 `::`(모든 주소)는 `adminAllowedOrigins` 와 함께 써야 동작한다. 목록에 없는 주소로 열면 로그인이 `403 Forbidden origin` 으로 실패한다. `adminAllowedOrigins` 에 적지 않아도 되는 주소는 관리 화면 포트를 쓰는 `127.0.0.1` 과 `localhost` 뿐이다.
       - `adminBindHost` 가 서버의 IPv4 주소나 호스트 이름 하나(예: `192.0.2.10`, `admin.example.com`)이면, 그 주소와 관리 화면 포트로 연 페이지(예: `https://192.0.2.10:9300`)는 목록에 없어도 된다. 다른 DNS 이름이나 IPv6 주소처럼 다른 주소로 열려면 목록에 적어야 한다.
       - 항목 규칙은 방법 3과 같다. `https://` origin 만 받고, 스킴·호스트·포트가 정확히 같아야 하며, 경로와 와일드카드는 받지 않는다. 포트는 443일 때만 생략한다. 규칙에 맞지 않는 항목이 있으면 서버가 시작할 때 `server configuration is not ready` 를 남기고 멈춘다. 이 메시지는 어느 항목이 틀렸는지 알려 주지 않는다. `-daemon` 으로 시작했다면 메시지는 터미널이 아니라 `logs/` 에 남는다. 이 메시지를 보면 항목마다 위 규칙에 맞는지 확인한다.
    2. `bin` 폴더에서 서버를 `-allowLegacyAdminRemote` 와 함께 시작한다. 이 플래그는 저장되지 않으므로 서버를 시작할 때마다 줘야 한다. 빠뜨리면 서버가 `Refusing insecure admin policy: ...` 를 출력하고 멈춘다. `-daemon` 으로 시작하면 감시 프로세스가 같은 옵션으로 앱을 다시 시작한다.
@@ -888,8 +888,8 @@ net.ipv4.tcp_wmem = 4096 16384 1048576
       ```
 
       서버를 멈출 때는 같은 폴더에서 `./TTTGate-linux-x64 stop` 을 실행한다.
-   3. 운영체제 방화벽에서 관리 화면 포트를 허용한다. 클라우드 호스트라면 클라우드 네트워크 규칙에서도 이 포트의 인바운드를 허용해야 한다. Azure 는 네트워크 보안 그룹, AWS 는 보안 그룹, OCI 는 보안 목록이고, 다른 클라우드에도 같은 역할의 규칙이 있다. 관리 화면이 필요한 원본 주소만 허용한다.
-   - **위험:** 포트에 닿을 수 있는 누구나 비밀번호를 시도할 수 있다. 로그인 잠금은 적용된다. 관리자 계정에 2단계 인증을 켜고, `adminTls: true` 를 유지하고, 접속할 수 있는 원본 주소를 제한한다.
+   3. 운영체제 방화벽에서 관리 화면 포트를 허용한다. 클라우드 호스트라면 클라우드 네트워크 규칙에서도 이 포트의 인바운드를 허용해야 한다. Azure 는 네트워크 보안 그룹, AWS 는 보안 그룹, OCI 는 보안 목록이고, 다른 클라우드에도 같은 역할의 규칙이 있다. 접속하는 쪽 주소는 관리 화면이 필요한 곳만 허용한다.
+   - **위험:** 포트에 닿을 수 있는 누구나 비밀번호를 시도할 수 있다. 로그인 잠금은 적용된다. 관리자 계정에 2단계 인증을 켜고, `adminTls: true` 를 유지하고, 접속하는 쪽 주소를 제한한다.
 3. **도메인 이름과 역방향 프록시.** `adminBindHost: 127.0.0.1` 은 그대로 두고, 같은 호스트의 HTTPS 프록시가 관리 화면으로 요청을 넘기게 한다.
    1. 사용자가 여는 주소를 `config/server.yaml` 에 추가한다. 스킴, 호스트, 포트를 정확히 쓴다. `https://` origin 만 받는다. HTTPS 관리 화면의 세션 쿠키는 `Secure` 라서 브라우저가 `http://` 페이지에서는 쿠키를 버리기 때문이다. 경로와 와일드카드는 받지 않는다.
 
@@ -931,7 +931,7 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 |---|---|---|
 | 브라우저가 연결 거부를 알린다. | 서버가 실행 중이 아니거나, 관리 화면이 서버 호스트에서 오는 연결만 받거나(`adminBindHost: 127.0.0.1`), 포트가 틀렸다. | 서버를 시작한다. `config/server.yaml` 의 `adminBindHost` 와 `adminPort` 를 확인한다. SSH 터널을 쓰거나 포트를 직접 연다(위의 방법 2). |
 | 연결이 시간 초과로 끝난다. | 방화벽이나 클라우드 네트워크 규칙이 포트를 막고 있거나, 호스트가 꺼져 있다. | 운영체제 방화벽과 클라우드 네트워크 규칙(Azure, AWS, OCI 등)에서 관리 화면 포트를 허용한다. |
-| 로그인이 `403 Forbidden origin` 으로 실패한다. | 연 주소가 관리 화면 포트를 쓰는 `127.0.0.1`, `localhost`, `adminBindHost` 에 적은 IPv4 주소나 호스트 이름이 아니고, `adminAllowedOrigins` 에도 없다. | 연 주소를 스킴·호스트·포트까지 정확히 `adminAllowedOrigins` 에 넣고 서버를 다시 시작한다. SSH 터널이면 로컬 포트를 `adminPort` 와 같게 한다. |
+| 로그인이 `403 Forbidden origin` 으로 실패한다. | 연 주소가 관리 화면 포트를 쓰는 `127.0.0.1`, `localhost`, `adminBindHost` 에 적은 IPv4 주소나 호스트 이름(`0.0.0.0`, `::` 제외)이 아니고, `adminAllowedOrigins` 에도 없다. | 연 주소를 스킴·호스트·포트까지 정확히 `adminAllowedOrigins` 에 넣고 서버를 다시 시작한다. SSH 터널이면 로컬 포트를 `adminPort` 와 같게 한다. |
 | 서버가 `server configuration is not ready` 를 남기고 멈춘다. | `config/server.yaml` 의 값이 규칙에 맞지 않는다. 예를 들면 `adminAllowedOrigins` 항목이 틀렸다. `-daemon` 으로 시작했다면 메시지는 `logs/` 에만 남는다. | `adminAllowedOrigins` 항목이 위의 방법 2에 적은 규칙에 맞는지 확인한다. 항목을 고친 뒤 서버를 다시 시작한다. |
 | 서버가 `Refusing insecure admin policy: ...` 를 출력하고 멈춘다. | `adminBindHost` 가 루프백 주소가 아니거나 `adminTls` 가 `false` 인데, 그에 맞는 플래그 없이 시작했다. | 메시지가 알려 주는 플래그(예: `-allowLegacyAdminRemote`)를 붙여 다시 시작한다. 원인이 `adminTls: false` 라면 되도록 `adminTls: true` 로 되돌린다. |
 | 브라우저에 인증서 경고가 뜬다. | 서버가 만든 자체 서명 인증서를 쓰고 있다. | 서버 호스트 밖에서 관리 화면을 연다면 직접 준비한 인증서를 쓴다([관리 화면 열기](#관리-화면-열기) 참고). 다른 호스트가 접속할 수 있는 관리 화면에서 경고를 넘기는 습관을 들이지 않는다. 서버 호스트에서 열거나 SSH 터널로 열 때는 올바른 주소인지 확인한 뒤 계속 진행한다. |
@@ -969,13 +969,13 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 
 아래에서 처음으로 들어맞는 경우를 따른다.
 
-1. **비밀번호를 안다.** **My account** 에서 **Change password** 를 누른다. 인증 앱을 잃어버렸다면 로그인 중 2단계 인증 화면에서 **Use a recovery code instead** 를 고른다. 로그인한 뒤 **My account** 의 **Two-factor authentication** 에서 **Disable** 을 누르고 비밀번호를 넣는다. 그다음 **Set up** 을 눌러 새 앱을 등록한다. 복구 코드는 하나당 한 번만 쓸 수 있다. `server.yaml` 에서 `mfaRequiredForSuperusers` 가 켜져 있으면 슈퍼유저는 **Disable** 을 쓸 수 없다. 이때는 다른 슈퍼유저에게 **Reset MFA** 를 부탁한다(2번 경우). 남은 복구 코드가 없으면 2번 경우를 따른다. 로그인할 수 있는 다른 슈퍼유저가 없으면 3번 경우를 따른다.
+1. **비밀번호를 안다.** **My account** 에서 **Change password** 를 누른다. 인증 앱을 잃어버렸다면 로그인 중 2단계 인증 화면에서 **Use a recovery code instead** 를 고른다. 로그인한 뒤 **My account** 의 **Two-factor authentication** 에서 **Disable** 을 누르고 비밀번호를 넣는다. 그다음 **Set up** 을 눌러 새 앱을 등록한다. 복구 코드는 하나당 한 번만 쓸 수 있다. `server.yaml` 에서 `mfaRequiredForSuperusers` 가 켜져 있으면 슈퍼유저는 **Disable** 을 쓸 수 없다. 이때는 **Users** 에서 내 계정을 고르고 **Reset MFA** 를 누른다. 서버가 내 세션을 모두 끊는다. 다시 로그인하면 서버가 새 앱을 등록하라고 안내한다. 남은 복구 코드가 없으면 2번 경우를 따른다. 로그인할 수 있는 다른 슈퍼유저도 없으면 3번 경우를 따른다.
 2. **로그인할 수 있는 다른 슈퍼유저가 있다.** 그 슈퍼유저가 **Users** 에서 해당 계정을 고르고 **Reset password** 를 누른다.
    - 관리 화면은 임시 비밀번호를 한 번만 보여 준다. 안전한 방법으로 사용자에게 전한다.
    - 서버는 그 사용자의 세션을 모두 끊는다. 사용자는 다음 로그인 때 새 비밀번호를 정해야 한다.
    - 감사 로그에 `temp_password_issued` 가 남는다.
-   - 사용자가 인증 앱도 잃어버렸다면, 슈퍼유저가 같은 화면에서 **Reset MFA** 를 누른다.
-3. **로그인할 수 있는 슈퍼유저가 없다.** 서버 호스트에서 계정 저장소를 초기화한다. 그러면 서버가 첫 관리자 설정을 다시 시작한다. 아래 명령은 `~/TTTGate` 를 기준으로 한다. `~/TTTGate` 는 실제 설치 폴더로 바꾼다(예: `/opt/TTTGate`). 경로가 틀리면 `rm -f` 는 오류 없이 아무 일도 하지 않고, 예전 `admin` 계정이 `.key` 로 되살아날 수 있다.
+   - 사용자가 인증 앱도 잃어버렸다면, 슈퍼유저가 같은 화면에서 **Reset MFA** 를 누른다. 이때도 그 사용자의 세션이 모두 끊긴다.
+3. **로그인할 수 있는 슈퍼유저가 없고, 남은 복구 코드도 없다.** 서버 호스트에서 계정 저장소를 초기화한다. 그러면 서버가 첫 관리자 설정을 다시 시작한다. 아래 명령은 `~/TTTGate` 를 기준으로 한다. `~/TTTGate` 는 실제 설치 폴더로 바꾼다(예: `/opt/TTTGate`). 경로가 틀리면 `rm -f` 는 오류 없이 아무 일도 하지 않고, 예전 `admin` 계정이 `.key` 로 되살아날 수 있다.
 
    진행하기 전에 다음 주의 사항을 읽는다.
 
