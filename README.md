@@ -109,7 +109,8 @@ The socket buffer cap above prevents the last case.
 | `config/client.yaml` | Client runtime config |
 | `config/server.sample.yaml`, `config/client.sample.yaml` | Tracked samples |
 | `config/.bootstrap-token` | One-time token for the first admin login |
-| `config/.key` | Admin password hash |
+| `config/identity.yaml` | Admin users, groups and two-factor settings |
+| `config/.key` | Admin password hash of older versions. The server reads it only when `config/identity.yaml` does not exist or cannot be read. When `config/identity.yaml` does not exist, the server creates the `admin` account from `.key` |
 | `config/server-ca.pem` | Server certificate that `client join` writes for the client |
 
 The old repository-root `config.yaml` is no longer used.
@@ -162,10 +163,10 @@ If `adminBindHost` is not a loopback address or `adminTls` is `false`, the serve
 
 The console accepts a login or a change only from these pages:
 
-- a page whose address is `127.0.0.1`, `::1`, `localhost` or the `adminBindHost` address, with the `adminPort` port
+- a page with the `adminPort` port at one of these addresses: `127.0.0.1`, `localhost`, or an IPv4 address or a host name in `adminBindHost` (not `0.0.0.0` or `::`)
 - a page whose origin is listed in `adminAllowedOrigins`
 
-Other addresses get `403 Forbidden origin`.
+Other addresses get `403 Forbidden origin`. This includes IPv6 addresses. To open the console at `https://[::1]:9300`, add `"https://[::1]:9300"` to `adminAllowedOrigins`.
 
 #### Open the Console from Another Computer
 
@@ -178,9 +179,30 @@ By default, the console listens only on the server host. Use one of these ways:
    ```
 
    Keep the SSH session open. Then open `https://127.0.0.1:9300/` on your computer. Use the same local port as `adminPort`. Another local port gets `403 Forbidden origin`.
-2. **Bind to the server IP address (not recommended).** Set `adminBindHost` to an IP address of the server that other hosts can reach (for example `192.168.0.10`). Start the server with `-allowLegacyAdminRemote`. Open the console with exactly that address and port (`https://192.168.0.10:9300/`).
-   - `0.0.0.0`, `::` and host names do not work. The server starts, but the login fails with `403 Forbidden origin`.
-   - **Risk:** anyone who can reach the port can try passwords. The login lockout applies. Turn on two-factor authentication for admin accounts, keep `adminTls: true` and limit the port with a firewall.
+2. **Expose the console port directly (not recommended).** Users open the console at the server address and the console port.
+   1. Edit `config/server.yaml`. List every address that users open in the browser in `adminAllowedOrigins`: each IP address and each DNS name, with the port.
+
+      ```yaml
+      adminBindHost: 0.0.0.0
+      adminTls: true
+      adminAllowedOrigins:
+        - "https://192.0.2.10:9300"
+        - "https://admin.example.com:9300"
+      ```
+
+      - `0.0.0.0` (all IPv4 addresses) and `::` (all addresses) work only together with `adminAllowedOrigins`. Without an entry, the login fails with `403 Forbidden origin`. Only `127.0.0.1` and `localhost` with the console port work without an entry.
+      - When `adminBindHost` is one IPv4 address or one host name of the server (for example `192.0.2.10` or `admin.example.com`), a page at that address and the console port (for example `https://192.0.2.10:9300`) works without an entry. Other addresses, for example another DNS name or an IPv6 address, still need an entry.
+      - The rules for entries are the same as in method 3: only `https://` origins, the exact scheme, host and port, no paths and no wildcards. Leave out the port only when it is 443. An entry that breaks these rules stops the server at startup with `server configuration is not ready`. This message does not name the entry. With `-daemon`, the message is in `logs/`, not in the terminal. When you see this message, check each entry against these rules.
+   2. Start the server from the `bin` folder with `-allowLegacyAdminRemote`. The flag is not saved. Give it every time that you start the server. Without it, the server stops with `Refusing insecure admin policy: ...`. With `-daemon`, the sentinel restarts the app with the same options.
+
+      ```shell
+      cd ~/TTTGate/bin
+      ./TTTGate-linux-x64 server -daemon -allowLegacyAdminRemote
+      ```
+
+      To stop the server, run `./TTTGate-linux-x64 stop` in the same folder.
+   3. Allow the console port in the firewall of the operating system. On a cloud host, also add an inbound rule for the port to the cloud network rules. Examples are the network security group (Azure), the security group (AWS) and the security list (OCI). Other providers have the same kind of rule. Allow only the source addresses that need the console.
+   - **Risk:** anyone who can reach the port can try passwords. The login lockout applies. Turn on two-factor authentication for admin accounts, keep `adminTls: true` and limit the source addresses.
 3. **Reverse proxy with a domain name.** Keep `adminBindHost: 127.0.0.1`. Let an HTTPS proxy on the same host forward to the console.
    1. Add the address that users open to `config/server.yaml`. Use the exact scheme, host and port. Only `https://` origins are accepted, because the session cookie of an HTTPS console is `Secure` and browsers drop it on `http://` pages. Paths and wildcards are not accepted.
 
@@ -216,6 +238,17 @@ With an SSH tunnel or a reverse proxy, the console sees every connection from `1
 
 `-trustXForwardedFor` changes the client address that the login lockout, the audit log, the session list and the binding of two-factor login tickets use. It does not change the country filter.
 
+#### If the Console Does Not Open
+
+| Symptom | Cause | What to do |
+|---|---|---|
+| The browser shows connection refused. | The server does not run, or the console listens only on the server host (`adminBindHost: 127.0.0.1`), or the port is wrong. | Start the server. Check `adminBindHost` and `adminPort` in `config/server.yaml`. Use an SSH tunnel, or expose the port (method 2 above). |
+| The connection times out. | A firewall or a cloud network rule blocks the port, or the host is down. | Allow the console port in the firewall of the operating system and in the cloud network rule (Azure, AWS, OCI and others). |
+| The login fails with `403 Forbidden origin`. | The address that you opened is not in `adminAllowedOrigins`. It is also not one of these addresses with the console port: `127.0.0.1`, `localhost`, or an IPv4 address or a host name in `adminBindHost` (not `0.0.0.0` or `::`). | Add the exact address (scheme, host and port) to `adminAllowedOrigins`, then restart the server. With an SSH tunnel, use the same local port as `adminPort`. |
+| The server stops with `server configuration is not ready`. | A value in `config/server.yaml` breaks a rule, for example an `adminAllowedOrigins` entry. With `-daemon`, the message is only in `logs/`. | Check the `adminAllowedOrigins` entries against the rules in method 2 above. Fix the entry, then start the server again. |
+| The server stops with `Refusing insecure admin policy: ...`. | `adminBindHost` is not a loopback address or `adminTls` is `false`, and the server started without the matching flag. | Start the server with the flag that the message names, for example `-allowLegacyAdminRemote`. For `adminTls: false`, set `adminTls: true` instead if you can. |
+| The browser shows a certificate warning. | The console uses the self-signed certificate that the server created. | When you open the console from outside the server host, use your own certificate (see [Open the Console](#open-the-console)). Do not get used to skipping the warning on a console that other hosts can reach. On the server host or through an SSH tunnel, make sure that you opened the correct address, then continue. |
+
 #### First Admin Login
 
 On a fresh install, the server has no admin account. It writes a one-time bootstrap token to `config/.bootstrap-token`. When it creates the token, it writes the file path to the log. The token stays the same when you restart the server before the first setup.
@@ -224,14 +257,63 @@ On a fresh install, the server has no admin account. It writes a one-time bootst
 2. Enter a username for the first superuser and a password, then press **OK**.
    - Username: 3–32 characters (letters, digits, `.`, `_`, `-`). Upper-case letters are changed to lower case. An empty username means `admin`.
    - Password: at least 8 characters and at most 1024 characters, not counting spaces at the start and the end.
-3. The **Bootstrap token** field appears. On the server, read the token (`cat config/.bootstrap-token`). Paste it into the field and press **OK** again.
+3. The **Bootstrap token** field appears. On the server, read the token. In the installation folder (the parent of `bin`), run `cat config/.bootstrap-token`. In the `bin` folder, run `cat ../config/.bootstrap-token`. Paste the token into the field and press **OK** again.
 4. The server creates the superuser, deletes `config/.bootstrap-token`, and signs you in. Next time, sign in with the username and password.
+
+Where to find the token:
+
+- The server creates the `config` folder next to the `bin` folder when it starts. When the binary is `~/TTTGate/bin/TTTGate-linux-x64`, the token file is `~/TTTGate/config/.bootstrap-token`.
+- When the server creates the token, the server log in `logs/` shows the full path in the line `Bootstrap token created at <path>`. A restart that reuses the token does not write this line again.
+- On a remote server, read the token over SSH. Sign in as the account that runs the server, because only that account (and root) can read the file. Keep the quotes, so that the server expands `~`:
+
+  ```shell
+  ssh user@server.example.com 'cat ~/TTTGate/config/.bootstrap-token'
+  ```
+
+- When a service account without a login shell runs the server, sign in with your own account and use `sudo`. Write the full path, because `~` is your home folder, not the home folder of the service account: `ssh -t user@server.example.com 'sudo cat /opt/TTTGate/config/.bootstrap-token'`.
 
 Who can do the first setup:
 
 - Only a person who knows the token. On Linux the file mode is 0600, so only the account that runs the server (and root) can read the token. In practice, only an operator of the server host can set the first password.
 - The server does not check where the request comes from. With the default `adminBindHost: 127.0.0.1`, the console is reachable only on the server host or through an SSH tunnel. If you open the console to other hosts, the token still protects the first setup.
 - Every failed attempt counts as a failed login. This includes the first **OK** without a token. After 5 failed logins within 1 minute from one address range (IPv4 /24, IPv6 /64), the server answers `429` for 1 minute.
+
+#### Recover Admin Accounts
+
+Use the first case that matches.
+
+1. **You know your password.** Open **My account** and press **Change password**. If you lost your authenticator app, choose **Use a recovery code instead** at the two-factor step of the login. After you sign in, open **My account**. Under **Two-factor authentication**, press **Disable** and enter your password. Then press **Set up** and register a new app. Each recovery code works only once. If `mfaRequiredForSuperusers` is on in `server.yaml`, a superuser cannot use **Disable**. In that case, open **Users**, select your own account and press **Reset MFA**. The server ends your sessions. Sign in again. The server then asks you to set up a new app. If no recovery code is left, follow case 2. If no other superuser can sign in either, follow case 3.
+2. **Another superuser can sign in.** That superuser opens **Users**, selects your account and presses **Reset password**.
+   - The console shows a temporary password once. Give it to the user in a safe way.
+   - The server ends the sessions of that user. At the next login, the user must set a new password.
+   - The audit log records `temp_password_issued`.
+   - If the user also lost the authenticator app, the superuser presses **Reset MFA** on the same screen. This also ends the sessions of that user.
+3. **No superuser can sign in (the password is forgotten, or two-factor authentication is lost and no recovery code is left).** Reset the account store on the server host. Then the server starts the first admin setup again. The commands below use `~/TTTGate`. Replace `~/TTTGate` with your installation folder, for example `/opt/TTTGate`. If `cp` or `rm` reports `No such file or directory`, the folder is wrong. Stop and fix the path. If `.key` is not deleted, the old `admin` account comes back. `config/identity.yaml` has file mode 0600. If a service account runs the server, run the commands as that account, or use `sudo` with full paths, for example `/opt/TTTGate/config/identity.yaml`. Keep the backup in a folder that only administrators can read.
+
+   Before you do this, read these warnings:
+
+   - All users, groups and two-factor settings are lost. Create them again after the setup.
+   - Tunnels and trusted clients in `config/server.yaml` stay. But the tunnel owner refers to a user that no longer exists. Check the owner of each tunnel, and give each tunnel to a new owner.
+   - Delete `config/.key` too. When `config/identity.yaml` does not exist and `config/.key` exists, the server creates the `admin` account with the old password from `.key`.
+   - Do not use `-reset` for this. `-reset` deletes every file in `config/`, including `server.yaml` with the tunnels and trusted clients, and the stored certificates.
+
+   1. Stop the server: `./TTTGate-linux-x64 stop` in the `bin` folder. If a service manager such as systemd runs the server, stop the service with that manager instead, so that it does not start the server again.
+   2. Copy `config/identity.yaml` to a safe place. The time in the file name keeps an older copy safe. The file contains password hashes and two-factor secrets. Keep the copy safe and delete it when you no longer need it.
+
+      ```shell
+      cp -p ~/TTTGate/config/identity.yaml ~/identity.yaml.$(date +%Y%m%d%H%M%S).bak
+      ```
+
+   3. Delete `config/identity.yaml`. If `config/.key` exists, delete it too.
+
+      ```shell
+      rm ~/TTTGate/config/identity.yaml
+      rm -f ~/TTTGate/config/.key
+      ```
+
+   4. Start the server again with the same options as usual, for example `-allowLegacyAdminRemote` for method 2. The server creates a new token in `config/.bootstrap-token`. Do the [First Admin Login](#first-admin-login). When `mfaRequiredForSuperusers` is on in `server.yaml`, the new superuser must set up two-factor authentication at the first login.
+
+You cannot change a username. To use a new name, create a new superuser and sign in with it. Give the tunnels of the old account to another owner, then delete the old account. The server does not delete a user who owns tunnels. It also does not delete, disable or demote the last active superuser.
 
 ### Client
 
@@ -714,7 +796,8 @@ net.ipv4.tcp_wmem = 4096 16384 1048576
 | `config/client.yaml` | 클라이언트 실행 설정 |
 | `config/server.sample.yaml`, `config/client.sample.yaml` | 저장소에 포함된 샘플 |
 | `config/.bootstrap-token` | 첫 관리자 로그인에 쓰는 일회용 토큰 |
-| `config/.key` | 관리자 비밀번호 해시 |
+| `config/identity.yaml` | 관리자 사용자, 그룹, 2단계 인증 설정 |
+| `config/.key` | 예전 버전의 관리자 비밀번호 해시. 서버는 `config/identity.yaml` 이 없거나 읽을 수 없을 때만 이 파일을 읽는다. `config/identity.yaml` 이 없으면 `.key` 로 `admin` 계정을 만든다 |
 | `config/server-ca.pem` | `client join` 이 클라이언트에 써 두는 서버 인증서 |
 
 예전에 저장소 최상위에 두던 `config.yaml` 은 더 이상 쓰지 않는다.
@@ -767,10 +850,10 @@ net.ipv4.tcp_wmem = 4096 16384 1048576
 
 관리 화면은 다음 페이지에서 온 로그인과 변경만 받는다.
 
-- 주소가 `127.0.0.1`, `::1`, `localhost` 또는 `adminBindHost` 이고 포트가 `adminPort` 인 페이지
+- 주소가 `127.0.0.1`, `localhost` 또는 `adminBindHost` 에 적은 IPv4 주소나 호스트 이름(`0.0.0.0`, `::` 제외)이고, 포트가 `adminPort` 인 페이지
 - origin 이 `adminAllowedOrigins` 에 있는 페이지
 
-그 밖의 주소에는 `403 Forbidden origin` 으로 답한다.
+그 밖의 주소에는 `403 Forbidden origin` 으로 답한다. IPv6 주소도 마찬가지다. `https://[::1]:9300` 으로 관리 화면을 열려면 `adminAllowedOrigins` 에 `"https://[::1]:9300"` 을 넣는다.
 
 #### 다른 컴퓨터에서 관리 화면 열기
 
@@ -783,9 +866,30 @@ net.ipv4.tcp_wmem = 4096 16384 1048576
    ```
 
    SSH 세션을 열어 둔 채로 내 컴퓨터에서 `https://127.0.0.1:9300/` 을 연다. 로컬 포트는 `adminPort` 와 같아야 한다. 다른 로컬 포트로 열면 `403 Forbidden origin` 이 난다.
-2. **서버 IP 주소에 바인드(권장하지 않음).** `adminBindHost` 를 다른 호스트가 접근할 수 있는 서버의 IP 주소(예: `192.168.0.10`)로 바꾸고, 서버를 `-allowLegacyAdminRemote` 로 시작한다. 관리 화면은 정확히 그 주소와 포트(`https://192.168.0.10:9300/`)로 연다.
-   - `0.0.0.0`, `::`, 호스트 이름은 쓸 수 없다. 서버는 시작되지만 로그인이 `403 Forbidden origin` 으로 실패한다.
-   - **위험:** 포트에 닿을 수 있는 누구나 비밀번호를 시도할 수 있다. 로그인 잠금은 적용된다. 관리자 계정에 2단계 인증을 켜고, `adminTls: true` 를 유지하고, 방화벽으로 포트를 제한한다.
+2. **관리 화면 포트를 직접 열기(권장하지 않음).** 사용자가 서버 주소와 관리 화면 포트로 관리 화면을 바로 연다.
+   1. `config/server.yaml` 을 고친다. 사용자가 브라우저에 입력하는 주소를 모두 `adminAllowedOrigins` 에 적는다. IP 주소와 DNS 이름마다 포트까지 적는다.
+
+      ```yaml
+      adminBindHost: 0.0.0.0
+      adminTls: true
+      adminAllowedOrigins:
+        - "https://192.0.2.10:9300"
+        - "https://admin.example.com:9300"
+      ```
+
+      - `0.0.0.0`(모든 IPv4 주소)와 `::`(모든 주소)는 `adminAllowedOrigins` 와 함께 써야 동작한다. 목록에 없는 주소로 열면 로그인이 `403 Forbidden origin` 으로 실패한다. `adminAllowedOrigins` 에 적지 않아도 되는 주소는 관리 화면 포트를 쓰는 `127.0.0.1` 과 `localhost` 뿐이다.
+      - `adminBindHost` 가 서버의 IPv4 주소나 호스트 이름 하나(예: `192.0.2.10`, `admin.example.com`)이면, 그 주소와 관리 화면 포트로 연 페이지(예: `https://192.0.2.10:9300`)는 목록에 없어도 된다. 다른 DNS 이름이나 IPv6 주소처럼 다른 주소로 열려면 목록에 적어야 한다.
+      - 항목 규칙은 방법 3과 같다. `https://` origin 만 받고, 스킴·호스트·포트가 정확히 같아야 하며, 경로와 와일드카드는 받지 않는다. 포트는 443일 때만 생략한다. 규칙에 맞지 않는 항목이 있으면 서버가 시작할 때 `server configuration is not ready` 를 남기고 멈춘다. 이 메시지는 어느 항목이 틀렸는지 알려 주지 않는다. `-daemon` 으로 시작했다면 메시지는 터미널이 아니라 `logs/` 에 남는다. 이 메시지를 보면 항목마다 위 규칙에 맞는지 확인한다.
+   2. `bin` 폴더에서 서버를 `-allowLegacyAdminRemote` 와 함께 시작한다. 이 플래그는 저장되지 않으므로 서버를 시작할 때마다 줘야 한다. 빠뜨리면 서버가 `Refusing insecure admin policy: ...` 를 출력하고 멈춘다. `-daemon` 으로 시작하면 감시 프로세스가 같은 옵션으로 앱을 다시 시작한다.
+
+      ```shell
+      cd ~/TTTGate/bin
+      ./TTTGate-linux-x64 server -daemon -allowLegacyAdminRemote
+      ```
+
+      서버를 멈출 때는 같은 폴더에서 `./TTTGate-linux-x64 stop` 을 실행한다.
+   3. 운영체제 방화벽에서 관리 화면 포트를 허용한다. 클라우드 호스트라면 클라우드 네트워크 규칙에서도 이 포트의 인바운드를 허용해야 한다. Azure 는 네트워크 보안 그룹, AWS 는 보안 그룹, OCI 는 보안 목록이고, 다른 클라우드에도 같은 역할의 규칙이 있다. 접속하는 쪽 주소는 관리 화면이 필요한 곳만 허용한다.
+   - **위험:** 포트에 닿을 수 있는 누구나 비밀번호를 시도할 수 있다. 로그인 잠금은 적용된다. 관리자 계정에 2단계 인증을 켜고, `adminTls: true` 를 유지하고, 접속하는 쪽 주소를 제한한다.
 3. **도메인 이름과 역방향 프록시.** `adminBindHost: 127.0.0.1` 은 그대로 두고, 같은 호스트의 HTTPS 프록시가 관리 화면으로 요청을 넘기게 한다.
    1. 사용자가 여는 주소를 `config/server.yaml` 에 추가한다. 스킴, 호스트, 포트를 정확히 쓴다. `https://` origin 만 받는다. HTTPS 관리 화면의 세션 쿠키는 `Secure` 라서 브라우저가 `http://` 페이지에서는 쿠키를 버리기 때문이다. 경로와 와일드카드는 받지 않는다.
 
@@ -821,6 +925,17 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 
 `-trustXForwardedFor` 는 로그인 잠금, 감사 로그, 세션 목록이 쓰는 클라이언트 주소와 2단계 로그인 티켓을 묶어 두는 클라이언트 주소를 바꾼다. 국가 필터는 바꾸지 않는다.
 
+#### 관리 화면이 열리지 않을 때
+
+| 증상 | 원인 | 조치 |
+|---|---|---|
+| 브라우저가 연결 거부를 알린다. | 서버가 실행 중이 아니거나, 관리 화면이 서버 호스트에서 오는 연결만 받거나(`adminBindHost: 127.0.0.1`), 포트가 틀렸다. | 서버를 시작한다. `config/server.yaml` 의 `adminBindHost` 와 `adminPort` 를 확인한다. SSH 터널을 쓰거나 포트를 직접 연다(위의 방법 2). |
+| 연결이 시간 초과로 끝난다. | 방화벽이나 클라우드 네트워크 규칙이 포트를 막고 있거나, 호스트가 꺼져 있다. | 운영체제 방화벽과 클라우드 네트워크 규칙(Azure, AWS, OCI 등)에서 관리 화면 포트를 허용한다. |
+| 로그인이 `403 Forbidden origin` 으로 실패한다. | 연 주소가 관리 화면 포트를 쓰는 `127.0.0.1`, `localhost`, `adminBindHost` 에 적은 IPv4 주소나 호스트 이름(`0.0.0.0`, `::` 제외)이 아니고, `adminAllowedOrigins` 에도 없다. | 연 주소를 스킴·호스트·포트까지 정확히 `adminAllowedOrigins` 에 넣고 서버를 다시 시작한다. SSH 터널이면 로컬 포트를 `adminPort` 와 같게 한다. |
+| 서버가 `server configuration is not ready` 를 남기고 멈춘다. | `config/server.yaml` 의 값이 규칙에 맞지 않는다. 예를 들면 `adminAllowedOrigins` 항목이 틀렸다. `-daemon` 으로 시작했다면 메시지는 `logs/` 에만 남는다. | `adminAllowedOrigins` 항목이 위의 방법 2에 적은 규칙에 맞는지 확인한다. 항목을 고친 뒤 서버를 다시 시작한다. |
+| 서버가 `Refusing insecure admin policy: ...` 를 출력하고 멈춘다. | `adminBindHost` 가 루프백 주소가 아니거나 `adminTls` 가 `false` 인데, 그에 맞는 플래그 없이 시작했다. | 메시지가 알려 주는 플래그(예: `-allowLegacyAdminRemote`)를 붙여 다시 시작한다. 원인이 `adminTls: false` 라면 되도록 `adminTls: true` 로 되돌린다. |
+| 브라우저에 인증서 경고가 뜬다. | 서버가 만든 자체 서명 인증서를 쓰고 있다. | 서버 호스트 밖에서 관리 화면을 연다면 직접 준비한 인증서를 쓴다([관리 화면 열기](#관리-화면-열기) 참고). 다른 호스트가 접속할 수 있는 관리 화면에서 경고를 넘기는 습관을 들이지 않는다. 서버 호스트에서 열거나 SSH 터널로 열 때는 올바른 주소인지 확인한 뒤 계속 진행한다. |
+
 #### 첫 관리자 로그인
 
 새로 설치하면 서버에는 관리자 계정이 없다. 서버는 일회용 부트스트랩 토큰을 `config/.bootstrap-token` 에 쓰고, 토큰을 만들 때 파일 경로를 로그에 남긴다. 첫 설정을 마치기 전에는 서버를 다시 시작해도 토큰이 바뀌지 않는다.
@@ -829,14 +944,63 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 2. 첫 슈퍼유저의 사용자 이름과 비밀번호를 넣고 **OK** 를 누른다.
    - 사용자 이름: 3–32자(영문자, 숫자, `.`, `_`, `-`). 대문자는 소문자로 바뀐다. 비워 두면 `admin` 이 된다.
    - 비밀번호: 앞뒤 공백을 빼고 8자 이상 1024자 이하.
-3. **Bootstrap token** 입력란이 나타난다. 서버에서 토큰을 읽어(`cat config/.bootstrap-token`) 입력란에 붙여 넣고 **OK** 를 다시 누른다.
+3. **Bootstrap token** 입력란이 나타난다. 서버에서 토큰을 읽는다. 설치 폴더(`bin` 의 상위 폴더)에서는 `cat config/.bootstrap-token`, `bin` 폴더에서는 `cat ../config/.bootstrap-token` 을 실행한다. 읽은 토큰을 입력란에 붙여 넣고 **OK** 를 다시 누른다.
 4. 서버가 슈퍼유저를 만들고, `config/.bootstrap-token` 을 지우고, 로그인시킨다. 다음부터는 사용자 이름과 비밀번호로 로그인한다.
+
+토큰 파일 찾기:
+
+- 서버는 시작할 때 `bin` 폴더 옆에 `config` 폴더를 만든다. 실행 파일이 `~/TTTGate/bin/TTTGate-linux-x64` 이면 토큰 파일은 `~/TTTGate/config/.bootstrap-token` 이다.
+- 서버가 토큰을 만들 때 `logs/` 의 서버 로그에 `Bootstrap token created at <path>` 줄로 전체 경로를 남긴다. 기존 토큰을 다시 쓰는 재시작에서는 이 줄을 다시 남기지 않는다.
+- 원격 서버에서는 SSH 로 토큰을 읽는다. 파일은 서버를 실행하는 계정(과 root)만 읽을 수 있으므로 그 계정으로 접속한다. `~` 를 서버가 해석하도록 따옴표를 그대로 둔다.
+
+  ```shell
+  ssh user@server.example.com 'cat ~/TTTGate/config/.bootstrap-token'
+  ```
+
+- 로그인 셸이 없는 서비스 계정이 서버를 실행한다면, 내 계정으로 접속해 `sudo` 로 읽는다. 이때 `~` 는 서비스 계정이 아니라 내 홈 폴더를 가리키므로 전체 경로를 쓴다. 예: `ssh -t user@server.example.com 'sudo cat /opt/TTTGate/config/.bootstrap-token'`.
 
 첫 설정을 할 수 있는 사람:
 
 - 토큰을 아는 사람만 할 수 있다. Linux 에서는 파일 권한이 0600 이라서 서버를 실행하는 계정(과 root)만 토큰을 읽을 수 있다. 결국 서버 호스트의 운영자만 첫 비밀번호를 정할 수 있다.
 - 서버는 요청이 어디서 왔는지 보지 않는다. 기본값 `adminBindHost: 127.0.0.1` 이면 관리 화면은 서버 호스트에서나 SSH 터널로만 열린다. 관리 화면을 다른 호스트에 열어도 첫 설정은 토큰이 지킨다.
 - 실패한 시도는 모두 로그인 실패로 센다. 토큰 없이 처음 누른 **OK** 도 마찬가지다. 한 주소 대역(IPv4 /24, IPv6 /64)에서 1분 안에 로그인이 5번 실패하면, 서버는 1분 동안 `429` 로 답한다.
+
+#### 관리자 계정 복구
+
+아래에서 처음으로 들어맞는 경우를 따른다.
+
+1. **비밀번호를 안다.** **My account** 에서 **Change password** 를 누른다. 인증 앱을 잃어버렸다면 로그인 중 2단계 인증 화면에서 **Use a recovery code instead** 를 고른다. 로그인한 뒤 **My account** 의 **Two-factor authentication** 에서 **Disable** 을 누르고 비밀번호를 넣는다. 그다음 **Set up** 을 눌러 새 앱을 등록한다. 복구 코드는 하나당 한 번만 쓸 수 있다. `server.yaml` 에서 `mfaRequiredForSuperusers` 가 켜져 있으면 슈퍼유저는 **Disable** 을 쓸 수 없다. 이때는 **Users** 에서 내 계정을 고르고 **Reset MFA** 를 누른다. 서버가 내 세션을 모두 끊는다. 다시 로그인하면 서버가 새 앱을 등록하라고 안내한다. 남은 복구 코드가 없으면 2번 경우를 따른다. 로그인할 수 있는 다른 슈퍼유저도 없으면 3번 경우를 따른다.
+2. **로그인할 수 있는 다른 슈퍼유저가 있다.** 그 슈퍼유저가 **Users** 에서 해당 계정을 고르고 **Reset password** 를 누른다.
+   - 관리 화면은 임시 비밀번호를 한 번만 보여 준다. 안전한 방법으로 사용자에게 전한다.
+   - 서버는 그 사용자의 세션을 모두 끊는다. 사용자는 다음 로그인 때 새 비밀번호를 정해야 한다.
+   - 감사 로그에 `temp_password_issued` 가 남는다.
+   - 사용자가 인증 앱도 잃어버렸다면, 슈퍼유저가 같은 화면에서 **Reset MFA** 를 누른다. 이때도 그 사용자의 세션이 모두 끊긴다.
+3. **로그인할 수 있는 슈퍼유저가 없다(비밀번호를 잊었거나, 2단계 인증을 잃었고 남은 복구 코드도 없다).** 서버 호스트에서 계정 저장소를 초기화한다. 그러면 서버가 첫 관리자 설정을 다시 시작한다. 아래 명령은 `~/TTTGate` 를 기준으로 한다. `~/TTTGate` 는 실제 설치 폴더로 바꾼다(예: `/opt/TTTGate`). `cp` 나 `rm` 이 `No such file or directory` 를 출력하면 폴더가 틀린 것이다. 멈추고 경로를 고친다. `.key` 가 지워지지 않으면 예전 `admin` 계정이 되살아난다. `config/identity.yaml` 의 파일 권한은 0600 이다. 서비스 계정이 서버를 실행한다면 그 계정으로 명령을 실행하거나, `sudo` 와 함께 전체 경로(예: `/opt/TTTGate/config/identity.yaml`)를 쓴다. 백업은 관리자만 읽을 수 있는 폴더에 둔다.
+
+   진행하기 전에 다음 주의 사항을 읽는다.
+
+   - 모든 사용자, 그룹, 2단계 인증 설정이 사라진다. 첫 설정을 마친 뒤 다시 만든다.
+   - `config/server.yaml` 의 터널과 신뢰 클라이언트는 남는다. 다만 터널 소유자가 더는 없는 사용자를 가리킨다. 터널마다 소유자를 확인하고 새 소유자를 정한다.
+   - `config/.key` 도 반드시 지운다. `config/identity.yaml` 이 없고 `config/.key` 가 있으면, 서버는 `.key` 의 예전 비밀번호로 `admin` 계정을 다시 만든다.
+   - 이 작업에 `-reset` 은 쓰지 않는다. `-reset` 은 `config/` 의 모든 파일(터널과 신뢰 클라이언트가 든 `server.yaml` 포함)과 저장된 인증서를 지운다.
+
+   1. 서버를 멈춘다. `bin` 폴더에서 `./TTTGate-linux-x64 stop` 을 실행한다. systemd 같은 서비스 관리자가 서버를 실행한다면, 서버가 다시 뜨지 않도록 그 관리자로 서비스를 멈춘다.
+   2. `config/identity.yaml` 을 안전한 곳에 복사해 둔다. 파일 이름에 시각을 넣으면 예전 사본을 덮어쓰지 않는다. 이 파일에는 비밀번호 해시와 2단계 인증 비밀값이 들어 있다. 사본은 안전하게 보관하고, 더 필요 없으면 지운다.
+
+      ```shell
+      cp -p ~/TTTGate/config/identity.yaml ~/identity.yaml.$(date +%Y%m%d%H%M%S).bak
+      ```
+
+   3. `config/identity.yaml` 을 지운다. `config/.key` 가 있으면 그것도 지운다.
+
+      ```shell
+      rm ~/TTTGate/config/identity.yaml
+      rm -f ~/TTTGate/config/.key
+      ```
+
+   4. 평소와 같은 옵션으로 서버를 다시 시작한다(예: 방법 2라면 `-allowLegacyAdminRemote`). 서버가 `config/.bootstrap-token` 에 새 토큰을 만든다. [첫 관리자 로그인](#첫-관리자-로그인)을 진행한다. `server.yaml` 에서 `mfaRequiredForSuperusers` 가 켜져 있으면, 새 슈퍼유저는 첫 로그인 때 2단계 인증을 설정해야 한다.
+
+사용자 이름은 바꿀 수 없다. 새 이름을 쓰려면 새 슈퍼유저를 만들고 그 계정으로 로그인한다. 예전 계정이 소유한 터널의 소유자를 바꾼 뒤 예전 계정을 지운다. 터널을 소유한 사용자는 지울 수 없다. 서버는 마지막 활성 슈퍼유저도 지우거나, 비활성으로 바꾸거나, 일반 사용자로 내리지 않는다.
 
 ### 클라이언트
 
