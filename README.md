@@ -163,10 +163,10 @@ If `adminBindHost` is not a loopback address or `adminTls` is `false`, the serve
 
 The console accepts a login or a change only from these pages:
 
-- a page with the `adminPort` port at one of these addresses: `127.0.0.1`, `localhost`, or an IPv4 address or a host name in `adminBindHost` (not `0.0.0.0` or `::`)
+- a page with the `adminPort` port at one of these addresses: `127.0.0.1`, `localhost`, `[::1]`, or an IP address (IPv4 or IPv6) or a host name in `adminBindHost` (not `0.0.0.0` or `::`)
 - a page whose origin is listed in `adminAllowedOrigins`
 
-Other addresses get `403 Forbidden origin`. This includes IPv6 addresses. To open the console at `https://[::1]:9300`, add `"https://[::1]:9300"` to `adminAllowedOrigins`.
+Other addresses get `403 Forbidden origin`. Write an IPv6 address in square brackets, for example `https://[::1]:9300`.
 
 #### Open the Console from Another Computer
 
@@ -190,8 +190,8 @@ By default, the console listens only on the server host. Use one of these ways:
         - "https://admin.example.com:9300"
       ```
 
-      - `0.0.0.0` (all IPv4 addresses) and `::` (all addresses) work only together with `adminAllowedOrigins`. Without an entry, the login fails with `403 Forbidden origin`. Only `127.0.0.1` and `localhost` with the console port work without an entry.
-      - When `adminBindHost` is one IPv4 address or one host name of the server (for example `192.0.2.10` or `admin.example.com`), a page at that address and the console port (for example `https://192.0.2.10:9300`) works without an entry. Other addresses, for example another DNS name or an IPv6 address, still need an entry.
+      - `0.0.0.0` (all IPv4 addresses) and `::` (all addresses) work only together with `adminAllowedOrigins`. Without an entry, the login fails with `403 Forbidden origin`. Only `127.0.0.1`, `localhost` and `[::1]` with the console port work without an entry.
+      - When `adminBindHost` is one IP address (IPv4 or IPv6) or one host name of the server (for example `192.0.2.10`, `fd00::10` or `admin.example.com`), a page at that address and the console port (for example `https://192.0.2.10:9300` or `https://[fd00::10]:9300`) works without an entry. Other addresses, for example another DNS name, still need an entry.
       - The rules for entries are the same as in method 3: only `https://` origins, the exact scheme, host and port, no paths and no wildcards. Leave out the port only when it is 443. An entry that breaks these rules stops the server at startup with `server configuration is not ready`. This message does not name the entry. With `-daemon`, the message is in `logs/`, not in the terminal. When you see this message, check each entry against these rules.
    2. Start the server from the `bin` folder with `-allowLegacyAdminRemote`. The flag is not saved. Give it every time that you start the server. Without it, the server stops with `Refusing insecure admin policy: ...`. With `-daemon`, the sentinel restarts the app with the same options.
 
@@ -244,7 +244,7 @@ With an SSH tunnel or a reverse proxy, the console sees every connection from `1
 |---|---|---|
 | The browser shows connection refused. | The server does not run, or the console listens only on the server host (`adminBindHost: 127.0.0.1`), or the port is wrong. | Start the server. Check `adminBindHost` and `adminPort` in `config/server.yaml`. Use an SSH tunnel, or expose the port (method 2 above). |
 | The connection times out. | A firewall or a cloud network rule blocks the port, or the host is down. | Allow the console port in the firewall of the operating system and in the cloud network rule (Azure, AWS, OCI and others). |
-| The login fails with `403 Forbidden origin`. | The address that you opened is not in `adminAllowedOrigins`. It is also not one of these addresses with the console port: `127.0.0.1`, `localhost`, or an IPv4 address or a host name in `adminBindHost` (not `0.0.0.0` or `::`). | Add the exact address (scheme, host and port) to `adminAllowedOrigins`, then restart the server. With an SSH tunnel, use the same local port as `adminPort`. |
+| The login fails with `403 Forbidden origin`. | The address that you opened is not in `adminAllowedOrigins`. It is also not one of these addresses with the console port: `127.0.0.1`, `localhost`, `[::1]`, or an IP address or a host name in `adminBindHost` (not `0.0.0.0` or `::`). | Add the exact address (scheme, host and port) to `adminAllowedOrigins`, then restart the server. With an SSH tunnel, use the same local port as `adminPort`. |
 | The server stops with `server configuration is not ready`. | A value in `config/server.yaml` breaks a rule, for example an `adminAllowedOrigins` entry. With `-daemon`, the message is only in `logs/`. | Check the `adminAllowedOrigins` entries against the rules in method 2 above. Fix the entry, then start the server again. |
 | The server stops with `Refusing insecure admin policy: ...`. | `adminBindHost` is not a loopback address or `adminTls` is `false`, and the server started without the matching flag. | Start the server with the flag that the message names, for example `-allowLegacyAdminRemote`. For `adminTls: false`, set `adminTls: true` instead if you can. |
 | The browser shows a certificate warning. | The console uses the self-signed certificate that the server created. | When you open the console from outside the server host, use your own certificate (see [Open the Console](#open-the-console)). Do not get used to skipping the warning on a console that other hosts can reach. On the server host or through an SSH tunnel, make sure that you opened the correct address, then continue. |
@@ -850,10 +850,10 @@ net.ipv4.tcp_wmem = 4096 16384 1048576
 
 관리 화면은 다음 페이지에서 온 로그인과 변경만 받는다.
 
-- 주소가 `127.0.0.1`, `localhost` 또는 `adminBindHost` 에 적은 IPv4 주소나 호스트 이름(`0.0.0.0`, `::` 제외)이고, 포트가 `adminPort` 인 페이지
+- 주소가 `127.0.0.1`, `localhost`, `[::1]` 또는 `adminBindHost` 에 적은 IP 주소(IPv4·IPv6)나 호스트 이름(`0.0.0.0`, `::` 제외)이고, 포트가 `adminPort` 인 페이지
 - origin 이 `adminAllowedOrigins` 에 있는 페이지
 
-그 밖의 주소에는 `403 Forbidden origin` 으로 답한다. IPv6 주소도 마찬가지다. `https://[::1]:9300` 으로 관리 화면을 열려면 `adminAllowedOrigins` 에 `"https://[::1]:9300"` 을 넣는다.
+그 밖의 주소에는 `403 Forbidden origin` 으로 답한다. IPv6 주소는 대괄호로 감싸 적는다. 예: `https://[::1]:9300`.
 
 #### 다른 컴퓨터에서 관리 화면 열기
 
@@ -877,8 +877,8 @@ net.ipv4.tcp_wmem = 4096 16384 1048576
         - "https://admin.example.com:9300"
       ```
 
-      - `0.0.0.0`(모든 IPv4 주소)와 `::`(모든 주소)는 `adminAllowedOrigins` 와 함께 써야 동작한다. 목록에 없는 주소로 열면 로그인이 `403 Forbidden origin` 으로 실패한다. `adminAllowedOrigins` 에 적지 않아도 되는 주소는 관리 화면 포트를 쓰는 `127.0.0.1` 과 `localhost` 뿐이다.
-      - `adminBindHost` 가 서버의 IPv4 주소나 호스트 이름 하나(예: `192.0.2.10`, `admin.example.com`)이면, 그 주소와 관리 화면 포트로 연 페이지(예: `https://192.0.2.10:9300`)는 목록에 없어도 된다. 다른 DNS 이름이나 IPv6 주소처럼 다른 주소로 열려면 목록에 적어야 한다.
+      - `0.0.0.0`(모든 IPv4 주소)와 `::`(모든 주소)는 `adminAllowedOrigins` 와 함께 써야 동작한다. 목록에 없는 주소로 열면 로그인이 `403 Forbidden origin` 으로 실패한다. `adminAllowedOrigins` 에 적지 않아도 되는 주소는 관리 화면 포트를 쓰는 `127.0.0.1`, `localhost`, `[::1]` 뿐이다.
+      - `adminBindHost` 가 서버의 IP 주소(IPv4·IPv6)나 호스트 이름 하나(예: `192.0.2.10`, `fd00::10`, `admin.example.com`)이면, 그 주소와 관리 화면 포트로 연 페이지(예: `https://192.0.2.10:9300`, `https://[fd00::10]:9300`)는 목록에 없어도 된다. 다른 DNS 이름처럼 다른 주소로 열려면 목록에 적어야 한다.
       - 항목 규칙은 방법 3과 같다. `https://` origin 만 받고, 스킴·호스트·포트가 정확히 같아야 하며, 경로와 와일드카드는 받지 않는다. 포트는 443일 때만 생략한다. 규칙에 맞지 않는 항목이 있으면 서버가 시작할 때 `server configuration is not ready` 를 남기고 멈춘다. 이 메시지는 어느 항목이 틀렸는지 알려 주지 않는다. `-daemon` 으로 시작했다면 메시지는 터미널이 아니라 `logs/` 에 남는다. 이 메시지를 보면 항목마다 위 규칙에 맞는지 확인한다.
    2. `bin` 폴더에서 서버를 `-allowLegacyAdminRemote` 와 함께 시작한다. 이 플래그는 저장되지 않으므로 서버를 시작할 때마다 줘야 한다. 빠뜨리면 서버가 `Refusing insecure admin policy: ...` 를 출력하고 멈춘다. `-daemon` 으로 시작하면 감시 프로세스가 같은 옵션으로 앱을 다시 시작한다.
 
@@ -931,7 +931,7 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 |---|---|---|
 | 브라우저가 연결 거부를 알린다. | 서버가 실행 중이 아니거나, 관리 화면이 서버 호스트에서 오는 연결만 받거나(`adminBindHost: 127.0.0.1`), 포트가 틀렸다. | 서버를 시작한다. `config/server.yaml` 의 `adminBindHost` 와 `adminPort` 를 확인한다. SSH 터널을 쓰거나 포트를 직접 연다(위의 방법 2). |
 | 연결이 시간 초과로 끝난다. | 방화벽이나 클라우드 네트워크 규칙이 포트를 막고 있거나, 호스트가 꺼져 있다. | 운영체제 방화벽과 클라우드 네트워크 규칙(Azure, AWS, OCI 등)에서 관리 화면 포트를 허용한다. |
-| 로그인이 `403 Forbidden origin` 으로 실패한다. | 연 주소가 관리 화면 포트를 쓰는 `127.0.0.1`, `localhost`, `adminBindHost` 에 적은 IPv4 주소나 호스트 이름(`0.0.0.0`, `::` 제외)이 아니고, `adminAllowedOrigins` 에도 없다. | 연 주소를 스킴·호스트·포트까지 정확히 `adminAllowedOrigins` 에 넣고 서버를 다시 시작한다. SSH 터널이면 로컬 포트를 `adminPort` 와 같게 한다. |
+| 로그인이 `403 Forbidden origin` 으로 실패한다. | 연 주소가 관리 화면 포트를 쓰는 `127.0.0.1`, `localhost`, `[::1]`, `adminBindHost` 에 적은 IP 주소나 호스트 이름(`0.0.0.0`, `::` 제외)이 아니고, `adminAllowedOrigins` 에도 없다. | 연 주소를 스킴·호스트·포트까지 정확히 `adminAllowedOrigins` 에 넣고 서버를 다시 시작한다. SSH 터널이면 로컬 포트를 `adminPort` 와 같게 한다. |
 | 서버가 `server configuration is not ready` 를 남기고 멈춘다. | `config/server.yaml` 의 값이 규칙에 맞지 않는다. 예를 들면 `adminAllowedOrigins` 항목이 틀렸다. `-daemon` 으로 시작했다면 메시지는 `logs/` 에만 남는다. | `adminAllowedOrigins` 항목이 위의 방법 2에 적은 규칙에 맞는지 확인한다. 항목을 고친 뒤 서버를 다시 시작한다. |
 | 서버가 `Refusing insecure admin policy: ...` 를 출력하고 멈춘다. | `adminBindHost` 가 루프백 주소가 아니거나 `adminTls` 가 `false` 인데, 그에 맞는 플래그 없이 시작했다. | 메시지가 알려 주는 플래그(예: `-allowLegacyAdminRemote`)를 붙여 다시 시작한다. 원인이 `adminTls: false` 라면 되도록 `adminTls: true` 로 되돌린다. |
 | 브라우저에 인증서 경고가 뜬다. | 서버가 만든 자체 서명 인증서를 쓰고 있다. | 서버 호스트 밖에서 관리 화면을 연다면 직접 준비한 인증서를 쓴다([관리 화면 열기](#관리-화면-열기) 참고). 다른 호스트가 접속할 수 있는 관리 화면에서 경고를 넘기는 습관을 들이지 않는다. 서버 호스트에서 열거나 SSH 터널로 열 때는 올바른 주소인지 확인한 뒤 계속 진행한다. |
