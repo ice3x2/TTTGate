@@ -1,5 +1,6 @@
 import http, {IncomingMessage, ServerResponse} from "http";
 import https from "https";
+import {isIPv6} from "net";
 import ServerOptionStore from "../ServerOptionStore";
 import SessionStore, {Session} from "./SessionStore";
 import {IdentityStore} from "../rbac/IdentityStore";
@@ -2085,6 +2086,20 @@ class AdminServer {
     }
 
     /**
+     * #318: 호스트를 비교할 수 있는 형태로 맞춘다. URL 의 IPv6 호스트 이름은 대괄호가 붙고([::1]),
+     * 설정 값은 대문자나 생략하지 않은 0 으로 적을 수 있다. IPv6 는 대괄호를 벗기고 URL 이 쓰는 줄인 소문자 표기로 바꾼다.
+     * 대괄호는 IPv6 일 때만 벗긴다. 영역 식별자(fe80::1%eth0)가 붙은 주소는 URL 로 적을 수 없으므로 소문자로만 바꾼다.
+     */
+    private static comparableHost(host: string): string {
+        const lower = host.toLowerCase();
+        const bracketed = lower.startsWith('[') && lower.endsWith(']');
+        const bare = bracketed ? lower.slice(1, -1) : lower;
+        if(!isIPv6(bare)) return lower;
+        const asUrl = `https://[${bare}]`;
+        return URL.canParse(asUrl) ? new URL(asUrl).hostname.slice(1, -1) : bare;
+    }
+
+    /**
      * P5-T1/P5-T4: 자기 호스트(listen URL)와 Origin 이 일치할 때만 CORS/상태변경 요청 허용.
      * 화이트리스트: listen host + 127.0.0.1 / ::1 / localhost (개발 편의).
      */
@@ -2092,14 +2107,15 @@ class AdminServer {
         if(!origin) return false; // Origin 없는 상태변경 요청은 거부 (다만 CSRF 헤더 존재 여부로 별도 판정).
         try {
             const u = new URL(origin);
-            const host = u.hostname.toLowerCase();
+            const host = AdminServer.comparableHost(u.hostname);
             // MEDIUM / REQ-12 개선: 포트까지 포함해 비교한다.
             // u.port 는 동일 scheme 기본 포트(80/443)일 때 '' 가 되므로, scheme 기반 기본 포트로 보정.
             const defaultPort = u.protocol === 'https:' ? 443 : (u.protocol === 'http:' ? 80 : 0);
             const originPort = u.port.length > 0 ? parseInt(u.port, 10) : defaultPort;
             const allowedHosts = new Set<string>(['127.0.0.1', '::1', 'localhost']);
-            if(this._bindHost && this._bindHost.length > 0 && this._bindHost !== '0.0.0.0' && this._bindHost !== '::') {
-                allowedHosts.add(this._bindHost.toLowerCase());
+            const bindHost = this._bindHost ? AdminServer.comparableHost(this._bindHost) : '';
+            if(bindHost.length > 0 && bindHost !== '0.0.0.0' && bindHost !== '::') {
+                allowedHosts.add(bindHost);
             }
             // listen 포트를 알고 있을 때만 포트 일치 강제. listen 전이면(_port < 0) hostname 일치로 폴백.
             if(allowedHosts.has(host) && (this._port <= 0 || originPort === this._port)) return true;
