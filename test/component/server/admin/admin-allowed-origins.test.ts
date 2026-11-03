@@ -48,6 +48,26 @@ describe("adminAllowedOrigins (#303)", () => {
         expect(store.serverOption.adminAllowedOrigins).toEqual([PROXY_ORIGIN]);
     }));
 
+    // #318: URL 의 IPv6 호스트 이름은 대괄호가 붙는다([::1]). 대괄호를 벗겨 비교해야 루프백과 IPv6 바인드 주소가 통과한다.
+    test("the IPv6 loopback origin with the console port passes without a list, other ports do not (#318 AC-1)", async () => withConfigurationServer(async ({ports}) => {
+        expect((await loginFrom(ports[0], `https://[::1]:${ports[0]}`)).status).toBe(401);
+        expect(await loginFrom(ports[0], `https://[::1]:${ports[0] + 1}`)).toEqual({status: 403, message: "Forbidden origin"});
+    }));
+
+    test("an IPv6 adminBindHost passes in any spelling with the console port; other addresses and :: do not (#318 AC-2)", async () => withConfigurationServer(async ({apis, ports}) => {
+        const api = apis[0] as any;
+        const allowed = (origin: string) => api.isOriginAllowed(origin);
+        api._bindHost = "fd00::10";
+        expect(allowed(`https://[fd00::10]:${ports[0]}`)).toBe(true);
+        expect(allowed(`https://[FD00:0:0:0:0:0:0:10]:${ports[0]}`)).toBe(true);
+        expect(allowed(`https://[fd00::11]:${ports[0]}`)).toBe(false);
+        expect(allowed(`https://[fd00::10]:${ports[0] + 1}`)).toBe(false);
+        api._bindHost = "FD00:0000::0010";
+        expect(allowed(`https://[fd00::10]:${ports[0]}`)).toBe(true);
+        api._bindHost = "::";
+        expect(allowed(`https://[::]:${ports[0]}`)).toBe(false);
+    }));
+
     test("a wrong origin is 400 and server.yaml does not change (REQ-2)", async () => withConfigurationServer(async ({request, snapshot, store, root}) => {
         const file = path.join(root.rootDir, "config", "server.yaml");
         const before = await fs.readFile(file, "utf8");
