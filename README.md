@@ -288,7 +288,7 @@ Use the first case that matches.
    - The server ends the sessions of that user. At the next login, the user must set a new password.
    - The audit log records `temp_password_issued`.
    - If the user also lost the authenticator app, the superuser presses **Reset MFA** on the same screen. This also ends the sessions of that user.
-3. **No superuser can sign in, and no recovery code is left.** Reset the account store on the server host. Then the server starts the first admin setup again. The commands below use `~/TTTGate`. Replace `~/TTTGate` with your installation folder, for example `/opt/TTTGate`. With a wrong folder, `rm -f` does nothing and shows no error, and the old `admin` account can come back from `.key`.
+3. **No superuser can sign in (the password is forgotten, or two-factor authentication is lost and no recovery code is left).** Reset the account store on the server host. Then the server starts the first admin setup again. The commands below use `~/TTTGate`. Replace `~/TTTGate` with your installation folder, for example `/opt/TTTGate`. With a wrong folder, `rm -f` does nothing and shows no error, and the old `admin` account can come back from `.key`.
 
    Before you do this, read these warnings:
 
@@ -975,7 +975,7 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
    - 서버는 그 사용자의 세션을 모두 끊는다. 사용자는 다음 로그인 때 새 비밀번호를 정해야 한다.
    - 감사 로그에 `temp_password_issued` 가 남는다.
    - 사용자가 인증 앱도 잃어버렸다면, 슈퍼유저가 같은 화면에서 **Reset MFA** 를 누른다. 이때도 그 사용자의 세션이 모두 끊긴다.
-3. **로그인할 수 있는 슈퍼유저가 없고, 남은 복구 코드도 없다.** 서버 호스트에서 계정 저장소를 초기화한다. 그러면 서버가 첫 관리자 설정을 다시 시작한다. 아래 명령은 `~/TTTGate` 를 기준으로 한다. `~/TTTGate` 는 실제 설치 폴더로 바꾼다(예: `/opt/TTTGate`). 경로가 틀리면 `rm -f` 는 오류 없이 아무 일도 하지 않고, 예전 `admin` 계정이 `.key` 로 되살아날 수 있다.
+3. **로그인할 수 있는 슈퍼유저가 없다(비밀번호를 잊었거나, 2단계 인증을 잃었고 남은 복구 코드도 없다).** 서버 호스트에서 계정 저장소를 초기화한다. 그러면 서버가 첫 관리자 설정을 다시 시작한다. 아래 명령은 `~/TTTGate` 를 기준으로 한다. `~/TTTGate` 는 실제 설치 폴더로 바꾼다(예: `/opt/TTTGate`). 경로가 틀리면 `rm -f` 는 오류 없이 아무 일도 하지 않고, 예전 `admin` 계정이 `.key` 로 되살아날 수 있다.
 
    진행하기 전에 다음 주의 사항을 읽는다.
 

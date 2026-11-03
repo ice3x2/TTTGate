@@ -140,7 +140,7 @@ describe("README in English and Korean (#310)", () => {
                     "The file contains password hashes and two-factor secrets.", "delete it when you no longer need it",
                     "Replace `~/TTTGate` with your installation folder", "systemd", "**Two-factor authentication**", "**Disable**", "**Set up**", "a superuser cannot use **Disable**", "If no recovery code is left",
                     "If no other superuser can sign in either, follow case 3.", "select your own account and press **Reset MFA**",
-                    "This also ends the sessions of that user.", "**No superuser can sign in, and no recovery code is left.**"],
+                    "This also ends the sessions of that user.", "**No superuser can sign in (the password is forgotten, or two-factor authentication is lost and no recovery code is left).**"],
                     before: ["All users, groups and two-factor settings are lost.", "Delete `config/.key` too.", "Do not use `-reset` for this."]
                         .map((warning): [string, string] => [warning, "\n   1. Stop the server"]),
                     matches: [/creates the `admin` account with the old password/, /do not use `-reset`/i, /last active superuser/,
@@ -167,7 +167,7 @@ describe("README in English and Korean (#310)", () => {
                     "이 파일에는 비밀번호 해시와 2단계 인증 비밀값이 들어 있다", "더 필요 없으면 지운다",
                     "`~/TTTGate` 는 실제 설치 폴더로 바꾼다", "systemd", "**Two-factor authentication**", "**Disable**", "**Set up**", "슈퍼유저는 **Disable** 을 쓸 수 없다", "남은 복구 코드가 없으면",
                     "로그인할 수 있는 다른 슈퍼유저도 없으면 3번 경우를 따른다.", "**Users** 에서 내 계정을 고르고 **Reset MFA** 를 누른다",
-                    "이때도 그 사용자의 세션이 모두 끊긴다.", "**로그인할 수 있는 슈퍼유저가 없고, 남은 복구 코드도 없다.**",
+                    "이때도 그 사용자의 세션이 모두 끊긴다.", "**로그인할 수 있는 슈퍼유저가 없다(비밀번호를 잊었거나, 2단계 인증을 잃었고 남은 복구 코드도 없다).**",
                     "로그인 중 2단계 인증 화면에서"],
                     before: ["모든 사용자, 그룹, 2단계 인증 설정이 사라진다.", "`config/.key` 도 반드시 지운다.", "이 작업에 `-reset` 은 쓰지 않는다."]
                         .map((warning): [string, string] => [warning, "\n   1. 서버를 멈춘다"]),
