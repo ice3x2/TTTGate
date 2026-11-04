@@ -433,7 +433,7 @@ The window shows a form with these settings:
 - Allowed origins, one per line
 - Control port, TLS and protocol mode
 
-Empty fields keep the current settings. Change all other settings in the admin console. **TLS** of the control port starts as **On**, because clients can enroll with a code only over TLS. A new `server.yaml` has it off.
+Empty fields keep the current settings. Change all other settings in the admin console. When `server.yaml` does not exist yet, **TLS** of the control port starts as **On**, because clients can enroll with a code only over TLS and a new `server.yaml` has it off. When the file exists, TLS starts as **Keep current**.
 
 **Save and start** runs `server config save` and then `server -daemon`. If the admin console would be reachable from other PCs, the launcher first explains the risk and asks you. After you confirm, it adds `-allowLegacyAdminRemote` and remembers this for later starts.
 
@@ -491,10 +491,10 @@ TTTGate <server|client|stop|status> [command] [options]
 |---|---|---|---|
 | `server` | Start the tunnel server and the admin console. | [Server options](#server-options) that are accepted at start, `-daemon` | `TTTGate server --help` shows the options. |
 | `server config save` | Save the given values to `config/server.yaml` without starting the server. | `-adminPort`, `-adminBindHost`, `-adminAllowedOrigins`, `-controlPort`, `-controlTls`, `-controlProtocolMode`, `-allowLegacyAdminRemote` | Prints `Saved <path>`. Exit codes 0, 1, 75 and 77. See [Save Server Settings Without Starting](#save-server-settings-without-starting). |
-| `client` | Start a tunnel client. | [Client options](#client-options) except `--code`, `--force` and `-json` | Reads `config/client.yaml` when it exists. |
+| `client` | Start a tunnel client. | [Client options](#client-options) except `--code`, `--code-stdin`, `--force` and `-json` | Reads `config/client.yaml` when it exists. |
 | `client run` | The same as `client`. | The same as `client` | Use it when a script needs an explicit command. |
 | `client join <addr>` | Enroll this client with a code from the admin console. Write `config/client.yaml` (mode 0600) and `config/server-ca.pem`, then stop. | `--code` (required), `--force`, `-json` | `<addr>` uses the `-addr` format. The default port is 9126. `tcp://` is refused: the control port must use TLS. It does not connect a tunnel and does not write pid files. With `-json`, it prints one JSON line (see [Enroll with a Code](#enroll-with-a-code)). |
-| `client config show` | Print the resolved client options and the source of each value (`default`, `client.yaml`, `environment`, `file`, `command line`, `inferred`). | Client options except `-daemon`, `-save`, `--code`, `--force`, `-json` | Does not connect. Shows `clientSecret`, `key` and `privateKey` as `(hidden)` and PEM text as `(PEM text)`. When `client.yaml` holds insecure fields, it prints a warning and still shows the values (exit code 0). |
+| `client config show` | Print the resolved client options and the source of each value (`default`, `client.yaml`, `environment`, `file`, `command line`, `inferred`). | Client options except `-daemon`, `-save`, `--code`, `--code-stdin`, `--force`, `-json` | Does not connect. Shows `clientSecret`, `key` and `privateKey` as `(hidden)` and PEM text as `(PEM text)`. When `client.yaml` holds insecure fields, it prints a warning and still shows the values (exit code 0). |
 | `client config save` | Save the resolved client options to `config/client.yaml` without connecting. | The same as `client config show` | Prints `Saved <path>`. Saves the same content as `-save` (see [Client Options](#client-options)). |
 | `stop` | Stop the TTTGate processes that this installation recorded: daemons and foreground runs, server and client. | Only the help options | See [Stop Background Processes](#stop-background-processes). |
 | `status` | Show whether a TTTGate server or client of this installation runs, as a daemon or in the foreground. | `-json`, the help options | Exit code 0 when TTTGate runs, 3 when it does not. See [Check Whether TTTGate Runs](#check-whether-tttgate-runs). |
@@ -1276,7 +1276,7 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 - 허용 주소(origin). 한 줄에 하나씩 쓴다
 - 제어 포트, TLS, 프로토콜 모드
 
-비워 둔 값은 지금 설정을 그대로 쓴다. 나머지 설정은 관리 화면에서 바꾼다. 제어 포트의 **TLS** 는 처음부터 **켬** 으로 골라져 있다. 클라이언트는 TLS 로만 등록 코드를 쓸 수 있는데, 새 `server.yaml` 은 이 값이 꺼져 있기 때문이다.
+비워 둔 값은 지금 설정을 그대로 쓴다. 나머지 설정은 관리 화면에서 바꾼다. `server.yaml` 이 아직 없으면 제어 포트의 **TLS** 는 **켬** 으로 골라져 있다. 클라이언트는 TLS 로만 등록 코드를 쓸 수 있는데, 새 `server.yaml` 은 이 값이 꺼져 있기 때문이다. 파일이 있으면 **지금 설정 유지** 로 골라져 있다.
 
 **저장하고 시작**(**Save and start**)은 `server config save` 를 실행한 뒤 `server -daemon` 을 실행한다. 관리 화면이 다른 PC 에서도 열리게 되는 설정이면, 런처가 먼저 위험을 설명하고 묻는다. 확인하면 `-allowLegacyAdminRemote` 를 붙이고, 다음 시작부터도 이 선택을 기억한다.
 
@@ -1334,10 +1334,10 @@ TTTGate <server|client|stop|status> [command] [options]
 |---|---|---|---|
 | `server` | 터널 서버와 관리 화면을 시작한다. | 시작할 때 받는 [서버 옵션](#서버-옵션), `-daemon` | `TTTGate server --help` 로 옵션을 볼 수 있다. |
 | `server config save` | 서버를 시작하지 않고 준 값을 `config/server.yaml` 에 저장한다. | `-adminPort`, `-adminBindHost`, `-adminAllowedOrigins`, `-controlPort`, `-controlTls`, `-controlProtocolMode`, `-allowLegacyAdminRemote` | `Saved <path>` 를 출력한다. 종료 코드는 0, 1, 75, 77 이다. [서버를 시작하지 않고 설정 저장하기](#서버를-시작하지-않고-설정-저장하기)를 참고한다. |
-| `client` | 터널 클라이언트를 시작한다. | `--code`, `--force`, `-json` 을 뺀 [클라이언트 옵션](#클라이언트-옵션) | `config/client.yaml` 이 있으면 읽는다. |
+| `client` | 터널 클라이언트를 시작한다. | `--code`, `--code-stdin`, `--force`, `-json` 을 뺀 [클라이언트 옵션](#클라이언트-옵션) | `config/client.yaml` 이 있으면 읽는다. |
 | `client run` | `client` 와 같다. | `client` 와 같다 | 스크립트에서 명령을 명시해야 할 때 쓴다. |
 | `client join <addr>` | 관리 화면에서 받은 코드로 이 클라이언트를 등록한다. `config/client.yaml`(권한 0600)과 `config/server-ca.pem` 을 쓰고 끝난다. | `--code`(필수), `--force`, `-json` | `<addr>` 는 `-addr` 과 같은 형식이고 기본 포트는 9126 이다. 제어 포트가 TLS 를 써야 하므로 `tcp://` 는 받지 않는다. 터널을 연결하지 않고 pid 파일도 쓰지 않는다. `-json` 을 붙이면 JSON 한 줄을 출력한다([코드로 등록하기](#코드로-등록하기) 참고). |
-| `client config show` | 최종 클라이언트 옵션과 각 값의 출처(`default`, `client.yaml`, `environment`, `file`, `command line`, `inferred`)를 출력한다. | `-daemon`, `-save`, `--code`, `--force`, `-json` 을 뺀 클라이언트 옵션 | 연결하지 않는다. `clientSecret`, `key`, `privateKey` 는 `(hidden)`, PEM 본문은 `(PEM text)` 로 보여 준다. `client.yaml` 에 안전하지 않은 필드가 있으면 경고를 출력하고 값은 그대로 보여 준다(종료 코드 0). |
+| `client config show` | 최종 클라이언트 옵션과 각 값의 출처(`default`, `client.yaml`, `environment`, `file`, `command line`, `inferred`)를 출력한다. | `-daemon`, `-save`, `--code`, `--code-stdin`, `--force`, `-json` 을 뺀 클라이언트 옵션 | 연결하지 않는다. `clientSecret`, `key`, `privateKey` 는 `(hidden)`, PEM 본문은 `(PEM text)` 로 보여 준다. `client.yaml` 에 안전하지 않은 필드가 있으면 경고를 출력하고 값은 그대로 보여 준다(종료 코드 0). |
 | `client config save` | 연결하지 않고 최종 클라이언트 옵션을 `config/client.yaml` 에 저장한다. | `client config show` 와 같다 | `Saved <path>` 를 출력한다. `-save` 와 같은 내용을 저장한다([클라이언트 옵션](#클라이언트-옵션) 참고). |
 | `stop` | 이 설치본이 기록한 TTTGate 프로세스를 멈춘다. 데몬과 포그라운드 실행, 서버와 클라이언트를 모두 포함한다. | 도움말 옵션만 | [백그라운드 프로세스 멈추기](#백그라운드-프로세스-멈추기)를 참고한다. |
 | `status` | 이 설치본의 TTTGate 서버나 클라이언트가 데몬이나 포그라운드로 돌고 있는지 보여 준다. | `-json`, 도움말 옵션 | TTTGate 가 돌고 있으면 종료 코드 0, 아니면 3 이다. [TTTGate 실행 여부 확인하기](#tttgate-실행-여부-확인하기)를 참고한다. |

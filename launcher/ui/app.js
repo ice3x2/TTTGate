@@ -168,6 +168,10 @@ function render(state) {
   token.hidden = !state.bootstrapToken;
   if (state.bootstrapToken) $("[data-token-value]").textContent = state.bootstrapToken;
 
+  if (screen.screen === "serverSetup" && previous !== "serverSetup") {
+    // 새 설치(server.yaml 없음)에서만 TLS 를 켬으로 고른다. 있으면 지금 설정을 그대로 둔다.
+    $("select[name=controlTls]").value = state.serverConfigExists ? "" : "true";
+  }
   if (screen.screen === "clientJoin") {
     $("[data-replacing]").hidden = !screen.replacing;
     // 다른 화면에서 들어왔으면 지난 등록 결과를 지운다.

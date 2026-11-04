@@ -128,6 +128,8 @@ struct LoadView {
     settings: Settings,
     /// 서버를 처음 띄웠을 때의 부트스트랩 토큰(REQ-6). 그 밖에는 없다.
     bootstrap_token: Option<String>,
+    /// server.yaml 이 이미 있는지. 없으면 서버 화면이 제어 포트 TLS 를 켬으로 미리 고른다(새 설정은 꺼져 있어 등록을 받지 못한다).
+    server_config_exists: bool,
 }
 
 #[derive(Serialize, Clone)]
@@ -216,6 +218,7 @@ fn build_view(state: &AppState, launcher_version: String) -> LoadView {
         settings,
         screen,
         bootstrap_token,
+        server_config_exists: state.paths.config_dir.join("server.yaml").is_file(),
     }
 }
 
@@ -550,6 +553,8 @@ pub fn run() {
             runner::remove_old_outputs(&runner::output_dir());
             // 자동 시작 표시는 실제 Run 값을 따른다(폴더를 옮기면 경로 해시가 달라 값이 없다).
             in_background(app.handle(), |_, state| {
+                // 다른 일(모드 고르기 등)과 겹쳐 launcher.json 의 변경 하나를 잃지 않게 한다. 바쁘면 다음 실행 때 맞춘다.
+                let Some(_guard) = state.begin() else { return };
                 let present = runner::run(&system_tool("reg.exe"), &autostart::query_args(&state.exe), &state.paths.bin_dir).ok();
                 let mut settings = state.settings();
                 if settings.autostart != present {
