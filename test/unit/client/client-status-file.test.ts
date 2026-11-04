@@ -18,6 +18,17 @@ describe("client connection status", () => {
         expect(t.closed()).toEqual({state: "reconnecting", since: now, failures: 0, pid: 77});
     });
 
+    test("REQ-15 after the first close, later attempts stay reconnecting (connecting is only the first attempt)", () => {
+        const t = tracker();
+        expect(t.connecting().state).toBe("connecting");
+        t.closed();
+        expect(t.connecting()).toMatchObject({state: "reconnecting", failures: 1});
+        t.connected();
+        now += STABLE_CONNECTION_MS;
+        t.closed();
+        expect(t.connecting().state).toBe("reconnecting");
+    });
+
     test("REQ-2b a connection that closes before it is stable counts as a failure, even after 'connected'", () => {
         // 클라이언트는 인증 결과를 기다리지 않고 '연결됨'이 된다. 서버가 곧바로 끊으면(인증 거부 등) 실패로 센다.
         const t = tracker();

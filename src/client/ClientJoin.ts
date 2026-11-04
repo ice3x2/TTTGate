@@ -19,7 +19,14 @@ const SERVER_CA_FILE_NAME = "server-ca.pem";
 /** readInput 은 --code-stdin 일 때 입력 전체를 돌려준다. 없으면 표준 입력을 읽는다. */
 type JoinIo = {configDir: string, out: (line: string) => void, err: (line: string) => void, readInput?: () => string};
 
-const readStandardInput = (): string => fs.readFileSync(0, "utf-8");
+/**
+ * --code-stdin 의 입력. 터미널이면 읽지 않는다: 입력의 끝(Ctrl+Z·Ctrl+D)까지 안내 없이 멈추기 때문이다.
+ * 그때는 undefined 를 돌려주고, 호출자는 코드가 없다고 알린다.
+ */
+const readCodeInput = (stdin: {isTTY?: boolean}, read: () => string): string | undefined =>
+    stdin.isTTY ? undefined : read();
+
+const readStandardInput = (): string => readCodeInput(process.stdin, () => fs.readFileSync(0, "utf-8")) ?? "";
 
 /** 권한을 0600 으로 맞춘다. chmod 를 지원하지 않는 파일 시스템(CIFS 등)에서는 경고만 남긴다. */
 const restrictToOwner = (file: string, io: JoinIo): void => {
@@ -49,7 +56,8 @@ const enroll = async (addr: string, options: {[key: string]: string}, io: JoinIo
     // #322 REQ-2: --code-stdin 은 코드를 명령줄에 두지 않는다(프로세스 목록·프로세스 생성 감사 로그에 남지 않는다). 첫 줄만 쓴다.
     const code = fromInput ? ((io.readInput ?? readStandardInput)().split(/\r?\n/)[0] ?? "").trim() : options["code"];
     if(code === undefined || code.length === 0) {
-        return {ok: false, category: "argument", message: "client join needs --code <code> (or --code-stdin) from the admin console"};
+        return {ok: false, category: "argument",
+            message: "client join needs --code <code> from the admin console, or --code-stdin with the code piped in"};
     }
     if(!normalizeEnrollmentCode(code)) {
         return {ok: false, category: "argument", message: "the enrollment code must have 12 letters or digits, for example 7Q4K-M2XP-AB01"};
@@ -112,4 +120,4 @@ const runClientJoin = async (addr: string, options: {[key: string]: string}, io:
     return result.ok ? 0 : EXIT_CODE_OF[result.category];
 };
 
-export {runClientJoin, SERVER_CA_FILE_NAME};
+export {runClientJoin, readCodeInput, SERVER_CA_FILE_NAME};

@@ -16,8 +16,9 @@ const launcherBuildPlan = (platform, root, binDir) => {
         skip: false,
         // rust-toolchain.toml 은 현재 폴더에서 찾으므로 그 폴더에서 cargo 를 실행한다.
         cwd: crate,
-        cargoArgs: ['build', '--release', '--locked'],
-        source: path.join(crate, 'target', 'release', 'TTTGate-launcher.exe'),
+        // 파일 이름이 x64 이므로 개발 PC 가 arm64 여도 x64 로 만든다.
+        cargoArgs: ['build', '--release', '--locked', '--target', 'x86_64-pc-windows-msvc'],
+        source: path.join(crate, 'target', 'x86_64-pc-windows-msvc', 'release', 'TTTGate-launcher.exe'),
         target: path.join(binDir, LAUNCHER_FILE_NAME)
     };
 };

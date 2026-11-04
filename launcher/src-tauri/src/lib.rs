@@ -528,11 +528,13 @@ pub fn run() {
     tauri::Builder::default()
         // 두 번째 실행은 떠 있는 창을 앞으로 가져온다(REQ-9).
         // 런처는 PC 마다 하나만 뜬다. 다른 설치 폴더의 런처를 띄웠으면 그 사실을 알린다.
-        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             show_main_window(app);
-            let ours = app.state::<Shared>().exe.to_string_lossy().to_lowercase();
-            let theirs = args.first().map(|exe| exe.to_lowercase());
-            if theirs.is_some_and(|exe| !exe.is_empty() && exe != ours) {
+            // 상대 경로·짧은 경로로 띄워도 같은 파일이면 같은 설치본이다. 둘 다 정규화해서 비교한다.
+            let canonical = |path: PathBuf| std::fs::canonicalize(&path).unwrap_or(path);
+            let ours = canonical(app.state::<Shared>().exe.clone());
+            let theirs = args.first().filter(|exe| !exe.is_empty()).map(|exe| canonical(PathBuf::from(&cwd).join(exe)));
+            if theirs.is_some_and(|exe| exe != ours) {
                 let _ = app.emit("action-failed", ActionResult::because("otherInstall",
                     "A launcher of another TTTGate folder is already running. Quit it first."));
             }

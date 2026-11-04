@@ -26,12 +26,14 @@ type ClientConnectionStatus = {state: ClientConnectionState, since: number, fail
 class ClientConnectionTracker {
     private _failures = 0;
     private _connectedAt: number | undefined;
+    /** 한 번이라도 끊긴 뒤의 시도는 다시 연결이다. connecting 은 첫 시도에만 쓴다(#322 REQ-15). */
+    private _closedOnce = false;
 
     constructor(private readonly _now: () => number, private readonly _pid: number) {}
 
     public connecting(): ClientConnectionStatus {
         this._connectedAt = undefined;
-        return this.status("connecting");
+        return this.status(this._closedOnce ? "reconnecting" : "connecting");
     }
 
     public connected(): ClientConnectionStatus {
@@ -43,6 +45,7 @@ class ClientConnectionTracker {
         const stable = this._connectedAt !== undefined && this._now() - this._connectedAt >= STABLE_CONNECTION_MS;
         this._failures = stable ? 0 : this._failures + 1;
         this._connectedAt = undefined;
+        this._closedOnce = true;
         return this.status("reconnecting");
     }
 

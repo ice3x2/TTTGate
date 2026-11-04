@@ -4,7 +4,7 @@ import {CertificationStore} from "../../../src/server/CertificationStore";
 import ServerOptionStore from "../../../src/server/ServerOptionStore";
 import TTTServer from "../../../src/server/TTTServer";
 import {DEFAULT_KEY, ServerOption} from "../../../src/types/TunnelingOption";
-import {runClientJoin} from "../../../src/client/ClientJoin";
+import {readCodeInput, runClientJoin} from "../../../src/client/ClientJoin";
 import {getFreePort} from "../../helpers/network";
 import {applyTestRoot, cleanupTestRoot, createTestRoot, TestRoot} from "../../helpers/runtime";
 
@@ -117,6 +117,11 @@ describe("client join --json", () => {
         input = "\n";
         expect(await join(`127.0.0.1:${port}`, {"code-stdin": ""})).toBe(2);
         expect(result()).toMatchObject({ok: false, category: "argument"});
+    });
+
+    test("REQ-2 --code-stdin refuses a terminal instead of waiting for the end of input", () => {
+        expect(readCodeInput({isTTY: true}, () => { throw new Error("must not read a terminal"); })).toBeUndefined();
+        expect(readCodeInput({isTTY: false}, () => "7Q4K-M2XP-AB01\nrest")).toBe("7Q4K-M2XP-AB01\nrest");
     });
 
     test("AC-9 a settings folder that cannot be written reports category write", async () => {
