@@ -1,3 +1,6 @@
+import * as fs from "fs";
+import * as Path from "path";
+import Environment from "../Environment";
 import ServerOptionStore from "./ServerOptionStore";
 import {buildAdminSecurityAllowancesFromCliOptions, evaluateAdminSecurityPolicy, formatAdminSecurityPolicyErrors,
     LEGACY_ADMIN_HTTP_FLAG, LEGACY_ADMIN_REMOTE_FLAG} from "./AdminSecurityPolicy";
@@ -52,7 +55,25 @@ const applyCliValues = (option: ServerOption, cli: {[key: string]: string}): App
     return {ok: true};
 };
 
+const listFiles = (dir: string): Set<string> => new Set(fs.existsSync(dir) ? fs.readdirSync(dir) : []);
+
+/**
+ * 저장이 실패하면 이 명령이 새로 만든 파일(처음 읽을 때 만든 기본 server.yaml 등)을 지운다.
+ * 남기면 "이미 설정이 있다" 로 보여, 런처가 새 설치에 맞는 기본값(제어 포트 TLS 켬)을 고르지 않는다.
+ */
 const saveServerConfig = (cli: {[key: string]: string}, io: ConfigIo, deps: SaveDeps): number => {
+    const configDir = Environment.path.configDir;
+    const before = listFiles(configDir);
+    const exitCode = saveIntoStore(cli, io, deps);
+    if(exitCode !== EXIT_SAVED) {
+        for(const name of listFiles(configDir)) {
+            if(!before.has(name)) fs.rmSync(Path.join(configDir, name), {force: true, recursive: true});
+        }
+    }
+    return exitCode;
+};
+
+const saveIntoStore = (cli: {[key: string]: string}, io: ConfigIo, deps: SaveDeps): number => {
     if(deps.isServerRunning()) {
         io.err("TTTGate is running. Stop it first (TTTGate stop), then save the settings.");
         return EXIT_SERVER_RUNNING;

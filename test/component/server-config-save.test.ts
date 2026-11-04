@@ -31,6 +31,15 @@ describe("server config save", () => {
         await cleanupTestRoot(root);
     });
 
+    test("AC-10 a failed save in a new installation leaves no settings files behind", () => {
+        // 실패한 저장이 기본 server.yaml 을 남기면, 런처는 "이미 설정이 있다" 고 보고 TLS 를 켬으로 미리 고르지 않는다.
+        const configDir = Environment.path.configDir;
+        const before = fs.existsSync(configDir) ? fs.readdirSync(configDir) : [];
+        expect(save({adminPort: "99999"})).toBe(1);
+        expect(save({adminBindHost: "0.0.0.0"})).toBe(77);
+        expect(fs.existsSync(configDir) ? fs.readdirSync(configDir) : []).toEqual(before);
+    });
+
     test("AC-10 the given values are validated and saved; the others stay", () => {
         expect(save({adminPort: "9400", adminAllowedOrigins: " https://gw.example:9400 , https://b.example ", controlPort: "9127",
             controlTls: "true", controlProtocolMode: "mixed"})).toBe(0);

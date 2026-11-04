@@ -160,9 +160,9 @@ The old repository-root `config.yaml` is no longer used.
 | Exit code | Meaning |
 |---|---|
 | 0 | Saved |
-| 1 | A value is wrong. The message is on stderr. The given values are not saved. (When `server.yaml` did not exist, the default file is still created.) |
+| 1 | A value is wrong. The message is on stderr. Nothing is saved, and no new file is left in `config/`. |
 | 75 | A TTTGate server of this installation is running. Stop it first |
-| 77 | The admin console would be reachable from other hosts, and `-allowLegacyAdminRemote` was not given. The given values are not saved. (When `server.yaml` did not exist, the default file is still created.) |
+| 77 | The admin console would be reachable from other hosts, and `-allowLegacyAdminRemote` was not given. Nothing is saved, and no new file is left in `config/`. |
 
 ### Admin Web Console
 
@@ -1003,9 +1003,9 @@ net.ipv4.tcp_wmem = 4096 16384 1048576
 | 종료 코드 | 뜻 |
 |---|---|
 | 0 | 저장했다 |
-| 1 | 값이 잘못되었다. 메시지는 stderr 에 나온다. 준 값은 저장하지 않는다. (`server.yaml` 이 없었다면 기본 설정 파일은 만들어진다.) |
+| 1 | 값이 잘못되었다. 메시지는 stderr 에 나온다. 아무것도 저장하지 않고, `config/` 에 새 파일도 남기지 않는다. |
 | 75 | 이 설치본의 TTTGate 서버가 돌고 있다. 먼저 멈춘다 |
-| 77 | 관리 화면이 다른 호스트에서 접근 가능해지는데 `-allowLegacyAdminRemote` 가 없다. 준 값은 저장하지 않는다. (`server.yaml` 이 없었다면 기본 설정 파일은 만들어진다.) |
+| 77 | 관리 화면이 다른 호스트에서 접근 가능해지는데 `-allowLegacyAdminRemote` 가 없다. 아무것도 저장하지 않고, `config/` 에 새 파일도 남기지 않는다. |
 
 ### 웹 관리 화면
 
