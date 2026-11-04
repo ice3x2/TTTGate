@@ -8,7 +8,7 @@
  * - aliasOf: 대표 옵션의 별칭. 도움말에서는 대표 옵션 옆에만 적는다.
  * - risk: 위험·레거시 옵션. 일반 도움말에서 빼고 --help-advanced 에만 위험 설명과 함께 보인다.
  */
-type CliMode = "server" | "client" | "stop" | "none";
+type CliMode = "server" | "client" | "stop" | "status" | "none";
 type CliValueKind = "flag" | "string" | "number";
 type CliGroup = "connection" | "identity" | "tls" | "run" | "tuning" | "admin" | "proxy" | "help";
 
@@ -26,20 +26,29 @@ type CliOptionDef = {
     /**
      * 이 옵션을 받는 하위 명령(#215). 공백으로 이은 경로이고 ''는 하위 명령 없음이다.
      * 없으면 실행·설정 계열('', run, config show, config save)에서 받는다. 도움말 옵션과 -dev 는 어디서나 받는다.
+     * 모드마다 받는 하위 명령이 다르면 모드를 키로 쓴다(#322, 예: client 는 join, status 는 하위 명령 없음).
      */
-    commands?: ReadonlyArray<string>;
+    commands?: ReadonlyArray<string> | {readonly [mode in CliMode]?: ReadonlyArray<string>};
 };
 
 const RUN_FAMILY_COMMANDS: ReadonlyArray<string> = ["", "run", "config show", "config save"];
 
 /** 옵션을 이 하위 명령에서 받는지. */
-const optionAllowedInCommand = (def: CliOptionDef, command: string): boolean => {
+const optionAllowedInCommand = (def: CliOptionDef, mode: CliMode, command: string): boolean => {
     if(def.group === "help" || def.name === "dev") return true;
-    return (def.commands ?? RUN_FAMILY_COMMANDS).includes(command);
+    const commands = def.commands === undefined ? RUN_FAMILY_COMMANDS
+        : Array.isArray(def.commands) ? def.commands as ReadonlyArray<string>
+        : (def.commands as {[mode in CliMode]?: ReadonlyArray<string>})[mode] ?? [];
+    return commands.includes(command);
 };
 
-const ALL_MODES: ReadonlyArray<CliMode> = ["server", "client", "stop", "none"];
-const RUN_MODES: ReadonlyArray<CliMode> = ["server", "client", "stop"];
+const ALL_MODES: ReadonlyArray<CliMode> = ["server", "client", "stop", "status", "none"];
+const RUN_MODES: ReadonlyArray<CliMode> = ["server", "client", "stop", "status"];
+/** 서버를 실행할 때만 받는 옵션. server config save(#322)에서는 받지 않는다. */
+const SERVER_RUN: ReadonlyArray<string> = [""];
+/** 서버 실행과 server config save 에서 모두 받는 옵션. */
+const SERVER_RUN_AND_SAVE: ReadonlyArray<string> = ["", "config save"];
+const SERVER_SAVE: ReadonlyArray<string> = ["config save"];
 
 const CLI_OPTIONS: ReadonlyArray<CliOptionDef> = [
     // 도움말·버전(#208)
@@ -55,24 +64,36 @@ const CLI_OPTIONS: ReadonlyArray<CliOptionDef> = [
         help: "Development mode (paths relative to the source tree)"},
 
     // 서버
-    {name: "adminPort", kind: "number", modes: ["server"], group: "admin", valueName: "port", help: "Admin server port"},
+    {name: "adminPort", kind: "number", modes: ["server"], group: "admin", valueName: "port", commands: SERVER_RUN_AND_SAVE, help: "Admin server port"},
+    // server config save(#322 REQ-17). 실행할 때는 받지 않는다. 실행 중 설정은 관리 화면에서 바꾼다.
+    {name: "adminBindHost", kind: "string", modes: ["server"], group: "admin", valueName: "host", commands: SERVER_SAVE,
+        help: "Admin server bind address (config save)"},
+    {name: "adminAllowedOrigins", kind: "string", modes: ["server"], group: "admin", valueName: "origins", commands: SERVER_SAVE,
+        help: "Allowed admin origins, comma separated (config save)"},
+    {name: "controlPort", kind: "number", modes: ["server"], group: "connection", valueName: "port", commands: SERVER_SAVE,
+        help: "Control port for tunnel clients (config save)"},
+    {name: "controlTls", kind: "flag", modes: ["server"], group: "connection", commands: SERVER_SAVE,
+        help: "Use TLS on the control port (config save)"},
+    {name: "controlProtocolMode", kind: "string", modes: ["server"], group: "connection", valueName: "legacy|mixed|mtls-strict",
+        commands: SERVER_SAVE, help: "Control protocol mode (config save)"},
     {name: "keepAlive", kind: "number", modes: ["server", "client"], group: "tuning", valueName: "ms",
+        commands: {server: SERVER_RUN, client: RUN_FAMILY_COMMANDS},
         help: "Control connection TCP keepalive interval"},
     {name: "trustXForwardedFor", kind: "flag", modes: ["server"], group: "proxy",
-        help: "Read the admin client address from X-Forwarded-For (behind your own proxy)"},
-    {name: "trustedProxyHops", kind: "number", modes: ["server"], group: "proxy", valueName: "n",
+        commands: SERVER_RUN, help: "Read the admin client address from X-Forwarded-For (behind your own proxy)"},
+    {name: "trustedProxyHops", kind: "number", modes: ["server"], group: "proxy", valueName: "n", commands: SERVER_RUN,
         help: "Trusted proxies in front of the admin server (default 1)"},
-    {name: "reset", kind: "flag", modes: ["server"], group: "run", help: "Reset persisted server state"},
-    {name: "allowLegacyAdminHttp", kind: "flag", modes: ["server"], group: "admin",
+    {name: "reset", kind: "flag", modes: ["server"], group: "run", commands: SERVER_RUN, help: "Reset persisted server state"},
+    {name: "allowLegacyAdminHttp", kind: "flag", modes: ["server"], group: "admin", commands: SERVER_RUN,
         help: "Allow legacy admin HTTP for one process run",
         risk: "the admin console and its session cookies travel in plain text"},
-    {name: "allowLegacyAdminRemote", kind: "flag", modes: ["server"], group: "admin",
+    {name: "allowLegacyAdminRemote", kind: "flag", modes: ["server"], group: "admin", commands: SERVER_RUN_AND_SAVE,
         help: "Allow legacy non-loopback admin bind for one process run",
         risk: "the admin console is reachable from other hosts"},
-    {name: "allowLegacyControlAuth", kind: "flag", modes: ["server"], group: "identity",
+    {name: "allowLegacyControlAuth", kind: "flag", modes: ["server"], group: "identity", commands: SERVER_RUN,
         help: "Allow legacy shared-key control authentication",
         risk: "legacy data connections can be hijacked by a guessed handler ID"},
-    {name: "requireCsrfHeader", kind: "flag", modes: ["server"], group: "admin",
+    {name: "requireCsrfHeader", kind: "flag", modes: ["server"], group: "admin", commands: SERVER_RUN,
         help: "Require the admin CSRF header (default true; 'false' turns the check off)",
         risk: "'-requireCsrfHeader false' turns off CSRF protection of the admin API"},
 
@@ -102,6 +123,9 @@ const CLI_OPTIONS: ReadonlyArray<CliOptionDef> = [
     // client join(#214)
     {name: "code", kind: "string", modes: ["client"], group: "run", valueName: "code", commands: ["join"],
         help: "Enrollment code from the admin console (client join)"},
+    // 런처가 읽는 결과(#322 REQ-13·REQ-16)
+    {name: "json", kind: "flag", modes: ["client", "status"], group: "run", commands: {client: ["join"], status: [""]},
+        help: "Print the result as one JSON line"},
     {name: "force", kind: "flag", modes: ["client"], group: "run", commands: ["join"],
         help: "Replace an existing config/client.yaml (the old file is kept as client.yaml.bak)"},
     {name: "bufferLimit", kind: "number", modes: ["client"], group: "tuning", valueName: "MiB",

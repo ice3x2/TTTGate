@@ -59,6 +59,8 @@ class ServerOptionStore {
     private _loadStatus: ConfigLoadStatus = {ready: false, reason: 'empty'};
 
     public get loadStatus(): ConfigLoadStatus { return {...this._loadStatus}; }
+    /** server.yaml 의 경로. 사용자에게 어느 파일인지 알릴 때 쓴다. */
+    public get configFilePath(): string { return this._configFile.toString(); }
     public readServerOption(): {success: true; serverOption: ServerOption} | {success: false; message: string} {
         return this._loadStatus.ready ? {success: true, serverOption: this.serverOption} : {success: false, message: 'server configuration is not ready'};
     }

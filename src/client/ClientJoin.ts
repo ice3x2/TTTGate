@@ -4,7 +4,7 @@ import YAML from "yaml";
 import {parseServerAddress, formatServerAddress} from "../util/AddressParser";
 import {normalizeEnrollmentCode} from "../commons/Enrollment";
 import {DEFAULT_CLIENT_PORT} from "../types/TunnelingOption";
-import {requestEnrollment} from "./ClientEnrollment";
+import {EnrollmentFailureCategory, requestEnrollment} from "./ClientEnrollment";
 import {CLIENT_OPTION_FILE_NAME} from "./ClientOptionResolver";
 import {isFlagOn} from "../server/ServerCliOptions";
 
@@ -28,39 +28,34 @@ const restrictToOwner = (file: string, io: JoinIo): void => {
     }
 };
 
-const runClientJoin = async (addr: string, options: {[key: string]: string}, io: JoinIo): Promise<number> => {
+/** 런처가 읽는 실패 종류(#322 REQ-16). 문장은 바뀔 수 있지만 이 값은 바뀌지 않는다. */
+type JoinFailureCategory = "argument" | "exists" | "write" | EnrollmentFailureCategory;
+type JoinResult = {ok: true, clientId: string, server: string, files: string[]}
+    | {ok: false, category: JoinFailureCategory, message: string};
+
+const EXIT_CODE_OF: {[category in JoinFailureCategory]: number} = {
+    argument: 2, exists: 78, write: 78, rejected: 1, proof: 1, network: 1, throttled: 1, unavailable: 1
+};
+
+const enroll = async (addr: string, options: {[key: string]: string}, io: JoinIo): Promise<JoinResult> => {
     const parsed = parseServerAddress(addr ?? "");
-    if(!parsed.ok) {
-        io.err(parsed.message);
-        return 2;
-    }
-    if(parsed.scheme === "tcp") {
-        io.err("client join needs TLS on the server control port; tcp:// cannot be used");
-        return 2;
-    }
+    if(!parsed.ok) return {ok: false, category: "argument", message: parsed.message};
+    if(parsed.scheme === "tcp") return {ok: false, category: "argument", message: "client join needs TLS on the server control port; tcp:// cannot be used"};
     const code = options["code"];
-    if(code === undefined || code.length === 0) {
-        io.err("client join needs --code <code> from the admin console");
-        return 2;
-    }
+    if(code === undefined || code.length === 0) return {ok: false, category: "argument", message: "client join needs --code <code> from the admin console"};
     if(!normalizeEnrollmentCode(code)) {
-        io.err("the enrollment code must have 12 letters or digits, for example 7Q4K-M2XP-AB01");
-        return 2;
+        return {ok: false, category: "argument", message: "the enrollment code must have 12 letters or digits, for example 7Q4K-M2XP-AB01"};
     }
     const yamlFile = Path.join(io.configDir, CLIENT_OPTION_FILE_NAME);
-    const force = isFlagOn(options, "force");
-    if(fs.existsSync(yamlFile) && !force) {
-        io.err(`${yamlFile} already exists. Run again with --force to replace it (the old file is kept as ${CLIENT_OPTION_FILE_NAME}.bak).`);
-        return 78;
+    if(fs.existsSync(yamlFile) && !isFlagOn(options, "force")) {
+        return {ok: false, category: "exists",
+            message: `${yamlFile} already exists. Run again with --force to replace it (the old file is kept as ${CLIENT_OPTION_FILE_NAME}.bak).`};
     }
 
     const host = parsed.host;
     const port = parsed.port ?? DEFAULT_CLIENT_PORT;
     const result = await requestEnrollment({host, port, code});
-    if(!result.ok) {
-        io.err(`enrollment failed: ${result.message}`);
-        return 1;
-    }
+    if(!result.ok) return {ok: false, category: result.category, message: `enrollment failed: ${result.message}`};
 
     const payload = result.payload;
     const caFile = Path.join(io.configDir, SERVER_CA_FILE_NAME);
@@ -84,15 +79,29 @@ const runClientJoin = async (addr: string, options: {[key: string]: string}, io:
         fs.writeFileSync(yamlFile, YAML.stringify(clientYaml), {encoding: "utf-8", mode: 0o600});
         restrictToOwner(yamlFile, io);
     } catch (e) {
-        io.err(`cannot write the client settings in ${io.configDir}: ${(e as NodeJS.ErrnoException).code ?? (e as Error).message}`);
-        return 78;
+        return {ok: false, category: "write",
+            message: `cannot write the client settings in ${io.configDir}: ${(e as NodeJS.ErrnoException).code ?? (e as Error).message}`};
     }
+    return {ok: true, clientId: payload.clientId, server: formatServerAddress(host, port), files: [yamlFile, caFile]};
+};
 
-    io.out(`Enrolled as '${payload.clientId}' with ${formatServerAddress(host, port)}.`);
-    io.out(`Saved ${yamlFile}`);
-    io.out(`Saved ${caFile}`);
-    io.out("Start the client with: TTTGate client   (or TTTGate client -daemon to run in the background)");
-    return 0;
+/**
+ * --json(#322 REQ-16)이면 stdout 에 결과 JSON 한 줄만 쓴다. 경고는 그대로 stderr 로 간다.
+ * 어느 출력에도 등록 코드를 넣지 않는다.
+ */
+const runClientJoin = async (addr: string, options: {[key: string]: string}, io: JoinIo): Promise<number> => {
+    const result = await enroll(addr, options, io);
+    if(isFlagOn(options, "json")) {
+        io.out(JSON.stringify(result.ok ? {ok: true, clientId: result.clientId, server: result.server}
+            : {ok: false, category: result.category, message: result.message}));
+    } else if(result.ok) {
+        io.out(`Enrolled as '${result.clientId}' with ${result.server}.`);
+        for(const file of result.files) io.out(`Saved ${file}`);
+        io.out("Start the client with: TTTGate client   (or TTTGate client -daemon to run in the background)");
+    } else {
+        io.err(result.message);
+    }
+    return result.ok ? 0 : EXIT_CODE_OF[result.category];
 };
 
 export {runClientJoin, SERVER_CA_FILE_NAME};

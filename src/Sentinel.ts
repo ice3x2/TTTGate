@@ -6,6 +6,7 @@ import Environment from "./Environment";
 
 import LoggerFactory  from "./util/logger/LoggerFactory";
 import {clearConfigErrorMarker, hasConfigErrorMarker} from "./util/ConfigExit";
+import CLI from "./util/CLI";
 const logger = LoggerFactory.getLogger('boot', 'Sentinel');
 
 type PidType = 'app' | 'sentinel' | 'foreground';
@@ -15,8 +16,13 @@ type PidType = 'app' | 'sentinel' | 'foreground';
  * - ticks: Linux 의 프로세스 시작 tick(/proc/<pid>/stat 22번째 필드). 시계가 보정돼도 바뀌지 않으므로 Linux 에서는 이것으로 본다.
  * - start: 프로세스 시작 시각(ms). tick 이 없을 때(Windows) 재사용된 PID 를 가려내는 데 쓴다.
  * - exe: 실행 파일 경로(알 때만).
+ * - mode: 실행 모드(#322). 런처가 무엇이 도는지 알 수 있게 적는다. 예전 항목에는 없다.
  */
-type PidEntry = {pid: number, start?: number, ticks?: number, exe?: string};
+type RunMode = 'server' | 'client';
+type PidEntry = {pid: number, start?: number, ticks?: number, exe?: string, mode?: RunMode};
+
+/** 지금 도는 TTTGate(#322 REQ-13). daemon 은 -daemon 으로 띄운 앱인지다. */
+type RunningProcess = {pid: number, mode: RunMode | null, daemon: boolean};
 
 /** 실제 프로세스의 시작 시각·tick·실행 파일 경로(#256). */
 type ProcessIdentity = {start?: number, ticks?: number, exe?: string, cmdline?: string[]};
@@ -123,7 +129,31 @@ class Sentinel {
         // 같은 PID 의 항목이라도 앞서 죽은 프로세스의 것(PID 재사용)일 수 있다. 신원까지 같을 때만 건너뛴다.
         if(Sentinel.readPIDFile('foreground').some((entry) => Sentinel.isOwnEntry(entry))) return;
         Sentinel.appendPidEntry({pid: process.pid, start: Sentinel.ownStartTime(),
-            ticks: process.platform === 'linux' ? Sentinel.processIdentity(process.pid)?.ticks : undefined, exe: process.execPath}, 'foreground');
+            ticks: process.platform === 'linux' ? Sentinel.processIdentity(process.pid)?.ticks : undefined, exe: process.execPath,
+            mode: Sentinel.currentMode()}, 'foreground');
+    }
+
+    /** 이 프로세스의 명령줄에 적힌 모드. sentinel·app 자식은 부모의 명령줄을 그대로 받는다. */
+    private static currentMode(): RunMode | undefined {
+        const mode = CLI.parseCommandLine(process.argv.slice(2)).mode;
+        return mode === 'server' || mode === 'client' ? mode : undefined;
+    }
+
+    /**
+     * 살아 있는 TTTGate 를 찾는다(#322 REQ-13). 데몬 app 을 먼저 보고, 없으면 foreground 를 본다.
+     * 신호 0 으로 살아 있고 기록과 다르다고 확인되지 않은 항목만 센다. 확인할 수 없으면(unknown) 도는 것으로 본다.
+     */
+    public static findRunning(): RunningProcess | undefined {
+        for(const type of ['app', 'foreground'] as PidType[]) {
+            for(const entry of Sentinel.readPIDFile(type)) {
+                const state = Sentinel.processState(entry.pid);
+                if(state === 'dead') continue;
+                const match = Sentinel.matchRecordedProcess(entry);
+                if(state === 'alive' ? match === 'mismatch' : match !== 'match') continue;
+                return {pid: entry.pid, mode: entry.mode ?? null, daemon: type === 'app'};
+            }
+        }
+        return undefined;
     }
 
     private static ownStartTime(): number {
@@ -415,10 +445,10 @@ class Sentinel {
         logger.info('Start daemon and sentinel mode.');
         this.startApp((pid) => {
             logger.info('App started: ' + pid);
-            Sentinel.writeSpawnedPid(pid, 'app');
+            Sentinel.recordSpawnedPid(pid, 'app');
             this.startSentinel(pid, (pid) => {
                 logger.info('Sentinel started: ' + pid);
-                Sentinel.writeSpawnedPid(pid, 'sentinel');
+                Sentinel.recordSpawnedPid(pid, 'sentinel');
             });
         });
     }
@@ -448,7 +478,8 @@ class Sentinel {
                     // 형식이 맞지 않는 필드는 버린다. 버리면 확인이 더 엄격한 쪽(예전 형식 규칙)으로 간다.
                     const finite = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? value : undefined;
                     result.push({pid, start: finite(parsed.start), ticks: finite(parsed.ticks),
-                        exe: typeof parsed.exe === 'string' ? parsed.exe : undefined});
+                        exe: typeof parsed.exe === 'string' ? parsed.exe : undefined,
+                        mode: parsed.mode === 'server' || parsed.mode === 'client' ? parsed.mode : undefined});
                 } catch { /* 깨진 줄은 건너뛴다 */ }
                 continue;
             }
@@ -479,9 +510,9 @@ class Sentinel {
      * 방금 띄운 자식의 PID 를 적는다. 시작 시각은 spawn 시각으로 적는다(실제와 수 ms 차이).
      * Linux 는 /proc 의 시작 tick 도 적는다(값싼 파일 읽기다. Windows 는 PowerShell 조회가 무거워 시각만 적는다).
      */
-    private static writeSpawnedPid(pid: number, type: PidType) {
+    public static recordSpawnedPid(pid: number, type: 'app' | 'sentinel') {
         const ticks = process.platform === 'linux' ? Sentinel.processIdentity(pid)?.ticks : undefined;
-        Sentinel.writePidEntry({pid, start: Date.now(), ticks}, type);
+        Sentinel.writePidEntry({pid, start: Date.now(), ticks, mode: Sentinel.currentMode()}, type);
     }
 
     /** 신호 0 으로 PID 가 살아 있는지 본다. EPERM 은 살아 있지만 권한이 없는 경우다. */
@@ -502,7 +533,7 @@ class Sentinel {
 
     private restartApp() {
         this.startApp((pid) => {
-            Sentinel.writeSpawnedPid(pid, 'app');
+            Sentinel.recordSpawnedPid(pid, 'app');
             this.startScanPid(pid);
         });
     }
@@ -577,3 +608,4 @@ class Sentinel {
 }
 
 export default Sentinel;
+export {RunningProcess, RunMode};

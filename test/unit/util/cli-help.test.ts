@@ -9,7 +9,7 @@ const optionTokens = (text: string): string[] => text.split("\n")
 describe("CLI help (#208)", () => {
     test("REQ-1 top-level help lists the modes and how to get mode help", () => {
         const text = renderHelp("none", false);
-        expect(text).toContain("Usage: TTTGate <server|client|stop> [options]");
+        expect(text).toContain("Usage: TTTGate <server|client|stop|status> [options]");
         for(const mode of ["server", "client", "stop"]) expect(text).toMatch(new RegExp(`^  ${mode} `, "m"));
         expect(text).toContain("TTTGate client --help");
     });
