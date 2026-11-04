@@ -94,7 +94,8 @@ pub fn native_arch() -> &'static str {
     const IMAGE_FILE_MACHINE_ARM64: u16 = 0xAA64;
     const IMAGE_FILE_MACHINE_AMD64: u16 = 0x8664;
     let (mut process_machine, mut native_machine) = (0u16, 0u16);
-    // 실패하면(아주 오래된 Windows) 빌드 아키텍처를 쓴다.
+    // 조회가 실패하면 빌드 아키텍처를 쓴다. 이 함수는 Windows 10 1709 부터 있으므로 그보다 오래된 Windows 에서는
+    // 런처가 뜨지 않는다(README 의 최소 지원 버전).
     let ok = unsafe { IsWow64Process2(GetCurrentProcess(), &mut process_machine, &mut native_machine) } != 0;
     match (ok, native_machine) {
         (true, IMAGE_FILE_MACHINE_ARM64) => "aarch64",

@@ -46,8 +46,9 @@ impl AppState {
     /// `input` 은 표준 입력으로 넘긴다(등록 코드처럼 명령줄에 두면 안 되는 값).
     fn run_cli(&self, args: &[String], input: Option<&str>) -> CliOutput {
         match (self.cli(), input) {
-            (Some(cli), Some(text)) => runner::run_with_input(&cli, args, &self.paths.bin_dir, text),
-            (Some(cli), None) => runner::run(&cli, args, &self.paths.bin_dir),
+            // 루트 폴더에서 실행한다. 설치 경로에 "node" 가 들어 있으면 CLI 는 현재 폴더를 루트로 쓴다.
+            (Some(cli), Some(text)) => runner::run_with_input(&cli, args, &self.paths.root_dir, text),
+            (Some(cli), None) => runner::run(&cli, args, &self.paths.root_dir),
             (None, _) => CliOutput { code: None, stdout: String::new(), stderr: CLI_MISSING_MESSAGE.into() },
         }
     }
@@ -547,6 +548,15 @@ pub fn run() {
             // 앞선 실행에서 데몬이 잡고 있던 출력 파일을 지운다. 두 번째로 띄운 런처는 여기 오기 전에
             // single-instance 플러그인이 끝내므로, 첫 런처가 쓰는 파일을 지우지 않는다.
             runner::remove_old_outputs(&runner::output_dir());
+            // 자동 시작 표시는 실제 Run 값을 따른다(폴더를 옮기면 경로 해시가 달라 값이 없다).
+            in_background(app.handle(), |_, state| {
+                let present = runner::run(&system_tool("reg.exe"), &autostart::query_args(&state.exe), &state.paths.bin_dir).ok();
+                let mut settings = state.settings();
+                if settings.autostart != present {
+                    settings.autostart = present;
+                    let _ = state.save_settings(&settings);
+                }
+            });
             build_tray(app.handle())?;
             if !autostarted {
                 // 창은 숨긴 채 만들어진다. 로그인 자동 시작이 아니면 보인다.

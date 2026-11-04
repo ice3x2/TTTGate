@@ -406,7 +406,7 @@ See [Modes and Commands](#modes-and-commands) for details.
 - Keep it in the same `bin` folder as `TTTGate-win-x64.exe` or `TTTGate-win-arm64.exe`. The launcher uses the one for this PC. If only the other one is there, it uses that one.
 - The launcher only controls the command line program (CLI). The CLI does the tunnelling.
 - It is in both Windows release zip files. On Windows on Arm, the x64 launcher runs under emulation.
-- It uses Microsoft Edge WebView2. WebView2 is included in Windows 11 and in current Windows 10. If WebView2 is missing, the launcher shows a message with the download link https://go.microsoft.com/fwlink/p/?LinkId=2124703 and stops. The command line still works.
+- It needs Windows 10 version 1709 or later (x64, or Arm64 through emulation). It uses Microsoft Edge WebView2. WebView2 is included in Windows 11 and in current Windows 10. If WebView2 is missing, the launcher shows a message with the download link https://go.microsoft.com/fwlink/p/?LinkId=2124703 and stops. The command line still works.
 - It loads nothing from the network. Its screens are inside the exe.
 - Its text is Korean when the Windows display language is Korean. Otherwise it is English.
 - If the launcher version and the CLI version differ, the window shows a warning. Use the files of one release together.
@@ -1249,7 +1249,7 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 - `TTTGate-win-x64.exe` 나 `TTTGate-win-arm64.exe` 와 같은 `bin` 폴더에 둔다. 런처는 이 PC 에 맞는 쪽을 쓰고, 다른 쪽만 있으면 그것을 쓴다.
 - 런처는 명령줄 프로그램(CLI)을 조작할 뿐이다. 터널링은 CLI 가 한다.
 - 두 Windows 릴리스 zip 파일에 모두 들어 있다. Windows on Arm 에서는 x64 런처가 에뮬레이션으로 돈다.
-- Microsoft Edge WebView2 를 쓴다. WebView2 는 Windows 11 과 최신 Windows 10 에 들어 있다. WebView2 가 없으면 다운로드 링크 https://go.microsoft.com/fwlink/p/?LinkId=2124703 를 담은 메시지를 보여 주고 끝난다. 이때도 명령줄은 그대로 쓸 수 있다.
+- Windows 10 1709 이상이 필요하다(x64, 또는 에뮬레이션으로 도는 Arm64). Microsoft Edge WebView2 를 쓴다. WebView2 는 Windows 11 과 최신 Windows 10 에 들어 있다. WebView2 가 없으면 다운로드 링크 https://go.microsoft.com/fwlink/p/?LinkId=2124703 를 담은 메시지를 보여 주고 끝난다. 이때도 명령줄은 그대로 쓸 수 있다.
 - 네트워크에서 아무것도 받아 오지 않는다. 화면은 모두 exe 안에 들어 있다.
 - Windows 표시 언어가 한국어면 한국어로, 그 밖에는 영어로 보여 준다.
 - 런처와 CLI 의 버전이 다르면 창에 경고를 보여 준다. 같은 릴리스의 파일을 함께 쓴다.
