@@ -79,7 +79,8 @@ fn spawn_and_wait(cli: &Path, args: &[String], work_dir: &Path, out_file: &Path,
     if let (Some(text), Some(mut stdin)) = (input, child.stdin.take()) {
         use std::io::Write;
         // 쓰고 나서 stdin 을 닫아야 자식이 입력의 끝을 안다(이 블록을 벗어나며 닫힌다).
-        stdin.write_all(text.as_bytes())?;
+        // 자식이 먼저 끝나면(예: 옛 CLI 가 옵션을 거부) 쓰기가 실패한다. 그때도 기다려 자식의 오류를 보인다.
+        let _ = stdin.write_all(text.as_bytes());
     }
     Ok(child.wait()?.code())
 }

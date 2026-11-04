@@ -459,7 +459,7 @@ Empty fields keep the current settings. Change all other settings in the admin c
 
 - `npm run launcher:build` builds the launcher. It runs `node scripts/build-launcher.cjs dist/bin`.
 - The build uses Rust: `cargo build --release --locked` in `launcher/src-tauri`. `launcher/src-tauri/rust-toolchain.toml` pins Rust 1.96.0. Install Rust with rustup.
-- On Windows, `npm run dist` builds the launcher after the CLI binaries. On other systems, this step prints `Windows launcher skipped` and succeeds.
+- On Windows, `npm run dist` builds the launcher after the CLI binaries. So `npm run dist` on Windows needs Rust. Without it, the build stops and tells you to install Rust from https://rustup.rs. On other systems, this step prints `Windows launcher skipped` and succeeds.
 - The release workflow builds the launcher on a Windows runner and adds it to the Windows zip files.
 
 ### Command-Line Reference
@@ -1301,7 +1301,7 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 
 - `npm run launcher:build` 로 런처를 빌드한다. 이 명령은 `node scripts/build-launcher.cjs dist/bin` 을 실행한다.
 - 빌드에는 Rust 가 필요하다. `launcher/src-tauri` 에서 `cargo build --release --locked` 를 실행한다. Rust 버전은 `launcher/src-tauri/rust-toolchain.toml` 이 1.96.0 으로 고정한다. Rust 는 rustup 으로 설치한다.
-- Windows 에서는 `npm run dist` 가 CLI 바이너리를 만든 뒤 런처도 빌드한다. 다른 운영체제에서는 이 단계가 `Windows launcher skipped` 를 출력하고 성공으로 끝난다.
+- Windows 에서는 `npm run dist` 가 CLI 바이너리를 만든 뒤 런처도 빌드한다. 그래서 Windows 에서 `npm run dist` 를 돌리려면 Rust 가 있어야 한다. 없으면 빌드가 멈추고 https://rustup.rs 에서 Rust 를 설치하라고 알린다. 다른 운영체제에서는 이 단계가 `Windows launcher skipped` 를 출력하고 성공으로 끝난다.
 - 릴리스 워크플로는 Windows 러너에서 런처를 빌드해 Windows zip 파일에 넣는다.
 
 ### 명령줄 레퍼런스

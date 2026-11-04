@@ -119,10 +119,11 @@ pub fn parse_registration(stdout: &str) -> Option<Registration> {
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerOptions {
-    pub admin_port: Option<u16>,
+    /// 포트는 글자 그대로 넘기고 검사는 CLI 가 한다(REQ-4). 화면이 숫자로 바꾸면 틀린 값이 조용히 사라진다.
+    pub admin_port: Option<String>,
     pub admin_bind_host: Option<String>,
     pub admin_allowed_origins: Option<Vec<String>>,
-    pub control_port: Option<u16>,
+    pub control_port: Option<String>,
     pub control_tls: Option<bool>,
     pub control_protocol_mode: Option<String>,
 }
@@ -136,6 +137,14 @@ fn args(items: &[&str]) -> Vec<String> {
 }
 
 pub fn status_args() -> Vec<String> { args(&["status", "--json"]) }
+pub fn version_args() -> Vec<String> { args(&["--version"]) }
+
+/// `TTTGate v2.0.1 (빌드)` 에서 버전을 읽는다. status 가 없는 옛 CLI 의 버전을 알 때 쓴다(NFR-6).
+pub fn parse_version(stdout: &str) -> Option<String> {
+    let rest = stdout.trim().strip_prefix("TTTGate v")?;
+    let version = rest.split_whitespace().next()?;
+    Some(version.to_string())
+}
 pub fn registration_args() -> Vec<String> { args(&["client", "config", "show"]) }
 
 /// 등록 코드는 표준 입력으로 넘긴다(`runner::run_with_input`). 명령줄은 다른 사용자와 감사 로그가 볼 수 있다(REQ-2).
@@ -152,13 +161,13 @@ pub fn client_daemon_args() -> Vec<String> { args(&["client", "-daemon"]) }
 pub fn server_save_args(options: &ServerOptions, allow_remote: bool) -> Vec<String> {
     let mut list = args(&["server", "config", "save"]);
     let mut push = |name: &str, value: String| { list.push(format!("-{}", name)); list.push(value); };
-    if let Some(port) = options.admin_port { push("adminPort", port.to_string()); }
+    if let Some(port) = &options.admin_port { push("adminPort", port.clone()); }
     if let Some(host) = &options.admin_bind_host { push("adminBindHost", host.clone()); }
     // CLI 는 빈 값을 받지 않는다. 빈 목록은 넘기지 않아 지금 값을 그대로 둔다.
     if let Some(origins) = options.admin_allowed_origins.as_ref().filter(|origins| !origins.is_empty()) {
         push("adminAllowedOrigins", origins.join(","));
     }
-    if let Some(port) = options.control_port { push("controlPort", port.to_string()); }
+    if let Some(port) = &options.control_port { push("controlPort", port.clone()); }
     if let Some(tls) = options.control_tls { push("controlTls", tls.to_string()); }
     if let Some(mode) = &options.control_protocol_mode { push("controlProtocolMode", mode.clone()); }
     if allow_remote {
@@ -241,6 +250,14 @@ mod tests {
     }
 
     #[test]
+    fn the_version_line_is_parsed() {
+        assert_eq!(version_args(), strings(&["--version"]));
+        assert_eq!(parse_version("TTTGate v2.0.1 (20261104)\n"), Some("2.0.1".to_string()));
+        assert_eq!(parse_version("TTTGate v1.0.11b (dev)"), Some("1.0.11b".to_string()));
+        assert_eq!(parse_version("something else"), None);
+    }
+
+    #[test]
     fn command_lines_match_the_cli() {
         assert_eq!(status_args(), strings(&["status", "--json"]));
         assert_eq!(registration_args(), strings(&["client", "config", "show"]));
@@ -257,9 +274,9 @@ mod tests {
     fn server_save_passes_only_the_given_values() {
         assert_eq!(server_save_args(&ServerOptions::default(), false), strings(&["server", "config", "save"]));
         let options = ServerOptions {
-            admin_port: Some(9300), admin_bind_host: Some("0.0.0.0".into()),
+            admin_port: Some("9300".into()), admin_bind_host: Some("0.0.0.0".into()),
             admin_allowed_origins: Some(vec!["https://a:9300".into(), "https://b".into()]),
-            control_port: Some(9126), control_tls: Some(false), control_protocol_mode: Some("mixed".into()),
+            control_port: Some("9126".into()), control_tls: Some(false), control_protocol_mode: Some("mixed".into()),
         };
         assert_eq!(server_save_args(&options, true), strings(&["server", "config", "save", "-adminPort", "9300", "-adminBindHost", "0.0.0.0",
             "-adminAllowedOrigins", "https://a:9300,https://b", "-controlPort", "9126", "-controlTls", "false",
@@ -267,5 +284,8 @@ mod tests {
         // CLI 는 빈 값을 받지 않는다. 빈 목록은 지금 값을 그대로 둔다(목록 지우기는 관리 화면에서 한다).
         let empty_origins = ServerOptions { admin_allowed_origins: Some(vec![]), ..Default::default() };
         assert_eq!(server_save_args(&empty_origins, false), strings(&["server", "config", "save"]));
+        // 틀린 포트도 그대로 넘겨 CLI 가 거부하게 한다.
+        let wrong = ServerOptions { admin_port: Some("70000".into()), control_port: Some("abc".into()), ..Default::default() };
+        assert_eq!(server_save_args(&wrong, false), strings(&["server", "config", "save", "-adminPort", "70000", "-controlPort", "abc"]));
     }
 }

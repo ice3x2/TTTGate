@@ -131,7 +131,13 @@ fn build_view(state: &AppState, launcher_version: String) -> LoadView {
     let settings = state.settings();
     let cli_missing = state.cli().is_none();
     let status = if cli_missing { None } else { state.status() };
-    let status = status.unwrap_or_else(stopped_status);
+    let status = status.unwrap_or_else(|| DaemonStatus {
+        // status 를 모르는 옛 CLI 다. 버전 경고(NFR-6)가 뜨도록 --version 으로 버전을 읽는다.
+        version: if cli_missing { String::new() } else {
+            cli::parse_version(&state.run(&cli::version_args()).stdout).unwrap_or_else(|| "unknown".into())
+        },
+        ..stopped_status()
+    });
     // 등록 확인(REQ-2a)은 클라이언트 모드이고 멈춰 있을 때만 한다. 비밀값은 CLI 가 가려서 출력한다.
     let registration = if !cli_missing && !status.running && settings.mode == Some(Mode::Client) {
         cli::parse_registration(&state.run(&cli::registration_args()).stdout)
@@ -244,17 +250,20 @@ async fn stop_daemon(state: State<'_, Shared>) -> Result<ActionResult, String> {
     blocking(&state, stop).await
 }
 
-fn open_admin_url(state: &AppState) {
-    if let Some(url) = state.status().and_then(|s| s.server).map(|s| s.admin_url) {
-        if url.starts_with("https://") || url.starts_with("http://") {
+/// 실행 중인 서버의 관리 화면을 연다. 열 서버가 없으면 false.
+fn open_admin_url(state: &AppState) -> bool {
+    match state.status().and_then(|s| s.server).map(|s| s.admin_url) {
+        Some(url) if url.starts_with("https://") || url.starts_with("http://") => {
             open_with_shell(&url);
+            true
         }
+        _ => false,
     }
 }
 
 #[tauri::command]
 async fn open_admin(state: State<'_, Shared>) -> Result<(), String> {
-    blocking(&state, open_admin_url).await
+    blocking(&state, |state| { open_admin_url(state); }).await
 }
 
 fn open_logs_folder(state: &AppState) {
@@ -344,7 +353,8 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         .on_menu_event(|app, event| {
             match event.id.as_ref() {
                 "open" => show_main_window(app),
-                "admin" => in_background(app, |_, state| open_admin_url(state)),
+                // 클라이언트 모드나 멈춘 상태에서는 열 관리 화면이 없다. 창을 보여 지금 상태를 알린다.
+                "admin" => in_background(app, |app, state| if !open_admin_url(state) { show_main_window(app); }),
                 "stop" => in_background(app, |_, state| { stop(state); }),
                 "restart" => in_background(app, |app, state| {
                     stop(state);

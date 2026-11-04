@@ -72,6 +72,11 @@ jobs:
         run: cargo test --locked
       - name: Build the launcher
         run: node scripts/build-launcher.cjs launcher-out
+      - name: Check the launcher size (15 MB or less)
+        run: |
+          size=$(stat -c %s launcher-out/TTTGate-launcher-win-x64.exe)
+          echo "launcher size: $size bytes"
+          test "$size" -le 15728640
       - uses: actions/upload-artifact@v7
         with:
           name: windows-launcher

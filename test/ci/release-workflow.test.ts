@@ -74,7 +74,9 @@ describe("release workflow (#290)", () => {
         expect(launcher["runs-on"]).toBe("windows-latest");
         expect(launcher.needs).toEqual(["tag"]);
         const runs: string[] = launcher.steps.filter((step: any) => step.run).map((step: any) => step.run.trim());
-        expect(runs).toEqual(["cargo test --locked", "node scripts/build-launcher.cjs launcher-out"]);
+        expect(runs.slice(0, 2)).toEqual(["cargo test --locked", "node scripts/build-launcher.cjs launcher-out"]);
+        // NFR-1·AC-7: 릴리스도 크기를 본다. Windows Launcher 워크플로는 런처 파일이 바뀔 때만 돈다.
+        expect(runs.some((run) => run.includes("launcher-out/TTTGate-launcher-win-x64.exe") && run.includes("15728640"))).toBe(true);
         const test = launcher.steps.find((step: any) => step.run?.trim() === "cargo test --locked");
         expect(test["working-directory"]).toBe("launcher/src-tauri");
         const upload = launcher.steps.find((step: any) => String(step.uses ?? "").startsWith("actions/upload-artifact@"));

@@ -63,7 +63,11 @@ pub fn screen(input: &ViewInput) -> Screen {
 }
 
 fn running_view(status: &DaemonStatus) -> RunningView {
-    let failures = status.client.as_ref().map(|client| client.failures).unwrap_or(0);
+    // 상태 파일은 바뀔 때만 쓰이므로 연결된 동안에도 마지막 실패 수가 남는다. 연결됐으면 실패를 보이지 않는다.
+    let failures = status.client.as_ref()
+        .filter(|client| client.state != "connected")
+        .map(|client| client.failures)
+        .unwrap_or(0);
     RunningView {
         mode: status.mode.clone(),
         pid: status.pid,
@@ -151,6 +155,18 @@ mod tests {
         assert!(!view(AUTH_HINT_FAILURES - 1).auth_hint);
         assert!(view(AUTH_HINT_FAILURES).auth_hint);
         assert_eq!(view(AUTH_HINT_FAILURES).failures, AUTH_HINT_FAILURES);
+    }
+
+    #[test]
+    fn req2b_a_recovered_connection_hides_the_hint_and_the_failure_count() {
+        // 상태 파일은 바뀔 때만 쓰이므로 연결된 동안에도 마지막 실패 수가 남아 있다.
+        match screen(&input(Some(Mode::Client), &running_client(AUTH_HINT_FAILURES, "connected"), None, false)) {
+            Screen::Running(view) => {
+                assert!(!view.auth_hint);
+                assert_eq!(view.failures, 0);
+            }
+            other => panic!("{:?}", other),
+        }
     }
 
     #[test]

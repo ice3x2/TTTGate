@@ -171,7 +171,8 @@ async function refresh() {
 function serverOptions(form) {
   const data = new FormData(form);
   const text = (name) => String(data.get(name) || "").trim();
-  const port = (name) => (text(name) === "" ? null : Number(text(name)));
+  // 포트는 글자 그대로 넘긴다. 검사는 서버의 기존 검사(server config save)가 하고, 틀리면 그 문장을 보인다.
+  const port = (name) => (text(name) === "" ? null : text(name));
   const origins = text("adminAllowedOrigins");
   return {
     adminPort: port("adminPort"),
@@ -193,7 +194,13 @@ function ask(name) {
 }
 
 async function startServer(form, allowRemote) {
-  const result = await busy(() => invoke("start_server", { options: serverOptions(form), allowRemote }));
+  let result;
+  try {
+    result = await busy(() => invoke("start_server", { options: serverOptions(form), allowRemote }));
+  } catch (error) {
+    showResult("[data-server-result]", false, String(error));
+    return;
+  }
   if (result.needsRemoteConsent && !allowRemote) {
     if ((await ask("remote")) === "ok") return startServer(form, true);
     return;
@@ -202,12 +209,19 @@ async function startServer(form, allowRemote) {
   await refresh();
 }
 
+/** 멈추고, 실패하면 이유를 알린다. 멈췄으면 true. */
+async function stopOrReport() {
+  const result = await invoke("stop_daemon");
+  if (!result.ok) alert(result.message);
+  return result.ok;
+}
+
 const ACTIONS = {
   chooseServer: () => invoke("choose_mode", { mode: "server" }),
   chooseClient: () => invoke("choose_mode", { mode: "client" }),
   changeMode: () => invoke("choose_mode", { mode: null }),
   rejoin: async () => {
-    if (current && current.screen.screen === "running") await invoke("stop_daemon");
+    if (current && current.screen.screen === "running" && !(await stopOrReport())) return;
     await invoke("set_rejoin", { on: true });
   },
   cancelRejoin: () => invoke("set_rejoin", { on: false }),
@@ -215,7 +229,7 @@ const ACTIONS = {
     const result = await invoke("start_client");
     if (!result.ok) alert(result.message);
   },
-  stop: () => invoke("stop_daemon"),
+  stop: () => stopOrReport(),
   openLogs: () => invoke("open_logs"),
   openAdmin: () => invoke("open_admin"),
   copyToken: async () => {
@@ -230,7 +244,12 @@ function wire() {
   for (const button of $$("[data-action]")) {
     button.addEventListener("click", async (event) => {
       event.preventDefault();
-      const changed = await busy(() => ACTIONS[button.dataset.action]());
+      let changed;
+      try {
+        changed = await busy(() => ACTIONS[button.dataset.action]());
+      } catch (error) {
+        alert(String(error));
+      }
       if (changed !== false) await refresh();
     });
   }
@@ -257,7 +276,7 @@ function wire() {
   });
   $("[data-form=server]").addEventListener("submit", (event) => {
     event.preventDefault();
-    startServer(event.target, false);
+    void startServer(event.target, false);
   });
   $("[data-autostart]").addEventListener("change", async (event) => {
     const result = await invoke("set_autostart", { on: event.target.checked });
@@ -269,7 +288,18 @@ function wire() {
     const choice = await ask("quit");
     if (choice === "stop" || choice === "keep") await invoke("quit", { stopDaemon: choice === "stop" });
   });
-  setInterval(() => { if (document.visibilityState === "visible") refresh(); }, POLL_MS);
+  scheduleRefresh();
+}
+
+function scheduleRefresh() {
+  setTimeout(async () => {
+    try {
+      if (document.visibilityState === "visible") await refresh();
+    } catch (error) {
+      // 한 번 실패해도 다음 갱신은 계속한다.
+    }
+    scheduleRefresh();
+  }, POLL_MS);
 }
 
 translate();
