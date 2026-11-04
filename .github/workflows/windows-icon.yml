@@ -79,3 +79,5 @@ jobs:
           echo "$output"
           test "$code" -eq 2
           echo "$output" | grep -F '"category":"argument"'
+          # 형식 오류 문장은 코드를 실제로 읽었을 때만 나온다(못 읽으면 "needs --code" 가 나온다).
+          echo "$output" | grep -F 'must have 12 letters'

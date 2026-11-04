@@ -31,7 +31,8 @@ describe("Windows icon smoke workflow (#321)", () => {
         expect(runs).toContain(`node scripts/set-exe-icon.cjs icon-smoke ${windowsTargets.length}`);
         expect(runs).toContain("icon-smoke/TTTGate-win-x64.exe --version");
         // #322: 런처는 등록 코드를 표준 입력으로 넘긴다. 실제 Windows 실행 파일이 파이프 입력을 읽는지 본다.
-        expect(runs.some((run) => run.includes("--code-stdin --json") && run.includes('"category":"argument"'))).toBe(true);
+        // 형식 오류 문장(must have 12 letters)은 코드를 실제로 읽었을 때만 나온다. 읽지 못해도 argument 로 끝나므로 문장까지 본다.
+        expect(runs.some((run) => run.includes("--code-stdin --json") && run.includes("must have 12 letters"))).toBe(true);
         expect(runs.some((run) => run.startsWith("npx pkg"))).toBe(false);
         expect(workflow.permissions).toEqual({contents: "read"});
     });

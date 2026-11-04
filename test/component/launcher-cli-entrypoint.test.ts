@@ -4,7 +4,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import YAML from "yaml";
-import {spawnSync} from "child_process";
+import {spawn, spawnSync} from "child_process";
 import {getFreePort, spawnProcess, SpawnedProcess, waitUntil} from "../helpers/smokeProcess";
 import {stopDaemon} from "../helpers/daemonCleanup";
 
@@ -83,6 +83,21 @@ describe("launcher commands (process boundary)", () => {
         expect(jsonLine(result.stdout)).toMatchObject({ok: false, category: "network"});
         expect(result.stdout + result.stderr).not.toContain(code);
         expect(result.stdout + result.stderr).not.toContain(code.replace(/-/g, ""));
+    });
+
+    test("REQ-2 client join --code-stdin waits for a producer that writes the code late", async () => {
+        // Linux 에서 process.stdin 을 건드리면 파이프가 논블로킹이 되어, 늦게 온 입력에서 EAGAIN 으로 끝났다.
+        const port = await getFreePort();
+        const code = "7Q4K-M2XP-AB01";
+        const child = spawn(process.execPath, [APP_JS, "client", "join", `127.0.0.1:${port}`, "--code-stdin", "--json"],
+            {cwd: root, stdio: ["pipe", "pipe", "pipe"]});
+        let stdout = "";
+        child.stdout.on("data", (chunk) => { stdout += chunk; });
+        const timer = setTimeout(() => { child.stdin.end(`${code}\n`); }, 3000);
+        const exitCode = await new Promise<number | null>((resolve) => child.on("close", resolve));
+        clearTimeout(timer);
+        expect(exitCode).toBe(1);
+        expect(jsonLine(stdout)).toMatchObject({ok: false, category: "network"});
     });
 
     test("REQ-17 server config save writes server.yaml and refuses a remote admin address without the flag", async () => {

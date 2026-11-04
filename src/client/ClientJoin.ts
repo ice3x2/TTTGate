@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import * as tty from "tty";
 import * as Path from "path";
 import YAML from "yaml";
 import {parseServerAddress, formatServerAddress} from "../util/AddressParser";
@@ -26,7 +27,8 @@ type JoinIo = {configDir: string, out: (line: string) => void, err: (line: strin
 const readCodeInput = (stdin: {isTTY?: boolean}, read: () => string): string | undefined =>
     stdin.isTTY ? undefined : read();
 
-const readStandardInput = (): string => readCodeInput(process.stdin, () => fs.readFileSync(0, "utf-8")) ?? "";
+// process.stdin 은 건드리지 않는다. Linux 에서는 그 스트림이 파이프를 논블로킹으로 바꿔, 늦게 온 입력을 읽을 때 EAGAIN 이 난다.
+const readStandardInput = (): string => readCodeInput({isTTY: tty.isatty(0)}, () => fs.readFileSync(0, "utf-8")) ?? "";
 
 /** 권한을 0600 으로 맞춘다. chmod 를 지원하지 않는 파일 시스템(CIFS 등)에서는 경고만 남긴다. */
 const restrictToOwner = (file: string, io: JoinIo): void => {
