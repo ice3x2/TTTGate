@@ -77,7 +77,8 @@ const saveServerConfig = (cli: {[key: string]: string}, io: ConfigIo, deps: Save
     // 관리 화면을 다른 PC 에 여는 것은 사용자가 위험을 알고 고른 경우에만 저장한다(#322 REQ-5).
     const decision = evaluateAdminSecurityPolicy(prepared.serverOption!, buildAdminSecurityAllowancesFromCliOptions(cli));
     if(decision.missingFlags.includes(LEGACY_ADMIN_HTTP_FLAG)) {
-        io.err(`${formatAdminSecurityPolicyErrors(decision)}. Turn adminTls on in the admin console or in server.yaml first.`);
+        io.err(`${formatAdminSecurityPolicyErrors(decision)}. Set adminTls: true in ${store.configFilePath}, ` +
+            `or start once with 'TTTGate server -${LEGACY_ADMIN_HTTP_FLAG}' and turn admin TLS on in the admin console.`);
         return EXIT_INVALID;
     }
     if(decision.missingFlags.includes(LEGACY_ADMIN_REMOTE_FLAG)) {

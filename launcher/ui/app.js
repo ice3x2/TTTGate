@@ -23,7 +23,8 @@ const STRINGS = {
       busy: "다른 작업이 아직 진행 중입니다. 끝난 뒤 다시 하세요.",
       stillRunning: "TTTGate 가 아직 실행 중입니다. 다른 사용자로 실행 중일 수 있습니다. 그 사용자로 멈추거나 작업 관리자에서 끝내세요.",
       statusUnknown: "TTTGate 의 상태를 읽을 수 없습니다. 런처가 TTTGate 의 bin 폴더에 있는지 확인하세요.",
-      otherInstall: "다른 폴더의 TTTGate 런처가 이미 실행 중입니다. 그 런처를 먼저 끝내세요."
+      otherInstall: "다른 폴더의 TTTGate 런처가 이미 실행 중입니다. 그 런처를 먼저 끝내세요.",
+      noMode: "먼저 서버 모드나 클라이언트 모드를 고르세요."
     },
     stoppedAfterStart: "TTTGate 가 시작한 뒤 곧 멈췄습니다. 로그 폴더의 기록에서 이유를 확인하세요(예: 포트가 이미 쓰이고 있음, 등록 정보 없음).",
     replaceConfirm: "이 PC 에 이미 등록 정보(config/client.yaml)가 있지만 읽을 수 없거나 예전 방식입니다. 새 코드로 바꾸어 등록할까요? 지금 파일은 client.yaml.bak 으로 남깁니다.",
@@ -74,7 +75,8 @@ const STRINGS = {
       busy: "Another action is still running. Try again when it ends.",
       stillRunning: "TTTGate is still running. It may run as another user. Stop it as that user, or end it in Task Manager.",
       statusUnknown: "Cannot read the TTTGate status. Check that the launcher is in the bin folder of TTTGate.",
-      otherInstall: "A launcher of another TTTGate folder is already running. Quit it first."
+      otherInstall: "A launcher of another TTTGate folder is already running. Quit it first.",
+      noMode: "Choose server or client mode first."
     },
     stoppedAfterStart: "TTTGate stopped right after it started. Check the logs folder for the reason (for example, a port in use or no enrollment).",
     replaceConfirm: "This PC already has enrollment settings (config/client.yaml), but they cannot be read or use the old method. Enroll again with this code? The current file is kept as client.yaml.bak.",

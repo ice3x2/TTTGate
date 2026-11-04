@@ -6,6 +6,7 @@ pub mod cli;
 pub mod paths;
 pub mod runner;
 pub mod settings;
+pub mod start_check;
 pub mod view;
 
 use serde::Serialize;
@@ -47,7 +48,7 @@ impl AppState {
         match (self.cli(), input) {
             (Some(cli), Some(text)) => runner::run_with_input(&cli, args, &self.paths.bin_dir, text),
             (Some(cli), None) => runner::run(&cli, args, &self.paths.bin_dir),
-            (None, _) => CliOutput { code: None, stdout: String::new(), stderr: "TTTGate CLI not found next to the launcher".into() },
+            (None, _) => CliOutput { code: None, stdout: String::new(), stderr: CLI_MISSING_MESSAGE.into() },
         }
     }
 
@@ -84,6 +85,7 @@ impl Drop for BusyGuard<'_> {
 }
 
 const BUSY_MESSAGE: &str = "Another action is still running. Try again when it ends.";
+const CLI_MISSING_MESSAGE: &str = "TTTGate-win-x64.exe or TTTGate-win-arm64.exe is not next to the launcher.";
 const STATUS_UNKNOWN_MESSAGE: &str = "Cannot read the TTTGate status. Check that the launcher is in the bin folder of TTTGate.";
 
 /// 명령이 함께 쓰는 상태. CLI 를 부르는 일은 작업 스레드에서 하므로 Arc 로 나눈다.
@@ -268,7 +270,7 @@ fn start_daemon(state: &AppState) -> ActionResult {
     let args = match settings.mode {
         Some(Mode::Client) => cli::client_daemon_args(),
         Some(Mode::Server) => cli::server_daemon_args(settings.allow_remote_admin),
-        None => return ActionResult::failed("choose a mode first".into()),
+        None => return ActionResult::because("noMode", "Choose server or client mode first."),
     };
     let result = ActionResult::from(&state.run(&args));
     if !result.ok {
@@ -278,28 +280,15 @@ fn start_daemon(state: &AppState) -> ActionResult {
     // `-daemon` 의 종료 코드 0 은 자식을 띄웠다는 뜻일 뿐이다. 앱이 곧 끝나면(포트 충돌 등) 알린다.
     // sentinel 이 앱을 다시 띄우면 PID 가 바뀌므로 같은 PID 가 계속 돌아야 성공이다.
     // 상태를 읽지 못한 것(일시 오류)은 멈춘 것이 아니다. 멈췄거나 PID 가 바뀐 것을 본 때만 실패로 본다.
-    let mut first_pid = None;
-    let mut seen_status = false;
-    let started = runner::poll_until(START_CHECK_ATTEMPTS, START_CHECK_INTERVAL, || {
-        let status = state.status();
-        seen_status |= status.is_some();
-        first_pid = status.filter(|status| status.running).and_then(|status| status.pid);
-        first_pid.is_some()
-    });
-    if !started && !seen_status {
+    match start_check::judge_start(START_CHECK_ATTEMPTS, START_HOLD_ATTEMPTS, START_CHECK_INTERVAL, || state.status()) {
+        start_check::StartOutcome::Running => result,
         // 상태를 한 번도 읽지 못했다(예: status 를 모르는 옛 CLI). 정상으로 떴을 수 있으므로 멈추지 않는다.
-        return ActionResult::because("statusUnknown", STATUS_UNKNOWN_MESSAGE);
-    }
-    let running = started && runner::holds_for(START_HOLD_ATTEMPTS, START_CHECK_INTERVAL, || match state.status() {
-        None => true,
-        Some(status) => status.running && status.pid == first_pid,
-    });
-    if running {
-        result
-    } else {
-        // 설정 오류 표시 없이 끝난 앱은 sentinel 이 3초마다 다시 띄운다. 화면이 실행과 멈춤을 오가지 않게 멈춘다.
-        stop(state);
-        ActionResult { stopped_after_start: true, ..ActionResult::failed("TTTGate stopped right after it started".into()) }
+        start_check::StartOutcome::StatusUnknown => ActionResult::because("statusUnknown", STATUS_UNKNOWN_MESSAGE),
+        start_check::StartOutcome::StoppedAfterStart => {
+            // 설정 오류 표시 없이 끝난 앱은 sentinel 이 3초마다 다시 띄운다. 화면이 실행과 멈춤을 오가지 않게 멈춘다.
+            stop(state);
+            ActionResult { stopped_after_start: true, ..ActionResult::failed("TTTGate stopped right after it started".into()) }
+        }
     }
 }
 
@@ -531,10 +520,11 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             show_main_window(app);
             // 상대 경로·짧은 경로로 띄워도 같은 파일이면 같은 설치본이다. 둘 다 정규화해서 비교한다.
-            let canonical = |path: PathBuf| std::fs::canonicalize(&path).unwrap_or(path);
-            let ours = canonical(app.state::<Shared>().exe.clone());
-            let theirs = args.first().filter(|exe| !exe.is_empty()).map(|exe| canonical(PathBuf::from(&cwd).join(exe)));
-            if theirs.is_some_and(|exe| exe != ours) {
+            // 확장자 없이 띄웠으면 .exe 를 붙여 본다. 그래도 찾지 못하면 같은 설치본인지 모르므로 알리지 않는다.
+            let resolve = |path: PathBuf| std::fs::canonicalize(&path).or_else(|_| std::fs::canonicalize(path.with_extension("exe"))).ok();
+            let ours = resolve(app.state::<Shared>().exe.clone());
+            let theirs = args.first().filter(|exe| !exe.is_empty()).and_then(|exe| resolve(PathBuf::from(&cwd).join(exe)));
+            if matches!((&ours, &theirs), (Some(ours), Some(theirs)) if ours != theirs) {
                 let _ = app.emit("action-failed", ActionResult::because("otherInstall",
                     "A launcher of another TTTGate folder is already running. Quit it first."));
             }
