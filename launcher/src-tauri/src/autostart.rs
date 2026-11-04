@@ -10,8 +10,11 @@ pub const AUTOSTART_ARG: &str = "--autostart";
 /// Run 값 이름. 설치 폴더마다 다르게 해 한 PC 의 여러 설치본이 서로 덮어쓰지 않게 한다.
 /// 경로는 Windows 처럼 대소문자를 무시하고 FNV-1a 로 줄인다.
 pub fn value_name(exe: &Path) -> String {
+    // 같은 폴더를 다른 표기(짧은 경로, subst 등)로 띄워도 같은 이름이 되도록 정규화한 경로로 만든다.
+    // 정규화한 경로(\\?\ 접두어)는 이름에만 쓰고, Run 값의 명령에는 원래 경로를 쓴다.
+    let key = std::fs::canonicalize(exe).unwrap_or_else(|_| exe.to_path_buf());
     let mut hash: u32 = 0x811c_9dc5;
-    for byte in exe.to_string_lossy().to_lowercase().bytes() {
+    for byte in key.to_string_lossy().to_lowercase().bytes() {
         hash ^= u32::from(byte);
         hash = hash.wrapping_mul(0x0100_0193);
     }

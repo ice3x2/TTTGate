@@ -257,6 +257,8 @@ mod tests {
         assert!(server.server.expect("server").bootstrap_required);
         assert_eq!(parse_join(include_str!("../../contract/join-ok.json"), ""),
             JoinOutcome::Joined { client_id: "edge".into(), server: "gw.example:9126".into() });
+        assert_eq!(parse_registration(include_str!("../../contract/config-show.txt")),
+            Some(Registration { client_id: "edge".into(), server: "gw.example:9126".into() }));
         assert_eq!(parse_join(include_str!("../../contract/join-failed.json"), ""),
             JoinOutcome::Failed { category: "rejected".into(), message: "enrollment failed: m".into() });
     }

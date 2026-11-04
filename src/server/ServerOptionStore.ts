@@ -733,3 +733,4 @@ class ServerOptionStore {
 }
 
 export default ServerOptionStore;
+export {OPTION_FILE_NAME, OPTION_STATE_FILE_NAME};

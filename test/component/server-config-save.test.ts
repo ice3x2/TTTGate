@@ -40,6 +40,30 @@ describe("server config save", () => {
         expect(fs.existsSync(configDir) ? fs.readdirSync(configDir) : []).toEqual(before);
     });
 
+    test("AC-10 the admin port and the control port must differ", () => {
+        expect(save({adminPort: "9400"})).toBe(0);
+        const before = fs.readFileSync(yamlFile(), "utf-8");
+        expect(save({controlPort: "9400"})).toBe(1);
+        expect(err.join("\n")).toContain("9400");
+        expect(fs.readFileSync(yamlFile(), "utf-8")).toBe(before);
+    });
+
+    test("AC-10 a failed save removes only the files that it created", () => {
+        // 같은 때 다른 프로세스(예: client join)가 config/ 에 만든 파일은 지우지 않는다.
+        const configDir = Environment.path.configDir;
+        fs.mkdirSync(configDir, {recursive: true});
+        const other = path.join(configDir, "client.yaml");
+        const result = (() => {
+            ServerOptionStore.resetForTest();
+            return saveServerConfig({adminPort: "99999"}, {out: () => {}, err: () => {}}, {isServerRunning: () => {
+                fs.writeFileSync(other, "host: gw\n");
+                return false;
+            }});
+        })();
+        expect(result).toBe(1);
+        expect(fs.readdirSync(configDir).sort()).toEqual(["client.yaml"]);
+    });
+
     test("AC-10 the given values are validated and saved; the others stay", () => {
         expect(save({adminPort: "9400", adminAllowedOrigins: " https://gw.example:9400 , https://b.example ", controlPort: "9127",
             controlTls: "true", controlProtocolMode: "mixed"})).toBe(0);

@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as Path from "path";
 import Environment from "../Environment";
-import ServerOptionStore from "./ServerOptionStore";
+import ServerOptionStore, {OPTION_FILE_NAME, OPTION_STATE_FILE_NAME} from "./ServerOptionStore";
 import {buildAdminSecurityAllowancesFromCliOptions, evaluateAdminSecurityPolicy, formatAdminSecurityPolicyErrors,
     LEGACY_ADMIN_HTTP_FLAG, LEGACY_ADMIN_REMOTE_FLAG} from "./AdminSecurityPolicy";
 import {normalizeBooleanOption} from "./ServerCliOptions";
@@ -55,20 +55,18 @@ const applyCliValues = (option: ServerOption, cli: {[key: string]: string}): App
     return {ok: true};
 };
 
-const listFiles = (dir: string): Set<string> => new Set(fs.existsSync(dir) ? fs.readdirSync(dir) : []);
 
 /**
  * 저장이 실패하면 이 명령이 새로 만든 파일(처음 읽을 때 만든 기본 server.yaml 등)을 지운다.
  * 남기면 "이미 설정이 있다" 로 보여, 런처가 새 설치에 맞는 기본값(제어 포트 TLS 켬)을 고르지 않는다.
  */
 const saveServerConfig = (cli: {[key: string]: string}, io: ConfigIo, deps: SaveDeps): number => {
-    const configDir = Environment.path.configDir;
-    const before = listFiles(configDir);
+    // 이 명령이 만들 수 있는 파일만 본다. 같은 때 다른 프로세스가 config/ 에 만든 파일은 건드리지 않는다.
+    const created = [OPTION_FILE_NAME, OPTION_STATE_FILE_NAME].map((name) => Path.join(Environment.path.configDir, name))
+        .filter((file) => !fs.existsSync(file));
     const exitCode = saveIntoStore(cli, io, deps);
     if(exitCode !== EXIT_SAVED) {
-        for(const name of listFiles(configDir)) {
-            if(!before.has(name)) fs.rmSync(Path.join(configDir, name), {force: true, recursive: true});
-        }
+        for(const file of created) fs.rmSync(file, {force: true});
     }
     return exitCode;
 };
@@ -92,6 +90,11 @@ const saveIntoStore = (cli: {[key: string]: string}, io: ConfigIo, deps: SaveDep
     const prepared = store.prepareServerOption(option);
     if(!prepared.success) {
         io.err(prepared.message);
+        return EXIT_INVALID;
+    }
+    // 관리 화면과 제어 포트가 같으면 서버가 두 번째 포트를 열지 못하고 곧 멈춘다.
+    if(prepared.serverOption!.adminPort === prepared.serverOption!.port) {
+        io.err(`the admin port and the control port are both ${prepared.serverOption!.port}. Use two different ports.`);
         return EXIT_INVALID;
     }
     // 서버 시작과 같은 정책으로 판단한다. 저장은 되는데 서버가 뜨지 않는 설정을 만들지 않는다.

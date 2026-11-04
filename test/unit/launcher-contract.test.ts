@@ -11,6 +11,8 @@ jest.mock("../../src/client/ClientEnrollment", () => ({requestEnrollment: jest.f
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const {requestEnrollment} = require("../../src/client/ClientEnrollment");
 import {runClientJoin} from "../../src/client/ClientJoin";
+import {showClientConfig} from "../../src/client/ClientConfigCommand";
+import Environment from "../../src/Environment";
 
 const contract = (name: string) =>
     JSON.parse(fs.readFileSync(path.resolve(__dirname, "../../launcher/contract", name), "utf-8"));
@@ -38,6 +40,21 @@ describe("launcher JSON contract", () => {
             binDir: path.join(dir, "bin"), configDir: path.join(dir, "config"), version: "2.0.1"});
         // 토큰 파일 경로는 설치 폴더마다 다르므로 계약 파일에는 자리 표시 값을 둔다.
         expect({...status, server: {...status.server!, bootstrapTokenFile: "<token file>"}}).toEqual(contract("status-server.json"));
+    });
+
+    test("client config show of an enrolled client", () => {
+        // 런처는 이 출력에서 clientId·host·port 와 가려진 비밀값((hidden))을 읽는다(cli.rs parse_registration).
+        fs.writeFileSync(path.join(dir, "config", "client.yaml"),
+            "host: gw.example\nport: 9126\ntls: true\nname: edge\nclientId: edge\nclientSecret: s3cret-value\nserverName: tttgate-control\n");
+        Environment.configure({rootDir: dir});
+        const lines: string[] = [];
+        try {
+            showClientConfig({}, {out: (line) => lines.push(line), err: () => {}});
+        } finally {
+            Environment.configure({});
+        }
+        const expected = fs.readFileSync(path.resolve(__dirname, "../../launcher/contract/config-show.txt"), "utf-8").trimEnd().split(/\r?\n/);
+        expect(lines.map((line) => line.trimEnd())).toEqual(expected.map((line) => line.trimEnd()));
     });
 
     test("join results", async () => {
