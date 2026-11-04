@@ -7,6 +7,9 @@ import {parse} from "yaml";
 const root = path.resolve(__dirname, "../../..");
 const binaries = ["TTTGate-linux-x64", "TTTGate-linux-arm64", "TTTGate-win-x64.exe", "TTTGate-win-arm64.exe", "TTTGate-alpine-x64"];
 const archives = ["linux-x64.tar.gz", "linux-arm64.tar.gz", "win-x64.zip", "win-arm64.zip", "alpine-x64.tar.gz"];
+// #322: 두 Windows 묶음에는 x64 런처가 함께 들어간다(arm64 Windows 는 x64 앱을 에뮬레이션으로 실행한다).
+const LAUNCHER = "TTTGate-launcher-win-x64.exe";
+const writeLauncher = (directory: string) => fs.writeFileSync(path.join(directory, "dist/bin", LAUNCHER), Buffer.from([7, 7, 7]));
 const run = (directory: string) => spawnSync(process.execPath,
     [path.join(root, "scripts/archive-binaries.cjs"), "v-fixture", directory], {encoding: "utf8", timeout: 15000});
 const web = (directory: string) => {
@@ -20,6 +23,7 @@ test("archives exactly the five configured output binaries with original bytes",
     try {
         fs.mkdirSync(path.join(directory, "dist/bin"), {recursive: true});
         binaries.forEach((name, i) => fs.writeFileSync(path.join(directory, "dist/bin", name), Buffer.from([0, i, 255, 13, 10])));
+        writeLauncher(directory);
         web(directory);
         const result = run(directory);
         expect({status: result.status, error: result.stderr}).toEqual({status: 0, error: ""});
@@ -31,7 +35,12 @@ test("archives exactly the five configured output binaries with original bytes",
             const list = spawnSync(zip ? "unzip" : "tar", zip ? ["-Z1", archive] : ["-tf", archive], {encoding: "utf8"});
             expect(list.status).toBe(0);
             const members = list.stdout.trim().split(/\r?\n/).filter(name => !name.endsWith("/"));
-            expect(members.sort()).toEqual([`bin/${binaries[i]}`, "web/assets/main.js", "web/index.html"].sort());
+            const launcher = suffix.startsWith("win-") ? [`bin/${LAUNCHER}`] : [];
+            expect(members.sort()).toEqual([`bin/${binaries[i]}`, ...launcher, "web/assets/main.js", "web/index.html"].sort());
+            if(launcher.length > 0) {
+                const launcherContent = spawnSync(zip ? "unzip" : "tar", zip ? ["-p", archive, launcher[0]] : ["-xOf", archive, launcher[0]]);
+                expect(launcherContent.stdout).toEqual(fs.readFileSync(path.join(directory, "dist/bin", LAUNCHER)));
+            }
             const content = spawnSync(zip ? "unzip" : "tar", zip ? ["-p", archive, `bin/${binaries[i]}`] : ["-xOf", archive, `bin/${binaries[i]}`]);
             expect(content.status).toBe(0);
             expect(content.stdout).toEqual(fs.readFileSync(path.join(directory, "dist/bin", binaries[i])));
@@ -46,6 +55,7 @@ test.each(["missing index", "empty index", "missing asset", "empty asset"])("%s 
     try {
         fs.mkdirSync(path.join(directory, "dist/bin"), {recursive: true});
         binaries.forEach(name => fs.writeFileSync(path.join(directory, "dist/bin", name), "binary"));
+        writeLauncher(directory);
         web(directory);
         const relative = kind.endsWith("index") ? "web/index.html" : "web/assets/main.js";
         const file = path.join(directory, "dist", relative);
@@ -63,9 +73,24 @@ test.each(["missing", "empty"])("%s binary fails before any archive is emitted",
         fs.mkdirSync(path.join(directory, "dist/bin"), {recursive: true});
         binaries.slice(0, -1).forEach(name => fs.writeFileSync(path.join(directory, "dist/bin", name), "binary"));
         if(kind === "empty") fs.writeFileSync(path.join(directory, "dist/bin", binaries[4]), "");
+        writeLauncher(directory);
         const result = run(directory);
         expect(result.status).not.toBe(0);
         expect(result.stderr).toContain(binaries[4]);
+        expect(fs.readdirSync(directory)).toEqual(["dist"]);
+    } finally { fs.rmSync(directory, {recursive: true, force: true}); }
+});
+
+test.each(["missing", "empty"])("%s Windows launcher fails before any archive is emitted (#322)", (kind) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archive launcher "));
+    try {
+        fs.mkdirSync(path.join(directory, "dist/bin"), {recursive: true});
+        binaries.forEach(name => fs.writeFileSync(path.join(directory, "dist/bin", name), "binary"));
+        if(kind === "empty") fs.writeFileSync(path.join(directory, "dist/bin", LAUNCHER), "");
+        web(directory);
+        const result = run(directory);
+        expect(result.status).not.toBe(0);
+        expect(result.stderr).toContain(LAUNCHER);
         expect(fs.readdirSync(directory)).toEqual(["dist"]);
     } finally { fs.rmSync(directory, {recursive: true, force: true}); }
 });

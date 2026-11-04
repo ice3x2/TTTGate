@@ -38,6 +38,7 @@
     "build": "tsc -b",
     "pkg": "pkg . --no-bytecode --public-packages \"*\" --public",
     "icon:exe": "node scripts/set-exe-icon.cjs dist/bin",
+    "launcher:build": "node scripts/build-launcher.cjs dist/bin",
     "dist": "node deploy.js",
     "start": "node bin/src/sserver.js",
     "server": "node --watch --require ts-node/register src/app.ts server -dev",

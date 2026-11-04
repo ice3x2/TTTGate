@@ -29,19 +29,20 @@ describe("release workflow (#290)", () => {
         expect(workflow.jobs.tag.permissions).toEqual({contents: "read"});
         expect(workflow.jobs.regression.permissions).toEqual({contents: "read"});
         expect(workflow.jobs["supply-chain"].permissions).toEqual({contents: "read"});
+        expect(workflow.jobs.launcher.permissions).toEqual({contents: "read"});
         expect(workflow.jobs.release.permissions).toEqual({contents: "write"});
     });
 
     // 태그 확인을 테스트보다 먼저 한다. 브랜치에서 잘못 실행하면 테스트(20~50분)를 기다리지 않고 바로 멈춘다.
     test("checks the tag first, then reuses Code Regression, and packages only after tag, regression and supply-chain all pass (REQ-4, REQ-6, AC-2)", () => {
         const workflow = read();
-        expect(Object.keys(workflow.jobs)).toEqual(["tag", "regression", "supply-chain", "release"]);
+        expect(Object.keys(workflow.jobs)).toEqual(["tag", "regression", "supply-chain", "launcher", "release"]);
         const tagRuns = workflow.jobs.tag.steps.filter((step: any) => step.run).map((step: any) => step.run.trim());
         expect(tagRuns).toEqual(['node scripts/validate-release-version.cjs "$RELEASE_VERSION" --match-package']);
         expect(workflow.jobs.tag.env.RELEASE_VERSION).toBe("${{ github.ref_name }}");
         expect(workflow.jobs.regression.needs).toEqual(["tag"]);
         expect(workflow.jobs.regression.uses).toBe("./.github/workflows/code-regression.yml");
-        expect(workflow.jobs.release.needs).toEqual(["tag", "regression", "supply-chain"]);
+        expect(workflow.jobs.release.needs).toEqual(["tag", "regression", "supply-chain", "launcher"]);
         expect(workflow.jobs.release.if).toBeUndefined();
         const regression = parseYaml(fs.readFileSync(path.join(directory, "code-regression.yml"), "utf8"));
         expect(regression.on.workflow_call).toEqual({});
@@ -59,6 +60,24 @@ describe("release workflow (#290)", () => {
         for(const name of ["audit-runtime", "audit-admin"]) {
             expect(audit.jobs[name].if).toBe("github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')");
         }
+    });
+
+    // #322: Windows 런처는 Windows 에서만 빌드된다. Windows 작업이 만든 exe 를 패키징 작업이 dist/bin 에 받아 Windows 묶음에 넣는다.
+    test("builds the Windows launcher on Windows and puts it into dist/bin before archiving (#322)", () => {
+        const workflow = read();
+        const launcher = workflow.jobs.launcher;
+        expect(launcher["runs-on"]).toBe("windows-latest");
+        expect(launcher.needs).toEqual(["tag"]);
+        const runs: string[] = launcher.steps.filter((step: any) => step.run).map((step: any) => step.run.trim());
+        expect(runs).toEqual(["node scripts/build-launcher.cjs launcher-out"]);
+        const upload = launcher.steps.find((step: any) => String(step.uses ?? "").startsWith("actions/upload-artifact@"));
+        expect(upload.with).toMatchObject({name: "windows-launcher", path: "launcher-out/TTTGate-launcher-win-x64.exe", "if-no-files-found": "error"});
+        const steps: any[] = workflow.jobs.release.steps;
+        const download = steps.findIndex((step) => String(step.uses ?? "").startsWith("actions/download-artifact@"));
+        expect(steps[download].with).toEqual({name: "windows-launcher", path: "dist/bin"});
+        const index = (run: string) => steps.findIndex((step) => step.run?.trim() === run);
+        expect(index("npm run dist -- --skip-tests")).toBeLessThan(download);
+        expect(download).toBeLessThan(index('node scripts/archive-binaries.cjs "$RELEASE_VERSION"'));
     });
 
     test("validates the tag against package.json, packages without re-running tests and archives everything (REQ-5, REQ-6)", () => {

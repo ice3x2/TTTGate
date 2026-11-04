@@ -1,0 +1,59 @@
+name: Windows Launcher
+
+# #322: Windows 런처(Tauri 2)는 Windows 에서만 빌드된다. 런처나 그 빌드 스크립트가 바뀌면
+# Rust 단위 테스트를 돌리고, 릴리스와 같은 명령으로 빌드해 크기(15MB 이하)를 본다.
+on:
+  pull_request:
+    paths:
+      - launcher/**
+      - scripts/build-launcher.cjs
+      - package.json
+      - .github/workflows/windows-launcher.yml
+  push:
+    branches: [main, develop]
+    paths:
+      - launcher/**
+      - scripts/build-launcher.cjs
+      - package.json
+      - .github/workflows/windows-launcher.yml
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-launcher-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-launcher:
+    name: Test and build the Windows launcher
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Cache cargo registry and build output
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            launcher/src-tauri/target
+          key: launcher-${{ runner.os }}-${{ hashFiles('launcher/src-tauri/Cargo.lock', 'launcher/src-tauri/rust-toolchain.toml') }}
+      # rust-toolchain.toml 이 고정한 Rust 를 rustup 이 받는다. 그 파일은 현재 폴더에서 찾는다.
+      - name: Rust unit tests
+        working-directory: launcher/src-tauri
+        run: cargo test --locked
+      - name: Build the launcher like the release
+        run: node scripts/build-launcher.cjs launcher-out
+      - name: Check the launcher size (15 MB or less)
+        run: |
+          size=$(stat -c %s launcher-out/TTTGate-launcher-win-x64.exe)
+          echo "launcher size: $size bytes"
+          test "$size" -le 15728640
