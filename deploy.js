@@ -1,6 +1,7 @@
 const Path = require('node:path');
 const fs = require('node:fs');
 const {spawnSync} = require('node:child_process');
+const {setExeIcon} = require('./scripts/set-exe-icon.cjs');
 
 const root = __dirname;
 const admin = Path.join(root, 'admin');
@@ -20,6 +21,16 @@ const runNpm = (args, cwd, nodeEnv = 'development') => {
         return false;
     }
     return true;
+};
+
+/** #321: pkg 가 만든 Windows 실행 파일에 붉은 터널 아이콘을 넣는다. 하나도 없거나 실패하면 빌드를 멈춘다. */
+const setWindowsIcons = (binDir) => {
+    const exes = fs.readdirSync(binDir).filter((name) => /-win-[^.]+\.exe$/.test(name));
+    if(exes.length === 0) throw new Error(`no Windows executable in ${binDir} to set the icon on`);
+    for(const name of exes) {
+        setExeIcon(Path.join(binDir, name));
+        console.log(`icon set: ${name}`);
+    }
 };
 
 const main = () => {
@@ -60,7 +71,10 @@ const main = () => {
     fs.cpSync(Path.join(root, 'build', 'src'), sourceOutput, {recursive: true});
     fs.cpSync(Path.join(admin, 'dist'), Path.join(sourceOutput, 'web'), {recursive: true});
     fs.copyFileSync(Path.join(root, 'package-build.json'), Path.join(sourceOutput, 'package.json'));
-    if(!process.argv.includes('--skip-binaries')) runNpm(['run', 'pkg'], root, 'production');
+    if(!process.argv.includes('--skip-binaries')) {
+        runNpm(['run', 'pkg'], root, 'production');
+        setWindowsIcons(Path.join(binaryOutput, 'bin'));
+    }
 };
 
 main();

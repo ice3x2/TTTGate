@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#b91c1c"/>
+      <stop offset="1" stop-color="#450a0a"/>
+    </linearGradient>
+    <radialGradient id="light" cx="0.5" cy="0.62" r="0.5">
+      <stop offset="0" stop-color="#fef9c3"/>
+      <stop offset="0.35" stop-color="#facc15"/>
+      <stop offset="1" stop-color="#f59e0b" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="arch" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fef2f2"/>
+      <stop offset="1" stop-color="#fca5a5"/>
+    </linearGradient>
+    <clipPath id="mouth">
+      <path d="M96 432 V256 A160 160 0 0 1 416 256 V432 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- 바탕 -->
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#bg)"/>
+
+  <!-- 터널 안쪽: 깊이감을 주는 겹친 아치 -->
+  <g clip-path="url(#mouth)">
+    <rect x="96" y="96" width="320" height="336" fill="#140404"/>
+    <path d="M136 432 V268 A120 120 0 0 1 376 268 V432 Z" fill="#220808"/>
+    <path d="M172 432 V282 A84 84 0 0 1 340 282 V432 Z" fill="#330c0c"/>
+    <path d="M204 432 V296 A52 52 0 0 1 308 296 V432 Z" fill="#4a1212"/>
+    <!-- 출구의 빛 -->
+    <ellipse cx="256" cy="318" rx="96" ry="96" fill="url(#light)"/>
+    <path d="M230 432 V310 A26 26 0 0 1 282 310 V432 Z" fill="#fde68a"/>
+    <!-- 바닥과 차선 -->
+    <path d="M96 432 L230 352 L282 352 L416 432 Z" fill="#2a0b0b"/>
+    <path d="M256 360 L256 374 M256 386 L256 404 M256 416 L256 432" stroke="#facc15" stroke-width="8" stroke-linecap="round"/>
+  </g>
+
+  <!-- 터널 입구 테두리 -->
+  <path d="M96 432 V256 A160 160 0 0 1 416 256 V432" fill="none" stroke="url(#arch)" stroke-width="28" stroke-linejoin="round"/>
+  <!-- 땅 -->
+  <rect x="64" y="424" width="384" height="20" rx="10" fill="#fef2f2"/>
+</svg>
