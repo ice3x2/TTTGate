@@ -15,17 +15,26 @@ describe("Windows icon smoke workflow (#321)", () => {
         expect(workflow.on.push.paths).toEqual(WATCHED);
     });
 
-    test("builds one Windows binary, sets the icon and runs it on a Windows runner", () => {
+    test("builds both Windows binaries with the release pkg options, sets the icon and runs one on a Windows runner", () => {
         const job = workflow.jobs["windows-icon"];
         expect(job["runs-on"]).toBe("windows-latest");
         const runs: string[] = job.steps.filter((step: any) => step.run).map((step: any) => step.run.trim());
-        expect(runs).toEqual([
-            "npm ci --include=dev --no-audit --no-fund",
-            "npm run build",
-            "npx pkg . --targets node24-win-x64 --output icon-smoke/TTTGate-win-x64.exe",
-            "node scripts/set-exe-icon.cjs icon-smoke 1",
-            "icon-smoke/TTTGate-win-x64.exe --version",
-        ]);
+        // 릴리스와 같은 pkg 옵션을 쓰도록 npm run pkg 를 거친다. Windows 대상은 package.json 의 것과 같아야 한다.
+        // 같은 플랫폼 대상만 주면 pkg 가 이름에서 win 을 빼므로(TTTGate-x64.exe), 대상마다 릴리스와 같은 이름을 준다.
+        const windowsTargets: string[] = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).pkg.targets
+            .filter((target: string) => target.includes("-win-")).sort();
+        const pkgRuns = runs.filter((run) => run.startsWith("npm run pkg -- ")).sort();
+        expect(pkgRuns).toEqual(windowsTargets.map((target) =>
+            `npm run pkg -- --targets ${target} --output icon-smoke/TTTGate-${target.replace(/^node\d+-/, "")}.exe`));
+        expect(runs).toContain(`node scripts/set-exe-icon.cjs icon-smoke ${windowsTargets.length}`);
+        expect(runs).toContain("icon-smoke/TTTGate-win-x64.exe --version");
+        expect(runs.some((run) => run.startsWith("npx pkg"))).toBe(false);
         expect(workflow.permissions).toEqual({contents: "read"});
+    });
+
+    test("caches the pkg base binaries and cancels superseded runs", () => {
+        const cache = workflow.jobs["windows-icon"].steps.find((step: any) => String(step.uses ?? "").startsWith("actions/cache@"));
+        expect(cache?.with?.path).toBe("~/.pkg-cache");
+        expect(workflow.concurrency).toEqual({group: "windows-icon-${{ github.ref }}", "cancel-in-progress": true});
     });
 });

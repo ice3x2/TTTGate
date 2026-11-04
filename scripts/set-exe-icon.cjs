@@ -41,6 +41,7 @@ const setExeIcon = (exePath, iconFile = EXE_ICON_FILE) => {
     }
     const temporary = `${exePath}.icon-tmp`;
     fs.writeFileSync(temporary, output);
+    fs.chmodSync(temporary, fs.statSync(exePath).mode);
     fs.renameSync(temporary, exePath);
 };
 

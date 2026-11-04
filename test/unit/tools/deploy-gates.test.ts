@@ -159,7 +159,7 @@ test("a failed icon stage fails the deployment", () => {
     }, "icon-exe");
 }, 50_000);
 
-test("the icon stage sets the icon on the Windows binaries in dist/bin", () => {
+test("the icon stage script points at the pkg output folder dist/bin", () => {
     const manifest = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
     expect(manifest.scripts["icon:exe"]).toBe("node scripts/set-exe-icon.cjs dist/bin");
 });

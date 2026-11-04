@@ -62,6 +62,15 @@ describe("Windows executable icon (#321)", () => {
         expect(after.subarray(after.length - payload.length).equals(payload)).toBe(true);
     });
 
+    // 릴리스는 Linux 에서 Windows 실행 파일을 고친다. 파일을 바꿔치기해도 원래 권한을 그대로 둔다.
+    (process.platform === "win32" ? test.skip : test)("setExeIcon keeps the file mode", () => {
+        const exePath = path.join(dir, "TTTGate-win-x64.exe");
+        writeExe(exePath, iconsOfFile().slice(0, 1));
+        fs.chmodSync(exePath, 0o755);
+        setExeIcon(exePath);
+        expect(fs.statSync(exePath).mode & 0o777).toBe(0o755);
+    });
+
     test("setExeIcon refuses a change that would move the appended data and leaves the file as it was", () => {
         const exePath = path.join(dir, "TTTGate-win-x64.exe");
         writeExe(exePath);
