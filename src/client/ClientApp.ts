@@ -1,6 +1,7 @@
 import {ClientOption} from "../types/TunnelingOption";
 import TunnelNames from "./TunnelNames";
 import TTTClient from "./TTTClient";
+import {trackClientStatus} from "./ClientStatusFile";
 import File from "../util/File";
 import Environment from "../Environment";
 import YAML from "yaml";
@@ -101,7 +102,8 @@ let ClientApp : { start(options?: {[key: string]: string}) : void} = {
         const clientOption = _loadClientOption(options);
         if(!clientOption) return;
         let tttClient = TTTClient.create(clientOption);
-
+        // #322 REQ-15: 런처가 `TTTGate status` 로 연결 상태를 읽는다.
+        trackClientStatus(tttClient, Environment.path.binDir);
         tttClient.start();
 
 

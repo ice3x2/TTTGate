@@ -15,6 +15,7 @@ TTTGate exposes internal TCP/HTTP services through a server-client tunnel pair.
 - [Server](#server)
 - [Admin Web Console](#admin-web-console)
 - [Client](#client)
+- [Windows Launcher](#windows-launcher)
 - [Command-Line Reference](#command-line-reference)
 - [Operations](#operations)
 - [Upgrading an Existing Server](#upgrading-an-existing-server)
@@ -112,6 +113,7 @@ The socket buffer cap above prevents the last case.
 | `config/identity.yaml` | Admin users, groups and two-factor settings |
 | `config/.key` | Admin password hash of older versions. The server reads it only when `config/identity.yaml` does not exist or cannot be read. When `config/identity.yaml` does not exist, the server creates the `admin` account from `.key` |
 | `config/server-ca.pem` | Server certificate that `client join` writes for the client |
+| `config/launcher.json` | Settings of the [Windows Launcher](#windows-launcher), for example the mode that you chose |
 
 The old repository-root `config.yaml` is no longer used.
 
@@ -137,6 +139,30 @@ The old repository-root `config.yaml` is no longer used.
 - `-adminPort`, `-keepAlive` and `-allowLegacyControlAuth` write their value to `config/server.yaml`. The next start uses the saved value without the option.
 - All other server options apply only to the run that you start with them.
 - `-reset` is an action. It deletes the stored server state at that start. With `-daemon`, the sentinel restarts the app with the same options, so every automatic restart resets again. Do not combine `-reset` with `-daemon`.
+- `server config save` writes settings to `config/server.yaml` without starting the server. See [Save Server Settings Without Starting](#save-server-settings-without-starting).
+
+#### Save Server Settings Without Starting
+
+`TTTGate server config save [options]` writes the given values to `config/server.yaml`. It does not start the server.
+
+```shell
+./TTTGate-linux-x64 server config save -adminPort 9400 -controlPort 9126 -controlTls
+```
+
+- It accepts `-adminPort`, `-adminBindHost`, `-adminAllowedOrigins`, `-controlPort`, `-controlTls`, `-controlProtocolMode` and `-allowLegacyAdminRemote`. See [Server Options](#server-options).
+- Values that you do not give stay as they are. The command line does not accept an empty value, so `server config save` cannot clear `adminAllowedOrigins`. Clear the list in the admin console.
+- If `server.yaml` does not exist, the defaults are created first.
+- The command uses the same checks as a save in the admin console.
+- On success, the last line is `Saved <path>`. Server log lines can come before it, and a server log file is written. It does not print the version banner.
+- If a TTTGate server of this installation runs, the command saves nothing. This also applies when a running process has an unknown mode. Stop the server first with `TTTGate stop`. A running client of the same installation does not block the command.
+- If the resulting `adminBindHost` is not loopback, the command saves nothing unless you add `-allowLegacyAdminRemote`. Then start the server later with the same `-allowLegacyAdminRemote`.
+
+| Exit code | Meaning |
+|---|---|
+| 0 | Saved |
+| 1 | A value is wrong. The message is on stderr. Nothing is saved, and no new file is left in `config/`. |
+| 75 | A TTTGate server of this installation is running. Stop it first |
+| 77 | The admin console would be reachable from other hosts, and `-allowLegacyAdminRemote` was not given. Nothing is saved, and no new file is left in `config/`. |
 
 ### Admin Web Console
 
@@ -341,6 +367,13 @@ The code never travels over the network. The client derives a lookup value and a
 
 `client join` writes these values to `client.yaml`: `host`, `port`, `tls: true`, `name` and `clientId` (both the client ID), `clientSecret`, `serverName` and `ca: server-ca.pem`. A relative `ca` path in `client.yaml` starts at the `config/` directory.
 
+For scripts, add `-json`. Then `client join` prints only one JSON line on stdout:
+
+- Success: `{"ok":true,"clientId":"...","server":"host:port"}`
+- Failure: `{"ok":false,"category":"...","message":"..."}`. The category is `argument`, `exists`, `write`, `rejected`, `proof`, `network`, `throttled` or `unavailable`.
+
+The exit codes do not change (0, 1, 2, 78). The enrollment code never appears in the output.
+
 #### Set Up by Hand
 
 1. Prepare `config/client.yaml` from `config/client.sample.yaml`.
@@ -366,24 +399,88 @@ The code never travels over the network. The client derives a lookup value and a
 
 See [Modes and Commands](#modes-and-commands) for details.
 
+### Windows Launcher
+
+`bin/TTTGate-launcher-win-x64.exe` is a window program for Windows. It is portable: it needs no installer and no administrator rights. Double-click it to start it.
+
+- Keep it in the same `bin` folder as `TTTGate-win-x64.exe` or `TTTGate-win-arm64.exe`. The launcher uses the one for this PC. If only the other one is there, it uses that one.
+- The launcher only controls the command line program (CLI). The CLI does the tunnelling.
+- It is in both Windows release zip files. On Windows on Arm, the x64 launcher runs under emulation.
+- It needs Windows 10 version 1709 or later (x64, or Arm64 through emulation). It uses Microsoft Edge WebView2. WebView2 is included in Windows 11 and in current Windows 10. If WebView2 is missing, the launcher shows a message with the download link https://go.microsoft.com/fwlink/p/?LinkId=2124703 and stops. The command line still works.
+- It loads nothing from the network. Its screens are inside the exe.
+- Its text is Korean when the Windows display language is Korean. Otherwise it is English.
+- If the launcher version and the CLI version differ, the window shows a warning. Use the files of one release together.
+
+#### First Start
+
+Choose server mode or client mode. The launcher saves the choice in `config/launcher.json`. To change it later, press **Change mode** at the bottom of the window. You can do this only while TTTGate is stopped.
+
+#### Client Mode
+
+- If this PC is already enrolled (`client config show` has a `clientId` and a secret), the window shows the client ID and the server. Press **Run in the background** to start the client. The launcher skips enrollment.
+- Otherwise, enter the server address and the enrollment code from the admin console, then press **Enroll**. The launcher runs `client join --code-stdin --json` and shows the result as a sentence.
+- A client that uses the old shared-key method (no `clientId` in `client.yaml`) cannot run from the launcher. Enroll it with a code, or keep running it from the command line.
+- If `config/client.yaml` exists but cannot be read, or uses the old shared-key method, the launcher asks whether to enroll again with the code. When you agree, it replaces the file and keeps the old one as `client.yaml.bak`.
+- **Enroll with another server** enrolls this PC again. If TTTGate runs, the launcher stops it first. It replaces `client.yaml` and keeps the old file as `client.yaml.bak`.
+- After 3 or more failed connections in a row, the window says that the server may have removed this client or changed its secret. Then enroll again with a new code.
+
+#### Server Mode
+
+The window shows a form with these settings:
+
+- Admin console port
+- Listen address: keep the current setting, this PC only (`127.0.0.1`), or other PCs too (`0.0.0.0`)
+- Allowed origins, one per line
+- Control port, TLS and protocol mode
+
+Empty fields keep the current settings. Change all other settings in the admin console. When `server.yaml` does not exist yet, **TLS** of the control port starts as **On**, because clients can enroll with a code only over TLS and a new `server.yaml` has it off. When the file exists, TLS starts as **Keep current**.
+
+**Save and start** runs `server config save` and then `server -daemon`. If the admin console would be reachable from other PCs, the launcher first explains the risk and asks you. After you confirm, it adds `-allowLegacyAdminRemote` and remembers this for later starts.
+
+#### While TTTGate Runs
+
+- The window shows the state. For a client, it shows the connection state.
+- For a server, the window has **Open admin console**, which opens the default browser. On the first start, it also shows the bootstrap token with a **Copy** button.
+- The tray (notification area) icon is the red tunnel icon. Click it to open the window. Its menu has **Open**, **Open admin console**, **Stop**, **Restart**, **Open logs folder** and **Quit**.
+- If you close the window while TTTGate runs, the window only goes to the tray. If TTTGate is stopped, closing the window ends the launcher.
+- **Quit** asks whether to stop TTTGate or keep it running.
+- If you open the launcher again, it finds a running TTTGate and continues to manage it.
+- Only one launcher runs at a time on a PC, even across TTTGate folders. If you start a second one, the first window comes to the front. If the second one belongs to another TTTGate folder, the window also says so. Quit the first launcher before you use the other folder.
+
+#### Start at Sign-In
+
+**Start when I sign in to Windows** is off by default. When you turn it on, the launcher writes a `TTTGate Launcher (<hash>)` value in the `Run` registry key of the current user. The hash comes from the launcher path, so each TTTGate folder has its own value. At sign-in, the launcher starts in the tray without a window. If TTTGate is not running, the launcher starts it in the saved mode.
+
+#### Security Notes
+
+- The launcher and the CLI are not code-signed yet. Windows SmartScreen can show a warning at the first start. To continue, select **More info**, then **Run anyway**.
+- The launcher gives the enrollment code to `client join` through standard input (`--code-stdin`), not on the command line. So the code does not appear in the process list or in process-creation audit logs.
+
+#### Build the Launcher
+
+- `npm run launcher:build` builds the launcher. It runs `node scripts/build-launcher.cjs dist/bin`, which runs `cargo build --release --locked --target x86_64-pc-windows-msvc` in `launcher/src-tauri` and copies `target/x86_64-pc-windows-msvc/release/TTTGate-launcher.exe` to `dist/bin/TTTGate-launcher-win-x64.exe`.
+- The build uses Rust. `launcher/src-tauri/rust-toolchain.toml` pins Rust 1.96.0 and the x64 target. Install Rust with rustup.
+- On Windows, `npm run dist` builds the launcher after the CLI binaries. So `npm run dist` on Windows needs Rust. Without it, the build stops and tells you to install Rust from https://rustup.rs. On other systems, this step prints `Windows launcher skipped` and succeeds.
+- The release workflow builds the launcher on a Windows runner and adds it to the Windows zip files.
+
 ### Command-Line Reference
 
 The general form is:
 
 ```
-TTTGate <server|client|stop> [command] [options]
+TTTGate <server|client|stop|status> [command] [options]
 ```
 
 #### Argument Syntax
 
-- **Mode word.** The first word that is not an option and not an option value is the mode: `server`, `client` or `stop`. Options can come before or after the mode. `TTTGate -adminPort 9400 server` and `TTTGate server -adminPort 9400` are the same. Write the mode in lower case.
-- **Commands.** Only `client` has commands: `run`, `join <addr>`, `config show` and `config save`. Write them right after `client`. Any other extra word is an error (`unexpected argument '...'`).
+- **Mode word.** The first word that is not an option and not an option value is the mode: `server`, `client`, `stop` or `status`. Options can come before or after the mode. `TTTGate -adminPort 9400 server` and `TTTGate server -adminPort 9400` are the same. Write the mode in lower case.
+- **Commands.** `client` has the commands `run`, `join <addr>`, `config show` and `config save`. `server` has one command: `config save`. Write a command right after its mode. `stop` and `status` have no commands. Any other extra word is an error (`unexpected argument '...'`).
 - **Dashes.** An option can start with any number of dashes. `-addr`, `--addr` and `---addr` are the same. The help shows one dash, and two dashes when the name contains a dash (`--yes-insecure`). The help options are an exception: the help always shows `--help`, `--help-advanced` and `--version` with two dashes.
 - **Names are case-sensitive.** `-adminport` is an unknown option. The program suggests `-adminPort`.
 - **Values.** An option that takes a value reads the next word (`-addr gw.example.com`) or the text after `=` (`-addr=gw.example.com`). The next word is used even when it starts with a dash, so `-bufferLimit -1` works. An empty value is an error (`option '-addr' needs a value`).
 - **Flags.** A flag without a value is on. A flag also accepts one truth word, as the next word or after `=`: `true`, `false`, `1`, `0`, `yes`, `no`, `on`, `off` (any case). `false`, `0`, `no` and `off` turn the flag off. Examples: `-tls false`, `-reset=no`, `-requireCsrfHeader off`. Any other value after `=` is an error.
 - **Exact options.** Write `-daemon` exactly like this: one dash, no value, no `=`. `--daemon` and `-daemon=true` are errors.
-- **Options without a mode.** Without a mode, only `-h`, `--help`, `--help-advanced` and `--version` are allowed. Other options give `option '...' needs a mode (server, client or stop)`.
+- **Options without a mode.** Without a mode, only `-h`, `--help`, `--help-advanced` and `--version` are allowed. Other options give `option '...' needs a mode (server, client, stop or status)`.
 - **Options in the wrong place.** An option of another mode is an error (`option '-adminPort' is not available in client mode`). An option of another command is also an error (`option '-save' is not available in 'client join'`).
 - **Unknown options.** An unknown option stops the program. When an option of that mode is close to it (2 or fewer changed letters, case ignored), the program names it: `unknown option '-adr'. Did you mean '-addr'?`.
 - **Whole-line check.** The program checks the whole command line before it starts anything. It prints each error as `TTTGate: <error>`, then `Run 'TTTGate <mode> --help' for usage.`, and exits with code 2.
@@ -392,29 +489,40 @@ TTTGate <server|client|stop> [command] [options]
 
 | Mode or command | What it does | Accepted options | Notes |
 |---|---|---|---|
-| `server` | Start the tunnel server and the admin console. | All [server options](#server-options), `-daemon` | `TTTGate server --help` shows the options. |
-| `client` | Start a tunnel client. | [Client options](#client-options) except `--code` and `--force` | Reads `config/client.yaml` when it exists. |
+| `server` | Start the tunnel server and the admin console. | [Server options](#server-options) that are accepted at start, `-daemon` | `TTTGate server --help` shows the options. |
+| `server config save` | Save the given values to `config/server.yaml` without starting the server. | `-adminPort`, `-adminBindHost`, `-adminAllowedOrigins`, `-controlPort`, `-controlTls`, `-controlProtocolMode`, `-allowLegacyAdminRemote` | Prints `Saved <path>`. Exit codes 0, 1, 75 and 77. See [Save Server Settings Without Starting](#save-server-settings-without-starting). |
+| `client` | Start a tunnel client. | [Client options](#client-options) except `--code`, `--code-stdin`, `--force` and `-json` | Reads `config/client.yaml` when it exists. |
 | `client run` | The same as `client`. | The same as `client` | Use it when a script needs an explicit command. |
-| `client join <addr>` | Enroll this client with a code from the admin console. Write `config/client.yaml` (mode 0600) and `config/server-ca.pem`, then stop. | `--code` (required), `--force` | `<addr>` uses the `-addr` format. The default port is 9126. `tcp://` is refused: the control port must use TLS. It does not connect a tunnel and does not write pid files. |
-| `client config show` | Print the resolved client options and the source of each value (`default`, `client.yaml`, `environment`, `file`, `command line`, `inferred`). | Client options except `-daemon`, `-save`, `--code`, `--force` | Does not connect. Shows `clientSecret`, `key` and `privateKey` as `(hidden)` and PEM text as `(PEM text)`. When `client.yaml` holds insecure fields, it prints a warning and still shows the values (exit code 0). |
+| `client join <addr>` | Enroll this client with a code from the admin console. Write `config/client.yaml` (mode 0600) and `config/server-ca.pem`, then stop. | `--code` (required), `--force`, `-json` | `<addr>` uses the `-addr` format. The default port is 9126. `tcp://` is refused: the control port must use TLS. It does not connect a tunnel and does not write pid files. With `-json`, it prints one JSON line (see [Enroll with a Code](#enroll-with-a-code)). |
+| `client config show` | Print the resolved client options and the source of each value (`default`, `client.yaml`, `environment`, `file`, `command line`, `inferred`). | Client options except `-daemon`, `-save`, `--code`, `--code-stdin`, `--force`, `-json` | Does not connect. Shows `clientSecret`, `key` and `privateKey` as `(hidden)` and PEM text as `(PEM text)`. When `client.yaml` holds insecure fields, it prints a warning and still shows the values (exit code 0). |
 | `client config save` | Save the resolved client options to `config/client.yaml` without connecting. | The same as `client config show` | Prints `Saved <path>`. Saves the same content as `-save` (see [Client Options](#client-options)). |
 | `stop` | Stop the TTTGate processes that this installation recorded: daemons and foreground runs, server and client. | Only the help options | See [Stop Background Processes](#stop-background-processes). |
+| `status` | Show whether a TTTGate server or client of this installation runs, as a daemon or in the foreground. | `-json`, the help options | Exit code 0 when TTTGate runs, 3 when it does not. See [Check Whether TTTGate Runs](#check-whether-tttgate-runs). |
 
-`client join`, `client config show` and `client config save` do not print the version banner. Scripts can read their output.
+`client join`, `client config show`, `client config save`, `server config save` and `status` do not print the version banner. Scripts can read their output.
 
 #### Server Options
 
-Each option applies to the `server` mode.
+Each option applies to the `server` mode. Some options are accepted only when the server starts (`server`). Others are accepted only by `server config save`. Each row tells which. An option in the wrong command is an error (exit code 2).
+
+- At start and by `server config save`: `-adminPort`, `-allowLegacyAdminRemote`.
+- Only by `server config save`: `-adminBindHost`, `-adminAllowedOrigins`, `-controlPort`, `-controlTls`, `-controlProtocolMode`.
+- Only at start: all other server options.
 
 | Option | Value | Default | How long it lasts | Details |
 |---|---|---|---|---|
-| `-adminPort <port>` | Whole number 1–65535 | `9300` | Saved to `server.yaml` (`adminPort`) | Port of the admin console. A bad value stops the server with exit code 1 (`Invalid admin port number (1 ~ 65535)`). Example: `server -adminPort 9400`. |
+| `-adminPort <port>` | Whole number 1–65535 | `9300` | Saved to `server.yaml` (`adminPort`) | Port of the admin console. Accepted at start and by `server config save`. A bad value stops the server with exit code 1 (`Invalid admin port number (1 ~ 65535)`). Example: `server -adminPort 9400`. |
+| `-adminBindHost <host>` | Host name or IP address | `127.0.0.1` | Saved to `server.yaml` (`adminBindHost`) | Address that the admin console listens on. Only `server config save`. A value that is not loopback needs `-allowLegacyAdminRemote` (otherwise exit code 77). Example: `server config save -adminBindHost 0.0.0.0 -allowLegacyAdminRemote`. |
+| `-adminAllowedOrigins <origins>` | Origins, comma separated | Empty list | Saved to `server.yaml` (`adminAllowedOrigins`) | Other addresses that may open the admin console, for example through a reverse proxy. Only `server config save`. An empty value is an error (exit code 2); clear the list in the admin console. Example: `server config save -adminAllowedOrigins https://admin.example.com`. |
+| `-controlPort <port>` | Whole number 1–65535 | The value in `server.yaml` | Saved to `server.yaml` (`port`) | Control port that tunnel clients connect to. Only `server config save`. A bad value gives exit code 1. |
+| `-controlTls` | Flag | The value in `server.yaml` | Saved to `server.yaml` (`tls`) | Use TLS on the control port. Only `server config save`. `-controlTls false` turns TLS off. [Enroll with a Code](#enroll-with-a-code) needs TLS. |
+| `-controlProtocolMode <mode>` | `legacy`, `mixed` or `mtls-strict` | The value in `server.yaml` | Saved to `server.yaml` (`controlProtocolMode`) | Control protocol mode. Only `server config save`. Another value gives exit code 1. |
 | `-keepAlive <ms>` | Whole number, 0 or more | `10000` | Saved to `server.yaml` (`keepAlive`) | TCP keepalive interval of the control listener. A negative or non-numeric value stops the server with exit code 1 (`Invalid keep alive time`). Example: `server -keepAlive 30000`. |
 | `-trustXForwardedFor` | Flag | Off | This run only | Read the admin client address from `X-Forwarded-For`. Use it only behind a reverse proxy that you control. To open the console through the proxy, also add the address that users open (for example `https://admin.example.com`) to `adminAllowedOrigins`. The server logs a warning at startup while it is on. Example: `server -trustXForwardedFor -trustedProxyHops 1`. |
 | `-trustedProxyHops <n>` | Whole number 1–16 | `1` | This run only | Number of trusted proxies in front of the admin server. See the notes below. A bad value gives a startup warning, and the server uses 1. Without `-trustXForwardedFor`, it has no effect and gives a warning. |
 | `-reset` | Flag | Off | Action at this start | Delete every file in the `config/` directory (`server.yaml`, `.key`, `.bootstrap-token` and the other stored state) and the stored certificates, then start with defaults. `-reset` and `-reset true` reset. `-reset false` does nothing. **Risk:** tunnels, trusted clients and admin accounts are lost. With `-daemon`, the sentinel restarts the app with the same options, so every automatic restart resets again. Do not combine `-reset` with `-daemon`. |
 | `-allowLegacyAdminHttp` | Flag | Off | This run only | Allow `adminTls: false` (legacy non-TLS admin mode). **Risk:** the admin console and its session cookies travel in plain text. Shown by `--help-advanced`. |
-| `-allowLegacyAdminRemote` | Flag | Off | This run only | Allow a non-loopback `adminBindHost`. **Risk:** the admin console is reachable from other hosts. Shown by `--help-advanced`. |
+| `-allowLegacyAdminRemote` | Flag | Off | This run only | Allow a non-loopback `adminBindHost`. Accepted at start and by `server config save`. With `server config save`, it allows saving such an `adminBindHost`. The flag itself is not saved, so start the server with it too. **Risk:** the admin console is reachable from other hosts. Shown by `--help-advanced`. |
 | `-allowLegacyControlAuth` | Flag | Off (`allowLegacyControlAuth: false`) | Saved to `server.yaml` (`allowLegacyControlAuth`) | Allow legacy shared-key control authentication. It stays on in later runs until you start once with `-allowLegacyControlAuth false` or edit `server.yaml`. **Risk:** legacy data connections carry no binding token. Anyone who guesses a data handler ID can take over a session. That person can then read or inject external user traffic. The server logs a warning at startup while it is on. Shown by `--help-advanced`. |
 | `-requireCsrfHeader false` | Flag | On | This run only | `-requireCsrfHeader false` turns off the CSRF header check of the admin API. **Risk:** other web pages can send admin requests with the session cookie. Shown by `--help-advanced`. |
 | `-daemon` | Exact flag | Off | This run only | Run in the background with process monitoring. See [Run in the Background](#run-in-the-background). |
@@ -444,7 +552,9 @@ Notes on `-trustedProxyHops`:
 | `-privateKey <path\|pem>` | Run commands | File path or PEM text | None | Saved by `-save` (a path as a path, PEM text as text) | Private key of `-cert`. Turns TLS on. The path rules of `-ca` apply. Error messages do not show the path, because the value can be key text that was put in the wrong place. |
 | `-save` | `client`, `client run` | Flag | Off | Writes `config/client.yaml` | Save the resolved options to `config/client.yaml`, then start the client. See the notes below. `-save false` writes nothing. |
 | `--code <code>` | `client join` | 12 Crockford Base32 characters, for example `7Q4K-M2XP-AB01` | None (required) | Used once | Enrollment code from the admin console. It uses digits and the letters A–Z except `I`, `L`, `O` and `U`. When you type it, `I` and `L` are read as `1`, and `O` as `0`. Dashes, spaces and case are ignored. The code works once and, by default, expires after 15 minutes. Choose another expiry in **Code expires after** in the console, up to 30 days or **Never expires**. The `ttlMinutes` field of the admin API takes 1–43200 (30 days), or `null` for no expiry. A script can send `ttlMinutes` alone. The console also sends `provisional: true`. Then an expiry longer than 15 minutes applies only after `POST /api/trustedClients/<id>/enrollmentCode/confirm` with the `issueId` from the response. |
+| `--code-stdin` | `client join` | Flag | Off | This run only | Read the enrollment code from the first line of standard input instead of `--code`. Pipe the code in. A terminal is refused with exit code 2, because reading it would wait for the end of input. The code then does not appear in the process list or in process-creation audit logs. Using it together with `--code`, or giving an empty first line, is an error (exit code 2). Example: `echo 7Q4K-M2XP-AB01 \| TTTGate client join gw.example.com --code-stdin`. |
 | `--force` | `client join` | Flag | Off | This run only | Replace an existing `config/client.yaml`. The old file is kept as `client.yaml.bak`. Without it, an existing file stops `client join` with exit code 78. |
+| `-json` | `client join` (also `status`) | Flag | Off | This run only | Print the result as one JSON line on stdout. See [Enroll with a Code](#enroll-with-a-code) and [Check Whether TTTGate Runs](#check-whether-tttgate-runs). Other commands do not accept it. |
 | `-bufferLimit <MiB>` | Run commands | `-1` (no limit) or a whole number 16–1048576 | `128` | Saved by `-save` (as `globalMemCacheLimit`) | Memory buffer limit. Another value is an error (exit code 2). Example: `-bufferLimit 256`. |
 | `-keepAlive <ms>` | Run commands | Whole number, 0 or more | `10000` | Saved by `-save` | TCP keepalive interval of the control connection. A bad or negative value gives a warning, and the client uses 10000. |
 | `-key <key>` | Run commands | Text | Built-in legacy key | Saved by `-save` | Legacy shared key. It is used only with explicit legacy control auth. **Risk:** the key is sent to any server that answers with the legacy protocol. On the command line, it gives a warning. Shown by `--help-advanced`. |
@@ -478,7 +588,7 @@ More rules:
 - `displayName` in `client.yaml` is read as `name` when `name` is missing. When both are set and differ, the client uses `name` and logs a warning.
 - `client config show` prints the source of each value.
 
-The server reads its options from `config/server.yaml`. `-adminPort`, `-keepAlive` and `-allowLegacyControlAuth` first write their value to that file. The other server options apply only to that run.
+The server reads its options from `config/server.yaml`. `-adminPort`, `-keepAlive` and `-allowLegacyControlAuth` first write their value to that file. The other server options apply only to that run. `server config save` writes values to that file without starting the server.
 
 #### Run in the Background
 
@@ -496,9 +606,10 @@ The server reads its options from `config/server.yaml`. `-adminPort`, `-keepAliv
 |---|---|
 | `TTTGate` (no arguments) | The version and the list of modes |
 | `TTTGate --help`, `TTTGate -h` | The list of modes |
-| `TTTGate server --help` | Server options in groups: Admin, Proxy, Run, Tuning. Risky options appear only with `--help-advanced` |
+| `TTTGate server --help` | Server commands and options in groups: Admin, Control port, Proxy, Identity, Run, Tuning. Risky options appear only with `--help-advanced` |
 | `TTTGate client --help` | Client commands and options in groups: Connection, Identity, TLS trust, Run, Tuning |
 | `TTTGate stop --help` | The `stop` usage |
+| `TTTGate status --help` | The `status` usage and `-json` |
 | `--help-advanced` | The same as `--help`, plus legacy and risky options with a `RISK:` line, and aliases |
 | `--version` | `TTTGate v<version> (<build>)` |
 
@@ -510,9 +621,12 @@ The program checks the whole command line before it starts anything. With `-daem
 
 | Code | Meaning |
 |---|---|
-| 0 | Normal end, help, version |
-| 1 | Error while running. Server option errors also use 1. `client join`: the server refused the code, too many failed attempts from this address (wait 15 minutes), the server does not accept enrollment, the answer could not be verified, or a network error |
+| 0 | Normal end, help, version. `status`: TTTGate runs |
+| 1 | Error while running. Server option errors also use 1. `client join`: the server refused the code, too many failed attempts from this address (wait 15 minutes), the server does not accept enrollment, the answer could not be verified, or a network error. `server config save`: a value is wrong |
 | 2 | Command-line error: unknown option or mode, missing or bad value, options that conflict |
+| 3 | `status`: TTTGate does not run (the LSB convention) |
+| 75 | `server config save`: a TTTGate server of this installation is running |
+| 77 | `server config save`: the admin console would be reachable from other hosts, and `-allowLegacyAdminRemote` was not given |
 | 78 | Configuration file error: insecure fields in `client.yaml`, a CA, certificate, key or secret file that is missing or not valid. `client join`: `client.yaml` exists without `--force`, or the files cannot be written |
 
 #### Command-Line Examples
@@ -570,6 +684,20 @@ Check the resolved client settings, then save them without connecting:
     -clientSecretFile /etc/tttgate/client-a.secret -ca /etc/tttgate/server-ca.pem
 ```
 
+Save server settings without starting the server, then start it:
+
+```shell
+./TTTGate-linux-x64 server config save -adminPort 9400 -controlPort 9126 -controlTls -controlProtocolMode mixed
+./TTTGate-linux-x64 server -daemon
+```
+
+Check whether TTTGate runs, as a sentence and as JSON:
+
+```shell
+./TTTGate-linux-x64 status
+./TTTGate-linux-x64 status -json
+```
+
 ### Operations
 
 #### Log Level
@@ -618,6 +746,34 @@ If it cannot confirm a process, it does not stop it. It writes a warning with th
 
 - **Use the same user.** Stop and start TTTGate as the user that started it. A user without administrator rights cannot stop, or on Windows identify, a daemon that an administrator started.
 - **A start is refused while an old daemon runs.** If `-daemon` finds a TTTGate process that it could not stop, it does not start a second pair (the ports would collide). It names the pid and the pid file and exits with code 1. Stop that process, or delete the pid file if that pid is not TTTGate, and start again.
+
+#### Check Whether TTTGate Runs
+
+```shell
+./TTTGate-linux-x64 status
+./TTTGate-linux-x64 status -json
+```
+
+`status` shows whether a TTTGate server or client of this installation runs, as a daemon or in the foreground. It does not create pid or log files, and it does not print the version banner. It exits with code 0 when TTTGate runs and with code 3 when it does not (the LSB convention).
+
+Without `-json`, it prints one sentence, for example `TTTGate server is running in the background (pid 1234)` or `TTTGate is not running`.
+
+With `-json`, it prints one JSON line with these fields:
+
+| Field | Meaning |
+|---|---|
+| `version` | Version of this TTTGate |
+| `running` | `true` when TTTGate runs |
+| `mode` | `server`, `client` or `null`. It is `null` for a process that an older version started, because its pid file has no mode |
+| `pid` | Process ID, or `null` |
+| `daemon` | `true` when the process was started with `-daemon` |
+| `client` | For a running client: `state` (`connecting`, `connected` or `reconnecting`), `since` (time of the last change, in milliseconds since the epoch) and `failures`. Otherwise `null` |
+| `server` | For a running server: `adminUrl`, `bootstrapRequired` and `bootstrapTokenFile`. Otherwise `null` |
+
+- `adminUrl` is the address to open on this PC. A wildcard bind (`0.0.0.0`, `::` or empty) becomes `127.0.0.1`. The scheme is `https` when `adminTls` is true.
+- The running client writes `bin/.status_client` when its connection changes. `status` reads this file.
+- `failures` counts the connections in a row that ended within 30 seconds. Such a connection counts as a failure even if it was `connected` for a moment. The reason: the server closes a connection that fails authentication and does not tell the reason. A connection that lasts 30 seconds or more resets the count to 0.
+- Pid file lines now also record the mode.
 
 ### Upgrading an Existing Server
 
@@ -702,6 +858,7 @@ Recommended cutover order:
 - [서버](#서버)
 - [웹 관리 화면](#웹-관리-화면)
 - [클라이언트](#클라이언트)
+- [Windows 런처](#windows-런처)
 - [명령줄 레퍼런스](#명령줄-레퍼런스)
 - [운영](#운영)
 - [기존 서버 업그레이드](#기존-서버-업그레이드)
@@ -799,6 +956,7 @@ net.ipv4.tcp_wmem = 4096 16384 1048576
 | `config/identity.yaml` | 관리자 사용자, 그룹, 2단계 인증 설정 |
 | `config/.key` | 예전 버전의 관리자 비밀번호 해시. 서버는 `config/identity.yaml` 이 없거나 읽을 수 없을 때만 이 파일을 읽는다. `config/identity.yaml` 이 없으면 `.key` 로 `admin` 계정을 만든다 |
 | `config/server-ca.pem` | `client join` 이 클라이언트에 써 두는 서버 인증서 |
+| `config/launcher.json` | [Windows 런처](#windows-런처)의 설정. 예: 고른 모드 |
 
 예전에 저장소 최상위에 두던 `config.yaml` 은 더 이상 쓰지 않는다.
 
@@ -824,6 +982,30 @@ net.ipv4.tcp_wmem = 4096 16384 1048576
 - `-adminPort`, `-keepAlive`, `-allowLegacyControlAuth` 는 값을 `config/server.yaml` 에 저장한다. 다음에는 옵션 없이 시작해도 저장된 값을 쓴다.
 - 나머지 서버 옵션은 그 옵션을 주고 시작한 실행에만 적용된다.
 - `-reset` 은 동작이다. 그 실행을 시작할 때 저장된 서버 상태를 지운다. `-daemon` 과 함께 쓰면 감시 프로세스가 같은 옵션으로 앱을 다시 띄우므로, 자동 재시작 때마다 다시 초기화된다. `-daemon` 과 함께 쓰지 않는다.
+- `server config save` 는 서버를 시작하지 않고 설정을 `config/server.yaml` 에 쓴다. [서버를 시작하지 않고 설정 저장하기](#서버를-시작하지-않고-설정-저장하기)를 참고한다.
+
+#### 서버를 시작하지 않고 설정 저장하기
+
+`TTTGate server config save [options]` 는 준 값을 `config/server.yaml` 에 쓴다. 서버는 시작하지 않는다.
+
+```shell
+./TTTGate-linux-x64 server config save -adminPort 9400 -controlPort 9126 -controlTls
+```
+
+- 받는 옵션은 `-adminPort`, `-adminBindHost`, `-adminAllowedOrigins`, `-controlPort`, `-controlTls`, `-controlProtocolMode`, `-allowLegacyAdminRemote` 다. [서버 옵션](#서버-옵션)을 참고한다.
+- 주지 않은 값은 그대로 둔다. 명령줄은 빈 값을 받지 않으므로 `server config save` 로는 `adminAllowedOrigins` 를 비울 수 없다. 목록은 관리 화면에서 비운다.
+- `server.yaml` 이 없으면 기본값으로 먼저 만든다.
+- 관리 화면에서 저장할 때와 같은 검사를 거친다.
+- 저장하면 마지막 줄에 `Saved <path>` 를 출력한다. 그 앞에 서버 로그 줄이 나올 수 있고, 서버 로그 파일도 쓴다. 버전 배너는 출력하지 않는다.
+- 이 설치본의 TTTGate 서버가 돌고 있으면 아무것도 저장하지 않는다. 실행 중인 프로세스의 모드를 알 수 없을 때도 마찬가지다. 먼저 `TTTGate stop` 으로 서버를 멈춘다. 같은 설치본에서 클라이언트가 돌고 있는 것은 상관없다.
+- 저장할 `adminBindHost` 가 루프백이 아니면, `-allowLegacyAdminRemote` 를 붙이지 않는 한 아무것도 저장하지 않는다. 붙여서 저장했다면 나중에 서버를 시작할 때도 같은 `-allowLegacyAdminRemote` 를 붙인다.
+
+| 종료 코드 | 뜻 |
+|---|---|
+| 0 | 저장했다 |
+| 1 | 값이 잘못되었다. 메시지는 stderr 에 나온다. 아무것도 저장하지 않고, `config/` 에 새 파일도 남기지 않는다. |
+| 75 | 이 설치본의 TTTGate 서버가 돌고 있다. 먼저 멈춘다 |
+| 77 | 관리 화면이 다른 호스트에서 접근 가능해지는데 `-allowLegacyAdminRemote` 가 없다. 아무것도 저장하지 않고, `config/` 에 새 파일도 남기지 않는다. |
 
 ### 웹 관리 화면
 
@@ -1028,6 +1210,13 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 
 `client join` 이 `client.yaml` 에 쓰는 값은 `host`, `port`, `tls: true`, `name` 과 `clientId`(둘 다 클라이언트 ID), `clientSecret`, `serverName`, `ca: server-ca.pem` 이다. `client.yaml` 에 적힌 `ca` 의 상대 경로는 `config/` 디렉터리를 기준으로 한다.
 
+스크립트에서 쓸 때는 `-json` 을 붙인다. 그러면 `client join` 은 stdout 에 JSON 한 줄만 출력한다.
+
+- 성공: `{"ok":true,"clientId":"...","server":"host:port"}`
+- 실패: `{"ok":false,"category":"...","message":"..."}`. `category` 는 `argument`, `exists`, `write`, `rejected`, `proof`, `network`, `throttled`, `unavailable` 가운데 하나다.
+
+종료 코드는 그대로다(0, 1, 2, 78). 등록 코드는 출력에 나오지 않는다.
+
 #### 직접 설정하기
 
 1. `config/client.sample.yaml` 을 바탕으로 `config/client.yaml` 을 만든다.
@@ -1053,24 +1242,88 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 
 자세한 내용은 [모드와 명령](#모드와-명령)에 있다.
 
+### Windows 런처
+
+`bin/TTTGate-launcher-win-x64.exe` 는 Windows 용 창 프로그램이다. 설치 프로그램과 관리자 권한이 필요 없는 포터블 프로그램이라, 두 번 클릭하면 바로 실행된다.
+
+- `TTTGate-win-x64.exe` 나 `TTTGate-win-arm64.exe` 와 같은 `bin` 폴더에 둔다. 런처는 이 PC 에 맞는 쪽을 쓰고, 다른 쪽만 있으면 그것을 쓴다.
+- 런처는 명령줄 프로그램(CLI)을 조작할 뿐이다. 터널링은 CLI 가 한다.
+- 두 Windows 릴리스 zip 파일에 모두 들어 있다. Windows on Arm 에서는 x64 런처가 에뮬레이션으로 돈다.
+- Windows 10 1709 이상이 필요하다(x64, 또는 에뮬레이션으로 도는 Arm64). Microsoft Edge WebView2 를 쓴다. WebView2 는 Windows 11 과 최신 Windows 10 에 들어 있다. WebView2 가 없으면 다운로드 링크 https://go.microsoft.com/fwlink/p/?LinkId=2124703 를 담은 메시지를 보여 주고 끝난다. 이때도 명령줄은 그대로 쓸 수 있다.
+- 네트워크에서 아무것도 받아 오지 않는다. 화면은 모두 exe 안에 들어 있다.
+- Windows 표시 언어가 한국어면 한국어로, 그 밖에는 영어로 보여 준다.
+- 런처와 CLI 의 버전이 다르면 창에 경고를 보여 준다. 같은 릴리스의 파일을 함께 쓴다.
+
+#### 처음 시작할 때
+
+서버 모드와 클라이언트 모드 가운데 하나를 고른다. 고른 모드는 `config/launcher.json` 에 저장된다. 나중에 바꾸려면 창 아래의 **모드 바꾸기**(**Change mode**)를 누른다. TTTGate 가 멈춰 있을 때만 바꿀 수 있다.
+
+#### 클라이언트 모드
+
+- 이 PC 가 이미 등록되어 있으면(`client config show` 에 `clientId` 와 비밀값이 있으면) 창에 클라이언트 ID 와 서버를 보여 준다. **데몬으로 실행**(**Run in the background**)을 누르면 클라이언트가 시작된다. 등록 단계는 건너뛴다.
+- 등록되어 있지 않으면 서버 주소와 관리 화면에서 받은 등록 코드를 넣고 **등록**(**Enroll**)을 누른다. 런처는 `client join --code-stdin --json` 을 실행하고 결과를 문장으로 보여 준다.
+- 예전 공유 키 방식의 클라이언트(`client.yaml` 에 `clientId` 가 없음)는 런처로 실행할 수 없다. 코드로 등록하거나 계속 명령줄에서 실행한다.
+- `config/client.yaml` 이 있지만 읽을 수 없거나 예전 공유 키 방식이면, 런처는 이 코드로 다시 등록할지 묻는다. 동의하면 파일을 바꾸고 이전 파일은 `client.yaml.bak` 으로 남긴다.
+- **다른 서버로 다시 등록**(**Enroll with another server**)은 이 PC 를 다시 등록한다. TTTGate 가 돌고 있으면 먼저 멈춘다. `client.yaml` 을 바꾸고, 이전 파일은 `client.yaml.bak` 으로 남긴다.
+- 연결이 3번 이상 잇달아 실패하면, 서버가 이 클라이언트를 지웠거나 비밀값을 바꿨을 수 있다고 알려 준다. 그렇다면 새 코드로 다시 등록한다.
+
+#### 서버 모드
+
+창에 다음 설정을 넣는 입력 양식이 나온다.
+
+- 관리 화면 포트
+- 열 주소: 지금 설정 유지, 이 PC 에서만(`127.0.0.1`), 다른 PC 에서도(`0.0.0.0`)
+- 허용 주소(origin). 한 줄에 하나씩 쓴다
+- 제어 포트, TLS, 프로토콜 모드
+
+비워 둔 값은 지금 설정을 그대로 쓴다. 나머지 설정은 관리 화면에서 바꾼다. `server.yaml` 이 아직 없으면 제어 포트의 **TLS** 는 **켬** 으로 골라져 있다. 클라이언트는 TLS 로만 등록 코드를 쓸 수 있는데, 새 `server.yaml` 은 이 값이 꺼져 있기 때문이다. 파일이 있으면 **지금 설정 유지** 로 골라져 있다.
+
+**저장하고 시작**(**Save and start**)은 `server config save` 를 실행한 뒤 `server -daemon` 을 실행한다. 관리 화면이 다른 PC 에서도 열리게 되는 설정이면, 런처가 먼저 위험을 설명하고 묻는다. 확인하면 `-allowLegacyAdminRemote` 를 붙이고, 다음 시작부터도 이 선택을 기억한다.
+
+#### TTTGate 가 실행 중일 때
+
+- 창에 실행 상태를 보여 준다. 클라이언트라면 연결 상태도 보여 준다.
+- 서버라면 기본 브라우저로 관리 화면을 여는 **관리 화면 열기**(**Open admin console**) 버튼이 있다. 처음 시작했을 때는 부트스트랩 토큰과 **복사**(**Copy**) 버튼도 보여 준다.
+- 트레이(알림 영역) 아이콘은 붉은 터널 아이콘이다. 아이콘을 클릭하면 창이 열린다. 메뉴에는 **창 열기**, **관리 화면 열기**, **멈추기**, **다시 시작**, **로그 폴더 열기**, **끝내기** 가 있다(영어: **Open**, **Open admin console**, **Stop**, **Restart**, **Open logs folder**, **Quit**).
+- TTTGate 가 실행 중일 때 창을 닫으면 창만 트레이로 숨는다. TTTGate 가 멈춰 있으면 창을 닫을 때 런처도 끝난다.
+- **끝내기** 를 누르면 TTTGate 를 멈출지, 계속 둘지 묻는다.
+- 런처를 다시 열면 실행 중인 TTTGate 를 찾아 이어서 관리한다.
+- 런처는 TTTGate 폴더가 달라도 한 PC 에서 하나만 돈다. 두 번째로 실행하면 이미 떠 있는 창이 앞으로 나온다. 두 번째가 다른 TTTGate 폴더의 런처이면 창에 그 사실도 알린다. 다른 폴더를 쓰려면 먼저 떠 있는 런처를 끝낸다.
+
+#### Windows 로그인 때 자동 시작
+
+**Windows 로그인 때 자동 시작**(**Start when I sign in to Windows**)은 기본으로 꺼져 있다. 켜면 런처가 현재 사용자의 `Run` 레지스트리 키에 `TTTGate Launcher (<해시>)` 값을 쓴다. 해시는 런처 경로로 만들므로 TTTGate 폴더마다 값이 따로 있다. 로그인하면 런처가 창 없이 트레이에서 시작하고, TTTGate 가 돌고 있지 않으면 저장된 모드로 시작한다.
+
+#### 보안 참고 사항
+
+- 런처와 CLI 는 아직 코드 서명이 되어 있지 않다. 처음 실행할 때 Windows SmartScreen 이 경고할 수 있다. 계속하려면 **추가 정보**(**More info**)를 누른 뒤 **실행**(**Run anyway**)을 누른다.
+- 런처는 등록 코드를 명령줄이 아니라 표준 입력(`--code-stdin`)으로 `client join` 에 넘긴다. 그래서 코드가 프로세스 목록이나 프로세스 생성 감사 로그에 남지 않는다.
+
+#### 런처 빌드하기
+
+- `npm run launcher:build` 로 런처를 빌드한다. 이 명령은 `node scripts/build-launcher.cjs dist/bin` 을 실행한다. 이 스크립트는 `launcher/src-tauri` 에서 `cargo build --release --locked --target x86_64-pc-windows-msvc` 를 돌리고, `target/x86_64-pc-windows-msvc/release/TTTGate-launcher.exe` 를 `dist/bin/TTTGate-launcher-win-x64.exe` 로 복사한다.
+- 빌드에는 Rust 가 필요하다. Rust 버전(1.96.0)과 x64 타깃은 `launcher/src-tauri/rust-toolchain.toml` 이 고정한다. Rust 는 rustup 으로 설치한다.
+- Windows 에서는 `npm run dist` 가 CLI 바이너리를 만든 뒤 런처도 빌드한다. 그래서 Windows 에서 `npm run dist` 를 돌리려면 Rust 가 있어야 한다. 없으면 빌드가 멈추고 https://rustup.rs 에서 Rust 를 설치하라고 알린다. 다른 운영체제에서는 이 단계가 `Windows launcher skipped` 를 출력하고 성공으로 끝난다.
+- 릴리스 워크플로는 Windows 러너에서 런처를 빌드해 Windows zip 파일에 넣는다.
+
 ### 명령줄 레퍼런스
 
 기본 형식은 다음과 같다.
 
 ```
-TTTGate <server|client|stop> [command] [options]
+TTTGate <server|client|stop|status> [command] [options]
 ```
 
 #### 인자 문법
 
-- **모드 단어.** 옵션도 아니고 옵션의 값도 아닌 첫 단어가 모드다. 모드는 `server`, `client`, `stop` 가운데 하나다. 옵션은 모드 앞에 와도 되고 뒤에 와도 된다. `TTTGate -adminPort 9400 server` 와 `TTTGate server -adminPort 9400` 은 같다. 모드는 소문자로 쓴다.
-- **명령.** 명령이 있는 모드는 `client` 뿐이다. `run`, `join <addr>`, `config show`, `config save` 를 `client` 바로 뒤에 쓴다. 그 밖의 단어가 남으면 오류다(`unexpected argument '...'`).
+- **모드 단어.** 옵션도 아니고 옵션의 값도 아닌 첫 단어가 모드다. 모드는 `server`, `client`, `stop`, `status` 가운데 하나다. 옵션은 모드 앞에 와도 되고 뒤에 와도 된다. `TTTGate -adminPort 9400 server` 와 `TTTGate server -adminPort 9400` 은 같다. 모드는 소문자로 쓴다.
+- **명령.** `client` 에는 `run`, `join <addr>`, `config show`, `config save` 명령이 있다. `server` 에는 `config save` 명령 하나가 있다. 명령은 모드 바로 뒤에 쓴다. `stop` 과 `status` 에는 명령이 없다. 그 밖의 단어가 남으면 오류다(`unexpected argument '...'`).
 - **대시.** 옵션 앞의 대시 개수는 상관없다. `-addr`, `--addr`, `---addr` 은 같다. 도움말은 대시 하나로 보여 주고, 이름에 대시가 들어간 옵션만 대시 둘로 보여 준다(`--yes-insecure`). 다만 `--help`, `--help-advanced`, `--version` 은 예외로, 도움말에서 언제나 대시 둘로 보여 준다.
 - **이름은 대소문자를 가린다.** `-adminport` 는 모르는 옵션이다. 프로그램은 `-adminPort` 를 제안한다.
 - **값.** 값을 받는 옵션은 다음 단어(`-addr gw.example.com`)나 `=` 뒤의 글자(`-addr=gw.example.com`)를 값으로 읽는다. 다음 단어가 대시로 시작해도 값으로 읽으므로 `-bufferLimit -1` 이 동작한다. 값이 비어 있으면 오류다(`option '-addr' needs a value`).
 - **플래그.** 값 없이 쓴 플래그는 켜진다. 플래그는 다음 단어나 `=` 뒤에 진릿값 단어 하나를 받을 수 있다. `true`, `false`, `1`, `0`, `yes`, `no`, `on`, `off`(대소문자 무관) 가운데 하나이고, `false`, `0`, `no`, `off` 는 플래그를 끈다. 예: `-tls false`, `-reset=no`, `-requireCsrfHeader off`. `=` 뒤에 그 밖의 값을 쓰면 오류다.
 - **정확히 써야 하는 옵션.** `-daemon` 은 대시 하나에 값과 `=` 없이 이대로만 쓴다. `--daemon`, `-daemon=true` 는 오류다.
-- **모드 없이 쓸 수 있는 옵션.** 모드가 없으면 `-h`, `--help`, `--help-advanced`, `--version` 만 쓸 수 있다. 다른 옵션은 `option '...' needs a mode (server, client or stop)` 오류가 난다.
+- **모드 없이 쓸 수 있는 옵션.** 모드가 없으면 `-h`, `--help`, `--help-advanced`, `--version` 만 쓸 수 있다. 다른 옵션은 `option '...' needs a mode (server, client, stop or status)` 오류가 난다.
 - **맞지 않는 곳에 쓴 옵션.** 다른 모드의 옵션을 쓰면 오류다(`option '-adminPort' is not available in client mode`). 다른 명령의 옵션도 오류다(`option '-save' is not available in 'client join'`).
 - **모르는 옵션.** 모르는 옵션이 있으면 프로그램이 멈춘다. 그 모드의 옵션 가운데 비슷한 것(대소문자를 무시하고 두 글자 이하 차이)이 있으면 알려 준다. 예: `unknown option '-adr'. Did you mean '-addr'?`.
 - **전체 검사.** 프로그램은 무엇이든 시작하기 전에 명령줄 전체를 검사한다. 오류마다 `TTTGate: <error>` 를 출력하고, 이어서 `Run 'TTTGate <mode> --help' for usage.` 를 출력한 뒤 종료 코드 2 로 끝난다.
@@ -1079,29 +1332,40 @@ TTTGate <server|client|stop> [command] [options]
 
 | 모드 또는 명령 | 하는 일 | 받는 옵션 | 참고 |
 |---|---|---|---|
-| `server` | 터널 서버와 관리 화면을 시작한다. | 모든 [서버 옵션](#서버-옵션), `-daemon` | `TTTGate server --help` 로 옵션을 볼 수 있다. |
-| `client` | 터널 클라이언트를 시작한다. | `--code`, `--force` 를 뺀 [클라이언트 옵션](#클라이언트-옵션) | `config/client.yaml` 이 있으면 읽는다. |
+| `server` | 터널 서버와 관리 화면을 시작한다. | 시작할 때 받는 [서버 옵션](#서버-옵션), `-daemon` | `TTTGate server --help` 로 옵션을 볼 수 있다. |
+| `server config save` | 서버를 시작하지 않고 준 값을 `config/server.yaml` 에 저장한다. | `-adminPort`, `-adminBindHost`, `-adminAllowedOrigins`, `-controlPort`, `-controlTls`, `-controlProtocolMode`, `-allowLegacyAdminRemote` | `Saved <path>` 를 출력한다. 종료 코드는 0, 1, 75, 77 이다. [서버를 시작하지 않고 설정 저장하기](#서버를-시작하지-않고-설정-저장하기)를 참고한다. |
+| `client` | 터널 클라이언트를 시작한다. | `--code`, `--code-stdin`, `--force`, `-json` 을 뺀 [클라이언트 옵션](#클라이언트-옵션) | `config/client.yaml` 이 있으면 읽는다. |
 | `client run` | `client` 와 같다. | `client` 와 같다 | 스크립트에서 명령을 명시해야 할 때 쓴다. |
-| `client join <addr>` | 관리 화면에서 받은 코드로 이 클라이언트를 등록한다. `config/client.yaml`(권한 0600)과 `config/server-ca.pem` 을 쓰고 끝난다. | `--code`(필수), `--force` | `<addr>` 는 `-addr` 과 같은 형식이고 기본 포트는 9126 이다. 제어 포트가 TLS 를 써야 하므로 `tcp://` 는 받지 않는다. 터널을 연결하지 않고 pid 파일도 쓰지 않는다. |
-| `client config show` | 최종 클라이언트 옵션과 각 값의 출처(`default`, `client.yaml`, `environment`, `file`, `command line`, `inferred`)를 출력한다. | `-daemon`, `-save`, `--code`, `--force` 를 뺀 클라이언트 옵션 | 연결하지 않는다. `clientSecret`, `key`, `privateKey` 는 `(hidden)`, PEM 본문은 `(PEM text)` 로 보여 준다. `client.yaml` 에 안전하지 않은 필드가 있으면 경고를 출력하고 값은 그대로 보여 준다(종료 코드 0). |
+| `client join <addr>` | 관리 화면에서 받은 코드로 이 클라이언트를 등록한다. `config/client.yaml`(권한 0600)과 `config/server-ca.pem` 을 쓰고 끝난다. | `--code`(필수), `--force`, `-json` | `<addr>` 는 `-addr` 과 같은 형식이고 기본 포트는 9126 이다. 제어 포트가 TLS 를 써야 하므로 `tcp://` 는 받지 않는다. 터널을 연결하지 않고 pid 파일도 쓰지 않는다. `-json` 을 붙이면 JSON 한 줄을 출력한다([코드로 등록하기](#코드로-등록하기) 참고). |
+| `client config show` | 최종 클라이언트 옵션과 각 값의 출처(`default`, `client.yaml`, `environment`, `file`, `command line`, `inferred`)를 출력한다. | `-daemon`, `-save`, `--code`, `--code-stdin`, `--force`, `-json` 을 뺀 클라이언트 옵션 | 연결하지 않는다. `clientSecret`, `key`, `privateKey` 는 `(hidden)`, PEM 본문은 `(PEM text)` 로 보여 준다. `client.yaml` 에 안전하지 않은 필드가 있으면 경고를 출력하고 값은 그대로 보여 준다(종료 코드 0). |
 | `client config save` | 연결하지 않고 최종 클라이언트 옵션을 `config/client.yaml` 에 저장한다. | `client config show` 와 같다 | `Saved <path>` 를 출력한다. `-save` 와 같은 내용을 저장한다([클라이언트 옵션](#클라이언트-옵션) 참고). |
 | `stop` | 이 설치본이 기록한 TTTGate 프로세스를 멈춘다. 데몬과 포그라운드 실행, 서버와 클라이언트를 모두 포함한다. | 도움말 옵션만 | [백그라운드 프로세스 멈추기](#백그라운드-프로세스-멈추기)를 참고한다. |
+| `status` | 이 설치본의 TTTGate 서버나 클라이언트가 데몬이나 포그라운드로 돌고 있는지 보여 준다. | `-json`, 도움말 옵션 | TTTGate 가 돌고 있으면 종료 코드 0, 아니면 3 이다. [TTTGate 실행 여부 확인하기](#tttgate-실행-여부-확인하기)를 참고한다. |
 
-`client join`, `client config show`, `client config save` 는 버전 배너를 출력하지 않는다. 그래서 스크립트가 출력을 그대로 읽을 수 있다.
+`client join`, `client config show`, `client config save`, `server config save`, `status` 는 버전 배너를 출력하지 않는다. 그래서 스크립트가 출력을 그대로 읽을 수 있다.
 
 #### 서버 옵션
 
-모든 옵션은 `server` 모드에 적용된다.
+모든 옵션은 `server` 모드에 적용된다. 어떤 옵션은 서버를 시작할 때(`server`)만 받고, 어떤 옵션은 `server config save` 에서만 받는다. 각 행에 어느 쪽인지 적었다. 맞지 않는 명령에 쓰면 오류다(종료 코드 2).
+
+- 시작할 때와 `server config save` 모두: `-adminPort`, `-allowLegacyAdminRemote`
+- `server config save` 에서만: `-adminBindHost`, `-adminAllowedOrigins`, `-controlPort`, `-controlTls`, `-controlProtocolMode`
+- 시작할 때만: 나머지 서버 옵션 전부
 
 | 옵션 | 값 | 기본값 | 유지 범위 | 설명 |
 |---|---|---|---|---|
-| `-adminPort <port>` | 정수 1–65535 | `9300` | `server.yaml` 에 저장(`adminPort`) | 관리 화면의 포트. 잘못된 값이면 서버가 종료 코드 1 로 멈춘다(`Invalid admin port number (1 ~ 65535)`). 예: `server -adminPort 9400`. |
+| `-adminPort <port>` | 정수 1–65535 | `9300` | `server.yaml` 에 저장(`adminPort`) | 관리 화면의 포트. 시작할 때와 `server config save` 모두 받는다. 잘못된 값이면 서버가 종료 코드 1 로 멈춘다(`Invalid admin port number (1 ~ 65535)`). 예: `server -adminPort 9400`. |
+| `-adminBindHost <host>` | 호스트 이름 또는 IP 주소 | `127.0.0.1` | `server.yaml` 에 저장(`adminBindHost`) | 관리 화면이 연결을 받을 주소. `server config save` 에서만 받는다. 루프백이 아닌 값은 `-allowLegacyAdminRemote` 가 있어야 저장된다(없으면 종료 코드 77). 예: `server config save -adminBindHost 0.0.0.0 -allowLegacyAdminRemote`. |
+| `-adminAllowedOrigins <origins>` | 쉼표로 구분한 origin 목록 | 빈 목록 | `server.yaml` 에 저장(`adminAllowedOrigins`) | 역방향 프록시 등을 거쳐 관리 화면을 열 수 있는 다른 주소. `server config save` 에서만 받는다. 빈 값은 오류다(종료 코드 2). 목록은 관리 화면에서 비운다. 예: `server config save -adminAllowedOrigins https://admin.example.com`. |
+| `-controlPort <port>` | 정수 1–65535 | `server.yaml` 의 값 | `server.yaml` 에 저장(`port`) | 터널 클라이언트가 연결하는 제어 포트. `server config save` 에서만 받는다. 잘못된 값이면 종료 코드 1 이다. |
+| `-controlTls` | 플래그 | `server.yaml` 의 값 | `server.yaml` 에 저장(`tls`) | 제어 포트에 TLS 를 쓴다. `server config save` 에서만 받는다. `-controlTls false` 는 TLS 를 끈다. [코드로 등록하기](#코드로-등록하기)에는 TLS 가 필요하다. |
+| `-controlProtocolMode <mode>` | `legacy`, `mixed`, `mtls-strict` | `server.yaml` 의 값 | `server.yaml` 에 저장(`controlProtocolMode`) | 제어 프로토콜 모드. `server config save` 에서만 받는다. 그 밖의 값이면 종료 코드 1 이다. |
 | `-keepAlive <ms>` | 0 이상의 정수 | `10000` | `server.yaml` 에 저장(`keepAlive`) | 제어 리스너의 TCP keepalive 간격. 음수나 숫자가 아닌 값이면 서버가 종료 코드 1 로 멈춘다(`Invalid keep alive time`). 예: `server -keepAlive 30000`. |
 | `-trustXForwardedFor` | 플래그 | 꺼짐 | 이번 실행만 | 관리 화면 클라이언트의 주소를 `X-Forwarded-For` 에서 읽는다. 직접 관리하는 역방향 프록시 뒤에서만 쓴다. 프록시를 거쳐 관리 화면을 열려면 사용자가 여는 주소(예: `https://admin.example.com`)도 `adminAllowedOrigins` 에 넣는다. 켜져 있으면 시작할 때 경고를 남긴다. 예: `server -trustXForwardedFor -trustedProxyHops 1`. |
 | `-trustedProxyHops <n>` | 정수 1–16 | `1` | 이번 실행만 | 관리 서버 앞에 있는 신뢰 프록시의 수. 아래 참고 사항을 읽는다. 잘못된 값이면 시작할 때 경고를 남기고 1 을 쓴다. `-trustXForwardedFor` 없이 쓰면 효과가 없고 경고를 남긴다. |
 | `-reset` | 플래그 | 꺼짐 | 이번 시작 때 한 번 동작 | `config/` 디렉터리의 모든 파일(`server.yaml`, `.key`, `.bootstrap-token` 등 저장된 상태)과 저장된 인증서를 지우고 기본값으로 시작한다. `-reset` 과 `-reset true` 는 초기화하고, `-reset false` 는 아무것도 하지 않는다. **위험:** 터널, 신뢰 클라이언트, 관리자 계정이 모두 사라진다. `-daemon` 과 함께 쓰면 감시 프로세스가 같은 옵션으로 앱을 다시 띄우므로, 자동 재시작 때마다 다시 초기화된다. `-daemon` 과 함께 쓰지 않는다. |
 | `-allowLegacyAdminHttp` | 플래그 | 꺼짐 | 이번 실행만 | `adminTls: false`(TLS 없는 레거시 관리 모드)를 허용한다. **위험:** 관리 화면과 세션 쿠키가 평문으로 오간다. `--help-advanced` 에 나온다. |
-| `-allowLegacyAdminRemote` | 플래그 | 꺼짐 | 이번 실행만 | 루프백이 아닌 `adminBindHost` 를 허용한다. **위험:** 다른 호스트에서 관리 화면에 접근할 수 있다. `--help-advanced` 에 나온다. |
+| `-allowLegacyAdminRemote` | 플래그 | 꺼짐 | 이번 실행만 | 루프백이 아닌 `adminBindHost` 를 허용한다. 시작할 때와 `server config save` 모두 받는다. `server config save` 에서는 그런 `adminBindHost` 를 저장할 수 있게 한다. 이 플래그 자체는 저장되지 않으므로, 서버를 시작할 때도 붙인다. **위험:** 다른 호스트에서 관리 화면에 접근할 수 있다. `--help-advanced` 에 나온다. |
 | `-allowLegacyControlAuth` | 플래그 | 꺼짐(`allowLegacyControlAuth: false`) | `server.yaml` 에 저장(`allowLegacyControlAuth`) | 레거시 공유 키 제어 인증을 허용한다. `-allowLegacyControlAuth false` 로 한 번 시작하거나 `server.yaml` 을 고치기 전까지는 다음 실행에서도 켜진 채로 남는다. **위험:** 레거시 데이터 연결에는 바인딩 토큰이 없다. 그래서 데이터 핸들러 ID 를 맞힌 사람은 누구나 세션을 가로채 외부 사용자의 트래픽을 읽거나 끼워 넣을 수 있다. 켜져 있으면 시작할 때 경고를 남긴다. `--help-advanced` 에 나온다. |
 | `-requireCsrfHeader false` | 플래그 | 켜짐 | 이번 실행만 | `-requireCsrfHeader false` 는 관리 API 의 CSRF 헤더 검사를 끈다. **위험:** 다른 웹 페이지가 세션 쿠키를 실어 관리 요청을 보낼 수 있다. `--help-advanced` 에 나온다. |
 | `-daemon` | 정확히 써야 하는 플래그 | 꺼짐 | 이번 실행만 | 프로세스 감시와 함께 백그라운드로 돌린다. [백그라운드로 실행하기](#백그라운드로-실행하기)를 참고한다. |
@@ -1131,7 +1395,9 @@ TTTGate <server|client|stop> [command] [options]
 | `-privateKey <path\|pem>` | 실행 계열 명령 | 파일 경로 또는 PEM 본문 | 없음 | `-save` 로 저장(경로는 경로로, PEM 본문은 본문으로) | `-cert` 의 개인 키. TLS 를 켠다. 경로 규칙은 `-ca` 와 같다. 잘못 넣은 키 본문일 수도 있으므로 오류 메시지에 경로를 보여 주지 않는다. |
 | `-save` | `client`, `client run` | 플래그 | 꺼짐 | `config/client.yaml` 에 씀 | 최종 옵션을 `config/client.yaml` 에 저장한 뒤 클라이언트를 시작한다. 아래 참고 사항을 읽는다. `-save false` 는 아무것도 쓰지 않는다. |
 | `--code <code>` | `client join` | Crockford Base32 글자 12개. 예: `7Q4K-M2XP-AB01` | 없음(필수) | 한 번 사용 | 관리 화면에서 받은 등록 코드. 숫자와, `I`·`L`·`O`·`U` 를 뺀 영문자 A–Z 로 이루어진다. 입력할 때 `I` 와 `L` 은 `1` 로, `O` 는 `0` 으로 읽는다. 대시, 공백, 대소문자는 무시한다. 코드는 한 번만 쓸 수 있고 기본으로 15분 뒤에 만료된다. 관리 화면의 **Code expires after** 에서 30일까지, 또는 **Never expires**(만료 없음)로 바꿀 수 있다. 관리 API 의 `ttlMinutes` 는 1–43200(30일) 또는 만료 없음을 뜻하는 `null` 을 받는다. 스크립트는 `ttlMinutes` 만 보내도 된다. 관리 화면은 `provisional: true` 도 함께 보낸다. 이때 15분보다 긴 기한은 응답의 `issueId` 로 `POST /api/trustedClients/<id>/enrollmentCode/confirm` 을 보낸 뒤에 적용된다. |
+| `--code-stdin` | `client join` | 플래그 | 꺼짐 | 이번 실행만 | 등록 코드를 `--code` 대신 표준 입력의 첫 줄에서 읽는다. 코드는 파이프로 넘긴다. 터미널 입력은 입력의 끝을 기다리며 멈추므로 받지 않고 종료 코드 2 로 끝낸다. 그러면 코드가 프로세스 목록이나 프로세스 생성 감사 로그에 남지 않는다. `--code` 와 함께 쓰거나 첫 줄이 비어 있으면 오류다(종료 코드 2). 예: `echo 7Q4K-M2XP-AB01 \| TTTGate client join gw.example.com --code-stdin`. |
 | `--force` | `client join` | 플래그 | 꺼짐 | 이번 실행만 | 이미 있는 `config/client.yaml` 을 바꾼다. 이전 파일은 `client.yaml.bak` 으로 남는다. 이 옵션이 없으면 파일이 이미 있을 때 `client join` 이 종료 코드 78 로 멈춘다. |
+| `-json` | `client join`(그리고 `status`) | 플래그 | 꺼짐 | 이번 실행만 | 결과를 stdout 에 JSON 한 줄로 출력한다. [코드로 등록하기](#코드로-등록하기)와 [TTTGate 실행 여부 확인하기](#tttgate-실행-여부-확인하기)를 참고한다. 다른 명령에서는 받지 않는다. |
 | `-bufferLimit <MiB>` | 실행 계열 명령 | `-1`(제한 없음) 또는 정수 16–1048576 | `128` | `-save` 로 저장(`globalMemCacheLimit`) | 메모리 버퍼 상한. 그 밖의 값은 오류다(종료 코드 2). 예: `-bufferLimit 256`. |
 | `-keepAlive <ms>` | 실행 계열 명령 | 0 이상의 정수 | `10000` | `-save` 로 저장 | 제어 연결의 TCP keepalive 간격. 잘못된 값이나 음수면 경고를 남기고 10000 을 쓴다. |
 | `-key <key>` | 실행 계열 명령 | 문자열 | 내장 레거시 키 | `-save` 로 저장 | 레거시 공유 키. 레거시 제어 인증을 명시적으로 켰을 때만 쓴다. **위험:** 레거시 프로토콜로 답하는 어떤 서버에게든 키를 보낸다. 명령줄에 쓰면 경고가 난다. `--help-advanced` 에 나온다. |
@@ -1165,7 +1431,7 @@ TTTGate <server|client|stop> [command] [options]
 - `client.yaml` 에 `name` 이 없으면 `displayName` 을 `name` 으로 읽는다. 둘 다 있고 값이 다르면 `name` 을 쓰고 경고를 남긴다.
 - `client config show` 는 각 값의 출처를 보여 준다.
 
-서버는 `config/server.yaml` 에서 옵션을 읽는다. `-adminPort`, `-keepAlive`, `-allowLegacyControlAuth` 는 먼저 그 값을 이 파일에 쓴다. 나머지 서버 옵션은 그 실행에만 적용된다.
+서버는 `config/server.yaml` 에서 옵션을 읽는다. `-adminPort`, `-keepAlive`, `-allowLegacyControlAuth` 는 먼저 그 값을 이 파일에 쓴다. 나머지 서버 옵션은 그 실행에만 적용된다. `server config save` 는 서버를 시작하지 않고 이 파일에 값을 쓴다.
 
 #### 백그라운드로 실행하기
 
@@ -1183,9 +1449,10 @@ TTTGate <server|client|stop> [command] [options]
 |---|---|
 | `TTTGate`(인자 없음) | 버전과 모드 목록 |
 | `TTTGate --help`, `TTTGate -h` | 모드 목록 |
-| `TTTGate server --help` | 서버 옵션을 Admin, Proxy, Run, Tuning 묶음으로 보여 준다. 위험한 옵션은 `--help-advanced` 에만 나온다 |
+| `TTTGate server --help` | 서버 명령과 옵션을 Admin, Control port, Proxy, Identity, Run, Tuning 묶음으로 보여 준다. 위험한 옵션은 `--help-advanced` 에만 나온다 |
 | `TTTGate client --help` | 클라이언트 명령과 옵션을 Connection, Identity, TLS trust, Run, Tuning 묶음으로 보여 준다 |
 | `TTTGate stop --help` | `stop` 사용법 |
+| `TTTGate status --help` | `status` 사용법과 `-json` |
 | `--help-advanced` | `--help` 내용에 더해 레거시 옵션과 위험한 옵션(`RISK:` 줄 포함), 별칭을 보여 준다 |
 | `--version` | `TTTGate v<version> (<build>)` |
 
@@ -1197,9 +1464,12 @@ TTTGate <server|client|stop> [command] [options]
 
 | 코드 | 뜻 |
 |---|---|
-| 0 | 정상 종료, 도움말, 버전 |
-| 1 | 실행 중 오류. 서버 옵션 오류도 1 을 쓴다. `client join`: 서버가 코드를 거부했거나, 이 주소에서 실패가 너무 많았거나(15분 뒤 다시 시도), 서버가 등록을 받지 않거나, 응답을 검증하지 못했거나, 네트워크 오류 |
+| 0 | 정상 종료, 도움말, 버전. `status`: TTTGate 가 돌고 있음 |
+| 1 | 실행 중 오류. 서버 옵션 오류도 1 을 쓴다. `client join`: 서버가 코드를 거부했거나, 이 주소에서 실패가 너무 많았거나(15분 뒤 다시 시도), 서버가 등록을 받지 않거나, 응답을 검증하지 못했거나, 네트워크 오류. `server config save`: 값이 잘못됨 |
 | 2 | 명령줄 오류: 모르는 옵션이나 모드, 빠지거나 잘못된 값, 서로 충돌하는 옵션 |
+| 3 | `status`: TTTGate 가 돌고 있지 않음(LSB 관례) |
+| 75 | `server config save`: 이 설치본의 TTTGate 서버가 돌고 있음 |
+| 77 | `server config save`: 관리 화면이 다른 호스트에서 접근 가능해지는데 `-allowLegacyAdminRemote` 가 없음 |
 | 78 | 설정 파일 오류: `client.yaml` 의 안전하지 않은 필드, 없거나 올바르지 않은 CA·인증서·키·비밀값 파일. `client join`: `--force` 없이 `client.yaml` 이 이미 있거나, 파일을 쓸 수 없음 |
 
 #### 명령줄 예시
@@ -1257,6 +1527,20 @@ TLS 와 비밀값 파일로 클라이언트를 직접 실행한다.
     -clientSecretFile /etc/tttgate/client-a.secret -ca /etc/tttgate/server-ca.pem
 ```
 
+서버를 시작하지 않고 서버 설정을 저장한 뒤 시작한다.
+
+```shell
+./TTTGate-linux-x64 server config save -adminPort 9400 -controlPort 9126 -controlTls -controlProtocolMode mixed
+./TTTGate-linux-x64 server -daemon
+```
+
+TTTGate 가 돌고 있는지 문장과 JSON 으로 확인한다.
+
+```shell
+./TTTGate-linux-x64 status
+./TTTGate-linux-x64 status -json
+```
+
 ### 운영
 
 #### 로그 레벨
@@ -1305,6 +1589,34 @@ TLS 와 비밀값 파일로 클라이언트를 직접 실행한다.
 
 - **같은 사용자로 실행한다.** TTTGate 를 시작한 사용자와 같은 사용자로 멈추고 다시 시작한다. 관리자 권한이 없는 사용자는 관리자가 시작한 데몬을 멈출 수 없고, Windows 에서는 그 데몬을 확인할 수도 없다.
 - **이전 데몬이 돌고 있으면 시작을 거부한다.** `-daemon` 이 멈추지 못한 TTTGate 프로세스를 찾으면 두 번째 쌍을 띄우지 않는다(포트가 부딪친다). pid 와 pid 파일을 알려 주고 종료 코드 1 로 끝난다. 그 프로세스를 멈추거나, 그 pid 가 TTTGate 가 아니면 pid 파일을 지운 뒤 다시 시작한다.
+
+#### TTTGate 실행 여부 확인하기
+
+```shell
+./TTTGate-linux-x64 status
+./TTTGate-linux-x64 status -json
+```
+
+`status` 는 이 설치본의 TTTGate 서버나 클라이언트가 데몬이나 포그라운드로 돌고 있는지 보여 준다. pid 파일이나 로그 파일을 만들지 않고, 버전 배너도 출력하지 않는다. TTTGate 가 돌고 있으면 종료 코드 0, 아니면 3 으로 끝난다(LSB 관례).
+
+`-json` 이 없으면 한 문장을 출력한다. 예: `TTTGate server is running in the background (pid 1234)`, `TTTGate is not running`.
+
+`-json` 을 붙이면 다음 필드를 담은 JSON 한 줄을 출력한다.
+
+| 필드 | 뜻 |
+|---|---|
+| `version` | 이 TTTGate 의 버전 |
+| `running` | TTTGate 가 돌고 있으면 `true` |
+| `mode` | `server`, `client`, `null` 가운데 하나. 이전 버전이 시작한 프로세스는 pid 파일에 모드가 없으므로 `null` 이다 |
+| `pid` | 프로세스 ID. 없으면 `null` |
+| `daemon` | `-daemon` 으로 시작한 프로세스면 `true` |
+| `client` | 실행 중인 클라이언트의 `state`(`connecting`, `connected`, `reconnecting`), `since`(마지막으로 바뀐 시각, 에포크 기준 밀리초), `failures`. 클라이언트가 아니면 `null` |
+| `server` | 실행 중인 서버의 `adminUrl`, `bootstrapRequired`, `bootstrapTokenFile`. 서버가 아니면 `null` |
+
+- `adminUrl` 은 이 PC 에서 열 주소다. 모든 주소에 묶인 경우(`0.0.0.0`, `::`, 빈 값)는 `127.0.0.1` 로 바꾼다. `adminTls` 가 true 면 `https` 를 쓴다.
+- 실행 중인 클라이언트는 연결 상태가 바뀔 때마다 `bin/.status_client` 를 쓴다. `status` 는 이 파일을 읽는다.
+- `failures` 는 30초 안에 끝난 연결이 잇달아 몇 번인지 센다. 이렇게 빨리 끝난 연결은 잠깐 `connected` 였더라도 실패로 센다. 서버는 인증에 실패한 연결을 이유를 알려 주지 않고 닫기 때문이다. 30초 이상 이어진 연결이 있으면 0 으로 돌아간다.
+- 이제 pid 파일의 각 줄에 모드도 기록한다.
 
 ### 기존 서버 업그레이드
 

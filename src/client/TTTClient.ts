@@ -9,6 +9,8 @@ import {TTTClientRuntimeRegistry} from "./TTTClientRuntime";
 import {redactSecrets} from "../util/SecretRedactor";
 
 type ClientOwner = {client: TunnelClient; pool: EndPointClientPool};
+/** 제어 연결의 바뀜(#322 REQ-15). closed 뒤에는 다시 연결을 시도한다. stop() 으로 멈출 때는 알리지 않는다. */
+type ClientConnectionEvent = 'connecting' | 'connected' | 'closed';
 
 const logger = LoggerFactory.getLogger('client', 'TTTClient');
 
@@ -23,6 +25,7 @@ class TTTClient {
     private _reconnectTimer : NodeJS.Timeout | undefined;
     private _owner: ClientOwner | undefined;
     private _cancelReconnect: (() => void) | undefined;
+    public onConnectionEvent: ((event: ClientConnectionEvent) => void) | undefined;
 
     private constructor(clientOption: ClientOption) {
         this._clientOption = clientOption;
@@ -81,6 +84,7 @@ class TTTClient {
         this._tryConnectState = true;
         logger.info(` try connect to ${this._clientOption.host}:${this._clientOption.port}`);
         logger.info(` option: ${JSON.stringify(redactSecrets(this._clientOption))}`);
+        this.onConnectionEvent?.('connecting');
         owner.client.connect();
     }
 
@@ -96,6 +100,7 @@ class TTTClient {
             this._tryConnectState = false;
             this._isOnline = false;
             logger.error(`Connection closed.`, error);
+            this.onConnectionEvent?.('closed');
             this.retireOwner();
             const runtime = TTTClientRuntimeRegistry.current();
             const reconnectInterval = runtime.reconnectIntervalMs;
@@ -114,6 +119,7 @@ class TTTClient {
             logger.info(` connection established.`);
             this._isOnline = true;
             this._tryConnectState = false;
+            this.onConnectionEvent?.('connected');
         }
     }
 
@@ -184,3 +190,4 @@ class TTTClient {
 
 
 export default TTTClient;
+export {ClientConnectionEvent};

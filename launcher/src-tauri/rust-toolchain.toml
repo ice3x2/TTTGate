@@ -1,0 +1,6 @@
+# Tauri 2.12 needs Rust 1.90 or later. Pin the toolchain so that local and CI builds match.
+[toolchain]
+channel = "1.96.0"
+profile = "minimal"
+# build-launcher.cjs 는 arm64 개발 PC 에서도 x64 로 빌드한다. 그 표준 라이브러리를 함께 받는다.
+targets = ["x86_64-pc-windows-msvc"]

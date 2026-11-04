@@ -50,9 +50,42 @@ jobs:
       contents: read
     uses: ./.github/workflows/supply-chain-audit.yml
 
+  # #322: Windows 런처(Tauri)는 Windows 에서만 빌드된다. 여기서 만든 exe 를 패키징 작업이 받아 Windows 묶음에 넣는다.
+  launcher:
+    name: Build the Windows launcher
+    needs: [tag]
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      # rust-toolchain.toml 이 고정한 Rust 로 Cargo.lock 그대로 시험하고 빌드한다. 그 파일은 현재 폴더에서 찾는다.
+      - name: Rust unit tests
+        working-directory: launcher/src-tauri
+        run: cargo test --locked
+      - name: Build the launcher
+        run: node scripts/build-launcher.cjs launcher-out
+      - name: Check the launcher size (15 MB or less)
+        run: |
+          size=$(stat -c %s launcher-out/TTTGate-launcher-win-x64.exe)
+          echo "launcher size: $size bytes"
+          test "$size" -le 15728640
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-launcher
+          path: launcher-out/TTTGate-launcher-win-x64.exe
+          if-no-files-found: error
+
   release:
     name: Package and create draft release
-    needs: [tag, regression, supply-chain]
+    needs: [tag, regression, supply-chain, launcher]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -68,6 +101,11 @@ jobs:
       # deploy.js 가 루트·admin 의존성을 설치하고 빌드한 뒤 다섯 플랫폼 바이너리를 만든다. 테스트는 위 regression 이 돌렸다.
       - name: Build source distribution and platform binaries
         run: npm run dist -- --skip-tests
+      # Linux 에서는 런처 단계가 건너뛰어지므로 Windows 작업이 만든 런처를 dist/bin 에 받는다.
+      - uses: actions/download-artifact@v8
+        with:
+          name: windows-launcher
+          path: dist/bin
       - name: Archive source distribution
         run: node scripts/archive-source.cjs "$RELEASE_VERSION"
       - name: Archive platform binaries

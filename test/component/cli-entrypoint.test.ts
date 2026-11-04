@@ -45,7 +45,7 @@ describe("CLI entrypoint (process boundary)", () => {
         test("--help prints the usage without the banner and leaves no pid or log files", async () => {
             const result = await run(["--help"]);
             expect(result.code).toBe(0);
-            expect(result.stdout).toContain("Usage: TTTGate <server|client|stop> [options]");
+            expect(result.stdout).toContain("Usage: TTTGate <server|client|stop|status> [options]");
             expect(result.stdout).not.toMatch(/^TTTGate v/m);
             expect(binFiles()).toEqual([]);
             expect(fs.existsSync(path.join(root, "logs"))).toBe(false);

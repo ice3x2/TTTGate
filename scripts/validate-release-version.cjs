@@ -15,7 +15,12 @@ if(require.main === module) {
     } else if(process.argv.includes('--match-package')) {
         const readVersion = (file) => JSON.parse(fs.readFileSync(path.join(process.cwd(), file), 'utf8')).version;
         const expected = readVersion('package.json');
-        if(version !== expected) {
+        // #322: Windows 런처(Tauri)는 버전을 semver 로 읽는다. 아니면 런처 빌드가 실패하므로 여기서 멈춘다.
+        const semver = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
+        if(!semver.test(expected)) {
+            console.error(`package.json version ${expected} is not semver (MAJOR.MINOR.PATCH). The Windows launcher build needs a semver version.`);
+            process.exitCode = 1;
+        } else if(version !== expected) {
             console.error(`Release tag ${version} does not match package.json version ${expected}. Push the tag ${expected} or run the workflow on it.`);
             process.exitCode = 1;
         } else if(fs.existsSync(path.join(process.cwd(), 'package-build.json')) && readVersion('package-build.json') !== expected) {

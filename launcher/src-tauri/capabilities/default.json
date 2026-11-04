@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "The launcher window may call the launcher commands and listen to its events.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

@@ -7,6 +7,8 @@ import CLI, {ParsedCommandLine} from "./util/CLI";
 import {renderHelp, renderVersion} from "./util/CliHelp";
 import {runClientJoin} from "./client/ClientJoin";
 import {saveClientConfig, showClientConfig} from "./client/ClientConfigCommand";
+import {runStatus} from "./StatusCommand";
+import {saveServerConfig} from "./server/ServerConfigCommand";
 
 AppCompositionRoot.configureLogger();
 
@@ -68,6 +70,20 @@ let app = () => {
         } else {
             process.exitCode = command === 'config show' ? showClientConfig(options, io) : saveClientConfig(options, io);
         }
+        return;
+    }
+
+    // #322: status·server config save 도 설정만 읽고 쓰고 끝난다. 런처가 출력을 읽으므로 배너를 찍지 않는다.
+    if(startType == 'status') {
+        process.exitCode = runStatus(options, {out: (line) => console.log(line)}, {findRunning: () => Sentinel.findRunning(),
+            binDir: Environment.path.binDir, configDir: Environment.path.configDir, version: Environment.version.name});
+        return;
+    }
+    if(startType == 'server' && command === 'config save') {
+        // 같은 bin 에서 도는 클라이언트는 server.yaml 을 쓰지 않는다. 모드를 모르는 예전 항목은 서버일 수 있다고 본다.
+        const isServerRunning = () => Sentinel.findAllRunning().some((running) => running.mode !== 'client');
+        process.exitCode = saveServerConfig(options, {out: (line) => console.log(line), err: (line) => { process.stderr.write(line + "\n"); }},
+            {isServerRunning});
         return;
     }
 
