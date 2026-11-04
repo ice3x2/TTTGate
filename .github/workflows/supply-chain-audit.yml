@@ -21,6 +21,18 @@ on:
   workflow_call: {}
 
 jobs:
+  # #322: Windows 런처(Tauri)의 Rust 의존성. 도구 버전을 고정하고 RustSec 권고와 Cargo.lock 을 대조한다.
+  audit-launcher:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+    name: Launcher audit (Rust crates)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked --version 0.22.2
+      - name: Audit launcher/src-tauri/Cargo.lock
+        run: cargo audit --file launcher/src-tauri/Cargo.lock
+
   audit-runtime:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
     name: Runtime audit (server production chain)

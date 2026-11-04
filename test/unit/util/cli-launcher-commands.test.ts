@@ -16,6 +16,11 @@ describe("launcher commands", () => {
         expect(CLI.parseCommandLine(["server", "--json"]).errors).toEqual([expect.stringContaining("--json")]);
     });
 
+    test("REQ-2 --code-stdin is accepted by client join only", () => {
+        expect(CLI.parseCommandLine(["client", "join", "gw", "--code-stdin", "--json"]).errors).toEqual([]);
+        expect(CLI.parseCommandLine(["client", "-addr", "gw", "--code-stdin"]).errors).toEqual([expect.stringContaining("--code-stdin")]);
+    });
+
     test("REQ-17 server config save takes the launcher options", () => {
         const parsed = CLI.parseCommandLine(["server", "config", "save", "-adminPort", "9300", "-adminBindHost", "0.0.0.0",
             "-adminAllowedOrigins", "https://gw.example:9300,https://a.example", "-controlPort", "9126", "-controlTls", "true",

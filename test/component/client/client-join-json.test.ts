@@ -46,8 +46,10 @@ describe("client join --json", () => {
         if(!issued.ok) throw new Error(issued.reason);
         return issued.code;
     };
-    const join = (addr: string, options: {[key: string]: string}) =>
-        runClientJoin(addr, {...options, json: ""}, {configDir, out: (line) => out.push(line), err: (line) => err.push(line)});
+    let input = "";
+    const join = (addr: string, options: {[key: string]: string}, dir = configDir) =>
+        runClientJoin(addr, {...options, json: ""}, {configDir: dir, out: (line) => out.push(line), err: (line) => err.push(line),
+            readInput: () => input});
     /** stdout 은 JSON 한 줄뿐이어야 한다. */
     const result = () => {
         expect(out).toHaveLength(1);
@@ -97,5 +99,30 @@ describe("client join --json", () => {
         fs.writeFileSync(path.join(configDir, "client.yaml"), "host: old\n");
         expect(await join(`127.0.0.1:${port}`, {code: await issue()})).toBe(78);
         expect(result()).toMatchObject({ok: false, category: "exists"});
+    });
+
+    test("REQ-2 --code-stdin reads the code from standard input so that it is not on the command line", async () => {
+        const code = await issue();
+        input = `${code}\r\nignored second line\n`;
+        expect(await join(`127.0.0.1:${port}`, {"code-stdin": ""})).toBe(0);
+        expect(result()).toMatchObject({ok: true, clientId: "edge"});
+        expectNoCode(code);
+    });
+
+    test("REQ-2 --code-stdin with --code, or with empty input, is an argument error", async () => {
+        input = "0000-0000-0000\n";
+        expect(await join(`127.0.0.1:${port}`, {"code-stdin": "", code: "0000-0000-0000"})).toBe(2);
+        expect(result()).toMatchObject({ok: false, category: "argument"});
+        out = [];
+        input = "\n";
+        expect(await join(`127.0.0.1:${port}`, {"code-stdin": ""})).toBe(2);
+        expect(result()).toMatchObject({ok: false, category: "argument"});
+    });
+
+    test("AC-9 a settings folder that cannot be written reports category write", async () => {
+        const blocked = path.join(root.rootDir, "not-a-folder");
+        fs.writeFileSync(blocked, "a file where the folder should be");
+        expect(await join(`127.0.0.1:${port}`, {code: await issue()}, blocked)).toBe(78);
+        expect(result()).toMatchObject({ok: false, category: "write"});
     });
 });

@@ -18,6 +18,7 @@ const STRINGS = {
     controlPortTitle: "클라이언트 연결", controlPort: "제어 포트", controlTls: "TLS", controlProtocolMode: "프로토콜 모드",
     on: "켬", off: "끔", saveAndStart: "저장하고 시작",
     authHint: "연결이 계속 실패합니다. 서버에서 이 클라이언트가 지워졌거나 비밀값이 바뀌었을 수 있습니다. 그렇다면 다른 서버로 다시 등록을 눌러 새 코드로 등록하세요.",
+    replaceConfirm: "이 PC 에 이미 등록 정보(config/client.yaml)가 있지만 읽을 수 없거나 예전 방식입니다. 새 코드로 바꾸어 등록할까요? 지금 파일은 client.yaml.bak 으로 남깁니다.",
     tokenHelp: "처음 로그인할 때 이 부트스트랩 토큰으로 관리자 계정을 만듭니다.", copy: "복사", copied: "복사했습니다",
     openLogs: "로그 폴더", openAdmin: "관리 화면 열기", stop: "멈추기",
     autostart: "Windows 로그인 때 자동 시작", changeMode: "모드 바꾸기",
@@ -60,6 +61,7 @@ const STRINGS = {
     controlPortTitle: "Client connections", controlPort: "Control port", controlTls: "TLS", controlProtocolMode: "Protocol mode",
     on: "On", off: "Off", saveAndStart: "Save and start",
     authHint: "The connection keeps failing. The server may have removed this client or changed its secret. If so, choose Enroll with another server and use a new code.",
+    replaceConfirm: "This PC already has enrollment settings (config/client.yaml), but they cannot be read or use the old method. Enroll again with this code? The current file is kept as client.yaml.bak.",
     tokenHelp: "Use this bootstrap token to create the admin account at the first sign-in.", copy: "Copy", copied: "Copied",
     openLogs: "Logs folder", openAdmin: "Open admin console", stop: "Stop",
     autostart: "Start when I sign in to Windows", changeMode: "Change mode",
@@ -134,6 +136,10 @@ function render(state) {
   $("[data-autostart]").checked = state.settings.autostart;
   $("[data-action=changeMode]").hidden = screen.screen === "running" || screen.screen === "chooseMode";
 
+  const token = $("[data-token]");
+  token.hidden = !state.bootstrapToken;
+  if (state.bootstrapToken) $("[data-token-value]").textContent = state.bootstrapToken;
+
   if (screen.screen === "clientJoin") {
     $("[data-replacing]").hidden = !screen.replacing;
   } else if (screen.screen === "clientReady") {
@@ -144,7 +150,7 @@ function render(state) {
   }
 }
 
-async function renderRunning(view) {
+function renderRunning(view) {
   const mode = view.mode === "server" || view.mode === "client" ? view.mode : "unknown";
   $("[data-running-title]").textContent = T.running[mode];
   const details = [view.daemon ? T.background : T.foreground, `pid ${view.pid}`];
@@ -156,9 +162,6 @@ async function renderRunning(view) {
   $("[data-auth-hint]").hidden = !view.authHint;
   $$("[data-client-only]").forEach((element) => { element.hidden = mode !== "client"; });
   $$("[data-server-only]").forEach((element) => { element.hidden = mode !== "server"; });
-  const token = $("[data-token]");
-  token.hidden = !view.bootstrapRequired;
-  if (view.bootstrapRequired) $("[data-token-value]").textContent = (await invoke("bootstrap_token")) || "";
 }
 
 async function refresh() {
@@ -234,10 +237,15 @@ function wire() {
   $("[data-form=join]").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.target;
-    const replace = current && current.screen.replacing === true;
-    const result = await busy(() => invoke("join", { addr: form.addr.value.trim(), code: form.code.value.trim(), replace }));
+    const addr = form.addr.value.trim();
+    const code = form.code.value.trim();
     // 코드는 화면에 남기지 않는다(REQ-2).
     form.code.value = "";
+    let result = await busy(() => invoke("join", { addr, code, replace: current && current.screen.replacing === true }));
+    // 읽을 수 없는 예전 등록 정보가 있으면 바꾸어 등록할지 묻는다. 묻지 않으면 이 화면에서 빠져나갈 길이 없다.
+    if (!result.ok && result.category === "exists" && confirm(T.replaceConfirm)) {
+      result = await busy(() => invoke("join", { addr, code, replace: true }));
+    }
     if (result.ok) {
       showResult("[data-join-result]", true, T.joined(result.clientId, result.server));
       await invoke("set_rejoin", { on: false });

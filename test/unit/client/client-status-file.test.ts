@@ -52,4 +52,16 @@ describe("client connection status", () => {
     test("a write into a missing folder does not throw", () => {
         expect(() => writeClientStatus(path.join(os.tmpdir(), "no-such-dir-322", "x"), {state: "connecting", since: 1, failures: 0, pid: 1})).not.toThrow();
     });
+
+    test("a failed rename leaves no temporary file behind", () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), "client-status-rename-"));
+        try {
+            // 상태 파일 이름에 폴더가 있으면 이름 바꾸기가 실패한다.
+            fs.mkdirSync(path.join(dir, CLIENT_STATUS_FILE_NAME));
+            writeClientStatus(dir, {state: "connected", since: 1, failures: 0, pid: 4});
+            expect(fs.readdirSync(dir)).toEqual([CLIENT_STATUS_FILE_NAME]);
+        } finally {
+            fs.rmSync(dir, {recursive: true, force: true});
+        }
+    });
 });

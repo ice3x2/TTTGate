@@ -4,6 +4,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import YAML from "yaml";
+import {spawnSync} from "child_process";
 import {getFreePort, spawnProcess, SpawnedProcess, waitUntil} from "../helpers/smokeProcess";
 import {stopDaemon} from "../helpers/daemonCleanup";
 
@@ -71,7 +72,17 @@ describe("launcher commands (process boundary)", () => {
         const result = await run(["client", "join", "127.0.0.1:9", "--code", "short", "--json"]);
         expect(result.code).toBe(2);
         expect(jsonLine(result.stdout)).toMatchObject({ok: false, category: "argument"});
-        expect(result.stdout + result.stderr).not.toContain("short\"");
+    });
+
+    test("REQ-2 client join --code-stdin reads the code from standard input and never prints it", async () => {
+        const port = await getFreePort();
+        const code = "7Q4K-M2XP-AB01";
+        const result = spawnSync(process.execPath, [APP_JS, "client", "join", `127.0.0.1:${port}`, "--code-stdin", "--json"],
+            {cwd: root, input: `${code}\n`, encoding: "utf-8", timeout: 30_000});
+        expect(result.status).toBe(1);
+        expect(jsonLine(result.stdout)).toMatchObject({ok: false, category: "network"});
+        expect(result.stdout + result.stderr).not.toContain(code);
+        expect(result.stdout + result.stderr).not.toContain(code.replace(/-/g, ""));
     });
 
     test("REQ-17 server config save writes server.yaml and refuses a remote admin address without the flag", async () => {

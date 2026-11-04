@@ -57,7 +57,12 @@ describe("release workflow (#290)", () => {
         const audit = parseYaml(fs.readFileSync(path.join(directory, "supply-chain-audit.yml"), "utf8"));
         expect(audit.on.workflow_call).toEqual({});
         // 불린 워크플로의 github 문맥은 부른 쪽 것이다. 태그 push 로 불렸을 때 온라인 감사가 건너뛰어지면 안 된다.
-        for(const name of ["audit-runtime", "audit-admin"]) {
+        // #322: 런처의 Rust 의존성(Cargo.lock)도 같은 조건에서 감사한다. 도구 버전은 고정한다.
+        const rust = audit.jobs["audit-launcher"];
+        const rustRuns: string[] = rust.steps.filter((step: any) => step.run).map((step: any) => step.run.trim());
+        expect(rustRuns).toEqual(["cargo install cargo-audit --locked --version 0.22.2",
+            "cargo audit --file launcher/src-tauri/Cargo.lock"]);
+        for(const name of ["audit-runtime", "audit-admin", "audit-launcher"]) {
             expect(audit.jobs[name].if).toBe("github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')");
         }
     });
@@ -69,7 +74,9 @@ describe("release workflow (#290)", () => {
         expect(launcher["runs-on"]).toBe("windows-latest");
         expect(launcher.needs).toEqual(["tag"]);
         const runs: string[] = launcher.steps.filter((step: any) => step.run).map((step: any) => step.run.trim());
-        expect(runs).toEqual(["node scripts/build-launcher.cjs launcher-out"]);
+        expect(runs).toEqual(["cargo test --locked", "node scripts/build-launcher.cjs launcher-out"]);
+        const test = launcher.steps.find((step: any) => step.run?.trim() === "cargo test --locked");
+        expect(test["working-directory"]).toBe("launcher/src-tauri");
         const upload = launcher.steps.find((step: any) => String(step.uses ?? "").startsWith("actions/upload-artifact@"));
         expect(upload.with).toMatchObject({name: "windows-launcher", path: "launcher-out/TTTGate-launcher-win-x64.exe", "if-no-files-found": "error"});
         const steps: any[] = workflow.jobs.release.steps;

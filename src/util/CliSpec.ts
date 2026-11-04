@@ -126,6 +126,8 @@ const CLI_OPTIONS: ReadonlyArray<CliOptionDef> = [
     // 런처가 읽는 결과(#322 REQ-13·REQ-16)
     {name: "json", kind: "flag", modes: ["client", "status"], group: "run", commands: {client: ["join"], status: [""]},
         help: "Print the result as one JSON line"},
+    {name: "code-stdin", kind: "flag", modes: ["client"], group: "run", commands: ["join"],
+        help: "Read the enrollment code from standard input instead of the command line (client join)"},
     {name: "force", kind: "flag", modes: ["client"], group: "run", commands: ["join"],
         help: "Replace an existing config/client.yaml (the old file is kept as client.yaml.bak)"},
     {name: "bufferLimit", kind: "number", modes: ["client"], group: "tuning", valueName: "MiB",

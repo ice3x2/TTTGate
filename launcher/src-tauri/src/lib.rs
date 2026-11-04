@@ -11,7 +11,7 @@ pub mod view;
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Mutex;
+use std::sync::Arc;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
@@ -26,7 +26,7 @@ const MAIN_WINDOW: &str = "main";
 struct AppState {
     paths: Paths,
     exe: PathBuf,
-    rejoin: Mutex<bool>,
+    rejoin: AtomicBool,
     /// 마지막으로 본 실행 여부. 창을 닫을 때 숨길지 끝낼지 정한다(REQ-8).
     running: AtomicBool,
 }
@@ -58,6 +58,30 @@ impl AppState {
     }
 }
 
+/// 명령이 함께 쓰는 상태. CLI 를 부르는 일은 작업 스레드에서 하므로 Arc 로 나눈다.
+type Shared = Arc<AppState>;
+
+/// CLI 를 부르는 일은 수 초 걸릴 수 있다. 창과 트레이가 멈추지 않게 작업 스레드에서 한다.
+async fn blocking<T: Send + 'static>(state: &State<'_, Shared>, work: impl FnOnce(&AppState) -> T + Send + 'static) -> Result<T, String> {
+    let shared = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || work(&shared)).await.map_err(|error| error.to_string())
+}
+
+/// 트레이 메뉴의 일도 메인 스레드를 막지 않게 따로 돈다.
+fn in_background(app: &AppHandle, work: impl FnOnce(&AppHandle, &AppState) + Send + 'static) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let shared = app.state::<Shared>().inner().clone();
+        work(&app, &shared);
+    });
+}
+
+/// 시스템 폴더의 실행 파일. 이름만 주면 런처 폴더(bin)를 먼저 찾으므로 같은 이름의 파일이 대신 실행될 수 있다.
+fn system_tool(name: &str) -> PathBuf {
+    let root = std::env::var_os("SystemRoot").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(r"C:\Windows"));
+    if name == "explorer.exe" { root.join(name) } else { root.join("System32").join(name) }
+}
+
 fn stopped_status() -> DaemonStatus {
     DaemonStatus { version: String::new(), running: false, mode: None, pid: None, daemon: false, client: None, server: None }
 }
@@ -71,6 +95,8 @@ struct LoadView {
     version_mismatch: bool,
     cli_missing: bool,
     settings: Settings,
+    /// 서버를 처음 띄웠을 때의 부트스트랩 토큰(REQ-6). 그 밖에는 없다.
+    bootstrap_token: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -101,8 +127,7 @@ struct JoinResult {
     message: Option<String>,
 }
 
-#[tauri::command]
-fn load_view(app: AppHandle, state: State<AppState>) -> LoadView {
+fn build_view(state: &AppState, launcher_version: String) -> LoadView {
     let settings = state.settings();
     let cli_missing = state.cli().is_none();
     let status = if cli_missing { None } else { state.status() };
@@ -113,9 +138,13 @@ fn load_view(app: AppHandle, state: State<AppState>) -> LoadView {
     } else {
         None
     };
-    let rejoin = *state.rejoin.lock().unwrap();
+    let rejoin = state.rejoin.load(Ordering::SeqCst);
     let screen = view::screen(&view::ViewInput { mode: settings.mode, status: &status, registration: registration.as_ref(), rejoin_requested: rejoin });
-    let launcher_version = app.package_info().version.to_string();
+    let bootstrap_token = status.server.as_ref()
+        .filter(|server| server.bootstrap_required)
+        .and_then(|server| server.bootstrap_token_file.as_ref())
+        .and_then(|file| std::fs::read_to_string(file).ok())
+        .map(|token| token.trim().to_string());
     LoadView {
         version_mismatch: view::version_mismatch(&launcher_version, &status.version),
         cli_version: status.version,
@@ -123,26 +152,41 @@ fn load_view(app: AppHandle, state: State<AppState>) -> LoadView {
         cli_missing,
         settings,
         screen,
+        bootstrap_token,
     }
 }
 
 #[tauri::command]
-fn choose_mode(state: State<AppState>, mode: Option<Mode>) -> Result<(), String> {
+async fn load_view(app: AppHandle, state: State<'_, Shared>) -> Result<LoadView, String> {
+    let launcher_version = app.package_info().version.to_string();
+    blocking(&state, move |state| build_view(state, launcher_version)).await
+}
+
+#[tauri::command]
+fn choose_mode(state: State<Shared>, mode: Option<Mode>) -> Result<(), String> {
     let mut settings = state.settings();
     settings.mode = mode;
-    *state.rejoin.lock().unwrap() = false;
+    state.rejoin.store(false, Ordering::SeqCst);
     state.save_settings(&settings)
 }
 
 #[tauri::command]
-fn set_rejoin(state: State<AppState>, on: bool) {
-    *state.rejoin.lock().unwrap() = on;
+fn set_rejoin(state: State<Shared>, on: bool) {
+    state.rejoin.store(on, Ordering::SeqCst);
 }
 
 #[tauri::command]
-fn join(state: State<AppState>, addr: String, code: String, replace: bool) -> JoinResult {
-    // 코드는 CLI 인자로만 넘기고 기록하지 않는다(REQ-2).
-    match cli::parse_join(&state.run(&cli::join_args(&addr, &code, replace)).stdout) {
+async fn join(state: State<'_, Shared>, addr: String, code: String, replace: bool) -> Result<JoinResult, String> {
+    blocking(&state, move |state| join_with(state, &addr, &code, replace)).await
+}
+
+fn join_with(state: &AppState, addr: &str, code: &str, replace: bool) -> JoinResult {
+    // 코드는 표준 입력으로만 넘기고 어디에도 기록하지 않는다(REQ-2).
+    let output = match state.cli() {
+        Some(cli) => runner::run_with_input(&cli, &cli::join_args(addr, replace), &state.paths.bin_dir, &format!("{}\n", code)),
+        None => CliOutput { code: None, stdout: String::new(), stderr: "TTTGate CLI not found next to the launcher".into() },
+    };
+    match cli::parse_join(&output.stdout, &output.stderr) {
         JoinOutcome::Joined { client_id, server } =>
             JoinResult { ok: true, client_id: Some(client_id), server: Some(server), category: None, message: None },
         JoinOutcome::Failed { category, message } =>
@@ -157,16 +201,22 @@ fn start_daemon(state: &AppState) -> ActionResult {
         Some(Mode::Server) => cli::server_daemon_args(settings.allow_remote_admin),
         None => return ActionResult::failed("choose a mode first".into()),
     };
-    ActionResult::from(&state.run(&args))
+    let result = ActionResult::from(&state.run(&args));
+    state.status();
+    result
 }
 
 #[tauri::command]
-fn start_client(state: State<AppState>) -> ActionResult {
-    start_daemon(&state)
+async fn start_client(state: State<'_, Shared>) -> Result<ActionResult, String> {
+    blocking(&state, start_daemon).await
 }
 
 #[tauri::command]
-fn start_server(state: State<AppState>, options: ServerOptions, allow_remote: bool) -> ActionResult {
+async fn start_server(state: State<'_, Shared>, options: ServerOptions, allow_remote: bool) -> Result<ActionResult, String> {
+    blocking(&state, move |state| save_and_start_server(state, &options, allow_remote)).await
+}
+
+fn save_and_start_server(state: &AppState, options: &ServerOptions, allow_remote: bool) -> ActionResult {
     let saved = state.run(&cli::server_save_args(&options, allow_remote));
     if saved.code == Some(cli::REMOTE_CONSENT_EXIT_CODE) {
         return ActionResult { ok: false, needs_remote_consent: true, message: saved.error_message() };
@@ -179,18 +229,19 @@ fn start_server(state: State<AppState>, options: ServerOptions, allow_remote: bo
     if let Err(message) = state.save_settings(&settings) {
         return ActionResult::failed(message);
     }
-    start_daemon(&state)
+    start_daemon(state)
+}
+
+fn stop(state: &AppState) -> ActionResult {
+    let result = ActionResult::from(&state.run(&cli::stop_args()));
+    // 창을 닫을 때 숨길지 끝낼지를 바로 맞추도록 실행 여부를 새로 읽는다.
+    state.status();
+    result
 }
 
 #[tauri::command]
-fn stop_daemon(state: State<AppState>) -> ActionResult {
-    ActionResult::from(&state.run(&cli::stop_args()))
-}
-
-#[tauri::command]
-fn bootstrap_token(state: State<AppState>) -> Option<String> {
-    let file = state.status()?.server?.bootstrap_token_file?;
-    std::fs::read_to_string(file).ok().map(|token| token.trim().to_string())
+async fn stop_daemon(state: State<'_, Shared>) -> Result<ActionResult, String> {
+    blocking(&state, stop).await
 }
 
 fn open_admin_url(state: &AppState) {
@@ -202,28 +253,32 @@ fn open_admin_url(state: &AppState) {
 }
 
 #[tauri::command]
-fn open_admin(state: State<AppState>) {
-    open_admin_url(&state);
+async fn open_admin(state: State<'_, Shared>) -> Result<(), String> {
+    blocking(&state, open_admin_url).await
 }
 
 fn open_logs_folder(state: &AppState) {
     let _ = std::fs::create_dir_all(&state.paths.logs_dir);
-    open_with_shell(&state.paths.logs_dir.to_string_lossy());
+    let _ = std::process::Command::new(system_tool("explorer.exe")).arg(&state.paths.logs_dir).spawn();
 }
 
 #[tauri::command]
-fn open_logs(state: State<AppState>) {
+fn open_logs(state: State<Shared>) {
     open_logs_folder(&state);
 }
 
-/// 기본 브라우저나 탐색기로 연다. 런처 안에서는 외부 페이지를 열지 않는다(NFR-4).
-fn open_with_shell(target: &str) {
-    let _ = std::process::Command::new("rundll32").args(["url.dll,FileProtocolHandler", target]).spawn();
+/// 기본 브라우저로 연다. 런처 안에서는 외부 페이지를 열지 않는다(NFR-4).
+fn open_with_shell(url: &str) {
+    let _ = std::process::Command::new(system_tool("rundll32.exe")).args(["url.dll,FileProtocolHandler", url]).spawn();
 }
 
 #[tauri::command]
-fn set_autostart(state: State<AppState>, on: bool) -> ActionResult {
-    let output = runner::run(std::path::Path::new("reg.exe"), &autostart::reg_args(&state.exe, on), &state.paths.bin_dir);
+async fn set_autostart(state: State<'_, Shared>, on: bool) -> Result<ActionResult, String> {
+    blocking(&state, move |state| apply_autostart(state, on)).await
+}
+
+fn apply_autostart(state: &AppState, on: bool) -> ActionResult {
+    let output = runner::run(&system_tool("reg.exe"), &autostart::reg_args(&state.exe, on), &state.paths.bin_dir);
     // 끄려는데 값이 이미 없으면 reg delete 가 실패한다. 그때도 끈 상태다.
     if !output.ok() && on {
         return ActionResult::from(&output);
@@ -237,11 +292,12 @@ fn set_autostart(state: State<AppState>, on: bool) -> ActionResult {
 }
 
 #[tauri::command]
-fn quit(app: AppHandle, state: State<AppState>, stop_daemon: bool) {
+async fn quit(app: AppHandle, state: State<'_, Shared>, stop_daemon: bool) -> Result<(), String> {
     if stop_daemon {
-        state.run(&cli::stop_args());
+        blocking(&state, stop).await?;
     }
     app.exit(0);
+    Ok(())
 }
 
 fn show_main_window(app: &AppHandle) {
@@ -253,8 +309,7 @@ fn show_main_window(app: &AppHandle) {
 }
 
 /// 끝내기(REQ-8): 실행 중이면 창에서 멈출지 남길지 묻고, 아니면 바로 끝낸다.
-fn request_quit(app: &AppHandle) {
-    let state = app.state::<AppState>();
+fn request_quit(app: &AppHandle, state: &AppState) {
     if state.status().map(|s| s.running).unwrap_or(false) {
         show_main_window(app);
         let _ = app.emit("confirm-quit", ());
@@ -263,31 +318,40 @@ fn request_quit(app: &AppHandle) {
     }
 }
 
+/// 창 밖(트레이·자동 시작)에서 띄우지 못했으면 창을 보여 사용자가 알게 한다.
+fn report_start(app: &AppHandle, result: ActionResult) {
+    if !result.ok {
+        show_main_window(app);
+    }
+}
+
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let korean = is_korean();
     let label = |ko: &str, en: &str| if korean { ko.to_string() } else { en.to_string() };
     let open = MenuItem::with_id(app, "open", label("창 열기", "Open"), true, None::<&str>)?;
     let admin = MenuItem::with_id(app, "admin", label("관리 화면 열기", "Open admin console"), true, None::<&str>)?;
-    let stop = MenuItem::with_id(app, "stop", label("멈추기", "Stop"), true, None::<&str>)?;
+    let stop_item = MenuItem::with_id(app, "stop", label("멈추기", "Stop"), true, None::<&str>)?;
     let restart = MenuItem::with_id(app, "restart", label("다시 시작", "Restart"), true, None::<&str>)?;
     let logs = MenuItem::with_id(app, "logs", label("로그 폴더 열기", "Open logs folder"), true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", label("끝내기", "Quit"), true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
-    let menu = Menu::with_items(app, &[&open, &admin, &separator, &stop, &restart, &logs, &PredefinedMenuItem::separator(app)?, &quit])?;
+    let menu = Menu::with_items(app, &[&open, &admin, &separator, &stop_item, &restart, &logs, &PredefinedMenuItem::separator(app)?, &quit])?;
     let mut builder = TrayIconBuilder::with_id("tray").menu(&menu).show_menu_on_left_click(false).tooltip("TTTGate");
     if let Some(icon) = app.default_window_icon() {
         builder = builder.icon(icon.clone());
     }
     builder
         .on_menu_event(|app, event| {
-            let state = app.state::<AppState>();
             match event.id.as_ref() {
                 "open" => show_main_window(app),
-                "admin" => open_admin_url(&state),
-                "stop" => { state.run(&cli::stop_args()); }
-                "restart" => { state.run(&cli::stop_args()); start_daemon(&state); }
-                "logs" => open_logs_folder(&state),
-                "quit" => request_quit(app),
+                "admin" => in_background(app, |_, state| open_admin_url(state)),
+                "stop" => in_background(app, |_, state| { stop(state); }),
+                "restart" => in_background(app, |app, state| {
+                    stop(state);
+                    report_start(app, start_daemon(state));
+                }),
+                "logs" => in_background(app, |_, state| open_logs_folder(state)),
+                "quit" => in_background(app, request_quit),
                 _ => {}
             }
         })
@@ -345,9 +409,9 @@ pub fn run() {
     tauri::Builder::default()
         // 두 번째 실행은 떠 있는 창을 앞으로 가져온다(REQ-9).
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main_window(app)))
-        .manage(AppState { paths, exe, rejoin: Mutex::new(false), running: AtomicBool::new(false) })
+        .manage::<Shared>(Arc::new(AppState { paths, exe, rejoin: AtomicBool::new(false), running: AtomicBool::new(false) }))
         .invoke_handler(tauri::generate_handler![load_view, choose_mode, set_rejoin, join, start_client, start_server,
-            stop_daemon, bootstrap_token, open_admin, open_logs, set_autostart, quit])
+            stop_daemon, open_admin, open_logs, set_autostart, quit])
         .setup(move |app| {
             build_tray(app.handle())?;
             if autostarted {
@@ -355,17 +419,18 @@ pub fn run() {
                 if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
                     let _ = window.hide();
                 }
-                let state = app.state::<AppState>();
-                if !state.status().map(|s| s.running).unwrap_or(true) {
-                    start_daemon(&state);
-                }
+                in_background(app.handle(), |app, state| {
+                    if !state.status().map(|s| s.running).unwrap_or(true) {
+                        report_start(app, start_daemon(state));
+                    }
+                });
             }
             Ok(())
         })
         .on_window_event(|window, event| {
             // 닫기는 데몬이 도는 동안 창만 숨기고 트레이에 남는다(REQ-8).
             if let WindowEvent::CloseRequested { api, .. } = event {
-                if window.state::<AppState>().running.load(Ordering::SeqCst) {
+                if window.state::<Shared>().running.load(Ordering::SeqCst) {
                     api.prevent_close();
                     let _ = window.hide();
                 }

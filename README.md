@@ -150,7 +150,7 @@ The old repository-root `config.yaml` is no longer used.
 ```
 
 - It accepts `-adminPort`, `-adminBindHost`, `-adminAllowedOrigins`, `-controlPort`, `-controlTls`, `-controlProtocolMode` and `-allowLegacyAdminRemote`. See [Server Options](#server-options).
-- Values that you do not give stay as they are. `-adminAllowedOrigins ""` clears the list.
+- Values that you do not give stay as they are. The command line does not accept an empty value, so `server config save` cannot clear `adminAllowedOrigins`. Clear the list in the admin console.
 - If `server.yaml` does not exist, the defaults are created first.
 - The command uses the same checks as a save in the admin console.
 - On success, it prints `Saved <path>`. It does not print the version banner.
@@ -418,7 +418,8 @@ Choose server mode or client mode. The launcher saves the choice in `config/laun
 #### Client Mode
 
 - If this PC is already enrolled (`client config show` has a `clientId` and a secret), the window shows the client ID and the server. Press **Run in the background** to start the client. The launcher skips enrollment.
-- Otherwise, enter the server address and the enrollment code from the admin console, then press **Enroll**. The launcher runs `client join -json` and shows the result as a sentence.
+- Otherwise, enter the server address and the enrollment code from the admin console, then press **Enroll**. The launcher runs `client join --code-stdin -json` and shows the result as a sentence.
+- If `config/client.yaml` exists but cannot be read, or uses the old shared-key method, the launcher asks whether to enroll again with the code. When you agree, it replaces the file and keeps the old one as `client.yaml.bak`.
 - **Enroll with another server** enrolls this PC again. If TTTGate runs, the launcher stops it first. It replaces `client.yaml` and keeps the old file as `client.yaml.bak`.
 - After 3 or more failed connections in a row, the window says that the server may have removed this client or changed its secret. Then enroll again with a new code.
 
@@ -452,7 +453,7 @@ Empty fields keep the current settings. Change all other settings in the admin c
 #### Security Notes
 
 - The launcher and the CLI are not code-signed yet. Windows SmartScreen can show a warning at the first start. To continue, select **More info**, then **Run anyway**.
-- The launcher gives the enrollment code to `client join` on its command line while that command runs. Other users of the same PC can see process command lines. The code works once and expires.
+- The launcher gives the enrollment code to `client join` through standard input (`--code-stdin`), not on the command line. So the code does not appear in the process list or in process-creation audit logs.
 
 #### Build the Launcher
 
@@ -511,7 +512,7 @@ Each option applies to the `server` mode. Some options are accepted only when th
 |---|---|---|---|---|
 | `-adminPort <port>` | Whole number 1–65535 | `9300` | Saved to `server.yaml` (`adminPort`) | Port of the admin console. Accepted at start and by `server config save`. A bad value stops the server with exit code 1 (`Invalid admin port number (1 ~ 65535)`). Example: `server -adminPort 9400`. |
 | `-adminBindHost <host>` | Host name or IP address | `127.0.0.1` | Saved to `server.yaml` (`adminBindHost`) | Address that the admin console listens on. Only `server config save`. A value that is not loopback needs `-allowLegacyAdminRemote` (otherwise exit code 77). Example: `server config save -adminBindHost 0.0.0.0 -allowLegacyAdminRemote`. |
-| `-adminAllowedOrigins <origins>` | Origins, comma separated | Empty list | Saved to `server.yaml` (`adminAllowedOrigins`) | Other addresses that may open the admin console, for example through a reverse proxy. Only `server config save`. `-adminAllowedOrigins ""` clears the list. Example: `server config save -adminAllowedOrigins https://admin.example.com`. |
+| `-adminAllowedOrigins <origins>` | Origins, comma separated | Empty list | Saved to `server.yaml` (`adminAllowedOrigins`) | Other addresses that may open the admin console, for example through a reverse proxy. Only `server config save`. An empty value is an error (exit code 2); clear the list in the admin console. Example: `server config save -adminAllowedOrigins https://admin.example.com`. |
 | `-controlPort <port>` | Whole number 1–65535 | The value in `server.yaml` | Saved to `server.yaml` (`port`) | Control port that tunnel clients connect to. Only `server config save`. A bad value gives exit code 1. |
 | `-controlTls` | Flag | The value in `server.yaml` | Saved to `server.yaml` (`tls`) | Use TLS on the control port. Only `server config save`. `-controlTls false` turns TLS off. [Enroll with a Code](#enroll-with-a-code) needs TLS. |
 | `-controlProtocolMode <mode>` | `legacy`, `mixed` or `mtls-strict` | The value in `server.yaml` | Saved to `server.yaml` (`controlProtocolMode`) | Control protocol mode. Only `server config save`. Another value gives exit code 1. |
@@ -550,6 +551,7 @@ Notes on `-trustedProxyHops`:
 | `-privateKey <path\|pem>` | Run commands | File path or PEM text | None | Saved by `-save` (a path as a path, PEM text as text) | Private key of `-cert`. Turns TLS on. The path rules of `-ca` apply. Error messages do not show the path, because the value can be key text that was put in the wrong place. |
 | `-save` | `client`, `client run` | Flag | Off | Writes `config/client.yaml` | Save the resolved options to `config/client.yaml`, then start the client. See the notes below. `-save false` writes nothing. |
 | `--code <code>` | `client join` | 12 Crockford Base32 characters, for example `7Q4K-M2XP-AB01` | None (required) | Used once | Enrollment code from the admin console. It uses digits and the letters A–Z except `I`, `L`, `O` and `U`. When you type it, `I` and `L` are read as `1`, and `O` as `0`. Dashes, spaces and case are ignored. The code works once and, by default, expires after 15 minutes. Choose another expiry in **Code expires after** in the console, up to 30 days or **Never expires**. The `ttlMinutes` field of the admin API takes 1–43200 (30 days), or `null` for no expiry. A script can send `ttlMinutes` alone. The console also sends `provisional: true`. Then an expiry longer than 15 minutes applies only after `POST /api/trustedClients/<id>/enrollmentCode/confirm` with the `issueId` from the response. |
+| `--code-stdin` | `client join` | Flag | Off | This run only | Read the enrollment code from the first line of standard input instead of `--code`. The code then does not appear in the process list or in process-creation audit logs. Using it together with `--code`, or giving an empty first line, is an error (exit code 2). Example: `echo 7Q4K-M2XP-AB01 \| TTTGate client join gw.example.com --code-stdin`. |
 | `--force` | `client join` | Flag | Off | This run only | Replace an existing `config/client.yaml`. The old file is kept as `client.yaml.bak`. Without it, an existing file stops `client join` with exit code 78. |
 | `-json` | `client join` (also `status`) | Flag | Off | This run only | Print the result as one JSON line on stdout. See [Enroll with a Code](#enroll-with-a-code) and [Check Whether TTTGate Runs](#check-whether-tttgate-runs). Other commands do not accept it. |
 | `-bufferLimit <MiB>` | Run commands | `-1` (no limit) or a whole number 16–1048576 | `128` | Saved by `-save` (as `globalMemCacheLimit`) | Memory buffer limit. Another value is an error (exit code 2). Example: `-bufferLimit 256`. |
@@ -990,7 +992,7 @@ net.ipv4.tcp_wmem = 4096 16384 1048576
 ```
 
 - 받는 옵션은 `-adminPort`, `-adminBindHost`, `-adminAllowedOrigins`, `-controlPort`, `-controlTls`, `-controlProtocolMode`, `-allowLegacyAdminRemote` 다. [서버 옵션](#서버-옵션)을 참고한다.
-- 주지 않은 값은 그대로 둔다. `-adminAllowedOrigins ""` 는 목록을 비운다.
+- 주지 않은 값은 그대로 둔다. 명령줄은 빈 값을 받지 않으므로 `server config save` 로는 `adminAllowedOrigins` 를 비울 수 없다. 목록은 관리 화면에서 비운다.
 - `server.yaml` 이 없으면 기본값으로 먼저 만든다.
 - 관리 화면에서 저장할 때와 같은 검사를 거친다.
 - 저장하면 `Saved <path>` 를 출력한다. 버전 배너는 출력하지 않는다.
@@ -1258,7 +1260,8 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 #### 클라이언트 모드
 
 - 이 PC 가 이미 등록되어 있으면(`client config show` 에 `clientId` 와 비밀값이 있으면) 창에 클라이언트 ID 와 서버를 보여 준다. **데몬으로 실행**(**Run in the background**)을 누르면 클라이언트가 시작된다. 등록 단계는 건너뛴다.
-- 등록되어 있지 않으면 서버 주소와 관리 화면에서 받은 등록 코드를 넣고 **등록**(**Enroll**)을 누른다. 런처는 `client join -json` 을 실행하고 결과를 문장으로 보여 준다.
+- 등록되어 있지 않으면 서버 주소와 관리 화면에서 받은 등록 코드를 넣고 **등록**(**Enroll**)을 누른다. 런처는 `client join --code-stdin -json` 을 실행하고 결과를 문장으로 보여 준다.
+- `config/client.yaml` 이 있지만 읽을 수 없거나 예전 공유 키 방식이면, 런처는 이 코드로 다시 등록할지 묻는다. 동의하면 파일을 바꾸고 이전 파일은 `client.yaml.bak` 으로 남긴다.
 - **다른 서버로 다시 등록**(**Enroll with another server**)은 이 PC 를 다시 등록한다. TTTGate 가 돌고 있으면 먼저 멈춘다. `client.yaml` 을 바꾸고, 이전 파일은 `client.yaml.bak` 으로 남긴다.
 - 연결이 3번 이상 잇달아 실패하면, 서버가 이 클라이언트를 지웠거나 비밀값을 바꿨을 수 있다고 알려 준다. 그렇다면 새 코드로 다시 등록한다.
 
@@ -1292,7 +1295,7 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 #### 보안 참고 사항
 
 - 런처와 CLI 는 아직 코드 서명이 되어 있지 않다. 처음 실행할 때 Windows SmartScreen 이 경고할 수 있다. 계속하려면 **추가 정보**(**More info**)를 누른 뒤 **실행**(**Run anyway**)을 누른다.
-- 런처는 `client join` 이 실행되는 동안 그 명령줄로 등록 코드를 넘긴다. 같은 PC 의 다른 사용자는 프로세스 명령줄을 볼 수 있다. 등록 코드는 한 번만 쓸 수 있고 기한이 지나면 만료된다.
+- 런처는 등록 코드를 명령줄이 아니라 표준 입력(`--code-stdin`)으로 `client join` 에 넘긴다. 그래서 코드가 프로세스 목록이나 프로세스 생성 감사 로그에 남지 않는다.
 
 #### 런처 빌드하기
 
@@ -1351,7 +1354,7 @@ TTTGate <server|client|stop|status> [command] [options]
 |---|---|---|---|---|
 | `-adminPort <port>` | 정수 1–65535 | `9300` | `server.yaml` 에 저장(`adminPort`) | 관리 화면의 포트. 시작할 때와 `server config save` 모두 받는다. 잘못된 값이면 서버가 종료 코드 1 로 멈춘다(`Invalid admin port number (1 ~ 65535)`). 예: `server -adminPort 9400`. |
 | `-adminBindHost <host>` | 호스트 이름 또는 IP 주소 | `127.0.0.1` | `server.yaml` 에 저장(`adminBindHost`) | 관리 화면이 연결을 받을 주소. `server config save` 에서만 받는다. 루프백이 아닌 값은 `-allowLegacyAdminRemote` 가 있어야 저장된다(없으면 종료 코드 77). 예: `server config save -adminBindHost 0.0.0.0 -allowLegacyAdminRemote`. |
-| `-adminAllowedOrigins <origins>` | 쉼표로 구분한 origin 목록 | 빈 목록 | `server.yaml` 에 저장(`adminAllowedOrigins`) | 역방향 프록시 등을 거쳐 관리 화면을 열 수 있는 다른 주소. `server config save` 에서만 받는다. `-adminAllowedOrigins ""` 는 목록을 비운다. 예: `server config save -adminAllowedOrigins https://admin.example.com`. |
+| `-adminAllowedOrigins <origins>` | 쉼표로 구분한 origin 목록 | 빈 목록 | `server.yaml` 에 저장(`adminAllowedOrigins`) | 역방향 프록시 등을 거쳐 관리 화면을 열 수 있는 다른 주소. `server config save` 에서만 받는다. 빈 값은 오류다(종료 코드 2). 목록은 관리 화면에서 비운다. 예: `server config save -adminAllowedOrigins https://admin.example.com`. |
 | `-controlPort <port>` | 정수 1–65535 | `server.yaml` 의 값 | `server.yaml` 에 저장(`port`) | 터널 클라이언트가 연결하는 제어 포트. `server config save` 에서만 받는다. 잘못된 값이면 종료 코드 1 이다. |
 | `-controlTls` | 플래그 | `server.yaml` 의 값 | `server.yaml` 에 저장(`tls`) | 제어 포트에 TLS 를 쓴다. `server config save` 에서만 받는다. `-controlTls false` 는 TLS 를 끈다. [코드로 등록하기](#코드로-등록하기)에는 TLS 가 필요하다. |
 | `-controlProtocolMode <mode>` | `legacy`, `mixed`, `mtls-strict` | `server.yaml` 의 값 | `server.yaml` 에 저장(`controlProtocolMode`) | 제어 프로토콜 모드. `server config save` 에서만 받는다. 그 밖의 값이면 종료 코드 1 이다. |
@@ -1390,6 +1393,7 @@ TTTGate <server|client|stop|status> [command] [options]
 | `-privateKey <path\|pem>` | 실행 계열 명령 | 파일 경로 또는 PEM 본문 | 없음 | `-save` 로 저장(경로는 경로로, PEM 본문은 본문으로) | `-cert` 의 개인 키. TLS 를 켠다. 경로 규칙은 `-ca` 와 같다. 잘못 넣은 키 본문일 수도 있으므로 오류 메시지에 경로를 보여 주지 않는다. |
 | `-save` | `client`, `client run` | 플래그 | 꺼짐 | `config/client.yaml` 에 씀 | 최종 옵션을 `config/client.yaml` 에 저장한 뒤 클라이언트를 시작한다. 아래 참고 사항을 읽는다. `-save false` 는 아무것도 쓰지 않는다. |
 | `--code <code>` | `client join` | Crockford Base32 글자 12개. 예: `7Q4K-M2XP-AB01` | 없음(필수) | 한 번 사용 | 관리 화면에서 받은 등록 코드. 숫자와, `I`·`L`·`O`·`U` 를 뺀 영문자 A–Z 로 이루어진다. 입력할 때 `I` 와 `L` 은 `1` 로, `O` 는 `0` 으로 읽는다. 대시, 공백, 대소문자는 무시한다. 코드는 한 번만 쓸 수 있고 기본으로 15분 뒤에 만료된다. 관리 화면의 **Code expires after** 에서 30일까지, 또는 **Never expires**(만료 없음)로 바꿀 수 있다. 관리 API 의 `ttlMinutes` 는 1–43200(30일) 또는 만료 없음을 뜻하는 `null` 을 받는다. 스크립트는 `ttlMinutes` 만 보내도 된다. 관리 화면은 `provisional: true` 도 함께 보낸다. 이때 15분보다 긴 기한은 응답의 `issueId` 로 `POST /api/trustedClients/<id>/enrollmentCode/confirm` 을 보낸 뒤에 적용된다. |
+| `--code-stdin` | `client join` | 플래그 | 꺼짐 | 이번 실행만 | 등록 코드를 `--code` 대신 표준 입력의 첫 줄에서 읽는다. 그러면 코드가 프로세스 목록이나 프로세스 생성 감사 로그에 남지 않는다. `--code` 와 함께 쓰거나 첫 줄이 비어 있으면 오류다(종료 코드 2). 예: `echo 7Q4K-M2XP-AB01 \| TTTGate client join gw.example.com --code-stdin`. |
 | `--force` | `client join` | 플래그 | 꺼짐 | 이번 실행만 | 이미 있는 `config/client.yaml` 을 바꾼다. 이전 파일은 `client.yaml.bak` 으로 남는다. 이 옵션이 없으면 파일이 이미 있을 때 `client join` 이 종료 코드 78 로 멈춘다. |
 | `-json` | `client join`(그리고 `status`) | 플래그 | 꺼짐 | 이번 실행만 | 결과를 stdout 에 JSON 한 줄로 출력한다. [코드로 등록하기](#코드로-등록하기)와 [TTTGate 실행 여부 확인하기](#tttgate-실행-여부-확인하기)를 참고한다. 다른 명령에서는 받지 않는다. |
 | `-bufferLimit <MiB>` | 실행 계열 명령 | `-1`(제한 없음) 또는 정수 16–1048576 | `128` | `-save` 로 저장(`globalMemCacheLimit`) | 메모리 버퍼 상한. 그 밖의 값은 오류다(종료 코드 2). 예: `-bufferLimit 256`. |

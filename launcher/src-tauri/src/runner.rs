@@ -31,11 +31,20 @@ impl CliOutput {
 }
 
 pub fn run(cli: &Path, args: &[String], work_dir: &Path) -> CliOutput {
+    run_inner(cli, args, work_dir, None)
+}
+
+/// 표준 입력으로 `input` 을 넘긴다. 등록 코드처럼 명령줄에 두면 안 되는 값을 넘길 때 쓴다.
+pub fn run_with_input(cli: &Path, args: &[String], work_dir: &Path, input: &str) -> CliOutput {
+    run_inner(cli, args, work_dir, Some(input))
+}
+
+fn run_inner(cli: &Path, args: &[String], work_dir: &Path, input: Option<&str>) -> CliOutput {
     let unique = format!("{}-{}", std::process::id(), std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0));
     let out_file = temp_file(&format!("tttgate-launcher-{}.out", unique));
     let err_file = temp_file(&format!("tttgate-launcher-{}.err", unique));
-    let result = spawn_and_wait(cli, args, work_dir, &out_file, &err_file);
+    let result = spawn_and_wait(cli, args, work_dir, &out_file, &err_file, input);
     let output = match result {
         Ok(code) => CliOutput {
             code,
@@ -53,10 +62,11 @@ fn temp_file(name: &str) -> PathBuf {
     std::env::temp_dir().join(name)
 }
 
-fn spawn_and_wait(cli: &Path, args: &[String], work_dir: &Path, out_file: &Path, err_file: &Path) -> std::io::Result<Option<i32>> {
+fn spawn_and_wait(cli: &Path, args: &[String], work_dir: &Path, out_file: &Path, err_file: &Path, input: Option<&str>)
+    -> std::io::Result<Option<i32>> {
     let mut command = Command::new(cli);
     command.args(args).current_dir(work_dir)
-        .stdin(Stdio::null())
+        .stdin(if input.is_some() { Stdio::piped() } else { Stdio::null() })
         .stdout(Stdio::from(fs::File::create(out_file)?))
         .stderr(Stdio::from(fs::File::create(err_file)?));
     #[cfg(windows)]
@@ -65,7 +75,13 @@ fn spawn_and_wait(cli: &Path, args: &[String], work_dir: &Path, out_file: &Path,
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         command.creation_flags(CREATE_NO_WINDOW);
     }
-    Ok(command.status()?.code())
+    let mut child = command.spawn()?;
+    if let (Some(text), Some(mut stdin)) = (input, child.stdin.take()) {
+        use std::io::Write;
+        // 쓰고 나서 stdin 을 닫아야 자식이 입력의 끝을 안다(이 블록을 벗어나며 닫힌다).
+        stdin.write_all(text.as_bytes())?;
+    }
+    Ok(child.wait()?.code())
 }
 
 #[cfg(test)]
@@ -80,6 +96,15 @@ mod tests {
         assert_eq!(silent.error_message(), "TTTGate exited with code 78");
         let killed = CliOutput { code: None, stdout: String::new(), stderr: String::new() };
         assert_eq!(killed.error_message(), "TTTGate did not finish");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn the_input_reaches_standard_input() {
+        let cmd = Path::new(r"C:\Windows\System32\cmd.exe");
+        let output = run_with_input(cmd, &["/v:on".into(), "/c".into(), "set /p X=& echo got !X!".into()], &std::env::temp_dir(), "abc\n");
+        assert_eq!(output.code, Some(0));
+        assert_eq!(output.stdout.trim(), "got abc");
     }
 
     #[cfg(windows)]

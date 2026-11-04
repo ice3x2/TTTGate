@@ -60,6 +60,9 @@ const writeClientStatus = (binDir: string, status: ClientConnectionStatus): void
         fs.renameSync(temp, file);
     } catch (e) {
         logger.debug(`cannot write ${file}: ${(e as Error).message}`);
+        // 이름 바꾸기가 실패하면(백신 잠금 등) 임시 파일이 bin 에 남는다. 지운다.
+        // 지우기도 실패하면(같은 잠금) 남겨 둔다. 상태 파일은 연결에 영향을 주지 않으므로 클라이언트를 멈추지 않는다.
+        try { fs.rmSync(temp, {force: true}); } catch { /* 남겨 둔다 */ }
     }
 };
 

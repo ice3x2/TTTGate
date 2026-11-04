@@ -67,7 +67,8 @@ struct JoinJson {
     message: Option<String>,
 }
 
-pub fn parse_join(stdout: &str) -> JoinOutcome {
+/// JSON 결과가 없으면 stderr(없으면 stdout)를 문장으로 돌려준다. 사용자가 원인을 알 수 있어야 한다.
+pub fn parse_join(stdout: &str, stderr: &str) -> JoinOutcome {
     let parsed: Option<JoinJson> = last_json_line(stdout).and_then(|line| serde_json::from_str(line).ok());
     match parsed {
         Some(JoinJson { ok: true, client_id: Some(client_id), server: Some(server), .. }) => JoinOutcome::Joined { client_id, server },
@@ -75,7 +76,10 @@ pub fn parse_join(stdout: &str) -> JoinOutcome {
             category: json.category.unwrap_or_else(|| "unknown".into()),
             message: json.message.unwrap_or_default(),
         },
-        _ => JoinOutcome::Failed { category: "unknown".into(), message: stdout.trim().to_string() },
+        _ => {
+            let message = if stderr.trim().is_empty() { stdout.trim() } else { stderr.trim() };
+            JoinOutcome::Failed { category: "unknown".into(), message: message.to_string() }
+        }
     }
 }
 
@@ -103,6 +107,8 @@ pub fn parse_registration(stdout: &str) -> Option<Registration> {
     shown_value(stdout, "clientSecret").filter(|secret| *secret == "(hidden)")?;
     let host = shown_value(stdout, "host")?;
     let server = match shown_value(stdout, "port") {
+        // IPv6 주소는 포트와 헷갈리지 않게 대괄호로 감싼다.
+        Some(port) if host.contains(':') => format!("[{}]:{}", host, port),
         Some(port) => format!("{}:{}", host, port),
         None => host.to_string(),
     };
@@ -132,8 +138,9 @@ fn args(items: &[&str]) -> Vec<String> {
 pub fn status_args() -> Vec<String> { args(&["status", "--json"]) }
 pub fn registration_args() -> Vec<String> { args(&["client", "config", "show"]) }
 
-pub fn join_args(addr: &str, code: &str, replace: bool) -> Vec<String> {
-    let mut list = args(&["client", "join", addr, "--code", code, "--json"]);
+/// 등록 코드는 표준 입력으로 넘긴다(`runner::run_with_input`). 명령줄은 다른 사용자와 감사 로그가 볼 수 있다(REQ-2).
+pub fn join_args(addr: &str, replace: bool) -> Vec<String> {
+    let mut list = args(&["client", "join", addr, "--code-stdin", "--json"]);
     if replace {
         list.push("--force".into());
     }
@@ -147,7 +154,10 @@ pub fn server_save_args(options: &ServerOptions, allow_remote: bool) -> Vec<Stri
     let mut push = |name: &str, value: String| { list.push(format!("-{}", name)); list.push(value); };
     if let Some(port) = options.admin_port { push("adminPort", port.to_string()); }
     if let Some(host) = &options.admin_bind_host { push("adminBindHost", host.clone()); }
-    if let Some(origins) = &options.admin_allowed_origins { push("adminAllowedOrigins", origins.join(",")); }
+    // CLI 는 빈 값을 받지 않는다. 빈 목록은 넘기지 않아 지금 값을 그대로 둔다.
+    if let Some(origins) = options.admin_allowed_origins.as_ref().filter(|origins| !origins.is_empty()) {
+        push("adminAllowedOrigins", origins.join(","));
+    }
     if let Some(port) = options.control_port { push("controlPort", port.to_string()); }
     if let Some(tls) = options.control_tls { push("controlTls", tls.to_string()); }
     if let Some(mode) = &options.control_protocol_mode { push("controlProtocolMode", mode.clone()); }
@@ -209,11 +219,14 @@ mod tests {
 
     #[test]
     fn join_json_is_parsed_and_anything_else_is_a_failure() {
-        assert_eq!(parse_join(r#"{"ok":true,"clientId":"edge","server":"gw:9126"}"#),
+        assert_eq!(parse_join(r#"{"ok":true,"clientId":"edge","server":"gw:9126"}"#, ""),
             JoinOutcome::Joined { client_id: "edge".into(), server: "gw:9126".into() });
-        assert_eq!(parse_join("{\"ok\":false,\"category\":\"rejected\",\"message\":\"m\"}\n"),
+        assert_eq!(parse_join("{\"ok\":false,\"category\":\"rejected\",\"message\":\"m\"}\n", "warning: x"),
             JoinOutcome::Failed { category: "rejected".into(), message: "m".into() });
-        assert_eq!(parse_join("boom"), JoinOutcome::Failed { category: "unknown".into(), message: "boom".into() });
+        assert_eq!(parse_join("boom", ""), JoinOutcome::Failed { category: "unknown".into(), message: "boom".into() });
+        // JSON 이 없으면(예: 옛 CLI 가 옵션을 모름) 사용자가 원인을 알도록 stderr 를 보인다.
+        assert_eq!(parse_join("", "TTTGate: unknown option '--code-stdin'\n"),
+            JoinOutcome::Failed { category: "unknown".into(), message: "TTTGate: unknown option '--code-stdin'".into() });
     }
 
     #[test]
@@ -223,14 +236,17 @@ mod tests {
         assert_eq!(parse_registration("host: gw  (file)\nclientId: edge  (file)\n"), None);
         assert_eq!(parse_registration("host: gw  (file)\nclientSecret: (hidden)  (env)\n"), None);
         assert_eq!(parse_registration(""), None);
+        let ipv6 = "host: ::1  (file)\nport: 9126  (file)\nclientId: edge  (file)\nclientSecret: (hidden)  (file)\n";
+        assert_eq!(parse_registration(ipv6).unwrap().server, "[::1]:9126");
     }
 
     #[test]
     fn command_lines_match_the_cli() {
         assert_eq!(status_args(), strings(&["status", "--json"]));
         assert_eq!(registration_args(), strings(&["client", "config", "show"]));
-        assert_eq!(join_args("gw:9126", "7Q4K-M2XP-AB01", false), strings(&["client", "join", "gw:9126", "--code", "7Q4K-M2XP-AB01", "--json"]));
-        assert_eq!(join_args("gw", "c", true), strings(&["client", "join", "gw", "--code", "c", "--json", "--force"]));
+        // 코드는 표준 입력으로 넘긴다. 명령줄에 두면 프로세스 생성 감사 로그에 남는다(REQ-2).
+        assert_eq!(join_args("gw:9126", false), strings(&["client", "join", "gw:9126", "--code-stdin", "--json"]));
+        assert_eq!(join_args("gw", true), strings(&["client", "join", "gw", "--code-stdin", "--json", "--force"]));
         assert_eq!(client_daemon_args(), strings(&["client", "-daemon"]));
         assert_eq!(server_daemon_args(false), strings(&["server", "-daemon"]));
         assert_eq!(server_daemon_args(true), strings(&["server", "-daemon", "-allowLegacyAdminRemote"]));
@@ -248,7 +264,8 @@ mod tests {
         assert_eq!(server_save_args(&options, true), strings(&["server", "config", "save", "-adminPort", "9300", "-adminBindHost", "0.0.0.0",
             "-adminAllowedOrigins", "https://a:9300,https://b", "-controlPort", "9126", "-controlTls", "false",
             "-controlProtocolMode", "mixed", "-allowLegacyAdminRemote"]));
+        // CLI 는 빈 값을 받지 않는다. 빈 목록은 지금 값을 그대로 둔다(목록 지우기는 관리 화면에서 한다).
         let empty_origins = ServerOptions { admin_allowed_origins: Some(vec![]), ..Default::default() };
-        assert_eq!(server_save_args(&empty_origins, false), strings(&["server", "config", "save", "-adminAllowedOrigins", ""]));
+        assert_eq!(server_save_args(&empty_origins, false), strings(&["server", "config", "save"]));
     }
 }
