@@ -166,7 +166,15 @@ struct JoinResult {
 fn build_view(state: &AppState, launcher_version: String) -> LoadView {
     let settings = state.settings();
     let cli_missing = state.cli().is_none();
+    let was_running = state.running.load(Ordering::SeqCst);
     let status = if cli_missing { None } else { state.status() };
+    // 상태를 일시적으로 읽지 못했는데 마지막으로 돌고 있었다면, 멈춤 화면(시작 단추)을 보이지 않는다.
+    // 거기서 시작을 누르면 돌고 있던 데몬을 다시 띄워 연결이 끊긴다.
+    let status = status.or_else(|| (was_running && !cli_missing).then(|| DaemonStatus {
+        running: true,
+        mode: settings.mode.map(|mode| match mode { Mode::Server => "server".to_string(), Mode::Client => "client".to_string() }),
+        ..stopped_status()
+    }));
     let status = status.unwrap_or_else(|| DaemonStatus {
         // status 를 모르는 옛 CLI 다. 버전 경고(NFR-6)가 뜨도록 --version 으로 버전을 읽는다.
         version: if cli_missing { String::new() } else {
@@ -302,7 +310,11 @@ fn save_and_start_server(state: &AppState, options: &ServerOptions, allow_remote
 fn stop(state: &AppState) -> ActionResult {
     let result = ActionResult::from(&state.run(&cli::stop_args()));
     // 창을 닫을 때 숨길지 끝낼지를 바로 맞추도록 실행 여부를 새로 읽는다.
-    state.status();
+    // stop 은 확인하지 못한 프로세스(다른 사용자, 조회 실패)를 남기고도 0 으로 끝난다. 아직 돌면 실패로 알린다.
+    let still_running = state.status().map(|status| status.running).unwrap_or(false);
+    if result.ok && still_running {
+        return ActionResult::failed("TTTGate is still running. It may run as another user. Stop it as that user, or end it in Task Manager.".into());
+    }
     result
 }
 
@@ -502,10 +514,11 @@ pub fn run() {
                 show_main_window(app.handle());
             } else {
                 // 로그인 때는 창 없이 트레이로 뜨고, 고른 모드의 데몬이 멈춰 있으면 띄운다(REQ-12).
-                in_background(app.handle(), |app, state| {
-                    if !state.status().map(|s| s.running).unwrap_or(true) {
-                        report_failure(app, exclusive(state, start_daemon));
-                    }
+                in_background(app.handle(), |app, state| match state.status() {
+                    Some(status) if status.running => {}
+                    Some(_) => report_failure(app, exclusive(state, start_daemon)),
+                    // CLI 가 없거나 상태를 읽지 못했다. 트레이만 보고 돈다고 착각하지 않게 알린다.
+                    None => report_failure(app, ActionResult::failed("Cannot read the TTTGate status. Check that the launcher is in the bin folder of TTTGate.".into())),
                 });
             }
             Ok(())
@@ -513,7 +526,8 @@ pub fn run() {
         .on_window_event(|window, event| {
             // 닫기는 데몬이 도는 동안 창만 숨기고 트레이에 남는다(REQ-8).
             if let WindowEvent::CloseRequested { api, .. } = event {
-                if window.state::<Shared>().running.load(Ordering::SeqCst) {
+                let state = window.state::<Shared>();
+                if state.running.load(Ordering::SeqCst) || state.busy.load(Ordering::SeqCst) {
                     api.prevent_close();
                     let _ = window.hide();
                 }

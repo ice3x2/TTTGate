@@ -419,6 +419,7 @@ Choose server mode or client mode. The launcher saves the choice in `config/laun
 
 - If this PC is already enrolled (`client config show` has a `clientId` and a secret), the window shows the client ID and the server. Press **Run in the background** to start the client. The launcher skips enrollment.
 - Otherwise, enter the server address and the enrollment code from the admin console, then press **Enroll**. The launcher runs `client join --code-stdin --json` and shows the result as a sentence.
+- A client that uses the old shared-key method (no `clientId` in `client.yaml`) cannot run from the launcher. Enroll it with a code, or keep running it from the command line.
 - If `config/client.yaml` exists but cannot be read, or uses the old shared-key method, the launcher asks whether to enroll again with the code. When you agree, it replaces the file and keeps the old one as `client.yaml.bak`.
 - **Enroll with another server** enrolls this PC again. If TTTGate runs, the launcher stops it first. It replaces `client.yaml` and keeps the old file as `client.yaml.bak`.
 - After 3 or more failed connections in a row, the window says that the server may have removed this client or changed its secret. Then enroll again with a new code.
@@ -1261,6 +1262,7 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 
 - 이 PC 가 이미 등록되어 있으면(`client config show` 에 `clientId` 와 비밀값이 있으면) 창에 클라이언트 ID 와 서버를 보여 준다. **데몬으로 실행**(**Run in the background**)을 누르면 클라이언트가 시작된다. 등록 단계는 건너뛴다.
 - 등록되어 있지 않으면 서버 주소와 관리 화면에서 받은 등록 코드를 넣고 **등록**(**Enroll**)을 누른다. 런처는 `client join --code-stdin --json` 을 실행하고 결과를 문장으로 보여 준다.
+- 예전 공유 키 방식의 클라이언트(`client.yaml` 에 `clientId` 가 없음)는 런처로 실행할 수 없다. 코드로 등록하거나 계속 명령줄에서 실행한다.
 - `config/client.yaml` 이 있지만 읽을 수 없거나 예전 공유 키 방식이면, 런처는 이 코드로 다시 등록할지 묻는다. 동의하면 파일을 바꾸고 이전 파일은 `client.yaml.bak` 으로 남긴다.
 - **다른 서버로 다시 등록**(**Enroll with another server**)은 이 PC 를 다시 등록한다. TTTGate 가 돌고 있으면 먼저 멈춘다. `client.yaml` 을 바꾸고, 이전 파일은 `client.yaml.bak` 으로 남긴다.
 - 연결이 3번 이상 잇달아 실패하면, 서버가 이 클라이언트를 지웠거나 비밀값을 바꿨을 수 있다고 알려 준다. 그렇다면 새 코드로 다시 등록한다.

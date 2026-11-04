@@ -23,6 +23,13 @@ impl CliOutput {
         if !stderr.is_empty() {
             return stderr.to_string();
         }
+        // -daemon 의 거부 이유(이미 도는 프로세스, PID 파일 권한 등)는 로그로 stdout 에 나온다.
+        if let Some(reason) = self.stdout.lines().rev().find_map(|line| line.split_once(" [ERROR] ").map(|(_, rest)| rest)) {
+            let reason = reason.split_once(":: ").map(|(_, text)| text).unwrap_or(reason).trim();
+            if !reason.is_empty() {
+                return reason.to_string();
+            }
+        }
         match self.code {
             Some(code) => format!("TTTGate exited with code {}", code),
             None => "TTTGate did not finish".to_string(),
@@ -172,6 +179,11 @@ mod tests {
         assert_eq!(silent.error_message(), "TTTGate exited with code 78");
         let killed = CliOutput { code: None, stdout: String::new(), stderr: String::new() };
         assert_eq!(killed.error_message(), "TTTGate did not finish");
+        // -daemon 의 거부 이유는 로그로 stdout 에 나온다. stderr 가 비면 마지막 ERROR 줄의 본문을 보인다.
+        let refused = CliOutput { code: Some(1), stderr: String::new(), stdout: "TTTGate v2.0.1 (dev)\n\
+2026-11-05T01:00:00.000Z [INFO] Sentinel:: Start daemon and sentinel mode.\n\
+2026-11-05T01:00:00.100Z [ERROR] Sentinel:: A previous TTTGate process is still running and was not stopped: pid 7.\n".into() };
+        assert_eq!(refused.error_message(), "A previous TTTGate process is still running and was not stopped: pid 7.");
     }
 
     #[cfg(windows)]
