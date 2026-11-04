@@ -1,0 +1,68 @@
+name: Windows Icon
+
+# #321: 실행 파일 아이콘은 pkg 가 받는 Node 바이너리의 리소스 여유에 기댄다. pkg 나 아이콘을 바꾸면
+# 릴리스 전에 여기서 두 Windows 대상(x64, arm64)을 만들어 아이콘을 넣고 x64 를 실행해 본다.
+on:
+  pull_request:
+    paths:
+      - package.json
+      - package-lock.json
+      - scripts/set-exe-icon.cjs
+      - admin/public/favicon.ico
+      - .github/workflows/windows-icon.yml
+  push:
+    branches: [main, develop]
+    paths:
+      - package.json
+      - package-lock.json
+      - scripts/set-exe-icon.cjs
+      - admin/public/favicon.ico
+      - .github/workflows/windows-icon.yml
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-icon-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-icon:
+    name: Build the Windows binaries and set their icon
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      NODE_ENV: development
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Cache pkg base binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.pkg-cache
+          key: pkg-cache-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Install locked dependencies
+        run: npm ci --include=dev --no-audit --no-fund
+      - name: Build
+        run: npm run build
+      # 릴리스와 같은 pkg 옵션을 쓰도록 npm run pkg 를 거친다. 아이콘 여유는 바이너리마다 다르므로 두 Windows 대상을 모두 만든다.
+      # 같은 플랫폼 대상만 주면 pkg 가 이름에서 win 을 빼므로, 대상마다 릴리스와 같은 이름을 준다.
+      - name: Package win-x64
+        env:
+          NODE_ENV: production
+        run: npm run pkg -- --targets node24-win-x64 --output icon-smoke/TTTGate-win-x64.exe
+      - name: Package win-arm64
+        env:
+          NODE_ENV: production
+        run: npm run pkg -- --targets node24-win-arm64 --output icon-smoke/TTTGate-win-arm64.exe
+      - name: Set the icon
+        run: node scripts/set-exe-icon.cjs icon-smoke 2
+      - name: Run the binary with the icon
+        run: icon-smoke/TTTGate-win-x64.exe --version

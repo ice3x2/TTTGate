@@ -60,7 +60,7 @@ In the examples, `./TTTGate-linux-x64` is the Linux x64 binary. Use the binary f
 
 Use Node.js 24 LTS or newer (minimum `24.0.0`) for source installations and to build the server or the admin UI. When you use nvm, run `nvm use`. Then install the locked dependencies with `npm ci` and `npm ci --prefix admin`.
 
-Standalone binaries embed Node.js 24. They do not need a separate Node install. Build them with the locked `@yao-pkg/pkg` tool through `npm run pkg`. The supported targets are Linux x64/ARM64, Windows x64/ARM64 and Alpine x64.
+Standalone binaries embed Node.js 24. They do not need a separate Node install. Build them with the locked `@yao-pkg/pkg` tool through `npm run pkg`. The supported targets are Linux x64/ARM64, Windows x64/ARM64 and Alpine x64. `npm run pkg` alone leaves the Node.js icon on the Windows binaries. `npm run dist` sets the TTTGate icon. You can also run `npm run icon:exe` after `npm run pkg`.
 
 #### Memory on a Small Server
 
@@ -747,7 +747,7 @@ TTTGate 는 서버와 클라이언트가 짝을 이뤄 내부망의 TCP/HTTP 서
 
 소스로 설치하거나 서버·관리 UI 를 빌드할 때는 Node.js 24 LTS 이상(최소 `24.0.0`)을 쓴다. nvm 을 쓴다면 `nvm use` 를 먼저 실행한다. 그다음 `npm ci` 와 `npm ci --prefix admin` 으로 잠근 버전의 의존성을 설치한다.
 
-단독 실행 파일에는 Node.js 24 가 들어 있어서 Node 를 따로 설치하지 않아도 된다. 실행 파일은 잠근 버전의 `@yao-pkg/pkg` 도구로 `npm run pkg` 를 실행해 만든다. 지원 대상은 Linux x64/ARM64, Windows x64/ARM64, Alpine x64 다.
+단독 실행 파일에는 Node.js 24 가 들어 있어서 Node 를 따로 설치하지 않아도 된다. 실행 파일은 잠근 버전의 `@yao-pkg/pkg` 도구로 `npm run pkg` 를 실행해 만든다. 지원 대상은 Linux x64/ARM64, Windows x64/ARM64, Alpine x64 다. `npm run pkg` 만 실행하면 Windows 실행 파일에 Node.js 아이콘이 남는다. TTTGate 아이콘은 `npm run dist` 가 넣는다. `npm run pkg` 뒤에 `npm run icon:exe` 를 실행해도 된다.
 
 #### 작은 서버의 메모리
 
