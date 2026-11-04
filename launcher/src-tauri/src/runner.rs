@@ -54,6 +54,19 @@ pub fn remove_old_outputs(dir: &Path) {
     }
 }
 
+/// `attempts` 번 모두 `check` 가 참이어야 참이다. 거짓을 보면 바로 끝낸다.
+pub fn holds_for(attempts: u32, interval: std::time::Duration, mut check: impl FnMut() -> bool) -> bool {
+    for attempt in 0..attempts {
+        if !check() {
+            return false;
+        }
+        if attempt + 1 < attempts {
+            std::thread::sleep(interval);
+        }
+    }
+    true
+}
+
 /// `check` 가 참이 될 때까지 `interval` 간격으로 최대 `attempts` 번 본다.
 pub fn poll_until(attempts: u32, interval: std::time::Duration, mut check: impl FnMut() -> bool) -> bool {
     for attempt in 0..attempts {
@@ -136,6 +149,16 @@ mod tests {
         let mut never = 0;
         assert!(!poll_until(4, std::time::Duration::ZERO, || { never += 1; false }));
         assert_eq!(never, 4);
+    }
+
+    #[test]
+    fn holds_for_needs_every_check_to_pass_and_stops_at_the_first_failure() {
+        let mut calls = 0;
+        assert!(holds_for(4, std::time::Duration::ZERO, || { calls += 1; true }));
+        assert_eq!(calls, 4);
+        let mut checks = 0;
+        assert!(!holds_for(4, std::time::Duration::ZERO, || { checks += 1; checks < 2 }));
+        assert_eq!(checks, 2);
     }
 
     #[test]

@@ -81,7 +81,7 @@ let app = () => {
     }
     if(startType == 'server' && command === 'config save') {
         // 같은 bin 에서 도는 클라이언트는 server.yaml 을 쓰지 않는다. 모드를 모르는 예전 항목은 서버일 수 있다고 본다.
-        const isServerRunning = () => { const running = Sentinel.findRunning(); return running !== undefined && running.mode !== 'client'; };
+        const isServerRunning = () => Sentinel.findAllRunning().some((running) => running.mode !== 'client');
         process.exitCode = saveServerConfig(options, {out: (line) => console.log(line), err: (line) => { process.stderr.write(line + "\n"); }},
             {isServerRunning});
         return;

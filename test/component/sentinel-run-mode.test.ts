@@ -47,6 +47,16 @@ describe("Sentinel run mode (#322)", () => {
         expect(Sentinel.findRunning()).toEqual({pid: process.pid, mode: "client", daemon: false});
     });
 
+    test("REQ-17 findAllRunning lists the daemon and the foreground process together", () => {
+        fs.writeFileSync(pidFile("app"), ownEntry({mode: "client"}));
+        fs.writeFileSync(pidFile("foreground"), ownEntry({mode: "server"}));
+        expect(Sentinel.findAllRunning()).toEqual([
+            {pid: process.pid, mode: "client", daemon: true},
+            {pid: process.pid, mode: "server", daemon: false}
+        ]);
+        expect(Sentinel.findRunning()).toEqual({pid: process.pid, mode: "client", daemon: true});
+    });
+
     test("REQ-14 an entry without a mode (older format) is running with an unknown mode", () => {
         fs.writeFileSync(pidFile("app"), ownEntry());
         expect(Sentinel.findRunning()).toEqual({pid: process.pid, mode: null, daemon: true});

@@ -27,6 +27,8 @@ struct AppState {
     paths: Paths,
     exe: PathBuf,
     rejoin: AtomicBool,
+    /// 띄우기·멈추기·등록 같은 일이 도는 중이다. 창과 트레이에서 겹쳐 부르면 PID 파일과 설정을 두고 다툰다.
+    busy: AtomicBool,
     /// 마지막으로 본 실행 여부. 창을 닫을 때 숨길지 끝낼지 정한다(REQ-8).
     running: AtomicBool,
 }
@@ -43,10 +45,19 @@ impl AppState {
         }
     }
 
+    /// 한 번 읽지 못하면(일시 오류) 한 번 더 읽는다. 끝내 못 읽으면 마지막으로 본 실행 여부를 그대로 둔다.
     fn status(&self) -> Option<DaemonStatus> {
-        let status = cli::parse_status(&self.run(&cli::status_args()).stdout);
-        self.running.store(status.as_ref().map(|s| s.running).unwrap_or(false), Ordering::SeqCst);
+        let status = cli::parse_status(&self.run(&cli::status_args()).stdout)
+            .or_else(|| cli::parse_status(&self.run(&cli::status_args()).stdout));
+        if let Some(status) = &status {
+            self.running.store(status.running, Ordering::SeqCst);
+        }
         status
+    }
+
+    /// 다른 일이 돌고 있지 않으면 시작한다. 끝나면(가드가 사라지면) 다시 받는다.
+    fn begin(&self) -> Option<BusyGuard<'_>> {
+        self.busy.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).ok().map(|_| BusyGuard(&self.busy))
     }
 
     fn settings(&self) -> Settings {
@@ -57,6 +68,16 @@ impl AppState {
         settings::save(&self.paths.config_dir, settings).map_err(|e| e.to_string())
     }
 }
+
+struct BusyGuard<'a>(&'a AtomicBool);
+
+impl Drop for BusyGuard<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::SeqCst);
+    }
+}
+
+const BUSY_MESSAGE: &str = "Another action is still running. Try again when it ends.";
 
 /// 명령이 함께 쓰는 상태. CLI 를 부르는 일은 작업 스레드에서 하므로 Arc 로 나눈다.
 type Shared = Arc<AppState>;
@@ -120,8 +141,10 @@ impl ActionResult {
     }
 }
 
-/// 데몬이 뜬 뒤 실제로 도는지 보는 시간: 1초 간격으로 8번.
+/// 데몬이 뜨기를 기다리는 시간(1초 간격으로 8번)과, 뜬 뒤 같은 프로세스가 계속 도는지 보는 시간(3번).
+/// 포트 충돌 같은 실패는 앱이 뜨고 1~2초 뒤에 나므로 한 번 본 것으로는 알 수 없다.
 const START_CHECK_ATTEMPTS: u32 = 8;
+const START_HOLD_ATTEMPTS: u32 = 3;
 const START_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
 
 #[derive(Serialize)]
@@ -190,7 +213,18 @@ fn set_rejoin(state: State<Shared>, on: bool) {
 
 #[tauri::command]
 async fn join(state: State<'_, Shared>, addr: String, code: String, replace: bool) -> Result<JoinResult, String> {
-    blocking(&state, move |state| join_with(state, &addr, &code, replace)).await
+    blocking(&state, move |state| match state.begin() {
+        Some(_guard) => join_with(state, &addr, &code, replace),
+        None => JoinResult { ok: false, client_id: None, server: None, category: Some("unknown".into()), message: Some(BUSY_MESSAGE.into()) },
+    }).await
+}
+
+/// 겹치면 안 되는 일을 하나씩만 한다.
+fn exclusive(state: &AppState, work: impl FnOnce(&AppState) -> ActionResult) -> ActionResult {
+    match state.begin() {
+        Some(_guard) => work(state),
+        None => ActionResult::failed(BUSY_MESSAGE.into()),
+    }
 }
 
 fn join_with(state: &AppState, addr: &str, code: &str, replace: bool) -> JoinResult {
@@ -220,8 +254,11 @@ fn start_daemon(state: &AppState) -> ActionResult {
         return result;
     }
     // `-daemon` 의 종료 코드 0 은 자식을 띄웠다는 뜻일 뿐이다. 앱이 곧 끝나면(포트 충돌 등) 알린다.
-    let running = runner::poll_until(START_CHECK_ATTEMPTS, START_CHECK_INTERVAL,
-        || state.status().map(|status| status.running).unwrap_or(false));
+    // sentinel 이 앱을 다시 띄우면 PID 가 바뀌므로 같은 PID 가 계속 돌아야 성공이다.
+    let current_pid = || state.status().filter(|status| status.running).and_then(|status| status.pid);
+    let mut first_pid = None;
+    let started = runner::poll_until(START_CHECK_ATTEMPTS, START_CHECK_INTERVAL, || { first_pid = current_pid(); first_pid.is_some() });
+    let running = started && runner::holds_for(START_HOLD_ATTEMPTS, START_CHECK_INTERVAL, || current_pid() == first_pid);
     if running {
         result
     } else {
@@ -232,12 +269,12 @@ fn start_daemon(state: &AppState) -> ActionResult {
 
 #[tauri::command]
 async fn start_client(state: State<'_, Shared>) -> Result<ActionResult, String> {
-    blocking(&state, start_daemon).await
+    blocking(&state, |state| exclusive(state, start_daemon)).await
 }
 
 #[tauri::command]
 async fn start_server(state: State<'_, Shared>, options: ServerOptions, allow_remote: bool) -> Result<ActionResult, String> {
-    blocking(&state, move |state| save_and_start_server(state, &options, allow_remote)).await
+    blocking(&state, move |state| exclusive(state, |state| save_and_start_server(state, &options, allow_remote))).await
 }
 
 fn save_and_start_server(state: &AppState, options: &ServerOptions, allow_remote: bool) -> ActionResult {
@@ -265,7 +302,7 @@ fn stop(state: &AppState) -> ActionResult {
 
 #[tauri::command]
 async fn stop_daemon(state: State<'_, Shared>) -> Result<ActionResult, String> {
-    blocking(&state, stop).await
+    blocking(&state, |state| exclusive(state, stop)).await
 }
 
 /// 실행 중인 서버의 관리 화면을 연다. 열 서버가 없으면 false.
@@ -301,7 +338,7 @@ fn open_with_shell(url: &str) {
 
 #[tauri::command]
 async fn set_autostart(state: State<'_, Shared>, on: bool) -> Result<ActionResult, String> {
-    blocking(&state, move |state| apply_autostart(state, on)).await
+    blocking(&state, move |state| exclusive(state, |state| apply_autostart(state, on))).await
 }
 
 fn apply_autostart(state: &AppState, on: bool) -> ActionResult {
@@ -325,7 +362,7 @@ fn apply_autostart(state: &AppState, on: bool) -> ActionResult {
 #[tauri::command]
 async fn quit(app: AppHandle, state: State<'_, Shared>, stop_daemon: bool) -> Result<(), String> {
     if stop_daemon {
-        let result = blocking(&state, stop).await?;
+        let result = blocking(&state, |state| exclusive(state, stop)).await?;
         if !result.ok {
             return Err(result.message);
         }
@@ -381,11 +418,11 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 "open" => show_main_window(app),
                 // 클라이언트 모드나 멈춘 상태에서는 열 관리 화면이 없다. 창을 보여 지금 상태를 알린다.
                 "admin" => in_background(app, |app, state| if !open_admin_url(state) { show_main_window(app); }),
-                "stop" => in_background(app, |app, state| report_failure(app, stop(state))),
-                "restart" => in_background(app, |app, state| {
+                "stop" => in_background(app, |app, state| report_failure(app, exclusive(state, stop))),
+                "restart" => in_background(app, |app, state| report_failure(app, exclusive(state, |state| {
                     let stopped = stop(state);
-                    report_failure(app, if stopped.ok { start_daemon(state) } else { stopped });
-                }),
+                    if stopped.ok { start_daemon(state) } else { stopped }
+                }))),
                 "logs" => in_background(app, |_, state| open_logs_folder(state)),
                 "quit" => in_background(app, request_quit),
                 _ => {}
@@ -442,24 +479,26 @@ pub fn run() {
     let exe = std::env::current_exe().expect("the launcher path");
     let paths = paths::from_exe(&exe);
     let autostarted = std::env::args().any(|arg| arg == autostart::AUTOSTART_ARG);
-    // 앞선 실행에서 데몬이 잡고 있던 출력 파일을 지운다. 명령을 부르기 전에 한 번만 한다.
-    runner::remove_old_outputs(&runner::output_dir());
     tauri::Builder::default()
         // 두 번째 실행은 떠 있는 창을 앞으로 가져온다(REQ-9).
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main_window(app)))
-        .manage::<Shared>(Arc::new(AppState { paths, exe, rejoin: AtomicBool::new(false), running: AtomicBool::new(false) }))
+        .manage::<Shared>(Arc::new(AppState { paths, exe, rejoin: AtomicBool::new(false), busy: AtomicBool::new(false),
+            running: AtomicBool::new(false) }))
         .invoke_handler(tauri::generate_handler![load_view, choose_mode, set_rejoin, join, start_client, start_server,
             stop_daemon, open_admin, open_logs, set_autostart, quit])
         .setup(move |app| {
+            // 앞선 실행에서 데몬이 잡고 있던 출력 파일을 지운다. 두 번째로 띄운 런처는 여기 오기 전에
+            // single-instance 플러그인이 끝내므로, 첫 런처가 쓰는 파일을 지우지 않는다.
+            runner::remove_old_outputs(&runner::output_dir());
             build_tray(app.handle())?;
-            if autostarted {
+            if !autostarted {
+                // 창은 숨긴 채 만들어진다. 로그인 자동 시작이 아니면 보인다.
+                show_main_window(app.handle());
+            } else {
                 // 로그인 때는 창 없이 트레이로 뜨고, 고른 모드의 데몬이 멈춰 있으면 띄운다(REQ-12).
-                if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
-                    let _ = window.hide();
-                }
                 in_background(app.handle(), |app, state| {
                     if !state.status().map(|s| s.running).unwrap_or(true) {
-                        report_failure(app, start_daemon(state));
+                        report_failure(app, exclusive(state, start_daemon));
                     }
                 });
             }

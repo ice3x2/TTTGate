@@ -34,8 +34,11 @@ describe("build-launcher", () => {
         expect(require("../../../package.json").scripts["launcher:build"]).toBe("node scripts/build-launcher.cjs dist/bin");
     });
 
-    test("the launcher version comes from package.json", () => {
+    test("the launcher version comes from package.json, which must be semver for Tauri", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         expect(require("../../../launcher/src-tauri/tauri.conf.json").version).toBe("../../package.json");
+        // 릴리스 태그는 package.json 버전과 같아야 하므로(--match-package) 여기서 지키면 태그도 semver 다.
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        expect(require("../../../package.json").version).toMatch(/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/);
     });
 });

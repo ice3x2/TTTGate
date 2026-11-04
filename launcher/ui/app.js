@@ -98,8 +98,8 @@ const invoke = (command, args) => window.__TAURI__.core.invoke(command, args);
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 /** 실행 중에는 상태가 자주 바뀐다. 멈춰 있을 때는 CLI 를 덜 부른다. */
-const POLL_RUNNING_MS = 3000;
-const POLL_STOPPED_MS = 10000;
+const POLL_RUNNING_MS = 5000;
+const POLL_STOPPED_MS = 15000;
 let current = null;
 
 function translate() {
@@ -109,12 +109,13 @@ function translate() {
 
 async function busy(work) {
   $("[data-busy]").hidden = false;
-  $$("button").forEach((button) => { button.disabled = true; });
+  const controls = () => $$("button, input[type=checkbox]");
+  controls().forEach((control) => { control.disabled = true; });
   try {
     return await work();
   } finally {
     $("[data-busy]").hidden = true;
-    $$("button").forEach((button) => { button.disabled = false; });
+    controls().forEach((control) => { control.disabled = false; });
   }
 }
 
@@ -198,6 +199,8 @@ function serverOptions(form) {
 
 function ask(name) {
   const dialog = $(`[data-dialog=${name}]`);
+  // 이미 열려 있으면(같은 이벤트가 연달아 옴) 다시 열지 않는다.
+  if (dialog.open) return Promise.resolve("cancel");
   return new Promise((resolve) => {
     dialog.addEventListener("close", () => resolve(dialog.returnValue), { once: true });
     dialog.showModal();
@@ -271,10 +274,16 @@ function wire() {
     const code = form.code.value.trim();
     // 코드는 화면에 남기지 않는다(REQ-2).
     form.code.value = "";
-    let result = await busy(() => invoke("join", { addr, code, replace: current && current.screen.replacing === true }));
-    // 읽을 수 없는 예전 등록 정보가 있으면 바꾸어 등록할지 묻는다. 묻지 않으면 이 화면에서 빠져나갈 길이 없다.
-    if (!result.ok && result.category === "exists" && confirm(T.replaceConfirm)) {
-      result = await busy(() => invoke("join", { addr, code, replace: true }));
+    let result;
+    try {
+      result = await busy(() => invoke("join", { addr, code, replace: current && current.screen.replacing === true }));
+      // 읽을 수 없는 예전 등록 정보가 있으면 바꾸어 등록할지 묻는다. 묻지 않으면 이 화면에서 빠져나갈 길이 없다.
+      if (!result.ok && result.category === "exists" && confirm(T.replaceConfirm)) {
+        result = await busy(() => invoke("join", { addr, code, replace: true }));
+      }
+    } catch (error) {
+      showResult("[data-join-result]", false, String(error));
+      return;
     }
     if (result.ok) {
       showResult("[data-join-result]", true, T.joined(result.clientId, result.server));
@@ -287,8 +296,8 @@ function wire() {
   });
   $("[data-form=server]").addEventListener("submit", (event) => {
     event.preventDefault();
-    // 이미 동의했으면 다시 묻지 않는다(REQ-5). 동의는 런처 설정에 남아 있다.
-    void startServer(event.target, Boolean(current && current.settings.allowRemoteAdmin));
+    // 먼저 동의 없이 저장한다. 다른 PC 에 열리는 설정일 때만(종료 코드 77) 묻는다. 루프백으로 되돌리면 동의도 지워진다(REQ-5).
+    void startServer(event.target, false);
   });
   $("[data-autostart]").addEventListener("change", async (event) => {
     const result = await invoke("set_autostart", { on: event.target.checked });

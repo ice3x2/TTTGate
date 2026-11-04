@@ -144,16 +144,22 @@ class Sentinel {
      * 신호 0 으로 살아 있고 기록과 다르다고 확인되지 않은 항목만 센다. 확인할 수 없으면(unknown) 도는 것으로 본다.
      */
     public static findRunning(): RunningProcess | undefined {
+        return Sentinel.findAllRunning()[0];
+    }
+
+    /** 살아 있는 TTTGate 모두(데몬 app 먼저, 그다음 foreground). 같은 설치본에서 서버와 클라이언트가 함께 돌 수 있다. */
+    public static findAllRunning(): RunningProcess[] {
+        const running: RunningProcess[] = [];
         for(const type of ['app', 'foreground'] as PidType[]) {
             for(const entry of Sentinel.readPIDFile(type)) {
                 const state = Sentinel.processState(entry.pid);
                 if(state === 'dead') continue;
                 const match = Sentinel.matchRecordedProcess(entry);
                 if(state === 'alive' ? match === 'mismatch' : match !== 'match') continue;
-                return {pid: entry.pid, mode: entry.mode ?? null, daemon: type === 'app'};
+                running.push({pid: entry.pid, mode: entry.mode ?? null, daemon: type === 'app'});
             }
         }
-        return undefined;
+        return running;
     }
 
     private static ownStartTime(): number {
