@@ -105,7 +105,7 @@ describe("Windows executable icon (#321)", () => {
             expect(run(path.join(dir, "missing")).status).not.toBe(0);
         });
 
-        // CI 의 아이콘 확인 작업은 win-x64 하나만 만든다. 그때는 기대하는 수를 인자로 준다.
+        // CI 처럼 기대하는 실행 파일 수를 직접 줄 수 있다.
         test("accepts the expected number of Windows binaries as a second argument", () => {
             writeExe(path.join(dir, "TTTGate-win-x64.exe"), iconsOfFile().slice(0, 1));
             const result = run(dir, "1");
