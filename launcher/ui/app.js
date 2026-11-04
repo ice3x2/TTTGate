@@ -202,6 +202,8 @@ function ask(name) {
   // 이미 열려 있으면(같은 이벤트가 연달아 옴) 다시 열지 않는다.
   if (dialog.open) return Promise.resolve("cancel");
   return new Promise((resolve) => {
+    // Esc 로 닫으면 returnValue 가 바뀌지 않는다. 비워 두지 않으면 지난번 선택(예: 멈추고 끝내기)이 다시 쓰인다.
+    dialog.returnValue = "";
     dialog.addEventListener("close", () => resolve(dialog.returnValue), { once: true });
     dialog.showModal();
   });

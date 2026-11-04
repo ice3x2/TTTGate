@@ -164,7 +164,8 @@ fn build_view(state: &AppState, launcher_version: String) -> LoadView {
     let status = status.unwrap_or_else(|| DaemonStatus {
         // status 를 모르는 옛 CLI 다. 버전 경고(NFR-6)가 뜨도록 --version 으로 버전을 읽는다.
         version: if cli_missing { String::new() } else {
-            cli::parse_version(&state.run(&cli::version_args()).stdout).unwrap_or_else(|| "unknown".into())
+            // 버전을 읽지 못하면 비워 둔다. 모르는 것을 다르다고 경고하지 않는다.
+            cli::parse_version(&state.run(&cli::version_args()).stdout).unwrap_or_default()
         },
         ..stopped_status()
     });

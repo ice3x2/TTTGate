@@ -160,9 +160,9 @@ The old repository-root `config.yaml` is no longer used.
 | Exit code | Meaning |
 |---|---|
 | 0 | Saved |
-| 1 | A value is wrong. The message is on stderr. Nothing is saved |
+| 1 | A value is wrong. The message is on stderr. The given values are not saved. (When `server.yaml` did not exist, the default file is still created.) |
 | 75 | A TTTGate server of this installation is running. Stop it first |
-| 77 | The admin console would be reachable from other hosts, and `-allowLegacyAdminRemote` was not given. Nothing is saved |
+| 77 | The admin console would be reachable from other hosts, and `-allowLegacyAdminRemote` was not given. The given values are not saved. (When `server.yaml` did not exist, the default file is still created.) |
 
 ### Admin Web Console
 
@@ -418,7 +418,7 @@ Choose server mode or client mode. The launcher saves the choice in `config/laun
 #### Client Mode
 
 - If this PC is already enrolled (`client config show` has a `clientId` and a secret), the window shows the client ID and the server. Press **Run in the background** to start the client. The launcher skips enrollment.
-- Otherwise, enter the server address and the enrollment code from the admin console, then press **Enroll**. The launcher runs `client join --code-stdin -json` and shows the result as a sentence.
+- Otherwise, enter the server address and the enrollment code from the admin console, then press **Enroll**. The launcher runs `client join --code-stdin --json` and shows the result as a sentence.
 - If `config/client.yaml` exists but cannot be read, or uses the old shared-key method, the launcher asks whether to enroll again with the code. When you agree, it replaces the file and keeps the old one as `client.yaml.bak`.
 - **Enroll with another server** enrolls this PC again. If TTTGate runs, the launcher stops it first. It replaces `client.yaml` and keeps the old file as `client.yaml.bak`.
 - After 3 or more failed connections in a row, the window says that the server may have removed this client or changed its secret. Then enroll again with a new code.
@@ -1002,9 +1002,9 @@ net.ipv4.tcp_wmem = 4096 16384 1048576
 | 종료 코드 | 뜻 |
 |---|---|
 | 0 | 저장했다 |
-| 1 | 값이 잘못되었다. 메시지는 stderr 에 나온다. 아무것도 저장하지 않는다 |
+| 1 | 값이 잘못되었다. 메시지는 stderr 에 나온다. 준 값은 저장하지 않는다. (`server.yaml` 이 없었다면 기본 설정 파일은 만들어진다.) |
 | 75 | 이 설치본의 TTTGate 서버가 돌고 있다. 먼저 멈춘다 |
-| 77 | 관리 화면이 다른 호스트에서 접근 가능해지는데 `-allowLegacyAdminRemote` 가 없다. 아무것도 저장하지 않는다 |
+| 77 | 관리 화면이 다른 호스트에서 접근 가능해지는데 `-allowLegacyAdminRemote` 가 없다. 준 값은 저장하지 않는다. (`server.yaml` 이 없었다면 기본 설정 파일은 만들어진다.) |
 
 ### 웹 관리 화면
 
@@ -1260,7 +1260,7 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 #### 클라이언트 모드
 
 - 이 PC 가 이미 등록되어 있으면(`client config show` 에 `clientId` 와 비밀값이 있으면) 창에 클라이언트 ID 와 서버를 보여 준다. **데몬으로 실행**(**Run in the background**)을 누르면 클라이언트가 시작된다. 등록 단계는 건너뛴다.
-- 등록되어 있지 않으면 서버 주소와 관리 화면에서 받은 등록 코드를 넣고 **등록**(**Enroll**)을 누른다. 런처는 `client join --code-stdin -json` 을 실행하고 결과를 문장으로 보여 준다.
+- 등록되어 있지 않으면 서버 주소와 관리 화면에서 받은 등록 코드를 넣고 **등록**(**Enroll**)을 누른다. 런처는 `client join --code-stdin --json` 을 실행하고 결과를 문장으로 보여 준다.
 - `config/client.yaml` 이 있지만 읽을 수 없거나 예전 공유 키 방식이면, 런처는 이 코드로 다시 등록할지 묻는다. 동의하면 파일을 바꾸고 이전 파일은 `client.yaml.bak` 으로 남긴다.
 - **다른 서버로 다시 등록**(**Enroll with another server**)은 이 PC 를 다시 등록한다. TTTGate 가 돌고 있으면 먼저 멈춘다. `client.yaml` 을 바꾸고, 이전 파일은 `client.yaml.bak` 으로 남긴다.
 - 연결이 3번 이상 잇달아 실패하면, 서버가 이 클라이언트를 지웠거나 비밀값을 바꿨을 수 있다고 알려 준다. 그렇다면 새 코드로 다시 등록한다.
