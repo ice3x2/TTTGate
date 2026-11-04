@@ -19,6 +19,12 @@ const STRINGS = {
     on: "켬", off: "끔", saveAndStart: "저장하고 시작",
     tlsHelp: "클라이언트를 등록 코드로 등록하려면 켜야 합니다.",
     authHint: "연결이 계속 실패합니다. 서버에서 이 클라이언트가 지워졌거나 비밀값이 바뀌었을 수 있습니다. 그렇다면 다른 서버로 다시 등록을 눌러 새 코드로 등록하세요.",
+    reasons: {
+      busy: "다른 작업이 아직 진행 중입니다. 끝난 뒤 다시 하세요.",
+      stillRunning: "TTTGate 가 아직 실행 중입니다. 다른 사용자로 실행 중일 수 있습니다. 그 사용자로 멈추거나 작업 관리자에서 끝내세요.",
+      statusUnknown: "TTTGate 의 상태를 읽을 수 없습니다. 런처가 TTTGate 의 bin 폴더에 있는지 확인하세요.",
+      otherInstall: "다른 폴더의 TTTGate 런처가 이미 실행 중입니다. 그 런처를 먼저 끝내세요."
+    },
     stoppedAfterStart: "TTTGate 가 시작한 뒤 곧 멈췄습니다. 로그 폴더의 기록에서 이유를 확인하세요(예: 포트가 이미 쓰이고 있음, 등록 정보 없음).",
     replaceConfirm: "이 PC 에 이미 등록 정보(config/client.yaml)가 있지만 읽을 수 없거나 예전 방식입니다. 새 코드로 바꾸어 등록할까요? 지금 파일은 client.yaml.bak 으로 남깁니다.",
     tokenHelp: "처음 로그인할 때 이 부트스트랩 토큰으로 관리자 계정을 만듭니다.", copy: "복사", copied: "복사했습니다",
@@ -64,6 +70,12 @@ const STRINGS = {
     on: "On", off: "Off", saveAndStart: "Save and start",
     tlsHelp: "Turn it on to enroll clients with a code.",
     authHint: "The connection keeps failing. The server may have removed this client or changed its secret. If so, choose Enroll with another server and use a new code.",
+    reasons: {
+      busy: "Another action is still running. Try again when it ends.",
+      stillRunning: "TTTGate is still running. It may run as another user. Stop it as that user, or end it in Task Manager.",
+      statusUnknown: "Cannot read the TTTGate status. Check that the launcher is in the bin folder of TTTGate.",
+      otherInstall: "A launcher of another TTTGate folder is already running. Quit it first."
+    },
     stoppedAfterStart: "TTTGate stopped right after it started. Check the logs folder for the reason (for example, a port in use or no enrollment).",
     replaceConfirm: "This PC already has enrollment settings (config/client.yaml), but they cannot be read or use the old method. Enroll again with this code? The current file is kept as client.yaml.bak.",
     tokenHelp: "Use this bootstrap token to create the admin account at the first sign-in.", copy: "Copy", copied: "Copied",
@@ -123,7 +135,8 @@ async function busy(work) {
 
 /** 명령 결과를 문장으로 바꾼다. */
 function failureText(result) {
-  return result.stoppedAfterStart ? T.stoppedAfterStart : result.message;
+  if (result.stoppedAfterStart) return T.stoppedAfterStart;
+  return (result.reason && T.reasons[result.reason]) || result.message;
 }
 
 function showResult(selector, ok, text) {
@@ -170,7 +183,8 @@ function renderRunning(view) {
   // 예전 PID 항목은 모드가 없다. 단추는 저장된 모드로 정해서 다시 등록 단추가 사라지지 않게 한다(REQ-2b).
   const buttonsMode = mode === "unknown" && current ? current.settings.mode : mode;
   $("[data-running-title]").textContent = T.running[mode];
-  const details = [view.daemon ? T.background : T.foreground, `pid ${view.pid}`];
+  const details = [view.daemon ? T.background : T.foreground];
+  if (view.pid !== null && view.pid !== undefined) details.push(`pid ${view.pid}`);
   if (view.connection) details.unshift(T.connection[view.connection] || view.connection);
   if (view.failures > 0) details.push(T.failures(view.failures));
   $("[data-running-detail]").textContent = details.join(" · ");
@@ -233,7 +247,7 @@ async function startServer(form, allowRemote) {
 /** 멈추고, 실패하면 이유를 알린다. 멈췄으면 true. */
 async function stopOrReport() {
   const result = await invoke("stop_daemon");
-  if (!result.ok) alert(result.message);
+  if (!result.ok) alert(failureText(result));
   return result.ok;
 }
 
@@ -269,7 +283,7 @@ function wire() {
       try {
         changed = await busy(() => ACTIONS[button.dataset.action]());
       } catch (error) {
-        alert(String(error));
+        alert(T.reasons[String(error)] || String(error));
       }
       if (changed !== false) await refresh();
     });
@@ -298,7 +312,8 @@ function wire() {
       await refresh();
     } else {
       const text = T.joinFailed[result.category] || T.joinFailed.unknown;
-      showResult("[data-join-result]", false, result.category === "unknown" ? `${text} ${result.message}` : text);
+      const detail = result.category === "unknown" || result.category === "argument" ? ` (${result.message})` : "";
+      showResult("[data-join-result]", false, `${text}${detail}`);
     }
   });
   $("[data-form=server]").addEventListener("submit", (event) => {
@@ -308,7 +323,7 @@ function wire() {
   });
   $("[data-autostart]").addEventListener("change", async (event) => {
     const result = await invoke("set_autostart", { on: event.target.checked });
-    if (!result.ok) alert(result.message);
+    if (!result.ok) alert(failureText(result));
     await refresh();
   });
   // 트레이의 끝내기(REQ-8): 실행 중이면 멈출지 남길지 묻는다. 멈추지 못하면 끝내지 않고 알린다.
@@ -318,7 +333,8 @@ function wire() {
     try {
       await invoke("quit", { stopDaemon: choice === "stop" });
     } catch (error) {
-      alert(String(error));
+      // 끝내기 실패는 이유 키(예: stillRunning)나 CLI 의 문장으로 온다.
+      alert(T.reasons[String(error)] || String(error));
       await refresh();
     }
   });

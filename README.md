@@ -445,11 +445,11 @@ Empty fields keep the current settings. Change all other settings in the admin c
 - If you close the window while TTTGate runs, the window only goes to the tray. If TTTGate is stopped, closing the window ends the launcher.
 - **Quit** asks whether to stop TTTGate or keep it running.
 - If you open the launcher again, it finds a running TTTGate and continues to manage it.
-- Only one launcher runs at a time. If you start a second one, the first window comes to the front.
+- Only one launcher runs at a time on a PC, even across TTTGate folders. If you start a second one, the first window comes to the front. If the second one belongs to another TTTGate folder, the window also says so. Quit the first launcher before you use the other folder.
 
 #### Start at Sign-In
 
-**Start when I sign in to Windows** is off by default. When you turn it on, the launcher writes the `TTTGate Launcher` value in the `Run` registry key of the current user. At sign-in, the launcher starts in the tray without a window. If TTTGate is not running, the launcher starts it in the saved mode.
+**Start when I sign in to Windows** is off by default. When you turn it on, the launcher writes a `TTTGate Launcher (<hash>)` value in the `Run` registry key of the current user. The hash comes from the launcher path, so each TTTGate folder has its own value. At sign-in, the launcher starts in the tray without a window. If TTTGate is not running, the launcher starts it in the saved mode.
 
 #### Security Notes
 
@@ -1288,11 +1288,11 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 - TTTGate 가 실행 중일 때 창을 닫으면 창만 트레이로 숨는다. TTTGate 가 멈춰 있으면 창을 닫을 때 런처도 끝난다.
 - **끝내기** 를 누르면 TTTGate 를 멈출지, 계속 둘지 묻는다.
 - 런처를 다시 열면 실행 중인 TTTGate 를 찾아 이어서 관리한다.
-- 런처는 한 번에 하나만 돈다. 두 번째로 실행하면 이미 떠 있는 창이 앞으로 나온다.
+- 런처는 TTTGate 폴더가 달라도 한 PC 에서 하나만 돈다. 두 번째로 실행하면 이미 떠 있는 창이 앞으로 나온다. 두 번째가 다른 TTTGate 폴더의 런처이면 창에 그 사실도 알린다. 다른 폴더를 쓰려면 먼저 떠 있는 런처를 끝낸다.
 
 #### Windows 로그인 때 자동 시작
 
-**Windows 로그인 때 자동 시작**(**Start when I sign in to Windows**)은 기본으로 꺼져 있다. 켜면 런처가 현재 사용자의 `Run` 레지스트리 키에 `TTTGate Launcher` 값을 쓴다. 로그인하면 런처가 창 없이 트레이에서 시작하고, TTTGate 가 돌고 있지 않으면 저장된 모드로 시작한다.
+**Windows 로그인 때 자동 시작**(**Start when I sign in to Windows**)은 기본으로 꺼져 있다. 켜면 런처가 현재 사용자의 `Run` 레지스트리 키에 `TTTGate Launcher (<해시>)` 값을 쓴다. 해시는 런처 경로로 만들므로 TTTGate 폴더마다 값이 따로 있다. 로그인하면 런처가 창 없이 트레이에서 시작하고, TTTGate 가 돌고 있지 않으면 저장된 모드로 시작한다.
 
 #### 보안 참고 사항
 

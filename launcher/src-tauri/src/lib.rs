@@ -84,6 +84,7 @@ impl Drop for BusyGuard<'_> {
 }
 
 const BUSY_MESSAGE: &str = "Another action is still running. Try again when it ends.";
+const STATUS_UNKNOWN_MESSAGE: &str = "Cannot read the TTTGate status. Check that the launcher is in the bin folder of TTTGate.";
 
 /// 명령이 함께 쓰는 상태. CLI 를 부르는 일은 작업 스레드에서 하므로 Arc 로 나눈다.
 type Shared = Arc<AppState>;
@@ -133,17 +134,25 @@ struct ActionResult {
     needs_remote_consent: bool,
     /// 데몬을 띄웠지만 곧 끝났다(포트 충돌 등). 창은 로그 폴더를 보라고 알린다.
     stopped_after_start: bool,
+    /// 런처가 정한 실패 이유(busy, stillRunning, statusUnknown, otherInstall). 창이 언어에 맞는 문장으로 바꾼다.
+    /// CLI 가 낸 오류는 이유 없이 message 로만 온다.
+    reason: Option<String>,
     message: String,
 }
 
 impl ActionResult {
     fn from(output: &CliOutput) -> Self {
-        ActionResult { ok: output.ok(), needs_remote_consent: false, stopped_after_start: false,
+        ActionResult { ok: output.ok(), needs_remote_consent: false, stopped_after_start: false, reason: None,
             message: if output.ok() { String::new() } else { output.error_message() } }
     }
 
     fn failed(message: String) -> Self {
-        ActionResult { ok: false, needs_remote_consent: false, stopped_after_start: false, message }
+        ActionResult { ok: false, needs_remote_consent: false, stopped_after_start: false, reason: None, message }
+    }
+
+    /// 런처가 정한 이유로 실패한다. message 는 영어 기본 문장이다.
+    fn because(reason: &str, message: &str) -> Self {
+        ActionResult { reason: Some(reason.into()), ..ActionResult::failed(message.into()) }
     }
 }
 
@@ -215,7 +224,7 @@ async fn load_view(app: AppHandle, state: State<'_, Shared>) -> Result<LoadView,
 
 #[tauri::command]
 fn choose_mode(state: State<Shared>, mode: Option<Mode>) -> Result<(), String> {
-    let _guard = state.begin().ok_or_else(|| BUSY_MESSAGE.to_string())?;
+    let _guard = state.begin().ok_or_else(|| "busy".to_string())?;
     let mut settings = state.settings();
     settings.mode = mode;
     state.rejoin.store(false, Ordering::SeqCst);
@@ -239,7 +248,7 @@ async fn join(state: State<'_, Shared>, addr: String, code: String, replace: boo
 fn exclusive(state: &AppState, work: impl FnOnce(&AppState) -> ActionResult) -> ActionResult {
     match state.begin() {
         Some(_guard) => work(state),
-        None => ActionResult::failed(BUSY_MESSAGE.into()),
+        None => ActionResult::because("busy", BUSY_MESSAGE),
     }
 }
 
@@ -269,9 +278,18 @@ fn start_daemon(state: &AppState) -> ActionResult {
     // `-daemon` 의 종료 코드 0 은 자식을 띄웠다는 뜻일 뿐이다. 앱이 곧 끝나면(포트 충돌 등) 알린다.
     // sentinel 이 앱을 다시 띄우면 PID 가 바뀌므로 같은 PID 가 계속 돌아야 성공이다.
     // 상태를 읽지 못한 것(일시 오류)은 멈춘 것이 아니다. 멈췄거나 PID 가 바뀐 것을 본 때만 실패로 본다.
-    let current_pid = || state.status().filter(|status| status.running).and_then(|status| status.pid);
     let mut first_pid = None;
-    let started = runner::poll_until(START_CHECK_ATTEMPTS, START_CHECK_INTERVAL, || { first_pid = current_pid(); first_pid.is_some() });
+    let mut seen_status = false;
+    let started = runner::poll_until(START_CHECK_ATTEMPTS, START_CHECK_INTERVAL, || {
+        let status = state.status();
+        seen_status |= status.is_some();
+        first_pid = status.filter(|status| status.running).and_then(|status| status.pid);
+        first_pid.is_some()
+    });
+    if !started && !seen_status {
+        // 상태를 한 번도 읽지 못했다(예: status 를 모르는 옛 CLI). 정상으로 떴을 수 있으므로 멈추지 않는다.
+        return ActionResult::because("statusUnknown", STATUS_UNKNOWN_MESSAGE);
+    }
     let running = started && runner::holds_for(START_HOLD_ATTEMPTS, START_CHECK_INTERVAL, || match state.status() {
         None => true,
         Some(status) => status.running && status.pid == first_pid,
@@ -281,8 +299,7 @@ fn start_daemon(state: &AppState) -> ActionResult {
     } else {
         // 설정 오류 표시 없이 끝난 앱은 sentinel 이 3초마다 다시 띄운다. 화면이 실행과 멈춤을 오가지 않게 멈춘다.
         stop(state);
-        ActionResult { ok: false, needs_remote_consent: false, stopped_after_start: true,
-            message: "TTTGate stopped right after it started".into() }
+        ActionResult { stopped_after_start: true, ..ActionResult::failed("TTTGate stopped right after it started".into()) }
     }
 }
 
@@ -299,7 +316,7 @@ async fn start_server(state: State<'_, Shared>, options: ServerOptions, allow_re
 fn save_and_start_server(state: &AppState, options: &ServerOptions, allow_remote: bool) -> ActionResult {
     let saved = state.run(&cli::server_save_args(&options, allow_remote));
     if saved.code == Some(cli::REMOTE_CONSENT_EXIT_CODE) {
-        return ActionResult { ok: false, needs_remote_consent: true, stopped_after_start: false, message: saved.error_message() };
+        return ActionResult { needs_remote_consent: true, ..ActionResult::failed(saved.error_message()) };
     }
     if !saved.ok() {
         return ActionResult::from(&saved);
@@ -318,7 +335,7 @@ fn stop(state: &AppState) -> ActionResult {
     // stop 은 확인하지 못한 프로세스(다른 사용자, 조회 실패)를 남기고도 0 으로 끝난다. 아직 돌면 실패로 알린다.
     let still_running = state.status().map(|status| status.running).unwrap_or(false);
     if result.ok && still_running {
-        return ActionResult::failed("TTTGate is still running. It may run as another user. Stop it as that user, or end it in Task Manager.".into());
+        return ActionResult::because("stillRunning", "TTTGate is still running. It may run as another user. Stop it as that user, or end it in Task Manager.");
     }
     result
 }
@@ -367,7 +384,7 @@ async fn set_autostart(state: State<'_, Shared>, on: bool) -> Result<ActionResul
 fn apply_autostart(state: &AppState, on: bool) -> ActionResult {
     let reg = system_tool("reg.exe");
     // 끌 때 값이 이미 없으면 지울 것이 없다. 있는데 지우지 못하면(권한 등) 실패로 알린다.
-    let present = on || runner::run(&reg, &autostart::query_args(), &state.paths.bin_dir).ok();
+    let present = on || runner::run(&reg, &autostart::query_args(&state.exe), &state.paths.bin_dir).ok();
     if present {
         let output = runner::run(&reg, &autostart::reg_args(&state.exe, on), &state.paths.bin_dir);
         if !output.ok() {
@@ -377,7 +394,7 @@ fn apply_autostart(state: &AppState, on: bool) -> ActionResult {
     let mut settings = state.settings();
     settings.autostart = on;
     match state.save_settings(&settings) {
-        Ok(()) => ActionResult { ok: true, needs_remote_consent: false, stopped_after_start: false, message: String::new() },
+        Ok(()) => ActionResult { ok: true, ..ActionResult::failed(String::new()) },
         Err(message) => ActionResult::failed(message),
     }
 }
@@ -387,7 +404,8 @@ async fn quit(app: AppHandle, state: State<'_, Shared>, stop_daemon: bool) -> Re
     if stop_daemon {
         let result = blocking(&state, |state| exclusive(state, stop)).await?;
         if !result.ok {
-            return Err(result.message);
+            // 창이 언어에 맞는 문장으로 바꾸도록 이유 키가 있으면 그것을 넘긴다.
+            return Err(result.reason.unwrap_or(result.message));
         }
     }
     app.exit(0);
@@ -404,6 +422,10 @@ fn show_main_window(app: &AppHandle) {
 
 /// 끝내기(REQ-8): 실행 중이면 창에서 멈출지 남길지 묻고, 아니면 바로 끝낸다.
 fn request_quit(app: &AppHandle, state: &AppState) {
+    if state.busy.load(Ordering::SeqCst) {
+        report_failure(app, ActionResult::because("busy", BUSY_MESSAGE));
+        return;
+    }
     let running = state.status().map(|s| s.running).unwrap_or_else(|| state.running.load(Ordering::SeqCst));
     if running {
         show_main_window(app);
@@ -505,7 +527,16 @@ pub fn run() {
     let autostarted = std::env::args().any(|arg| arg == autostart::AUTOSTART_ARG);
     tauri::Builder::default()
         // 두 번째 실행은 떠 있는 창을 앞으로 가져온다(REQ-9).
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main_window(app)))
+        // 런처는 PC 마다 하나만 뜬다. 다른 설치 폴더의 런처를 띄웠으면 그 사실을 알린다.
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            show_main_window(app);
+            let ours = app.state::<Shared>().exe.to_string_lossy().to_lowercase();
+            let theirs = args.first().map(|exe| exe.to_lowercase());
+            if theirs.is_some_and(|exe| !exe.is_empty() && exe != ours) {
+                let _ = app.emit("action-failed", ActionResult::because("otherInstall",
+                    "A launcher of another TTTGate folder is already running. Quit it first."));
+            }
+        }))
         .manage::<Shared>(Arc::new(AppState { paths, exe, rejoin: AtomicBool::new(false), busy: AtomicBool::new(false),
             running: AtomicBool::new(false) }))
         .invoke_handler(tauri::generate_handler![load_view, choose_mode, set_rejoin, join, start_client, start_server,
@@ -524,7 +555,7 @@ pub fn run() {
                     Some(status) if status.running => {}
                     Some(_) => report_failure(app, exclusive(state, start_daemon)),
                     // CLI 가 없거나 상태를 읽지 못했다. 트레이만 보고 돈다고 착각하지 않게 알린다.
-                    None => report_failure(app, ActionResult::failed("Cannot read the TTTGate status. Check that the launcher is in the bin folder of TTTGate.".into())),
+                    None => report_failure(app, ActionResult::because("statusUnknown", STATUS_UNKNOWN_MESSAGE)),
                 });
             }
             Ok(())
