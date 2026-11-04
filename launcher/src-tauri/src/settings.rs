@@ -36,7 +36,11 @@ pub fn load(config_dir: &Path) -> Settings {
 pub fn save(config_dir: &Path, settings: &Settings) -> std::io::Result<()> {
     std::fs::create_dir_all(config_dir)?;
     let text = serde_json::to_string_pretty(settings).map_err(std::io::Error::other)?;
-    std::fs::write(settings_path(config_dir), text)
+    // 쓰는 도중 끊겨도 앞선 설정이 깨지지 않게 임시 파일에 쓴 뒤 이름을 바꾼다.
+    let path = settings_path(config_dir);
+    let temp = path.with_extension("json.tmp");
+    std::fs::write(&temp, text)?;
+    std::fs::rename(&temp, &path)
 }
 
 #[cfg(test)]

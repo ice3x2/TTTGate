@@ -433,7 +433,7 @@ The window shows a form with these settings:
 - Allowed origins, one per line
 - Control port, TLS and protocol mode
 
-Empty fields keep the current settings. Change all other settings in the admin console.
+Empty fields keep the current settings. Change all other settings in the admin console. **TLS** of the control port starts as **On**, because clients can enroll with a code only over TLS. A new `server.yaml` has it off.
 
 **Save and start** runs `server config save` and then `server -daemon`. If the admin console would be reachable from other PCs, the launcher first explains the risk and asks you. After you confirm, it adds `-allowLegacyAdminRemote` and remembers this for later starts.
 
@@ -552,7 +552,7 @@ Notes on `-trustedProxyHops`:
 | `-privateKey <path\|pem>` | Run commands | File path or PEM text | None | Saved by `-save` (a path as a path, PEM text as text) | Private key of `-cert`. Turns TLS on. The path rules of `-ca` apply. Error messages do not show the path, because the value can be key text that was put in the wrong place. |
 | `-save` | `client`, `client run` | Flag | Off | Writes `config/client.yaml` | Save the resolved options to `config/client.yaml`, then start the client. See the notes below. `-save false` writes nothing. |
 | `--code <code>` | `client join` | 12 Crockford Base32 characters, for example `7Q4K-M2XP-AB01` | None (required) | Used once | Enrollment code from the admin console. It uses digits and the letters A–Z except `I`, `L`, `O` and `U`. When you type it, `I` and `L` are read as `1`, and `O` as `0`. Dashes, spaces and case are ignored. The code works once and, by default, expires after 15 minutes. Choose another expiry in **Code expires after** in the console, up to 30 days or **Never expires**. The `ttlMinutes` field of the admin API takes 1–43200 (30 days), or `null` for no expiry. A script can send `ttlMinutes` alone. The console also sends `provisional: true`. Then an expiry longer than 15 minutes applies only after `POST /api/trustedClients/<id>/enrollmentCode/confirm` with the `issueId` from the response. |
-| `--code-stdin` | `client join` | Flag | Off | This run only | Read the enrollment code from the first line of standard input instead of `--code`. The code then does not appear in the process list or in process-creation audit logs. Using it together with `--code`, or giving an empty first line, is an error (exit code 2). Example: `echo 7Q4K-M2XP-AB01 \| TTTGate client join gw.example.com --code-stdin`. |
+| `--code-stdin` | `client join` | Flag | Off | This run only | Read the enrollment code from the first line of standard input instead of `--code`. It reads until the input ends, so pipe the code in (or press Ctrl+Z then Enter on Windows, Ctrl+D elsewhere, after typing it). The code then does not appear in the process list or in process-creation audit logs. Using it together with `--code`, or giving an empty first line, is an error (exit code 2). Example: `echo 7Q4K-M2XP-AB01 \| TTTGate client join gw.example.com --code-stdin`. |
 | `--force` | `client join` | Flag | Off | This run only | Replace an existing `config/client.yaml`. The old file is kept as `client.yaml.bak`. Without it, an existing file stops `client join` with exit code 78. |
 | `-json` | `client join` (also `status`) | Flag | Off | This run only | Print the result as one JSON line on stdout. See [Enroll with a Code](#enroll-with-a-code) and [Check Whether TTTGate Runs](#check-whether-tttgate-runs). Other commands do not accept it. |
 | `-bufferLimit <MiB>` | Run commands | `-1` (no limit) or a whole number 16–1048576 | `128` | Saved by `-save` (as `globalMemCacheLimit`) | Memory buffer limit. Another value is an error (exit code 2). Example: `-bufferLimit 256`. |
@@ -1276,7 +1276,7 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 - 허용 주소(origin). 한 줄에 하나씩 쓴다
 - 제어 포트, TLS, 프로토콜 모드
 
-비워 둔 값은 지금 설정을 그대로 쓴다. 나머지 설정은 관리 화면에서 바꾼다.
+비워 둔 값은 지금 설정을 그대로 쓴다. 나머지 설정은 관리 화면에서 바꾼다. 제어 포트의 **TLS** 는 처음부터 **켬** 으로 골라져 있다. 클라이언트는 TLS 로만 등록 코드를 쓸 수 있는데, 새 `server.yaml` 은 이 값이 꺼져 있기 때문이다.
 
 **저장하고 시작**(**Save and start**)은 `server config save` 를 실행한 뒤 `server -daemon` 을 실행한다. 관리 화면이 다른 PC 에서도 열리게 되는 설정이면, 런처가 먼저 위험을 설명하고 묻는다. 확인하면 `-allowLegacyAdminRemote` 를 붙이고, 다음 시작부터도 이 선택을 기억한다.
 
@@ -1395,7 +1395,7 @@ TTTGate <server|client|stop|status> [command] [options]
 | `-privateKey <path\|pem>` | 실행 계열 명령 | 파일 경로 또는 PEM 본문 | 없음 | `-save` 로 저장(경로는 경로로, PEM 본문은 본문으로) | `-cert` 의 개인 키. TLS 를 켠다. 경로 규칙은 `-ca` 와 같다. 잘못 넣은 키 본문일 수도 있으므로 오류 메시지에 경로를 보여 주지 않는다. |
 | `-save` | `client`, `client run` | 플래그 | 꺼짐 | `config/client.yaml` 에 씀 | 최종 옵션을 `config/client.yaml` 에 저장한 뒤 클라이언트를 시작한다. 아래 참고 사항을 읽는다. `-save false` 는 아무것도 쓰지 않는다. |
 | `--code <code>` | `client join` | Crockford Base32 글자 12개. 예: `7Q4K-M2XP-AB01` | 없음(필수) | 한 번 사용 | 관리 화면에서 받은 등록 코드. 숫자와, `I`·`L`·`O`·`U` 를 뺀 영문자 A–Z 로 이루어진다. 입력할 때 `I` 와 `L` 은 `1` 로, `O` 는 `0` 으로 읽는다. 대시, 공백, 대소문자는 무시한다. 코드는 한 번만 쓸 수 있고 기본으로 15분 뒤에 만료된다. 관리 화면의 **Code expires after** 에서 30일까지, 또는 **Never expires**(만료 없음)로 바꿀 수 있다. 관리 API 의 `ttlMinutes` 는 1–43200(30일) 또는 만료 없음을 뜻하는 `null` 을 받는다. 스크립트는 `ttlMinutes` 만 보내도 된다. 관리 화면은 `provisional: true` 도 함께 보낸다. 이때 15분보다 긴 기한은 응답의 `issueId` 로 `POST /api/trustedClients/<id>/enrollmentCode/confirm` 을 보낸 뒤에 적용된다. |
-| `--code-stdin` | `client join` | 플래그 | 꺼짐 | 이번 실행만 | 등록 코드를 `--code` 대신 표준 입력의 첫 줄에서 읽는다. 그러면 코드가 프로세스 목록이나 프로세스 생성 감사 로그에 남지 않는다. `--code` 와 함께 쓰거나 첫 줄이 비어 있으면 오류다(종료 코드 2). 예: `echo 7Q4K-M2XP-AB01 \| TTTGate client join gw.example.com --code-stdin`. |
+| `--code-stdin` | `client join` | 플래그 | 꺼짐 | 이번 실행만 | 등록 코드를 `--code` 대신 표준 입력의 첫 줄에서 읽는다. 입력이 끝날 때까지 읽으므로 파이프로 넘긴다(직접 입력하면 코드를 친 뒤 Windows 는 Ctrl+Z 와 Enter, 그 밖은 Ctrl+D 를 누른다). 그러면 코드가 프로세스 목록이나 프로세스 생성 감사 로그에 남지 않는다. `--code` 와 함께 쓰거나 첫 줄이 비어 있으면 오류다(종료 코드 2). 예: `echo 7Q4K-M2XP-AB01 \| TTTGate client join gw.example.com --code-stdin`. |
 | `--force` | `client join` | 플래그 | 꺼짐 | 이번 실행만 | 이미 있는 `config/client.yaml` 을 바꾼다. 이전 파일은 `client.yaml.bak` 으로 남는다. 이 옵션이 없으면 파일이 이미 있을 때 `client join` 이 종료 코드 78 로 멈춘다. |
 | `-json` | `client join`(그리고 `status`) | 플래그 | 꺼짐 | 이번 실행만 | 결과를 stdout 에 JSON 한 줄로 출력한다. [코드로 등록하기](#코드로-등록하기)와 [TTTGate 실행 여부 확인하기](#tttgate-실행-여부-확인하기)를 참고한다. 다른 명령에서는 받지 않는다. |
 | `-bufferLimit <MiB>` | 실행 계열 명령 | `-1`(제한 없음) 또는 정수 16–1048576 | `128` | `-save` 로 저장(`globalMemCacheLimit`) | 메모리 버퍼 상한. 그 밖의 값은 오류다(종료 코드 2). 예: `-bufferLimit 256`. |

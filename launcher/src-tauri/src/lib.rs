@@ -215,6 +215,7 @@ async fn load_view(app: AppHandle, state: State<'_, Shared>) -> Result<LoadView,
 
 #[tauri::command]
 fn choose_mode(state: State<Shared>, mode: Option<Mode>) -> Result<(), String> {
+    let _guard = state.begin().ok_or_else(|| BUSY_MESSAGE.to_string())?;
     let mut settings = state.settings();
     settings.mode = mode;
     state.rejoin.store(false, Ordering::SeqCst);
@@ -267,10 +268,14 @@ fn start_daemon(state: &AppState) -> ActionResult {
     }
     // `-daemon` 의 종료 코드 0 은 자식을 띄웠다는 뜻일 뿐이다. 앱이 곧 끝나면(포트 충돌 등) 알린다.
     // sentinel 이 앱을 다시 띄우면 PID 가 바뀌므로 같은 PID 가 계속 돌아야 성공이다.
+    // 상태를 읽지 못한 것(일시 오류)은 멈춘 것이 아니다. 멈췄거나 PID 가 바뀐 것을 본 때만 실패로 본다.
     let current_pid = || state.status().filter(|status| status.running).and_then(|status| status.pid);
     let mut first_pid = None;
     let started = runner::poll_until(START_CHECK_ATTEMPTS, START_CHECK_INTERVAL, || { first_pid = current_pid(); first_pid.is_some() });
-    let running = started && runner::holds_for(START_HOLD_ATTEMPTS, START_CHECK_INTERVAL, || current_pid() == first_pid);
+    let running = started && runner::holds_for(START_HOLD_ATTEMPTS, START_CHECK_INTERVAL, || match state.status() {
+        None => true,
+        Some(status) => status.running && status.pid == first_pid,
+    });
     if running {
         result
     } else {
@@ -399,7 +404,8 @@ fn show_main_window(app: &AppHandle) {
 
 /// 끝내기(REQ-8): 실행 중이면 창에서 멈출지 남길지 묻고, 아니면 바로 끝낸다.
 fn request_quit(app: &AppHandle, state: &AppState) {
-    if state.status().map(|s| s.running).unwrap_or(false) {
+    let running = state.status().map(|s| s.running).unwrap_or_else(|| state.running.load(Ordering::SeqCst));
+    if running {
         show_main_window(app);
         let _ = app.emit("confirm-quit", ());
     } else {
