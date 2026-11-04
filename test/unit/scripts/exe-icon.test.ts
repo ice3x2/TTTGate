@@ -5,9 +5,7 @@ import {spawnSync} from "child_process";
 
 // #321: Windows 실행 파일에 붉은 터널 아이콘을 넣는다. pkg 가 만든 .exe 는 Node.js 의 아이콘을 그대로 가지므로,
 // 빌드 뒤에 resedit 으로 아이콘 리소스를 바꾼다(pkg 문서 "Injecting Windows executable metadata after packaging").
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const ResEdit = require("resedit");
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const {setExeIcon, EXE_ICON_FILE} = require("../../../scripts/set-exe-icon.cjs");
 
 const root = path.resolve(__dirname, "../../..");
@@ -80,7 +78,7 @@ describe("Windows executable icon (#321)", () => {
     });
 
     describe("command line: node scripts/set-exe-icon.cjs <bin dir>", () => {
-        const run = (binDir: string) => spawnSync(process.execPath, [SCRIPT, binDir], {encoding: "utf8", timeout: 30_000});
+        const run = (binDir: string, ...rest: string[]) => spawnSync(process.execPath, [SCRIPT, binDir, ...rest], {encoding: "utf8", timeout: 30_000});
 
         test("sets the icon on every Windows binary that pkg builds", () => {
             for(const name of ["TTTGate-win-x64.exe", "TTTGate-win-arm64.exe"]) writeExe(path.join(dir, name), iconsOfFile().slice(0, 1));
@@ -96,6 +94,15 @@ describe("Windows executable icon (#321)", () => {
             writeExe(path.join(dir, "TTTGate-win-x64.exe"));
             expect(run(dir).status).not.toBe(0);
             expect(run(path.join(dir, "missing")).status).not.toBe(0);
+        });
+
+        // CI 의 아이콘 확인 작업은 win-x64 하나만 만든다. 그때는 기대하는 수를 인자로 준다.
+        test("accepts the expected number of Windows binaries as a second argument", () => {
+            writeExe(path.join(dir, "TTTGate-win-x64.exe"), iconsOfFile().slice(0, 1));
+            const result = run(dir, "1");
+            expect({status: result.status, stderr: result.stderr}).toEqual({status: 0, stderr: ""});
+            expect(run(dir, "2").status).not.toBe(0);
+            expect(run(dir, "zero").status).not.toBe(0);
         });
     });
 });

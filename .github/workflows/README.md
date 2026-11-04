@@ -5,6 +5,7 @@
 | Code Regression | `code-regression.yml` | 모든 PR, main 에 push, 수동 실행, 릴리스 워크플로가 부를 때 | 빌드·린트·단위 테스트, 컴포넌트 테스트, 타입 검사, 관리 화면·터널·브라우저 E2E 를 네 작업으로 나눠 병렬로 돌립니다. |
 | Release | `release.yml` | 버전 태그를 push 할 때, 수동 실행 | Code Regression 과 온라인 공급망 감사를 통과하면 소스 배포판과 다섯 플랫폼 바이너리를 만들어 초안(draft) 릴리스에 올립니다. |
 | Supply Chain Audit | `supply-chain-audit.yml` | 의존성 파일·판정 스크립트(`scripts/supply-chain-gate.cjs`)·이 워크플로가 바뀐 PR(대상: `main`, `refactor/safecode`), main 에 push, 매주 월요일, 수동 실행, 릴리스 워크플로가 부를 때 | 의존성 보안 권고(advisory)를 확인합니다. 온라인 감사는 매주 월요일, 수동 실행, 릴리스 때 돕니다. |
+| Windows Icon | `windows-icon.yml` | `package.json`·`package-lock.json`·아이콘 스크립트(`scripts/set-exe-icon.cjs`)·`admin/public/favicon.ico`·이 워크플로가 바뀐 PR, 같은 파일이 바뀐 main·develop push, 수동 실행 | Windows 러너에서 win-x64 바이너리 하나를 만들어 붉은 터널 아이콘을 넣고 `--version` 으로 실행해 봅니다. 아이콘이 pkg 의 덧붙은 데이터를 밀어내는 변경을 릴리스 전에 찾습니다. |
 
 ## 릴리스 만들기
 

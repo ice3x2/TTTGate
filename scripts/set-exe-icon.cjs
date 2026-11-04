@@ -1,7 +1,8 @@
 'use strict';
 // #321: pkg 가 만든 Windows 실행 파일은 Node.js 의 아이콘을 그대로 가진다. 빌드 뒤에 붉은 터널 아이콘으로 바꾼다.
 // pkg 문서가 권하는 resedit 을 쓴다(https://yao-pkg.github.io/pkg/guide/advanced-windows-metadata).
-// 사용법: node scripts/set-exe-icon.cjs <bin 폴더>   (npm run icon:exe 가 dist/bin 으로 부른다)
+// 사용법: node scripts/set-exe-icon.cjs <bin 폴더> [기대하는 Windows 실행 파일 수]
+// npm run icon:exe 가 dist/bin 으로 부른다. 수를 주지 않으면 package.json 의 pkg 대상 가운데 Windows 대상 수를 쓴다.
 const fs = require('node:fs');
 const Path = require('node:path');
 const ResEdit = require('resedit');
@@ -49,10 +50,13 @@ const windowsTargetCount = () => {
     return manifest.pkg.targets.filter((target) => target.includes('-win-')).length;
 };
 
-const main = (binDir) => {
+const main = (binDir, expectedArgument) => {
     if(!binDir || !fs.existsSync(binDir)) throw new Error(`bin folder not found: ${binDir}`);
+    if(expectedArgument !== undefined && !/^[1-9][0-9]*$/.test(expectedArgument)) {
+        throw new Error(`the expected number of Windows executables must be a positive integer: ${expectedArgument}`);
+    }
     const exes = fs.readdirSync(binDir).filter((name) => /-win-[^.]+\.exe$/.test(name)).sort();
-    const expected = windowsTargetCount();
+    const expected = expectedArgument === undefined ? windowsTargetCount() : Number(expectedArgument);
     if(exes.length !== expected) {
         throw new Error(`expected ${expected} Windows executables in ${binDir}, found ${exes.length}: ${exes.join(', ') || 'none'}`);
     }
@@ -64,7 +68,7 @@ const main = (binDir) => {
 
 if(require.main === module) {
     try {
-        main(process.argv[2]);
+        main(process.argv[2], process.argv[3]);
     } catch(error) {
         console.error(error instanceof Error ? error.message : String(error));
         process.exitCode = 1;

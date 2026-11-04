@@ -1,0 +1,51 @@
+name: Windows Icon
+
+# #321: 실행 파일 아이콘은 pkg 가 받는 Node 바이너리의 리소스 여유에 기댄다. pkg 나 아이콘을 바꾸면
+# 릴리스 전에 여기서 win-x64 하나를 만들어 아이콘을 넣고 실행해 본다.
+on:
+  pull_request:
+    paths:
+      - package.json
+      - package-lock.json
+      - scripts/set-exe-icon.cjs
+      - admin/public/favicon.ico
+      - .github/workflows/windows-icon.yml
+  push:
+    branches: [main, develop]
+    paths:
+      - package.json
+      - package-lock.json
+      - scripts/set-exe-icon.cjs
+      - admin/public/favicon.ico
+      - .github/workflows/windows-icon.yml
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  windows-icon:
+    name: Build one Windows binary and set its icon
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      NODE_ENV: development
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --include=dev --no-audit --no-fund
+      - name: Build
+        run: npm run build
+      - name: Package win-x64
+        run: npx pkg . --targets node24-win-x64 --output icon-smoke/TTTGate-win-x64.exe
+      - name: Set the icon
+        run: node scripts/set-exe-icon.cjs icon-smoke 1
+      - name: Run the binary with the icon
+        run: icon-smoke/TTTGate-win-x64.exe --version
