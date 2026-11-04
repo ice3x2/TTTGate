@@ -39,9 +39,15 @@ impl AppState {
     }
 
     fn run(&self, args: &[String]) -> CliOutput {
-        match self.cli() {
-            Some(cli) => runner::run(&cli, args, &self.paths.bin_dir),
-            None => CliOutput { code: None, stdout: String::new(), stderr: "TTTGate CLI not found next to the launcher".into() },
+        self.run_cli(args, None)
+    }
+
+    /// `input` 은 표준 입력으로 넘긴다(등록 코드처럼 명령줄에 두면 안 되는 값).
+    fn run_cli(&self, args: &[String], input: Option<&str>) -> CliOutput {
+        match (self.cli(), input) {
+            (Some(cli), Some(text)) => runner::run_with_input(&cli, args, &self.paths.bin_dir, text),
+            (Some(cli), None) => runner::run(&cli, args, &self.paths.bin_dir),
+            (None, _) => CliOutput { code: None, stdout: String::new(), stderr: "TTTGate CLI not found next to the launcher".into() },
         }
     }
 
@@ -230,10 +236,7 @@ fn exclusive(state: &AppState, work: impl FnOnce(&AppState) -> ActionResult) -> 
 
 fn join_with(state: &AppState, addr: &str, code: &str, replace: bool) -> JoinResult {
     // 코드는 표준 입력으로만 넘기고 어디에도 기록하지 않는다(REQ-2).
-    let output = match state.cli() {
-        Some(cli) => runner::run_with_input(&cli, &cli::join_args(addr, replace), &state.paths.bin_dir, &format!("{}\n", code)),
-        None => CliOutput { code: None, stdout: String::new(), stderr: "TTTGate CLI not found next to the launcher".into() },
-    };
+    let output = state.run_cli(&cli::join_args(addr, replace), Some(&format!("{}\n", code)));
     match cli::parse_join(&output.stdout, &output.stderr) {
         JoinOutcome::Joined { client_id, server } =>
             JoinResult { ok: true, client_id: Some(client_id), server: Some(server), category: None, message: None },
@@ -263,6 +266,8 @@ fn start_daemon(state: &AppState) -> ActionResult {
     if running {
         result
     } else {
+        // 설정 오류 표시 없이 끝난 앱은 sentinel 이 3초마다 다시 띄운다. 화면이 실행과 멈춤을 오가지 않게 멈춘다.
+        stop(state);
         ActionResult { ok: false, needs_remote_consent: false, stopped_after_start: true,
             message: "TTTGate stopped right after it started".into() }
     }

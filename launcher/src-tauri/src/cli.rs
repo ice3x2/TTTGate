@@ -246,6 +246,20 @@ mod tests {
         assert_eq!(native_arch(), "x86_64");
     }
 
+    /// launcher/contract 의 파일은 CLI 가 실제로 내는 JSON 이다(test/unit/launcher-contract.test.ts 가 지킨다).
+    #[test]
+    fn the_cli_contract_files_are_read() {
+        let client = parse_status(include_str!("../../contract/status-client.json")).expect("status-client.json");
+        assert_eq!(client.mode.as_deref(), Some("client"));
+        assert_eq!(client.client.as_ref().map(|c| (c.state.as_str(), c.failures)), Some(("reconnecting", 3)));
+        let server = parse_status(include_str!("../../contract/status-server.json")).expect("status-server.json");
+        assert!(server.server.expect("server").bootstrap_required);
+        assert_eq!(parse_join(include_str!("../../contract/join-ok.json"), ""),
+            JoinOutcome::Joined { client_id: "edge".into(), server: "gw.example:9126".into() });
+        assert_eq!(parse_join(include_str!("../../contract/join-failed.json"), ""),
+            JoinOutcome::Failed { category: "rejected".into(), message: "enrollment failed: m".into() });
+    }
+
     #[test]
     fn status_json_is_parsed() {
         let line = r#"{"version":"2.1.0","running":true,"mode":"client","pid":12,"daemon":true,"client":{"state":"reconnecting","since":5,"failures":3},"server":null}"#;

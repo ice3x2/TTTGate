@@ -132,6 +132,7 @@ function showResult(selector, ok, text) {
 }
 
 function render(state) {
+  const previous = current && current.screen.screen;
   current = state;
   $("[data-version]").textContent = T.version(state.launcherVersion);
   const mismatch = $("[data-mismatch]");
@@ -152,6 +153,8 @@ function render(state) {
 
   if (screen.screen === "clientJoin") {
     $("[data-replacing]").hidden = !screen.replacing;
+    // 다른 화면에서 들어왔으면 지난 등록 결과를 지운다.
+    if (previous !== "clientJoin") $("[data-join-result]").hidden = true;
   } else if (screen.screen === "clientReady") {
     $("[data-field=clientId]").textContent = screen.clientId;
     $("[data-field=server]").textContent = screen.server;

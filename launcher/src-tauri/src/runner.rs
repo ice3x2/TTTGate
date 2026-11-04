@@ -80,9 +80,12 @@ pub fn poll_until(attempts: u32, interval: std::time::Duration, mut check: impl 
     false
 }
 
+/// 같은 시각에 두 명령이 돌아도(화면 갱신과 트레이 동작) 출력 파일이 겹치지 않게 순번을 붙인다.
+static NEXT_OUTPUT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 fn run_inner(cli: &Path, args: &[String], work_dir: &Path, input: Option<&str>) -> CliOutput {
-    let unique = format!("{}-{}", std::process::id(), std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0));
+    let sequence = NEXT_OUTPUT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    let unique = format!("{}-{}", std::process::id(), sequence);
     let dir = output_dir();
     let _ = fs::create_dir_all(&dir);
     let out_file = dir.join(format!("{}.out", unique));

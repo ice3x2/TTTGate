@@ -1,0 +1,1 @@
+{"version":"2.0.1","running":true,"mode":"server","pid":99,"daemon":false,"client":null,"server":{"adminUrl":"https://127.0.0.1:9300/","bootstrapRequired":true,"bootstrapTokenFile":"<token file>"}}
