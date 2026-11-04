@@ -6,6 +6,7 @@
 | Release | `release.yml` | 버전 태그를 push 할 때, 수동 실행 | Code Regression 과 온라인 공급망 감사를 통과하면 소스 배포판과 다섯 플랫폼 바이너리를 만들어 초안(draft) 릴리스에 올립니다. |
 | Supply Chain Audit | `supply-chain-audit.yml` | 의존성 파일·판정 스크립트(`scripts/supply-chain-gate.cjs`)·이 워크플로가 바뀐 PR(대상: `main`, `refactor/safecode`), main 에 push, 매주 월요일, 수동 실행, 릴리스 워크플로가 부를 때 | 의존성 보안 권고(advisory)를 확인합니다. 온라인 감사는 매주 월요일, 수동 실행, 릴리스 때 돕니다. |
 | Windows Icon | `windows-icon.yml` | `package.json`·`package-lock.json`·아이콘 스크립트(`scripts/set-exe-icon.cjs`)·`admin/public/favicon.ico`·이 워크플로가 바뀐 PR, 같은 파일이 바뀐 main·develop push, 수동 실행 | Windows 러너에서 릴리스와 같은 pkg 옵션으로 두 Windows 바이너리(x64, arm64)를 만들어 붉은 터널 아이콘을 넣고, x64 를 `--version` 으로 실행해 봅니다. 아이콘이 pkg 의 덧붙은 데이터를 밀어내는 변경을 릴리스 전에 찾습니다. arm64 는 실행해 보지 않으므로(Windows arm64 러너 없음), arm64 실행 확인은 릴리스 뒤 실제 장비에서 합니다. |
+| Windows Launcher | `windows-launcher.yml` | `launcher/**`·런처 빌드 스크립트(`scripts/build-launcher.cjs`)·`package.json`·이 워크플로가 바뀐 PR, 같은 파일이 바뀐 main·develop push, 수동 실행 | `windows-latest` 러너의 `launcher/src-tauri` 에서 `cargo test --locked` 로 Rust 단위 테스트를 돌립니다. 이어서 릴리스와 같은 명령(`node scripts/build-launcher.cjs launcher-out`)으로 런처를 빌드하고, exe 가 15 MB 를 넘으면 실패합니다. |
 
 ## 릴리스 만들기
 
@@ -23,8 +24,9 @@
 3. Release 워크플로가 자동으로 돕니다. 순서는 다음과 같습니다.
    1. 태그가 `package.json`·`package-build.json` 의 `version` 과 같은지 확인합니다. 다르면 여기서 멈춥니다.
    2. Code Regression 의 네 작업과 공급망 감사(온라인 감사 두 작업과 공급망 회귀 테스트)를 병렬로 돌립니다(보통 20~50분). 하나라도 실패하면 패키징하지 않습니다. 스트레스 테스트(`npm run test:stress`)는 여기에 들어가지 않으므로, 필요하면 릴리스 전에 따로 돌립니다.
-   3. `npm run dist -- --skip-tests` 로 빌드하고 바이너리를 만듭니다. 테스트는 2단계에서 이미 돌렸으므로 다시 돌리지 않습니다.
-   4. 소스 배포판과 바이너리를 압축하고, 릴리스 노트를 써서 초안 릴리스에 올립니다.
+   3. 2단계와 함께 `launcher` 작업이 `windows-latest` 러너에서 Windows 런처를 빌드하고 `windows-launcher` 아티팩트로 올립니다. 런처는 Windows 에서만 빌드되기 때문입니다.
+   4. `npm run dist -- --skip-tests` 로 빌드하고 바이너리를 만듭니다. 테스트는 2단계에서 이미 돌렸으므로 다시 돌리지 않습니다. 이 작업은 Linux 에서 돌므로 런처 단계는 건너뜁니다. 대신 `windows-launcher` 아티팩트를 `dist/bin` 에 받은 뒤 압축합니다.
+   5. 소스 배포판과 바이너리를 압축하고, 릴리스 노트를 써서 초안 릴리스에 올립니다.
 4. **Releases** 화면에서 초안 릴리스를 확인합니다. 릴리스 노트를 고친 뒤 **Publish release** 를 눌러 공개합니다.
 
 태그를 올렸는데 실패했다면, 원인을 고친 커밋을 main 에 병합합니다. 그다음 태그를 지우고 같은 이름으로 다시 올립니다.
@@ -58,7 +60,7 @@ Release 워크플로의 패키징 작업만 `contents: write` 권한을 받습�
 | `TTTGate-{version}-win-arm64.zip` | Windows ARM64 바이너리 |
 | `TTTGate-{version}-alpine-x64.tar.gz` | Alpine Linux x64 바이너리 |
 
-바이너리 압축 파일에는 그 플랫폼의 `bin/TTTGate-*` 실행 파일과 관리 화면의 `web/` 자산이 들어 있습니다. 압축을 푼 구조를 그대로 두고 루트에서 실행합니다.
+바이너리 압축 파일에는 그 플랫폼의 `bin/TTTGate-*` 실행 파일과 관리 화면의 `web/` 자산이 들어 있습니다. 두 Windows 압축 파일에는 Windows 런처(`bin/TTTGate-launcher-win-x64.exe`)도 들어 있습니다. 압축을 푼 구조를 그대로 두고 루트에서 실행합니다.
 
 ```bash
 ./bin/TTTGate-linux-x64 server -adminPort 9300
