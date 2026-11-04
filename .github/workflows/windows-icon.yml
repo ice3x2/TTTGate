@@ -9,6 +9,7 @@ on:
       - package-lock.json
       - scripts/set-exe-icon.cjs
       - admin/public/favicon.ico
+      - src/client/ClientJoin.ts
       - .github/workflows/windows-icon.yml
   push:
     branches: [main, develop]
@@ -17,6 +18,7 @@ on:
       - package-lock.json
       - scripts/set-exe-icon.cjs
       - admin/public/favicon.ico
+      - src/client/ClientJoin.ts
       - .github/workflows/windows-icon.yml
   workflow_dispatch: {}
 
@@ -66,3 +68,16 @@ jobs:
         run: node scripts/set-exe-icon.cjs icon-smoke 2
       - name: Run the binary with the icon
         run: icon-smoke/TTTGate-win-x64.exe --version
+      # #322: 런처는 등록 코드를 표준 입력으로 넘긴다. 실행 파일이 Windows 파이프에서 코드를 읽는지 본다.
+      # 짧은 코드는 형식 검사에서 거부되므로(종료 코드 2) 서버 없이 확인할 수 있다.
+      - name: Read the enrollment code from standard input
+        run: |
+          set +e
+          output=$(echo short | icon-smoke/TTTGate-win-x64.exe client join 127.0.0.1:9 --code-stdin --json)
+          code=$?
+          set -e
+          echo "$output"
+          test "$code" -eq 2
+          echo "$output" | grep -F '"category":"argument"'
+          # 형식 오류 문장은 코드를 실제로 읽었을 때만 나온다(못 읽으면 "needs --code" 가 나온다).
+          echo "$output" | grep -F 'must have 12 letters'

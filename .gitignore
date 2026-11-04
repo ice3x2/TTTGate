@@ -65,4 +65,6 @@ linux_build/
 /web/
 
 .pid_*
+# #322 클라이언트 연결 상태 파일(개발 모드에서는 저장소 루트가 bin 이다)
+.status_client*
 .pid-*

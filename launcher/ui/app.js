@@ -1,0 +1,373 @@
+// TTTGate 런처 화면(#322). 판단은 Rust(view.rs)가 하고, 이 파일은 그 결과를 그리고 버튼을 Rust 명령에 잇는다.
+// 외부 네트워크에서 아무것도 받지 않는다(NFR-4). 모든 파일은 exe 안에 들어 있다.
+"use strict";
+
+const STRINGS = {
+  ko: {
+    chooseTitle: "어떻게 쓰시겠어요?", chooseHelp: "나중에 아래 '모드 바꾸기' 로 바꿀 수 있습니다.",
+    serverMode: "서버로 쓰기", serverModeHelp: "이 PC 가 클라이언트를 받고 관리 화면을 엽니다.",
+    clientMode: "클라이언트로 쓰기", clientModeHelp: "이 PC 를 서버에 등록하고 내부 네트워크를 연결합니다.",
+    joinTitle: "서버에 등록", joinHelp: "관리 화면의 클라이언트 메뉴에서 받은 등록 코드를 넣으세요.",
+    serverAddress: "서버 주소", enrollmentCode: "등록 코드", join: "등록", cancel: "취소",
+    readyTitle: "등록된 클라이언트", clientId: "클라이언트 ID", server: "서버",
+    rejoin: "다른 서버로 다시 등록", startDaemon: "데몬으로 실행",
+    serverTitle: "서버 설정", serverHelp: "비워 둔 값은 지금 설정을 그대로 씁니다. 나머지 설정은 관리 화면에서 바꿉니다.",
+    adminConsole: "관리 화면", adminPort: "포트", adminBindHost: "열 주소",
+    keep: "지금 설정 유지", bindLocal: "이 PC 에서만 (127.0.0.1)", bindAll: "다른 PC 에서도 (0.0.0.0)",
+    adminAllowedOrigins: "허용 주소 (도메인·프록시로 열 때)", originsHelp: "한 줄에 하나씩 씁니다. 예: https://gw.example.com:9300",
+    controlPortTitle: "클라이언트 연결", controlPort: "제어 포트", controlTls: "TLS", controlProtocolMode: "프로토콜 모드",
+    on: "켬", off: "끔", saveAndStart: "저장하고 시작",
+    tlsHelp: "클라이언트를 등록 코드로 등록하려면 켜야 합니다.",
+    authHint: "연결이 계속 실패합니다. 서버에서 이 클라이언트가 지워졌거나 비밀값이 바뀌었을 수 있습니다. 그렇다면 다른 서버로 다시 등록을 눌러 새 코드로 등록하세요.",
+    reasons: {
+      busy: "다른 작업이 아직 진행 중입니다. 끝난 뒤 다시 하세요.",
+      stillRunning: "TTTGate 가 아직 실행 중입니다. 다른 사용자로 실행 중일 수 있습니다. 그 사용자로 멈추거나 작업 관리자에서 끝내세요.",
+      statusUnknown: "TTTGate 의 상태를 읽을 수 없습니다. 런처가 TTTGate 의 bin 폴더에 있는지 확인하세요.",
+      otherInstall: "다른 폴더의 TTTGate 런처가 이미 실행 중입니다. 그 런처를 먼저 끝내세요.",
+      noMode: "먼저 서버 모드나 클라이언트 모드를 고르세요.",
+      cliMissing: "같은 폴더에서 TTTGate-win-x64.exe 또는 TTTGate-win-arm64.exe 를 찾지 못했습니다. 런처를 TTTGate 의 bin 폴더에 두세요."
+    },
+    stoppedAfterStart: "TTTGate 가 시작한 뒤 곧 멈췄습니다. 로그 폴더의 기록에서 이유를 확인하세요(예: 포트가 이미 쓰이고 있음, 등록 정보 없음).",
+    replaceConfirm: "이 PC 에 이미 등록 정보(config/client.yaml)가 있지만 읽을 수 없거나 예전 방식입니다. 새 코드로 바꾸어 등록할까요? 지금 파일은 client.yaml.bak 으로 남깁니다.",
+    tokenHelp: "처음 로그인할 때 이 부트스트랩 토큰으로 관리자 계정을 만듭니다.", copy: "복사", copied: "복사했습니다",
+    openLogs: "로그 폴더", openAdmin: "관리 화면 열기", stop: "멈추기",
+    autostart: "Windows 로그인 때 자동 시작", changeMode: "모드 바꾸기",
+    remoteTitle: "다른 PC 에서 관리 화면을 열까요?",
+    remoteBody: "관리 화면이 네트워크의 다른 PC 에도 열립니다. 방화벽으로 접근을 제한하고 강한 비밀번호와 MFA 를 쓰세요.",
+    remoteConfirm: "위험을 알고 열기",
+    quitTitle: "런처를 끝냅니다", quitBody: "TTTGate 가 실행 중입니다. 어떻게 할까요?",
+    quitStop: "TTTGate 도 멈추고 끝내기", quitKeep: "TTTGate 는 계속 두고 끝내기",
+    version: (v) => `런처 ${v}`,
+    mismatch: (l, c) => `런처(${l})와 TTTGate(${c})의 버전이 다릅니다. 같은 릴리스의 파일을 함께 쓰세요.`,
+    cliMissing: "같은 폴더에서 TTTGate-win-x64.exe 또는 TTTGate-win-arm64.exe 를 찾지 못했습니다. 런처를 TTTGate 의 bin 폴더에 두세요.",
+    running: { server: "서버 실행 중", client: "클라이언트 실행 중", unknown: "TTTGate 실행 중" },
+    connection: { connected: "연결됨", reconnecting: "다시 연결 중", connecting: "연결 중" },
+    failures: (n) => `연속 실패 ${n}회`, background: "백그라운드", foreground: "명령 창에서 실행 중",
+    joined: (id, server) => `${server} 에 '${id}' 로 등록했습니다.`,
+    joinFailed: {
+      argument: "주소나 코드 형식이 맞지 않습니다. 코드는 12자리입니다(예: 7Q4K-M2XP-AB01).",
+      exists: "이미 등록 정보가 있습니다.",
+      rejected: "서버가 코드를 거부했습니다. 틀렸거나, 기한이 지났거나, 이미 쓴 코드입니다. 새 코드를 받으세요.",
+      throttled: "실패가 많아 잠시 막혔습니다. 15분 뒤에 다시 하세요.",
+      unavailable: "서버가 등록을 받지 않습니다. 서버의 제어 포트가 TLS 를 써야 합니다.",
+      network: "서버에 연결하지 못했습니다. 주소와 포트, 방화벽을 확인하세요.",
+      proof: "서버 인증서가 맞지 않습니다. 중간에서 다른 장비가 가로챘을 수 있어 아무것도 저장하지 않았습니다.",
+      write: "설정 파일을 쓰지 못했습니다. 폴더 권한을 확인하세요.",
+      unknown: "등록하지 못했습니다."
+    }
+  },
+  en: {
+    chooseTitle: "How will you use this PC?", chooseHelp: "You can change it later with 'Change mode'.",
+    serverMode: "Use as a server", serverModeHelp: "This PC accepts clients and opens the admin console.",
+    clientMode: "Use as a client", clientModeHelp: "Enroll this PC with a server and connect your internal network.",
+    joinTitle: "Enroll with a server", joinHelp: "Enter the code from the Clients page of the admin console.",
+    serverAddress: "Server address", enrollmentCode: "Enrollment code", join: "Enroll", cancel: "Cancel",
+    readyTitle: "Enrolled client", clientId: "Client ID", server: "Server",
+    rejoin: "Enroll with another server", startDaemon: "Run in the background",
+    serverTitle: "Server settings", serverHelp: "Empty fields keep the current settings. Change the rest in the admin console.",
+    adminConsole: "Admin console", adminPort: "Port", adminBindHost: "Listen on",
+    keep: "Keep current", bindLocal: "This PC only (127.0.0.1)", bindAll: "Other PCs too (0.0.0.0)",
+    adminAllowedOrigins: "Allowed origins (domain or proxy)", originsHelp: "One per line, for example https://gw.example.com:9300",
+    controlPortTitle: "Client connections", controlPort: "Control port", controlTls: "TLS", controlProtocolMode: "Protocol mode",
+    on: "On", off: "Off", saveAndStart: "Save and start",
+    tlsHelp: "Turn it on to enroll clients with a code.",
+    authHint: "The connection keeps failing. The server may have removed this client or changed its secret. If so, choose Enroll with another server and use a new code.",
+    reasons: {
+      busy: "Another action is still running. Try again when it ends.",
+      stillRunning: "TTTGate is still running. It may run as another user. Stop it as that user, or end it in Task Manager.",
+      statusUnknown: "Cannot read the TTTGate status. Check that the launcher is in the bin folder of TTTGate.",
+      otherInstall: "A launcher of another TTTGate folder is already running. Quit it first.",
+      noMode: "Choose server or client mode first.",
+      cliMissing: "TTTGate-win-x64.exe or TTTGate-win-arm64.exe is not in this folder. Put the launcher in the bin folder of TTTGate."
+    },
+    stoppedAfterStart: "TTTGate stopped right after it started. Check the logs folder for the reason (for example, a port in use or no enrollment).",
+    replaceConfirm: "This PC already has enrollment settings (config/client.yaml), but they cannot be read or use the old method. Enroll again with this code? The current file is kept as client.yaml.bak.",
+    tokenHelp: "Use this bootstrap token to create the admin account at the first sign-in.", copy: "Copy", copied: "Copied",
+    openLogs: "Logs folder", openAdmin: "Open admin console", stop: "Stop",
+    autostart: "Start when I sign in to Windows", changeMode: "Change mode",
+    remoteTitle: "Open the admin console to other PCs?",
+    remoteBody: "Other PCs on the network can reach the admin console. Limit access with a firewall and use a strong password and MFA.",
+    remoteConfirm: "Open it anyway",
+    quitTitle: "Quit the launcher", quitBody: "TTTGate is running. What do you want to do?",
+    quitStop: "Stop TTTGate and quit", quitKeep: "Keep TTTGate running and quit",
+    version: (v) => `Launcher ${v}`,
+    mismatch: (l, c) => `The launcher (${l}) and TTTGate (${c}) versions differ. Use the files of one release together.`,
+    cliMissing: "TTTGate-win-x64.exe or TTTGate-win-arm64.exe is not in this folder. Put the launcher in the bin folder of TTTGate.",
+    running: { server: "Server is running", client: "Client is running", unknown: "TTTGate is running" },
+    connection: { connected: "Connected", reconnecting: "Reconnecting", connecting: "Connecting" },
+    failures: (n) => `${n} failures in a row`, background: "In the background", foreground: "Running in a command window",
+    joined: (id, server) => `Enrolled as '${id}' with ${server}.`,
+    joinFailed: {
+      argument: "The address or the code is not valid. The code has 12 characters, for example 7Q4K-M2XP-AB01.",
+      exists: "This PC is already enrolled.",
+      rejected: "The server rejected the code. It may be wrong, expired or already used. Ask for a new code.",
+      throttled: "Too many failed attempts. Try again in 15 minutes.",
+      unavailable: "The server does not accept enrollment. Its control port must use TLS.",
+      network: "Cannot reach the server. Check the address, the port and the firewall.",
+      proof: "The server certificate does not match. Another host may be in the middle, so nothing was saved.",
+      write: "Cannot write the settings. Check the folder permissions.",
+      unknown: "Enrollment failed."
+    }
+  }
+};
+
+const T = navigator.language && navigator.language.toLowerCase().startsWith("ko") ? STRINGS.ko : STRINGS.en;
+const invoke = (command, args) => window.__TAURI__.core.invoke(command, args);
+const $ = (selector) => document.querySelector(selector);
+const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+/** 실행 중에는 상태가 자주 바뀐다. 멈춰 있을 때는 CLI 를 덜 부른다. */
+const POLL_RUNNING_MS = 5000;
+const POLL_STOPPED_MS = 15000;
+let current = null;
+
+function translate() {
+  document.documentElement.lang = T === STRINGS.ko ? "ko" : "en";
+  for (const element of $$("[data-t]")) element.textContent = T[element.dataset.t];
+}
+
+async function busy(work) {
+  $("[data-busy]").hidden = false;
+  const controls = () => $$("button, input[type=checkbox]");
+  controls().forEach((control) => { control.disabled = true; });
+  try {
+    return await work();
+  } finally {
+    $("[data-busy]").hidden = true;
+    controls().forEach((control) => { control.disabled = false; });
+  }
+}
+
+/** 명령 결과를 문장으로 바꾼다. */
+function failureText(result) {
+  if (result.stoppedAfterStart) return T.stoppedAfterStart;
+  return (result.reason && T.reasons[result.reason]) || result.message;
+}
+
+function showResult(selector, ok, text) {
+  const element = $(selector);
+  element.hidden = false;
+  element.className = `result ${ok ? "ok" : "error"}`;
+  element.textContent = text;
+}
+
+function render(state) {
+  const previous = current && current.screen.screen;
+  current = state;
+  $("[data-version]").textContent = T.version(state.launcherVersion);
+  const mismatch = $("[data-mismatch]");
+  mismatch.hidden = !state.versionMismatch;
+  mismatch.textContent = state.versionMismatch ? T.mismatch(state.launcherVersion, state.cliVersion) : "";
+  const missing = $("[data-cli-missing]");
+  missing.hidden = !state.cliMissing;
+  missing.textContent = T.cliMissing;
+
+  const screen = state.screen;
+  for (const section of $$("[data-screen]")) section.hidden = section.dataset.screen !== screen.screen;
+  $("[data-autostart]").checked = state.settings.autostart;
+  $("[data-action=changeMode]").hidden = screen.screen === "running" || screen.screen === "chooseMode";
+
+  const token = $("[data-token]");
+  token.hidden = !state.bootstrapToken;
+  if (state.bootstrapToken) $("[data-token-value]").textContent = state.bootstrapToken;
+
+  // 등록 성공 문장은 등록 직후 한 번만 보인다. 다른 화면에서 들어오면 지운다.
+  if (screen.screen === "clientReady" && previous !== "clientReady" && previous !== "clientJoin") $("[data-ready-result]").hidden = true;
+  if (screen.screen === "serverSetup" && previous !== "serverSetup") {
+    // 새 설치(server.yaml 없음)에서만 TLS 를 켬으로 고른다. 있으면 지금 설정을 그대로 둔다.
+    $("select[name=controlTls]").value = state.serverConfigExists ? "" : "true";
+  }
+  if (screen.screen === "clientJoin") {
+    $("[data-replacing]").hidden = !screen.replacing;
+    // 다른 화면에서 들어왔으면 지난 등록 결과를 지운다.
+    if (previous !== "clientJoin") $("[data-join-result]").hidden = true;
+  } else if (screen.screen === "clientReady") {
+    $("[data-field=clientId]").textContent = screen.clientId;
+    $("[data-field=server]").textContent = screen.server;
+  } else if (screen.screen === "running") {
+    renderRunning(screen);
+  }
+}
+
+function renderRunning(view) {
+  const mode = view.mode === "server" || view.mode === "client" ? view.mode : "unknown";
+  // 예전 PID 항목은 모드가 없다. 단추는 저장된 모드로 정해서 다시 등록 단추가 사라지지 않게 한다(REQ-2b).
+  const buttonsMode = mode === "unknown" && current ? current.settings.mode : mode;
+  $("[data-running-title]").textContent = T.running[mode];
+  const details = [view.daemon ? T.background : T.foreground];
+  if (view.pid !== null && view.pid !== undefined) details.push(`pid ${view.pid}`);
+  if (view.connection) details.unshift(T.connection[view.connection] || view.connection);
+  if (view.failures > 0) details.push(T.failures(view.failures));
+  $("[data-running-detail]").textContent = details.join(" · ");
+  const dot = $("[data-dot]");
+  dot.className = `dot ${view.connection === "connected" || mode === "server" ? "ok" : "warn"}`;
+  $("[data-auth-hint]").hidden = !view.authHint;
+  $$("[data-client-only]").forEach((element) => { element.hidden = buttonsMode !== "client"; });
+  $$("[data-server-only]").forEach((element) => { element.hidden = buttonsMode !== "server"; });
+}
+
+async function refresh() {
+  render(await invoke("load_view"));
+}
+
+function serverOptions(form) {
+  const data = new FormData(form);
+  const text = (name) => String(data.get(name) || "").trim();
+  // 포트는 글자 그대로 넘긴다. 검사는 서버의 기존 검사(server config save)가 하고, 틀리면 그 문장을 보인다.
+  const port = (name) => (text(name) === "" ? null : text(name));
+  const origins = text("adminAllowedOrigins");
+  return {
+    adminPort: port("adminPort"),
+    adminBindHost: text("adminBindHost") || null,
+    // 비워 두면 지금 값을 유지한다. 지우려면 관리 화면에서 지운다.
+    adminAllowedOrigins: origins === "" ? null : origins.split(/[\r\n,]+/).map((o) => o.trim()).filter(Boolean),
+    controlPort: port("controlPort"),
+    controlTls: text("controlTls") === "" ? null : text("controlTls") === "true",
+    controlProtocolMode: text("controlProtocolMode") || null
+  };
+}
+
+function ask(name) {
+  const dialog = $(`[data-dialog=${name}]`);
+  // 이미 열려 있으면(같은 이벤트가 연달아 옴) 다시 열지 않는다.
+  if (dialog.open) return Promise.resolve("cancel");
+  return new Promise((resolve) => {
+    // Esc 로 닫으면 returnValue 가 바뀌지 않는다. 비워 두지 않으면 지난번 선택(예: 멈추고 끝내기)이 다시 쓰인다.
+    dialog.returnValue = "";
+    dialog.addEventListener("close", () => resolve(dialog.returnValue), { once: true });
+    dialog.showModal();
+  });
+}
+
+async function startServer(form, allowRemote) {
+  let result;
+  try {
+    result = await busy(() => invoke("start_server", { options: serverOptions(form), allowRemote }));
+  } catch (error) {
+    showResult("[data-server-result]", false, String(error));
+    return;
+  }
+  if (result.needsRemoteConsent && !allowRemote) {
+    if ((await ask("remote")) === "ok") return startServer(form, true);
+    return;
+  }
+  if (!result.ok) showResult("[data-server-result]", false, failureText(result));
+  await refresh();
+}
+
+/** 멈추고, 실패하면 이유를 알린다. 멈췄으면 true. */
+async function stopOrReport() {
+  const result = await invoke("stop_daemon");
+  if (!result.ok) alert(failureText(result));
+  return result.ok;
+}
+
+const ACTIONS = {
+  chooseServer: () => invoke("choose_mode", { mode: "server" }),
+  chooseClient: () => invoke("choose_mode", { mode: "client" }),
+  changeMode: () => invoke("choose_mode", { mode: null }),
+  rejoin: async () => {
+    if (current && current.screen.screen === "running" && !(await stopOrReport())) return;
+    await invoke("set_rejoin", { on: true });
+  },
+  cancelRejoin: () => invoke("set_rejoin", { on: false }),
+  startClient: async () => {
+    const result = await invoke("start_client");
+    if (!result.ok) alert(failureText(result));
+  },
+  stop: () => stopOrReport(),
+  openLogs: () => invoke("open_logs"),
+  openAdmin: () => invoke("open_admin"),
+  copyToken: async () => {
+    await navigator.clipboard.writeText($("[data-token-value]").textContent);
+    $("[data-action=copyToken]").textContent = T.copied;
+    setTimeout(() => { $("[data-action=copyToken]").textContent = T.copy; }, 1500);
+    return false;
+  }
+};
+
+function wire() {
+  for (const button of $$("[data-action]")) {
+    button.addEventListener("click", async (event) => {
+      event.preventDefault();
+      let changed;
+      try {
+        changed = await busy(() => ACTIONS[button.dataset.action]());
+      } catch (error) {
+        alert(T.reasons[String(error)] || String(error));
+      }
+      if (changed !== false) await refresh();
+    });
+  }
+  $("[data-form=join]").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.target;
+    const addr = form.addr.value.trim();
+    const code = form.code.value.trim();
+    // 코드는 화면에 남기지 않는다(REQ-2).
+    form.code.value = "";
+    let result;
+    try {
+      result = await busy(() => invoke("join", { addr, code, replace: current && current.screen.replacing === true }));
+      // 읽을 수 없는 예전 등록 정보가 있으면 바꾸어 등록할지 묻는다. 묻지 않으면 이 화면에서 빠져나갈 길이 없다.
+      if (!result.ok && result.category === "exists" && confirm(T.replaceConfirm)) {
+        result = await busy(() => invoke("join", { addr, code, replace: true }));
+      }
+    } catch (error) {
+      showResult("[data-join-result]", false, String(error));
+      return;
+    }
+    if (result.ok) {
+      // 등록하면 화면이 "등록된 클라이언트" 로 바뀐다. 성공 문장은 그 화면에 보인다.
+      showResult("[data-ready-result]", true, T.joined(result.clientId, result.server));
+      await invoke("set_rejoin", { on: false });
+      await refresh();
+    } else {
+      const text = T.joinFailed[result.category] || T.joinFailed.unknown;
+      const detail = result.category === "unknown" || result.category === "argument" ? ` (${result.message})` : "";
+      showResult("[data-join-result]", false, `${text}${detail}`);
+    }
+  });
+  $("[data-form=server]").addEventListener("submit", (event) => {
+    event.preventDefault();
+    // 먼저 동의 없이 저장한다. 다른 PC 에 열리는 설정일 때만(종료 코드 77) 묻는다. 루프백으로 되돌리면 동의도 지워진다(REQ-5).
+    void startServer(event.target, false);
+  });
+  $("[data-autostart]").addEventListener("change", async (event) => {
+    const result = await invoke("set_autostart", { on: event.target.checked });
+    if (!result.ok) alert(failureText(result));
+    await refresh();
+  });
+  // 트레이의 끝내기(REQ-8): 실행 중이면 멈출지 남길지 묻는다. 멈추지 못하면 끝내지 않고 알린다.
+  window.__TAURI__.event.listen("confirm-quit", async () => {
+    const choice = await ask("quit");
+    if (choice !== "stop" && choice !== "keep") return;
+    try {
+      await invoke("quit", { stopDaemon: choice === "stop" });
+    } catch (error) {
+      // 끝내기 실패는 이유 키(예: stillRunning)나 CLI 의 문장으로 온다.
+      alert(T.reasons[String(error)] || String(error));
+      await refresh();
+    }
+  });
+  // 트레이·자동 시작에서 한 일이 실패했다. 창이 이미 앞에 나와 있다.
+  window.__TAURI__.event.listen("action-failed", async (event) => {
+    await refresh();
+    alert(failureText(event.payload));
+  });
+  scheduleRefresh();
+}
+
+function scheduleRefresh() {
+  setTimeout(async () => {
+    try {
+      if (document.visibilityState === "visible") await refresh();
+    } catch (error) {
+      // 한 번 실패해도 다음 갱신은 계속한다.
+    }
+    scheduleRefresh();
+  }, current && current.screen.screen === "running" ? POLL_RUNNING_MS : POLL_STOPPED_MS);
+}
+
+translate();
+wire();
+refresh();

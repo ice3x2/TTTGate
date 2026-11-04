@@ -11,7 +11,7 @@ type ParsedCommandLine = {
     errors: string[];
 };
 
-const KNOWN_MODES = new Set<CliMode>(["server", "client", "stop"]);
+const KNOWN_MODES = new Set<CliMode>(["server", "client", "stop", "status"]);
 const BOOLEAN_WORD = /^(true|false|1|0|yes|no|on|off)$/i;
 /** 모드 없이 쓸 수 있는 옵션. 그 밖의 옵션을 모드 없이 쓰면 오류다(#204 REQ-6). */
 const MODELESS_OPTIONS = new Set(["h", "help", "help-advanced", "version"]);
@@ -26,6 +26,9 @@ const COMMANDS: {[mode: string]: CliCommandDef[]} = {
         {path: ["run"], positionals: 0},
         {path: ["join"], positionals: 1, positionalName: "<addr>"},
         {path: ["config", "show"], positionals: 0},
+        {path: ["config", "save"], positionals: 0}
+    ],
+    server: [
         {path: ["config", "save"], positionals: 0}
     ]
 };
@@ -114,7 +117,7 @@ class CLI {
         }
 
         if(modeIndex < 0 && loose.length > 0) {
-            result.errors.push(`unknown mode '${loose[0]}'. Use server, client or stop`);
+            result.errors.push(`unknown mode '${loose[0]}'. Use server, client, stop or status`);
             return result;
         }
         let rest = loose;
@@ -137,9 +140,9 @@ class CLI {
         for(const {def, token} of given) {
             if(mode === "none" ? !MODELESS_OPTIONS.has(def.name) : !def.modes.includes(mode)) {
                 result.errors.push(mode === "none"
-                    ? `option '${token}' needs a mode (server, client or stop)`
+                    ? `option '${token}' needs a mode (server, client, stop or status)`
                     : `option '${token}' is not available in ${mode} mode`);
-            } else if(mode !== "none" && !optionAllowedInCommand(def, commandKey)) {
+            } else if(mode !== "none" && !optionAllowedInCommand(def, mode, commandKey)) {
                 result.errors.push(`option '${token}' is not available in '${mode}${commandKey ? " " + commandKey : ""}'`);
             }
         }

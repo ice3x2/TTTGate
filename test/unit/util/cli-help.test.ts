@@ -9,7 +9,7 @@ const optionTokens = (text: string): string[] => text.split("\n")
 describe("CLI help (#208)", () => {
     test("REQ-1 top-level help lists the modes and how to get mode help", () => {
         const text = renderHelp("none", false);
-        expect(text).toContain("Usage: TTTGate <server|client|stop> [options]");
+        expect(text).toContain("Usage: TTTGate <server|client|stop|status> [options]");
         for(const mode of ["server", "client", "stop"]) expect(text).toMatch(new RegExp(`^  ${mode} `, "m"));
         expect(text).toContain("TTTGate client --help");
     });
@@ -55,7 +55,7 @@ describe("CLI help (#208)", () => {
         const texts = [renderHelp("server", true), renderHelp("client", true)].map(optionTokens);
         for(const def of CLI_OPTIONS) {
             if(def.hidden || def.aliasOf) continue;
-            const token = def.name === "yes-insecure" ? "--yes-insecure" : def.name.length > 1 && def.group === "help" ? `--${def.name}` : `-${def.name}`;
+            const token = def.name.includes("-") ? `--${def.name}` : def.name.length > 1 && def.group === "help" ? `--${def.name}` : `-${def.name}`;
             const counts = texts.map(tokens => tokens.filter(t => t === token).length);
             expect(counts.some(count => count === 1)).toBe(true);
             expect(counts.every(count => count <= 1)).toBe(true);

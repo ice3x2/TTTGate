@@ -1,0 +1,116 @@
+:root {
+  --bg: #f6f5f4;
+  --card: #ffffff;
+  --text: #1d1d1f;
+  --muted: #6e6e73;
+  --line: #e2e0de;
+  --accent: #c62828;
+  --accent-text: #ffffff;
+  --ok: #2e7d32;
+  --warn: #b26a00;
+  --warn-bg: #fff4e0;
+  --error-bg: #fdecea;
+  --radius: 12px;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161515;
+    --card: #222020;
+    --text: #f2f2f2;
+    --muted: #a1a1a6;
+    --line: #3a3737;
+    --accent: #e53935;
+    --warn: #ffb74d;
+    --warn-bg: #3a2c12;
+    --error-bg: #3d1d1b;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 20px 24px;
+  font: 14px/1.5 "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+h1 { margin: 0; font-size: 20px; }
+h2 { margin: 0 0 4px; font-size: 17px; }
+h3 { margin: 0 0 8px; font-size: 16px; }
+p { margin: 0 0 12px; }
+.muted { color: var(--muted); margin: 0; }
+.brand { display: flex; align-items: center; gap: 12px; }
+main { flex: 1; }
+section {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.choices { display: grid; gap: 12px; }
+.choice {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+.choice:hover, .choice:focus-visible { border-color: var(--accent); outline: none; }
+.choice span { color: var(--muted); }
+form { display: flex; flex-direction: column; gap: 12px; }
+fieldset { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; margin: 0; display: grid; gap: 10px; }
+legend { padding: 0 6px; color: var(--muted); }
+label { display: flex; flex-direction: column; gap: 4px; }
+input, select, textarea {
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+}
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.actions { display: flex; justify-content: flex-end; gap: 8px; align-items: center; }
+.actions.wrap { flex-wrap: wrap; }
+.actions.column { flex-direction: column; align-items: stretch; }
+button { font: inherit; border-radius: 8px; padding: 8px 16px; cursor: pointer; border: 1px solid transparent; }
+button:disabled { opacity: .5; cursor: default; }
+.primary { background: var(--accent); color: var(--accent-text); }
+.secondary { background: transparent; border-color: var(--line); color: var(--text); }
+.danger { background: transparent; border-color: var(--accent); color: var(--accent); }
+.link { background: none; color: var(--accent); padding: 8px 4px; margin-right: auto; }
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; word-break: break-all; }
+.status { display: flex; gap: 12px; align-items: center; }
+.dot { width: 12px; height: 12px; border-radius: 50%; background: var(--muted); flex: none; }
+.dot.ok { background: var(--ok); }
+.dot.warn { background: var(--warn); }
+.notice { padding: 10px 12px; border-radius: 8px; margin: 0; }
+.notice.warn { background: var(--warn-bg); color: var(--warn); }
+.notice.error { background: var(--error-bg); color: var(--accent); }
+.result { margin: 0; }
+.result.ok { color: var(--ok); }
+.result.error { color: var(--accent); }
+.token { display: grid; gap: 8px; padding: 12px; border: 1px dashed var(--accent); border-radius: 8px; }
+.token p { margin: 0; }
+.token code { font-family: Consolas, monospace; word-break: break-all; user-select: all; }
+footer { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+footer .link { margin: 0 0 0 auto; }
+.check { flex-direction: row; align-items: center; gap: 6px; }
+dialog { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); color: var(--text); max-width: 420px; }
+dialog::backdrop { background: rgba(0, 0, 0, .4); }
+.busy { position: fixed; inset: 0; background: rgba(0, 0, 0, .08); cursor: progress; }
+[hidden] { display: none !important; }

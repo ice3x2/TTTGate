@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TTTGate</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="brand">
+    <img src="icon.svg" alt="" width="40" height="40">
+    <div>
+      <h1>TTTGate</h1>
+      <p class="muted" data-version></p>
+    </div>
+  </header>
+
+  <div class="notice warn" data-mismatch hidden></div>
+  <div class="notice error" data-cli-missing hidden></div>
+
+  <main>
+    <!-- REQ-1 모드 선택 -->
+    <section data-screen="chooseMode" hidden>
+      <h2 data-t="chooseTitle"></h2>
+      <p class="muted" data-t="chooseHelp"></p>
+      <div class="choices">
+        <button class="choice" data-action="chooseServer">
+          <strong data-t="serverMode"></strong>
+          <span data-t="serverModeHelp"></span>
+        </button>
+        <button class="choice" data-action="chooseClient">
+          <strong data-t="clientMode"></strong>
+          <span data-t="clientModeHelp"></span>
+        </button>
+      </div>
+    </section>
+
+    <!-- REQ-2 등록 -->
+    <section data-screen="clientJoin" hidden>
+      <h2 data-t="joinTitle"></h2>
+      <p class="muted" data-t="joinHelp"></p>
+      <form data-form="join" autocomplete="off">
+        <label><span data-t="serverAddress"></span>
+          <input name="addr" required placeholder="gw.example.com:9126" spellcheck="false"></label>
+        <label><span data-t="enrollmentCode"></span>
+          <input name="code" required placeholder="XXXX-XXXX-XXXX" spellcheck="false" autocomplete="off"></label>
+        <p class="result" data-join-result hidden></p>
+        <div class="actions">
+          <button type="button" class="secondary" data-action="cancelRejoin" data-replacing hidden data-t="cancel"></button>
+          <button type="submit" class="primary" data-t="join"></button>
+        </div>
+      </form>
+    </section>
+
+    <!-- REQ-2a 등록된 클라이언트 -->
+    <section data-screen="clientReady" hidden>
+      <h2 data-t="readyTitle"></h2>
+      <dl class="facts">
+        <dt data-t="clientId"></dt><dd data-field="clientId"></dd>
+        <dt data-t="server"></dt><dd data-field="server"></dd>
+      </dl>
+      <p class="result ok" data-ready-result hidden></p>
+      <div class="actions">
+        <button class="link" data-action="rejoin" data-t="rejoin"></button>
+        <button class="primary" data-action="startClient" data-t="startDaemon"></button>
+      </div>
+    </section>
+
+    <!-- REQ-4 서버 옵션 -->
+    <section data-screen="serverSetup" hidden>
+      <h2 data-t="serverTitle"></h2>
+      <p class="muted" data-t="serverHelp"></p>
+      <form data-form="server" autocomplete="off">
+        <fieldset>
+          <legend data-t="adminConsole"></legend>
+          <label><span data-t="adminPort"></span><input name="adminPort" inputmode="numeric" placeholder="9300"></label>
+          <label><span data-t="adminBindHost"></span>
+            <select name="adminBindHost">
+              <option value="" data-t="keep"></option>
+              <option value="127.0.0.1" data-t="bindLocal"></option>
+              <option value="0.0.0.0" data-t="bindAll"></option>
+            </select></label>
+          <label><span data-t="adminAllowedOrigins"></span>
+            <textarea name="adminAllowedOrigins" rows="2" spellcheck="false" placeholder="https://gw.example.com:9300"></textarea>
+            <small class="muted" data-t="originsHelp"></small></label>
+        </fieldset>
+        <fieldset>
+          <legend data-t="controlPortTitle"></legend>
+          <label><span data-t="controlPort"></span><input name="controlPort" inputmode="numeric" placeholder="9126"></label>
+          <label><span data-t="controlTls"></span>
+            <select name="controlTls">
+              <option value="" data-t="keep"></option>
+              <option value="true" data-t="on"></option>
+              <option value="false" data-t="off"></option>
+            </select>
+            <small class="muted" data-t="tlsHelp"></small></label>
+          <label><span data-t="controlProtocolMode"></span>
+            <select name="controlProtocolMode">
+              <option value="" data-t="keep"></option>
+              <option value="mixed">mixed</option>
+              <option value="mtls-strict">mtls-strict</option>
+              <option value="legacy">legacy</option>
+            </select></label>
+        </fieldset>
+        <p class="result" data-server-result hidden></p>
+        <div class="actions">
+          <button type="submit" class="primary" data-t="saveAndStart"></button>
+        </div>
+      </form>
+    </section>
+
+    <!-- REQ-3·6 실행 중 -->
+    <section data-screen="running" hidden>
+      <div class="status">
+        <span class="dot" data-dot></span>
+        <div>
+          <h2 data-running-title></h2>
+          <p class="muted" data-running-detail></p>
+        </div>
+      </div>
+      <p class="notice warn" data-auth-hint hidden data-t="authHint"></p>
+      <div class="token" data-token hidden>
+        <p data-t="tokenHelp"></p>
+        <code data-token-value></code>
+        <button class="secondary" data-action="copyToken" data-t="copy"></button>
+      </div>
+      <div class="actions wrap">
+        <button class="link" data-action="rejoin" data-client-only data-t="rejoin"></button>
+        <button class="secondary" data-action="openLogs" data-t="openLogs"></button>
+        <button class="secondary" data-action="openAdmin" data-server-only data-t="openAdmin"></button>
+        <button class="danger" data-action="stop" data-t="stop"></button>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <label class="check"><input type="checkbox" data-autostart> <span data-t="autostart"></span></label>
+    <button class="link" data-action="changeMode" data-t="changeMode"></button>
+  </footer>
+
+  <!-- REQ-5 원격 관리 화면 확인, REQ-8 끝내기 확인 -->
+  <dialog data-dialog="remote"><form method="dialog">
+    <h3 data-t="remoteTitle"></h3>
+    <p data-t="remoteBody"></p>
+    <div class="actions">
+      <button class="secondary" value="cancel" data-t="cancel"></button>
+      <button class="danger" value="ok" data-t="remoteConfirm"></button>
+    </div>
+  </form></dialog>
+  <dialog data-dialog="quit"><form method="dialog">
+    <h3 data-t="quitTitle"></h3>
+    <p data-t="quitBody"></p>
+    <div class="actions column">
+      <button class="danger" value="stop" data-t="quitStop"></button>
+      <button class="secondary" value="keep" data-t="quitKeep"></button>
+      <button class="link" value="cancel" data-t="cancel"></button>
+    </div>
+  </form></dialog>
+  <div class="busy" data-busy hidden></div>
+</body>
+</html>

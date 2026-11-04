@@ -42,7 +42,8 @@ const withFixture = (check: (fixture: {directory: string, result: ReturnType<typ
         fs.copyFileSync(path.join(root, "deploy.js"), path.join(directory, "deploy.js"));
         fs.writeFileSync(path.join(directory, "stage.cjs"), fixtureScript);
         manifest(directory, {postinstall: "node stage.cjs root-install", "test:browser:install": "node stage.cjs browser-install",
-            build: "node stage.cjs root-build", test: "node stage.cjs tests", pkg: "node stage.cjs pkg", "icon:exe": "node stage.cjs icon-exe"});
+            build: "node stage.cjs root-build", test: "node stage.cjs tests", pkg: "node stage.cjs pkg", "icon:exe": "node stage.cjs icon-exe",
+            "launcher:build": "node stage.cjs launcher"});
         manifest(path.join(directory, "admin"), {postinstall: "node ../stage.cjs admin-install",
             check: "node ../stage.cjs admin-check", build: "node ../stage.cjs admin-build"});
         fs.writeFileSync(path.join(directory, "package-build.json"), JSON.stringify({name: "source-fixture", main: "app.js"}));
@@ -85,9 +86,11 @@ test("all gates run from fixed project directories and final production rebuild 
     withFixture(({directory, result, journal, days}) => {
         expect(result.error).toBeUndefined();
         expect({status: result.status, error: result.status ? String(result.stderr) : ""}).toEqual({status: 0, error: ""});
-        expect(journal.map((entry) => entry.stage)).toEqual([...stages, "pkg", "icon-exe"]);
+        expect(journal.map((entry) => entry.stage)).toEqual([...stages, "pkg", "icon-exe", "launcher"]);
         // #321: 실행 파일 아이콘은 pkg 와 같은 production 환경에서 pkg 바로 뒤에 넣는다.
         expect(journal.find((entry) => entry.stage === "icon-exe").nodeEnv).toBe("production");
+        // #322: Windows 런처는 아이콘을 넣은 CLI 다음에 같은 bin 폴더로 만든다.
+        expect(journal.find((entry) => entry.stage === "launcher").nodeEnv).toBe("production");
         journal.forEach((entry) => expect(entry.cwd).toBe(entry.stage.startsWith("admin-") ? path.join(directory, "admin") : directory));
         expect(journal.find((entry) => entry.stage === "root-build").args).toEqual(["--force"]);
         expect(journal.find((entry) => entry.stage === "tests").args).toEqual(["--runInBand"]);
@@ -138,7 +141,7 @@ test("the geoip update script reports a skipped update without a license key", (
 test("--skip-tests skips only the browser install and test gates and still packages", () => {
     withFixture(({directory, result, journal}) => {
         expect({status: result.status, error: result.status ? String(result.stderr) : ""}).toEqual({status: 0, error: ""});
-        expect(journal.map(entry => entry.stage)).toEqual(["root-install", "admin-install", "admin-check", "root-build", "admin-build", "pkg", "icon-exe"]);
+        expect(journal.map(entry => entry.stage)).toEqual(["root-install", "admin-install", "admin-check", "root-build", "admin-build", "pkg", "icon-exe", "launcher"]);
         expect(fs.readFileSync(path.join(directory, "dist/web/index.html"), "utf8")).toBe("PRODUCTION ADMIN");
         expect(fs.readFileSync(path.join(directory, "dist/bin/fixture.txt"), "utf8")).toBe("fixture package");
     }, undefined, ["--skip-tests"]);
@@ -152,11 +155,18 @@ test("a failed pkg never reaches the icon stage", () => {
     }, "pkg");
 }, 50_000);
 
-test("a failed icon stage fails the deployment", () => {
+test("a failed icon stage fails the deployment and never builds the launcher", () => {
     withFixture(({result, journal}) => {
         expect(result.status).not.toBe(0);
         expect(journal.map(entry => entry.stage)).toEqual([...stages, "pkg", "icon-exe"]);
     }, "icon-exe");
+}, 50_000);
+
+test("a failed launcher build fails the deployment (#322)", () => {
+    withFixture(({result, journal}) => {
+        expect(result.status).not.toBe(0);
+        expect(journal.map(entry => entry.stage)).toEqual([...stages, "pkg", "icon-exe", "launcher"]);
+    }, "launcher");
 }, 50_000);
 
 test("the icon stage script points at the pkg output folder dist/bin", () => {

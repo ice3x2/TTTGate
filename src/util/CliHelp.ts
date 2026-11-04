@@ -7,21 +7,25 @@ import {COMMANDS} from "./CLI";
  */
 const GROUP_TITLES: {[mode: string]: Array<[CliGroup, string]>} = {
     client: [["connection", "Connection"], ["identity", "Identity"], ["tls", "TLS trust"], ["run", "Run"], ["tuning", "Tuning"]],
-    server: [["admin", "Admin"], ["proxy", "Proxy"], ["identity", "Identity"], ["run", "Run"], ["tuning", "Tuning"]],
-    stop: []
+    server: [["admin", "Admin"], ["connection", "Control port"], ["proxy", "Proxy"], ["identity", "Identity"], ["run", "Run"], ["tuning", "Tuning"]],
+    stop: [],
+    status: [["run", "Output"]]
 };
 
 const MODE_SUMMARY: Array<[string, string]> = [
     ["server", "Start the tunnel server and the admin console"],
     ["client", "Start a tunnel client"],
-    ["stop", "Stop a server or client started with -daemon"]
+    ["stop", "Stop a server or client started with -daemon"],
+    ["status", "Show whether a server or client started with -daemon is running"]
 ];
 
-const COMMAND_SUMMARY: {[path: string]: string} = {
-    "run": "Start the client (the same as no command)",
-    "join": "Enroll this client with a code from the admin console and write config/client.yaml",
-    "config show": "Print the resolved options and where each value comes from",
-    "config save": "Save the resolved options to config/client.yaml without connecting"
+/** 키는 '모드 하위 명령'이다. 같은 하위 명령이 모드마다 다른 일을 한다(#322). */
+const COMMAND_SUMMARY: {[modeAndPath: string]: string} = {
+    "client run": "Start the client (the same as no command)",
+    "client join": "Enroll this client with a code from the admin console and write config/client.yaml",
+    "client config show": "Print the resolved options and where each value comes from",
+    "client config save": "Save the resolved options to config/client.yaml without connecting",
+    "server config save": "Save the given options to config/server.yaml without starting the server"
 };
 
 const HELP_FOOTER = [
@@ -57,7 +61,7 @@ const visibleOptions = (mode: CliMode): CliOptionDef[] =>
 const renderHelp = (mode: CliMode, advanced: boolean): string => {
     if(mode === "none") {
         return [
-            "Usage: TTTGate <server|client|stop> [options]",
+            "Usage: TTTGate <server|client|stop|status> [options]",
             "",
             ...MODE_SUMMARY.map(([name, summary]) => `  ${name.padEnd(8)} ${summary}`),
             "",
@@ -75,7 +79,7 @@ const renderHelp = (mode: CliMode, advanced: boolean): string => {
         for(const command of commands) {
             const path = command.path.join(" ");
             const usage = path + (command.positionals > 0 ? " <addr>" : "");
-            lines.push(`  ${usage.padEnd(28)} ${COMMAND_SUMMARY[path] ?? ""}`);
+            lines.push(`  ${usage.padEnd(28)} ${COMMAND_SUMMARY[`${mode} ${path}`] ?? ""}`);
         }
     }
     const options = visibleOptions(mode);

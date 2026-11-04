@@ -61,7 +61,11 @@ const main = () => {
     fs.cpSync(Path.join(admin, 'dist'), Path.join(sourceOutput, 'web'), {recursive: true});
     fs.copyFileSync(Path.join(root, 'package-build.json'), Path.join(sourceOutput, 'package.json'));
     // #321: pkg 가 만든 Windows 실행 파일에 아이콘을 넣는다. pkg 가 성공했을 때만 넣고, 실패하면 빌드도 실패한다.
-    if(!process.argv.includes('--skip-binaries') && runNpm(['run', 'pkg'], root, 'production')) runNpm(['run', 'icon:exe'], root, 'production');
+    // #322: 그다음 같은 bin 폴더에 Windows 런처를 만든다. Windows 가 아니면 이 단계는 건너뛰었다고 알리고 성공한다.
+    if(process.argv.includes('--skip-binaries')) return;
+    if(runNpm(['run', 'pkg'], root, 'production') && runNpm(['run', 'icon:exe'], root, 'production')) {
+        runNpm(['run', 'launcher:build'], root, 'production');
+    }
 };
 
 main();
