@@ -340,7 +340,12 @@ fn stop(state: &AppState) -> ActionResult {
     let result = ActionResult::from(&state.run(&cli::stop_args()));
     // 창을 닫을 때 숨길지 끝낼지를 바로 맞추도록 실행 여부를 새로 읽는다.
     // stop 은 확인하지 못한 프로세스(다른 사용자, 조회 실패)를 남기고도 0 으로 끝난다. 아직 돌면 실패로 알린다.
-    let still_running = state.status().map(|status| status.running).unwrap_or(false);
+    let status = state.status();
+    if result.ok && status.is_none() {
+        // stop 은 성공했는데 상태를 읽지 못했다. 멈췄다고 본다(닫기가 트레이로 숨지 않고 끝나도록).
+        state.running.store(false, Ordering::SeqCst);
+    }
+    let still_running = status.map(|status| status.running).unwrap_or(false);
     if result.ok && still_running {
         return ActionResult::because("stillRunning", "TTTGate is still running. It may run as another user. Stop it as that user, or end it in Task Manager.");
     }

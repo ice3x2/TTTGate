@@ -184,6 +184,20 @@ mod tests {
         }
     }
 
+    /// app.js 는 screen.screen, screen.clientId, screen.replacing, view.authHint 같은 이름을 읽는다. 이름이 바뀌면 화면이 조용히 깨진다.
+    #[test]
+    fn the_screen_json_keeps_the_names_that_the_window_reads() {
+        let ready = serde_json::to_value(Screen::ClientReady { client_id: "edge".into(), server: "gw:9126".into() }).unwrap();
+        assert_eq!(ready, serde_json::json!({"screen": "clientReady", "clientId": "edge", "server": "gw:9126"}));
+        let join = serde_json::to_value(Screen::ClientJoin { replacing: true }).unwrap();
+        assert_eq!(join, serde_json::json!({"screen": "clientJoin", "replacing": true}));
+        assert_eq!(serde_json::to_value(Screen::ChooseMode).unwrap(), serde_json::json!({"screen": "chooseMode"}));
+        assert_eq!(serde_json::to_value(Screen::ServerSetup).unwrap(), serde_json::json!({"screen": "serverSetup"}));
+        let running = serde_json::to_value(screen(&input(Some(Mode::Client), &running_client(3, "reconnecting"), None, false))).unwrap();
+        assert_eq!(running, serde_json::json!({"screen": "running", "mode": "client", "pid": 9, "daemon": true,
+            "connection": "reconnecting", "failures": 3, "authHint": true, "adminUrl": null, "bootstrapRequired": false}));
+    }
+
     #[test]
     fn nfr6_version_mismatch() {
         assert!(!version_mismatch("2.1.0", "2.1.0"));

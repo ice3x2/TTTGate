@@ -153,7 +153,7 @@ The old repository-root `config.yaml` is no longer used.
 - Values that you do not give stay as they are. The command line does not accept an empty value, so `server config save` cannot clear `adminAllowedOrigins`. Clear the list in the admin console.
 - If `server.yaml` does not exist, the defaults are created first.
 - The command uses the same checks as a save in the admin console.
-- On success, it prints `Saved <path>`. It does not print the version banner.
+- On success, the last line is `Saved <path>`. Server log lines can come before it, and a server log file is written. It does not print the version banner.
 - If a TTTGate server of this installation runs, the command saves nothing. This also applies when a running process has an unknown mode. Stop the server first with `TTTGate stop`. A running client of the same installation does not block the command.
 - If the resulting `adminBindHost` is not loopback, the command saves nothing unless you add `-allowLegacyAdminRemote`. Then start the server later with the same `-allowLegacyAdminRemote`.
 
@@ -996,7 +996,7 @@ net.ipv4.tcp_wmem = 4096 16384 1048576
 - 주지 않은 값은 그대로 둔다. 명령줄은 빈 값을 받지 않으므로 `server config save` 로는 `adminAllowedOrigins` 를 비울 수 없다. 목록은 관리 화면에서 비운다.
 - `server.yaml` 이 없으면 기본값으로 먼저 만든다.
 - 관리 화면에서 저장할 때와 같은 검사를 거친다.
-- 저장하면 `Saved <path>` 를 출력한다. 버전 배너는 출력하지 않는다.
+- 저장하면 마지막 줄에 `Saved <path>` 를 출력한다. 그 앞에 서버 로그 줄이 나올 수 있고, 서버 로그 파일도 쓴다. 버전 배너는 출력하지 않는다.
 - 이 설치본의 TTTGate 서버가 돌고 있으면 아무것도 저장하지 않는다. 실행 중인 프로세스의 모드를 알 수 없을 때도 마찬가지다. 먼저 `TTTGate stop` 으로 서버를 멈춘다. 같은 설치본에서 클라이언트가 돌고 있는 것은 상관없다.
 - 저장할 `adminBindHost` 가 루프백이 아니면, `-allowLegacyAdminRemote` 를 붙이지 않는 한 아무것도 저장하지 않는다. 붙여서 저장했다면 나중에 서버를 시작할 때도 같은 `-allowLegacyAdminRemote` 를 붙인다.
 
