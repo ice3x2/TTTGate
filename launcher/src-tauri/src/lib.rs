@@ -275,6 +275,9 @@ fn start_daemon(state: &AppState) -> ActionResult {
 }
 
 fn start_daemon_in(state: &AppState, mode: Option<Mode>) -> ActionResult {
+    if state.cli().is_none() {
+        return ActionResult::because("cliMissing", CLI_MISSING_MESSAGE);
+    }
     let settings = state.settings();
     let args = match mode {
         Some(Mode::Client) => cli::client_daemon_args(),
@@ -312,6 +315,9 @@ async fn start_server(state: State<'_, Shared>, options: ServerOptions, allow_re
 }
 
 fn save_and_start_server(state: &AppState, options: &ServerOptions, allow_remote: bool) -> ActionResult {
+    if state.cli().is_none() {
+        return ActionResult::because("cliMissing", CLI_MISSING_MESSAGE);
+    }
     let saved = state.run(&cli::server_save_args(&options, allow_remote));
     if saved.code == Some(cli::REMOTE_CONSENT_EXIT_CODE) {
         return ActionResult { needs_remote_consent: true, ..ActionResult::failed(saved.error_message()) };
@@ -328,6 +334,9 @@ fn save_and_start_server(state: &AppState, options: &ServerOptions, allow_remote
 }
 
 fn stop(state: &AppState) -> ActionResult {
+    if state.cli().is_none() {
+        return ActionResult::because("cliMissing", CLI_MISSING_MESSAGE);
+    }
     let result = ActionResult::from(&state.run(&cli::stop_args()));
     // 창을 닫을 때 숨길지 끝낼지를 바로 맞추도록 실행 여부를 새로 읽는다.
     // stop 은 확인하지 못한 프로세스(다른 사용자, 조회 실패)를 남기고도 0 으로 끝난다. 아직 돌면 실패로 알린다.
@@ -552,7 +561,8 @@ pub fn run() {
             // single-instance 플러그인이 끝내므로, 첫 런처가 쓰는 파일을 지우지 않는다.
             runner::remove_old_outputs(&runner::output_dir());
             // 자동 시작 표시는 실제 Run 값을 따른다(폴더를 옮기면 경로 해시가 달라 값이 없다).
-            in_background(app.handle(), |_, state| {
+            // 로그인 자동 시작으로 떴으면 맞추지 않는다. 그 값으로 떴고, 곧 할 데몬 시작과 겹치지 않게 한다.
+            if !autostarted { in_background(app.handle(), |_, state| {
                 // 다른 일(모드 고르기 등)과 겹쳐 launcher.json 의 변경 하나를 잃지 않게 한다. 바쁘면 다음 실행 때 맞춘다.
                 let Some(_guard) = state.begin() else { return };
                 let present = runner::run(&system_tool("reg.exe"), &autostart::query_args(&state.exe), &state.paths.bin_dir).ok();
@@ -561,7 +571,7 @@ pub fn run() {
                     settings.autostart = present;
                     let _ = state.save_settings(&settings);
                 }
-            });
+            }); }
             build_tray(app.handle())?;
             if !autostarted {
                 // 창은 숨긴 채 만들어진다. 로그인 자동 시작이 아니면 보인다.

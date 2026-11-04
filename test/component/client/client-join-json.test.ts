@@ -122,6 +122,8 @@ describe("client join --json", () => {
     test("REQ-2 --code-stdin refuses a terminal instead of waiting for the end of input", () => {
         expect(readCodeInput({isTTY: true}, () => { throw new Error("must not read a terminal"); })).toBeUndefined();
         expect(readCodeInput({isTTY: false}, () => "7Q4K-M2XP-AB01\nrest")).toBe("7Q4K-M2XP-AB01\nrest");
+        // 읽기가 실패해도(잘못된 핸들 등) 예외로 끝나지 않는다. 코드가 없는 것으로 보고 JSON 결과를 낸다.
+        expect(readCodeInput({isTTY: false}, () => { throw Object.assign(new Error("bad handle"), {code: "EBADF"}); })).toBeUndefined();
     });
 
     test("AC-9 a settings folder that cannot be written reports category write", async () => {

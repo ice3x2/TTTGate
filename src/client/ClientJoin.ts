@@ -24,8 +24,15 @@ type JoinIo = {configDir: string, out: (line: string) => void, err: (line: strin
  * --code-stdin 의 입력. 터미널이면 읽지 않는다: 입력의 끝(Ctrl+Z·Ctrl+D)까지 안내 없이 멈추기 때문이다.
  * 그때는 undefined 를 돌려주고, 호출자는 코드가 없다고 알린다.
  */
-const readCodeInput = (stdin: {isTTY?: boolean}, read: () => string): string | undefined =>
-    stdin.isTTY ? undefined : read();
+const readCodeInput = (stdin: {isTTY?: boolean}, read: () => string): string | undefined => {
+    if(stdin.isTTY) return undefined;
+    // 입력을 읽지 못하면(잘못된 핸들, 닫힌 파이프 등) 코드가 없는 것으로 본다. --json 이면 JSON 결과가 나가야 한다.
+    try {
+        return read();
+    } catch {
+        return undefined;
+    }
+};
 
 // process.stdin 은 건드리지 않는다. Linux 에서는 그 스트림이 파이프를 논블로킹으로 바꿔, 늦게 온 입력을 읽을 때 EAGAIN 이 난다.
 const readStandardInput = (): string => readCodeInput({isTTY: tty.isatty(0)}, () => fs.readFileSync(0, "utf-8")) ?? "";
