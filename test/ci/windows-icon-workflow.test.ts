@@ -6,7 +6,9 @@ import {parse as parseYaml} from "yaml";
 // 그 파일이 바뀔 때 Windows 에서 두 Windows 대상(x64, arm64)을 만들어 아이콘을 넣고 x64 를 실행해 본다.
 const root = path.resolve(__dirname, "../..");
 const workflow = parseYaml(fs.readFileSync(path.join(root, ".github/workflows/windows-icon.yml"), "utf8"));
-const WATCHED = ["package.json", "package-lock.json", "scripts/set-exe-icon.cjs", "admin/public/favicon.ico", ".github/workflows/windows-icon.yml"];
+// #322: 실행 파일로 --code-stdin 을 확인하므로 표준 입력을 읽는 코드가 바뀌어도 돈다.
+const WATCHED = ["package.json", "package-lock.json", "scripts/set-exe-icon.cjs", "admin/public/favicon.ico", "src/client/ClientJoin.ts",
+    ".github/workflows/windows-icon.yml"];
 
 describe("Windows icon smoke workflow (#321)", () => {
     test("runs on pull requests and pushes that change the packaging or the icon", () => {

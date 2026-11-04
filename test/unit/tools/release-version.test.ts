@@ -72,6 +72,13 @@ test("--match-package rejects a source distribution manifest with another versio
     expect(result.stderr).toBe("package-build.json version 1.0.11b does not match package.json version 2.0.0.\n");
 }, "1.0.11b"));
 
+// #322: Windows 런처(Tauri)는 버전을 semver 로 읽는다. semver 가 아닌 릴리스는 런처 빌드에서 실패하므로 태그 확인에서 멈춘다.
+test("--match-package rejects a package version that is not semver", () => withPackage("2.0.2b", directory => {
+    const result = shell('node scripts/validate-release-version.cjs "$RELEASE_VERSION" --match-package', directory, "2.0.2b");
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("semver");
+}));
+
 test("--match-package accepts a tag equal to package.json version", () => withPackage("2.0.0", directory => {
     const result = shell('node scripts/validate-release-version.cjs "$RELEASE_VERSION" --match-package', directory, "2.0.0");
     expect({status: result.status, stderr: result.stderr}).toEqual({status: 0, stderr: ""});

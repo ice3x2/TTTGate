@@ -265,9 +265,14 @@ fn join_with(state: &AppState, addr: &str, code: &str, replace: bool) -> JoinRes
     }
 }
 
+/// 저장된 모드로 데몬을 띄운다.
 fn start_daemon(state: &AppState) -> ActionResult {
+    start_daemon_in(state, state.settings().mode)
+}
+
+fn start_daemon_in(state: &AppState, mode: Option<Mode>) -> ActionResult {
     let settings = state.settings();
-    let args = match settings.mode {
+    let args = match mode {
         Some(Mode::Client) => cli::client_daemon_args(),
         Some(Mode::Server) => cli::server_daemon_args(settings.allow_remote_admin),
         None => return ActionResult::because("noMode", "Choose server or client mode first."),
@@ -455,8 +460,13 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 "admin" => in_background(app, |app, state| if !open_admin_url(state) { show_main_window(app); }),
                 "stop" => in_background(app, |app, state| report_failure(app, exclusive(state, stop))),
                 "restart" => in_background(app, |app, state| report_failure(app, exclusive(state, |state| {
+                    // 지금 도는 모드로 다시 띄운다. 띄울 모드를 모르면 멈추지 않는다(멈춘 채로 남지 않게).
+                    let running = state.status().and_then(|status| status.mode);
+                    let Some(mode) = start_check::restart_mode(running.as_deref(), state.settings().mode) else {
+                        return ActionResult::because("noMode", "Choose server or client mode first.");
+                    };
                     let stopped = stop(state);
-                    if stopped.ok { start_daemon(state) } else { stopped }
+                    if stopped.ok { start_daemon_in(state, Some(mode)) } else { stopped }
                 }))),
                 "logs" => in_background(app, |_, state| open_logs_folder(state)),
                 "quit" => in_background(app, request_quit),

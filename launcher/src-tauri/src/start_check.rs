@@ -1,8 +1,19 @@
 //! 데몬을 띄운 뒤 실제로 도는지 판단한다(#322). `-daemon` 의 종료 코드 0 은 자식을 띄웠다는 뜻일 뿐이다.
 
 use crate::cli::DaemonStatus;
+use crate::settings::Mode;
 use crate::runner::{holds_for, poll_until};
 use std::time::Duration;
+
+/// 다시 시작할 모드. 지금 도는 프로세스의 모드를 먼저 쓴다. 모르면(예전 PID 항목) 저장된 모드를 쓴다.
+/// 둘 다 모르면 None 이고, 호출자는 멈추지 않는다(멈춘 채로 남지 않게).
+pub fn restart_mode(running: Option<&str>, saved: Option<Mode>) -> Option<Mode> {
+    match running {
+        Some("server") => Some(Mode::Server),
+        Some("client") => Some(Mode::Client),
+        _ => saved,
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StartOutcome {
@@ -38,6 +49,16 @@ pub fn judge_start(wait: u32, hold: u32, interval: Duration, mut read: impl FnMu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn restart_uses_the_running_mode_first() {
+        // CLI 로 띄운 서버를 런처의 다시 시작이 클라이언트로 바꾸지 않는다.
+        assert_eq!(restart_mode(Some("server"), Some(Mode::Client)), Some(Mode::Server));
+        assert_eq!(restart_mode(Some("client"), None), Some(Mode::Client));
+        // 도는 모드를 모르면(예전 PID 항목) 저장된 모드를 쓴다. 둘 다 모르면 다시 시작하지 않는다.
+        assert_eq!(restart_mode(None, Some(Mode::Server)), Some(Mode::Server));
+        assert_eq!(restart_mode(None, None), None);
+    }
 
     fn running(pid: u32) -> Option<DaemonStatus> {
         Some(DaemonStatus { version: "2.0.1".into(), running: true, mode: Some("server".into()), pid: Some(pid), daemon: true, client: None, server: None })

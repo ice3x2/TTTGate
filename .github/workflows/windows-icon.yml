@@ -9,6 +9,7 @@ on:
       - package-lock.json
       - scripts/set-exe-icon.cjs
       - admin/public/favicon.ico
+      - src/client/ClientJoin.ts
       - .github/workflows/windows-icon.yml
   push:
     branches: [main, develop]
@@ -17,6 +18,7 @@ on:
       - package-lock.json
       - scripts/set-exe-icon.cjs
       - admin/public/favicon.ico
+      - src/client/ClientJoin.ts
       - .github/workflows/windows-icon.yml
   workflow_dispatch: {}
 
