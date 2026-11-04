@@ -65,6 +65,19 @@ describe("server config save", () => {
         expect(save({adminBindHost: "::1"})).toBe(0);
     });
 
+    test("AC-10 a server.yaml with admin TLS off is not saved: the server would refuse to start without -allowLegacyAdminHttp", () => {
+        expect(save({adminPort: "9400"})).toBe(0);
+        // 관리 화면에서 HTTP 로 바꾼 경우와 같다. 서버 시작 경로와 같은 정책(evaluateAdminSecurityPolicy)으로 판단한다.
+        const yaml = stored();
+        yaml.adminTls = false;
+        fs.writeFileSync(yamlFile(), YAML.stringify(yaml));
+        const before = fs.readFileSync(yamlFile(), "utf-8");
+        expect(save({controlPort: "9127"})).toBe(1);
+        expect(fs.readFileSync(yamlFile(), "utf-8")).toBe(before);
+        expect(err.join("\n")).toContain("admin TLS is disabled");
+        expect(err.join("\n")).toContain("adminTls");
+    });
+
     test("AC-10 wrong values are not saved", () => {
         expect(save({adminPort: "9400"})).toBe(0);
         const before = fs.readFileSync(yamlFile(), "utf-8");

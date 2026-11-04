@@ -18,6 +18,7 @@ const STRINGS = {
     controlPortTitle: "클라이언트 연결", controlPort: "제어 포트", controlTls: "TLS", controlProtocolMode: "프로토콜 모드",
     on: "켬", off: "끔", saveAndStart: "저장하고 시작",
     authHint: "연결이 계속 실패합니다. 서버에서 이 클라이언트가 지워졌거나 비밀값이 바뀌었을 수 있습니다. 그렇다면 다른 서버로 다시 등록을 눌러 새 코드로 등록하세요.",
+    stoppedAfterStart: "TTTGate 가 시작한 뒤 곧 멈췄습니다. 포트가 이미 쓰이고 있을 수 있습니다. 로그 폴더의 기록을 확인하세요.",
     replaceConfirm: "이 PC 에 이미 등록 정보(config/client.yaml)가 있지만 읽을 수 없거나 예전 방식입니다. 새 코드로 바꾸어 등록할까요? 지금 파일은 client.yaml.bak 으로 남깁니다.",
     tokenHelp: "처음 로그인할 때 이 부트스트랩 토큰으로 관리자 계정을 만듭니다.", copy: "복사", copied: "복사했습니다",
     openLogs: "로그 폴더", openAdmin: "관리 화면 열기", stop: "멈추기",
@@ -61,6 +62,7 @@ const STRINGS = {
     controlPortTitle: "Client connections", controlPort: "Control port", controlTls: "TLS", controlProtocolMode: "Protocol mode",
     on: "On", off: "Off", saveAndStart: "Save and start",
     authHint: "The connection keeps failing. The server may have removed this client or changed its secret. If so, choose Enroll with another server and use a new code.",
+    stoppedAfterStart: "TTTGate stopped right after it started. A port may already be in use. Check the logs folder.",
     replaceConfirm: "This PC already has enrollment settings (config/client.yaml), but they cannot be read or use the old method. Enroll again with this code? The current file is kept as client.yaml.bak.",
     tokenHelp: "Use this bootstrap token to create the admin account at the first sign-in.", copy: "Copy", copied: "Copied",
     openLogs: "Logs folder", openAdmin: "Open admin console", stop: "Stop",
@@ -95,7 +97,9 @@ const T = navigator.language && navigator.language.toLowerCase().startsWith("ko"
 const invoke = (command, args) => window.__TAURI__.core.invoke(command, args);
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
-const POLL_MS = 3000;
+/** 실행 중에는 상태가 자주 바뀐다. 멈춰 있을 때는 CLI 를 덜 부른다. */
+const POLL_RUNNING_MS = 3000;
+const POLL_STOPPED_MS = 10000;
 let current = null;
 
 function translate() {
@@ -112,6 +116,11 @@ async function busy(work) {
     $("[data-busy]").hidden = true;
     $$("button").forEach((button) => { button.disabled = false; });
   }
+}
+
+/** 명령 결과를 문장으로 바꾼다. */
+function failureText(result) {
+  return result.stoppedAfterStart ? T.stoppedAfterStart : result.message;
 }
 
 function showResult(selector, ok, text) {
@@ -152,6 +161,8 @@ function render(state) {
 
 function renderRunning(view) {
   const mode = view.mode === "server" || view.mode === "client" ? view.mode : "unknown";
+  // 예전 PID 항목은 모드가 없다. 단추는 저장된 모드로 정해서 다시 등록 단추가 사라지지 않게 한다(REQ-2b).
+  const buttonsMode = mode === "unknown" && current ? current.settings.mode : mode;
   $("[data-running-title]").textContent = T.running[mode];
   const details = [view.daemon ? T.background : T.foreground, `pid ${view.pid}`];
   if (view.connection) details.unshift(T.connection[view.connection] || view.connection);
@@ -160,8 +171,8 @@ function renderRunning(view) {
   const dot = $("[data-dot]");
   dot.className = `dot ${view.connection === "connected" || mode === "server" ? "ok" : "warn"}`;
   $("[data-auth-hint]").hidden = !view.authHint;
-  $$("[data-client-only]").forEach((element) => { element.hidden = mode !== "client"; });
-  $$("[data-server-only]").forEach((element) => { element.hidden = mode !== "server"; });
+  $$("[data-client-only]").forEach((element) => { element.hidden = buttonsMode !== "client"; });
+  $$("[data-server-only]").forEach((element) => { element.hidden = buttonsMode !== "server"; });
 }
 
 async function refresh() {
@@ -205,7 +216,7 @@ async function startServer(form, allowRemote) {
     if ((await ask("remote")) === "ok") return startServer(form, true);
     return;
   }
-  if (!result.ok) showResult("[data-server-result]", false, result.message);
+  if (!result.ok) showResult("[data-server-result]", false, failureText(result));
   await refresh();
 }
 
@@ -227,7 +238,7 @@ const ACTIONS = {
   cancelRejoin: () => invoke("set_rejoin", { on: false }),
   startClient: async () => {
     const result = await invoke("start_client");
-    if (!result.ok) alert(result.message);
+    if (!result.ok) alert(failureText(result));
   },
   stop: () => stopOrReport(),
   openLogs: () => invoke("open_logs"),
@@ -276,17 +287,29 @@ function wire() {
   });
   $("[data-form=server]").addEventListener("submit", (event) => {
     event.preventDefault();
-    void startServer(event.target, false);
+    // 이미 동의했으면 다시 묻지 않는다(REQ-5). 동의는 런처 설정에 남아 있다.
+    void startServer(event.target, Boolean(current && current.settings.allowRemoteAdmin));
   });
   $("[data-autostart]").addEventListener("change", async (event) => {
     const result = await invoke("set_autostart", { on: event.target.checked });
     if (!result.ok) alert(result.message);
     await refresh();
   });
-  // 트레이의 끝내기(REQ-8): 실행 중이면 멈출지 남길지 묻는다.
+  // 트레이의 끝내기(REQ-8): 실행 중이면 멈출지 남길지 묻는다. 멈추지 못하면 끝내지 않고 알린다.
   window.__TAURI__.event.listen("confirm-quit", async () => {
     const choice = await ask("quit");
-    if (choice === "stop" || choice === "keep") await invoke("quit", { stopDaemon: choice === "stop" });
+    if (choice !== "stop" && choice !== "keep") return;
+    try {
+      await invoke("quit", { stopDaemon: choice === "stop" });
+    } catch (error) {
+      alert(String(error));
+      await refresh();
+    }
+  });
+  // 트레이·자동 시작에서 한 일이 실패했다. 창이 이미 앞에 나와 있다.
+  window.__TAURI__.event.listen("action-failed", async (event) => {
+    await refresh();
+    alert(failureText(event.payload));
   });
   scheduleRefresh();
 }
@@ -299,7 +322,7 @@ function scheduleRefresh() {
       // 한 번 실패해도 다음 갱신은 계속한다.
     }
     scheduleRefresh();
-  }, POLL_MS);
+  }, current && current.screen.screen === "running" ? POLL_RUNNING_MS : POLL_STOPPED_MS);
 }
 
 translate();

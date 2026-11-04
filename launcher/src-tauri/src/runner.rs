@@ -39,11 +39,41 @@ pub fn run_with_input(cli: &Path, args: &[String], work_dir: &Path, input: &str)
     run_inner(cli, args, work_dir, Some(input))
 }
 
+/// CLI 출력을 받는 폴더. `-daemon` 은 분리된 자식에게 출력 파일 핸들을 물려주므로, 그 파일은 데몬이 끝날 때까지 지워지지 않는다.
+/// 그래서 런처 전용 폴더에 두고 런처가 시작할 때 남은 것을 지운다(`remove_old_outputs`).
+pub fn output_dir() -> PathBuf {
+    std::env::temp_dir().join("tttgate-launcher")
+}
+
+/// 앞선 실행이 남긴 출력 파일을 지운다. 아직 데몬이 잡고 있는 파일은 지워지지 않으므로 그대로 둔다.
+/// 런처가 다른 명령을 부르기 전에 한 번만 부른다(돌고 있는 명령의 파일을 지우지 않도록).
+pub fn remove_old_outputs(dir: &Path) {
+    let Ok(entries) = fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        let _ = fs::remove_file(entry.path());
+    }
+}
+
+/// `check` 가 참이 될 때까지 `interval` 간격으로 최대 `attempts` 번 본다.
+pub fn poll_until(attempts: u32, interval: std::time::Duration, mut check: impl FnMut() -> bool) -> bool {
+    for attempt in 0..attempts {
+        if check() {
+            return true;
+        }
+        if attempt + 1 < attempts {
+            std::thread::sleep(interval);
+        }
+    }
+    false
+}
+
 fn run_inner(cli: &Path, args: &[String], work_dir: &Path, input: Option<&str>) -> CliOutput {
     let unique = format!("{}-{}", std::process::id(), std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0));
-    let out_file = temp_file(&format!("tttgate-launcher-{}.out", unique));
-    let err_file = temp_file(&format!("tttgate-launcher-{}.err", unique));
+    let dir = output_dir();
+    let _ = fs::create_dir_all(&dir);
+    let out_file = dir.join(format!("{}.out", unique));
+    let err_file = dir.join(format!("{}.err", unique));
     let result = spawn_and_wait(cli, args, work_dir, &out_file, &err_file, input);
     let output = match result {
         Ok(code) => CliOutput {
@@ -56,10 +86,6 @@ fn run_inner(cli: &Path, args: &[String], work_dir: &Path, input: Option<&str>) 
     let _ = fs::remove_file(&out_file);
     let _ = fs::remove_file(&err_file);
     output
-}
-
-fn temp_file(name: &str) -> PathBuf {
-    std::env::temp_dir().join(name)
 }
 
 fn spawn_and_wait(cli: &Path, args: &[String], work_dir: &Path, out_file: &Path, err_file: &Path, input: Option<&str>)
@@ -88,6 +114,29 @@ fn spawn_and_wait(cli: &Path, args: &[String], work_dir: &Path, out_file: &Path,
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn outputs_live_in_their_own_folder_and_old_ones_are_removed() {
+        let dir = std::env::temp_dir().join(format!("tttgate-runner-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("left-by-a-daemon.out"), b"x").unwrap();
+        fs::write(dir.join("left-by-a-daemon.err"), b"x").unwrap();
+        remove_old_outputs(&dir);
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 0);
+        fs::remove_dir_all(&dir).unwrap();
+        assert!(output_dir().ends_with("tttgate-launcher"));
+    }
+
+    #[test]
+    fn poll_until_stops_at_the_first_success_or_after_the_attempts() {
+        let mut calls = 0;
+        assert!(poll_until(5, std::time::Duration::ZERO, || { calls += 1; calls == 3 }));
+        assert_eq!(calls, 3);
+        let mut never = 0;
+        assert!(!poll_until(4, std::time::Duration::ZERO, || { never += 1; false }));
+        assert_eq!(never, 4);
+    }
 
     #[test]
     fn the_error_message_prefers_stderr() {

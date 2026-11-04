@@ -33,7 +33,7 @@ struct AppState {
 
 impl AppState {
     fn cli(&self) -> Option<PathBuf> {
-        cli::find_cli(&self.paths.bin_dir, std::env::consts::ARCH)
+        cli::find_cli(&self.paths.bin_dir, cli::native_arch())
     }
 
     fn run(&self, args: &[String]) -> CliOutput {
@@ -99,23 +99,30 @@ struct LoadView {
     bootstrap_token: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct ActionResult {
     ok: bool,
     needs_remote_consent: bool,
+    /// 데몬을 띄웠지만 곧 끝났다(포트 충돌 등). 창은 로그 폴더를 보라고 알린다.
+    stopped_after_start: bool,
     message: String,
 }
 
 impl ActionResult {
     fn from(output: &CliOutput) -> Self {
-        ActionResult { ok: output.ok(), needs_remote_consent: false, message: if output.ok() { String::new() } else { output.error_message() } }
+        ActionResult { ok: output.ok(), needs_remote_consent: false, stopped_after_start: false,
+            message: if output.ok() { String::new() } else { output.error_message() } }
     }
 
     fn failed(message: String) -> Self {
-        ActionResult { ok: false, needs_remote_consent: false, message }
+        ActionResult { ok: false, needs_remote_consent: false, stopped_after_start: false, message }
     }
 }
+
+/// 데몬이 뜬 뒤 실제로 도는지 보는 시간: 1초 간격으로 8번.
+const START_CHECK_ATTEMPTS: u32 = 8;
+const START_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -208,8 +215,19 @@ fn start_daemon(state: &AppState) -> ActionResult {
         None => return ActionResult::failed("choose a mode first".into()),
     };
     let result = ActionResult::from(&state.run(&args));
-    state.status();
-    result
+    if !result.ok {
+        state.status();
+        return result;
+    }
+    // `-daemon` 의 종료 코드 0 은 자식을 띄웠다는 뜻일 뿐이다. 앱이 곧 끝나면(포트 충돌 등) 알린다.
+    let running = runner::poll_until(START_CHECK_ATTEMPTS, START_CHECK_INTERVAL,
+        || state.status().map(|status| status.running).unwrap_or(false));
+    if running {
+        result
+    } else {
+        ActionResult { ok: false, needs_remote_consent: false, stopped_after_start: true,
+            message: "TTTGate stopped right after it started".into() }
+    }
 }
 
 #[tauri::command]
@@ -225,7 +243,7 @@ async fn start_server(state: State<'_, Shared>, options: ServerOptions, allow_re
 fn save_and_start_server(state: &AppState, options: &ServerOptions, allow_remote: bool) -> ActionResult {
     let saved = state.run(&cli::server_save_args(&options, allow_remote));
     if saved.code == Some(cli::REMOTE_CONSENT_EXIT_CODE) {
-        return ActionResult { ok: false, needs_remote_consent: true, message: saved.error_message() };
+        return ActionResult { ok: false, needs_remote_consent: true, stopped_after_start: false, message: saved.error_message() };
     }
     if !saved.ok() {
         return ActionResult::from(&saved);
@@ -287,15 +305,19 @@ async fn set_autostart(state: State<'_, Shared>, on: bool) -> Result<ActionResul
 }
 
 fn apply_autostart(state: &AppState, on: bool) -> ActionResult {
-    let output = runner::run(&system_tool("reg.exe"), &autostart::reg_args(&state.exe, on), &state.paths.bin_dir);
-    // 끄려는데 값이 이미 없으면 reg delete 가 실패한다. 그때도 끈 상태다.
-    if !output.ok() && on {
-        return ActionResult::from(&output);
+    let reg = system_tool("reg.exe");
+    // 끌 때 값이 이미 없으면 지울 것이 없다. 있는데 지우지 못하면(권한 등) 실패로 알린다.
+    let present = on || runner::run(&reg, &autostart::query_args(), &state.paths.bin_dir).ok();
+    if present {
+        let output = runner::run(&reg, &autostart::reg_args(&state.exe, on), &state.paths.bin_dir);
+        if !output.ok() {
+            return ActionResult::from(&output);
+        }
     }
     let mut settings = state.settings();
     settings.autostart = on;
     match state.save_settings(&settings) {
-        Ok(()) => ActionResult { ok: true, needs_remote_consent: false, message: String::new() },
+        Ok(()) => ActionResult { ok: true, needs_remote_consent: false, stopped_after_start: false, message: String::new() },
         Err(message) => ActionResult::failed(message),
     }
 }
@@ -303,7 +325,10 @@ fn apply_autostart(state: &AppState, on: bool) -> ActionResult {
 #[tauri::command]
 async fn quit(app: AppHandle, state: State<'_, Shared>, stop_daemon: bool) -> Result<(), String> {
     if stop_daemon {
-        blocking(&state, stop).await?;
+        let result = blocking(&state, stop).await?;
+        if !result.ok {
+            return Err(result.message);
+        }
     }
     app.exit(0);
     Ok(())
@@ -327,10 +352,11 @@ fn request_quit(app: &AppHandle, state: &AppState) {
     }
 }
 
-/// 창 밖(트레이·자동 시작)에서 띄우지 못했으면 창을 보여 사용자가 알게 한다.
-fn report_start(app: &AppHandle, result: ActionResult) {
+/// 창 밖(트레이·자동 시작)에서 한 일이 실패하면 창을 보이고 이유를 알린다.
+fn report_failure(app: &AppHandle, result: ActionResult) {
     if !result.ok {
         show_main_window(app);
+        let _ = app.emit("action-failed", result);
     }
 }
 
@@ -355,10 +381,10 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 "open" => show_main_window(app),
                 // 클라이언트 모드나 멈춘 상태에서는 열 관리 화면이 없다. 창을 보여 지금 상태를 알린다.
                 "admin" => in_background(app, |app, state| if !open_admin_url(state) { show_main_window(app); }),
-                "stop" => in_background(app, |_, state| { stop(state); }),
+                "stop" => in_background(app, |app, state| report_failure(app, stop(state))),
                 "restart" => in_background(app, |app, state| {
-                    stop(state);
-                    report_start(app, start_daemon(state));
+                    let stopped = stop(state);
+                    report_failure(app, if stopped.ok { start_daemon(state) } else { stopped });
                 }),
                 "logs" => in_background(app, |_, state| open_logs_folder(state)),
                 "quit" => in_background(app, request_quit),
@@ -416,6 +442,8 @@ pub fn run() {
     let exe = std::env::current_exe().expect("the launcher path");
     let paths = paths::from_exe(&exe);
     let autostarted = std::env::args().any(|arg| arg == autostart::AUTOSTART_ARG);
+    // 앞선 실행에서 데몬이 잡고 있던 출력 파일을 지운다. 명령을 부르기 전에 한 번만 한다.
+    runner::remove_old_outputs(&runner::output_dir());
     tauri::Builder::default()
         // 두 번째 실행은 떠 있는 창을 앞으로 가져온다(REQ-9).
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main_window(app)))
@@ -431,7 +459,7 @@ pub fn run() {
                 }
                 in_background(app.handle(), |app, state| {
                     if !state.status().map(|s| s.running).unwrap_or(true) {
-                        report_start(app, start_daemon(state));
+                        report_failure(app, start_daemon(state));
                     }
                 });
             }

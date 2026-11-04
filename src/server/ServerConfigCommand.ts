@@ -1,6 +1,7 @@
 import ServerOptionStore from "./ServerOptionStore";
-import {isLoopbackAdminHost, LEGACY_ADMIN_REMOTE_FLAG} from "./AdminSecurityPolicy";
-import {isFlagOn, normalizeBooleanOption} from "./ServerCliOptions";
+import {buildAdminSecurityAllowancesFromCliOptions, evaluateAdminSecurityPolicy, formatAdminSecurityPolicyErrors,
+    LEGACY_ADMIN_HTTP_FLAG, LEGACY_ADMIN_REMOTE_FLAG} from "./AdminSecurityPolicy";
+import {normalizeBooleanOption} from "./ServerCliOptions";
 import {ControlProtocolMode, ServerOption} from "../types/TunnelingOption";
 
 /**
@@ -72,8 +73,14 @@ const saveServerConfig = (cli: {[key: string]: string}, io: ConfigIo, deps: Save
         io.err(prepared.message);
         return EXIT_INVALID;
     }
+    // 서버 시작과 같은 정책으로 판단한다. 저장은 되는데 서버가 뜨지 않는 설정을 만들지 않는다.
     // 관리 화면을 다른 PC 에 여는 것은 사용자가 위험을 알고 고른 경우에만 저장한다(#322 REQ-5).
-    if(!isLoopbackAdminHost(prepared.serverOption!.adminBindHost) && !isFlagOn(cli, LEGACY_ADMIN_REMOTE_FLAG)) {
+    const decision = evaluateAdminSecurityPolicy(prepared.serverOption!, buildAdminSecurityAllowancesFromCliOptions(cli));
+    if(decision.missingFlags.includes(LEGACY_ADMIN_HTTP_FLAG)) {
+        io.err(`${formatAdminSecurityPolicyErrors(decision)}. Turn adminTls on in the admin console or in server.yaml first.`);
+        return EXIT_INVALID;
+    }
+    if(decision.missingFlags.includes(LEGACY_ADMIN_REMOTE_FLAG)) {
         io.err(`the admin console would be reachable from other hosts (${prepared.serverOption!.adminBindHost ?? "*"}). ` +
             `Add -${LEGACY_ADMIN_REMOTE_FLAG} to save it, and start the server with the same option.`);
         return EXIT_REMOTE_ADMIN_NEEDS_CONSENT;

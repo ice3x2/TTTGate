@@ -83,6 +83,31 @@ pub fn parse_join(stdout: &str, stderr: &str) -> JoinOutcome {
     }
 }
 
+/// 이 PC 의 실제 CPU 아키텍처. x64 런처가 arm64 Windows 에서 에뮬레이션으로 돌아도 aarch64 를 돌려준다.
+/// (`std::env::consts::ARCH` 는 런처를 빌드한 아키텍처라 에뮬레이션 중에는 x86_64 다.)
+#[cfg(windows)]
+pub fn native_arch() -> &'static str {
+    extern "system" {
+        fn GetCurrentProcess() -> isize;
+        fn IsWow64Process2(process: isize, process_machine: *mut u16, native_machine: *mut u16) -> i32;
+    }
+    const IMAGE_FILE_MACHINE_ARM64: u16 = 0xAA64;
+    const IMAGE_FILE_MACHINE_AMD64: u16 = 0x8664;
+    let (mut process_machine, mut native_machine) = (0u16, 0u16);
+    // 실패하면(아주 오래된 Windows) 빌드 아키텍처를 쓴다.
+    let ok = unsafe { IsWow64Process2(GetCurrentProcess(), &mut process_machine, &mut native_machine) } != 0;
+    match (ok, native_machine) {
+        (true, IMAGE_FILE_MACHINE_ARM64) => "aarch64",
+        (true, IMAGE_FILE_MACHINE_AMD64) => "x86_64",
+        _ => std::env::consts::ARCH,
+    }
+}
+
+#[cfg(not(windows))]
+pub fn native_arch() -> &'static str {
+    std::env::consts::ARCH
+}
+
 /// `client config show` 에서 읽은 등록 정보. 비밀값은 CLI 가 `(hidden)` 으로 가려 출력한다.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Registration {
@@ -212,6 +237,13 @@ mod tests {
         assert_eq!(find_cli(&dir, "x86_64"), Some(dir.join("TTTGate-win-x64.exe")));
         assert_eq!(find_cli(&dir, "aarch64"), Some(dir.join("TTTGate-win-arm64.exe")));
         fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[cfg(all(windows, target_arch = "x86_64"))]
+    #[test]
+    fn the_native_architecture_is_read_from_the_os() {
+        // 이 시험 PC 는 x64 다. arm64 PC 에서 에뮬레이션으로 돌면 aarch64 를 돌려줘야 한다.
+        assert_eq!(native_arch(), "x86_64");
     }
 
     #[test]

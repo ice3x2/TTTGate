@@ -7,6 +7,11 @@ pub const VALUE_NAME: &str = "TTTGate Launcher";
 /// 자동 시작으로 뜬 런처는 창 없이 트레이로 시작한다.
 pub const AUTOSTART_ARG: &str = "--autostart";
 
+/// 값이 있는지 묻는 reg.exe 인자. 종료 코드 0 이면 있다.
+pub fn query_args() -> Vec<String> {
+    vec!["query".into(), RUN_KEY.into(), "/v".into(), VALUE_NAME.into()]
+}
+
 /// reg.exe 에 줄 인자.
 pub fn reg_args(exe: &Path, on: bool) -> Vec<String> {
     let args: Vec<String> = if on {
@@ -27,6 +32,12 @@ mod tests {
         let exe = Path::new(r"C:\Program Files\TTTGate\bin\TTTGate-launcher-win-x64.exe");
         assert_eq!(reg_args(exe, true), vec!["add", RUN_KEY, "/v", VALUE_NAME, "/t", "REG_SZ", "/d",
             r#""C:\Program Files\TTTGate\bin\TTTGate-launcher-win-x64.exe" --autostart"#, "/f"]);
+    }
+
+    #[test]
+    fn the_value_is_queried_before_it_is_deleted() {
+        // 값이 없어서 지우기가 실패한 것과 권한이 없어서 실패한 것을 가린다.
+        assert_eq!(query_args(), vec!["query", RUN_KEY, "/v", VALUE_NAME]);
     }
 
     #[test]
