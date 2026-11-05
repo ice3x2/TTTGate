@@ -144,6 +144,26 @@ describe("ServerOptionStore 감사 옵션 검증", () => {
         expect(option.auditRetentionDays).toBe(0);
     });
 
+    // #327 REQ-12: 거절 로그 보관 일수. 없으면 20, 0 이하는 끄기로 받는다.
+    it("denialLogRetentionDays 를 생략하면 20 으로 채우고, 0 이하와 3650 까지의 정수를 받는다", () => {
+        const {result, option} = verify({denialLogRetentionDays: undefined});
+        expect(result.success).toBe(true);
+        expect(option.denialLogRetentionDays).toBe(20);
+        for(const days of [0, -3, 1, 3650]) {
+            const accepted = verify({denialLogRetentionDays: days});
+            expect(accepted.result.success).toBe(true);
+            expect(accepted.option.denialLogRetentionDays).toBe(days);
+        }
+    });
+
+    it("AC-7 denialLogRetentionDays 가 정수가 아니거나 3650 을 넘으면 실패한다", () => {
+        for(const days of [1.5, 3651, "20", null]) {
+            const rejected = verify({denialLogRetentionDays: days});
+            expect(rejected.result.success).toBe(false);
+            expect(rejected.result.message).toBe("denialLogRetentionDays must be an integer of at most 3650 (0 or less turns the denial log off)");
+        }
+    });
+
     it("auditRetentionDays 3650 은 통과하고 3651 은 실패한다", () => {
         expect(verify({auditRetentionDays: 3650}).option.auditRetentionDays).toBe(3650);
 

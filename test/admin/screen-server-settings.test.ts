@@ -316,6 +316,44 @@ describe("U4-09 서버 설정 Security 카드", () => {
     }, ADMIN_APP_TEST_TIMEOUT_MS);
 });
 
+// #327 REQ-16 · AC-12 — 거절 로그 보관 일수. 기본 20, 0 이하(끄기)도 저장한다. 비우면 요청 없이 오류를 보인다.
+test("거절 로그 보관 일수는 기본 20 이고, 음수도 저장되며, 비우면 저장하지 않는다", async () => {
+    const app = await startAdminApp({fixture: "password"});
+    try {
+        const {page} = app;
+        await openServerSettings(page);
+        const field = page.locator("#input-denial-log-retention-days");
+        expect(await field.inputValue()).toBe("20");
+        expect(await page.locator('label[for="input-denial-log-retention-days"]').textContent()).toContain("Denial log retention (days)");
+        await page.locator("#server-security").getByText("0 or less turns off the denial log.", {exact: true}).waitFor({state: "visible"});
+
+        let posts = 0;
+        page.on("request", (request) => { if(request.method() === "POST" && new URL(request.url()).pathname === "/api/serverOption") posts++; });
+        await field.fill("");
+        await page.getByRole("button", {name: "Apply", exact: true}).click();
+        await page.locator("#server-security").getByText("Enter a number of days. 0 or less turns off the denial log.", {exact: true})
+            .waitFor({state: "visible", timeout: 10_000});
+        expect(posts).toBe(0);
+
+        await field.fill("-3");
+        const saved = page.waitForResponse((response) => response.request().method() === "POST"
+            && new URL(response.url()).pathname === "/api/serverOption", {timeout: 15_000});
+        await page.getByRole("button", {name: "Apply", exact: true}).click();
+        expect((await (await saved).json()).success).toBe(true);
+        const stored = await page.evaluate(async () => (await (await fetch("/api/serverOption", {credentials: "same-origin"})).json()).serverOption);
+        expect(stored.denialLogRetentionDays).toBe(-3);
+        // 화면은 캐시한 설정을 쓴다. 페이지를 새로 읽어 서버 값을 다시 받은 뒤 칸을 본다.
+        const reloaded = page.waitForResponse(isGet("/api/serverOption"), {timeout: 15_000});
+        await page.reload();
+        await reloaded;
+        await page.waitForFunction(() => (document.querySelector("#input-denial-log-retention-days") as HTMLInputElement | null)?.value === "-3",
+            undefined, {timeout: 15_000});
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, ADMIN_APP_TEST_TIMEOUT_MS);
+
 // #267 REQ-4·AC-3 — 서버 설정에서 로그 레벨을 고르고 저장하면 서버 설정에 반영된다.
 test("로그 레벨은 기본 info 이고, 네 가지 가운데 골라 저장하면 서버 설정에 남는다", async () => {
     const app = await startAdminApp({fixture: "password"});

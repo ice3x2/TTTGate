@@ -712,6 +712,44 @@ Check whether TTTGate runs, as a sentence and as JSON:
 - A wrong value written directly in `server.yaml` fails config validation at startup.
 - Upgrade note: earlier versions also wrote `debug` lines by default. Set `logLevel: debug` to keep that output.
 
+#### Denied Connections
+
+The server refuses a connection for one of five reasons:
+
+| Reason | Shown as | Meaning |
+|---|---|---|
+| `geo-deny` | Country blocked | The country filter refused the address. |
+| `ip-blocklist` | Blocklist | The address is on the admin blocklist. |
+| `rate-limit-ban` | Temporarily banned | The address is banned for a time after too many connections. |
+| `rate-limit-exceeded` | Rate limit exceeded | The address made too many connections in the rate-limit window. |
+| `concurrency-limit` | Connection limit | The tunnel owner's group reached its limit of connections at the same time. |
+
+You can see denials in three places:
+
+- **Denials by port** (admin console → **Security**): the number of denials for each port and reason, and the number of banned addresses. The admin console itself appears as `admin`; only the country filter can refuse it. The counts start at 0 when the server starts. They do not reset when you change or remove a tunnel. `GET /api/security/stats` returns the same numbers.
+- **Recent denials** (admin console → **Security**): the latest 200 denials with time, IP, country, port and reason. They are kept only in memory and are lost when the server restarts. Countries are shown only while the country filter is on. `GET /api/security/denials` returns the same list. Both tables refresh every 10 seconds.
+- **Denial log files**: `logs/denial-YYYY.MM.DD.log`, next to the server logs. They are for reading over SSH when you investigate a problem. The admin console does not show them, and the lines do not go to the console or to `logs/server-*.log`.
+
+Each line of a denial log file groups the denials of one IP, port and reason over one minute:
+
+```text
+2026-11-05T01:01:30.004Z [INFO] Denial:: first=2026-11-05T01:00:00.000Z last=2026-11-05T01:00:41.512Z ip=203.0.113.7 country=CN port=8080 reason=geo-deny count=5
+```
+
+- Times are UTC. The file name uses the server's local date. A line is written in the file of the day it is written, so a group that crosses midnight can have a `first` date of the day before.
+- `port=admin` is the admin console. `country=-` means the country is not known or the country filter is off.
+- When more than 10,000 different IP, port and reason groups are open at the same time, the others are merged into one line per port and reason with `ip=*`.
+- A line is written within about 90 seconds after its minute ends. When the server process stops, groups not yet written are lost.
+- Writing is asynchronous. If the disk cannot keep up, lines are dropped and a `Dropped N log lines ...` line records how many.
+
+`denialLogRetentionDays` in `config/server.yaml` sets how many days the files are kept. The default is 20.
+
+- With `N` days, a file is deleted on day `N + 1`, counting the day of the file as day 1. With 20, `denial-2026.11.01.log` is kept until 2026-11-20 and deleted on 2026-11-21. With 1, only today's file is kept.
+- Old files are deleted when the server starts, when a new day's file opens, when you save a value of 1 or more, and every hour.
+- A value of 0 or less turns the denial log off. Nothing is written, and files that already exist are not deleted. The admin console tables still work.
+- The value must be a whole number no larger than 3650. Change it in the admin console (**Server settings** → **Denial log retention (days)**) or with `POST`/`PUT /api/serverOption`. The new value applies from the next denial. You do not need to restart the server.
+- If a `PUT /api/serverOption` body leaves out `denialLogRetentionDays`, the value goes back to the default 20. A denial log that you turned off is then on again.
+
 #### Connection Close Timeouts
 
 When the server closes a tunnelled connection, it first sends the remaining output. Then it waits for the peer to close. Two options in `config/server.yaml` limit these waits:
@@ -1554,6 +1592,44 @@ TTTGate 가 돌고 있는지 문장과 JSON 으로 확인한다.
 - 감사 로그(`logs/audit`)에는 영향이 없다.
 - `server.yaml` 에 잘못된 값을 직접 쓰면 시작할 때 설정 검증에서 실패한다.
 - 업그레이드 참고: 이전 버전은 기본으로 `debug` 줄도 남겼다. 그 출력을 유지하려면 `logLevel: debug` 로 정한다.
+
+#### 거절된 연결
+
+서버는 다섯 가지 사유로 연결을 거절한다.
+
+| 사유 | 화면 표기 | 뜻 |
+|---|---|---|
+| `geo-deny` | Country blocked | 국가 필터가 그 주소를 막았다. |
+| `ip-blocklist` | Blocklist | 관리자 차단 목록에 있는 주소다. |
+| `rate-limit-ban` | Temporarily banned | 연결이 너무 많아 일정 시간 동안 차단된 주소다. |
+| `rate-limit-exceeded` | Rate limit exceeded | 레이트 리미트 창 안에서 연결이 너무 많았다. |
+| `concurrency-limit` | Connection limit | 터널 소유자 그룹의 동시 연결 한도에 닿았다. |
+
+거절은 세 곳에서 볼 수 있다.
+
+- **Denials by port**(관리 화면 → **Security**): 포트·사유별 거절 건수와 지금 차단된 주소 수다. 관리 화면 자체는 `admin` 으로 보이며, 국가 필터만 막을 수 있다. 건수는 서버가 시작할 때 0 에서 시작한다. 터널을 바꾸거나 지워도 0 으로 돌아가지 않는다. `GET /api/security/stats` 가 같은 값을 준다.
+- **Recent denials**(관리 화면 → **Security**): 최근 거절 200건의 시각, IP, 국가, 포트, 사유다. 메모리에만 두므로 서버를 다시 시작하면 지워진다. 국가는 국가 필터가 켜져 있을 때만 보인다. `GET /api/security/denials` 가 같은 목록을 준다. 두 표는 10초마다 다시 읽는다.
+- **거절 로그 파일**: 서버 로그와 같은 곳의 `logs/denial-YYYY.MM.DD.log` 다. 문제가 생겼을 때 SSH 로 접속해 읽는 용도다. 관리 화면에는 보이지 않고, 콘솔과 `logs/server-*.log` 에도 나오지 않는다.
+
+거절 로그 파일의 한 줄은 같은 IP·포트·사유의 1분 동안의 거절을 묶는다.
+
+```text
+2026-11-05T01:01:30.004Z [INFO] Denial:: first=2026-11-05T01:00:00.000Z last=2026-11-05T01:00:41.512Z ip=203.0.113.7 country=CN port=8080 reason=geo-deny count=5
+```
+
+- 시각은 UTC 다. 파일 이름은 서버의 현지 날짜를 쓴다. 줄은 쓰는 날의 파일에 들어가므로, 자정에 걸친 묶음은 `first` 가 전날일 수 있다.
+- `port=admin` 은 관리 화면이다. `country=-` 는 국가를 모르거나 국가 필터가 꺼져 있다는 뜻이다.
+- 동시에 열린 IP·포트·사유 묶음이 10,000개를 넘으면, 넘는 것은 포트·사유별로 `ip=*` 한 줄로 합친다.
+- 줄은 그 1분이 끝난 뒤 약 90초 안에 쓴다. 서버 프로세스가 멈추면 아직 쓰지 않은 묶음은 잃는다.
+- 쓰기는 비동기다. 디스크가 따라오지 못하면 줄을 버리고, 버린 수를 `Dropped N log lines ...` 한 줄로 남긴다.
+
+`config/server.yaml` 의 `denialLogRetentionDays` 는 파일을 며칠 보관할지 정한다. 기본값은 20 이다.
+
+- `N` 일이면, 파일 날짜를 1일째로 셀 때 `N + 1` 일째에 지운다. 20 이면 `denial-2026.11.01.log` 는 2026-11-20 까지 남고 2026-11-21 에 지워진다. 1 이면 오늘 파일만 남는다.
+- 서버가 시작할 때, 새 날짜의 파일을 열 때, 1 이상의 값을 저장할 때, 그리고 한 시간마다 오래된 파일을 지운다.
+- 0 이하이면 거절 로그를 끈다. 아무것도 쓰지 않고, 이미 있는 파일도 지우지 않는다. 관리 화면의 두 표는 그대로 동작한다.
+- 값은 3650 이하의 정수다. 관리 화면(**Server settings** → **Denial log retention (days)**)이나 `POST`/`PUT /api/serverOption` 으로 바꾼다. 새 값은 다음 거절부터 적용된다. 서버를 다시 시작하지 않아도 된다.
+- `PUT /api/serverOption` 본문에서 `denialLogRetentionDays` 를 빼면 기본값 20 으로 돌아간다. 꺼 둔 거절 로그가 다시 켜진다.
 
 #### 연결 닫기 기한
 

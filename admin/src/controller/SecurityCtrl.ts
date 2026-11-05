@@ -1,5 +1,5 @@
 import {adminRequest} from "./AdminRequest";
-import type {ApiResult, BanEntry, BlocklistEntry, CountryEntry, GeoConfig} from "./Types";
+import type {ApiResult, BanEntry, BlocklistEntry, CountryEntry, DenialStats, GeoConfig, RecentDenial} from "./Types";
 
 // U5-06: 국가 필터와 차단 목록. 슈퍼유저 전용 API 다(섹션 가드가 화면 진입을 막는다).
 class SecurityCtrl {
@@ -29,6 +29,15 @@ class SecurityCtrl {
 
     public bans(): Promise<ApiResult<{serverTime: number; bans: BanEntry[]}>> {
         return adminRequest("/api/security/bans");
+    }
+
+    // 이슈 327: 거절 집계와 최근 거절.
+    public stats(): Promise<ApiResult<{serverTime: number; stats: DenialStats}>> {
+        return adminRequest("/api/security/stats");
+    }
+
+    public denials(): Promise<ApiResult<{serverTime: number; countryLookup: boolean; denials: RecentDenial[]}>> {
+        return adminRequest("/api/security/denials");
     }
 
     public unban(port: number, ip: string): Promise<ApiResult<{removed: boolean}>> {

@@ -34,6 +34,11 @@ class LogWriter {
     private _logMessageQueue : Array<LogMessage> = [];
     private _logFileStream : fs.WriteStream | undefined;
     private readonly _history : number;
+    /**
+     * #327: 정하면 history 대신 이 규칙으로 지운다. 경과 일수(달력 날짜의 차)가 이 값 이상인 파일을 지운다.
+     * 파일 날짜를 1일째로 세면 retentionDays + 1 일째에 지워진다. 1 이면 오늘 파일만 남는다.
+     */
+    private _retentionDays : number | undefined;
     private readonly _fileWrite : boolean;
     private readonly _consoleWrite : boolean;
     private _todayDate : number = 0;
@@ -81,6 +86,8 @@ class LogWriter {
     /** 파일은 첫 기록 때 연다(#208). 도움말처럼 아무것도 기록하지 않는 실행은 logs/ 를 만들지 않는다. */
     private ensureStream() {
         if(this._fileWrite && !this._logFileStream && !this._isUnwritable && !this._isEnd) {
+            // 날짜 상태는 스트림을 여는 곳(여기와 nextLogFile)에서만 바꾼다. 정리(sweep)가 바꾸면 자정 뒤에도 어제 파일에 쓴다(#327).
+            this._todayDate = new Date().getDate();
             this._filePath = this.makeLogFilePath();
             this.sweepOldFiles();
             this._logFileStream = fs.createWriteStream(this._filePath, {flags: 'a'});
@@ -96,18 +103,43 @@ class LogWriter {
 
     }
 
+    public set retentionDays(days: number) {
+        this._retentionDays = days;
+    }
+
+    /** #327: 기한이 지난 파일을 지금 지운다. 아무것도 쓰지 않은 날에도 지워야 할 때 부른다. 폴더가 없으면 만들지 않는다. */
+    public sweepExpired() {
+        if(!fs.existsSync(this._dirPath)) return;
+        this.sweepOldFiles();
+    }
+
+    private isExpired(fileDate: Date): boolean {
+        if(this._retentionDays !== undefined) return this.calendarDaysSince(fileDate) >= this._retentionDays;
+        return this.daysSince(fileDate) > this._history && this._history > 0;
+    }
+
+    /** 지금 쓰고 있는 파일. 열린 파일은 지우지 않는다(지우면 그 뒤의 줄이 사라진다). 다음 날 첫 줄이 새 파일을 연 뒤 지운다. */
+    private isOpenFile(fileName: string): boolean {
+        const stream = this._logFileStream;
+        return stream !== undefined && !stream.closed && Path.join(this._dirPath, fileName) === this._filePath;
+    }
+
+    /** 오늘의 현지 날짜에서 fileDate 를 뺀 날수. 서머타임으로 하루가 23·25시간이어도 하루로 센다. */
+    private calendarDaysSince(fileDate: Date): number {
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        return Math.round((today.getTime() - fileDate.getTime()) / (24 * 60 * 60 * 1000));
+    }
+
     private sweepOldFiles() {
         if(!this._fileWrite) {
             return;
         }
-        this._todayDate = new Date().getDate();
         let logFiles = this.logFilesInDir();
         for(let i =0 ; i < logFiles.length; ++i) {
             let logFile = logFiles[i];
             let date = this.logFileNameToDate(logFile);
-            let since = this.daysSince(date);
-            let diff = since;
-            if(diff > this._history && this._history > 0) {
+            if(this.isExpired(date) && !this.isOpenFile(logFile)) {
                 try {
                     fs.unlinkSync(Path.join(this._dirPath, logFile));
                 } catch (e) {

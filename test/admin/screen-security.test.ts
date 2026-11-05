@@ -317,3 +317,28 @@ test("Block permanently 가 이미 막힌 주소로 거절되면 차단 목록�
     await toast(page, "203.0.113.9 is already blocked on all tunnels").waitFor({state: "visible", timeout: 10_000});
     await page.locator('#block-table tr[data-block="203.0.113.9"]').waitFor({state: "visible", timeout: 10_000});
 }));
+
+// #327 REQ-3·6 · AC-10: 거절 집계와 최근 거절. 처음에는 비어 있고, 거절이 생기면 10초 주기 안에 두 표에 보인다.
+test("거절 집계와 최근 거절은 처음에 비어 있고, 거절이 생기면 다시 읽어 표에 보인다", () => withSecurity(async (app) => {
+    const {page} = app;
+    await goSecurity(page, app.url);
+    await page.locator("#denial-stats-empty").waitFor({state: "visible", timeout: 10_000});
+    expect(await page.locator("#denial-stats-empty").textContent()).toBe("No denials recorded.");
+    expect(await page.locator("#denial-recent-empty").textContent()).toBe("No denials recorded.");
+    expect(await page.locator("#denial-country-note").textContent()).toBe("Countries are shown only while the country filter is on.");
+
+    // 화면을 연 뒤에 거절이 생긴다. 새로 고침 없이 주기적으로 다시 읽어 보인다.
+    await app.seedBan(20001, "203.0.113.9");
+    const statsRow = page.locator('#denial-stats-table tr[data-scope="20001"]');
+    await statsRow.waitFor({state: "visible", timeout: 15_000});
+    expect(await statsRow.locator("td").allTextContents()).toEqual(["20001", "0", "0", "0", "1", "0", "1"]);
+    expect(await page.locator("#denial-stats-table thead th").allTextContents()).toEqual(
+        ["Port", "Country blocked", "Blocklist", "Temporarily banned", "Rate limit exceeded", "Connection limit", "Banned IPs"]);
+
+    const recentRow = page.locator("#denial-recent-table tbody tr").first();
+    await recentRow.waitFor({state: "visible", timeout: 15_000});
+    const cells = await recentRow.locator("td").allTextContents();
+    expect(cells.slice(1)).toEqual(["203.0.113.9", "—", "20001", "Rate limit exceeded"]);
+    expect(cells[0]).not.toBe("");
+    expect(await page.locator("#denial-recent-table thead th").allTextContents()).toEqual(["Time", "IP", "Country", "Port", "Reason"]);
+}));

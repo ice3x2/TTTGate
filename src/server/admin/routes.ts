@@ -275,6 +275,8 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.security_ban_removed, {kind: 'security', id: truncateAuditValue(`${ctx.params.port}/${ctx.params.ip}`)}), handler: 'onDeleteSecurityBan'},
     // U5-04 / #119 가 추가한 거절 집계 조회 라우트. bans 와 같은 성격이라 같은 권한을 쓴다.
     {method: 'GET', pattern: new RegExp('^/api/security/stats$'), action: 'security:manage', handler: 'onGetSecurityStats'},
+    // #327 최근 거절 기록. stats 와 같은 성격이라 같은 권한을 쓴다.
+    {method: 'GET', pattern: new RegExp('^/api/security/denials$'), action: 'security:manage', handler: 'onGetSecurityDenials'},
     // U5-05 / #120 — 국가 필터는 서버 전역 설정이라 슈퍼유저 전용이다(결정 D10).
     // 대상 id 는 'geo' 로 고정이고, 정규화된 값은 핸들러가 auditDetail 로 더한다.
     {method: 'GET', pattern: new RegExp('^/api/security/geo$'), action: 'security:manage', handler: 'onGetSecurityGeo'},

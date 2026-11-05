@@ -42,8 +42,6 @@ type PortState = {
     windows: Map<string, number[]>;
     /** /48 별로 표에 따로 있는 /64 버킷 수. */
     subnetsPerPrefix: Map<string, number>;
-    rejectedBans: number;
-    rejectedExceeded: number;
 };
 
 export class ConnectionRateLimiter {
@@ -58,9 +56,7 @@ export class ConnectionRateLimiter {
             config,
             bans: new Map(),
             windows: new Map(),
-            subnetsPerPrefix: new Map(),
-            rejectedBans: 0,
-            rejectedExceeded: 0
+            subnetsPerPrefix: new Map()
         });
     }
 
@@ -125,7 +121,6 @@ export class ConnectionRateLimiter {
                     state.bans.delete(bannedIp);
                 }
             }
-            state.rejectedExceeded++;
             if (state.bans.size < MAX_TRACKED_IPS_PER_PORT) {
                 state.bans.delete(key);  // 다시 넣어 만료 시각 순서를 지킨다.
                 state.bans.set(key, {until: now + banMs, hits: arr.length});
@@ -188,7 +183,6 @@ export class ConnectionRateLimiter {
         const ban = state.bans.get(key);
         if (!ban) return undefined;
         if (ban.until > now) {
-            state.rejectedBans++;
             return {allowed: false, reason: 'rate-limit-ban', retryAfterMs: ban.until - now};
         }
         state.bans.delete(key);
@@ -235,14 +229,9 @@ export class ConnectionRateLimiter {
         return [...this._ports.keys()].sort((a, b) => a - b);
     }
 
-    public stats(port: number): {rejectedBans: number; rejectedExceeded: number; bannedIps: number} {
-        const state = this._ports.get(port);
-        if (!state) return {rejectedBans: 0, rejectedExceeded: 0, bannedIps: 0};
-        return {
-            rejectedBans: state.rejectedBans,
-            rejectedExceeded: state.rejectedExceeded,
-            bannedIps: state.bans.size
-        };
+    // 거절 건수는 AdmissionController 의 DenialTally 가 센다(#327). 리미터는 지금 차단된 주소 수만 안다.
+    public stats(port: number): {bannedIps: number} {
+        return {bannedIps: this._ports.get(port)?.bans.size ?? 0};
     }
 
     public trackedIps(port: number): number {

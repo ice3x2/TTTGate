@@ -89,7 +89,7 @@ describe("ConnectionRateLimiter", () => {
         limiter.configurePort(1, undefined);
 
         expect(limiter.admit(1, "1.1.1.1", 4)).toEqual({allowed: true});
-        expect(limiter.stats(1)).toEqual({rejectedBans: 0, rejectedExceeded: 0, bannedIps: 0});
+        expect(limiter.stats(1)).toEqual({bannedIps: 0});
         expect(limiter.ports()).not.toContain(1);
     });
 
