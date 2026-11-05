@@ -70,6 +70,8 @@ type ServerOption = {
     auditRetentionDays?: number,
     /** 감사 쓰기 큐 상한. 기본 1000. 가득 차면 CUD API 가 503 으로 실패한다. */
     auditQueueSize?: number,
+    /** #327 거절 로그 파일(logs/denial-*.log) 보관 일수. 기본 20, 3650 이하. 0 이하이면 쓰지 않는다. 바꾸면 다음 거절부터 적용한다. */
+    denialLogRetentionDays?: number,
     /** #267 로그 레벨. 기본 info. 바꾸면 다시 시작하지 않고 모든 로그 출력(파일·콘솔)에 적용한다. */
     logLevel?: LogLevel,
     /** #303 관리 화면을 역방향 프록시·도메인으로 열 때 허용할 Origin(스킴·호스트·포트). 기본 빈 목록. 바꾸면 다음 요청부터 적용한다. */
@@ -216,6 +218,17 @@ const resolveAuditRetentionDays = (value: unknown): {success: true; days: number
     if(!Number.isInteger(days) || (days !== 0 && (days < min || days > max)))
         return {success: false, message: `auditRetentionDays must be 0 or an integer within ${min}..${max}`};
     return {success: true, days};
+};
+
+const DEFAULT_DENIAL_LOG_RETENTION_DAYS = 20;
+const MAX_DENIAL_LOG_RETENTION_DAYS = 3650;
+
+/** #327: 0 이하는 거절 로그를 끈다는 뜻이다. 하한은 없다. 3650 은 입력 오류를 걸러내는 상한이다. */
+const resolveDenialLogRetentionDays = (value: unknown): {success: true; days: number} | {success: false; message: string} => {
+    if(value === undefined) return {success: true, days: DEFAULT_DENIAL_LOG_RETENTION_DAYS};
+    if(!Number.isInteger(value) || (value as number) > MAX_DENIAL_LOG_RETENTION_DAYS)
+        return {success: false, message: `denialLogRetentionDays must be an integer of at most ${MAX_DENIAL_LOG_RETENTION_DAYS} (0 or less turns the denial log off)`};
+    return {success: true, days: value as number};
 };
 
 type LogLevel = 'error' | 'warn' | 'info' | 'debug';
@@ -380,6 +393,8 @@ export {
     DEFAULT_AUDIT_QUEUE_SIZE,
     resolveAuditRetentionDays,
     resolveAuditQueueSize,
+    DEFAULT_DENIAL_LOG_RETENTION_DAYS,
+    resolveDenialLogRetentionDays,
     LogLevel,
     LOG_LEVELS,
     DEFAULT_LOG_LEVEL,

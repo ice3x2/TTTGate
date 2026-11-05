@@ -1,7 +1,7 @@
 import {ExternalPortServerPool, ExternalPortServerStatus } from "./ExternalPortServerPool";
 import {TunnelServer, ClientStatus} from "./TunnelServer";
 import {EnrollmentRegistry} from "./EnrollmentRegistry";
-import {ConnectionSecurityOption, DEFAULT_AUDIT_QUEUE_SIZE, DEFAULT_AUDIT_RETENTION_DAYS, DEFAULT_GEO_CONFIG, DEFAULT_LOG_LEVEL, DEFAULT_CLOSE_STALL_MS, DEFAULT_CLOSE_GRACE_MS, ServerOption, TunnelingOption, resolveSessionTtlMs} from "../types/TunnelingOption";
+import {ConnectionSecurityOption, DEFAULT_AUDIT_QUEUE_SIZE, DEFAULT_AUDIT_RETENTION_DAYS, DEFAULT_DENIAL_LOG_RETENTION_DAYS, DEFAULT_GEO_CONFIG, DEFAULT_LOG_LEVEL, DEFAULT_CLOSE_STALL_MS, DEFAULT_CLOSE_GRACE_MS, ServerOption, TunnelingOption, resolveSessionTtlMs} from "../types/TunnelingOption";
 import SocketState from "../util/SocketState";
 import {CertInfo, CertificationStore} from "./CertificationStore";
 import ServerOptionStore from "./ServerOptionStore";
@@ -11,6 +11,7 @@ import AppCompositionRoot from "../bootstrap/AppCompositionRoot";
 import ObjectUtil from "../util/ObjectUtil";
 import {SocketHandler} from "../util/SocketHandler";
 import {AdmissionController} from "./security/AdmissionController";
+import Environment from "../Environment";
 import {AuditSinkRegistry, recordAuditEvent} from "./audit/AuditSink";
 import {AUDIT_EVENT_TYPES} from "./audit/AuditEventTypes";
 import {maxActiveSeconds} from "./security/TunnelLifetimePolicy";
@@ -380,6 +381,9 @@ class TTTServer {
         // #271: 감사 싱크(보존·큐)도 실행 상태다. 이전 설정과 다르면 이전 설정의 싱크로 되돌린다.
         try { await TTTServer.applyAuditOption(state.serverOption); }
         catch(error) { logger.error('audit sink restore failed', error); failures.push('audit-restore'); }
+        // #327: 거절 로그 보관 일수도 실행 상태다. 저장을 되돌리면 이전 값으로 다시 적용한다.
+        try { TTTServer.applyDenialLogOption(state.serverOption); }
+        catch(error) { logger.error('denial log restore failed', error); failures.push('denial-log-restore'); }
         try { this._tunnelServer.configureSessionTtl(state.sessionTtlPolicy.ttlMs, state.sessionTtlPolicy.checkIntervalMs); }
         catch(error) { logger.error('session TTL restore failed', error); failures.push('session-ttl-restore'); }
         if(SocketHandler.maxGlobalMemoryBufferSize !== state.memoryLimit) AppCompositionRoot.applyGlobalMemLimitMiB(state.memoryLimit / (1024 * 1024));
@@ -450,6 +454,11 @@ class TTTServer {
         await previous.close();
     }
 
+    /** #327: 거절 로그 파일의 보관 일수를 적용한다. 서버가 시작할 때와 저장할 때 부른다. 0 이하이면 쓰지 않는다. */
+    public static applyDenialLogOption(option: ServerOption): void {
+        AdmissionController.instance.configureDenialLog(Environment.path.logDir, option.denialLogRetentionDays ?? DEFAULT_DENIAL_LOG_RETENTION_DAYS);
+    }
+
     /** #268: 서버 설정의 닫기 기한을 SocketHandler 에 넣는다. 값이 없으면 기본값이다. */
     public static applyCloseDeadlines(option: ServerOption): void {
         SocketHandler.closeStallMs = option.closeStallMs ?? DEFAULT_CLOSE_STALL_MS;
@@ -476,6 +485,7 @@ class TTTServer {
             this.applyConnectionSecurity(nextOption.connectionSecurity);
         }
         await TTTServer.applyAuditOption(nextOption);
+        TTTServer.applyDenialLogOption(nextOption);
         // #267: 로그 레벨은 다시 시작하지 않고 바로 모든 로그 출력에 적용한다.
         LoggerFactory.setLevel(nextOption.logLevel ?? DEFAULT_LOG_LEVEL);
         // #268: 닫기 기한은 닫기를 시작할 때 읽으므로 이후 닫는 연결부터 새 값을 쓴다.

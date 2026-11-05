@@ -1,4 +1,5 @@
 import {AdmissionReason, AdmissionScope} from "./AdmissionPolicy";
+import {DenialWindows} from "./DenialWindows";
 
 export const DENIAL_LOG_WINDOW_MS = 60_000;
 
@@ -9,48 +10,42 @@ type DenialBucket = {scopeLabel: string; reason: AdmissionReason; count: number;
  * 시각은 항상 인자로 받는다 — 이 클래스는 시계를 읽지 않는다.
  */
 export class DenialAggregator {
-    private readonly _buckets = new Map<string, DenialBucket>();
+    private readonly _buckets: DenialWindows<DenialBucket>;
 
     constructor(private readonly _sink: (line: string) => void,
-                private readonly _windowMs: number = DENIAL_LOG_WINDOW_MS) {
+                windowMs: number = DENIAL_LOG_WINDOW_MS) {
+        this._buckets = new DenialWindows(windowMs);
     }
 
     public record(scope: AdmissionScope, reason: AdmissionReason, now: number): void {
         const scopeLabel = scope.kind === 'admin' ? 'admin' : String(scope.port);
         const key = `${scopeLabel}|${reason}`;
-        const bucket = this._buckets.get(key);
+        const bucket = this._buckets.find(key);
         if (bucket) {
             bucket.count++;
             return;
         }
-        this._buckets.set(key, {scopeLabel, reason, count: 1, windowStart: now});
+        this._buckets.open(key, {scopeLabel, reason, count: 1, windowStart: now});
     }
 
     /** 창이 닫힌 버킷만 내보낸다. 내보낸 줄 수를 돌려준다. */
     public flushDue(now: number): number {
-        return this.flush(bucket => bucket.windowStart + this._windowMs <= now);
+        return this.emit(this._buckets.takeDue(now));
     }
 
     /** 창이 닫혔는지와 무관하게 모든 버킷을 내보낸다. now 는 호출 형태를 flushDue 와 맞추기 위한 자리다. */
     public flushAll(now: number): number {
         void now;
-        return this.flush(() => true);
+        return this.emit(this._buckets.takeAll());
     }
 
     public pending(): number {
         return this._buckets.size;
     }
 
-    private flush(isDue: (bucket: DenialBucket) => boolean): number {
-        const flushed: DenialBucket[] = [];
-        for (const [key, bucket] of this._buckets) {
-            if (!isDue(bucket)) continue;
-            // 버킷을 먼저 지우고 나서 sink 를 부른다. sink 가 던져도 같은 줄이 두 번 쌓이지 않는다.
-            this._buckets.delete(key);
-            flushed.push(bucket);
-        }
-
-        const seconds = Math.round(this._windowMs / 1000);
+    // 버킷을 먼저 꺼내(지우고) 나서 sink 를 부른다. sink 가 던져도 같은 줄이 두 번 쌓이지 않는다.
+    private emit(flushed: DenialBucket[]): number {
+        const seconds = Math.round(this._buckets.windowMs / 1000);
         for (const bucket of flushed) {
             try {
                 this._sink(`admission denied port=${bucket.scopeLabel} reason=${bucket.reason} count=${bucket.count} (last ${seconds}s)`);

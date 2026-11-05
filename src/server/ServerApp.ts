@@ -34,11 +34,13 @@ let tttServer : TTTServer;
 
 /**
  * server.yaml 의 실행 설정을 시작할 때 적용한다. 실행 중에는 TTTServer.applyServerOption 이 바꾼다.
- * 로그 레벨(#267)은 모든 로그 출력에, 닫기 기한(#268)은 이후 닫는 연결에 적용된다.
+ * 로그 레벨(#267)은 모든 로그 출력에, 닫기 기한(#268)은 이후 닫는 연결에, 거절 로그 보관 일수(#327)는 다음 거절부터 적용된다.
  */
 const applyStartupRuntimeOptions = (serverOption: ServerOption): void => {
     LoggerFactory.setLevel(serverOption.logLevel ?? DEFAULT_LOG_LEVEL);
     TTTServer.applyCloseDeadlines(serverOption);
+    // #327: 거절 로그 파일을 켜고(0 이하이면 끄고) 기한이 지난 파일을 지운다. 주기 타이머도 여기서 시작한다.
+    TTTServer.applyDenialLogOption(serverOption);
 };
 
 const startService = async (serverOption: ServerOption, adminCertInfo: CertInfo) => {

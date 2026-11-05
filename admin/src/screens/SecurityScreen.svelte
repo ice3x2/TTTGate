@@ -3,7 +3,7 @@
     import InvalidSession from '../controller/InvalidSession';
     import SecurityCtrl from '../controller/SecurityCtrl';
     import ServerOptionCtrl from '../controller/ServerOptionCtrl';
-    import type {BanEntry, BlocklistEntry, CountryEntry, GeoConfig} from '../controller/Types';
+    import type {BanEntry, BlocklistEntry, CountryEntry, DenialReason, DenialStats, GeoConfig, RecentDenial} from '../controller/Types';
     import Button from '../ui/Button.svelte';
     import Card from '../ui/Card.svelte';
     import Checkbox from '../ui/Checkbox.svelte';
@@ -48,6 +48,26 @@
     let blockNote = $state('');
     let blockError = $state('');
     let blockPending = $state(false);
+    // 이슈 327: 거절 집계와 최근 거절. 일시 차단 목록과 같은 주기로 다시 읽는다.
+    let denialStats = $state<DenialStats>({ports: {}, admin: {rejectedGeo: 0}});
+    let recentDenials = $state<RecentDenial[]>([]);
+    let countryLookup = $state(false);
+    const REASON_LABELS: Record<DenialReason, string> = {
+        'geo-deny': 'Country blocked',
+        'ip-blocklist': 'Blocklist',
+        'rate-limit-ban': 'Temporarily banned',
+        'rate-limit-exceeded': 'Rate limit exceeded',
+        'concurrency-limit': 'Connection limit'
+    };
+    /** 거절이 있었던 범위만 보인다. 포트 번호 순, 관리 화면은 맨 아래. 관리 화면에는 국가 차단만 생긴다. */
+    const denialRows = $derived.by(() => {
+        const rows = Object.entries(denialStats.ports)
+            .filter(([, s]) => s.rejectedGeo + s.rejectedBlocklist + s.rejectedBans + s.rejectedExceeded + s.rejectedConcurrency > 0)
+            .sort(([a], [b]) => Number(a) - Number(b))
+            .map(([port, s]) => ({scope: port, cells: [s.rejectedGeo, s.rejectedBlocklist, s.rejectedBans, s.rejectedExceeded, s.rejectedConcurrency, s.bannedIps].map(String)}));
+        if(denialStats.admin.rejectedGeo > 0) rows.push({scope: 'admin', cells: [String(denialStats.admin.rejectedGeo), '—', '—', '—', '—', '—']});
+        return rows;
+    });
     let promoting = $state<BanEntry | undefined>(undefined);
     let promoteOpen = $state(false);
 
@@ -92,6 +112,22 @@
             } else if(!quiet) {
                 toast.push({tone: 'alarm', message: result.message});
             }
+        } catch(e) {
+            if(e instanceof InvalidSession) session.invalidate();
+            else if(!quiet) toast.push({tone: 'alarm', message: 'Unable to connect to the server.'});
+        }
+    };
+
+    const loadDenials = async (quiet = false) => {
+        try {
+            const [stats, recent] = await Promise.all([SecurityCtrl.instance.stats(), SecurityCtrl.instance.denials()]);
+            if(stats.success) denialStats = {ports: stats.stats.ports, admin: stats.stats.admin};
+            if(recent.success) {
+                recentDenials = recent.denials;
+                countryLookup = recent.countryLookup;
+            }
+            const failure = !stats.success ? stats : !recent.success ? recent : undefined;
+            if(failure && !failure.success && !quiet) toast.push({tone: 'alarm', message: failure.message});
         } catch(e) {
             if(e instanceof InvalidSession) session.invalidate();
             else if(!quiet) toast.push({tone: 'alarm', message: 'Unable to connect to the server.'});
@@ -260,14 +296,14 @@
     onMount(() => {
         void (async () => {
             try {
-                const [, loadedCountries] = await Promise.all([loadGeo(), SecurityCtrl.instance.countries(), loadBans(), loadBlocklist(), loadTunnels()]);
+                const [, loadedCountries] = await Promise.all([loadGeo(), SecurityCtrl.instance.countries(), loadBans(), loadBlocklist(), loadTunnels(), loadDenials()]);
                 if(loadedCountries.success) countries = loadedCountries.countries;
             } catch(e) {
                 if(!geoLoaded) geoFailed = true;
                 failed(e, 'Unable to connect to the server.');
             }
         })();
-        const poll = setInterval(() => { void loadBans(true); }, POLL_MS);
+        const poll = setInterval(() => { void loadBans(true); void loadDenials(true); }, POLL_MS);
         const clock = setInterval(() => { tick = Date.now(); }, 1000);
         return () => { clearInterval(poll); clearInterval(clock); };
     });
@@ -385,6 +421,48 @@
                                 <Button size="sm" onclick={() => { void unban(ban); }}>Unban</Button>
                                 <Button size="sm" variant="danger" onclick={() => askPromote(ban)}>Block permanently</Button>
                             </td>
+                        </tr>
+                    {/each}
+                </tbody>
+            </table>
+        {/if}
+    </Card>
+
+    <Card label="Denials by port">
+        {#if denialRows.length === 0}
+            <p id="denial-stats-empty">No denials recorded.</p>
+        {:else}
+            <table id="denial-stats-table" style="width: 100%; border-collapse: collapse;">
+                <thead><tr><th>Port</th><th>Country blocked</th><th>Blocklist</th><th>Temporarily banned</th><th>Rate limit exceeded</th><th>Connection limit</th><th>Banned IPs</th></tr></thead>
+                <tbody>
+                    {#each denialRows as row (row.scope)}
+                        <tr data-scope={row.scope}>
+                            <td class="mono">{row.scope}</td>
+                            {#each row.cells as cell, index (index)}<td class="mono">{cell}</td>{/each}
+                        </tr>
+                    {/each}
+                </tbody>
+            </table>
+        {/if}
+    </Card>
+
+    <Card label="Recent denials">
+        {#if !countryLookup}
+            <p id="denial-country-note">Countries are shown only while the country filter is on.</p>
+        {/if}
+        {#if recentDenials.length === 0}
+            <p id="denial-recent-empty">No denials recorded.</p>
+        {:else}
+            <table id="denial-recent-table" style="width: 100%; border-collapse: collapse;">
+                <thead><tr><th>Time</th><th>IP</th><th>Country</th><th>Port</th><th>Reason</th></tr></thead>
+                <tbody>
+                    {#each recentDenials as denial, index (index)}
+                        <tr>
+                            <td>{formatLocal(denial.at, true)}</td>
+                            <td class="mono">{denial.ip}</td>
+                            <td>{denial.country ?? '—'}</td>
+                            <td class="mono">{denial.scope}</td>
+                            <td>{REASON_LABELS[denial.reason] ?? denial.reason}</td>
                         </tr>
                     {/each}
                 </tbody>

@@ -108,6 +108,50 @@ describe("AdminServer security stats route", () => {
         expect(JSON.parse(response.body).stats.ports["20001"].rejectedExceeded).toBe(1);
     }));
 
+    // #327 REQ-2: 다섯 사유의 건수를 모두 싣는다.
+    it("reports the blocklist and concurrency counts too", async () => withStatsServer(async f => {
+        const headers = await f.login();
+        AdmissionController.instance.blocklist.configure([{address: "203.0.113.5", port: null, note: "", createdAt: 0, createdBy: ""}]);
+        AdmissionController.instance.admit({kind: "tunnel", port: 20002, protocol: "tcp"}, "203.0.113.5");
+        const response = await f.request("GET", "/api/security/stats", {}, headers);
+        expect(JSON.parse(response.body).stats.ports["20002"]).toEqual({rejectedGeo: 0, rejectedBlocklist: 1, rejectedBans: 0,
+            rejectedExceeded: 0, rejectedConcurrency: 0, bannedIps: 0});
+    }));
+
+    // #327 REQ-5 · AC-2b · AC-2c: 최근 거절. 국가 필터가 꺼져 있으면 국가를 싣지 않는다.
+    it("returns the recent denials newest first, without countries while the country filter is off", async () => withStatsServer(async f => {
+        const headers = await f.login();
+        AdmissionController.instance.blocklist.configure([{address: "203.0.113.5", port: null, note: "", createdAt: 0, createdBy: ""}]);
+        AdmissionController.instance.admit({kind: "tunnel", port: 20002, protocol: "tcp"}, "203.0.113.5", 1000);
+        AdmissionController.instance.admit({kind: "tunnel", port: 20003, protocol: "tcp"}, "203.0.113.5", 2000);
+        const response = await f.request("GET", "/api/security/denials", {}, headers);
+        expect(response.status).toBe(200);
+        expect(response.headers["cache-control"]).toBe("no-cache, no-store, must-revalidate");
+        const json = JSON.parse(response.body);
+        expect(json.countryLookup).toBe(false);
+        expect(typeof json.serverTime).toBe("number");
+        expect(json.denials).toEqual([
+            {at: 2000, ip: "203.0.113.5", scope: 20003, reason: "ip-blocklist", country: null},
+            {at: 1000, ip: "203.0.113.5", scope: 20002, reason: "ip-blocklist", country: null}
+        ]);
+    }));
+
+    it("shows the country of a recent denial while the country filter is on", async () => withStatsServer(async f => {
+        const headers = await f.login();
+        AdmissionController.instance.configureGeo({mode: "deny", countries: ["US"], applyToAdmin: false, unknownPolicy: "allow"});
+        AdmissionController.instance.admit({kind: "tunnel", port: 20004, protocol: "tcp"}, "8.8.8.8", 5);
+        const json = JSON.parse((await f.request("GET", "/api/security/denials", {}, headers)).body);
+        expect(json.countryLookup).toBe(true);
+        expect(json.denials).toEqual([{at: 5, ip: "8.8.8.8", scope: 20004, reason: "geo-deny", country: "US"}]);
+    }));
+
+    it("rejects a regular user with 403 and no denials", async () => withStatsServer(async f => {
+        const headers = await f.loginRegular();
+        const response = await f.request("GET", "/api/security/denials", {}, headers);
+        expect(response.status).toBe(403);
+        expect(JSON.parse(response.body)).not.toHaveProperty("denials");
+    }));
+
     it("is not cacheable", async () => withStatsServer(async f => {
         const headers = await f.login();
         const response = await f.request("GET", "/api/security/stats", {}, headers);

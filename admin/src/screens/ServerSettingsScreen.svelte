@@ -22,6 +22,8 @@
     // U4-09: 서버가 값을 아직 저장하지 않았을 때 보이는 기본값(서버 src/types/TunnelingOption.ts 와 같다).
     const DEFAULT_AUDIT_RETENTION_DAYS = 90;
     const DEFAULT_AUDIT_QUEUE_SIZE = 1000;
+    // 이슈 327: 거절 로그 보관 일수의 서버 기본값. 0 이하이면 거절 로그를 쓰지 않는다(하한 없음).
+    const DEFAULT_DENIAL_LOG_RETENTION_DAYS = 20;
     // 이슈 268: 닫기 기한의 서버 기본값과 범위(서버 TunnelingOption 과 같다).
     const DEFAULT_CLOSE_STALL_MS = 60000;
     const DEFAULT_CLOSE_GRACE_MS = 10000;
@@ -40,8 +42,9 @@
     // 입력 칸은 별도 상태다. 칸을 비워도 기본값이 다시 들어오지 않게, 불러올 때와 Reset 때만 서버 값(없으면 기본값)으로 맞춘다.
     let retentionInput = $state<number | null>(DEFAULT_AUDIT_RETENTION_DAYS);
     let queueInput = $state<number | null>(DEFAULT_AUDIT_QUEUE_SIZE);
-    // 빈 감사 칸 오류. 빈칸은 JSON 에서 빠져 서버 기본값(보존 90일)이 되므로 저장을 막는다.
-    let auditErrors = $state<{retention?: string; queue?: string}>({});
+    let denialRetentionInput = $state<number | null>(DEFAULT_DENIAL_LOG_RETENTION_DAYS);
+    // 빈 감사 칸 오류. 빈칸은 JSON 에서 빠져 서버 기본값(보존 90일)이 되므로 저장을 막는다. 거절 로그 칸도 같다.
+    let auditErrors = $state<{retention?: string; queue?: string; denialRetention?: string}>({});
     // 이슈 268: 닫기 기한 칸도 같은 방식이다. 빈칸이면 기본값으로 조용히 돌아가지 않게 저장을 막는다.
     let closeStallInput = $state<number | null>(DEFAULT_CLOSE_STALL_MS);
     let closeGraceInput = $state<number | null>(DEFAULT_CLOSE_GRACE_MS);
@@ -50,6 +53,7 @@
     const syncSecurityInputs = () => {
         retentionInput = serverOption.auditRetentionDays ?? DEFAULT_AUDIT_RETENTION_DAYS;
         queueInput = serverOption.auditQueueSize ?? DEFAULT_AUDIT_QUEUE_SIZE;
+        denialRetentionInput = serverOption.denialLogRetentionDays ?? DEFAULT_DENIAL_LOG_RETENTION_DAYS;
         auditErrors = {};
         closeStallInput = serverOption.closeStallMs ?? DEFAULT_CLOSE_STALL_MS;
         closeGraceInput = serverOption.closeGraceMs ?? DEFAULT_CLOSE_GRACE_MS;
@@ -156,7 +160,8 @@
     const apply = async () => {
         auditErrors = {
             ...(retentionInput == null ? {retention: 'Enter a number of days. 0 keeps logs forever.'} : {}),
-            ...(queueInput == null ? {queue: 'Enter a queue size.'} : {})
+            ...(queueInput == null ? {queue: 'Enter a queue size.'} : {}),
+            ...(denialRetentionInput == null ? {denialRetention: 'Enter a number of days. 0 or less turns off the denial log.'} : {})
         };
         closeErrors = {
             ...(closeStallInput == null ? {stall: 'Enter a time in milliseconds (1000-600000).'} : {}),
@@ -271,6 +276,10 @@
                 <Field label="Audit log retention (days)" hint="0 keeps logs forever." for="input-audit-retention-days" error={auditErrors.retention}>
                     <NumberInput id="input-audit-retention-days" min={0} max={3650} step={1}
                         bind:value={retentionInput} oninput={(value) => (serverOption.auditRetentionDays = value ?? undefined)} />
+                </Field>
+                <Field label="Denial log retention (days)" hint="0 or less turns off the denial log." for="input-denial-log-retention-days" error={auditErrors.denialRetention}>
+                    <NumberInput id="input-denial-log-retention-days" max={3650} step={1}
+                        bind:value={denialRetentionInput} oninput={(value) => (serverOption.denialLogRetentionDays = value ?? undefined)} />
                 </Field>
                 <Field label="Audit queue size" for="input-audit-queue-size" error={auditErrors.queue}>
                     <NumberInput id="input-audit-queue-size" min={100} max={100000} step={1}

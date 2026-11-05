@@ -23,7 +23,7 @@ describe("AdmissionController.snapshot", () => {
         controller.admit(scope, "1.1.1.1", 2);
 
         expect(controller.snapshot()).toEqual({
-            ports: {"1": {rejectedBans: 1, rejectedExceeded: 1, rejectedGeo: 0, bannedIps: 1}},
+            ports: {"1": {rejectedBans: 1, rejectedExceeded: 1, rejectedGeo: 0, rejectedBlocklist: 0, rejectedConcurrency: 0, bannedIps: 1}},
             admin: {rejectedGeo: 0}
         });
     });

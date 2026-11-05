@@ -1,3 +1,4 @@
+import {AdmissionController} from "../../../../src/server/security/AdmissionController";
 import LoggerFactory from "../../../../src/util/logger/LoggerFactory";
 import {SocketHandler} from "../../../../src/util/SocketHandler";
 import {withConfigurationServer} from "./configuration-revision-fixture";
@@ -153,6 +154,25 @@ describe("runtime apply that throws (#271)", () => {
             thrower.restore();
             await (AuditSinkRegistry.current() as any).close?.();
             AuditSinkRegistry.reset();
+            fs.rmSync(dir, {recursive: true, force: true});
+        }
+    }));
+
+    // #327 AC-13: 거절 로그 보관 일수도 실행 상태다. 적용 뒤 예외가 나면 이전 값으로 되돌린다.
+    test("a server option save that throws restores the denial log retention", async () => withConfigurationServer(async ({request, snapshot, tunnel}) => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apply-throw-denial-"));
+        AdmissionController.instance.configureDenialLog(dir, 20);
+        const thrower = throwAfterApply(tunnel);
+        try {
+            const read = await snapshot();
+            const failed = await request("POST", "/api/serverOption", {...read.serverOption, denialLogRetentionDays: 0,
+                expectedRevision: read.revisionState.currentRevision});
+            expect(thrower.calls()).toBe(1);
+            expect(failed.statusCode).toBe(400);
+            expect(AdmissionController.instance.denialFileLog?.enabled).toBe(true);
+        } finally {
+            thrower.restore();
+            AdmissionController.instance.configureDenialLog(dir, 0);
             fs.rmSync(dir, {recursive: true, force: true});
         }
     }));

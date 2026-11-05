@@ -112,7 +112,7 @@ test('saving an option that carries none of the rollback-sensitive fields create
     // logLevel(#267)·closeStallMs·closeGraceMs(#268)·adminAllowedOrigins(#303)를 기본값으로 채우므로 그것들도 빼야
     // "민감 필드가 하나도 없는 옵션" 이 된다.
     const {connectionSecurity, mfaRequiredForSuperusers, auditRetentionDays, auditQueueSize, logLevel, closeStallMs, closeGraceMs,
-        adminAllowedOrigins, ...withoutSensitive} = boot.store.serverOption;
+        adminAllowedOrigins, denialLogRetentionDays, ...withoutSensitive} = boot.store.serverOption;
     const tunnel = legacyTunnel(boot.store);
     const {rateLimit, ownerId, ...tunnelWithoutNewFields} = tunnel;
     const result = boot.store.commitPreparedServerOption({
@@ -155,14 +155,15 @@ test.each(['ownerId', 'rateLimit'] as const)('a tunnel-level %s alone triggers t
     expect(fs.readFileSync(boot.backupState, 'utf-8')).toBe(LEGACY_STATE_JSON);
 });
 
-test.each(['connectionSecurity', 'mfaRequiredForSuperusers', 'auditRetentionDays', 'auditQueueSize', 'logLevel', 'closeStallMs', 'closeGraceMs'] as const)(
+test.each(['connectionSecurity', 'mfaRequiredForSuperusers', 'auditRetentionDays', 'auditQueueSize', 'logLevel', 'closeStallMs', 'closeGraceMs', 'denialLogRetentionDays'] as const)(
     'a top-level %s alone triggers the backup', async (field) => {
     const boot = await bootLegacyStore(`rollback-backup-top-${field}`);
     const {connectionSecurity, ...withoutSecurity} = boot.store.serverOption;
     const tunnel = legacyTunnel(boot.store);
     const {rateLimit, ownerId, ...bare} = tunnel;
     const values: Record<string, unknown> = {
-        connectionSecurity, mfaRequiredForSuperusers: true, auditRetentionDays: 14, auditQueueSize: 1000, logLevel: 'debug', closeStallMs: 90_000, closeGraceMs: 5_000
+        connectionSecurity, mfaRequiredForSuperusers: true, auditRetentionDays: 14, auditQueueSize: 1000, logLevel: 'debug', closeStallMs: 90_000, closeGraceMs: 5_000,
+        denialLogRetentionDays: 7
     };
     expect(values[field]).not.toBeUndefined();
     const result = boot.store.commitPreparedServerOption(withExtra(
@@ -231,4 +232,17 @@ test('verificationServerOption admits and preserves fields the previous binary d
     expect(result.serverOption!.tunnelingOptions[0].ownerId).toBe('u_1');
     expect(result.serverOption!.tunnelingOptions[0].rateLimit).not.toBeUndefined();
     expect((result.serverOption as unknown as Record<string, unknown>).auditQueueSize).toBe(1000);
+});
+
+// #327: denialLogRetentionDays 하나만 있어도 업그레이드 .bak 을 남긴다(다른 민감 필드를 모두 벗긴 옵션으로 판별한다).
+test('a top-level denialLogRetentionDays alone, with every other sensitive field removed, triggers the backup', async () => {
+    const boot = await bootLegacyStore('rollback-backup-top-denial-only');
+    const {connectionSecurity, mfaRequiredForSuperusers, auditRetentionDays, auditQueueSize, logLevel, closeStallMs, closeGraceMs,
+        adminAllowedOrigins, denialLogRetentionDays, ...withoutSensitive} = boot.store.serverOption;
+    const {rateLimit, ownerId, ...bare} = legacyTunnel(boot.store);
+    const result = boot.store.commitPreparedServerOption({
+        ...withoutSensitive, denialLogRetentionDays: 7, tunnelingOptions: [bare as TunnelingOption]
+    } as ServerOption);
+    expect(result.success).toBe(true);
+    expect(fs.readFileSync(boot.backupYaml, 'utf-8')).toBe(LEGACY_YAML);
 });

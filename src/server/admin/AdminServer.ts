@@ -205,6 +205,7 @@ class AdminServer {
             onGetSecurityBans: this.onGetSecurityBans,
             onDeleteSecurityBan: this.onDeleteSecurityBan,
             onGetSecurityStats: this.onGetSecurityStats,
+            onGetSecurityDenials: this.onGetSecurityDenials,
             onGetSecurityGeo: this.onGetSecurityGeo,
             onUpdateSecurityGeo: this.onUpdateSecurityGeo,
             onGetSecurityCountries: this.onGetSecurityCountries,
@@ -1801,6 +1802,14 @@ class AdminServer {
         // 설정을 읽지 못한 상태면 런타임 필터도 기본값으로 떠 있으므로 기본값을 싣는다. 집계는 설정과 무관하게 보여 준다.
         const geo = this.storedGeoConfig() ?? {...DEFAULT_GEO_CONFIG, countries: []};
         this.sendApiSuccess(res, {serverTime: Date.now(), stats: {geo, ...AdmissionController.instance.snapshot()}});
+    }
+
+    // #327 REQ-5 — 최근 거절, 최신 순. 국가는 부를 때 찾고, 국가 필터가 켜져 있을 때만 싣는다.
+    private onGetSecurityDenials = async (ctx: RouteContext) => {
+        const geo = AdmissionController.instance.geo;
+        const denials = AdmissionController.instance.recentDenials()
+            .map((denial) => ({...denial, country: geo.displayCountry(denial.ip) ?? null}));
+        this.sendApiSuccess(ctx.res, {serverTime: Date.now(), countryLookup: geo.countriesShown, denials});
     }
 
     // U5-05 / #120 — 국가 필터 조회·저장과 국가 목록.

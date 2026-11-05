@@ -64,6 +64,7 @@ const EXPECTED_ROUTES: ReadonlyArray<ExpectedRoute> = [
     {method: "GET", pattern: "^/api/security/bans$", action: "security:manage", hasTarget: false},
     {method: "DELETE", pattern: "^/api/security/bans/(?<port>[^/]+)/(?<ip>[^/]+)$", action: "security:manage", hasTarget: false},
     {method: "GET", pattern: "^/api/security/stats$", action: "security:manage", hasTarget: false},
+    {method: "GET", pattern: "^/api/security/denials$", action: "security:manage", hasTarget: false},
     // U5-05 / #120 이 더한 국가 필터·국가 목록 라우트.
     {method: "GET", pattern: "^/api/security/geo$", action: "security:manage", hasTarget: false},
     {method: "PUT", pattern: "^/api/security/geo$", action: "security:manage", hasTarget: false},

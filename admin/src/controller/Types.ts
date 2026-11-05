@@ -22,6 +22,8 @@ type ServerOption = {
     /** U4-09: 서버 설정 Security 카드. */
     mfaRequiredForSuperusers?: boolean;
     auditRetentionDays?: number;
+    /** 이슈 327: 거절 로그 파일 보관 일수. 기본 20, 0 이하이면 쓰지 않는다. */
+    denialLogRetentionDays?: number;
     auditQueueSize?: number;
     /** #267: 서버 로그 레벨. 저장하면 다시 시작하지 않고 바로 적용된다. */
     logLevel?: 'error' | 'warn' | 'info' | 'debug';
@@ -148,6 +150,14 @@ export type ApiFailure = {success: false; status: number; message: string; code?
 export type GeoConfig = {mode: 'off' | 'allow' | 'deny'; countries: string[]; applyToAdmin: boolean; unknownPolicy: 'allow' | 'deny'};
 export type CountryEntry = {code: string; name: string};
 export type BanEntry = {port: number; ip: string; country?: string; bannedUntil: number; hits: number};
+/** 이슈 327: 거절 사유. 서버의 AdmissionReason 과 같다. */
+export type DenialReason = 'ip-blocklist' | 'geo-deny' | 'rate-limit-ban' | 'rate-limit-exceeded' | 'concurrency-limit';
+/** 이슈 327: 포트별 누적 거절 건수(서버가 시작한 뒤부터). */
+export type PortDenialStats = {rejectedGeo: number; rejectedBlocklist: number; rejectedBans: number;
+    rejectedExceeded: number; rejectedConcurrency: number; bannedIps: number};
+export type DenialStats = {ports: Record<string, PortDenialStats>; admin: {rejectedGeo: number}};
+/** 이슈 327: 최근 거절 한 건. scope 는 포트 번호이거나 관리 화면('admin')이다. */
+export type RecentDenial = {at: number; ip: string; scope: number | 'admin'; reason: DenialReason; country: string | null};
 /** #286 관리자 차단 목록 항목. port 가 null 이면 모든 터널이다. */
 export type BlocklistEntry = {address: string; port: number | null; note: string; createdAt: number; createdBy: string};
 export type RateLimitOption = {enabled: boolean; windowMs: number; maxConnections: number; banMs: number; customized: boolean};

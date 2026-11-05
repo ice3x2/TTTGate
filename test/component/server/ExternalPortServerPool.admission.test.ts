@@ -82,7 +82,7 @@ describe("ExternalPortServerPool admission wiring", () => {
         }, {timeoutMs: 2000});
 
         await expect(pool.stop(forwardPort)).resolves.toBe(true);
-        expect(AdmissionController.instance.rateLimiter.stats(forwardPort)).toEqual({rejectedBans: 0, rejectedExceeded: 0, bannedIps: 0});
+        expect(AdmissionController.instance.rateLimiter.stats(forwardPort)).toEqual({bannedIps: 0});
         first.destroy();
 
         await expect(pool.startServer(option)).resolves.toBe(true);
