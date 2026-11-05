@@ -43,7 +43,8 @@ describe("AdmissionController", () => {
         }
     });
 
-    it("resets denial counters when a tunnel is released", () => {
+    // #327 REQ-1: 건수는 프로세스 수명 동안 누적한다. 해제해도 지우지 않는다(이전에는 0 으로 돌아갔다).
+    it("keeps denial counters when a tunnel is released", () => {
         const controller = AdmissionController.instance;
         controller.configureTunnel({
             forwardPort: 1,
@@ -56,7 +57,7 @@ describe("AdmissionController", () => {
 
         controller.releaseTunnel(1);
 
-        expect(controller.denials(1)).toEqual({geo: 0, rateLimit: 0});
+        expect(controller.denials(1)).toEqual({geo: 0, rateLimit: 1});
     });
 
     it("treats an IPv4-mapped address and its plain IPv4 form as the same window", () => {

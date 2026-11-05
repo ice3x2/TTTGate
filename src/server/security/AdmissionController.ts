@@ -1,4 +1,4 @@
-import {ADMIT, AdmissionDecision, AdmissionDenial, AdmissionPolicy, AdmissionScope} from "./AdmissionPolicy";
+import {ADMIT, AdmissionDecision, AdmissionDenial, AdmissionPolicy, AdmissionReason, AdmissionScope} from "./AdmissionPolicy";
 import {ConnectionRateLimiter} from "./ConnectionRateLimiter";
 import {normalizeRemoteAddress} from "./address";
 import {GeoFilter} from "./GeoFilter";
@@ -8,6 +8,9 @@ import {AuditRateGate} from "./AuditRateGate";
 import LoggerFactory from "../../util/logger/LoggerFactory";
 import {ConnectionSecurityOption, DEFAULT_GEO_CONFIG, GeoConfig} from "../../types/TunnelingOption";
 import {IpBlocklist} from "./IpBlocklist";
+import {DenialScope, DenialTally} from "./DenialTally";
+import {RecentDenial, RecentDenials} from "./RecentDenials";
+import {DenialFileLog} from "./DenialFileLog";
 
 export type TunnelRateLimitSource = {
     forwardPort: number;
@@ -15,6 +18,9 @@ export type TunnelRateLimitSource = {
 };
 
 export const PRUNE_INTERVAL_MS = 30_000;
+
+export type PortDenialStats = {rejectedGeo: number; rejectedBlocklist: number; rejectedBans: number;
+    rejectedExceeded: number; rejectedConcurrency: number; bannedIps: number};
 
 const IP_BLOCKLIST_DENY: AdmissionDenial = Object.freeze({allowed: false, reason: 'ip-blocklist'});
 
@@ -37,7 +43,11 @@ export class AdmissionController implements AdmissionPolicy {
     public readonly blocklist = new IpBlocklist();
     // 거절은 건마다 로그로 남지 않는다. 30초 prune 타이머가 창이 닫힌 버킷만 한 줄로 내보낸다.
     public readonly denialLog = new DenialAggregator(line => LoggerFactory.getLogger('server', 'Admission').warn(line));
-    private readonly _geoDenials = new Map<number | 'admin', number>();
+    // #327: 모든 거절은 recordDenial 한 곳을 지난다. 누적 건수와 최근 기록을 함께 남긴다.
+    private readonly _tally = new DenialTally();
+    private readonly _recent = new RecentDenials();
+    // #327 REQ-7: 거절 로그 파일. 서버가 시작할 때 configureDenialLog 가 만든다.
+    private _fileLog: DenialFileLog | undefined;
     private _concurrencyProvider: ((port: number) => number) | undefined;
     // #123 (U5-08) 동시 연결 상한. 소유자·그룹은 TTTServer 가 넘긴 limiter 가 판정 시점에 읽는다(rbac 를 import 하지 않는다).
     private _concurrency: ConcurrencyLimiter | null = null;
@@ -62,17 +72,40 @@ export class AdmissionController implements AdmissionPolicy {
     private dispose(): void {
         if (this._pruneTimer) clearInterval(this._pruneTimer);
         this._pruneTimer = undefined;
+        this._fileLog?.configure(0);
+    }
+
+    private ensurePruneTimer(): void {
+        if (this._pruneTimer) return;
+        this._pruneTimer = setInterval(() => {
+            const now = Date.now();
+            this.rateLimiter.prune(now);
+            this.denialLog.flushDue(now);
+            this._fileLog?.tick(now);
+            this._concurrencyAuditGate.prune(now);
+        }, PRUNE_INTERVAL_MS).unref();
+    }
+
+    /**
+     * #327: 거절 로그 파일의 보관 일수를 정한다. 서버가 시작할 때와 설정을 저장할 때 부른다.
+     * 0 이하이면 쓰지 않는다. 주기 타이머는 터널이 없어도 여기서 시작한다(관리 화면 거절만 있어도 쓴다).
+     */
+    public configureDenialLog(dir: string, retentionDays: number): void {
+        if (this._fileLog && this._fileLog.directory !== dir) {
+            this._fileLog.configure(0);
+            this._fileLog = undefined;
+        }
+        this._fileLog ??= new DenialFileLog({dir, countryOf: (ip) => this.geo.displayCountry(ip)});
+        this._fileLog.configure(retentionDays);
+        this.ensurePruneTimer();
+    }
+
+    public get denialFileLog(): DenialFileLog | undefined {
+        return this._fileLog;
     }
 
     public configureTunnel(option: TunnelRateLimitSource): void {
-        if (!this._pruneTimer) {
-            this._pruneTimer = setInterval(() => {
-                const now = Date.now();
-                this.rateLimiter.prune(now);
-                this.denialLog.flushDue(now);
-                this._concurrencyAuditGate.prune(now);
-            }, PRUNE_INTERVAL_MS).unref();
-        }
+        this.ensurePruneTimer();
 
         if (option.rateLimit?.enabled) {
             const {windowMs, maxConnections, banMs} = option.rateLimit;
@@ -103,7 +136,6 @@ export class AdmissionController implements AdmissionPolicy {
 
     public releaseTunnel(port: number): void {
         this.rateLimiter.configurePort(port, undefined);
-        this._geoDenials.delete(port);
     }
 
     public admit(scope: AdmissionScope, remoteAddress: string | undefined, now: number = Date.now()): AdmissionDecision {
@@ -115,9 +147,7 @@ export class AdmissionController implements AdmissionPolicy {
 
         const geoDecision = this.geo.decide(ip, scope);
         if (!geoDecision.allowed) {
-            const key = scope.kind === 'admin' ? 'admin' : scope.port;
-            this._geoDenials.set(key, (this._geoDenials.get(key) ?? 0) + 1);
-            this.denialLog.record(scope, geoDecision.reason, now);
+            this.recordDenial(scope, ip, geoDecision.reason, now);
             return geoDecision;
         }
 
@@ -125,7 +155,7 @@ export class AdmissionController implements AdmissionPolicy {
             // 차단 중인지는 refusedAddress 가 이미 봤다. 여기서는 세기만 한다.
             const decision = this.rateLimiter.count(scope.port, ip, now);
             if (!decision.allowed) {
-                this.denialLog.record(scope, decision.reason, now);
+                this.recordDenial(scope, ip, decision.reason, now);
                 return decision;
             }
         }
@@ -134,7 +164,7 @@ export class AdmissionController implements AdmissionPolicy {
         if (scope.kind === 'tunnel' && this._concurrency) {
             const {decision, denial} = this._concurrency.decide(scope.port);
             if (!decision.allowed) {
-                this.denialLog.record(scope, decision.reason, now);
+                this.recordDenial(scope, ip, decision.reason, now);
                 if (denial && this._concurrencyAuditGate.allow(`${scope.port}|${denial.groupId}`, now)) {
                     this._onConcurrencyDenied?.(scope.port, denial, now);
                 }
@@ -161,31 +191,44 @@ export class AdmissionController implements AdmissionPolicy {
     private refusedAddress(scope: AdmissionScope, ip: string, now: number): AdmissionDenial | undefined {
         if (scope.kind !== 'tunnel') return undefined;
         const denial = this.blocklist.isBlocked(scope.port, ip) ? IP_BLOCKLIST_DENY : this.rateLimiter.banned(scope.port, ip, now);
-        if (denial) this.denialLog.record(scope, denial.reason, now);
+        if (denial) this.recordDenial(scope, ip, denial.reason, now);
         return denial;
     }
 
-    public denials(scope: number | 'admin'): {geo: number; rateLimit: number} {
-        const geo = this._geoDenials.get(scope) ?? 0;
-        if (scope === 'admin') return {geo, rateLimit: 0};
+    private recordDenial(scope: AdmissionScope, ip: string, reason: AdmissionReason, now: number): void {
+        const key: DenialScope = scope.kind === 'admin' ? 'admin' : scope.port;
+        this._tally.add(key, reason);
+        this._recent.add({at: now, ip, scope: key, reason});
+        this._fileLog?.record(key, ip, reason, now);
+        this.denialLog.record(scope, reason, now);
+    }
 
-        const stats = this.rateLimiter.stats(scope);
-        return {geo, rateLimit: stats.rejectedBans + stats.rejectedExceeded};
+    /** #327 REQ-4: 최근 거절, 최신 순. */
+    public recentDenials(): RecentDenial[] {
+        return this._recent.list();
+    }
+
+    public denials(scope: DenialScope): {geo: number; rateLimit: number} {
+        const counts = this._tally.counts(scope);
+        return {geo: counts['geo-deny'], rateLimit: counts['rate-limit-ban'] + counts['rate-limit-exceeded']};
     }
 
     // 계수기만 읽는 순수 집계다. GeoFilter 설정은 싣지 않는다(#120 이 응답에서 합친다).
-    // 관리자 포트는 터널 포트가 아니어서 ports 에 자리가 없으므로 admin 으로 따로 둔다.
-    public snapshot(): {ports: Record<string, {rejectedBans: number; rejectedExceeded: number; rejectedGeo: number; bannedIps: number}>; admin: {rejectedGeo: number}} {
-        const ports: Record<string, {rejectedBans: number; rejectedExceeded: number; rejectedGeo: number; bannedIps: number}> = {};
-        for (const port of this.rateLimiter.ports()) {
-            const stats = this.rateLimiter.stats(port);
+    // #327: 거절이 있었던 포트와 레이트 리밋이 켜진 포트를 모두 싣는다. 건수는 누적값이다.
+    // 관리 화면 범위에서는 국가 차단만 생기므로 admin 에는 rejectedGeo 만 둔다.
+    public snapshot(): {ports: Record<string, PortDenialStats>; admin: {rejectedGeo: number}} {
+        const ports: Record<string, PortDenialStats> = {};
+        for (const port of new Set([...this.rateLimiter.ports(), ...this._tally.ports()])) {
+            const counts = this._tally.counts(port);
             ports[String(port)] = {
-                rejectedBans: stats.rejectedBans,
-                rejectedExceeded: stats.rejectedExceeded,
-                rejectedGeo: this.denials(port).geo,
-                bannedIps: stats.bannedIps
+                rejectedGeo: counts['geo-deny'],
+                rejectedBlocklist: counts['ip-blocklist'],
+                rejectedBans: counts['rate-limit-ban'],
+                rejectedExceeded: counts['rate-limit-exceeded'],
+                rejectedConcurrency: counts['concurrency-limit'],
+                bannedIps: this.rateLimiter.stats(port).bannedIps
             };
         }
-        return {ports, admin: {rejectedGeo: this.denials('admin').geo}};
+        return {ports, admin: {rejectedGeo: this._tally.counts('admin')['geo-deny']}};
     }
 }

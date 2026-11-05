@@ -35,14 +35,15 @@ const authOf = (response: ApiResponse): Auth => {
     };
 };
 
-/** 여섯 라우트 전부. 권한 판정 케이스가 이 표 하나를 순회한다. */
+/** 일곱 라우트 전부. 권한 판정 케이스가 이 표 하나를 순회한다. */
 const SECURITY_ROUTES: ReadonlyArray<{method: string; target: string; body?: object}> = [
     {method: "GET", target: "/api/security/geo"},
     {method: "PUT", target: "/api/security/geo", body: {mode: "off"}},
     {method: "GET", target: "/api/security/countries"},
     {method: "GET", target: "/api/security/bans"},
     {method: "DELETE", target: `/api/security/bans/${TUNNEL_PORT}/${BANNED_IP}`},
-    {method: "GET", target: "/api/security/stats"}
+    {method: "GET", target: "/api/security/stats"},
+    {method: "GET", target: "/api/security/denials"}
 ];
 
 const banTwice = (ip: string): void => {
@@ -119,21 +120,21 @@ describe("security-api", () => {
         try { await api?.close(); } finally { await cleanupTestRoot(testRoot); }
     });
 
-    it("세션이 없으면 여섯 라우트가 모두 401 이다", async () => {
+    it("세션이 없으면 일곱 라우트가 모두 401 이다", async () => {
         const statuses = [];
         for(const route of SECURITY_ROUTES) {
             statuses.push((await request(route.method, route.target, route.body)).status);
         }
-        expect(statuses).toEqual([401, 401, 401, 401, 401, 401]);
+        expect(statuses).toEqual([401, 401, 401, 401, 401, 401, 401]);
     });
 
-    it("일반 유저는 여섯 라우트가 모두 403 이고 상태가 바뀌지 않는다", async () => {
+    it("일반 유저는 일곱 라우트가 모두 403 이고 상태가 바뀌지 않는다", async () => {
         banTwice(BANNED_IP);
         const statuses = [];
         for(const route of SECURITY_ROUTES) {
             statuses.push((await request(route.method, route.target, route.body, ru)).status);
         }
-        expect(statuses).toEqual([403, 403, 403, 403, 403, 403]);
+        expect(statuses).toEqual([403, 403, 403, 403, 403, 403, 403]);
         expect(applied).toEqual([]);
         expect(AdmissionController.instance.rateLimiter.bans(Date.now())).toHaveLength(1);
         expect(eventsOf("security_geo_updated")).toEqual([]);

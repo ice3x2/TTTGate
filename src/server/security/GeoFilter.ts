@@ -34,6 +34,19 @@ export class GeoFilter {
         return this._geoip.lookup(ip)?.country;
     }
 
+    /**
+     * #327: 거절 기록에 국가를 보일 수 있는지. 필터가 켜져 있고 데이터베이스가 올라와 있을 때만이다.
+     * 국가를 보이려고 데이터베이스를 올리지 않는다. 켰다 꺼서 남아 있어도 보이지 않는다.
+     */
+    public get countriesShown(): boolean {
+        return this._config.mode !== 'off' && this._geoip !== undefined;
+    }
+
+    /** #327: 거절 기록에 보일 국가. 판정이 아니므로 조회 수(stats)에 넣지 않는다. */
+    public displayCountry(ip: string): string | undefined {
+        return this.countriesShown ? this._geoip!.lookup(ip)?.country : undefined;
+    }
+
     public decide(ip: string, scope: AdmissionScope): AdmissionDecision {
         if(this._config.mode === 'off') return ADMIT;
         if(scope.kind === 'admin' && !this._config.applyToAdmin) return ADMIT;
