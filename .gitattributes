@@ -1,3 +1,7 @@
+# #330: 모든 텍스트 파일을 작업 트리에서도 LF 로 둔다. Windows Git(core.autocrlf=true)이 CRLF 로 바꾸면
+# 같은 폴더를 쓰는 WSL git 이 내용이 같은 파일을 바뀐 것으로 본다. 아래의 -text·binary 지정은 뒤에 있으므로 이 규칙을 덮어쓴다.
+* text=auto eol=lf
+
 # Preserve the original bytes of intentionally retained timing evidence.
 docs/plan/verification/epic61-issue-64-first-experiment.json -text
 docs/plan/verification/epic61-issue-64-default-affinity.json -text
