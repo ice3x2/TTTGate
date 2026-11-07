@@ -24,6 +24,9 @@ const EXPECTED_ROUTES: ReadonlyArray<ExpectedRoute> = [
     {method: "POST", pattern: "^/api/login$", action: "public", hasTarget: false},
     // U4-08 / #127 2단계 로그인. 세션이 없는 공개 라우트이고 핸들러가 직접 감사한다.
     {method: "POST", pattern: "^/api/login/mfa$", action: "public", hasTarget: false},
+    // #336 패스키 로그인. 세션이 없는 공개 라우트이고 핸들러가 직접 감사한다.
+    {method: "POST", pattern: "^/api/login/passkey/options$", action: "public", hasTarget: false},
+    {method: "POST", pattern: "^/api/login/passkey$", action: "public", hasTarget: false},
     {method: "GET", pattern: "^/api/version$", action: "public", hasTarget: false},
     {method: "POST", pattern: "^/api/logout$", action: "session", hasTarget: false},
     {method: "GET", pattern: "^/api/validateSession$", action: "session", hasTarget: false},
@@ -36,6 +39,11 @@ const EXPECTED_ROUTES: ReadonlyArray<ExpectedRoute> = [
     {method: "POST", pattern: "^/api/me/mfa/confirm$", action: "me:mfa", hasTarget: false},
     {method: "DELETE", pattern: "^/api/me/mfa$", action: "me:mfa", hasTarget: false},
     {method: "POST", pattern: "^/api/me/mfa/recovery-codes$", action: "me:mfa", hasTarget: false},
+    // #336 본인 패스키. options 는 상태를 저장하지 않는 준비 단계라 audit: false 다.
+    {method: "GET", pattern: "^/api/me/passkeys$", action: "me:passkey", hasTarget: false},
+    {method: "POST", pattern: "^/api/me/passkeys/options$", action: "me:passkey", hasTarget: false},
+    {method: "POST", pattern: "^/api/me/passkeys$", action: "me:passkey", hasTarget: false},
+    {method: "DELETE", pattern: "^/api/me/passkeys/(?<id>[^/]+)$", action: "me:passkey", hasTarget: false},
     // U4-05 / #113 본인 세션.
     {method: "GET", pattern: "^/api/me/sessions$", action: "me:sessions", hasTarget: false},
     {method: "POST", pattern: "^/api/me/sessions/logout-others$", action: "me:sessions", hasTarget: false},
@@ -81,6 +89,8 @@ const EXPECTED_ROUTES: ReadonlyArray<ExpectedRoute> = [
     {method: "DELETE", pattern: "^/api/users/(?<id>[^/]+)$", action: "user:manage", hasTarget: false},
     {method: "POST", pattern: "^/api/users/(?<id>[^/]+)/password-reset$", action: "user:manage", hasTarget: false},
     {method: "POST", pattern: "^/api/users/(?<id>[^/]+)/mfa/reset$", action: "user:manage", hasTarget: false},
+    // #336 슈퍼유저의 남의 패스키 초기화.
+    {method: "POST", pattern: "^/api/users/(?<id>[^/]+)/passkeys/reset$", action: "user:manage", hasTarget: false},
     {method: "GET", pattern: "^/api/groups$", action: "group:manage", hasTarget: false},
     {method: "GET", pattern: "^/api/trustedClients$", action: "group:manage", hasTarget: false},
     // #212 신뢰 클라이언트 관리·등록 코드(server:manage).

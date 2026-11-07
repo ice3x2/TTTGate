@@ -1,5 +1,7 @@
 <script lang="ts">
-    import LoginCtrl, {type LoginUser} from '../controller/LoginCtrl';
+    import {startAuthentication} from '@simplewebauthn/browser';
+    import LoginCtrl, {type LoginResult, type LoginUser} from '../controller/LoginCtrl';
+    import {PASSKEY_CONDITION, PASSKEY_UNSUPPORTED, isCertificateError, passkeysAvailable} from '../util/passkey';
     import Button from '../ui/Button.svelte';
     import Card from '../ui/Card.svelte';
     import Field from '../ui/Field.svelte';
@@ -62,6 +64,52 @@
             else if(result.status === 429) message = 'Too many attempts. Try again later.';
             else if(result.status === 422) message = 'Enter the code.';
             else message = result.message || 'Unable to connect to the server.';
+        } catch {
+            message = 'Unable to connect to the server.';
+        } finally {
+            pending = false;
+        }
+    };
+
+    // 이슈 336: 패스키 로그인. 사용자 이름 없이 브라우저가 이 사이트의 패스키를 고르게 한다. TOTP 는 묻지 않는다.
+    const passkeySupported = passkeysAvailable();
+
+    const passkeyFailureOf = (result: LoginResult): string => {
+        if(result.status === 429) return 'Too many login attempts. Please try again later.';
+        switch(result.code) {
+            case 'passkey_invalid': return 'The passkey was not accepted.';
+            case 'passkey_origin_unsupported': return PASSKEY_UNSUPPORTED;
+            case 'passkey_unavailable': return 'Sign in with your password first.';
+            case 'passkey_busy': return 'The server is busy. Try again in a minute.';
+            default: return 'Unable to connect to the server.';
+        }
+    };
+
+    const passkeySignIn = async () => {
+        if(pending) return;
+        pending = true;
+        message = '';
+        try {
+            const options = await LoginCtrl.passkeyOptions();
+            if(!options.success || !options.options) {
+                message = passkeyFailureOf(options);
+                return;
+            }
+            let response;
+            try {
+                response = await startAuthentication({optionsJSON: options.options});
+            } catch(error) {
+                // 사용자가 브라우저 창을 닫으면 브라우저는 예외로 알린다. 인증서 오류를 취소보다 먼저 본다.
+                message = isCertificateError(error) ? PASSKEY_UNSUPPORTED : 'Sign-in was canceled.';
+                return;
+            }
+            const result = await LoginCtrl.loginPasskey(response);
+            if(result.success) {
+                if(result.user) rememberUsername(result.user.username);
+                onsuccess({user: result.user, mustChangePassword: result.mustChangePassword === true});
+                return;
+            }
+            message = passkeyFailureOf(result);
         } catch {
             message = 'Unable to connect to the server.';
         } finally {
@@ -135,6 +183,12 @@
             <p id="login-message" role="alert" class="login-message">{message}</p>
             <div class="login-actions"><Button type="submit" variant="primary" disabled={pending}>OK</Button></div>
         </form>
+        {#if passkeySupported && !bootstrapRequired}
+            <div class="login-passkey">
+                <span id="login-passkey"><Button disabled={pending} onclick={() => { void passkeySignIn(); }}>Sign in with a passkey</Button></span>
+                <p id="login-passkey-hint" class="login-hint">{PASSKEY_CONDITION}</p>
+            </div>
+        {/if}
         {:else}
         <form onsubmit={verify} novalidate>
             <p id="login-mfa-hint">{useRecovery ? 'Enter one of your recovery codes.' : 'Enter the 6-digit code from your authenticator app.'}</p>
@@ -169,4 +223,7 @@
     form { display: flex; flex-direction: column; gap: var(--s-4); }
     .login-message { min-height: 1.5em; margin: 0; color: var(--alarm); font-size: var(--fs-sm); }
     .login-actions { display: flex; justify-content: flex-end; align-items: center; gap: var(--s-3); }
+    .login-passkey { display: flex; flex-direction: column; align-items: stretch; gap: var(--s-2); margin-top: var(--s-5);
+        padding-top: var(--s-4); border-top: 1px solid var(--line-0); }
+    .login-hint { margin: 0; color: var(--ink-2); font-size: var(--fs-sm); }
 </style>

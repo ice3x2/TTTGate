@@ -17,8 +17,8 @@ export type LoginGuard = {
     isBlocked(req: IncomingMessage): boolean;
     /** recordLoginFailure + delayFailedLogin. 비밀번호 실패와 같은 비용을 치르게 한다. */
     fail(req: IncomingMessage): Promise<void>;
-    /** resetLoginAttempts + 세션·쿠키 발급 + login_success 감사. */
-    issueSession(req: IncomingMessage, res: ServerResponse, user: User): Promise<void>;
+    /** resetLoginAttempts + 세션·쿠키 발급 + login_success 감사. loginDetail 은 login_success 의 detail 이 된다(#336 패스키). */
+    issueSession(req: IncomingMessage, res: ServerResponse, user: User, loginDetail?: Record<string, unknown>): Promise<void>;
     sendFailure(res: ServerResponse, statusCode: number, payload: {[key: string]: any}): void;
     emitAudit(event: AuditEvent): void;
 };

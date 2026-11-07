@@ -79,7 +79,7 @@ export type Route = {
     /** 권한 판정 대상(target)을 본문에서 읽는다. 이런 라우트는 본문을 읽은 뒤에만 권한을 판정할 수 있다(#173). */
     targetFromBody?: true;
     /** 로그인 경로. 본문을 읽기 전에 차단과 동시 처리 칸을 판정한다(#265). password 는 거절도 login_failure 로 감사한다. */
-    loginSlot?: 'password' | 'mfa';
+    loginSlot?: 'password' | 'mfa' | 'passkey';
     handler: (ctx: RouteContext) => Promise<void>;
 };
 
@@ -220,6 +220,9 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
     {method: 'POST', pattern: new RegExp('^/api/login$'), action: 'public', loginSlot: 'password', handler: 'onLogin'},
     // U4-08 / #127 2단계 로그인. 세션이 없으므로 audited() 대신 핸들러가 직접 감사한다.
     {method: 'POST', pattern: new RegExp('^/api/login/mfa$'), action: 'public', loginSlot: 'mfa', handler: 'onLoginMfa'},
+    // #336 패스키 로그인. 세션이 없으므로 핸들러가 직접 감사한다(login_success·login_failure 의 detail.method).
+    {method: 'POST', pattern: new RegExp('^/api/login/passkey/options$'), action: 'public', loginSlot: 'passkey', handler: 'onPasskeyLoginOptions'},
+    {method: 'POST', pattern: new RegExp('^/api/login/passkey$'), action: 'public', loginSlot: 'passkey', handler: 'onLoginPasskey'},
     {method: 'GET', pattern: new RegExp('^/api/version$'), action: 'public', handler: 'onGetVersion'},
     {method: 'POST', pattern: new RegExp('^/api/logout$'), action: 'session',
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.logout, {kind: 'session', id: SessionStore.sessionIdOf(ctx.session!.key)}), handler: 'onLogout'},
@@ -238,6 +241,13 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.mfa_disabled, userAuditTarget(ctx)), handler: 'onDisableMfa'},
     {method: 'POST', pattern: new RegExp('^/api/me/mfa/recovery-codes$'), action: 'me:mfa',
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.mfa_recovery_codes_regenerated, userAuditTarget(ctx)), handler: 'onRegenerateRecoveryCodes'},
+    // #336 본인 패스키. 핸들러는 passkeyRoutes.ts 에 있다. options 는 상태를 저장하지 않는 준비 단계라 감사하지 않는다.
+    {method: 'GET', pattern: new RegExp('^/api/me/passkeys$'), action: 'me:passkey', handler: 'onListPasskeys'},
+    {method: 'POST', pattern: new RegExp('^/api/me/passkeys/options$'), action: 'me:passkey', audit: false, handler: 'onPasskeyRegistrationOptions'},
+    {method: 'POST', pattern: new RegExp('^/api/me/passkeys$'), action: 'me:passkey',
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.passkey_registered, userAuditTarget(ctx)), handler: 'onRegisterPasskey'},
+    {method: 'DELETE', pattern: new RegExp('^/api/me/passkeys/(?<id>[^/]+)$'), action: 'me:passkey',
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.passkey_removed, userAuditTarget(ctx)), handler: 'onRemovePasskey'},
     // U4-05 / #113 본인 세션. 목록은 읽기라 감사하지 않는다. 핸들러는 rbacRoutes.ts 에 있다.
     {method: 'GET', pattern: new RegExp('^/api/me/sessions$'), action: 'me:sessions', handler: 'onListMySessions'},
     {method: 'POST', pattern: new RegExp('^/api/me/sessions/logout-others$'), action: 'me:sessions',
@@ -306,6 +316,9 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
     // U4-08 / #127 슈퍼유저의 남의 MFA 초기화. 대상 사용자의 세션도 끊는다.
     {method: 'POST', pattern: new RegExp('^/api/users/(?<id>[^/]+)/mfa/reset$'), action: 'user:manage',
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.mfa_reset, pathIdTarget('user')(ctx)), handler: 'onResetUserMfa'},
+    // #336 슈퍼유저의 남의 패스키 초기화. 대상 사용자의 세션도 끊는다.
+    {method: 'POST', pattern: new RegExp('^/api/users/(?<id>[^/]+)/passkeys/reset$'), action: 'user:manage',
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.passkey_reset, pathIdTarget('user')(ctx)), handler: 'onResetUserPasskeys'},
     {method: 'GET', pattern: new RegExp('^/api/groups$'), action: 'group:manage', handler: 'onListGroups'},
     // 그룹 편집 화면의 신뢰 클라이언트 선택지(id·표시 이름만, #155).
     {method: 'GET', pattern: new RegExp('^/api/trustedClients$'), action: 'group:manage', handler: 'onListTrustedClients'},

@@ -69,6 +69,26 @@
         });
     };
 
+    // 이슈 336: 수정 화면의 Passkeys 행. 모두 지우면 서버가 그 사용자의 세션을 모두 끊는다.
+    const passkeyCount = $derived(loaded?.passkeyCount ?? 0);
+    let resetPasskeysOpen = $state(false);
+    const resetPasskeys = () => {
+        resetPasskeysOpen = false;
+        void run(async () => {
+            if(!loaded) return;
+            const id = loaded.id;
+            const result = await UsersCtrl.instance.resetPasskeys(id);
+            if(!result.success) {
+                toast.push({tone: 'alarm', message: result.message});
+                return;
+            }
+            // 저장하지 않은 폼 편집을 덮지 않도록 패스키 수만 바꾼다.
+            if(loaded) loaded = {...loaded, passkeyCount: result.user.passkeyCount ?? 0};
+            toast.push({tone: 'pulse', message: 'Passkeys removed.'});
+            await loadSessionCount(id);
+        });
+    };
+
     // U4-06: 수정 화면의 Sessions 행. 전체 세션 목록을 이 사용자 id 로 센다.
     let sessionCount = $state(0);
     let endSessionsOpen = $state(false);
@@ -302,6 +322,14 @@
                 </div>
             </Card>
         </section>
+        <section id="user-passkeys">
+            <Card label="Passkeys">
+                <div style="display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; justify-content: space-between;">
+                    <span id="user-passkey-count">{passkeyCount} {passkeyCount === 1 ? 'passkey' : 'passkeys'}</span>
+                    <span id="user-reset-passkeys"><Button variant="danger" disabled={pending || passkeyCount === 0} onclick={() => (resetPasskeysOpen = true)}>Remove passkeys</Button></span>
+                </div>
+            </Card>
+        </section>
         <section id="user-sessions">
             <Card label="Sessions">
                 <div style="display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; justify-content: space-between;">
@@ -346,6 +374,13 @@
     {#snippet footer()}
         <Button onclick={() => (resetMfaOpen = false)}>Cancel</Button>
         <span id="confirm-reset-mfa"><Button variant="danger" onclick={resetMfa}>Reset</Button></span>
+    {/snippet}
+</Modal>
+<Modal bind:open={resetPasskeysOpen} title="Remove passkeys" class="reset-passkeys-modal">
+    Remove all passkeys of {loaded?.username}? Their sessions will end.
+    {#snippet footer()}
+        <Button onclick={() => (resetPasskeysOpen = false)}>Cancel</Button>
+        <span id="confirm-reset-passkeys"><Button variant="danger" onclick={resetPasskeys}>Remove</Button></span>
     {/snippet}
 </Modal>
 <Modal bind:open={endSessionsOpen} title="End all sessions" class="end-all-modal">

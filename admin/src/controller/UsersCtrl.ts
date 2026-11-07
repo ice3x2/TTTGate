@@ -43,6 +43,11 @@ class UsersCtrl {
         return adminRequest(`/api/users/${id}/mfa/reset`, {method: "POST"});
     }
 
+    /** #336: 다른 사용자의 패스키를 모두 지운다. 서버가 그 사용자의 세션을 모두 끊는다. */
+    public resetPasskeys(id: string): Promise<ApiResult<{user: UserView}>> {
+        return adminRequest(`/api/users/${id}/passkeys/reset`, {method: "POST"});
+    }
+
     public resetPassword(id: string, temporaryPassword?: string): Promise<ApiResult<{temporaryPassword: string}>> {
         return adminRequest(`/api/users/${id}/password-reset`, {
             method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({temporaryPassword})
