@@ -8,6 +8,8 @@ export const AUDIT_EVENT_TYPES = {
     mfa_success: 'mfa_success', mfa_failure: 'mfa_failure', mfa_recovery_used: 'mfa_recovery_used',
     mfa_enrolled: 'mfa_enrolled', mfa_disabled: 'mfa_disabled', mfa_reset: 'mfa_reset',
     mfa_recovery_codes_regenerated: 'mfa_recovery_codes_regenerated',
+    // #336 패스키. 공개키는 감사에 남기지 않는다. 패스키 로그인은 login_success·login_failure 의 detail.method 로 남긴다.
+    passkey_registered: 'passkey_registered', passkey_removed: 'passkey_removed', passkey_reset: 'passkey_reset',
     // 세션
     logout: 'logout', session_killed: 'session_killed',
     sessions_killed_for_user: 'sessions_killed_for_user', sessions_killed_self_others: 'sessions_killed_self_others',

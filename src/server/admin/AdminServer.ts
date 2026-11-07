@@ -38,7 +38,10 @@ import {rbacRouteHandlers} from "./rbacRoutes";
 import {keepTrustedClients, maskTrustedClientSecrets, trustedClientRouteHandlers} from "./trustedClientRoutes";
 import {blocklistRouteHandlers, updateConnectionSecurity} from "./blocklistRoutes";
 import {MfaTicketStore, PendingEnrollmentStore} from "../mfa/MfaTickets";
-import {mfaLoginHandler} from "./mfaLoginRoutes";
+import {LoginGuard, mfaLoginHandler} from "./mfaLoginRoutes";
+import {passkeyRouteHandlers} from "./passkeyRoutes";
+import {PendingPasskeyRegistrations} from "../passkey/PendingPasskeyRegistrations";
+import {PasskeyLoginChallenges} from "../passkey/PasskeyLoginChallenges";
 import {auditRouteHandlers} from "./auditRoutes";
 import {AuditQuery} from "../audit/AuditQuery";
 import {auditDirPath} from "../audit/FileAuditSink";
@@ -125,6 +128,8 @@ class AdminServer {
     private readonly _exposeAuthzTiming: boolean;
     // U4-04 / #112: MFA 등록 대기·2단계 로그인 티켓(메모리). 만료 항목은 listen 동안 60초마다 쓸어 낸다.
     private readonly _mfa = {pending: new PendingEnrollmentStore(MFA_NOW), tickets: new MfaTicketStore(MFA_NOW)};
+    // #336: 패스키 등록 대기 값과 로그인 challenge 의 사용 목록(메모리). MFA 와 같은 타이머가 쓸어 낸다.
+    private readonly _passkeys = {registrations: new PendingPasskeyRegistrations(MFA_NOW), challenges: new PasskeyLoginChallenges(MFA_NOW)};
     private _mfaSweepTimer: NodeJS.Timeout | undefined;
 
     constructor(tttServer: TTTServer, tls : boolean, certInfo? : CertInfo, options: AdminServerOptions = {}) {
@@ -168,16 +173,20 @@ class AdminServer {
             (this._server as any).requestTimeout = ADMIN_REQUEST_TIMEOUT_MS;
         } catch { /* no-op: runtime 차이 보호 */ }
 
+        // 2단계·패스키 로그인이 함께 쓰는 로그인 백오프와 세션 발급(비밀번호 로그인과 같은 버킷·같은 쿠키 형식).
+        const loginGuard: LoginGuard = {
+            isBlocked: (req) => this.isLoginBlocked(req),
+            fail: async (req) => { this.recordLoginFailure(req); await this.delayFailedLogin(req); },
+            issueSession: (req, res, user, loginDetail) => this.completeLogin(req, res, user.id,
+                {id: user.id, username: user.username, displayName: user.displayName, role: user.role}, user.mustChangePassword, loginDetail),
+            sendFailure: (res, status, payload) => this.sendApiFailure(res, status, payload),
+            emitAudit: (event) => this.emitAudit(event)
+        };
         this._routes = buildAdminRoutes({
             onLogin: this.onLogin,
-            onLoginMfa: mfaLoginHandler(this._mfa.tickets, {
-                isBlocked: (req) => this.isLoginBlocked(req),
-                fail: async (req) => { this.recordLoginFailure(req); await this.delayFailedLogin(req); },
-                issueSession: (req, res, user) => this.completeLogin(req, res, user.id,
-                    {id: user.id, username: user.username, displayName: user.displayName, role: user.role}, user.mustChangePassword),
-                sendFailure: (res, status, payload) => this.sendApiFailure(res, status, payload),
-                emitAudit: (event) => this.emitAudit(event)
-            }),
+            onLoginMfa: mfaLoginHandler(this._mfa.tickets, loginGuard),
+            // #336 패스키 등록·로그인·초기화. 핸들러는 passkeyRoutes.ts 가 갖는다.
+            ...passkeyRouteHandlers(this._passkeys, loginGuard),
             onGetVersion: this.onGetVersion,
             onLogout: this.onLogout,
             onGetValidateSession: this.onGetValidateSession,
@@ -284,7 +293,8 @@ class AdminServer {
            if(method === 'POST' || method === 'PUT' || method === 'DELETE') {
                // /api/login 은 CSRF 토큰 발급 전 호출 가능해야 하므로 헤더 검증은 스킵하되,
                // Origin(존재 시)은 여전히 화이트리스트 강제.
-               const skipCsrfHeader = (pathname == '/api/login' || pathname == '/api/login/mfa');
+               const skipCsrfHeader = (pathname == '/api/login' || pathname == '/api/login/mfa'
+                   || pathname == '/api/login/passkey' || pathname == '/api/login/passkey/options');
                if(!this.verifyCsrfGuard(req, res, skipCsrfHeader)) {
                    return;
                }
@@ -1417,7 +1427,7 @@ class AdminServer {
      * 칸은 응답이 끝나거나 연결이 닫힐 때(본문 읽기 실패·시간 초과·크기 초과 포함) 한 번만 돌려준다. 통과하면 true 다.
      * 본문을 읽지 않았으므로 password 경로의 거절 감사는 username 을 '(unread)' 로 남긴다.
      */
-    private admitLogin(ctx: RouteContext, kind: 'password' | 'mfa'): boolean {
+    private admitLogin(ctx: RouteContext, kind: 'password' | 'mfa' | 'passkey'): boolean {
         const {req, res} = ctx;
         const bucket = this.buildLoginAttemptKey(req);
         const reject = (payload: {code?: string, message: string}, reason?: 'concurrency_limit'): false => {
@@ -1552,7 +1562,7 @@ class AdminServer {
      */
     private async completeLogin(req: IncomingMessage, res: ServerResponse, userId: string,
                                  user: {id: string; username: string; displayName: string; role: string},
-                                 mustChangePassword: boolean): Promise<void> {
+                                 mustChangePassword: boolean, loginDetail?: Record<string, unknown>): Promise<void> {
         this.resetLoginAttempts(req);
         const userAgent = req.headers['user-agent'];
         // #127 (U4-08): 슈퍼유저 MFA 강제는 로그인 시점에만 계산한다(이미 열린 세션은 소급하지 않는다).
@@ -1589,7 +1599,7 @@ class AdminServer {
             at: this.now(), actor: {userId: user.id, username: user.username, role: user.role as Role},
             sessionIdHash: SessionStore.sessionIdOf(sessionKey), ip: this.getClientAddress(req),
             type: AUDIT_EVENT_TYPES.login_success, target: {kind: 'user', id: user.id},
-            outcome: 'success', summary: `login_success ${user.id}`
+            outcome: 'success', summary: `login_success ${user.id}`, ...(loginDetail ? {detail: loginDetail} : {})
         });
     }
 
@@ -1872,7 +1882,11 @@ class AdminServer {
 
     public async listen(port : number, host?: string)  : Promise<number> {
         clearInterval(this._mfaSweepTimer);
-        this._mfaSweepTimer = setInterval(() => { this._mfa.pending.sweep(); this._mfa.tickets.sweep(); SessionStore.instance.sweepSession(); }, 60_000).unref();
+        this._mfaSweepTimer = setInterval(() => {
+            this._mfa.pending.sweep(); this._mfa.tickets.sweep();
+            this._passkeys.registrations.sweep(); this._passkeys.challenges.sweep();
+            SessionStore.instance.sweepSession();
+        }, 60_000).unref();
         // P5-T6 / REQ-19: listen 전용 핸들러를 named function 으로 등록해 listen 종료 후 removeListener(named).
         // removeAllListeners 를 호출하면 생성자에서 등록한 영구 핸들러(_permanentErrorHandler)까지 제거되므로 절대 사용 금지.
         return new Promise((resolve, reject) => {

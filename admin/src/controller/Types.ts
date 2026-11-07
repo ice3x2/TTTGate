@@ -111,7 +111,11 @@ export type UserView = {id: string; username: string; displayName: string; role:
     groupId: string; groupName: string; mustChangePassword: boolean; migratedFromLegacyAdmin: boolean;
     createdAt: number; updatedAt: number;
     /** U4-04 가 더한 필드. */
-    mfaEnabled?: boolean};
+    mfaEnabled?: boolean;
+    /** #336 등록한 패스키 수. */
+    passkeyCount?: number};
+/** #336 내 계정 화면의 패스키 한 줄. 공개키는 오지 않는다. */
+export type PasskeyView = {id: string; name: string; rpId: string; createdAt: number; lastUsedAt: number | null; backedUp: boolean};
 export type TunnelProtocolName = 'TCP' | 'HTTP' | 'HTTPS' | 'HTTP_REWRITE';
 export type GroupAttributes = {
     tunnel_crud: 'none' | 'read_only' | 'full';

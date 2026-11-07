@@ -1,3 +1,4 @@
+import type {AuthenticationResponseJSON, PublicKeyCredentialRequestOptionsJSON} from "@simplewebauthn/browser";
 import {adminRequest} from "./AdminRequest";
 
 export type LoginUser = {id: string; username: string; displayName: string; role: 'superuser' | 'regular'};
@@ -37,16 +38,7 @@ class LoginCtrl {
 
     // #102 (U2-10): 진입점 하나. 서버의 {key} 별칭은 지워졌다.
     public static async login(username: string, password: string, bootstrapToken?: string) : Promise<LoginResult> {
-        let result = await fetch("/api/login", {
-            method: "POST",
-            credentials: "same-origin",
-            headers: {
-                'Content-Type': 'application/json'
-            }
-            ,body: JSON.stringify({username, password, bootstrapToken})
-        })
-        let json = await result.json();
-        return {...json, status: result.status, success: result.ok && json.success === true};
+        return LoginCtrl.postLogin("/api/login", {username, password, bootstrapToken});
     }
 
     /**
@@ -54,11 +46,26 @@ class LoginCtrl {
      * (이 경로의 401 은 세션 만료가 아니라 mfa_code_invalid·mfa_ticket_invalid 이고 화면이 코드로 분기한다).
      */
     public static async loginMfa(mfaTicket: string, input: {code: string} | {recoveryCode: string}) : Promise<LoginResult> {
-        const result = await fetch("/api/login/mfa", {
+        return LoginCtrl.postLogin("/api/login/mfa", {mfaTicket, ...input});
+    }
+
+    /** #336: 패스키 로그인 옵션. 실패하면 options 없이 status·code 만 온다. */
+    public static async passkeyOptions() : Promise<LoginResult & {options?: PublicKeyCredentialRequestOptionsJSON}> {
+        return LoginCtrl.postLogin("/api/login/passkey/options", {});
+    }
+
+    /** #336: 패스키 응답으로 세션을 받는다. loginMfa 와 같이 응답을 그대로 돌려준다(401 은 세션 만료가 아니다). */
+    public static async loginPasskey(response: AuthenticationResponseJSON) : Promise<LoginResult> {
+        return LoginCtrl.postLogin("/api/login/passkey", {response});
+    }
+
+    /** 로그인 전 경로의 POST. 세션·CSRF 가 없으므로 adminRequest 를 쓰지 않고 응답을 그대로 돌려준다. */
+    private static async postLogin(path: string, body: object) : Promise<any> {
+        const result = await fetch(path, {
             method: "POST",
             credentials: "same-origin",
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({mfaTicket, ...input})
+            body: JSON.stringify(body)
         });
         const json = await result.json();
         return {...json, status: result.status, success: result.ok && json.success === true};

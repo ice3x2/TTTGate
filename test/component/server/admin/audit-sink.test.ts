@@ -220,7 +220,8 @@ describe("audit-sink: 라우트 표의 CUD 전수 감사 커버리지", () => {
         // #112 (U4-04): 감사 면제는 audit: false 로 표에 적힌 예외뿐이다. 조용히 빠뜨린 라우트가 없게 목록을 고정한다.
         const exempt = requiring.filter((route) => route.audit === false)
             .map((route) => `${route.method} ${route.pattern.source}`);
-        expect(exempt).toEqual([`POST ${new RegExp("^/api/me/mfa/enroll$").source}`]);
+        // #336: 패스키 등록 옵션도 상태를 저장하지 않는 준비 단계다(대기 값은 메모리에만 둔다).
+        expect(exempt).toEqual([`POST ${new RegExp("^/api/me/mfa/enroll$").source}`, `POST ${new RegExp("^/api/me/passkeys/options$").source}`]);
         const mfaAudited = requiring.filter((route) => route.pattern.source.includes("mfa") && typeof route.audit === "function")
             .map((route) => `${route.method} ${route.pattern.source}`).sort();
         // #113 (U4-05): 세션 강제 종료 세 경로는 감사 대상이다.

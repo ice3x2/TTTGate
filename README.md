@@ -341,6 +341,30 @@ Use the first case that matches.
 
 You cannot change a username. To use a new name, create a new superuser and sign in with it. Give the tunnels of the old account to another owner, then delete the old account. The server does not delete a user who owns tunnels. It also does not delete, disable or demote the last active superuser.
 
+#### Sign In with a Passkey
+
+A passkey lets you sign in with the PIN, fingerprint or face check of your device instead of your username and password. A passkey sign-in does not ask for the two-factor code.
+
+Conditions:
+
+- Open the console with a domain name, for example `https://tttgate.example.com:9300`. A passkey cannot use an IP address such as `https://192.168.0.10:9300`. `http://localhost` also works, for example through an SSH tunnel.
+- The browser must trust the HTTPS certificate. A self-signed certificate works only when the device trusts it, for example after you install your private CA on the device. A page that you opened after you skipped a certificate warning cannot use passkeys.
+- Add the console address to `adminAllowedOrigins` in `server.yaml`, for example `adminAllowedOrigins: ["https://tttgate.example.com:9300"]`. See [Open the Console from Another Computer](#open-the-console-from-another-computer).
+- A passkey works only at the domain name where you added it. If you open the console at another name, add a passkey there too.
+
+Add a passkey on each device:
+
+1. Sign in with your password, then open **My account**.
+2. Under **Passkeys**, press **Add a passkey**.
+3. Enter a name for the device and your password, then press **Continue**.
+4. Confirm with the PIN, fingerprint or face check of the device.
+
+You can add up to 20 passkeys. A passkey that your phone or password manager synchronizes shows `synced`.
+
+Sign in: on the sign-in screen, press **Sign in with a passkey** and choose the passkey. You do not enter a username.
+
+Remove a passkey: press **Remove** next to it in **My account**. If you lost a device, sign in on another device and remove its passkey. A superuser can remove all passkeys of a user: open **Users**, select the user and press **Remove passkeys**. This also ends the sessions of that user. The audit log records `passkey_registered`, `passkey_removed` and `passkey_reset`. A passkey sign-in records `login_success` or `login_failure` with `method: passkey`.
+
 ### Client
 
 #### Enroll with a Code
@@ -1221,6 +1245,30 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
    4. 평소와 같은 옵션으로 서버를 다시 시작한다(예: 방법 2라면 `-allowLegacyAdminRemote`). 서버가 `config/.bootstrap-token` 에 새 토큰을 만든다. [첫 관리자 로그인](#첫-관리자-로그인)을 진행한다. `server.yaml` 에서 `mfaRequiredForSuperusers` 가 켜져 있으면, 새 슈퍼유저는 첫 로그인 때 2단계 인증을 설정해야 한다.
 
 사용자 이름은 바꿀 수 없다. 새 이름을 쓰려면 새 슈퍼유저를 만들고 그 계정으로 로그인한다. 예전 계정이 소유한 터널의 소유자를 바꾼 뒤 예전 계정을 지운다. 터널을 소유한 사용자는 지울 수 없다. 서버는 마지막 활성 슈퍼유저도 지우거나, 비활성으로 바꾸거나, 일반 사용자로 내리지 않는다.
+
+#### 패스키로 로그인
+
+패스키를 쓰면 사용자 이름과 비밀번호 대신 기기의 PIN·지문·얼굴 확인으로 로그인한다. 패스키로 로그인하면 2단계 인증 코드를 묻지 않는다.
+
+조건:
+
+- 관리 화면을 도메인 이름으로 연다(예: `https://tttgate.example.com:9300`). `https://192.168.0.10:9300` 같은 IP 주소에서는 패스키를 쓸 수 없다. `http://localhost` 는 쓸 수 있다(예: SSH 터널).
+- 브라우저가 HTTPS 인증서를 신뢰해야 한다. 자체 서명 인증서는 기기가 신뢰할 때만 쓸 수 있다(예: 사설 CA 를 기기에 설치한 경우). 인증서 경고를 무시하고 들어간 페이지에서는 패스키를 쓸 수 없다.
+- `server.yaml` 의 `adminAllowedOrigins` 에 관리 화면 주소를 넣는다(예: `adminAllowedOrigins: ["https://tttgate.example.com:9300"]`). [다른 컴퓨터에서 관리 화면 열기](#다른-컴퓨터에서-관리-화면-열기)를 참고한다.
+- 패스키는 등록한 도메인 이름에서만 쓸 수 있다. 다른 이름으로 관리 화면을 열면 그 이름에서도 패스키를 등록한다.
+
+기기마다 패스키 등록:
+
+1. 비밀번호로 로그인한 뒤 **My account** 를 연다.
+2. **Passkeys** 에서 **Add a passkey** 를 누른다.
+3. 기기 이름과 비밀번호를 넣고 **Continue** 를 누른다.
+4. 기기의 PIN·지문·얼굴 확인을 한다.
+
+패스키는 20개까지 등록할 수 있다. 휴대폰이나 비밀번호 관리자가 동기화하는 패스키에는 `synced` 가 붙는다.
+
+로그인: 로그인 화면에서 **Sign in with a passkey** 를 누르고 패스키를 고른다. 사용자 이름은 넣지 않는다.
+
+패스키 삭제: **My account** 에서 그 패스키 옆의 **Remove** 를 누른다. 기기를 잃어버렸으면 다른 기기로 로그인해 그 기기의 패스키를 지운다. 슈퍼유저는 한 사용자의 패스키를 모두 지울 수 있다. **Users** 에서 사용자를 고르고 **Remove passkeys** 를 누른다. 이때 그 사용자의 세션도 모두 끊긴다. 감사 로그에는 `passkey_registered`, `passkey_removed`, `passkey_reset` 이 남는다. 패스키 로그인은 `method: passkey` 가 붙은 `login_success` 또는 `login_failure` 로 남는다.
 
 ### 클라이언트
 

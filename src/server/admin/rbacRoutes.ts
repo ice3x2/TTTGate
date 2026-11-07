@@ -278,7 +278,7 @@ const onGetMe = async (ctx: RouteContext): Promise<void> => {
             user: {
                 id: principal.userId, username: principal.username, displayName: principal.username,
                 role: principal.role, status: 'active', groupId: principal.groupId, groupName: SYSTEM_SUPERUSER_GROUP_NAME,
-                mustChangePassword: false, migratedFromLegacyAdmin: false, mfaEnabled: false, createdAt: 0, updatedAt: 0
+                mustChangePassword: false, migratedFromLegacyAdmin: false, mfaEnabled: false, passkeyCount: 0, createdAt: 0, updatedAt: 0
             },
             group: {id: principal.groupId, name: SYSTEM_SUPERUSER_GROUP_NAME, attributes: principal.attributes},
             sections: sections(principal),
@@ -306,8 +306,8 @@ const onGetMe = async (ctx: RouteContext): Promise<void> => {
 
 const nowMs = (): number => ClockRngProvider.current().now();
 
-/** MFA 를 다루려면 identity.yaml 의 사용자가 있어야 한다(legacy-fallback 은 503). */
-const mfaUserOf = (ctx: RouteContext): User | undefined => {
+/** 본인의 MFA·패스키를 다루려면 identity.yaml 의 사용자가 있어야 한다(legacy-fallback 은 503). */
+export const selfUserOf = (ctx: RouteContext): User | undefined => {
     if(ctx.principal!.legacy) {
         ctx.fail(503, 'identity_store_unavailable', 'Identity store is unavailable');
         return undefined;
@@ -319,7 +319,7 @@ const mfaUserOf = (ctx: RouteContext): User | undefined => {
 };
 
 /** 세션 안의 재확인이라 로그인 백오프 버킷에 기록하지 않는다(PUT /api/me/password 와 같다). */
-const passwordConfirmed = async (ctx: RouteContext, user: User): Promise<boolean> => {
+export const passwordConfirmed = async (ctx: RouteContext, user: User): Promise<boolean> => {
     const password = typeof ctx.body?.password === 'string' ? ctx.body.password : '';
     const verified = await IdentityStore.instance.verifyPassword(user.username, password);
     if(!verified.success) ctx.fail(401, 'password_incorrect', 'The password is incorrect.');
@@ -327,7 +327,7 @@ const passwordConfirmed = async (ctx: RouteContext, user: User): Promise<boolean
 };
 
 const onEnrollMfa = async (ctx: RouteContext): Promise<void> => {
-    const user = mfaUserOf(ctx);
+    const user = selfUserOf(ctx);
     if(!user) return;
     if(user.mfa?.enabled) {
         ctx.fail(409, 'mfa_already_enabled', 'Two-factor authentication is already enabled.');
@@ -342,7 +342,7 @@ const onEnrollMfa = async (ctx: RouteContext): Promise<void> => {
 };
 
 const onConfirmMfa = async (ctx: RouteContext): Promise<void> => {
-    const user = mfaUserOf(ctx);
+    const user = selfUserOf(ctx);
     if(!user) return;
     const pending = ctx.mfa!.pending.peek(user.id);
     if(!pending) {
@@ -372,7 +372,7 @@ const onConfirmMfa = async (ctx: RouteContext): Promise<void> => {
 };
 
 const onDisableMfa = async (ctx: RouteContext): Promise<void> => {
-    const user = mfaUserOf(ctx);
+    const user = selfUserOf(ctx);
     if(!user || !await passwordConfirmed(ctx, user)) return;
     if(ServerOptionStore.instance.serverOption.mfaRequiredForSuperusers === true && user.role === 'superuser') {
         ctx.fail(409, 'mfa_required', 'Superusers must keep two-factor authentication enabled.');
@@ -386,7 +386,7 @@ const onDisableMfa = async (ctx: RouteContext): Promise<void> => {
 };
 
 const onRegenerateRecoveryCodes = async (ctx: RouteContext): Promise<void> => {
-    const user = mfaUserOf(ctx);
+    const user = selfUserOf(ctx);
     if(!user || !await passwordConfirmed(ctx, user)) return;
     if(!user.mfa?.enabled) {
         ctx.fail(409, 'mfa_not_enabled', 'Two-factor authentication is not enabled.');

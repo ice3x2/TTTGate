@@ -5,6 +5,8 @@ const EXPECTED_TYPES = [
     "login_success", "login_failure",
     "mfa_success", "mfa_failure", "mfa_recovery_used",
     "mfa_enrolled", "mfa_disabled", "mfa_reset", "mfa_recovery_codes_regenerated",
+    // #336 패스키
+    "passkey_registered", "passkey_removed", "passkey_reset",
     "logout", "session_killed", "sessions_killed_for_user", "sessions_killed_self_others",
     "user_created", "user_updated", "user_deleted", "user_status_changed", "role_changed",
     "temp_password_issued", "password_changed",
@@ -27,8 +29,8 @@ const EXPECTED_TYPES = [
 ];
 
 describe("AuditEventTypes", () => {
-    it("표의 이름 51 개를 모두 담는다", () => {
-        expect(AUDIT_EVENT_TYPE_LIST).toHaveLength(51);
+    it("표의 이름 54 개를 모두 담는다", () => {
+        expect(AUDIT_EVENT_TYPE_LIST).toHaveLength(54);
         expect([...AUDIT_EVENT_TYPE_LIST].sort()).toEqual([...EXPECTED_TYPES].sort());
     });
 
