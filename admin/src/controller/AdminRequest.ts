@@ -1,6 +1,11 @@
 import InvalidSession from "./InvalidSession";
 
-const failure = (message: string, status = 0) => ({success: false, status, message});
+// 이슈 338: generated 는 서버가 보낸 문구가 아니라 이 파일이 만든 문구라는 표시다(serverMessageOf 가 본다).
+const failure = (message: string, status = 0) => ({success: false, status, message, generated: true});
+
+/** 실패 값의 서버 문구. 이 파일이 만든 문구(네트워크 실패, 문구 없는 HTTP 오류)면 빈 문자열이다. 화면은 그때 자기 문구를 쓴다. */
+export const serverMessageOf = (result: {message?: string; generated?: boolean}): string =>
+    result.generated === true ? '' : (result.message ?? '');
 const csrfCookie = (): string => {
     const entry = document.cookie.split(";").map((part) => part.trim())
         .find((part) => part.startsWith("csrfToken="));
@@ -35,8 +40,9 @@ const requestJson = async (url: URL, options: RequestInit, credentialCheck = fal
         return failure(`Invalid JSON response from admin server (HTTP ${response.status})`, response.status);
     }
     if(!response.ok) {
+        const fromServer = typeof value.message === "string" && value.message !== "";
         return {...value, success: false, status: response.status,
-            message: typeof value.message === "string" && value.message ? value.message : `Admin request failed (HTTP ${response.status})`};
+            message: fromServer ? value.message : `Admin request failed (HTTP ${response.status})`, ...(fromServer ? {} : {generated: true})};
     }
     return value;
 };

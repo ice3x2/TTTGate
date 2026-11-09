@@ -13,10 +13,9 @@ const expectMessage = async (page: Page, text: string) => {
 };
 
 const expectStatusScreen = async (page: Page) => {
-    await page.waitForFunction(() => location.hash === "#/status", undefined, {timeout: 10_000});
-    // 옛 ServerStatusLayout 이 같은 이름의 h2 를 함께 그리므로 골격의 h1 로 좁혀 확인한다.
-    await page.locator("h1").waitFor({state: "visible", timeout: 10_000});
-    expect(await page.locator("h1").textContent()).toBe("Status");
+    // #338: 로그인하면 슈퍼유저도 터널 목록이 먼저다.
+    await page.waitForFunction(() => location.hash === "#/tunnels", undefined, {timeout: 10_000});
+    await page.waitForFunction(() => document.querySelector("h1")?.textContent === "Tunnels", undefined, {timeout: 10_000});
 };
 
 test("부트스트랩 화면이 단계별 문구를 보여주고 새로고침 없이 상태 화면에 도달한다", async () => {

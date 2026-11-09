@@ -96,3 +96,50 @@ test.each(["ordinary", "compound"])("%s failed apply retains pending committed s
         expect(await fingerprint(port)).toBe(certificate.fingerprintSha256);
     } finally { await service.close(); }
 }));
+
+// #338 REQ-4 — 이름만 바꾼 저장은 리스너를 다시 시작하지 않는다. 다시 시작하면 진행 중인 연결이 끊긴다.
+test("a name-only save keeps the running listener, its activation and its uptime", async () => withConfigurationServer(async f => {
+    const service = await startEchoServer();
+    try {
+        const port = await getFreePort();
+        const option = {forwardPort: port, protocol: "tcp", tls: false, destinationAddress: "127.0.0.1", destinationPort: service.port, keepAlive: 0};
+        expect((await save(f, "ordinary", option)).statusCode).toBe(200);
+        expect((await f.request("POST", `/api/tunneling/active/${port}`, {active: true, timeout: 600})).statusCode).toBe(200);
+        const before = f.tunnel.externalServerStatus(port);
+        await new Promise((resolve) => setTimeout(resolve, 1_200));
+
+        expect((await save(f, "ordinary", {...option, name: "office ssh"})).statusCode).toBe(200);
+
+        const after = f.tunnel.externalServerStatus(port);
+        expect(after.online).toBe(true);
+        expect(after.active).toBe(true);
+        expect(after.activeStart).toBe(before.activeStart);
+        expect(after.activeTimeout).toBe(before.activeTimeout);
+        // uptime 은 리스너가 시작한 시각이다. 다시 시작하지 않았으면 그대로다.
+        expect(after.uptime).toBe(before.uptime);
+        expect(f.store.getTunnelingOption(port).name).toBe("office ssh");
+        expect(f.tunnel.captureRuntimeState().external[port].option).toEqual(f.store.getTunnelingOption(port));
+
+        // 이름 말고 다른 값이 바뀌면 지금처럼 다시 시작한다.
+        expect((await save(f, "ordinary", {...option, name: "office ssh", bufferLimitOnServer: 6})).statusCode).toBe(200);
+        expect(f.tunnel.externalServerStatus(port).uptime).toBeGreaterThan(before.uptime);
+    } finally { await service.close(); }
+}));
+
+// #338 REQ-4 — 슈퍼유저 편집 화면은 TLS 터널을 저장할 때 바뀌지 않은 인증서도 함께 보낸다(compound 경로).
+// 인증서가 실행 중인 것과 같고 이름만 바뀌었으면 그 경로에서도 다시 시작하지 않는다.
+test("a name-only compound save of a TLS tunnel with the same certificate keeps the running listener", async () => withConfigurationServer(async f => {
+    const service = await startEchoServer();
+    try {
+        const port = await getFreePort();
+        const option = {forwardPort: port, protocol: "tcp", tls: true, destinationAddress: "127.0.0.1", destinationPort: service.port, keepAlive: 0};
+        expect((await save(f, "compound", option)).statusCode).toBe(200);
+        const before = f.tunnel.externalServerStatus(port);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        expect((await save(f, "compound", {...option, name: "secure ssh"})).statusCode).toBe(200);
+        expect(f.tunnel.externalServerStatus(port).uptime).toBe(before.uptime);
+        expect(f.store.getTunnelingOption(port).name).toBe("secure ssh");
+        expect(await fingerprint(port)).toBe(certificate.fingerprintSha256);
+    } finally { await service.close(); }
+}));

@@ -44,14 +44,21 @@ const certRequests = (page: Page): string[] => {
 const optionValues = (page: Page, selector: string) =>
     page.locator(`${selector} option`).evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value));
 
-test("alice 는 자기·그룹 공유 터널만 보고, 공유 터널은 읽기 전용 표시와 스위치가 없다", () => withTunnels("alice", async ({page}) => {
+// #338: 소유자(내 것이 아닐 때)와 view only 는 상태 줄에, 보기만 허락된 터널은 스위치 대신 자물쇠다.
+const statusOf = (page: Page, port: number) => card(page, port).locator(".tunnel-status");
+const waitStatus = (page: Page, port: number, pattern: RegExp) => page.waitForFunction(([target, source]) =>
+    new RegExp(source as string).test(document.querySelector(`li[data-port="${target}"] .tunnel-status`)?.textContent ?? ""),
+    [port, pattern.source] as const, {timeout: 10_000});
+
+test("alice 는 자기·그룹 공유 터널만 보고, 공유 터널은 view only 와 자물쇠이며 스위치가 없다", () => withTunnels("alice", async ({page}) => {
     expect(await card(page, 20003).count()).toBe(0);
-    expect(await card(page, 20001).locator("[data-owner]").textContent()).toBe("@alice");
-    expect(await card(page, 20001).locator("[data-readonly]").count()).toBe(0);
-    await card(page, 20001).getByText("Activation").waitFor({state: "visible", timeout: 10_000});
-    expect(await card(page, 20002).locator("[data-owner]").textContent()).toBe("@bob");
-    expect((await card(page, 20002).locator("[data-readonly]").textContent())?.trim()).toBe("read only");
-    expect(await card(page, 20002).getByText("Activation").count()).toBe(0);
+    await waitStatus(page, 20001, /^On/);
+    expect(await statusOf(page, 20001).textContent()).not.toContain("@alice");
+    expect(await statusOf(page, 20001).textContent()).not.toContain("view only");
+    expect(await card(page, 20001).getByRole("switch").count()).toBe(1);
+    await waitStatus(page, 20002, /^On · view only · @bob$/);
+    expect(await card(page, 20002).locator(".tunnel-lock").getAttribute("title")).toBe("View only");
+    expect(await card(page, 20002).getByRole("switch").count()).toBe(0);
     expect(await button(page, "Add tunneling service").count()).toBe(1);
     expect(await page.locator("#tunnel-limit-note").count()).toBe(0);
 }, 2));
@@ -133,10 +140,27 @@ test("carol 은 터널이 없고, 포트·프로토콜이 없는 그룹이라 �
     expect(await page.evaluate(() => location.hash)).toBe("#/tunnels/new");
 }));
 
+// #338 REQ-11: 터널이 없고 추가할 수 없으면 관리자에게 요청하라는 안내를 더한다. 추가할 수 있으면 보이지 않는다.
+test("carol 은 추가할 수 있어 요청 안내가 없고, 읽기 전용 그룹이 되면 요청 안내를 본다", () => withTunnels("carol", async ({page}) => {
+    await page.getByText("No tunnels yet.", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+    expect(await page.locator("#tunnel-ask-admin").count()).toBe(0);
+    await page.route("**/api/me", async (route) => {
+        const response = await route.fetch();
+        const body = await response.json();
+        body.group.attributes.tunnel_crud = "read_only";
+        await route.fulfill({response, json: body});
+    });
+    await page.reload();
+    await page.locator("#tunnel-ask-admin").waitFor({state: "visible", timeout: 10_000});
+    expect(await page.locator("#tunnel-ask-admin").textContent()).toBe("Ask an administrator to add a tunnel for you.");
+    expect(await button(page, "Add tunneling service").count()).toBe(0);
+}));
+
 test("admin 은 모든 터널과 소유자를 보고 읽기 전용 표시가 없다", () => withTunnels("admin", async ({page}) => {
-    expect(await card(page, 20003).locator("[data-owner]").textContent()).toBe("migrated");
-    expect(await card(page, 20001).locator("[data-owner]").textContent()).toBe("@alice");
-    expect(await page.locator("[data-readonly]").count()).toBe(0);
+    await waitStatus(page, 20003, /· migrated$/);
+    await waitStatus(page, 20001, /· @alice$/);
+    expect(await page.locator(".tunnel-lock").count()).toBe(0);
+    expect(await page.locator(".tunnel-status").filter({hasText: "view only"}).count()).toBe(0);
 }, 3));
 
 test("admin 이 20003 의 소유자를 alice 로 바꾸면 alice 는 그 터널을 편집할 수 있다", () => withTunnels("admin", async ({page}) => {
@@ -158,7 +182,7 @@ test("admin 이 20003 의 소유자를 alice 로 바꾸면 alice 는 그 터널�
     await page.getByText("Owner changed.", {exact: true}).waitFor({state: "visible", timeout: 10_000});
     await page.goto(`${page.url().split("#")[0]}#/tunnels`);
     await hashIs(page, "#/tunnels");
-    await card(page, 20003).locator("[data-owner]").filter({hasText: "@alice"}).waitFor({state: "visible", timeout: 10_000});
+    await waitStatus(page, 20003, /· @alice$/);
 
     // 같은 서버 상태에서 alice 로 다시 들어온다.
     await page.locator('[aria-label="Open menu"]').click();
@@ -228,7 +252,7 @@ test("admin 이 소유자가 있는 터널의 소유자를 바꾼 뒤 같은 화
     expect("editable" in body).toBe(false);
     await page.getByText("Success to apply tunneling option", {exact: true}).waitFor({state: "visible", timeout: 10_000});
     await hashIs(page, "#/tunnels");
-    await card(page, 20001).locator("[data-owner]").filter({hasText: "@bob"}).waitFor({state: "visible", timeout: 10_000});
+    await waitStatus(page, 20001, /· @bob$/);
 }, 3));
 
 // #150 — 서버는 allowedClientIds 가 있으면 이름 목록을 보지 않는다. 슈퍼유저 화면도 id 를 보이고 고칠 수 있어야 한다.
@@ -262,7 +286,7 @@ test("admin 이 소유자를 바꾼 뒤 같은 화면에서 저장해도 revisio
     await button(page, "Apply and Restart").click();
     await page.getByText("Success to apply tunneling option", {exact: true}).waitFor({state: "visible", timeout: 10_000});
     await hashIs(page, "#/tunnels");
-    await card(page, 20003).locator("[data-owner]").filter({hasText: "@bob"}).waitFor({state: "visible", timeout: 10_000});
+    await waitStatus(page, 20003, /· @bob$/);
 }, 3));
 
 // #178 — 슈퍼유저가 소유자 그룹이 허용하지 않은 id 를 넣으면 소유자는 자기 터널을 저장하지 못한다.

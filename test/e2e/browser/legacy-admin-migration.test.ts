@@ -96,8 +96,8 @@ describe("legacy-admin-migration", () => {
             await page.locator("#login-username").fill("admin");
             await password.fill(E2E_ADMIN_PASSWORD);
             await page.getByRole("button", {name: "OK", exact: true}).click();
-            await page.waitForFunction(() => location.hash === "#/status");
-            await page.waitForFunction(() => document.querySelector("h1")?.textContent === "Status");
+            await page.waitForFunction(() => location.hash === "#/tunnels");
+            await page.waitForFunction(() => document.querySelector("h1")?.textContent === "Tunnels");
             const sessionStatus = await page.evaluate(async () => (await fetch("/api/validateSession")).status);
             expect(sessionStatus).toBe(200);
             expect(app.errors).toEqual([]);

@@ -10,6 +10,10 @@
         <div class="toast {item.tone}" role="status">
             <span class="glyph" aria-hidden="true">{GLYPH[item.tone]}</span>
             <span class="msg">{item.message}</span>
+            {#if item.action}
+                {@const action = item.action}
+                <button type="button" class="toast-action" onclick={() => { toast.dismiss(item.id); action.run(); }}>{action.label}</button>
+            {/if}
             <button type="button" class="toast-close" aria-label="Dismiss" onclick={() => toast.dismiss(item.id)}>×</button>
         </div>
     {/each}
@@ -25,8 +29,7 @@
         .toasts{ left: auto; width: 360px; }
     }
     .toast{
-        display: grid;
-        grid-template-columns: auto 1fr auto;
+        display: flex;
         gap: var(--s-4); align-items: center;
         padding: var(--s-4) var(--s-5);
         border: 1px solid var(--line-1);
@@ -51,6 +54,7 @@
     .toast.alarm .glyph{ border-color: var(--alarm-dim); color: var(--alarm); }
     .toast.trace .glyph{ border-color: var(--trace-dim); color: var(--trace); }
     .toast.signal .glyph{ border-color: var(--signal-dim); color: var(--signal); }
-    .toast .msg{ color: var(--ink-0); }
+    .toast .msg{ flex: 1; min-width: 0; color: var(--ink-0); }
+    .toast-action{ background: none; border: 0; padding: var(--s-2) var(--s-1); color: var(--trace); font: 600 var(--fs-md) var(--ff-ui); cursor: pointer; }
     .toast-close{ background: none; border: 0; color: var(--ink-2); font-size: var(--fs-lg); cursor: pointer; }
 </style>

@@ -31,6 +31,8 @@
     let tallModalOpen = $state(false);
     let tinyModalOpen = $state(false);
     let tab = $state('one');
+    let undoPushes = 0;
+    let undoRuns = $state(0);
     let timerValue = $state(-1);
     let bannerShown = $state(true);
 </script>
@@ -90,6 +92,9 @@
 <div id="toast-push"><Button onclick={() => toast.push({tone: 'pulse', message: 'Fixture toast', timeoutMs: 1500})}>Push toast</Button></div>
 <!-- 스스로 사라지지 않는 토스트. 쌓이는 상한을 시간과 무관하게 확인한다(#263). -->
 <div id="toast-push-sticky"><Button onclick={() => toast.push({tone: 'trace', message: 'Sticky toast', timeoutMs: 0})}>Push sticky toast</Button></div>
+<!-- 이슈 338: 동작 버튼이 있고 같은 key 의 앞 알림을 대신하는 토스트. -->
+<div id="toast-push-undo"><Button onclick={() => { undoPushes += 1; toast.push({tone: 'pulse', message: `Undo toast ${undoPushes}`, timeoutMs: 0, key: 'fixture-undo', action: {label: 'Undo', run: () => { undoRuns += 1; }}}); }}>Push undo toast</Button></div>
+<output id="undo-echo">{undoRuns}</output>
 
 <Tabs items={[{id: 'one', label: 'One'}, {id: 'two', label: 'Two'}]} bind:active={tab} />
 <output id="tab-echo">{tab}</output>
