@@ -272,13 +272,13 @@ class TTTServer {
     }
 
 
-    public externalServerStatuses() : Array<ExternalPortServerStatus> {
-        let result = new Array<ExternalPortServerStatus>();
-        let serverOption = ServerOptionStore.instance.serverOption;
-        for(let tunnelOption of serverOption.tunnelingOptions) {
-            result.push(this._externalPortServerPool.getServerStatus(tunnelOption.forwardPort));
-        }
-        return result;
+    /** 설정된 터널마다의 상태. #338: clientConnected 는 그 터널을 맡을 수 있는 클라이언트가 연결되어 있는지다. */
+    public externalServerStatuses() : Array<ExternalPortServerStatus & {clientConnected: boolean}> {
+        return ServerOptionStore.instance.serverOption.tunnelingOptions.map((tunnelOption) => ({
+            ...this._externalPortServerPool.getServerStatus(tunnelOption.forwardPort),
+            clientConnected: this._tunnelServer.hasEligibleClient(
+                this._allowClientNamesMap.get(tunnelOption.forwardPort), this._allowClientIdsMap.get(tunnelOption.forwardPort))
+        }));
     }
 
 
@@ -560,6 +560,12 @@ class TTTServer {
         }
     }
 
+    private static sameExceptName(a: TunnelingOption, b: TunnelingOption): boolean {
+        const {name: _a, ...restA} = a;
+        const {name: _b, ...restB} = b;
+        return ObjectUtil.canonicalEquals(restA, restB);
+    }
+
     /**
      * @param previousForwardPort 외부 포트를 바꾸는 중이면 옛 포트. 옛 리스너가 돌고 있으면 새 리스너가 그 활성 상태를 이어받는다(#279, #281).
      *   포트를 바꿀 때는 새 포트에 행이 없으므로 previousOption 을 함께 넘기지 않는다. 실패 복원은 같은 포트의 previousOption 만 다룬다.
@@ -572,6 +578,17 @@ class TTTServer {
         // 리스너를 멈추면 online 이 false 가 되므로 멈추기 전에 읽는다.
         const inherits = inheritedStatus.online;
         const nextCert = stagedCert ?? CertificationStore.instance.getExternalCert(port);
+        // #338: 지금 돌고 있는 설정·인증서와 이름만 다르면 리스너를 다시 시작하지 않는다. 다시 시작하면 진행 중인 연결이 끊긴다.
+        // 이름은 런타임이 쓰지 않는다. 앞선 적용이 실패해 포트가 어긋난(dirty) 상태면 지름길을 쓰지 않는다.
+        const applied = this._appliedExternal[port];
+        if(lastServerStatus.online && applied !== undefined && !this._dirtyExternal.has(port)
+            && (previousForwardPort === undefined || previousForwardPort === port)
+            && TTTServer.sameExceptName(applied.option, nextOption) && ObjectUtil.canonicalEquals(applied.cert ?? null, nextCert ?? null)) {
+            this._appliedExternal[port] = {...applied, option: ObjectUtil.cloneDeep(nextOption),
+                configurationRevision: ServerOptionStore.instance.revisionState.currentRevision,
+                certificateRevision: CertificationStore.instance.revisionState.currentRevision};
+            return {success: true, partial: false, warnings: [], failedScopes: [], restartRequiredScopes: []};
+        }
 
         try {
             this._dirtyExternal.add(port);

@@ -442,11 +442,12 @@ class TunnelServer {
 
 
 
-    private getNextHandlerPool(allowClientNames?: Array<string>, allowClientIds?: Array<string>) : ClientHandlerPool | null {
-        if(this._clientHandlerPoolMap.size == 0) {
-            return null;
-        }
-        let ids: Array<number> = [];
+    /**
+     * 터널을 맡을 수 있는 연결된 클라이언트의 제어 ID. 허용 ID 가 있으면 그 ID 의 신뢰 클라이언트(레거시 아님)만,
+     * 없고 허용 이름이 있으면 그 이름의 클라이언트만, 둘 다 없으면 모두다. 세션 배정과 상태 표시(#338)가 이 규칙 하나를 쓴다.
+     */
+    private eligibleHandlerPoolIds(allowClientNames?: Array<string>, allowClientIds?: Array<string>) : Array<number> {
+        const ids: Array<number> = [];
         if(allowClientIds && allowClientIds.length > 0) {
             this._clientHandlerPoolMap.forEach((handlerPool, ctrlID) => {
                 if(!handlerPool.legacyMode && allowClientIds.includes(handlerPool.clientId)) {
@@ -454,7 +455,7 @@ class TunnelServer {
                 }
             });
         } else if(!allowClientNames || allowClientNames.length == 0) {
-           ids =  Array.from(this._clientHandlerPoolMap.keys());
+            ids.push(...this._clientHandlerPoolMap.keys());
         }  else {
             this._clientHandlerPoolMap.forEach((handlerPool, ctrlID) => {
                 if(allowClientNames.includes(handlerPool.name)) {
@@ -462,6 +463,19 @@ class TunnelServer {
                 }
             });
         }
+        return ids;
+    }
+
+    /** #338: 그 터널을 맡을 수 있는 클라이언트가 지금 하나라도 연결되어 있는가. */
+    public hasEligibleClient(allowClientNames?: Array<string>, allowClientIds?: Array<string>) : boolean {
+        return this.eligibleHandlerPoolIds(allowClientNames, allowClientIds).length > 0;
+    }
+
+    private getNextHandlerPool(allowClientNames?: Array<string>, allowClientIds?: Array<string>) : ClientHandlerPool | null {
+        if(this._clientHandlerPoolMap.size == 0) {
+            return null;
+        }
+        const ids = this.eligibleHandlerPoolIds(allowClientNames, allowClientIds);
         if(ids.length == 0) {
             return null;
         }

@@ -6,6 +6,8 @@ import {startAdminBrowser} from "../helpers/adminBrowser";
 jest.setTimeout(ADMIN_APP_TEST_TIMEOUT_MS);
 
 const openSysinfo = async (page: Page) => {
+    // #338: 로그인하면 터널 목록이 먼저다. 시스템 정보는 Status 화면에 있다.
+    await page.evaluate(() => { location.hash = "#/status"; });
     await page.waitForFunction(() => document.querySelectorAll(".gauge-msg").length >= 2, undefined, {timeout: 30_000});
     await page.getByRole("button", {name: "INFO", exact: true}).click();
     const dialog = page.getByRole("dialog", {name: "System info"});

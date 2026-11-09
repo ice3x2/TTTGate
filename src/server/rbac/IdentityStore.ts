@@ -11,6 +11,7 @@ import {recordAuditEvent} from "../audit/AuditSink";
 import {AUDIT_EVENT_TYPES} from "../audit/AuditEventTypes";
 import {hashLegacyPassword} from "./legacyPasswordHash";
 import {findRecoveryCodeHash} from "../mfa/Totp";
+import {isStoredPasskey, Passkey, PASSKEY_LIMIT, sanitizeTransports} from "../passkey/Passkey";
 import {
     cloneGroupAttributes,
     createSystemGroups,
@@ -43,9 +44,48 @@ type VerifyResult = {success: true; user: User; rehashed: boolean} | {success: f
 type CreateUserInput = {username: string; displayName?: string; role: Role; groupId?: string; mustChangePassword: boolean; migratedFromLegacyAdmin?: boolean}
     & ({password: string} | {passwordHash: string});
 
+function clonePasskey(passkey: Passkey): Passkey {
+    return {...passkey, transports: [...passkey.transports]};
+}
+
 function cloneUser(user: User): User {
-    // mfa 는 중첩 객체라 함께 복사해야 호출자가 저장소 내부를 고치지 못한다.
-    return user.mfa ? {...user, mfa: {...user.mfa, recoveryCodeHashes: [...user.mfa.recoveryCodeHashes]}} : {...user};
+    // mfa·passkeys 는 중첩 객체라 함께 복사해야 호출자가 저장소 내부를 고치지 못한다.
+    const copy: User = {...user};
+    if(user.mfa) copy.mfa = {...user.mfa, recoveryCodeHashes: [...user.mfa.recoveryCodeHashes]};
+    if(user.passkeys) copy.passkeys = user.passkeys.map(clonePasskey);
+    return copy;
+}
+
+/** #336: 형식이 틀린 패스키 항목은 버리고 경고한다. 사용자 항목과 나머지 패스키는 그대로 둔다. */
+function withValidPasskeys(user: User): User {
+    const raw: unknown = user.passkeys;
+    if(raw === undefined) return user;
+    const {passkeys: _raw, ...rest} = user;
+    if(!Array.isArray(raw)) {
+        logger.warn(`identity.yaml: user ${user.id} has invalid passkeys; ignoring them`);
+        return rest;
+    }
+    const valid = raw.filter(isStoredPasskey).map((passkey) => ({...passkey, transports: sanitizeTransports(passkey.transports)}));
+    if(valid.length !== raw.length) {
+        logger.warn(`identity.yaml: dropped ${raw.length - valid.length} invalid passkey entries of user ${user.id}`);
+    }
+    return {...rest, passkeys: valid};
+}
+
+/** #336: 자격증명 ID 는 모든 사용자를 통틀어 하나뿐이다. 손으로 고친 파일에서 겹치면 먼저 나온 것만 남기고 경고한다. */
+function withUniquePasskeyIds(users: User[]): User[] {
+    const seen = new Set<string>();
+    return users.map((user) => {
+        if(!user.passkeys) return user;
+        const kept = user.passkeys.filter((passkey) => {
+            if(seen.has(passkey.id)) return false;
+            seen.add(passkey.id);
+            return true;
+        });
+        if(kept.length === user.passkeys.length) return user;
+        logger.warn(`identity.yaml: dropped ${user.passkeys.length - kept.length} duplicate passkey ids of user ${user.id}`);
+        return {...user, passkeys: kept};
+    });
 }
 
 function cloneGroup(group: Group): Group {
@@ -61,6 +101,10 @@ function groupNameOf(value: unknown): string | undefined {
     if(typeof value !== 'string') return undefined;
     const trimmed = value.trim();
     return trimmed.length >= 1 && trimmed.length <= 64 ? trimmed : undefined;
+}
+
+function passkeyNotFound(): {success: false; status: 404; code: string; message: string} {
+    return {success: false, status: 404, code: 'passkey_not_found', message: 'Passkey not found.'};
 }
 
 function saveFailedResult(message: string): {success: false; status: 422; code: string; message: string} {
@@ -158,7 +202,7 @@ class IdentityStore {
             : group);
         const groupIds = new Set(normalizedGroups.map((group) => group.id));
 
-        const users = (raw.users as User[]).map((user) => ({...user}));
+        const users = withUniquePasskeyIds((raw.users as User[]).map((user) => withValidPasskeys({...user})));
         for(const user of users) {
             if(!groupIds.has(user.groupId)) {
                 return {success: false, message: `user ${user.id} references an unknown groupId: ${user.groupId}`};
@@ -395,6 +439,74 @@ class IdentityStore {
         const remaining = current.recoveryCodeHashes.filter((_, i) => i !== index);
         const saved = this.replaceMfa(id, () => ({...current, recoveryCodeHashes: remaining}), true);
         return saved.success ? {success: true, value: {remaining: remaining.length}} : saved;
+    }
+
+    // ---- #336 패스키 ----
+
+    /** 자격증명 ID 로 패스키와 그 주인을 찾는다. 돌려준 값은 사본이다. */
+    public findPasskey(credentialId: string): {user: User; passkey: Passkey} | undefined {
+        for(const user of this._data.users) {
+            const passkey = user.passkeys?.find((entry) => entry.id === credentialId);
+            if(passkey) return {user: cloneUser(user), passkey: clonePasskey(passkey)};
+        }
+        return undefined;
+    }
+
+    /** 자격증명 ID 는 모든 사용자를 통틀어 하나뿐이고, 사용자당 PASSKEY_LIMIT 개까지다. */
+    public addPasskey(id: string, passkey: Passkey): Result<void> {
+        if(this.findPasskey(passkey.id)) {
+            return {success: false, status: 409, code: 'passkey_already_registered', message: 'This passkey is already registered.'};
+        }
+        return this.replacePasskeys(id, (current) => current.length >= PASSKEY_LIMIT
+            ? {success: false, status: 409, code: 'passkey_limit', message: `You can register up to ${PASSKEY_LIMIT} passkeys.`}
+            : {success: true, value: {next: [...current, clonePasskey(passkey)], result: undefined}});
+    }
+
+    public removePasskey(id: string, passkeyId: string): Result<Passkey> {
+        return this.replacePasskeys(id, (current) => {
+            const removed = current.find((entry) => entry.id === passkeyId);
+            return removed
+                ? {success: true, value: {next: current.filter((entry) => entry !== removed), result: clonePasskey(removed)}}
+                : passkeyNotFound();
+        });
+    }
+
+    public clearPasskeys(id: string): Result<{removed: number}> {
+        return this.replacePasskeys(id, (current) => ({success: true, value: {next: [], result: {removed: current.length}}}));
+    }
+
+    /**
+     * 로그인에 쓴 패스키의 카운터·동기화 여부·사용 시각을 저장한다. 저장된 카운터가 0 보다 큰데 새 값이 그 이하면
+     * 409 passkey_counter_stale 이다. 검증과 저장 사이에 다른 로그인이 더 큰 값을 먼저 저장했을 때 되감지 않게 한다.
+     */
+    public markPasskeyUsed(id: string, passkeyId: string, use: {counter: number; backedUp: boolean; at: number}): Result<void> {
+        return this.replacePasskeys(id, (current) => {
+            const found = current.find((entry) => entry.id === passkeyId);
+            if(!found) return passkeyNotFound();
+            if(found.counter > 0 && use.counter <= found.counter) {
+                return {success: false, status: 409, code: 'passkey_counter_stale', message: 'The passkey counter did not increase.'};
+            }
+            return {success: true, value: {
+                next: current.map((entry) => entry === found ? {...entry, counter: use.counter, backedUp: use.backedUp, lastUsedAt: use.at} : entry),
+                result: undefined
+            }};
+        });
+    }
+
+    /** 사용자의 패스키 목록을 change() 결과로 바꿔 저장한다. 빈 목록이면 필드를 지운다. */
+    private replacePasskeys<T>(id: string, change: (current: Passkey[]) => Result<{next: Passkey[]; result: T}>): Result<T> {
+        const index = this._data.users.findIndex((u) => u.id === id);
+        if(index < 0) {
+            return {success: false, status: 404, code: 'user_not_found', message: `user not found: ${id}`};
+        }
+        const current = this._data.users[index];
+        const changed = change(current.passkeys ?? []);
+        if(!changed.success) return changed;
+        const {passkeys: _previous, ...rest} = current;
+        const nextUsers = [...this._data.users];
+        nextUsers[index] = changed.value.next.length > 0 ? {...rest, passkeys: changed.value.next} : rest;
+        const saveResult = this.replaceData({...this._data, users: nextUsers});
+        return saveResult.success ? {success: true, value: changed.value.result} : saveFailedResult(saveResult.message);
     }
 
     /** 사용자의 mfa 를 next() 결과로 바꿔 저장한다. requireMfa 면 mfa 가 없는 사용자는 409 다. */

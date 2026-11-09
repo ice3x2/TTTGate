@@ -25,7 +25,7 @@
   import Shell from "./shell/Shell.svelte";
   import {provideSession} from "./shell/session";
   import ServerOptionCtrl from "./controller/ServerOptionCtrl";
-  import {chrome, defaultHash, SECTION_OF_SCREEN} from "./shell/nav";
+  import {chrome, defaultHash, isDefaultHash, SECTION_OF_SCREEN} from "./shell/nav";
   import {navigate, route} from "./router";
   import {clearMe, loadMe, me} from "./me";
 
@@ -57,8 +57,8 @@
     else state = 'Invalid';
   });
 
-  $effect(() => { if(state === 'Valid' && $me && location.hash === '') navigate('#/status'); });
-  // 위 '#/status' 는 라우터 기본값이므로, 권한이 없으면 아래 가드가 기본 화면으로 바꾼다(여기서 바로 바꾸면 가드가 직접 고른 해시로 본다).
+  $effect(() => { if(state === 'Valid' && $me && location.hash === '') navigate('#/tunnels'); });
+  // 이슈 338: 로그인하면 터널 목록이 먼저다. '#/tunnels' 는 기본 해시이므로 권한이 없으면 아래 가드가 기본 화면으로 바꾼다.
 
   // 권한 판정이 끝나기 전에는 화면을 마운트하지 않는다. 가드의 navigate 는 hashchange 를 기다리므로,
   // 그 사이 권한 없는 화면의 onMount 가 API 를 부르면 403 과 access_denied 감사가 쌓인다.
@@ -68,6 +68,9 @@
   const enrolling = $derived(!forced && $me?.mustEnrollMfa === true);
   const allowed = $derived.by(() => {
     if($me === undefined) return false;
+    // 이슈 338: 해시가 비어 있으면 라우터는 Status 로 읽지만, 곧 #/tunnels 로 옮기므로 그 사이에 Status 를 마운트하지 않는다.
+    // location.hash 는 반응형이 아니지만 $route 가 해시 변경마다 바뀌므로 함께 다시 계산된다.
+    if($route && location.hash === '') return false;
     if(forced) return $route.screen === 'me-password';
     if(enrolling) return $route.screen === 'me' || $route.screen === 'me-password';
     const section = SECTION_OF_SCREEN[$route.screen];
@@ -78,7 +81,9 @@
   // U3-02: 강제 비밀번호 변경 중이면 어떤 해시든 #/me/password 로 고정하고 다음 단계로 가지 않는다.
   $effect(() => {
     const principal = $me;
-    if(state !== 'Valid' || !principal) return;
+    // 이슈 338: 해시가 바뀔 때마다 다시 판정한다. 기본 해시에서 기본 화면으로 옮긴 뒤 그 화면도 권한이 없으면 한 번 더 옮겨야 한다.
+    const current = $route;
+    if(state !== 'Valid' || !principal || !current) return;
     if(forced) {
       if($route.screen !== 'me-password' || location.hash !== '#/me/password') navigate('#/me/password');
       return;
@@ -89,7 +94,7 @@
     }
     if(allowed) return;
     const raw = location.hash;
-    if(raw === '' || raw === '#' || raw === '#/' || raw === '#/status') navigate(defaultHash(principal.sections));
+    if(isDefaultHash(raw)) navigate(defaultHash(principal.sections));
     else navigate('#/denied');
   });
 

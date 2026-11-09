@@ -1,4 +1,5 @@
 import * as crypto from "crypto";
+import type {Passkey} from "../passkey/Passkey";
 
 export type Role = 'superuser' | 'regular';
 export type UserStatus = 'active' | 'disabled';
@@ -39,6 +40,8 @@ export type User = {
     updatedAt: number;
     /** #112 (U4-04) 본인 MFA. 없으면 MFA 를 쓰지 않는다. */
     mfa?: UserMfa;
+    /** #336 패스키. 없으면 0개다. publicKey 는 API 응답·감사·로그에 넣지 않는다. */
+    passkeys?: Passkey[];
 };
 
 /** secret 은 identity.yaml 에만 저장한다. API 응답·감사 detail·로그에 넣지 않는다. */

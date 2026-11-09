@@ -1,4 +1,4 @@
-import {chrome, defaultHash, navScreen, NAV, SECTION_OF_SCREEN, visibleNav} from "../../admin/src/shell/nav";
+import {chrome, defaultHash, isDefaultHash, navScreen, NAV, SECTION_OF_SCREEN, visibleNav} from "../../admin/src/shell/nav";
 
 // U3-01 / #103 — 내비게이션 순수 함수. 섹션으로 드로어 항목과 기본 해시를 정한다.
 
@@ -33,7 +33,7 @@ describe("nav", () => {
     });
 
     test("NAV 는 10개 항목을 정해진 순서로 갖는다(#213 이 Server settings 뒤에 Trusted clients 를 넣었다)", () => {
-        expect(NAV.map((item) => item.title)).toEqual(["Status", "Tunnels", "Server settings", "Trusted clients", "Users", "Groups", "Security", "Audit log", "Sessions", "My account"]);
+        expect(NAV.map((item) => item.title)).toEqual(["Tunnels", "Status", "Server settings", "Trusted clients", "Users", "Groups", "Security", "Audit log", "Sessions", "My account"]);
         // 편집 화면이 목록과 같은 섹션이어야 가드가 #/users/new 같은 해시도 막는다.
         expect(SECTION_OF_SCREEN).toEqual({
             status: "status", tunnels: "tunnels", "tunnel-edit": "tunnels", server: "server",
@@ -53,10 +53,17 @@ describe("nav", () => {
     });
 
     test("defaultHash 는 첫 허용 항목, 없으면 #/me 다", () => {
-        expect(defaultHash(SUPERUSER_SECTIONS)).toBe("#/status");
+        // #338: 로그인하면 터널 목록이 먼저다. 슈퍼유저도 같다.
+        expect(defaultHash(SUPERUSER_SECTIONS)).toBe("#/tunnels");
+        expect(defaultHash(["status", "me"])).toBe("#/status");
         expect(defaultHash(["tunnels", "audit", "me", "sessions"])).toBe("#/tunnels");
         // U4-06: Audit log 가 NAV 에 들어와 첫 허용 항목이 바뀐다(defaultHash 의 정의 그대로다).
         expect(defaultHash(["audit", "me"])).toBe("#/audit");
         expect(defaultHash([])).toBe("#/me");
+    });
+
+    test("isDefaultHash 는 사용자가 고른 해시가 아닌 기본 해시만 참이다(#338)", () => {
+        for(const hash of ["", "#", "#/", "#/status", "#/tunnels"]) expect(isDefaultHash(hash)).toBe(true);
+        for(const hash of ["#/users", "#/tunnels/20001", "#/me", "#/denied"]) expect(isDefaultHash(hash)).toBe(false);
     });
 });

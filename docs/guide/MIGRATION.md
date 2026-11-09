@@ -66,6 +66,9 @@ new field (`connectionSecurity`, `mfaRequiredForSuperusers`, `auditRetentionDays
 `closeStallMs`, `closeGraceMs`, `adminAllowedOrigins`, `denialLogRetentionDays`, or a tunnel's `ownerId` or `rateLimit`). Keeping them is a manual decision: **retain them for at least 14 days**
 after the upgrade, and remove them yourself once you have accepted the new configuration.
 
+A tunnel can also carry a new optional `name` (1 to 40 characters, shown in the tunnel list). The previous
+binary ignores it and keeps it, so it does not block a rollback.
+
 Note that `.server.state.json.bak` records the revision state at that same moment, which the server may
 already have touched during startup (it marks the loaded revision as last-known-good). It is therefore the
 pre-save state, not necessarily a byte copy of the file the previous binary last wrote.

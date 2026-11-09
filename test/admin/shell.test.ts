@@ -44,7 +44,8 @@ test("메뉴 버튼이 드로어를 열고 항목을 고르면 해시와 화면�
         await dialog.waitFor({state: "visible"});
         expect(await menu.getAttribute("aria-expanded")).toBe("true");
         await app.page.waitForFunction(() => document.activeElement?.classList.contains("drawer-item") === true);
-        expect(await app.page.evaluate(() => document.activeElement?.textContent?.trim())).toBe("Status");
+        // #338: 메뉴의 첫 항목은 Tunnels 다. 초점은 첫 항목에 간다.
+        expect(await app.page.evaluate(() => document.activeElement?.textContent?.trim())).toBe("Tunnels");
         expect(await app.page.locator('.drawer-item[aria-current="page"]').textContent()).toBe("Status");
 
         await app.page.getByRole("link", {name: "Tunnels"}).click();
@@ -173,7 +174,7 @@ test("슈퍼유저 드로어는 NAV 10개를 순서대로 보여 준다", async 
     try {
         await app.page.getByRole("button", {name: "Open menu"}).click();
         await app.page.getByRole("dialog", {name: "Navigation"}).waitFor({state: "visible"});
-        expect(await app.page.locator(".drawer-item").allTextContents()).toEqual(["Status", "Tunnels", "Server settings", "Trusted clients", "Users", "Groups", "Security", "Audit log", "Sessions", "My account"]);
+        expect(await app.page.locator(".drawer-item").allTextContents()).toEqual(["Tunnels", "Status", "Server settings", "Trusted clients", "Users", "Groups", "Security", "Audit log", "Sessions", "My account"]);
         expect(app.errors).toEqual([]);
     } finally {
         await app.close();

@@ -25,6 +25,7 @@
     import BodyReplaceAppender from './parts/BodyReplaceAppender.svelte';
     import HeaderAppender from './parts/HeaderAppender.svelte';
     import InputCertFile from './parts/InputCertFile.svelte';
+    import TunnelStatusArea from './parts/TunnelStatusArea.svelte';
     import {PROTOCOLS, tunnelErrorMessage, tunnelPolicy} from './parts/tunnelPolicy';
 
     // 옛 layout/TunnelOptionSetLayout.svelte 21행의 정의 그대로다.
@@ -56,6 +57,10 @@
     const ownerLabel = $derived(owners.find((entry) => entry.value === ownerId)?.label ?? ownerId);
     let loading = $state(false);
     let confirmOpen = $state(false);
+    // 이슈 338: 화면에 보이는 이름(선택). 앞뒤 공백을 뺀 40 코드 포인트까지다. 형식의 최종 판정은 서버가 한다.
+    const NAME_MAX = 40;
+    let nameInput = $state('');
+    let nameError = $state('');
 
     let alertOpen = $state(false);
     let alertMessage = $state('');
@@ -187,6 +192,7 @@
                     fresh.allowedClientIds = [...policy.trustedClients];
                 }
                 option = fresh;
+                nameInput = '';
                 syncRateInputs();
                 loading = false;
                 return;
@@ -206,6 +212,7 @@
             // 서버가 늘 채워 주지만, 없으면 프로토콜 기본값으로 시작한다.
             if(!found.rateLimit) found.rateLimit = defaultRateLimit(found.protocol);
             option = found;
+            nameInput = found.name ?? '';
             loadedOutsideIds = (found.allowedClientIds ?? []).filter((id) => !(policy?.trustedClients ?? []).includes(id));
             syncRateInputs();
             ownerId = found.owner?.id ?? '';
@@ -325,6 +332,14 @@
     const apply = async () => {
         if(!option) return;
         trustedError = '';
+        nameError = '';
+        const name = nameInput.trim();
+        if(Array.from(name).length > NAME_MAX) {
+            nameError = `Use up to ${NAME_MAX} characters.`;
+            return;
+        }
+        if(name === '') delete option.name;
+        else option.name = name;
         // 그룹 밖 id 가 남아 있으면 서버가 422 trusted_client_not_allowed 로 거부한다. 요청 전에 이유를 보인다.
         if(restricted && outsideGroupClientIds.length > 0) {
             trustedError = 'Remove the client IDs your group does not allow.';
@@ -413,6 +428,9 @@
 </script>
 
 {#if option}
+{#if !isNew}
+    <TunnelStatusArea port={option.originalForwardPort ?? option.forwardPort} editable={!readOnly} onsessionout={sessionOut} />
+{/if}
 {#if readOnly}
     <p id="tunnel-readonly-note">This tunnel is shared with you as read only.</p>
 {/if}
@@ -433,6 +451,9 @@
     {/if}
     <Card>
         <div class="form-stack">
+            <Field label="Name" for="input-name" hint="Optional" error={nameError || undefined}>
+                <TextInput id="input-name" autocomplete="off" bind:value={nameInput} />
+            </Field>
             <Field label="External server port" for="input-external-port" hint={restricted ? policy!.portHint() : undefined} error={portError}>
                 <NumberInput id="input-external-port" min={1} max={65535} bind:value={option.forwardPort}
                     oninput={(v) => (option!.forwardPort = clampPort(v) as number)} />

@@ -1,5 +1,6 @@
 import {adminRequest} from "./AdminRequest";
-import type {ApiResult, MeResponse, SessionView} from "./Types";
+import type {PublicKeyCredentialCreationOptionsJSON, RegistrationResponseJSON} from "@simplewebauthn/browser";
+import type {ApiResult, MeResponse, PasskeyView, SessionView} from "./Types";
 
 // U3-01: 본인 정보·비밀번호 변경·마이그레이션 안내 확인. adminRequest 의 응답을 그대로 돌려준다(fetch 직접 사용 금지).
 class MeCtrl {
@@ -47,6 +48,25 @@ class MeCtrl {
     public regenerateRecoveryCodes(password: string): Promise<ApiResult<{recoveryCodes: string[]}>> {
         return adminRequest("/api/me/mfa/recovery-codes", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({password})},
             {credentialCheck: true});
+    }
+
+    /** #336: 본인 패스키 목록(최신 순). */
+    public passkeys(): Promise<ApiResult<{passkeys: PasskeyView[]}>> {
+        return adminRequest("/api/me/passkeys");
+    }
+
+    /** #336: 비밀번호를 다시 확인하고 등록 옵션을 받는다. */
+    public passkeyOptions(password: string): Promise<ApiResult<{options: PublicKeyCredentialCreationOptionsJSON}>> {
+        return adminRequest("/api/me/passkeys/options", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({password})},
+            {credentialCheck: true});
+    }
+
+    public registerPasskey(name: string, response: RegistrationResponseJSON): Promise<ApiResult<{passkey: PasskeyView}>> {
+        return adminRequest("/api/me/passkeys", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({name, response})});
+    }
+
+    public removePasskey(id: string): Promise<ApiResult<{}>> {
+        return adminRequest(`/api/me/passkeys/${encodeURIComponent(id)}`, {method: "DELETE"});
     }
 
     /** U4-06: 본인 세션 목록. */

@@ -13,6 +13,8 @@ export type UserView = {
     migratedFromLegacyAdmin: boolean;
     /** #112 (U4-04). mfa 객체 자체는 어떤 응답에도 넣지 않는다. */
     mfaEnabled: boolean;
+    /** #336 등록한 패스키 수. 패스키 자체는 담지 않는다. */
+    passkeyCount: number;
     createdAt: number;
     updatedAt: number;
 };
@@ -30,6 +32,7 @@ export function toUserView(user: User, groups: Group[]): UserView {
         mustChangePassword: user.mustChangePassword,
         migratedFromLegacyAdmin: user.migratedFromLegacyAdmin,
         mfaEnabled: user.mfa?.enabled === true,
+        passkeyCount: user.passkeys?.length ?? 0,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt
     };

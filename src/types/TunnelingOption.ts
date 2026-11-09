@@ -87,6 +87,8 @@ type ServerOption = {
 
 type TunnelingOption = {
     forwardPort: number,
+    /** #338 화면에 보이는 이름(선택). resolveTunnelName 이 정한 형식만 저장한다. */
+    name?: string,
     protocol?: Protocol,
     httpOption?: HttpOption,
     destinationAddress: string,
@@ -229,6 +231,21 @@ const resolveDenialLogRetentionDays = (value: unknown): {success: true; days: nu
     if(!Number.isInteger(value) || (value as number) > MAX_DENIAL_LOG_RETENTION_DAYS)
         return {success: false, message: `denialLogRetentionDays must be an integer of at most ${MAX_DENIAL_LOG_RETENTION_DAYS} (0 or less turns the denial log off)`};
     return {success: true, days: value as number};
+};
+
+const TUNNEL_NAME_MAX_LENGTH = 40;
+/** 제어 문자와 방향 제어 문자. 이름으로 다른 터널인 척하지 못하게 막는다(#338). */
+const TUNNEL_NAME_FORBIDDEN = /[\u0000-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069]/;
+
+/** #338: 터널 이름. 앞뒤 공백을 뺀 1~40 코드 포인트다. 값이 없거나 공백뿐이면 이름이 없다(name: undefined). */
+const resolveTunnelName = (value: unknown): {success: true; name: string | undefined} | {success: false; message: string} => {
+    if(value === undefined) return {success: true, name: undefined};
+    const invalid = {success: false as const, message: `name must be 1 to ${TUNNEL_NAME_MAX_LENGTH} characters without control characters`};
+    if(typeof value !== 'string') return invalid;
+    const trimmed = value.trim();
+    if(trimmed.length === 0) return {success: true, name: undefined};
+    if(Array.from(trimmed).length > TUNNEL_NAME_MAX_LENGTH || TUNNEL_NAME_FORBIDDEN.test(trimmed)) return invalid;
+    return {success: true, name: trimmed};
 };
 
 type LogLevel = 'error' | 'warn' | 'info' | 'debug';
@@ -395,6 +412,7 @@ export {
     resolveAuditQueueSize,
     DEFAULT_DENIAL_LOG_RETENTION_DAYS,
     resolveDenialLogRetentionDays,
+    resolveTunnelName,
     LogLevel,
     LOG_LEVELS,
     DEFAULT_LOG_LEVEL,

@@ -1,8 +1,9 @@
 <script lang="ts">
     import {onMount} from 'svelte';
+    import {startRegistration} from '@simplewebauthn/browser';
     import InvalidSession from '../controller/InvalidSession';
     import MeCtrl from '../controller/MeCtrl';
-    import type {SessionView} from '../controller/Types';
+    import type {PasskeyView, SessionView} from '../controller/Types';
     import Badge from '../ui/Badge.svelte';
     import Banner from '../ui/Banner.svelte';
     import Button from '../ui/Button.svelte';
@@ -18,6 +19,7 @@
     import {useSession} from '../shell/session';
     import {relativeTime} from '../util/relativeTime';
     import QrCanvas from './parts/QrCanvas.svelte';
+    import {PASSKEY_CONDITION, PASSKEY_UNSUPPORTED, defaultPasskeyName, errorNameOf, isCertificateError, passkeysAvailable, rememberPasskeyPreferred} from '../util/passkey';
 
     // U3-05: #/me. 계정 카드는 me 스토어만 읽는다.
     // U4-09: MFA 카드(등록 3단계·해제·복구 코드 재발급)와 세션 카드. secret·복구 코드는 모달이 닫히면 상태에서 지운다.
@@ -201,9 +203,99 @@
         await loadSessions();
     });
 
+    // 이슈 336: 패스키 카드. 비밀번호를 다시 확인한 뒤 브라우저가 패스키를 만든다. 비밀번호는 창이 닫히면 상태에서 지운다.
+    const passkeySupported = passkeysAvailable();
+    let passkeys = $state<PasskeyView[]>([]);
+    let passkeyOpen = $state(false);
+    let passkeyName = $state('');
+    let passkeyPassword = $state('');
+    let passkeyError = $state('');
+    let removeOpen = $state(false);
+    let removeTarget = $state<PasskeyView | undefined>(undefined);
+
+    $effect(() => {
+        if(!passkeyOpen) passkeyPassword = '';
+    });
+
+    const PASSKEY_ERRORS: Record<string, string> = {
+        password_incorrect: 'The password is incorrect.',
+        passkey_already_registered: 'This device already has a passkey for this account.',
+        passkey_limit: 'You can register up to 20 passkeys.',
+        passkey_registration_expired: 'The setup expired. Try again.',
+        passkey_name_invalid: 'Enter a name of 1 to 64 characters.',
+        passkey_invalid: 'The passkey could not be verified. Try again.',
+        passkey_origin_unsupported: PASSKEY_UNSUPPORTED
+    };
+    const serverMessageOf = (result: {code?: string}): string => PASSKEY_ERRORS[result.code ?? ''] ?? 'Unable to connect to the server.';
+    /** 브라우저가 패스키를 만들지 못한 이유. 인증서 오류를 NotAllowedError 보다 먼저 본다. */
+    const browserMessageOf = (error: unknown): string => {
+        if(isCertificateError(error)) return PASSKEY_UNSUPPORTED;
+        if(errorNameOf(error) === 'InvalidStateError') return PASSKEY_ERRORS.passkey_already_registered;
+        return 'The passkey was not created.';
+    };
+
+    const loadPasskeys = async () => {
+        const result = await MeCtrl.instance.passkeys();
+        if(result.success) passkeys = result.passkeys;
+    };
+
+    const openAddPasskey = () => {
+        passkeyName = defaultPasskeyName();
+        passkeyPassword = '';
+        passkeyError = '';
+        passkeyOpen = true;
+    };
+
+    const addPasskey = () => run(async () => {
+        passkeyError = '';
+        const options = await MeCtrl.instance.passkeyOptions(passkeyPassword);
+        if(!options.success) {
+            passkeyError = serverMessageOf(options);
+            return;
+        }
+        let response;
+        try {
+            response = await startRegistration({optionsJSON: options.options});
+        } catch(error) {
+            // 사용자가 브라우저 창을 닫거나 기기가 거절하면 브라우저는 예외로 알린다(고를 수 없는 계약이다).
+            passkeyError = browserMessageOf(error);
+            return;
+        }
+        const saved = await MeCtrl.instance.registerPasskey(passkeyName, response);
+        if(!saved.success) {
+            passkeyError = serverMessageOf(saved);
+            return;
+        }
+        passkeyOpen = false;
+        // 이슈 338: 이 기기에 패스키가 생겼으므로 다음 로그인 화면은 패스키를 먼저 보인다.
+        rememberPasskeyPreferred();
+        toast.push({tone: 'pulse', message: 'Passkey added.'});
+        await loadPasskeys();
+    });
+
+    const removePasskey = () => run(async () => {
+        const target = removeTarget;
+        removeOpen = false;
+        if(!target) return;
+        const result = await MeCtrl.instance.removePasskey(target.id);
+        if(!result.success) {
+            toast.push({tone: 'alarm', message: result.message});
+            return;
+        }
+        toast.push({tone: 'pulse', message: 'Passkey removed.'});
+        await loadPasskeys();
+    });
+
     const shortAgent = (agent: string): string => agent.length > UA_LIMIT ? agent.slice(0, UA_LIMIT) + '…' : agent;
 
     onMount(() => { void run(loadSessions); });
+    // 슈퍼유저 MFA 등록 강제 중에는 서버가 패스키 경로를 막으므로 카드를 숨기고 목록도 읽지 않는다. 등록을 마치면 한 번 읽는다.
+    let passkeysLoaded = false;
+    $effect(() => {
+        if(!$me || $me.mustEnrollMfa || passkeysLoaded) return;
+        passkeysLoaded = true;
+        void run(loadPasskeys);
+    });
 </script>
 
 {#if $me}
@@ -240,6 +332,37 @@
                 </div>
             </Card>
         </section>
+
+        {#if !$me.mustEnrollMfa}
+        <section id="me-passkeys">
+            <Card label="Passkeys">
+                <div style="display: flex; flex-direction: column; gap: var(--s-3);">
+                    {#if passkeys.length === 0}
+                        <p id="passkey-empty" style="margin: 0;">No passkeys yet.</p>
+                    {:else}
+                        <ul id="passkey-list" style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-3);">
+                            {#each passkeys as passkey (passkey.id)}
+                                <li class="passkey-row" data-passkey-id={passkey.id} style="display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-3); align-items: center; justify-content: space-between;">
+                                    <div style="display: flex; flex-direction: column; gap: var(--s-1); min-width: 0;">
+                                        <div style="display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center;">
+                                            <span style="overflow-wrap: anywhere;">{passkey.name}</span>
+                                            {#if passkey.backedUp}<Chip tone="neutral">synced</Chip>{/if}
+                                        </div>
+                                        <div class="mono" style="color: var(--ink-2);">
+                                            added {new Date(passkey.createdAt).toLocaleDateString()} · {passkey.lastUsedAt === null ? 'never used' : `last used ${relativeTime(passkey.lastUsedAt, now)}`}
+                                        </div>
+                                    </div>
+                                    <span class="passkey-remove"><Button size="sm" variant="danger" disabled={pending} onclick={() => { removeTarget = passkey; removeOpen = true; }}>Remove</Button></span>
+                                </li>
+                            {/each}
+                        </ul>
+                    {/if}
+                    <div><span id="passkey-add"><Button variant="primary" disabled={pending || !passkeySupported} onclick={openAddPasskey}>Add a passkey</Button></span></div>
+                    <p id="passkey-hint" style="margin: 0; color: var(--ink-2); font-size: var(--fs-sm);">{passkeySupported ? PASSKEY_CONDITION : PASSKEY_UNSUPPORTED}</p>
+                </div>
+            </Card>
+        </section>
+        {/if}
 
         <section id="me-sessions">
             <Card label="Sessions">
@@ -299,6 +422,30 @@
         {:else}
             <span id="mfa-done"><Button variant="primary" disabled={!saved} onclick={finishEnroll}>Done</Button></span>
         {/if}
+    {/snippet}
+</Modal>
+
+<Modal bind:open={passkeyOpen} title="Add a passkey" closeOnOverlay={false} class="passkey-add-modal">
+    <div style="display: flex; flex-direction: column; gap: var(--s-3);">
+        <Field label="Name" for="passkey-name">
+            <TextInput id="passkey-name" autocomplete="off" bind:value={passkeyName} />
+        </Field>
+        <Field label="Password" for="passkey-password">
+            <TextInput id="passkey-password" type="password" autocomplete="current-password" bind:value={passkeyPassword} />
+        </Field>
+        <p id="passkey-error" role="alert" style="min-height: 1.5em; margin: 0; color: var(--alarm); font-size: var(--fs-sm);">{passkeyError}</p>
+    </div>
+    {#snippet footer()}
+        <span id="passkey-cancel"><Button onclick={() => (passkeyOpen = false)}>Cancel</Button></span>
+        <span id="passkey-continue"><Button variant="primary" disabled={pending} onclick={() => { void addPasskey(); }}>Continue</Button></span>
+    {/snippet}
+</Modal>
+
+<Modal bind:open={removeOpen} title="Remove passkey" class="passkey-remove-modal">
+    Remove the passkey "{removeTarget?.name}"? You can't sign in with it after this.
+    {#snippet footer()}
+        <Button onclick={() => (removeOpen = false)}>Cancel</Button>
+        <span id="passkey-remove-confirm"><Button variant="danger" onclick={() => { void removePasskey(); }}>Remove</Button></span>
     {/snippet}
 </Modal>
 
