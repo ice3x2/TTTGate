@@ -203,6 +203,26 @@ test("Toast 가 표시되고 자동으로 사라지며, 최대 3개까지만 쌓
     }
 }, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
+// #338 REQ-15: 동작 버튼을 누르면 함수가 한 번 돌고 알림이 닫힌다. 같은 key 의 새 알림은 앞의 알림을 대신한다.
+test("Toast 의 동작 버튼은 함수를 부르고 닫히며, 같은 key 의 알림은 하나만 남는다", async () => {
+    const app = await startAdminBrowser();
+    try {
+        await app.page.setViewportSize({width: 400, height: 800});
+        await app.page.goto(`${app.url}/test/ui-fixture.html`);
+        const push = app.page.getByRole("button", {name: "Push undo toast"});
+        await push.click();
+        await push.click();
+        await app.page.locator(".toast .msg").filter({hasText: "Undo toast 2"}).waitFor({state: "visible"});
+        expect(await app.page.locator(".toast").count()).toBe(1);
+        await app.page.locator(".toast").getByRole("button", {name: "Undo", exact: true}).click();
+        await app.page.waitForFunction(() => document.querySelector("#undo-echo")?.textContent === "1", undefined, {timeout: 5_000});
+        await app.page.locator(".toast").waitFor({state: "detached", timeout: 5_000});
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, ADMIN_BROWSER_TEST_TIMEOUT_MS);
+
 test("Tabs 에서 탭을 고르면 active 클래스와 aria-selected, echo 가 갱신된다", async () => {
     const app = await startAdminBrowser();
     try {

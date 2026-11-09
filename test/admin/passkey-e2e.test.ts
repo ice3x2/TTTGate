@@ -49,6 +49,9 @@ const openWithAuthenticator = async (url: string): Promise<{page: Page; cdp: CDP
 };
 
 const passwordLogin = async (page: Page, username: string, password: string) => {
+    // #338: 이 기기에서 패스키를 쓴 뒤에는 비밀번호 칸이 접혀 있다.
+    await page.locator("#login-password, #login-use-password").first().waitFor({state: "visible", timeout: 30_000});
+    if(await page.locator("#login-use-password").count() > 0) await page.locator("#login-use-password").click();
     await page.locator("#login-password").waitFor({state: "visible", timeout: 30_000});
     await page.locator("#login-username").fill(username);
     await page.locator("#login-password").fill(password);
@@ -59,7 +62,7 @@ const passwordLogin = async (page: Page, username: string, password: string) => 
 const signOut = async (page: Page) => {
     await page.locator('[aria-label="Open menu"]').click();
     await page.locator("#nav-sign-out").click();
-    await page.locator("#login-password").waitFor({state: "visible", timeout: 10_000});
+    await page.locator("#login-passkey").waitFor({state: "visible", timeout: 10_000});
 };
 
 test("가상 인증기로 등록하고, 패스키로 로그인하고, 지우고, 관리자가 초기화한다", () => withMfaServer(async (f) => {
@@ -78,11 +81,16 @@ test("가상 인증기로 등록하고, 패스키로 로그인하고, 지우고,
     await page.locator("#passkey-continue button").click();
     await page.locator(".passkey-row").filter({hasText: "Test laptop"}).waitFor({state: "visible", timeout: 15_000});
     expect(IdentityStore.instance.user(f.idOf("alice"))!.passkeys).toHaveLength(1);
+    // #338: 이 기기에서 패스키를 등록했으므로 다음 로그인 화면은 패스키를 먼저 보인다.
+    expect(await page.evaluate(() => localStorage.getItem("tttgate.passkeyPreferred"))).toBe("1");
 
     // 2. 로그아웃하고 패스키로 로그인한다. TOTP·비밀번호를 묻지 않는다.
     await signOut(page);
+    expect(await page.locator("#login-password").count()).toBe(0);
     await page.locator("#login-passkey button").click();
-    await page.waitForFunction(() => location.hash === "#/tunnels", undefined, {timeout: 15_000});
+    // #338: 로그아웃하면 해시가 이미 #/tunnels 다. 로그인 화면이 사라질 때까지 기다린다.
+    await page.waitForFunction(() => !document.querySelector("#login-passkey") && document.querySelector("header h1")?.textContent === "Tunnels",
+        undefined, {timeout: 15_000});
     expect(f.sink.events.filter((event) => event.type === "login_success").at(-1)?.detail).toMatchObject({method: "passkey"});
 
     // 3. 내 계정에서 지운다.

@@ -68,17 +68,20 @@ const TUNNEL_OPTIONS: Array<TunnelingOption> = [
 const startedAt = Date.now();
 const calls: Array<{method: string; args: unknown[]}> = [];
 const active = new Map<number, {active: boolean; activeTimeout: number; activeStart: number}>();
+// #338: 테스트가 tunnelState IPC 로 바꾸는 포트별 상태(연결 수·리스너·클라이언트 연결).
+const overrides = new Map<number, {sessions?: number; online?: boolean; clientConnected?: boolean}>();
 
 const OK = () => ({success: true, partial: false, warnings: [], failedScopes: [], restartRequiredScopes: []});
 
 const record = (method: string, args: unknown[]): void => { calls.push({method, args}); };
 
 // 반환 타입을 실제 정의로 못박아 둔다 — 서버 쪽 타입이 늘면 여기서 컴파일이 깨져 드러난다.
-const statusOf = (port: number): ExternalPortServerStatus => ({
+const statusOf = (port: number): ExternalPortServerStatus & {clientConnected: boolean} => ({
     port,
-    online: true,
+    online: overrides.get(port)?.online ?? true,
     active: active.get(port)?.active ?? true,
-    sessions: 0,
+    sessions: overrides.get(port)?.sessions ?? 0,
+    clientConnected: overrides.get(port)?.clientConnected ?? true,
     rx: 0,
     tx: 0,
     // 화면이 Date.now() - uptime 으로 경과를 계산하므로 uptime 은 시작 시각이다.
@@ -313,6 +316,10 @@ const stub = {
         if(message && message.type === "enrollmentDelays") {
             enrollmentDelays = [...message.delays];
             process.send?.({type: "enrollmentDelays"});
+        }
+        if(message && message.type === "tunnelState") {
+            overrides.set(message.port, {...overrides.get(message.port), ...message.patch});
+            process.send?.({type: "tunnelState"});
         }
         if(message && message.type === "advanceClock") {
             clockOffset += message.ms;

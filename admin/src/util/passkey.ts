@@ -21,6 +21,20 @@ export const isCertificateError = (error: unknown): boolean => {
     return error.name === 'SecurityError' || (error.name === 'NotAllowedError' && /certificate/i.test(error.message));
 };
 
+const PREFERRED_KEY = 'tttgate.passkeyPreferred';
+
+/**
+ * 이슈 338: 이 브라우저에서 패스키 로그인이나 등록이 성공한 적이 있는가. 그렇다면 로그인 화면이 패스키를 먼저 보인다.
+ * localStorage 는 브라우저 정책으로 막힐 수 있다. 이 접근만 예외로 감싸고, 읽지 못하면 없는 것으로 본다.
+ */
+export const passkeyPreferred = (): boolean => {
+    try { return localStorage.getItem(PREFERRED_KEY) === '1'; } catch { return false; }
+};
+
+export const rememberPasskeyPreferred = (): void => {
+    try { localStorage.setItem(PREFERRED_KEY, '1'); } catch { /* 저장하지 못하면 다음에도 비밀번호 칸을 먼저 보인다 */ }
+};
+
 export const errorNameOf = (error: unknown): string => error instanceof Error ? error.name : '';
 
 /** 등록 창의 이름 칸에 미리 넣을 기기 종류. */

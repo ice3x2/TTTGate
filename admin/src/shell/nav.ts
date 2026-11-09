@@ -4,9 +4,10 @@ import type {Route, Screen} from '../router';
 export type Section = 'status' | 'tunnels' | 'server' | 'users' | 'groups' | 'security' | 'audit' | 'sessions' | 'me';
 export type NavItem = {hash: string; title: string; screen: Screen; section: Section};
 
+// 이슈 338: 로그인하면 터널 목록이 먼저 보인다. 그래서 Tunnels 가 첫 항목이고 defaultHash 의 첫 후보다.
 export const NAV: ReadonlyArray<NavItem> = [
-    {hash: '#/status',  title: 'Status',          screen: 'status',  section: 'status'},
     {hash: '#/tunnels', title: 'Tunnels',         screen: 'tunnels', section: 'tunnels'},
+    {hash: '#/status',  title: 'Status',          screen: 'status',  section: 'status'},
     {hash: '#/server',  title: 'Server settings', screen: 'server',  section: 'server'},
     // #213: 신뢰 클라이언트 관리. 자격 증명을 만드는 화면이라 서버 설정과 같은 섹션(server:manage)이다.
     {hash: '#/clients', title: 'Trusted clients', screen: 'clients', section: 'server'},
@@ -32,6 +33,12 @@ export function visibleNav(sections: string[]): NavItem[] {
 
 export function defaultHash(sections: string[]): string {
     return visibleNav(sections)[0]?.hash ?? '#/me';
+}
+
+/** 사용자가 고르지 않은 기본 해시. 권한이 없으면 #/denied 가 아니라 defaultHash 로 보낸다(이슈 338). */
+const DEFAULT_HASHES: ReadonlySet<string> = new Set(['', '#', '#/', '#/status', '#/tunnels']);
+export function isDefaultHash(hash: string): boolean {
+    return DEFAULT_HASHES.has(hash);
 }
 
 export function chrome(route: Route): {title: string; back?: string} {

@@ -176,10 +176,12 @@ class ServerOptionCtrl {
     }
 
 
-    public async loadTunnelingStatus() : Promise<{serverTime: number,statuses: Array<TunnelingStatus>}> {
+    /** 이슈 338: signal 로 멈춘 읽기를 끊을 수 있다(상태 폴링의 기한). */
+    public async loadTunnelingStatus(signal?: AbortSignal) : Promise<{serverTime: number,statuses: Array<TunnelingStatus>}> {
         let res = await fetch("/api/externalServerStatuses", {
             method: "GET",
-            credentials: "same-origin"
+            credentials: "same-origin",
+            signal
         });
         let json = await res.json();
         if(!json || res.status == 401) {
@@ -188,7 +190,8 @@ class ServerOptionCtrl {
         return {serverTime : json['serverTime'] as number, statuses:  json['statuses'] as Array<TunnelingStatus>};
     }
 
-    public async activeExternalPortServer(active: boolean, port: number, timeout?: number) : Promise<{success: boolean, message: string}> {
+    /** 실패하면 status 가 HTTP 상태다. 네트워크 실패는 0 이다(adminRequest 의 실패 값). */
+    public async activeExternalPortServer(active: boolean, port: number, timeout?: number) : Promise<{success: boolean, message: string, status?: number, generated?: boolean}> {
 
         timeout = timeout ?? 0;
         return adminRequest(`/api/tunneling/active/${port}`, {

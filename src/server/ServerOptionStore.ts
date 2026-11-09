@@ -1,6 +1,6 @@
 import Environment from "../Environment";
 import File from "../util/File";
-import {ControlProtocolMode, DEFAULT_KEY, DEFAULT_SESSION_TTL_MS, resolveSessionTtlMs, resolveAuditRetentionDays, resolveAuditQueueSize, resolveDenialLogRetentionDays, resolveLogLevel, resolveAdminAllowedOrigins, resolveCloseStallMs, resolveCloseGraceMs, HttpOption, ServerOption, TunnelingOption, normalizeRateLimit, defaultRateLimit, BlocklistEntry} from "../types/TunnelingOption";
+import {ControlProtocolMode, DEFAULT_KEY, DEFAULT_SESSION_TTL_MS, resolveSessionTtlMs, resolveAuditRetentionDays, resolveAuditQueueSize, resolveDenialLogRetentionDays, resolveTunnelName, resolveLogLevel, resolveAdminAllowedOrigins, resolveCloseStallMs, resolveCloseGraceMs, HttpOption, ServerOption, TunnelingOption, normalizeRateLimit, defaultRateLimit, BlocklistEntry} from "../types/TunnelingOption";
 import YAML from "yaml";
 import Files, {AtomicFileValue} from "../util/Files";
 import ObjectUtil from "../util/ObjectUtil";
@@ -604,6 +604,14 @@ class ServerOptionStore {
         if(!Number.isSafeInteger(option.forwardPort) || option.forwardPort < 1 || option.forwardPort > 65535) {
             return {success: false,forwardPort:option.forwardPort, message: "forwardPort must be an integer from 1 to 65535"};
         }
+        // #338: 이름. 새 설정은 틀린 이름을 거절하고, 파일에서 읽을 때는 그 이름만 버린다(서버 기동을 막지 않는다).
+        const name = resolveTunnelName(option.name);
+        if(!name.success && normalizationMode !== "legacy-load") {
+            return {success: false, forwardPort: option.forwardPort, message: name.message};
+        }
+        if(!name.success) logger.warn(`forwardPort ${option.forwardPort}: ignored an invalid tunnel name in server.yaml`);
+        if(name.success && name.name !== undefined) option.name = name.name;
+        else delete option.name;
         const buffer = this.normalizeServerBufferLimit(option);
         if(!buffer.success) return {...buffer, forwardPort: option.forwardPort};
         const rateLimit = normalizeRateLimit(option.protocol, option.rateLimit);

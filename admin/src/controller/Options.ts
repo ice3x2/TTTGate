@@ -39,6 +39,8 @@ type TunnelingStatus = {
     /** U5-06: 거절 건수와 차단된 IP 수. */
     rejected?: {geo: number; rateLimit: number},
     bannedIps?: number,
+    /** 이슈 338: 이 터널을 맡을 수 있는 클라이언트가 연결되어 있는가. 옛 서버 응답에는 없다(연결된 것으로 본다). */
+    clientConnected?: boolean,
 }
 
 
@@ -53,6 +55,8 @@ type ServerOption = {
 
 type Options = {
     forwardPort: number,
+    /** 이슈 338: 화면에 보이는 이름(선택, 1~40자). */
+    name?: string,
     protocol?: Protocol,
     httpOption: HttpOption,
     destinationAddress: string,

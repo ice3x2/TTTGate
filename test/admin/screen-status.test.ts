@@ -15,6 +15,14 @@ const SIZE = String.raw`\d+(\.\d+)?(B|KiB|MiB|GiB|TiB)`;
 const MEMORY_MESSAGE = new RegExp(`^${SIZE}/${SIZE}$`);
 
 // 게이지는 첫 폴링 응답이 도착해야 나타난다.
+// #338: 로그인하면 터널 목록이 먼저다. 이 파일의 테스트는 Status 화면에서 시작한다.
+const startStatus = async () => {
+    const app = await startAdminApp();
+    await app.page.evaluate(() => { location.hash = "#/status"; });
+    await app.page.waitForFunction(() => location.hash === "#/status", undefined, {timeout: 10_000});
+    return app;
+};
+
 const waitForGauges = (page: Page) =>
     page.waitForFunction(() => document.querySelectorAll(".gauge-title").length === 4, undefined, {timeout: 15_000});
 
@@ -30,7 +38,7 @@ test("옛 ServerStatusLayout 과 SysinfoPopup 이 layout 에 남아 있지 않�
 });
 
 test("상태 화면이 게이지 4개와 가동 시간을 실제 수치로 그린다", async () => {
-    const app = await startAdminApp();
+    const app = await startStatus();
     try {
         await waitForGauges(app.page);
         expect(await app.page.locator(".gauge-title").allTextContents()).toEqual(["CPU", "Memory", "Heap", "Buffer"]);
@@ -49,7 +57,7 @@ test("상태 화면이 게이지 4개와 가동 시간을 실제 수치로 그�
 }, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("INFO 를 누르면 시스템 정보 모달이 세 절을 보여주고 OK 로 닫힌다", async () => {
-    const app = await startAdminApp();
+    const app = await startStatus();
     try {
         await waitForGauges(app.page);
         await app.page.getByRole("button", {name: "INFO", exact: true}).click();
@@ -70,7 +78,7 @@ test("INFO 를 누르면 시스템 정보 모달이 세 절을 보여주고 OK �
 }, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("클라이언트 카드가 스텁 값을 그리고 카드를 누르면 그 클라이언트의 시스템 정보가 열린다", async () => {
-    const app = await startAdminApp();
+    const app = await startStatus();
     try {
         await app.page.waitForFunction(() => document.querySelectorAll(".client-list > li").length === 1,
             undefined, {timeout: 15_000});
@@ -98,7 +106,7 @@ test("클라이언트 카드가 스텁 값을 그리고 카드를 누르면 그 
 }, ADMIN_APP_TEST_TIMEOUT_MS);
 
 test("상태 화면은 1초마다 다시 읽고 화면을 떠나면 폴링을 멈춘다", async () => {
-    const app = await startAdminApp();
+    const app = await startStatus();
     try {
         let requests = 0;
         app.page.on("request", (request) => {

@@ -14,7 +14,13 @@ const isPath = (method: string, pathname: string) => (message: Request | Respons
     return request.method() === method && new URL(request.url()).pathname === pathname;
 };
 
+// #338: 로그인하면 이미 #/tunnels 에 있다. 같은 해시를 다시 넣으면 화면이 다시 그려지지 않으므로 내 계정 화면을 거쳐 다시 연다.
+// 새로 고침은 쓰지 않는다. 테스트가 미리 기다리던 응답이 옛 문서의 것이 되어 본문을 읽을 수 없게 된다.
 const openTunnels = async (page: Page) => {
+    if(await page.evaluate(() => location.hash) === "#/tunnels") {
+        await page.evaluate(() => { location.hash = "#/me"; });
+        await page.waitForFunction(() => document.querySelector("h1")?.textContent === "My account", undefined, {timeout: 10_000});
+    }
     await page.evaluate(() => { location.hash = "#/tunnels"; });
     await page.waitForFunction(() => document.querySelector("h1")?.textContent === "Tunnels", undefined, {timeout: 10_000});
 };
@@ -43,122 +49,168 @@ const nextStatusResponse = async (page: Page) => {
     await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
 };
 
-test("with-tunnels 목록이 터널마다 카드 하나에 포트·목적지·프로토콜·상태를 그린다", async () => {
+// ── #338 목록: 한 번 눌러 켜고 끄기 ─────────────────────────────────────────────
+
+const row = card;
+const statusText = (page: Page, port: number) => row(page, port).locator(".tunnel-status");
+const switchOf = (page: Page, port: number) => row(page, port).getByRole("switch");
+const waitStatus = (page: Page, port: number, pattern: RegExp) => page.waitForFunction(([target, source]) =>
+    new RegExp(source as string).test(document.querySelector(`li[data-port="${target}"] .tunnel-status`)?.textContent ?? ""),
+    [port, pattern.source] as const, {timeout: 10_000});
+const waitChecked = (page: Page, port: number, checked: boolean) => page.waitForFunction(([target, value]) =>
+    document.querySelector(`li[data-port="${target}"] [role="switch"]`)?.getAttribute("aria-checked") === String(value),
+    [port, checked] as const, {timeout: 10_000});
+const undoToast = (page: Page, text: string) => page.locator(".toast").filter({hasText: text});
+
+test("목록은 터널마다 제목·상태 한 줄·스위치를 그리고, 켜진 수를 위에 보인다", async () => {
     const app = await startAdminApp({fixture: "with-tunnels"});
     try {
         await openTunnels(app.page);
-        await app.page.waitForFunction(() => document.querySelectorAll("li[data-port]").length === 2, undefined, {timeout: 10_000});
+        await waitStatus(app.page, 20001, /^On/);
         expect(await app.page.locator("li[data-port]").count()).toBe(2);
-        expect(await card(app.page, 20001).isVisible()).toBe(true);
-        expect(await card(app.page, 20002).isVisible()).toBe(true);
+        expect(await row(app.page, 20001).locator(".tunnel-title").textContent()).toBe(":20001 → 127.0.0.1:9");
+        expect(await row(app.page, 20002).locator(".tunnel-title").textContent()).toBe(":20002 → 127.0.0.1:8080");
+        // 스텁은 시작할 때 3600초로 켠다. 소유자가 없는 설정은 migrated 다.
+        expect(await statusText(app.page, 20001).textContent()).toMatch(/^On · \d+m left · migrated$/);
+        expect(await app.page.locator("#tunnel-summary").textContent()).toBe("2 of 2 on");
+        expect(await switchOf(app.page, 20001).getAttribute("aria-checked")).toBe("true");
+        expect(await switchOf(app.page, 20001).getAttribute("aria-label")).toBe(":20001 → 127.0.0.1:9");
+        // 목록에는 프로토콜 칩·RX/TX·타이머가 없다(편집 화면으로 옮겼다).
+        expect(await row(app.page, 20001).locator(".chip").count()).toBe(0);
+        expect(await row(app.page, 20001).locator(".timer-text").count()).toBe(0);
+        // 스위치 터치 영역은 44×44 이상이다.
+        const box = await row(app.page, 20001).locator(".tunnel-switch").boundingBox();
+        expect(box!.width).toBeGreaterThanOrEqual(44);
+        expect(box!.height).toBeGreaterThanOrEqual(44);
 
-        const head = await card(app.page, 20001).locator(".tunnel-head").textContent();
-        expect(head).toContain("20001");
-        expect(head).toContain("127.0.0.1:9");
-        expect(await card(app.page, 20001).locator(".chip").textContent()).toBe("TCP");
-        expect(await card(app.page, 20002).locator(".tunnel-head").textContent()).toContain("127.0.0.1:8080");
-        expect(await card(app.page, 20002).locator(".chip").textContent()).toBe("HTTP");
-
-        for(const port of [20001, 20002]) {
-            await card(app.page, port).locator(".badge").filter({hasText: "Online"}).waitFor({state: "visible", timeout: 10_000});
-            expect(await card(app.page, port).locator(".badge").textContent()).toBe("Online");
-            // 스텁의 sessions·rx·tx 는 0 이다. 가동 시간 표기는 startupTime 이 내는 네 형태 중 하나다.
-            expect(await card(app.page, port).locator(".tunnel-stats").textContent())
-                .toMatch(/^Uptime (\d+s|\d+m|\d+h, \d+m|\d+d, \d+h) · Sessions 0 · RX 0B · TX 0B$/);
-        }
+        await app.tunnelState(20001, {online: false});
+        await waitStatus(app.page, 20001, /^Can't open port 20001/);
+        expect(await switchOf(app.page, 20001).isDisabled()).toBe(true);
+        await app.tunnelState(20001, {online: true, clientConnected: false, sessions: 2});
+        await waitStatus(app.page, 20001, /^On · client offline · 2 connections · \d+m left · migrated$/);
+        expect(await statusText(app.page, 20001).locator(".warn").first().textContent()).toBe("client offline");
         expect(app.errors).toEqual([]);
     } finally {
         await app.close();
     }
 }, ADMIN_APP_TEST_TIMEOUT_MS);
 
-test("활성 터널은 켜진 스위치와 남은 시간 타이머를 보여준다", async () => {
+test("연결이 없으면 한 번에 끄고, Undo 는 남은 시간으로 다시 켜며, 꺼진 터널은 한 번에 무기한으로 켠다", async () => {
     const app = await startAdminApp({fixture: "with-tunnels"});
     try {
         await openTunnels(app.page);
-        const tunnel = card(app.page, 20001);
-        const toggle = app.page.getByRole("switch", {name: "Activation 20001", exact: true});
-        await toggle.waitFor({state: "visible", timeout: 10_000});
-        expect(await toggle.getAttribute("aria-checked")).toBe("true");
-        expect(await tunnel.getByText("Timeout", {exact: true}).isVisible()).toBe(true);
-        // 남은 초 = activeStart + activeTimeout·1000 − serverTime 이다. 분 값은 드라이버가 뜬 뒤 흐른 시간에 따라
-        // 달라지므로 상수로 두지 않고 서버가 준 값에서 계산해 비교한다. 시가 0 인 동안은 {m}m {s}s 로 찍힌다.
-        const text = await tunnel.locator(".timer-text").textContent();
-        expect(text).toMatch(/^\d+m \d+s$/);
-        const {serverTime, status} = await statusSnapshot(app.page, 20001);
-        const remaining = Math.floor((status.activeStart + status.activeTimeout * 1000 - serverTime) / 1000);
-        expect(Math.abs(shownSeconds(text) - remaining)).toBeLessThanOrEqual(3);
+        await waitStatus(app.page, 20001, /^On/);
+        const off = app.page.waitForResponse(isPath("POST", "/api/tunneling/active/20001"), {timeout: 10_000});
+        await switchOf(app.page, 20001).click();
+        expect((await off).request().postDataJSON()).toEqual({active: false, timeout: 0});
+        await waitChecked(app.page, 20001, false);
+        await waitStatus(app.page, 20001, /^Off/);
+        expect(await app.page.locator("#tunnel-summary").textContent()).toBe("1 of 2 on");
+
+        // 끄기를 되돌리면 끈 순간에 남아 있던 시간으로 켠다(사용 시간이 늘지 않는다).
+        const undo = app.page.waitForResponse(isPath("POST", "/api/tunneling/active/20001"), {timeout: 10_000});
+        await undoToast(app.page, ":20001 → 127.0.0.1:9 is off").getByRole("button", {name: "Undo", exact: true}).click();
+        const undoBody = (await undo).request().postDataJSON();
+        expect(undoBody.active).toBe(true);
+        expect(undoBody.timeout).toBeGreaterThan(3000);
+        expect(undoBody.timeout).toBeLessThanOrEqual(3600);
+        await waitChecked(app.page, 20001, true);
+        // 되돌리기는 알림을 다시 띄우지 않는다.
+        expect(await app.page.locator(".toast").count()).toBe(0);
+
+        // 꺼진 터널을 켜면 확인 없이 timeout 0(무기한, 그룹 상한은 서버가 적용)으로 요청한다.
+        await switchOf(app.page, 20002).click();
+        await waitChecked(app.page, 20002, false);
+        await undoToast(app.page, "is off").waitFor({state: "visible", timeout: 10_000});
+        const on = app.page.waitForResponse(isPath("POST", "/api/tunneling/active/20002"), {timeout: 10_000});
+        await switchOf(app.page, 20002).click();
+        expect((await on).request().postDataJSON()).toEqual({active: true, timeout: 0});
+        await waitChecked(app.page, 20002, true);
+        // 되돌리기 알림은 하나만 남는다.
+        await undoToast(app.page, ":20002 → 127.0.0.1:8080 is on").waitFor({state: "visible", timeout: 10_000});
+        expect(await app.page.locator(".toast").count()).toBe(1);
+        const undoOn = app.page.waitForResponse(isPath("POST", "/api/tunneling/active/20002"), {timeout: 10_000});
+        await undoToast(app.page, "is on").getByRole("button", {name: "Undo", exact: true}).click();
+        expect((await undoOn).request().postDataJSON()).toMatchObject({active: false});
+        await waitChecked(app.page, 20002, false);
+
+        const calls = (await app.calls()).filter((call) => call.method === "activeExternalPortServer" || call.method === "inactiveExternalPortServer");
+        expect(calls.map((call) => call.method)).toEqual(["inactiveExternalPortServer", "activeExternalPortServer", "inactiveExternalPortServer",
+            "activeExternalPortServer", "inactiveExternalPortServer"]);
+        expect(calls[3].args).toEqual([20002, 0]);
         expect(app.errors).toEqual([]);
     } finally {
         await app.close();
     }
 }, ADMIN_APP_TEST_TIMEOUT_MS);
 
-test("스위치를 끄면 불리언 active=false 요청이 나가고 스텁과 화면이 함께 비활성으로 바뀐다", async () => {
+test("연결이 있으면 끄기 전에 묻고, 실패하면 되돌리며, 처리 중에는 그 행만 잠근다", async () => {
     const app = await startAdminApp({fixture: "with-tunnels"});
     try {
         await openTunnels(app.page);
-        const tunnel = card(app.page, 20001);
-        const toggle = app.page.getByRole("switch", {name: "Activation 20001", exact: true});
-        await toggle.waitFor({state: "visible", timeout: 10_000});
+        await app.tunnelState(20001, {sessions: 2});
+        await waitStatus(app.page, 20001, /2 connections/);
 
-        const posted = app.page.waitForResponse(isPath("POST", "/api/tunneling/active/20001"), {timeout: 10_000});
-        await toggle.click();
-        const response = await posted;
-        // 본문 전체를 비교한다. active 가 문자열 "false" 이거나 timeout 이 빠지면 여기서 드러난다.
-        expect(response.request().postDataJSON()).toEqual({active: false, timeout: 3600});
-        expect(response.status()).toBe(200);
-
-        await app.page.waitForFunction(() => document.querySelector('[aria-label="Activation 20001"]')?.getAttribute("aria-checked") === "false",
-            undefined, {timeout: 2_000});
-        await tunnel.getByText("Timeout", {exact: true}).waitFor({state: "detached", timeout: 2_000});
-        await nextStatusResponse(app.page);
-        expect(await toggle.getAttribute("aria-checked")).toBe("false");
-        expect(await tunnel.getByText("Timeout", {exact: true}).count()).toBe(0);
-
-        const calls = await app.calls();
-        expect(calls.filter((call) => call.method === "inactiveExternalPortServer")).toEqual([{method: "inactiveExternalPortServer", args: [20001]}]);
-        expect(calls.filter((call) => call.method === "activeExternalPortServer")).toEqual([]);
-        expect(await stubStatus(app.page, 20001)).toMatchObject({port: 20001, active: false});
-        expect(await stubStatus(app.page, 20002)).toMatchObject({port: 20002, active: true});
-
-        expect(app.errors).toEqual([]);
-    } finally {
-        await app.close();
-    }
-}, ADMIN_APP_TEST_TIMEOUT_MS);
-
-test("타이머에서 10분을 고르면 active=true·timeout=600 요청이 나가고 남은 시간이 그 값에서 다시 센다", async () => {
-    const app = await startAdminApp({fixture: "with-tunnels"});
-    try {
-        // 시계를 멈춰 폴링 틱을 없앤다. 그러면 아래 표기 갱신은 활성 변경 직후의 상태 재조회에서만 올 수 있다.
-        await app.page.clock.install();
-        await app.page.clock.pauseAt(Date.now() + 1_000);
-        await openTunnels(app.page);
-        const tunnel = card(app.page, 20002);
-        await tunnel.locator(".timer-text").waitFor({state: "visible", timeout: 10_000});
-        await tunnel.locator(".timer-text").click();
-
-        const dialog = app.page.getByRole("dialog", {name: "Tunneling activity restriction time"});
+        await switchOf(app.page, 20001).click();
+        const dialog = app.page.getByRole("dialog", {name: "Turn off :20001 → 127.0.0.1:9?"});
         await dialog.waitFor({state: "visible", timeout: 10_000});
-        await dialog.getByLabel("Days", {exact: true}).fill("0");
-        await dialog.getByLabel("Hours", {exact: true}).fill("0");
-        await dialog.getByLabel("Minutes", {exact: true}).fill("10");
+        expect(await dialog.getByText("2 connections will be cut.", {exact: true}).isVisible()).toBe(true);
+        // 확인 창이 열린 동안과 취소 뒤에는 원래 상태(켜짐)다.
+        expect(await switchOf(app.page, 20001).getAttribute("aria-checked")).toBe("true");
+        await dialog.getByRole("button", {name: "Cancel", exact: true}).click();
+        await dialog.waitFor({state: "hidden", timeout: 10_000});
+        expect(await switchOf(app.page, 20001).getAttribute("aria-checked")).toBe("true");
+        expect((await app.calls()).filter((call) => call.method === "inactiveExternalPortServer")).toEqual([]);
 
-        const posted = app.page.waitForResponse(isPath("POST", "/api/tunneling/active/20002"), {timeout: 10_000});
-        await dialog.getByRole("button", {name: "OK", exact: true}).click();
-        const response = await posted;
-        expect(response.request().postDataJSON()).toEqual({active: true, timeout: 600});
-        expect(response.status()).toBe(200);
+        await switchOf(app.page, 20001).click();
+        await dialog.getByRole("button", {name: "Turn Off", exact: true}).click();
+        await waitChecked(app.page, 20001, false);
+        expect((await app.calls()).filter((call) => call.method === "inactiveExternalPortServer")).toEqual([{method: "inactiveExternalPortServer", args: [20001]}]);
 
-        await app.page.waitForFunction(() => /^(10m 0s|9m \d+s)$/.test(document.querySelector('li[data-port="20002"] .timer-text')?.textContent ?? ""),
-            undefined, {timeout: 2_000});
+        // 실패하면 스위치를 원래대로 돌리고 서버 문구를 알린다.
+        await app.page.route("**/api/tunneling/active/20002", (route) => route.fulfill({status: 400, contentType: "application/json",
+            body: JSON.stringify({success: false, message: "Unable to change listener active state"})}));
+        await switchOf(app.page, 20002).click();
+        await app.page.locator(".toast.alarm").filter({hasText: "Unable to change listener active state"}).waitFor({state: "visible", timeout: 10_000});
+        await waitChecked(app.page, 20002, true);
+        await app.page.unroute("**/api/tunneling/active/20002");
 
-        const calls = await app.calls();
-        expect(calls.filter((call) => call.method === "activeExternalPortServer")).toEqual([{method: "activeExternalPortServer", args: [20002, 600]}]);
-        expect(calls.filter((call) => call.method === "inactiveExternalPortServer")).toEqual([]);
-        expect(await stubStatus(app.page, 20002)).toMatchObject({port: 20002, active: true, activeTimeout: 600});
+        // 처리 중에는 그 행의 스위치만 잠기고 화면 전체를 덮지 않는다.
+        let release: () => void = () => {};
+        await app.page.route("**/api/tunneling/active/20002", async (route) => {
+            await new Promise<void>((resolve) => { release = resolve; });
+            await route.continue();
+        });
+        await switchOf(app.page, 20002).click();
+        await app.page.waitForFunction(() => document.querySelector('li[data-port="20002"] [role="switch"]')?.getAttribute("aria-busy") === "true",
+            undefined, {timeout: 10_000});
+        expect(await switchOf(app.page, 20002).getAttribute("aria-checked")).toBe("false");
+        // 처리 중에는 상태 줄도 요청한 쪽을 보인다(폴링 결과가 덮지 않는다).
+        expect(await statusText(app.page, 20002).textContent()).toBe("Turning off…");
+        expect(await switchOf(app.page, 20002).isDisabled()).toBe(true);
+        expect(await switchOf(app.page, 20001).isDisabled()).toBe(false);
+        expect(await app.page.locator(".loading").count()).toBe(0);
+        release();
+        await waitChecked(app.page, 20002, false);
+        await app.page.waitForFunction(() => document.querySelector('li[data-port="20002"] [role="switch"]')?.getAttribute("aria-busy") !== "true",
+            undefined, {timeout: 10_000});
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, ADMIN_APP_TEST_TIMEOUT_MS);
 
+test("상태를 읽지 못해도 폴링을 이어 가며, 5초가 넘으면 retrying 을 보이고 다시 읽으면 지운다", async () => {
+    const app = await startAdminApp({fixture: "with-tunnels"});
+    try {
+        await openTunnels(app.page);
+        await waitStatus(app.page, 20001, /^On/);
+        await app.page.route("**/api/externalServerStatuses", (route) => route.abort());
+        await app.page.locator("#tunnel-stale").filter({hasText: "Couldn't update · retrying"}).waitFor({state: "visible", timeout: 15_000});
+        // 마지막으로 읽은 상태는 그대로 보인다.
+        expect(await statusText(app.page, 20001).textContent()).toMatch(/^On/);
+        await app.page.unroute("**/api/externalServerStatuses");
+        await app.page.locator("#tunnel-stale").waitFor({state: "detached", timeout: 10_000});
         expect(app.errors).toEqual([]);
     } finally {
         await app.close();
@@ -237,18 +289,19 @@ test("터널 화면은 1초마다 상태를 다시 읽고 화면을 떠나면 �
         });
         const isStatus = isPath("GET", "/api/externalServerStatuses");
 
-        // 목록 로드 안의 1회와 폴링 시작 직후의 1회가 나간 뒤부터 센다.
+        // #338: 상태 폴링은 화면이 열리면 바로 한 번 읽는다(목록 로드와 따로). 그 1회가 나간 뒤부터 센다.
         await openTunnels(app.page);
-        await card(app.page, 20001).locator(".badge").filter({hasText: "Online"}).waitFor({state: "visible", timeout: 10_000});
-        for(let attempt = 0; requests < 2 && attempt < 100; attempt++) await app.page.waitForTimeout(50);
-        expect(requests).toBe(2);
+        await card(app.page, 20001).locator(".tunnel-status").filter({hasText: "On"}).waitFor({state: "visible", timeout: 10_000});
+        for(let attempt = 0; requests < 1 && attempt < 100; attempt++) await app.page.waitForTimeout(50);
+        await app.page.waitForTimeout(200);
+        expect(requests).toBe(1);
 
         for(let tick = 1; tick <= 2; tick++) {
             const polled = app.page.waitForRequest(isStatus, {timeout: 5_000});
             await app.page.clock.runFor(1_000);
             await polled;
             await app.page.waitForTimeout(200);
-            expect([tick, requests]).toEqual([tick, 2 + tick]);
+            expect([tick, requests]).toEqual([tick, 1 + tick]);
         }
 
         await app.page.evaluate(() => { location.hash = "#/status"; });
@@ -400,7 +453,7 @@ test("TLS 를 켜면 자체 서명 인증서 허용 체크 상자가 보이고 �
 }, ADMIN_APP_TEST_TIMEOUT_MS);
 
 // #282: 인증서 검증을 끈 터널은 목록 카드에 표시가 붙고, 다른 터널에는 없다.
-test("인증서 검증을 끈 터널은 목록 카드에 표시가 붙는다 (AC-1, AC-2)", async () => {
+test("인증서 검증을 끈 터널은 목록의 상태 줄에 경고가 붙는다 (AC-1, AC-2)", async () => {
     const app = await startAdminApp({fixture: "with-tunnels"});
     try {
         await openEdit(app.page, 20001);
@@ -409,11 +462,58 @@ test("인증서 검증을 끈 터널은 목록 카드에 표시가 붙는다 (AC
         await app.page.getByRole("button", {name: "Apply and Restart", exact: true}).click();
         await app.page.waitForFunction(() => location.hash === "#/tunnels", undefined, {timeout: 10_000});
 
-        await card(app.page, 20001).locator("[data-cert-unverified]").waitFor({state: "visible", timeout: 10_000});
-        expect((await card(app.page, 20001).locator("[data-cert-unverified]").textContent())?.trim()).toBe("cert not verified");
-        // 표시가 붙어도 카드의 .chip 은 프로토콜 하나뿐이다(목록 계약, REQ-3).
-        expect(await card(app.page, 20001).locator(".chip").count()).toBe(1);
-        expect(await card(app.page, 20002).locator("[data-cert-unverified]").count()).toBe(0);
+        // #338: 상태 줄 끝에 경고색으로 붙는다.
+        const cert = card(app.page, 20001).locator(".tunnel-status .warn").filter({hasText: "cert not verified"});
+        await cert.waitFor({state: "visible", timeout: 10_000});
+        expect(await cert.getAttribute("title")).toBe("The client does not verify the destination server certificate.");
+        expect(await card(app.page, 20002).locator(".tunnel-status").filter({hasText: "cert not verified"}).count()).toBe(0);
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, ADMIN_APP_TEST_TIMEOUT_MS);
+
+// #338 REQ-18: 사용 시간 Timer 는 편집 화면의 Status 영역에 있다. 시간을 바꾸면 폼 저장과 관계없이 바로 요청한다.
+test("편집 화면의 Timer 에서 10분을 고르면 active=true·timeout=600 요청이 나가고 남은 시간이 그 값에서 다시 센다", async () => {
+    const app = await startAdminApp({fixture: "with-tunnels"});
+    try {
+        await app.page.goto(`${app.url}#/tunnels/20002`);
+        const timer = app.page.locator("#tunnel-status-area .timer-text");
+        await timer.waitFor({state: "visible", timeout: 10_000});
+        await timer.click();
+        const dialog = app.page.getByRole("dialog", {name: "Tunneling activity restriction time"});
+        await dialog.waitFor({state: "visible", timeout: 10_000});
+        await dialog.getByLabel("Days", {exact: true}).fill("0");
+        await dialog.getByLabel("Hours", {exact: true}).fill("0");
+        await dialog.getByLabel("Minutes", {exact: true}).fill("10");
+        const posted = app.page.waitForResponse(isPath("POST", "/api/tunneling/active/20002"), {timeout: 10_000});
+        await dialog.getByRole("button", {name: "OK", exact: true}).click();
+        expect((await posted).request().postDataJSON()).toEqual({active: true, timeout: 600});
+        await app.page.waitForFunction(() => /^(10m 0s|9m \d+s)$/.test(document.querySelector("#tunnel-status-area .timer-text")?.textContent ?? ""),
+            undefined, {timeout: 5_000});
+        expect(await app.page.evaluate(() => location.hash)).toBe("#/tunnels/20002");
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, ADMIN_APP_TEST_TIMEOUT_MS);
+
+// #338 REQ-4·REQ-5: 이름(선택)을 저장하면 목록 제목이 이름이 된다. 41자 이상은 요청 없이 칸 아래 오류다.
+test("이름을 넣어 저장하면 본문에 실리고 목록 제목이 이름이 되며, 41자면 저장하지 않는다", async () => {
+    const app = await startAdminApp({fixture: "with-tunnels"});
+    try {
+        await openEdit(app.page, 20001);
+        const bodies = bodiesOf(app.page, "POST", "/api/tunnelingOption");
+        await app.page.locator("#input-name").fill("x".repeat(41));
+        await app.page.getByRole("button", {name: "Apply and Restart", exact: true}).click();
+        await app.page.getByText("Use up to 40 characters.", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+        expect(bodies).toEqual([]);
+
+        await app.page.locator("#input-name").fill("  office ssh ");
+        await app.page.getByRole("button", {name: "Apply and Restart", exact: true}).click();
+        await app.page.waitForFunction(() => location.hash === "#/tunnels", undefined, {timeout: 10_000});
+        expect(bodies.at(-1).name).toBe("office ssh");
+        await card(app.page, 20001).locator(".tunnel-title").filter({hasText: "office ssh"}).waitFor({state: "visible", timeout: 10_000});
         expect(app.errors).toEqual([]);
     } finally {
         await app.close();
@@ -580,13 +680,17 @@ describe("U5-06 레이트 리밋 카드와 Blocked 표시", () => {
     };
     const values = (page: Page) => Promise.all(["#input-rate-window", "#input-rate-max", "#input-rate-ban"].map((id) => page.locator(id).inputValue()));
 
-    test("거절이 있는 online 카드에만 Blocked 합계를 보인다", async () => {
+    test("편집 화면의 Status 영역은 가동 정보와, 거절이 있을 때만 Blocked 합계를 보인다(#338 REQ-18)", async () => {
         const app = await startAdminApp({fixture: "with-tunnels"});
         try {
-            await openTunnels(app.page);
-            await card(app.page, 20002).locator("[data-blocked]").waitFor({state: "visible", timeout: 10_000});
-            expect(await card(app.page, 20002).locator("[data-blocked]").textContent()).toBe("Blocked 7");
-            expect(await card(app.page, 20001).locator("[data-blocked]").count()).toBe(0);
+            await app.page.goto(`${app.url}#/tunnels/20002`);
+            await app.page.locator("#tunnel-status-area [data-blocked]").waitFor({state: "visible", timeout: 10_000});
+            expect(await app.page.locator("#tunnel-status-area [data-blocked]").textContent()).toBe("Blocked 7");
+            expect(await app.page.locator("#tunnel-status-area .tunnel-stats").textContent())
+                .toMatch(/^Uptime (\d+s|\d+m|\d+h, \d+m|\d+d, \d+h) · Sessions 0 · RX 0B · TX 0B$/);
+            await app.page.goto(`${app.url}#/tunnels/20001`);
+            await app.page.locator("#tunnel-status-area .tunnel-stats").waitFor({state: "visible", timeout: 10_000});
+            expect(await app.page.locator("#tunnel-status-area [data-blocked]").count()).toBe(0);
             expect(app.errors).toEqual([]);
         } finally {
             await app.close();

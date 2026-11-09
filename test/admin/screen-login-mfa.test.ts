@@ -126,7 +126,7 @@ test("MFA 가 없는 admin 은 2단계 없이 바로 들어간다", () => withMf
     const login = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/login", {timeout: 10_000});
     await passwordStep(page, "admin", RBAC_PASSWORDS.admin);
     expect((await (await login).json()).mfaRequired).toBeUndefined();
-    await hashIs(page, "#/status");
+    await hashIs(page, "#/tunnels");
     expect(await page.locator("#login-mfa-code").count()).toBe(0);
 }));
 

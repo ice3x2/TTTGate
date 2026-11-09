@@ -19,7 +19,7 @@
     import {useSession} from '../shell/session';
     import {relativeTime} from '../util/relativeTime';
     import QrCanvas from './parts/QrCanvas.svelte';
-    import {PASSKEY_CONDITION, PASSKEY_UNSUPPORTED, defaultPasskeyName, errorNameOf, isCertificateError, passkeysAvailable} from '../util/passkey';
+    import {PASSKEY_CONDITION, PASSKEY_UNSUPPORTED, defaultPasskeyName, errorNameOf, isCertificateError, passkeysAvailable, rememberPasskeyPreferred} from '../util/passkey';
 
     // U3-05: #/me. 계정 카드는 me 스토어만 읽는다.
     // U4-09: MFA 카드(등록 3단계·해제·복구 코드 재발급)와 세션 카드. secret·복구 코드는 모달이 닫히면 상태에서 지운다.
@@ -267,6 +267,8 @@
             return;
         }
         passkeyOpen = false;
+        // 이슈 338: 이 기기에 패스키가 생겼으므로 다음 로그인 화면은 패스키를 먼저 보인다.
+        rememberPasskeyPreferred();
         toast.push({tone: 'pulse', message: 'Passkey added.'});
         await loadPasskeys();
     });

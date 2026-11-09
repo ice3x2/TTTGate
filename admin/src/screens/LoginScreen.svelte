@@ -1,7 +1,8 @@
 <script lang="ts">
     import {startAuthentication} from '@simplewebauthn/browser';
     import LoginCtrl, {type LoginResult, type LoginUser} from '../controller/LoginCtrl';
-    import {PASSKEY_CONDITION, PASSKEY_UNSUPPORTED, isCertificateError, passkeysAvailable} from '../util/passkey';
+    import {tick} from 'svelte';
+    import {PASSKEY_CONDITION, PASSKEY_UNSUPPORTED, isCertificateError, passkeyPreferred, passkeysAvailable, rememberPasskeyPreferred} from '../util/passkey';
     import Button from '../ui/Button.svelte';
     import Card from '../ui/Card.svelte';
     import Field from '../ui/Field.svelte';
@@ -73,6 +74,14 @@
 
     // 이슈 336: 패스키 로그인. 사용자 이름 없이 브라우저가 이 사이트의 패스키를 고르게 한다. TOTP 는 묻지 않는다.
     const passkeySupported = passkeysAvailable();
+    // 이슈 338: 이 기기에서 패스키를 쓴 적이 있으면 비밀번호 칸을 접고 패스키를 먼저 보인다.
+    let showPassword = $state(!(passkeySupported && passkeyPreferred()));
+
+    const usePassword = async () => {
+        showPassword = true;
+        await tick();
+        document.getElementById('login-username')?.focus();
+    };
 
     const passkeyFailureOf = (result: LoginResult): string => {
         if(result.status === 429) return 'Too many login attempts. Please try again later.';
@@ -93,6 +102,7 @@
             const options = await LoginCtrl.passkeyOptions();
             if(!options.success || !options.options) {
                 message = passkeyFailureOf(options);
+                showPassword = true;
                 return;
             }
             let response;
@@ -101,17 +111,21 @@
             } catch(error) {
                 // 사용자가 브라우저 창을 닫으면 브라우저는 예외로 알린다. 인증서 오류를 취소보다 먼저 본다.
                 message = isCertificateError(error) ? PASSKEY_UNSUPPORTED : 'Sign-in was canceled.';
+                showPassword = true;
                 return;
             }
             const result = await LoginCtrl.loginPasskey(response);
             if(result.success) {
                 if(result.user) rememberUsername(result.user.username);
+                rememberPasskeyPreferred();
                 onsuccess({user: result.user, mustChangePassword: result.mustChangePassword === true});
                 return;
             }
             message = passkeyFailureOf(result);
+            showPassword = true;
         } catch {
             message = 'Unable to connect to the server.';
+            showPassword = true;
         } finally {
             pending = false;
         }
@@ -167,7 +181,15 @@
 <main class="login">
     <Card class="login-card">
         <h1 class="login-title">Sign in</h1>
-        {#if ticket === ''}
+        {#if ticket === '' && !showPassword}
+        <!-- 이슈 338: 패스키를 먼저 보이는 화면. 비밀번호 칸은 Use password 를 누르거나 패스키가 실패하면 편다. -->
+        <div class="login-passkey-first">
+            <span id="login-passkey"><Button variant="primary" disabled={pending} onclick={() => { void passkeySignIn(); }}>Sign in with a passkey</Button></span>
+            <p id="login-passkey-hint" class="login-hint">{PASSKEY_CONDITION}</p>
+            <p id="login-message" role="alert" class="login-message">{message}</p>
+            <button type="button" id="login-use-password" class="login-link" disabled={pending} onclick={() => { void usePassword(); }}>Use password</button>
+        </div>
+        {:else if ticket === ''}
         <form onsubmit={submit} novalidate>
             <Field label="Username" for="login-username" hint={bootstrapRequired ? 'Choose the first superuser name (default: admin)' : undefined}>
                 <TextInput id="login-username" autocomplete="username" bind:value={username} />
@@ -226,4 +248,7 @@
     .login-passkey { display: flex; flex-direction: column; align-items: stretch; gap: var(--s-2); margin-top: var(--s-5);
         padding-top: var(--s-4); border-top: 1px solid var(--line-0); }
     .login-hint { margin: 0; color: var(--ink-2); font-size: var(--fs-sm); }
+    .login-passkey-first { display: flex; flex-direction: column; align-items: stretch; gap: var(--s-3); }
+    .login-passkey-first :global(button:not(.login-link)) { width: 100%; }
+    .login-link { align-self: center; padding: var(--s-2); border: 0; background: none; color: var(--ink-2); font: inherit; font-size: var(--fs-md); cursor: pointer; }
 </style>

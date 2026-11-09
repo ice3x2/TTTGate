@@ -260,3 +260,36 @@ test("부트스트랩이 필요하다는 응답을 받으면 패스키 버튼과
         expect(await page.locator("#login-passkey").count()).toBe(0);
         expect(await page.locator("#login-passkey-hint").count()).toBe(0);
     }));
+
+// #338 REQ-3: 이 기기에서 패스키를 쓴 적이 있으면 로그인 화면은 패스키 버튼을 먼저 보이고 비밀번호 입력란은 접어 둔다.
+test("패스키 우선 표시가 있는 기기는 패스키 버튼과 Use password 만 보이고, 실패하거나 Use password 를 누르면 비밀번호 칸을 편다", () =>
+    withApp({fixture: "rbac", login: false}, async (app) => {
+        const {page} = app;
+        await stubCredentials(page);
+        await page.addInitScript(() => { localStorage.setItem("tttgate.passkeyPreferred", "1"); });
+        await page.route("**/api/login/passkey/options", (route) => json(route, 200, {success: true, options: LOGIN_OPTIONS}));
+        await page.goto(localUrl(app));
+        await page.locator("#login-passkey").waitFor({state: "visible", timeout: 30_000});
+        expect(await page.locator("#login-password").count()).toBe(0);
+        expect(await page.locator("#login-passkey-hint").textContent()).toBe(CONDITION);
+
+        await page.locator("#login-use-password").click();
+        await page.locator("#login-password").waitFor({state: "visible", timeout: 10_000});
+        expect(await page.evaluate(() => document.activeElement?.id)).toBe("login-username");
+
+        await page.reload();
+        await page.locator("#login-passkey").waitFor({state: "visible", timeout: 30_000});
+        await queueCredential(page, [{error: {name: "NotAllowedError", message: "The operation either timed out or was not allowed."}}]);
+        await page.locator("#login-passkey button").click();
+        await page.locator("#login-message").filter({hasText: "Sign-in was canceled."}).waitFor({state: "visible", timeout: 10_000});
+        await page.locator("#login-password").waitFor({state: "visible", timeout: 10_000});
+    }));
+
+test("패스키 우선 표시가 없으면 지금처럼 비밀번호 칸을 먼저 보이고 패스키 버튼을 그 아래에 둔다", () =>
+    withApp({fixture: "rbac", login: false}, async (app) => {
+        const {page} = app;
+        await page.goto(localUrl(app));
+        await page.locator("#login-password").waitFor({state: "visible", timeout: 30_000});
+        await page.locator("#login-passkey").waitFor({state: "visible", timeout: 10_000});
+        expect(await page.locator("#login-use-password").count()).toBe(0);
+    }));

@@ -34,6 +34,8 @@ export type AdminApp = {
     mfaRecoveryCodes(username: string): Promise<string[]>;
     /** U4-07: 서버 시계를 ms 만큼 앞당기고 누적 offset 을 돌려준다. */
     advanceClock(ms: number): Promise<number>;
+    /** #338: 스텁 서버의 포트별 상태(연결 수·리스너·클라이언트 연결)를 바꾼다. */
+    tunnelState(port: number, patch: {sessions?: number; online?: boolean; clientConnected?: boolean}): Promise<void>;
     /** U4-09: 서버 옵션 일부를 드라이버에서 바꾼다. */
     serverOption(patch: Record<string, unknown>): Promise<void>;
     close(): Promise<void>;
@@ -113,6 +115,9 @@ export const startAdminApp = async (options: {fixture?: AdminFixture; login?: bo
     const seedBan = async (port: number, ip: string): Promise<void> => { await ask({type: "seed-ban", port, ip}); };
     const mfaSecret = async (username: string) => (await ask<{secret?: string}>({type: "mfaSecret", username})).secret;
     const mfaRecoveryCodes = async (username: string) => (await ask<{codes: string[]}>({type: "mfaRecoveryCodes", username})).codes;
+    const tunnelState = async (port: number, patch: {sessions?: number; online?: boolean; clientConnected?: boolean}): Promise<void> => {
+        await ask({type: "tunnelState", port, patch});
+    };
     const advanceClock = async (ms: number) => (await ask<{offset: number}>({type: "advanceClock", ms})).offset;
     const enrollmentDelays = async (delays: number[]): Promise<void> => { await ask({type: "enrollmentDelays", delays}); };
     const confirmOutcomes = async (outcomes: Array<{delayMs?: number, fail?: boolean}>): Promise<void> => { await ask({type: "confirmOutcomes", outcomes}); };
@@ -179,7 +184,7 @@ export const startAdminApp = async (options: {fixture?: AdminFixture; login?: bo
 
         const ownedBrowser = browser;
         return {
-            page, url: ownedBrowser.url, origin, rootDir: root.rootDir, errors: ownedBrowser.errors, calls, token, sessions, seedAudit, seedBan, mfaSecret, mfaRecoveryCodes, advanceClock, serverOption, enrollmentDelays, confirmOutcomes,
+            page, url: ownedBrowser.url, origin, rootDir: root.rootDir, errors: ownedBrowser.errors, calls, token, sessions, seedAudit, seedBan, mfaSecret, mfaRecoveryCodes, advanceClock, serverOption, enrollmentDelays, confirmOutcomes, tunnelState,
             async close(): Promise<void> {
                 try { await ownedBrowser.close(); }
                 finally {
