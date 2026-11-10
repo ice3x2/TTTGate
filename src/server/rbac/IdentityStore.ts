@@ -111,6 +111,15 @@ function saveFailedResult(message: string): {success: false; status: 422; code: 
     return {success: false, status: 422, code: 'identity_save_failed', message};
 }
 
+/** 이슈 346: 옛 파일에는 mfa_required 가 없다(false). 불리언이 아닌 값은 강제가 꺼지므로 경고를 남긴다. */
+function mfaRequiredOnLoad(group: Group): boolean {
+    const value = (group.attributes as Partial<GroupAttributes> | undefined)?.mfa_required;
+    if(value !== undefined && typeof value !== 'boolean') {
+        logger.warn(`identity.yaml: group ${group.id} has a non-boolean mfa_required (${String(value)}). Two-factor enforcement is off for this group.`);
+    }
+    return value === true;
+}
+
 class IdentityStore {
     private static _instance: IdentityStore;
     public static bcryptCost = 12;
@@ -200,7 +209,7 @@ class IdentityStore {
         // 이슈 346 이전 파일의 그룹에는 mfa_required 가 없다. 불리언이 아니면 false(강제 없음)로 읽는다.
         const normalizedGroups = groups.map((group) => group.id === SYSTEM_SUPERUSER_GROUP_ID
             ? {...group, attributes: cloneGroupAttributes(DEFAULT_GROUP_ATTRIBUTES as GroupAttributes)}
-            : {...group, attributes: {...group.attributes, mfa_required: group.attributes?.mfa_required === true}});
+            : {...group, attributes: {...group.attributes, mfa_required: mfaRequiredOnLoad(group)}});
         const groupIds = new Set(normalizedGroups.map((group) => group.id));
 
         const users = withUniquePasskeyIds((raw.users as User[]).map((user) => withValidPasskeys({...user})));
@@ -652,9 +661,7 @@ class IdentityStore {
     /**
      * 해시와 mustChangePassword 를 한 번의 저장으로 바꾼다. requireChange 는 관리자 초기화용이다 — 둘을 나눠 저장하면
      * 두 번째 저장이 실패할 때 해시만 바뀐 채 실패 응답이 나가 사용자가 모르는 비밀번호에 갇힌다(#145).
-     */
-    /**
-     * 비밀번호를 바꾼다. clearSecondFactors 면(이슈 346, 관리자 초기화) 같은 저장 한 번에 TOTP 와 모든 패스키도 지운다.
+     * clearSecondFactors 면(이슈 346, 관리자 초기화) 같은 저장 한 번에 TOTP 와 모든 패스키도 지운다.
      */
     public async setPassword(id: string, password: string,
                              options: {clearMustChange?: boolean; requireChange?: boolean; clearSecondFactors?: boolean}): Promise<Result<User>> {

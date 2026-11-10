@@ -135,9 +135,10 @@ failure, do not downgrade without restoring the `.bak` files first.
 ### Downgrading after group two-factor enforcement (2.3.0)
 
 2.3.0 adds the group attribute `mfa_required` to `config/identity.yaml`. Older versions ignore it when they read
-the file, so group enforcement simply stops after a downgrade (members can then sign in with a password alone).
-Older versions reject unknown attributes when they **save** a group, so editing such a group in an older
-console fails until you delete the `mfa_required:` line from that group in `identity.yaml`.
+the file, so group enforcement stops after a downgrade: members can then sign in with a password alone.
+When an older console saves such a group, the attribute is dropped from the file without a warning, so after an
+upgrade again the group no longer requires two-factor authentication. Check the group after you upgrade again.
+An API call to an older server that sends `mfa_required` is rejected with 422 `attributes_unknown_key`.
 
 ## 5. Legacy-fallback mode
 

@@ -300,7 +300,9 @@
         passkeyOpen = false;
         // 이슈 338: 이 기기에 패스키가 생겼으므로 다음 로그인 화면은 패스키를 먼저 보인다.
         rememberPasskeyPreferred();
-        toast.push({tone: 'pulse', message: 'Passkey added.'});
+        // 이슈 346 결정 7: 강제 대상이 인증 앱 없이 패스키만 가지면 비밀번호 로그인이 막히고 IP 주소로는 들어올 수 없다.
+        toast.push({tone: 'pulse', message: $me?.mfaRequired && !mfaEnabled
+            ? 'Passkey added. To sign in from an IP address, also set up an authenticator app.' : 'Passkey added.'});
         await loadPasskeys();
         // 이슈 346: 패스키도 2단계 수단이다. 강제 등록 중이었으면 이제 풀렸으므로 내 정보를 다시 읽는다.
         await loadMe();
@@ -410,7 +412,9 @@
                         <p id="passkey-remove-blocked" style="margin: 0; color: var(--ink-2); font-size: var(--fs-sm);">Your account requires two-factor authentication. Set up an authenticator app or add another passkey before you remove this one.</p>
                     {/if}
                     <div><span id="passkey-add"><Button variant="primary" disabled={pending || !passkeySupported} onclick={openAddPasskey}>Add a passkey</Button></span></div>
-                    <p id="passkey-hint" style="margin: 0; color: var(--ink-2); font-size: var(--fs-sm);">{passkeySupported ? PASSKEY_CONDITION : PASSKEY_UNSUPPORTED}</p>
+                    <p id="passkey-hint" style="margin: 0; color: var(--ink-2); font-size: var(--fs-sm);">{passkeySupported
+                        ? ($me.mfaRequired && !mfaEnabled ? `After this, you'll sign in with a passkey instead of a password. ${PASSKEY_CONDITION}` : PASSKEY_CONDITION)
+                        : PASSKEY_UNSUPPORTED}</p>
                 </div>
             </Card>
         </section>

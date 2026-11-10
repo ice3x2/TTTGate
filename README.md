@@ -384,7 +384,7 @@ A superuser can require two-factor authentication for all members of a group. Op
 - A member without either must set one up the next time they use the console. Until then, only **My account** opens. This also applies to members who are signed in now.
 - A member who has only passkeys must sign in with a passkey. A password alone does not work. Passkeys do not work at an IP address, so such a member also needs an authenticator app to sign in from an IP address.
 - A member cannot remove their last two-factor method. **Disable** and **Remove** stay off and show the reason.
-- **Users** shows **Required** next to the two-factor status of such a member.
+- In **Users**, the page of such a member shows **Required** next to the two-factor status.
 - Superusers follow the server setting `mfaRequiredForSuperusers` instead. The same rules apply to them: a passkey counts, and the setting applies to sessions that are open now.
 
 A member lost the phone with the authenticator app:
@@ -1316,7 +1316,7 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 - 둘 다 없는 구성원은 다음에 관리 화면을 쓸 때 하나를 등록해야 한다. 등록하기 전에는 **My account** 만 열린다. 지금 로그인해 있는 구성원에게도 적용된다.
 - 패스키만 가진 구성원은 패스키로 로그인해야 한다. 비밀번호만으로는 로그인할 수 없다. 패스키는 IP 주소에서 쓸 수 없으므로, IP 주소로 로그인하려면 인증 앱도 등록해 둔다.
 - 구성원은 마지막 2단계 인증 수단을 지울 수 없다. **Disable** 과 **Remove** 가 꺼진 채 이유를 보인다.
-- **Users** 는 이런 구성원의 2단계 인증 상태 옆에 **Required** 를 보인다.
+- **Users** 에서 이런 구성원의 화면을 열면 2단계 인증 상태 옆에 **Required** 가 보인다.
 - 슈퍼유저에게는 그룹 설정 대신 서버 설정 `mfaRequiredForSuperusers` 가 적용된다. 규칙은 같다. 패스키를 인정하고, 지금 열린 세션에도 적용된다.
 
 구성원이 인증 앱이 든 휴대폰을 잃어버렸다면:

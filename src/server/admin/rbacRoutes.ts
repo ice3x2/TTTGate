@@ -364,6 +364,12 @@ const onConfirmMfa = async (ctx: RouteContext): Promise<void> => {
         ctx.fail(409, 'mfa_enrollment_expired', 'Start the setup again.');
         return;
     }
+    // 이슈 346: 켜진 TOTP 를 바꾸려면 비밀번호를 확인한 교체 등록(replace)이어야 한다. TOTP 가 꺼진 동안 시작한 등록은 쓰지 않는다.
+    if(user.mfa?.enabled === true && !pending.replace) {
+        ctx.mfa!.pending.consume(user.id);
+        ctx.fail(409, 'mfa_already_enabled', 'Two-factor authentication is already enabled.');
+        return;
+    }
     // 코드는 6자리 문자열이다. 숫자로 보내면 앞자리 0 이 사라지므로 받지 않는다(형식 오류로 실패 1회).
     const code = typeof ctx.body?.code === 'string' ? ctx.body.code : '';
     const now = nowMs();
@@ -387,8 +393,11 @@ const onConfirmMfa = async (ctx: RouteContext): Promise<void> => {
 };
 
 const onDisableMfa = async (ctx: RouteContext): Promise<void> => {
-    const user = selfUserOf(ctx);
-    if(!user || !await passwordConfirmed(ctx, user)) return;
+    const confirmedUser = selfUserOf(ctx);
+    if(!confirmedUser || !await passwordConfirmed(ctx, confirmedUser)) return;
+    // 비밀번호 확인(bcrypt)을 기다리는 사이 다른 탭에서 패스키를 지웠을 수 있다. 판정은 지금 값으로 한다.
+    const user = IdentityStore.instance.user(confirmedUser.id);
+    if(!user) return;
     // 이슈 346: 강제 대상은 마지막 2단계 수단을 끌 수 없다. 패스키가 남으면 TOTP 를 끌 수 있다.
     if(isMfaRequired(user, IdentityStore.instance.group(user.groupId)?.attributes, mfaPolicyOptions()) && removesLastSecondFactor(user, 'totp')) {
         ctx.fail(409, 'mfa_required', 'Two-factor authentication is required for your account. Add a passkey before turning off the authenticator app.');

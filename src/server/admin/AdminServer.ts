@@ -1574,7 +1574,6 @@ class AdminServer {
                                  mustChangePassword: boolean, loginDetail?: Record<string, unknown>): Promise<void> {
         this.resetLoginAttempts(req);
         const userAgent = req.headers['user-agent'];
-        // #127 (U4-08): 슈퍼유저 MFA 강제는 로그인 시점에만 계산한다(이미 열린 세션은 소급하지 않는다).
         // 이슈 346: 강제 판정은 MfaPolicy 하나로 한다. 세션에는 저장하지 않고 요청마다 다시 계산한다(principalOf).
         const stored = IdentityStore.instance.user(userId);
         const mustEnrollMfa = stored !== undefined

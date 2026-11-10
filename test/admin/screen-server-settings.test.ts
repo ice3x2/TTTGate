@@ -289,6 +289,7 @@ describe("U4-09 서버 설정 Security 카드", () => {
             expect(sent.auditRetentionDays).toBe(30);
             expect(sent.auditQueueSize).toBe(1000);
             // #346 FR-7: 강제는 요청마다 판정한다. 2단계 인증이 없는 이 슈퍼유저는 다음 요청부터 막히고 등록 화면으로 간다.
+            await page.evaluate(() => { location.hash = "#/users"; });
             await page.waitForFunction(() => location.hash === "#/me", undefined, {timeout: 15_000});
             await page.locator("#mfa-required-banner").waitFor({state: "visible", timeout: 10_000});
             expect(app.errors).toEqual([]);

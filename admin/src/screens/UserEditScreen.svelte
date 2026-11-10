@@ -241,7 +241,11 @@
                 return;
             }
             tempSecondFactorsReset = cleared;
-            showTemp(loaded.username, result.temporaryPassword, () => { tempSecondFactorsReset = false; void run(() => reload(id)); });
+            // 초기화는 그 사용자의 세션을 모두 끝낸다. 세션 수도 다시 읽는다.
+            showTemp(loaded.username, result.temporaryPassword, () => {
+                tempSecondFactorsReset = false;
+                void run(async () => { await reload(id); await loadSessionCount(id); });
+            });
         });
     };
 
