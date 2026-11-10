@@ -15,6 +15,7 @@
     import {tunnelPolicy} from './parts/tunnelPolicy';
     import {StatusPoller} from './parts/statusPoller';
     import {tunnelRowView, tunnelTitle, undoTimeoutOf} from './parts/tunnelRow';
+    import Clock from '../ui/Clock.svelte';
 
     // 이슈 338: 로그인하면 먼저 보이는 화면이다. 터널마다 제목·상태 한 줄·스위치를 그리고 한 번 눌러 켜고 끈다.
     // 연결이 있는 터널을 끌 때만 묻고, 바꾼 뒤 5초 동안 Undo 를 보인다. 요청 중에는 그 행의 스위치만 잠근다.
@@ -190,6 +191,13 @@
                     <a class="tunnel-link" href={`#/tunnels/${option.forwardPort}`}>
                         <span class="tunnel-title">{title}</span>
                         <span class="tunnel-status">{#each parts as part, index}{#if index > 0}<span class="sep">{' · '}</span>{/if}<span class:warn={part.warn} class:muted={part.muted} title={part.title}>{part.text}</span>{/each}</span>
+                        {#if !busy && view.clock}
+                            <span class="tunnel-time-row">
+                                <Clock class="tunnel-clock" label={view.clock.label} fraction={view.clock.kind === 'limited' ? view.clock.fraction : undefined}
+                                    warn={view.clock.kind === 'limited' && view.clock.warn} />
+                                {#if view.clock.kind === 'limited'}<span class="tunnel-time" class:warn={view.clock.warn} aria-hidden="true">{view.clock.left} · {view.clock.ends}</span>{/if}
+                            </span>
+                        {/if}
                     </a>
                     {#if view.control === 'lock'}
                         <span class="tunnel-lock" title="View only" aria-label="View only">
@@ -233,6 +241,9 @@
     .tunnel-status { font-size: var(--fs-sm); color: var(--ink-2); }
     .tunnel-status .warn { color: var(--warn); }
     .tunnel-status .muted { color: var(--ink-3); }
+    .tunnel-time-row { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+    .tunnel-time { font-size: var(--fs-sm); color: var(--ink-2); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+    .tunnel-time.warn { color: var(--warn); }
     .tunnel-switch { flex: 0 0 auto; min-width: 52px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
     .tunnel-lock { flex: 0 0 auto; width: 52px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; color: var(--ink-3); }
     .empty { color: var(--ink-2); }

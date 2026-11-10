@@ -5,7 +5,11 @@ import type {Options, TunnelingStatus} from '../../controller/Options';
 export type RowPart = {text: string; warn?: boolean; muted?: boolean; title?: string};
 /** switch: 켜고 끌 수 있다. disabled: 스위치를 보이되 누를 수 없다. lock: 보기만 허락된 터널이다. */
 export type RowControl = 'switch' | 'disabled' | 'lock';
-export type RowView = {parts: RowPart[]; control: RowControl; checked: boolean};
+/** #344 켜진 터널의 시계. limited 는 남은 비율(0~1)과 숫자를, unlimited 는 도는 시계만 보인다. */
+export type ClockView =
+    | {kind: 'limited'; fraction: number; left: string; ends: string; warn: boolean; label: string}
+    | {kind: 'unlimited'; label: string};
+export type RowView = {parts: RowPart[]; control: RowControl; checked: boolean; clock?: ClockView};
 
 const MIGRATED_OWNER_ID = 'system:migrated';
 const CERT_UNVERIFIED_TITLE = 'The client does not verify the destination server certificate.';
@@ -16,11 +20,38 @@ export function tunnelTitle(option: Options): string {
     return `:${option.forwardPort} → ${destination}`;
 }
 
-export function formatLeft(seconds: number): string {
-    if(seconds < 60) return '<1m left';
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    return hours > 0 ? `${hours}h ${minutes}m left` : `${minutes}m left`;
+const WARN_SECONDS = 10 * 60;
+const pad2 = (value: number) => String(value).padStart(2, '0');
+
+/** #344 남은 시간. 1시간 미만은 분·초, 24시간 미만은 시·분, 그 이상은 일·시다. 0 이하는 0m 00s 다. */
+export function formatRemaining(seconds: number): string {
+    const left = Math.max(0, Math.floor(seconds));
+    if(left < 3600) return `${Math.floor(left / 60)}m ${pad2(left % 60)}s left`;
+    if(left < 86_400) return `${Math.floor(left / 3600)}h ${Math.floor((left % 3600) / 60)}m left`;
+    return `${Math.floor(left / 86_400)}d ${Math.floor((left % 86_400) / 3600)}h left`;
+}
+
+/** #344 종료 시각. 브라우저 시간대로 보이고, now(서버 시각)와 날짜가 다르면 월/일을 붙인다. */
+export function formatEnds(endsAt: number, now: number): string {
+    const end = new Date(endsAt);
+    const today = new Date(now);
+    const time = `${pad2(end.getHours())}:${pad2(end.getMinutes())}`;
+    const sameDay = end.getFullYear() === today.getFullYear() && end.getMonth() === today.getMonth() && end.getDate() === today.getDate();
+    return sameDay ? `ends ${time}` : `ends ${end.getMonth() + 1}/${end.getDate()} ${time}`;
+}
+
+/** #344 켜진 터널의 시계. 꺼졌거나 열리지 않았으면 없다. 시각은 서버 시각(serverTime)만 쓴다. */
+export function clockOf(status: TunnelingStatus | undefined, serverTime: number): ClockView | undefined {
+    if(!status || !status.online || !status.active) return undefined;
+    if(!(status.activeTimeout > 0)) return {kind: 'unlimited', label: 'No time limit'};
+    const endsAt = status.activeStart + status.activeTimeout * 1000;
+    const leftSeconds = Math.max(0, Math.floor((endsAt - serverTime) / 1000));
+    const left = formatRemaining(leftSeconds);
+    const ends = formatEnds(endsAt, serverTime);
+    const warn = leftSeconds <= WARN_SECONDS;
+    // 경고색은 눈으로만 보이므로 보조 기술용 이름에 같은 뜻을 붙인다.
+    return {kind: 'limited', fraction: Math.min(1, leftSeconds / status.activeTimeout), left, ends, warn,
+        label: `${warn ? 'Ending soon, ' : ''}${left}, ${ends}`};
 }
 
 /** 기한까지 남은 밀리초. 기한이 없으면 undefined. */
@@ -41,14 +72,12 @@ const ownerPart = (option: Options, meId: string): RowPart | undefined => {
     return {text: owner.username !== undefined ? `@${owner.username}` : owner.id};
 };
 
-const statePartsOf = (status: TunnelingStatus, serverTime: number): RowPart[] => {
+const statePartsOf = (status: TunnelingStatus): RowPart[] => {
     const offline = status.clientConnected === false;
     if(!status.active) return offline ? [{text: 'Off'}, {text: 'client offline'}] : [{text: 'Off'}];
     const parts: RowPart[] = [{text: 'On'}];
     if(offline) parts.push({text: 'client offline', warn: true});
     if(status.sessions > 0) parts.push({text: `${status.sessions} connection${status.sessions === 1 ? '' : 's'}`});
-    const remainingMs = remainingMsOf(status, serverTime);
-    if(remainingMs !== undefined) parts.push({text: formatLeft(Math.max(0, Math.floor(remainingMs / 1000)))});
     return parts;
 };
 
@@ -57,11 +86,11 @@ const baseOf = (input: {option: Options; status?: TunnelingStatus; loaded: boole
     if(!loaded) return {parts: [{text: 'Checking…', muted: true}], control: 'disabled', checked: false};
     if(option.editable === false) {
         const parts = status?.online ? [{text: status.active ? 'On' : 'Off'}] : [{text: 'Unavailable'}];
-        return {parts: [...parts, {text: 'view only'}], control: 'lock', checked: status?.online === true && status.active};
+        return {parts: [...parts, {text: 'view only'}], control: 'lock', checked: status?.online === true && status.active, clock: clockOf(status, serverTime)};
     }
     if(!status) return {parts: [{text: 'Not running', warn: true}], control: 'disabled', checked: false};
     if(!status.online) return {parts: [{text: `Can't open port ${option.forwardPort}`, warn: true}], control: 'disabled', checked: false};
-    return {parts: statePartsOf(status, serverTime), control: 'switch', checked: status.active};
+    return {parts: statePartsOf(status), control: 'switch', checked: status.active, clock: clockOf(status, serverTime)};
 };
 
 export function tunnelRowView(input: {option: Options; status?: TunnelingStatus; loaded: boolean; meId: string; serverTime: number}): RowView {

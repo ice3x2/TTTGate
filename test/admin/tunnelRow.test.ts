@@ -1,9 +1,10 @@
 import type {Options, TunnelingStatus} from "../../admin/src/controller/Options";
-import {formatLeft, tunnelRowView, tunnelTitle, undoTimeoutOf} from "../../admin/src/screens/parts/tunnelRow";
+import {clockOf, formatEnds, formatRemaining, tunnelRowView, tunnelTitle, undoTimeoutOf} from "../../admin/src/screens/parts/tunnelRow";
 
 // #338 REQ-5·REQ-8·REQ-15 — 터널 목록 한 줄의 제목·상태 줄·스위치(순수 함수).
 
-const NOW = 1_800_000_000_000;
+// #344: 종료 시각은 실행 환경의 시간대로 보인다. 기준 시각을 그 시간대의 2027-01-15 17:00 으로 만들어 어느 시간대에서도 같은 결과를 얻는다.
+const NOW = new Date(2027, 0, 15, 17, 0, 0).getTime();
 const ME = "u_me";
 
 const option = (overrides: Partial<Options> = {}): Options => ({
@@ -31,16 +32,75 @@ describe("tunnelTitle", () => {
     });
 });
 
-describe("formatLeft", () => {
-    test.each([[30, "<1m left"], [60, "1m left"], [59 * 60 + 59, "59m left"], [3600, "1h 0m left"], [4800, "1h 20m left"], [26 * 3600 + 60, "26h 1m left"]])(
-        "%i 초 → %s", (seconds, expected) => {
-            expect(formatLeft(seconds)).toBe(expected);
-        });
+describe("#344 formatRemaining — 남은 시간", () => {
+    test.each([
+        [0, "0m 00s left"], [-5, "0m 00s left"], [5, "0m 05s left"], [3000, "50m 00s left"], [3599, "59m 59s left"],
+        [3600, "1h 0m left"], [2 * 3600 + 13 * 60 + 59, "2h 13m left"], [86_399, "23h 59m left"], [26 * 3600, "1d 2h left"], [2 * 86_400 + 3 * 3600 + 59, "2d 3h left"],
+    ])("%i 초 → %s", (seconds, expected) => {
+        expect(formatRemaining(seconds)).toBe(expected);
+    });
+});
+
+describe("#344 formatEnds — 종료 시각", () => {
+    test("오늘이면 시:분만 보인다", () => {
+        expect(formatEnds(NOW + 90 * 60_000, NOW)).toBe("ends 18:30");
+    });
+    test("다른 날이면 월/일을 함께 보인다", () => {
+        expect(formatEnds(NOW + 26 * 3600_000, NOW)).toBe("ends 1/16 19:00");
+    });
+    test("자정 직전과 직후를 구분한다", () => {
+        expect(formatEnds(NOW + 6 * 3600_000 + 59 * 60_000, NOW)).toBe("ends 23:59");
+        expect(formatEnds(NOW + 7 * 3600_000, NOW)).toBe("ends 1/16 00:00");
+    });
+});
+
+describe("#344 clockOf — 켜진 터널의 시계", () => {
+    test("꺼진 터널과 상태가 없으면 시계가 없다", () => {
+        expect(clockOf(status({active: false}), NOW)).toBeUndefined();
+        expect(clockOf(undefined, NOW)).toBeUndefined();
+        expect(clockOf(status({online: false}), NOW)).toBeUndefined();
+    });
+    test("무제한이면 숫자 없이 도는 시계다", () => {
+        expect(clockOf(status({activeTimeout: 0}), NOW)).toEqual({kind: "unlimited", label: "No time limit"});
+    });
+    test("제한이 있으면 남은 비율·남은 시간·종료 시각을 준다 (AC-1)", () => {
+        const clock = clockOf(status({activeStart: NOW - 600_000, activeTimeout: 3600}), NOW);
+        expect(clock).toEqual({kind: "limited", fraction: 3000 / 3600, left: "50m 00s left", ends: "ends 17:50", warn: false,
+            label: "50m 00s left, ends 17:50"});
+    });
+    test("남은 시간이 10분 이하이면 경고다 (AC-3)", () => {
+        expect(clockOf(status({activeStart: NOW, activeTimeout: 9 * 60}), NOW)).toMatchObject({warn: true, label: "Ending soon, 9m 00s left, ends 17:09"});
+        expect(clockOf(status({activeStart: NOW, activeTimeout: 10 * 60}), NOW)).toMatchObject({warn: true});
+        expect(clockOf(status({activeStart: NOW, activeTimeout: 11 * 60}), NOW)).toMatchObject({warn: false});
+    });
+    test("만료 직후에는 비율 0 과 0m 00s 다", () => {
+        expect(clockOf(status({activeStart: NOW - 20_000, activeTimeout: 10}), NOW)).toMatchObject({fraction: 0, left: "0m 00s left", warn: true});
+    });
+    test("서버 시각만 쓴다: 브라우저 시각과 무관하다 (AC-5)", () => {
+        const before = clockOf(status({activeStart: NOW - 600_000, activeTimeout: 3600}), NOW);
+        const realNow = Date.now;
+        Date.now = () => realNow() + 3600_000;
+        try {
+            expect(clockOf(status({activeStart: NOW - 600_000, activeTimeout: 3600}), NOW)).toEqual(before);
+        } finally {
+            Date.now = realNow;
+        }
+    });
+    test("26시간 남았고 종료일이 다음 날이면 날짜가 붙는다 (AC-6)", () => {
+        expect(clockOf(status({activeStart: NOW, activeTimeout: 26 * 3600}), NOW)).toMatchObject({left: "1d 2h left", ends: "ends 1/16 19:00"});
+    });
 });
 
 describe("tunnelRowView", () => {
     test("상태를 아직 읽지 못했으면 Checking… 이고 스위치는 비활성이다", () => {
         expect(view(option(), undefined, false)).toMatchObject({control: "disabled", checked: false, parts: [{text: "Checking…", muted: true}]});
+    });
+
+    test("#344 자물쇠 줄도 켜져 있으면 시계가 있고, 꺼졌거나 열리지 않았으면 없다 (AC-8)", () => {
+        expect(view(option({editable: false}), status({activeStart: NOW - 600_000, activeTimeout: 3600})).clock).toMatchObject({kind: "limited", left: "50m 00s left"});
+        expect(view(option({editable: false}), status({active: false})).clock).toBeUndefined();
+        expect(view(option({editable: false}), status({online: false})).clock).toBeUndefined();
+        expect(view(option(), undefined, false).clock).toBeUndefined();
     });
 
     test("고칠 수 없으면 자물쇠이고 view only 를 붙인다", () => {
@@ -69,7 +129,9 @@ describe("tunnelRowView", () => {
         expect(view(option(), status())).toMatchObject({control: "switch", checked: true});
         expect(text(option(), status())).toBe("On");
         expect(text(option(), status({sessions: 1}))).toBe("On · 1 connection");
-        expect(text(option(), status({sessions: 2, activeStart: NOW, activeTimeout: 4800}))).toBe("On · 2 connections · 1h 20m left");
+        // #344: 남은 시간은 상태 줄이 아니라 시계 줄에 보인다.
+        expect(text(option(), status({sessions: 2, activeStart: NOW, activeTimeout: 4800}))).toBe("On · 2 connections");
+        expect(view(option(), status({sessions: 2, activeStart: NOW, activeTimeout: 4800})).clock).toMatchObject({kind: "limited", left: "1h 20m left"});
         const offline = view(option(), status({clientConnected: false}));
         expect(offline.parts).toEqual([{text: "On"}, {text: "client offline", warn: true}]);
     });

@@ -71,7 +71,7 @@ test("목록은 터널마다 제목·상태 한 줄·스위치를 그리고, 켜
         expect(await row(app.page, 20001).locator(".tunnel-title").textContent()).toBe(":20001 → 127.0.0.1:9");
         expect(await row(app.page, 20002).locator(".tunnel-title").textContent()).toBe(":20002 → 127.0.0.1:8080");
         // 스텁은 시작할 때 3600초로 켠다. 소유자가 없는 설정은 migrated 다.
-        expect(await statusText(app.page, 20001).textContent()).toMatch(/^On · \d+m left · migrated$/);
+        expect(await statusText(app.page, 20001).textContent()).toMatch(/^On · migrated$/); // #344: 남은 시간은 시계 줄로 옮겼다.
         expect(await app.page.locator("#tunnel-summary").textContent()).toBe("2 of 2 on");
         expect(await switchOf(app.page, 20001).getAttribute("aria-checked")).toBe("true");
         expect(await switchOf(app.page, 20001).getAttribute("aria-label")).toBe(":20001 → 127.0.0.1:9");
@@ -87,8 +87,52 @@ test("목록은 터널마다 제목·상태 한 줄·스위치를 그리고, 켜
         await waitStatus(app.page, 20001, /^Can't open port 20001/);
         expect(await switchOf(app.page, 20001).isDisabled()).toBe(true);
         await app.tunnelState(20001, {online: true, clientConnected: false, sessions: 2});
-        await waitStatus(app.page, 20001, /^On · client offline · 2 connections · \d+m left · migrated$/);
+        await waitStatus(app.page, 20001, /^On · client offline · 2 connections · migrated$/);
         expect(await statusText(app.page, 20001).locator(".warn").first().textContent()).toBe("client offline");
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, ADMIN_APP_TEST_TIMEOUT_MS);
+
+// ── #344 켜진 터널의 시계 ─────────────────────────────────────────────────────
+
+test("#344 제한 터널은 줄어드는 시계와 남은 시간·종료 시각을, 무제한은 도는 시계만 보이며 꺼지면 시계가 없다", async () => {
+    const app = await startAdminApp({fixture: "with-tunnels"});
+    try {
+        const {page} = app;
+        await openTunnels(page);
+        await waitStatus(page, 20001, /^On/);
+        // 스텁은 3600초로 켠다(AC-1 의 화면 확인).
+        const clock = row(page, 20001).locator(".tunnel-clock");
+        await clock.waitFor({state: "visible", timeout: 10_000});
+        expect(await row(page, 20001).locator(".tunnel-time").textContent()).toMatch(/^\d+m \d{2}s left · ends (\d{1,2}\/\d{1,2} )?\d{2}:\d{2}$/);
+        expect(await clock.getAttribute("class")).not.toContain("unlimited");
+        expect(await clock.getAttribute("aria-label")).toMatch(/^\d+m \d{2}s left, ends (\d{1,2}\/\d{1,2} )?\d{2}:\d{2}$/);
+        expect(await clock.getAttribute("role")).toBe("img");
+        // 끄면 시계가 사라진다(AC-4).
+        await switchOf(page, 20001).click();
+        await waitChecked(page, 20001, false);
+        await waitStatus(page, 20001, /^Off/);
+        expect(await row(page, 20001).locator(".tunnel-clock").count()).toBe(0);
+        // 목록에서 켜면 무기한이다. 시계는 돌고 숫자는 없다(AC-2).
+        await switchOf(page, 20001).click();
+        await waitChecked(page, 20001, true);
+        await waitStatus(page, 20001, /^On/);
+        await page.locator('li[data-port="20001"] .tunnel-clock.unlimited').waitFor({state: "visible", timeout: 10_000});
+        expect(await row(page, 20001).locator(".tunnel-time").count()).toBe(0);
+        expect(await clock.getAttribute("aria-label")).toBe("No time limit");
+        const spinning = () => page.evaluate(() => getComputedStyle(document.querySelector('li[data-port="20001"] .tunnel-clock .hand')!).animationName);
+        expect(await spinning()).not.toBe("none");
+        // 움직임 줄이기를 켜면 멈춘다(FR-8).
+        await page.emulateMedia({reducedMotion: "reduce"});
+        await page.waitForFunction(() => getComputedStyle(document.querySelector('li[data-port="20001"] .tunnel-clock .hand')!).animationName === "none", undefined, {timeout: 5_000});
+        // 360px 에서 줄이 넘치지 않는다(FR-10). 목록은 넘침을 잘라 숨기므로 줄과 시계 줄을 직접 본다.
+        await page.setViewportSize({width: 360, height: 800});
+        await page.waitForFunction(() => {
+            const fits = (selector: string) => { const element = document.querySelector(selector)!; return element.scrollWidth <= element.clientWidth; };
+            return document.documentElement.scrollWidth <= window.innerWidth && fits('li[data-port="20001"]') && fits('li[data-port="20001"] .tunnel-time-row');
+        }, undefined, {timeout: 5_000});
         expect(app.errors).toEqual([]);
     } finally {
         await app.close();
