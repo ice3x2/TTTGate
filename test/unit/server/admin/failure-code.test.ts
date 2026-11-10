@@ -99,8 +99,7 @@ const coversTemplate = (template: ts.TemplateExpression, properties: readonly ts
         });
     });
 
-/** 응답 봉투(sendApiEnvelope)의 필드. values 는 응답에 펼쳐지므로 이 이름을 키로 쓰면 실패가 성공처럼 보일 수 있다. */
-
+/** values 객체 리터럴이 응답 필드 이름(FAILURE_RESPONSE_FIELDS)을 키로 쓰는가. sendApiFailure 가 그 키를 버리므로 값이 사라진다. */
 const hasReservedKey = (values: ts.Expression | undefined): boolean =>
     values !== undefined && ts.isObjectLiteralExpression(values) && values.properties.some((property) =>
         property.name !== undefined && ts.isIdentifier(property.name) && FAILURE_RESPONSE_FIELDS.has(property.name.text));
