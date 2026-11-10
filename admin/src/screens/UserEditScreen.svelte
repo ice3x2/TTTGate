@@ -8,6 +8,7 @@
     import Button from '../ui/Button.svelte';
     import Card from '../ui/Card.svelte';
     import Checkbox from '../ui/Checkbox.svelte';
+    import Chip from '../ui/Chip.svelte';
     import Field from '../ui/Field.svelte';
     import Modal from '../ui/Modal.svelte';
     import Select from '../ui/Select.svelte';
@@ -48,6 +49,9 @@
     let tempUsername = $state('');
     let tempValue = $state('');
     let afterTemp: () => void = () => {};
+    // 이슈 346: 비밀번호 초기화 때 2단계 수단(TOTP·패스키)도 지울지. 확인 창을 열 때마다 켬으로 되돌린다.
+    let resetSecondFactors = $state(true);
+    let tempSecondFactorsReset = $state(false);
 
     // U4-09: 수정 화면의 Two-factor 행. 초기화하면 서버가 그 사용자의 세션을 모두 끊는다.
     let resetMfaOpen = $state(false);
@@ -70,6 +74,8 @@
 
     // 이슈 336: 수정 화면의 Passkeys 행. 모두 지우면 서버가 그 사용자의 세션을 모두 끊는다.
     const passkeyCount = $derived(loaded?.passkeyCount ?? 0);
+    const hasSecondFactor = $derived(loaded?.mfaEnabled === true || passkeyCount > 0);
+    const resetsSecondFactors = $derived(hasSecondFactor && resetSecondFactors);
     let resetPasskeysOpen = $state(false);
     const resetPasskeys = () => {
         resetPasskeysOpen = false;
@@ -228,12 +234,18 @@
         void run(async () => {
             if(!loaded) return;
             const id = loaded.id;
-            const result = await UsersCtrl.instance.resetPassword(id);
+            const cleared = resetsSecondFactors;
+            const result = await UsersCtrl.instance.resetPassword(id, {resetSecondFactors: cleared});
             if(!result.success) {
                 toast.push({tone: 'alarm', message: result.message});
                 return;
             }
-            showTemp(loaded.username, result.temporaryPassword, () => { void run(() => reload(id)); });
+            tempSecondFactorsReset = cleared;
+            // 초기화는 그 사용자의 세션을 모두 끝낸다. 세션 수도 다시 읽는다.
+            showTemp(loaded.username, result.temporaryPassword, () => {
+                tempSecondFactorsReset = false;
+                void run(async () => { await reload(id); await loadSessionCount(id); });
+            });
         });
     };
 
@@ -314,7 +326,10 @@
         <section id="user-mfa">
             <Card label="Two-factor">
                 <div style="display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; justify-content: space-between;">
-                    <span id="user-mfa-status" style="font-size: var(--fs-md); color: {loaded?.mfaEnabled ? 'var(--pulse)' : 'var(--ink-2)'};">{loaded?.mfaEnabled ? 'Enabled' : 'Off'}</span>
+                    <div style="display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center;">
+                        <span id="user-mfa-status" style="font-size: var(--fs-md); color: {loaded?.mfaEnabled ? 'var(--pulse)' : 'var(--ink-2)'};">{loaded?.mfaEnabled ? 'Enabled' : 'Off'}</span>
+                        {#if loaded?.mfaRequired}<span id="user-mfa-required"><Chip tone="warn">Required</Chip></span>{/if}
+                    </div>
                     <span id="user-reset-mfa"><Button variant="danger" disabled={pending || loaded?.mfaEnabled !== true} onclick={() => (resetMfaOpen = true)}>Reset MFA</Button></span>
                 </div>
             </Card>
@@ -345,18 +360,35 @@
         {#if isNew}
             <Button variant="primary" type="submit" disabled={pending}>Create user</Button>
         {:else}
-            <Button disabled={pending || !loaded} onclick={() => (resetOpen = true)}>Reset password</Button>
+            <Button disabled={pending || !loaded} onclick={() => { resetSecondFactors = true; resetOpen = true; }}>Reset password</Button>
             <Button variant="danger" disabled={pending || !loaded} onclick={() => (deleteOpen = true)}>Delete</Button>
             <Button variant="primary" type="submit" disabled={pending || !dirty}>Save</Button>
         {/if}
     </div>
 </form>
 
-<Modal bind:open={resetOpen} title="Reset password">
-    Issue a new temporary password for @{loaded?.username}? Their current sessions will be signed out.
+<Modal bind:open={resetOpen} title="Reset password" class="reset-password-modal">
+    <div style="display: flex; flex-direction: column; gap: var(--s-3);">
+        <p style="margin: 0;">Issue a new temporary password for @{loaded?.username}? Their current sessions will be signed out.</p>
+        <!-- 이슈 346: 2단계 수단을 잃은 사용자를 복구할 때 함께 지운다. 지울 수단이 없으면 끈 채 막는다. -->
+        <Checkbox id="user-reset-second-factors" label="Also reset two-factor authentication and passkeys" disabled={!hasSecondFactor}
+            bind:checked={() => resetsSecondFactors, (on) => (resetSecondFactors = on)} />
+        <p id="user-reset-second-factors-hint" style="margin: 0; color: var(--ink-2); font-size: var(--fs-sm);">{!hasSecondFactor
+            ? 'No two-factor methods to reset.'
+            : resetSecondFactors
+                ? (loaded?.mfaRequired ? "They'll set a new password, then set up two-factor authentication again."
+                    : 'They\'ll set a new password, then can set up two-factor authentication again in My account.')
+                : (loaded?.mfaRequired && loaded?.mfaEnabled !== true
+                    ? "They have only passkeys, so they'll need a passkey to sign in. The temporary password alone won't work."
+                    : "Their authenticator app and passkeys stay. They'll still need them to sign in.")}</p>
+    </div>
     {#snippet footer()}
         <Button onclick={() => (resetOpen = false)}>Cancel</Button>
-        <Button variant="primary" onclick={resetPassword}>Issue password</Button>
+        {#if resetsSecondFactors}
+            <Button variant="danger" onclick={resetPassword}>Reset and issue password</Button>
+        {:else}
+            <Button variant="primary" onclick={resetPassword}>Issue password</Button>
+        {/if}
     {/snippet}
 </Modal>
 <Modal bind:open={deleteOpen} title="Delete user">
@@ -387,5 +419,5 @@
         <span id="confirm-end-all"><Button variant="danger" onclick={endSessions}>End all</Button></span>
     {/snippet}
 </Modal>
-<TempPasswordModal bind:open={tempOpen} username={tempUsername} password={tempValue}
+<TempPasswordModal bind:open={tempOpen} username={tempUsername} password={tempValue} secondFactorsReset={tempSecondFactorsReset}
     ondone={() => { tempValue = ''; const next = afterTemp; afterTemp = () => {}; next(); }} />

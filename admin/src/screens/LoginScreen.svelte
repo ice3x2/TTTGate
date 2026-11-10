@@ -77,6 +77,13 @@
     const passkeySupported = passkeysAvailable();
     // 이슈 338: 이 기기에서 패스키를 쓴 적이 있으면 비밀번호 칸을 접고 패스키를 먼저 보인다.
     let showPassword = $state(!(passkeySupported && passkeyPreferred()));
+    // 이슈 346: 비밀번호는 맞았지만 이 계정은 패스키로만 로그인한다(2단계 인증 강제 대상이 패스키만 가졌다).
+    let passkeyRequired = $state(false);
+    const useDifferentAccount = () => {
+        passkeyRequired = false;
+        message = '';
+        showPassword = true;
+    };
 
     const usePassword = async () => {
         // 이슈 345: 자동 요청이 응답을 기다리고 있으면 취소한다. 취소는 자동 요청 경로에서 문구 없이 끝난다.
@@ -169,7 +176,7 @@
     const AUTOFILL_REFRESH_MS = 100_000;
 
     const autofillAllowed = (): boolean =>
-        !destroyed && !signedIn && autofillAvailable && !pending && showPassword && ticket === '' && !bootstrapRequired;
+        !passkeyRequired && !destroyed && !signedIn && autofillAvailable && !pending && showPassword && ticket === '' && !bootstrapRequired;
 
     const startAutofill = async () => {
         if(autofillRunning || !autofillAllowed()) return;
@@ -206,7 +213,7 @@
 
     // 비밀번호 칸이 보이고 다른 요청이 없으면 자동 완성 요청을 건다. 버튼 요청이 끝나면 다시 건다.
     $effect(() => {
-        if(autofillAvailable && showPassword && ticket === '' && !bootstrapRequired && !pending && !signedIn) void tick().then(startAutofill);
+        if(autofillAvailable && showPassword && !passkeyRequired && ticket === '' && !bootstrapRequired && !pending && !signedIn) void tick().then(startAutofill);
     });
 
     // 2단계(TOTP)로 넘어가거나 첫 비밀번호를 정해야 하면 진행 중인 자동 완성 요청을 취소한다.
@@ -254,6 +261,13 @@
                 onsuccess({user: result.user, mustChangePassword: result.mustChangePassword === true});
                 return;
             }
+            if(result.status === 403 && result.code === 'passkey_required') {
+                // 비밀번호 칸을 접고 패스키 로그인으로 안내한다. 입력한 비밀번호는 더 쓰지 않는다.
+                password = '';
+                message = '';
+                passkeyRequired = true;
+                return;
+            }
             if(result.bootstrapRequired) bootstrapRequired = true;
             if(result.status === 429) {
                 message = 'Too many login attempts. Please try again later.';
@@ -279,7 +293,22 @@
 <main class="login">
     <Card class="login-card">
         <h1 class="login-title">Sign in</h1>
-        {#if ticket === '' && !showPassword}
+        {#if ticket === '' && passkeyRequired}
+        <div class="login-passkey-first">
+            {#if passkeySupported}
+                <p id="login-passkey-required" role="status" style="margin: 0;">This account signs in with a passkey.</p>
+                <span id="login-passkey"><Button variant="primary" disabled={pending} onclick={() => { void passkeySignIn(); }}>Sign in with a passkey</Button></span>
+                <p id="login-passkey-hint" class="login-hint">Use the passkey on this device, your phone, or a security key.</p>
+                <p id="login-passkey-lost" class="login-hint">Lost your passkey? Ask your administrator to reset your sign-in.</p>
+            {:else}
+                <p id="login-passkey-required" role="status" style="margin: 0;">This account signs in with a passkey, but passkeys aren't available at this address.</p>
+                <p id="login-passkey-hint" class="login-hint">{PASSKEY_CONDITION} Open TTTGate at an address like that and sign in with your passkey.</p>
+                <p id="login-passkey-lost" class="login-hint">If you can't, ask your administrator to reset your password and two-factor authentication.</p>
+            {/if}
+            <p id="login-message" role="alert" class="login-message">{message}</p>
+            <button type="button" id="login-start-over" class="login-link" disabled={pending} onclick={useDifferentAccount}>Use a different account</button>
+        </div>
+        {:else if ticket === '' && !showPassword}
         <!-- 이슈 338: 패스키를 먼저 보이는 화면. 비밀번호 칸은 Use password 를 누르거나 패스키가 실패하면 편다. -->
         <div class="login-passkey-first">
             <span id="login-passkey"><Button variant="primary" disabled={pending} onclick={() => { void passkeySignIn(); }}>Sign in with a passkey</Button></span>

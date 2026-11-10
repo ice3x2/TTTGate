@@ -19,6 +19,7 @@
   import SecurityScreen from "./screens/SecurityScreen.svelte";
   import TrustedClientsScreen from "./screens/TrustedClientsScreen.svelte";
   import MeCtrl from "./controller/MeCtrl";
+  import {onMfaEnrollmentRequired} from "./controller/AdminRequest";
   import Loading from "./ui/Loading.svelte";
   import Banner from "./ui/Banner.svelte";
   import {toast} from "./ui/toast";
@@ -48,6 +49,16 @@
       state = error instanceof InvalidSession ? 'Invalid' : 'Offline';
     }
   };
+
+  // 이슈 346: 로그인한 사이에 2단계 인증 강제가 켜지면 서버가 403 mfa_enrollment_required 를 준다. 내 정보를 다시 읽으면
+  // 아래 가드가 등록 화면(#/me)으로 옮긴다. 같은 순간에 여러 요청이 거절되어도 한 번만 읽는다.
+  let enrollmentRefresh: Promise<unknown> | undefined;
+  onMfaEnrollmentRequired(() => {
+    if(enrollmentRefresh || $me?.mustEnrollMfa) return;
+    toast.push({tone: 'warn', message: 'Your account now requires two-factor authentication.'});
+    enrollmentRefresh = loadMe().catch((error) => { if(error instanceof InvalidSession) session.invalidate(); })
+      .finally(() => { enrollmentRefresh = undefined; });
+  });
 
   onMount(async () => {
     let valid: boolean;

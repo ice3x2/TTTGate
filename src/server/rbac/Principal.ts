@@ -1,6 +1,7 @@
 import {Session} from "../admin/SessionStore";
 import LoggerFactory from "../../util/logger/LoggerFactory";
 import {IdentityStore} from "./IdentityStore";
+import {mustEnrollMfa, type MfaPolicyOptions} from "./MfaPolicy";
 import {
     cloneGroupAttributes,
     DEFAULT_GROUP_ATTRIBUTES,
@@ -26,7 +27,7 @@ export type Principal = {
     /** 슈퍼유저에게는 무시된다(값은 system:superuser 그룹의 것). */
     attributes: GroupAttributes;
     mustChangePassword: boolean;
-    /** #127 (U4-08) 세션에 실린 MFA 등록 강제. 없으면 false 로 본다. */
+    /** 이슈 346: 2단계 인증 강제 대상인데 수단이 없다. 요청마다 지금 상태로 다시 계산한다. */
     mustEnrollMfa?: boolean;
     /** identity.yaml 을 읽지 못해 .key 로만 인증한 legacy-fallback 세션. */
     legacy?: true;
@@ -47,7 +48,7 @@ export const LEGACY_PRINCIPAL: Readonly<Principal> = Object.freeze({
  * 호출자(route())가 세션을 제거하고 401 을 응답한다.
  * 그룹이 사라진 경우(파일 수동 편집 등)에는 기본 속성으로 낮춰 잡고 경고만 남긴다.
  */
-export function principalOf(session: Session, store: IdentityStore): Principal | undefined {
+export function principalOf(session: Session, store: IdentityStore, mfa: MfaPolicyOptions): Principal | undefined {
     if(session.userId === LEGACY_ADMIN_USER_ID) {
         return LEGACY_PRINCIPAL;
     }
@@ -59,13 +60,15 @@ export function principalOf(session: Session, store: IdentityStore): Principal |
     if(!group) {
         logger.warn(`group not found for user ${user.id}: ${user.groupId}. falling back to default attributes`);
     }
+    const attributes = group ? group.attributes : cloneGroupAttributes(DEFAULT_GROUP_ATTRIBUTES);
     return {
         userId: user.id,
         username: user.username,
         role: user.role,
         groupId: user.groupId,
-        attributes: group ? group.attributes : cloneGroupAttributes(DEFAULT_GROUP_ATTRIBUTES),
+        attributes,
         mustChangePassword: user.mustChangePassword,
-        mustEnrollMfa: session.mustEnrollMfa === true
+        // 이슈 346: 그룹 강제가 켜지거나 꺼지고, 수단을 등록하면 다음 요청부터 바로 반영된다(세션에 저장하지 않는다).
+        mustEnrollMfa: mustEnrollMfa(user, attributes, mfa)
     };
 }

@@ -23,6 +23,8 @@ export type GroupAttributes = {
     admin_ui_section_access: AdminUiSection[];
     tunnel_visibility: TunnelVisibility;
     rate_limit: RateLimitPreset;
+    /** 이슈 346: 이 그룹 사용자는 2단계 인증(TOTP 또는 패스키)을 갖춰야 한다. 없는 옛 파일은 false 로 읽는다. */
+    mfa_required: boolean;
 };
 
 export type User = {
@@ -79,7 +81,7 @@ const RATE_LIMIT_VALUES: readonly RateLimitPreset[] = ['unlimited', '1MB/s', '10
 const GROUP_ATTRIBUTE_KEYS: readonly string[] = [
     'tunnel_crud', 'max_tunnel_count', 'max_tunnel_duration_ms', 'allowed_port_range',
     'allowed_protocols', 'max_concurrent_connections', 'allowed_trusted_clients',
-    'http_tunnel_rewrite_permissions', 'admin_ui_section_access', 'tunnel_visibility', 'rate_limit'
+    'http_tunnel_rewrite_permissions', 'admin_ui_section_access', 'tunnel_visibility', 'rate_limit', 'mfa_required'
 ];
 
 export const DEFAULT_GROUP_ATTRIBUTES: Readonly<GroupAttributes> = {
@@ -93,7 +95,8 @@ export const DEFAULT_GROUP_ATTRIBUTES: Readonly<GroupAttributes> = {
     http_tunnel_rewrite_permissions: {cors: false, host: false, header: false, body: false},
     admin_ui_section_access: [...ADMIN_UI_SECTIONS],
     tunnel_visibility: 'private',
-    rate_limit: 'unlimited'
+    rate_limit: 'unlimited',
+    mfa_required: false
 };
 
 /**
@@ -188,7 +191,9 @@ export function validateGroupAttributes(patch: unknown, base: GroupAttributes): 
         }
     }
 
+    // 이슈 346 이전 파일의 그룹에는 mfa_required 가 없다. 없으면 false 로 본다.
     const merged: Record<string, unknown> = {...base, ...patchObject};
+    if(merged.mfa_required === undefined) merged.mfa_required = false;
 
     if(!TUNNEL_CRUD_VALUES.includes(merged.tunnel_crud as TunnelCrud)) {
         return invalid('attribute_enum_invalid', `invalid tunnel_crud: ${merged.tunnel_crud}`);
@@ -226,6 +231,9 @@ export function validateGroupAttributes(patch: unknown, base: GroupAttributes): 
     if(!RATE_LIMIT_VALUES.includes(merged.rate_limit as RateLimitPreset)) {
         return invalid('attribute_enum_invalid', `invalid rate_limit: ${merged.rate_limit}`);
     }
+    if(typeof merged.mfa_required !== 'boolean') {
+        return invalid('attribute_bool_invalid', `invalid mfa_required: ${merged.mfa_required}`);
+    }
 
     const protocols = merged.allowed_protocols as AllowedProtocol[];
     const rewritePermissions = merged.http_tunnel_rewrite_permissions as RewritePermissions;
@@ -250,7 +258,8 @@ export function validateGroupAttributes(patch: unknown, base: GroupAttributes): 
             http_tunnel_rewrite_permissions: {...rewritePermissions},
             admin_ui_section_access: [...(merged.admin_ui_section_access as AdminUiSection[])],
             tunnel_visibility: merged.tunnel_visibility as TunnelVisibility,
-            rate_limit: merged.rate_limit as RateLimitPreset
+            rate_limit: merged.rate_limit as RateLimitPreset,
+            mfa_required: merged.mfa_required
         }
     };
 }

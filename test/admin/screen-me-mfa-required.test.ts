@@ -10,7 +10,7 @@ jest.setTimeout(ADMIN_APP_TEST_TIMEOUT_MS);
 const hashIs = (page: Page, expected: string) =>
     page.waitForFunction((value) => location.hash === value, expected, {timeout: 10_000});
 
-test("강제 등록 중에는 #/me 에 고정되고, 등록을 마치면 풀리며, 해제는 거부된다", async () => {
+test("강제 등록 중에는 #/me 에 고정되고, 등록을 마치면 풀리며, 마지막 수단은 끌 수 없다", async () => {
     const app = await startAdminApp({fixture: "rbac", login: false});
     try {
         const {page} = app;
@@ -25,7 +25,8 @@ test("강제 등록 중에는 #/me 에 고정되고, 등록을 마치면 풀리�
         page.on("response", (response) => { if(response.status() === 403) denied.push(new URL(response.url()).pathname); });
         const banner = page.locator("#mfa-required-banner");
         await banner.waitFor({state: "visible", timeout: 10_000});
-        expect((await banner.textContent())?.trim()).toBe("Superusers must enable two-factor authentication.");
+        // #346: 강제 대상 모두에 맞는 문구다.
+        expect((await banner.textContent())?.trim()).toBe("Your account requires two-factor authentication. Set up a passkey or an authenticator app to continue.");
         expect(await page.locator('[aria-label="Open menu"]').count()).toBe(0);
         await page.evaluate(() => { window.location.hash = "#/users"; });
         await hashIs(page, "#/me");
@@ -52,12 +53,10 @@ test("강제 등록 중에는 #/me 에 고정되고, 등록을 마치면 풀리�
         await hashIs(page, "#/users");
         await page.locator("li[data-user-id]").first().waitFor({state: "visible", timeout: 10_000});
 
+        // #346: 마지막 수단은 누른 뒤 거절하지 않고 미리 막는다(서버도 409 로 막는다).
         await page.evaluate(() => { window.location.hash = "#/me"; });
-        await page.locator("#mfa-disable button").click();
-        await page.locator("#mfa-disable-password").fill(RBAC_PASSWORDS.admin);
-        await page.locator("#mfa-disable-confirm button").click();
-        await page.locator(".mfa-disable-modal").getByText("Superusers must keep two-factor authentication enabled.", {exact: true})
-            .waitFor({state: "visible", timeout: 10_000});
+        await page.locator("#mfa-disable-blocked").waitFor({state: "visible", timeout: 10_000});
+        expect(await page.locator("#mfa-disable button").isDisabled()).toBe(true);
         expect((await page.locator("#mfa-status").textContent())?.trim()).toBe("Enabled");
         expect(app.errors).toEqual([]);
     } finally {

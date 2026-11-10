@@ -138,9 +138,9 @@ describe("README in English and Korean (#310)", () => {
                 {heading: "Recover Admin Accounts", contains: ["**My account**", "**Change password**", "**Reset password**", "**Reset MFA**",
                     "~/identity.yaml.$(date +%Y%m%d%H%M%S).bak", "rm ~/TTTGate/config/identity.yaml", "rm -f ~/TTTGate/config/.key",
                     "The file contains password hashes and two-factor secrets.", "delete it when you no longer need it",
-                    "Replace `~/TTTGate` with your installation folder", "systemd", "**Two-factor authentication**", "**Disable**", "**Set up**", "a superuser cannot use **Disable**", "If no recovery code is left", "**Use a recovery code instead**",
+                    "Replace `~/TTTGate` with your installation folder", "systemd", "**Two-factor authentication**", "**Disable**", "**Set up**", "**Replace app**", "**Disable** stays off", "If no recovery code is left", "**Use a recovery code instead**",
                     "`/opt/TTTGate/config/identity.yaml`", "only administrators can read",
-                    "If no other superuser can sign in either, follow case 3.", "select your own account and press **Reset MFA**",
+                    "If no other superuser can sign in either, follow case 3.",
                     "This also ends the sessions of that user.", "**No superuser can sign in (the password is forgotten, or two-factor authentication is lost and no recovery code is left).**"],
                     before: ["All users, groups and two-factor settings are lost.", "Delete `config/.key` too.", "Do not use `-reset` for this."]
                         .map((warning): [string, string] => [warning, "\n   1. Stop the server"]),
@@ -166,9 +166,9 @@ describe("README in English and Korean (#310)", () => {
                 {heading: "관리자 계정 복구", contains: ["**My account**", "**Change password**", "**Reset password**", "**Reset MFA**",
                     "~/identity.yaml.$(date +%Y%m%d%H%M%S).bak", "rm ~/TTTGate/config/identity.yaml", "rm -f ~/TTTGate/config/.key",
                     "이 파일에는 비밀번호 해시와 2단계 인증 비밀값이 들어 있다", "더 필요 없으면 지운다",
-                    "`~/TTTGate` 는 실제 설치 폴더로 바꾼다", "systemd", "**Two-factor authentication**", "**Disable**", "**Set up**", "슈퍼유저는 **Disable** 을 쓸 수 없다", "남은 복구 코드가 없으면", "**Use a recovery code instead**",
+                    "`~/TTTGate` 는 실제 설치 폴더로 바꾼다", "systemd", "**Two-factor authentication**", "**Disable**", "**Set up**", "**Replace app**", "**Disable** 은 꺼져 있다", "남은 복구 코드가 없으면", "**Use a recovery code instead**",
                     "`/opt/TTTGate/config/identity.yaml`", "관리자만 읽을 수 있는",
-                    "로그인할 수 있는 다른 슈퍼유저도 없으면 3번 경우를 따른다.", "**Users** 에서 내 계정을 고르고 **Reset MFA** 를 누른다",
+                    "로그인할 수 있는 다른 슈퍼유저도 없으면 3번 경우를 따른다.",
                     "이때도 그 사용자의 세션이 모두 끊긴다.", "**로그인할 수 있는 슈퍼유저가 없다(비밀번호를 잊었거나, 2단계 인증을 잃었고 남은 복구 코드도 없다).**",
                     "로그인 중 2단계 인증 화면에서"],
                     before: ["모든 사용자, 그룹, 2단계 인증 설정이 사라진다.", "`config/.key` 도 반드시 지운다.", "이 작업에 `-reset` 은 쓰지 않는다."]

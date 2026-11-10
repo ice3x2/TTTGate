@@ -19,7 +19,7 @@ export async function loadMe(): Promise<Me | undefined> {
     const result = await MeCtrl.instance.me();
     if(result.success !== true) return undefined;
     const value: Me = {user: result.user, group: result.group, sections: result.sections, migrationBanner: result.migrationBanner,
-        mfa: result.mfa, mustEnrollMfa: result.mustEnrollMfa === true};
+        mfa: result.mfa, mustEnrollMfa: result.mustEnrollMfa === true, mfaRequired: result.mfaRequired === true};
     me.set(value);
     return value;
 }

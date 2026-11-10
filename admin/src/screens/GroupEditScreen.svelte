@@ -2,7 +2,7 @@
     import {onMount} from 'svelte';
     import GroupsCtrl from '../controller/GroupsCtrl';
     import InvalidSession from '../controller/InvalidSession';
-    import {DEFAULT_GROUP_ATTRIBUTES, type Group, type GroupAttributes, type TunnelProtocolName} from '../controller/Types';
+    import {DEFAULT_GROUP_ATTRIBUTES, type Group, type GroupAttributes, type TunnelProtocolName, type UserView} from '../controller/Types';
     import Button from '../ui/Button.svelte';
     import Card from '../ui/Card.svelte';
     import Checkbox from '../ui/Checkbox.svelte';
@@ -54,6 +54,11 @@
     let formError = $state('');
     let pending = $state(false);
     let deleteOpen = $state(false);
+    // 이슈 346: 2단계 인증 필수를 켤 때 영향받는 인원을 세려고 구성원을 둔다(활성 사용자만 센다).
+    let members = $state<UserView[]>([]);
+    let mfaConfirmOpen = $state(false);
+    const activeMembers = $derived(members.filter((member) => member.status === 'active'));
+    const withoutSecondFactor = $derived(activeMembers.filter((member) => member.mfaEnabled !== true && (member.passkeyCount ?? 0) === 0).length);
 
     const dirty = $derived(snapshot(name, attrs) !== loadedSnapshot);
     const rewriteAllowed = $derived(attrs.allowed_protocols.includes('HTTP_REWRITE'));
@@ -116,8 +121,12 @@
 
     const reload = async (id: string): Promise<void> => {
         const result = await GroupsCtrl.instance.get(id);
-        if(result.success) fill(result.group);
-        else navigate('#/groups');
+        if(result.success) {
+            fill(result.group);
+            members = result.members;
+        } else {
+            navigate('#/groups');
+        }
     };
 
     const submit = (e: SubmitEvent) => {
@@ -127,6 +136,16 @@
         nameError = name.trim() === '' ? 'Enter a group name.' : '';
         limitErrors = emptyLimitErrors();
         if(nameError || Object.keys(limitErrors).length > 0) return;
+        // 이슈 346: 2단계 인증 필수를 새로 켜고 2단계 수단이 없는 구성원이 있으면 저장 전에 알린다. 끌 때는 묻지 않는다.
+        if(!isNew && attrs.mfa_required && !loadedAttrs.mfa_required && withoutSecondFactor > 0) {
+            mfaConfirmOpen = true;
+            return;
+        }
+        save();
+    };
+
+    const save = () => {
+        mfaConfirmOpen = false;
         void run(async () => {
             const attributes = normalized();
             if(isNew) {
@@ -289,6 +308,17 @@
         </div>
     </Card>
 
+    <Card label="Sign-in">
+        {#if isSuperuserGroup}
+            <p id="group-mfa-superuser-note" style="margin: 0; color: var(--ink-2);">Superusers follow the server setting “Require two-factor for superusers”.</p>
+        {:else}
+            <div style="display: flex; flex-direction: column; gap: var(--s-2);">
+                <Checkbox id="group-attr-mfa_required" label="Require two-factor authentication" disabled={readOnly} bind:checked={attrs.mfa_required} />
+                <p style="margin: 0; color: var(--ink-2); font-size: var(--fs-sm);">Members must use a passkey or an authenticator app. Members without one must set it up the next time they use the admin console.</p>
+            </div>
+        {/if}
+    </Card>
+
     {#if !readOnly}
         <!-- 하단 고정 바. 흐름 안의 sticky 라서 폼 마지막 입력을 덮지 않는다(TunnelEditScreen 과 같은 배치). -->
         <div style="position: sticky; bottom: 0; z-index: 40; display: flex; flex-wrap: wrap; gap: var(--s-3); justify-content: flex-end;
@@ -304,6 +334,14 @@
         </div>
     {/if}
 </form>
+
+<Modal bind:open={mfaConfirmOpen} title="Require two-factor authentication?" class="group-mfa-confirm-modal">
+    <p id="group-mfa-affected" style="margin: 0;">{withoutSecondFactor} of {activeMembers.length} members don't have two-factor authentication yet. They'll be asked to set it up before they can do anything else, including members who are signed in now.</p>
+    {#snippet footer()}
+        <Button onclick={() => (mfaConfirmOpen = false)}>Cancel</Button>
+        <Button variant="primary" onclick={save}>Require and save</Button>
+    {/snippet}
+</Modal>
 
 <Modal bind:open={deleteOpen} title="Delete group">
     Delete {group?.name}? This cannot be undone.

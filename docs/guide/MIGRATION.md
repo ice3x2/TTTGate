@@ -132,6 +132,14 @@ curl -sk https://127.0.0.1:9300/api/version
 The server must start and answer `/api/version` with 200. If it instead logs a configuration validation
 failure, do not downgrade without restoring the `.bak` files first.
 
+### Downgrading after group two-factor enforcement (2.3.0)
+
+2.3.0 adds the group attribute `mfa_required` to `config/identity.yaml`. Older versions ignore it when they read
+the file, so group enforcement stops after a downgrade: members can then sign in with a password alone.
+When an older console saves such a group, the attribute is dropped from the file without a warning, so after an
+upgrade again the group no longer requires two-factor authentication. Check the group after you upgrade again.
+An API call to an older server that sends `mfa_required` is rejected with 422 `attributes_unknown_key`.
+
 ## 5. Legacy-fallback mode
 
 If `identity.yaml` exists but cannot be read or parsed, the server does not refuse to start. It enters

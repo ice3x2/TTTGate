@@ -1,4 +1,6 @@
 import SessionStore, {Session} from "./SessionStore";
+import {mfaPolicyOptions} from "./mfaPolicyOptions";
+import {isMfaRequired, removesLastSecondFactor} from "../rbac/MfaPolicy";
 import {auditEventOf, isFieldProvided, RouteContext, RouteHandlers} from "./routes";
 import {recordAuditEvent} from "../audit/AuditSink";
 import {AUDIT_EVENT_TYPES} from "../audit/AuditEventTypes";
@@ -93,7 +95,7 @@ const onListUsers = async (ctx: RouteContext): Promise<void> => {
     const groups = store.groups();
     const users = store.users()
         .sort((left, right) => left.createdAt - right.createdAt)
-        .map((user) => toUserView(user, groups));
+        .map((user) => toUserView(user, groups, mfaPolicyOptions()));
     ctx.ok({users});
 };
 
@@ -122,7 +124,7 @@ const onCreateUser = async (ctx: RouteContext): Promise<void> => {
     }
     ctx.auditDetail({userId: created.value.id});
     emitTemporaryPasswordIssued(ctx, created.value.id, temporary.generated);
-    ctx.ok({user: toUserView(created.value, store.groups()), temporaryPassword: temporary.password}, 201);
+    ctx.ok({user: toUserView(created.value, store.groups(), mfaPolicyOptions()), temporaryPassword: temporary.password}, 201);
 };
 
 const onGetUser = async (ctx: RouteContext): Promise<void> => {
@@ -132,7 +134,7 @@ const onGetUser = async (ctx: RouteContext): Promise<void> => {
         ctx.fail(404, 'user_not_found', `user not found: ${ctx.params.id}`);
         return;
     }
-    ctx.ok({user: toUserView(user, store.groups())});
+    ctx.ok({user: toUserView(user, store.groups(), mfaPolicyOptions())});
 };
 
 const onUpdateUser = async (ctx: RouteContext): Promise<void> => {
@@ -168,7 +170,7 @@ const onUpdateUser = async (ctx: RouteContext): Promise<void> => {
     const updated = store.updateUser(ctx.params.id, patch);
     // 그룹·역할이 바뀌면 그 사용자 터널의 수명 상한도 바뀐다(#137).
     if(updated.success && (patch.groupId !== undefined || patch.role !== undefined)) ctx.reapplyTunnelCaps?.();
-    replyResult(ctx, updated, (user) => ({user: toUserView(user, store.groups())}));
+    replyResult(ctx, updated, (user) => ({user: toUserView(user, store.groups(), mfaPolicyOptions())}));
 };
 
 const onDeleteUser = async (ctx: RouteContext): Promise<void> => {
@@ -182,21 +184,27 @@ const onDeleteUser = async (ctx: RouteContext): Promise<void> => {
 };
 
 const onResetUserPassword = async (ctx: RouteContext): Promise<void> => {
+    // 이슈 346: 2단계 수단(TOTP·패스키)도 함께 지울지. 없으면 false 다. 화면 밖의 옛 호출이 뜻하지 않게 지우지 않게 한다.
+    const resetSecondFactors = ctx.body?.resetSecondFactors ?? false;
+    if(typeof resetSecondFactors !== 'boolean') {
+        ctx.fail(422, 'reset_second_factors_invalid', 'resetSecondFactors must be a boolean');
+        return;
+    }
     const temporary = resolveTemporaryPassword(ctx);
     if(!temporary) {
         return;
     }
     const store = IdentityStore.instance;
-    // 해시와 mustChangePassword 를 한 번에 저장한다(#145).
-    const updated = await store.setPassword(ctx.params.id, temporary.password, {requireChange: true});
+    // 해시와 mustChangePassword(#145), 그리고 2단계 수단 삭제를 한 번에 저장한다.
+    const updated = await store.setPassword(ctx.params.id, temporary.password, {requireChange: true, clearSecondFactors: resetSecondFactors});
     if(!updated.success) {
         ctx.fail(updated.status, updated.code, updated.message);
         return;
     }
     // 발급받은 사람이 새 비밀번호로 다시 들어오도록 기존 세션을 모두 끊는다.
     SessionStore.instance.removeSessionsOfUser(ctx.params.id);
-    ctx.auditDetail({generated: temporary.generated});
-    ctx.ok({user: toUserView(updated.value, store.groups()), temporaryPassword: temporary.password});
+    ctx.auditDetail({generated: temporary.generated, secondFactorsReset: resetSecondFactors});
+    ctx.ok({user: toUserView(updated.value, store.groups(), mfaPolicyOptions()), temporaryPassword: temporary.password});
 };
 
 const onListGroups = async (ctx: RouteContext): Promise<void> => {
@@ -231,7 +239,7 @@ const onGetGroup = async (ctx: RouteContext): Promise<void> => {
     const groups = store.groups();
     ctx.ok({
         group: toGroupView(group),
-        members: store.membersOf(group.id).map((user) => toUserView(user, groups))
+        members: store.membersOf(group.id).map((user) => toUserView(user, groups, mfaPolicyOptions()))
     });
 };
 
@@ -284,7 +292,8 @@ const onGetMe = async (ctx: RouteContext): Promise<void> => {
             sections: sections(principal),
             migrationBanner: false,
             mfa: mfaSummaryOf(undefined),
-            mustEnrollMfa: false
+            mustEnrollMfa: false,
+            mfaRequired: false
         });
         return;
     }
@@ -293,12 +302,14 @@ const onGetMe = async (ctx: RouteContext): Promise<void> => {
     const groups = store.groups();
     const group = groups.find((candidate) => candidate.id === user.groupId);
     ctx.ok({
-        user: toUserView(user, groups),
+        user: toUserView(user, groups, mfaPolicyOptions()),
         group: {id: principal.groupId, name: group?.name ?? principal.groupId, attributes: principal.attributes},
         sections: sections(principal),
         migrationBanner: user.migratedFromLegacyAdmin && !user.migrationAcknowledged,
         mfa: mfaSummaryOf(user),
-        mustEnrollMfa: ctx.session?.mustEnrollMfa === true
+        mustEnrollMfa: principal.mustEnrollMfa === true,
+        // 이슈 346: 화면이 마지막 2단계 수단의 삭제 버튼을 미리 막는 데 쓴다.
+        mfaRequired: isMfaRequired(user, group?.attributes, mfaPolicyOptions())
     });
 };
 
@@ -329,13 +340,17 @@ export const passwordConfirmed = async (ctx: RouteContext, user: User): Promise<
 const onEnrollMfa = async (ctx: RouteContext): Promise<void> => {
     const user = selfUserOf(ctx);
     if(!user) return;
-    if(user.mfa?.enabled) {
+    // 이슈 346: 켜진 TOTP 는 replace 와 비밀번호로만 다시 등록한다(휴대폰을 잃은 사용자의 인증 앱 교체).
+    // 새 코드를 확인하기 전까지 기존 인증 앱은 그대로이므로 2단계 인증이 끊기지 않는다.
+    const replace = user.mfa?.enabled === true;
+    if(replace && ctx.body?.replace !== true) {
         ctx.fail(409, 'mfa_already_enabled', 'Two-factor authentication is already enabled.');
         return;
     }
+    if(replace && !await passwordConfirmed(ctx, user)) return;
     const secret = generateSecret();
     const recoveryCodes = generateRecoveryCodes();
-    ctx.mfa!.pending.set(user.id, {secret, recoveryCodes});
+    ctx.mfa!.pending.set(user.id, {secret, recoveryCodes, replace});
     const secretBase32 = base32Encode(secret);
     // 평문 secret·복구 코드는 이 응답에만 실린다.
     ctx.ok({secret: secretBase32, otpauthUri: otpauthUri(user.username, secretBase32), recoveryCodes});
@@ -347,6 +362,12 @@ const onConfirmMfa = async (ctx: RouteContext): Promise<void> => {
     const pending = ctx.mfa!.pending.peek(user.id);
     if(!pending) {
         ctx.fail(409, 'mfa_enrollment_expired', 'Start the setup again.');
+        return;
+    }
+    // 이슈 346: 켜진 TOTP 를 바꾸려면 비밀번호를 확인한 교체 등록(replace)이어야 한다. TOTP 가 꺼진 동안 시작한 등록은 쓰지 않는다.
+    if(user.mfa?.enabled === true && !pending.replace) {
+        ctx.mfa!.pending.consume(user.id);
+        ctx.fail(409, 'mfa_already_enabled', 'Two-factor authentication is already enabled.');
         return;
     }
     // 코드는 6자리 문자열이다. 숫자로 보내면 앞자리 0 이 사라지므로 받지 않는다(형식 오류로 실패 1회).
@@ -364,18 +385,22 @@ const onConfirmMfa = async (ctx: RouteContext): Promise<void> => {
     });
     // 저장에 성공했을 때만 대기 항목을 지운다. 디스크 오류면 QR 을 다시 찍지 않고 재시도할 수 있다(사이에 await 없음).
     if(saved.success) {
+        // 강제 등록 상태는 요청마다 다시 계산하므로(이슈 346) 이 세션은 다음 요청부터 재로그인 없이 풀린다.
         ctx.mfa!.pending.consume(user.id);
-        // #127 (U4-08): 강제 등록 중이던 이 세션은 재로그인 없이 풀린다.
-        SessionStore.instance.updateSession(ctx.session!.key, {mustEnrollMfa: false});
+        if(pending.replace) ctx.auditDetail({replaced: true});
     }
     replyResult(ctx, saved, () => ({mfa: {enabled: true, recoveryCodesRemaining: pending.recoveryCodes.length}}));
 };
 
 const onDisableMfa = async (ctx: RouteContext): Promise<void> => {
-    const user = selfUserOf(ctx);
-    if(!user || !await passwordConfirmed(ctx, user)) return;
-    if(ServerOptionStore.instance.serverOption.mfaRequiredForSuperusers === true && user.role === 'superuser') {
-        ctx.fail(409, 'mfa_required', 'Superusers must keep two-factor authentication enabled.');
+    const confirmedUser = selfUserOf(ctx);
+    if(!confirmedUser || !await passwordConfirmed(ctx, confirmedUser)) return;
+    // 비밀번호 확인(bcrypt)을 기다리는 사이 다른 탭에서 패스키를 지웠을 수 있다. 판정은 지금 값으로 한다.
+    const user = IdentityStore.instance.user(confirmedUser.id);
+    if(!user) return;
+    // 이슈 346: 강제 대상은 마지막 2단계 수단을 끌 수 없다. 패스키가 남으면 TOTP 를 끌 수 있다.
+    if(isMfaRequired(user, IdentityStore.instance.group(user.groupId)?.attributes, mfaPolicyOptions()) && removesLastSecondFactor(user, 'totp')) {
+        ctx.fail(409, 'mfa_required', 'Two-factor authentication is required for your account. Add a passkey before turning off the authenticator app.');
         return;
     }
     if(!user.mfa?.enabled) {
@@ -475,7 +500,7 @@ const onResetUserMfa = async (ctx: RouteContext): Promise<void> => {
         return;
     }
     SessionStore.instance.removeSessionsOfUser(ctx.params.id);
-    ctx.ok({user: toUserView(store.user(ctx.params.id)!, store.groups())});
+    ctx.ok({user: toUserView(store.user(ctx.params.id)!, store.groups(), mfaPolicyOptions())});
 };
 
 /**

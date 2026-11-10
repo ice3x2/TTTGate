@@ -21,7 +21,8 @@ const TUNNEL_ACCESS_DISABLED: Decision = {allowed: false, status: 403, code: 'tu
 const TUNNEL_CREATE_FORBIDDEN: Decision = {allowed: false, status: 403, code: 'tunnel_create_forbidden'};
 const PASSWORD_CHANGE_REQUIRED: Decision = {allowed: false, status: 403, code: 'password_change_required'};
 const MFA_ENROLLMENT_REQUIRED: Decision = {allowed: false, status: 403, code: 'mfa_enrollment_required'};
-const MFA_ENROLLMENT_ACTIONS: ReadonlySet<Action> = new Set<Action>(['me:read', 'me:password', 'me:mfa', 'me:sessions']);
+// 이슈 346: 패스키도 2단계 수단이므로 등록 중에 패스키를 등록할 수 있다.
+const MFA_ENROLLMENT_ACTIONS: ReadonlySet<Action> = new Set<Action>(['me:read', 'me:password', 'me:mfa', 'me:sessions', 'me:passkey']);
 
 const SUPERUSER_SECTIONS: readonly Section[] = ['status', 'tunnels', 'server', 'users', 'groups', 'security', 'audit', 'sessions', 'me'];
 

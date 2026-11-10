@@ -48,9 +48,11 @@ class UsersCtrl {
         return adminRequest(`/api/users/${id}/passkeys/reset`, {method: "POST"});
     }
 
-    public resetPassword(id: string, temporaryPassword?: string): Promise<ApiResult<{temporaryPassword: string}>> {
+    /** 이슈 346: resetSecondFactors 면 TOTP 와 패스키도 함께 지운다. 화면은 이 값을 항상 보낸다. */
+    public resetPassword(id: string, options: {resetSecondFactors: boolean; temporaryPassword?: string}): Promise<ApiResult<{temporaryPassword: string}>> {
         return adminRequest(`/api/users/${id}/password-reset`, {
-            method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({temporaryPassword})
+            method: "POST", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({temporaryPassword: options.temporaryPassword, resetSecondFactors: options.resetSecondFactors})
         });
     }
 }

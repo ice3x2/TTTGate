@@ -9,11 +9,14 @@
         username,
         password,
         ondone,
+        secondFactorsReset = false,
     }: {
         open?: boolean;
         username: string;
         password: string;
         ondone: () => void;
+        /** 이슈 346: 비밀번호와 함께 2단계 인증·패스키도 초기화했다. */
+        secondFactorsReset?: boolean;
     } = $props();
 
     let wasOpen = false;
@@ -36,6 +39,9 @@
     <p id="temp-password-username" class="mono">@{username}</p>
     <p id="temp-password-value" class="mono" style="font-size: var(--fs-2xl)">{password}</p>
     <p>This password is shown only once. Send it to the user through a channel you trust.</p>
+    {#if secondFactorsReset}
+        <p id="temp-password-second-factors">Two-factor authentication and passkeys were reset. Tell the user to sign in with this password, set a new one, and then set up two-factor authentication.</p>
+    {/if}
     {#snippet footer()}
         <Button onclick={copy}>Copy</Button>
         <Button variant="primary" onclick={() => (open = false)}>Done</Button>

@@ -1,4 +1,6 @@
 import {IncomingMessage} from "http";
+import {mfaPolicyOptions} from "./mfaPolicyOptions";
+import {isMfaRequired, removesLastSecondFactor} from "../rbac/MfaPolicy";
 import type * as WebAuthnServer from "@simplewebauthn/server";
 import {RouteContext, RouteHandlers, decodedPathSegment} from "./routes";
 import {LoginGuard} from "./mfaLoginRoutes";
@@ -173,6 +175,13 @@ export function passkeyRouteHandlers(state: PasskeyState, guard: LoginGuard): Ro
         const user = selfUserOf(ctx);
         if(!user) return;
         const id = decodedPathSegment(ctx.params.id) ?? '';
+        // 이슈 346: 강제 대상은 마지막 2단계 수단(TOTP 가 없을 때의 마지막 패스키)을 지울 수 없다.
+        const owned = (user.passkeys ?? []).some((passkey) => passkey.id === id);
+        if(owned && isMfaRequired(user, IdentityStore.instance.group(user.groupId)?.attributes, mfaPolicyOptions())
+            && removesLastSecondFactor(user, 'passkey')) {
+            ctx.fail(409, 'mfa_required', 'Two-factor authentication is required for your account. Set up an authenticator app before removing your last passkey.');
+            return;
+        }
         const removed = IdentityStore.instance.removePasskey(user.id, id);
         if(!removed.success) {
             ctx.fail(removed.status, removed.code, removed.message);
@@ -192,7 +201,7 @@ export function passkeyRouteHandlers(state: PasskeyState, guard: LoginGuard): Ro
         }
         SessionStore.instance.removeSessionsOfUser(ctx.params.id);
         ctx.auditDetail({removed: cleared.value.removed});
-        ctx.ok({user: toUserView(store.user(ctx.params.id)!, store.groups())});
+        ctx.ok({user: toUserView(store.user(ctx.params.id)!, store.groups(), mfaPolicyOptions())});
     };
 
     /** 계정 저장소가 없거나 첫 관리자 설정 전이면 503 을 보내고 false 다. */
