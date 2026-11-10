@@ -244,9 +244,9 @@ describe("이슈 349 한국어 상태 줄", () => {
         expect(koText(option(), status({sessions: 2, clientConnected: false}))).toBe("켜짐 · 클라이언트 연결 끊김 · 연결 2개");
     });
 
-    test("보기만 가능한 터널", () => {
-        expect(koText(option({editable: false, toggleable: false}), status())).toBe("켜짐 · 보기만 가능");
-        expect(koText(option({editable: false, toggleable: false}), status({online: false}))).toBe("사용할 수 없음 · 보기만 가능");
+    test("보기 전용 터널", () => {
+        expect(koText(option({editable: false, toggleable: false}), status())).toBe("켜짐 · 보기 전용");
+        expect(koText(option({editable: false, toggleable: false}), status({online: false}))).toBe("사용할 수 없음 · 보기 전용");
     });
 
     test("옮겨 온 터널의 소유자와 인증서 경고", () => {

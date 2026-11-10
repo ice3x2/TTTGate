@@ -43,12 +43,13 @@ import type {Messages} from './en';
 //   delete / remove (항목을 지움)   삭제
 //   remove (고른 것에서 뺌)          빼기
 //   reset                        초기화 (편집 내용을 버리는 버튼은 '원래대로', 되돌리기는 Undo)
-//   end (session)                끝내기
+//   end (session)                끝내기 (감사 이벤트 이름은 종료)
 //   access denied                접근 거부 (권한), 연결 denial 은 거절
 //   issue (비밀번호·코드)           발급
 //   display name                 표시 이름
 //   role                         역할
-//   audit event names            '대상 + 동작' 의 명사형(예: 터널 켬, 사용자 생성)
+//   view only / read only        보기 전용
+//   audit event names            '대상 + 동작' 의 명사형(예: 터널 켜짐, 사용자 생성, 세션 종료, 비밀값 재발급)
 
 export const ko: Messages = {
     'common.unableToConnect': '서버에 연결하지 못했습니다.',
@@ -106,7 +107,7 @@ export const ko: Messages = {
     'tunnel.clientOffline': '클라이언트 연결 끊김',
     'tunnel.checking': '확인 중…',
     'tunnel.unavailable': '사용할 수 없음',
-    'tunnel.viewOnly': '보기만 가능',
+    'tunnel.viewOnly': '보기 전용',
     'tunnel.notRunning': '실행 중이 아님',
     'tunnel.cannotOpenPort': '{port} 포트를 열 수 없음',
     'tunnel.migratedOwner': '업그레이드 전 터널',
@@ -140,16 +141,16 @@ export const ko: Messages = {
     'auditEvent.mfa_success': '2단계 인증 통과',
     'auditEvent.mfa_failure': '2단계 인증 실패',
     'auditEvent.mfa_recovery_used': '복구 코드 사용',
-    'auditEvent.mfa_enrolled': '2단계 인증 켬',
-    'auditEvent.mfa_disabled': '2단계 인증 끔',
+    'auditEvent.mfa_enrolled': '2단계 인증 켜짐',
+    'auditEvent.mfa_disabled': '2단계 인증 꺼짐',
     'auditEvent.mfa_reset': '2단계 인증 초기화',
     'auditEvent.mfa_recovery_codes_regenerated': '복구 코드 재발급',
     'auditEvent.passkey_registered': '패스키 등록',
     'auditEvent.passkey_removed': '패스키 삭제',
     'auditEvent.passkey_reset': '패스키 초기화',
     'auditEvent.logout': '로그아웃',
-    'auditEvent.session_killed': '세션 끝냄',
-    'auditEvent.sessions_killed_for_user': '사용자의 세션 모두 끝냄',
+    'auditEvent.session_killed': '세션 종료',
+    'auditEvent.sessions_killed_for_user': '사용자 세션 모두 종료',
     'auditEvent.sessions_killed_self_others': '다른 기기 로그아웃',
     'auditEvent.user_created': '사용자 생성',
     'auditEvent.user_updated': '사용자 수정',
@@ -165,8 +166,8 @@ export const ko: Messages = {
     'auditEvent.tunnel_created': '터널 생성',
     'auditEvent.tunnel_updated': '터널 수정',
     'auditEvent.tunnel_deleted': '터널 삭제',
-    'auditEvent.tunnel_activated': '터널 켬',
-    'auditEvent.tunnel_deactivated': '터널 끔',
+    'auditEvent.tunnel_activated': '터널 켜짐',
+    'auditEvent.tunnel_deactivated': '터널 꺼짐',
     'auditEvent.tunnel_reassigned': '터널 소유자 변경',
     'auditEvent.tunnel_cert_updated': '터널 인증서 변경',
     'auditEvent.tunnel_cert_deleted': '터널 인증서 삭제',
@@ -176,7 +177,7 @@ export const ko: Messages = {
     'auditEvent.admin_cert_updated': '관리 인증서 변경',
     'auditEvent.trusted_client_created': '신뢰 클라이언트 생성',
     'auditEvent.trusted_client_deleted': '신뢰 클라이언트 삭제',
-    'auditEvent.trusted_client_secret_rotated': '신뢰 클라이언트 비밀값 새로 만듦',
+    'auditEvent.trusted_client_secret_rotated': '신뢰 클라이언트 비밀값 재발급',
     'auditEvent.enrollment_code_issued': '등록 코드 발급',
     'auditEvent.enrollment_code_confirmed': '등록 코드 확정',
     'auditEvent.client_enrolled': '클라이언트 등록',
@@ -296,7 +297,7 @@ export const ko: Messages = {
     // App.svelte
     'app.mfaNowRequired': '이제 이 계정은 2단계 인증을 써야 합니다.',
     'app.refreshFailed': '계정 정보를 다시 읽지 못했습니다. 페이지를 새로 고치세요.',
-    'app.offline': '서버에 연결할 수 없습니다…',
+    'app.offline': '서버에 연결할 수 없습니다.',
     'app.migrationBanner': '업그레이드하면서 이 계정이 슈퍼유저가 되었습니다.',
     'app.notAvailable': '아직 쓸 수 없는 화면입니다.',
 
@@ -438,6 +439,8 @@ export const ko: Messages = {
     'sysinfo.netmask': '넷마스크',
     'sysinfo.mac': 'MAC 주소',
     'sysinfo.internal': '내부',
+    'sysinfo.internalYes': '예',
+    'sysinfo.internalNo': '아니요',
     'sysinfo.family': '주소 체계',
     'sysinfo.cidr': 'CIDR',
 
@@ -463,7 +466,7 @@ export const ko: Messages = {
     'tunnels.askAdmin': '관리자에게 터널 추가를 요청하세요.',
     'tunnels.turningOn': '켜는 중…',
     'tunnels.turningOff': '끄는 중…',
-    'tunnels.viewOnly': '보기만 가능',
+    'tunnels.viewOnly': '보기 전용',
     'tunnels.turnOffConfirm': '{title} 터널을 끌까요?',
     'tunnels.turnOffConfirmUntitled': '터널을 끌까요?',
     'tunnels.connectionsCut_one': '연결 {count}개가 끊어집니다.',
@@ -572,7 +575,7 @@ export const ko: Messages = {
 
     // GroupEditScreen.svelte
     'group.crudNone': '없음',
-    'group.crudReadOnly': '보기만',
+    'group.crudReadOnly': '보기 전용',
     'group.crudToggle': '켜기·끄기만',
     'group.crudFull': '모든 권한',
     'group.httpRewrite': 'HTTP 다시 쓰기',
@@ -641,7 +644,11 @@ export const ko: Messages = {
     'server.keepAlive': 'Keep-Alive(ms)',
     'server.keepAliveHint': '0 이하면 keep-alive를 끕니다.',
     'server.logLevel': '로그 수준',
-    'server.logLevelHint': '모든 서버 로그에 바로 적용됩니다. debug는 내용이 많습니다.',
+    'server.logLevelHint': '모든 서버 로그에 바로 적용됩니다. 디버그는 기록이 많습니다.',
+    'server.logLevelError': '오류',
+    'server.logLevelWarn': '경고',
+    'server.logLevelInfo': '정보',
+    'server.logLevelDebug': '디버그',
     'server.requireMfaSuperusers': '슈퍼유저에게 2단계 인증 요구',
     'server.auditRetention': '감사 로그 보관 기간(일)',
     'server.auditRetentionHint': '0이면 영구 보관합니다.',
@@ -664,7 +671,7 @@ export const ko: Messages = {
     'cert.cert': '인증서',
     'cert.removeCa': 'CA 삭제',
     'cert.noUploadNote': '인증서를 올리지 않으면 임의로 만든 키를 씁니다.',
-    'cert.incorrectNote': '올바르지 않은 인증서를 올리면 HTTP 로 동작합니다.',
+    'cert.incorrectNote': '올바르지 않은 인증서를 올리면 HTTP로 동작합니다.',
     'cert.title': '인증서',
 
     // TunnelEditScreen.svelte
@@ -724,7 +731,7 @@ export const ko: Messages = {
     'tunnelEdit.injectResponseHeader': '응답 헤더 넣기',
     'tunnelEdit.replaceBody': '본문의 텍스트 바꾸기',
     'tunnelEdit.startup': '시작할 때',
-    'tunnelEdit.startupHint': '서버가 시작할 때, 터널을 만들 때, Online이 아닌 터널을 저장할 때 적용됩니다. Online인 터널을 저장하면 켜짐 상태와 타이머를 그대로 둡니다.',
+    'tunnelEdit.startupHint': '서버가 시작할 때, 터널을 만들 때, 켜져 있지 않은 터널을 저장할 때 적용됩니다. 켜진 터널을 저장하면 켜짐 상태와 타이머를 그대로 둡니다.',
     'tunnelEdit.inactiveOnStartup': '시작할 때 꺼 두기',
     'tunnelEdit.allowedIp': '허용 IP',
     'tunnelEdit.allowedIpHint': '이 터널을 켰거나 자기 IP를 반영한 사람의 IP에서 온 연결만 받습니다. 터널 앞에 CDN이나 리버스 프록시가 있으면 끄세요.',
@@ -782,7 +789,7 @@ export const ko: Messages = {
     'security.loading': '불러오는 중…',
     'security.noBlocked': '차단한 주소가 없습니다.',
     'security.note': '메모',
-    'security.added': '추가',
+    'security.added': '추가한 시각',
     'security.port': '{port} 포트',
     'security.unblock': '차단 해제',
     'security.bannedAddresses': '일시 차단된 주소',

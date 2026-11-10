@@ -6,18 +6,29 @@ import ts from "typescript";
 //
 // 찾는 것:
 //   template-text  .svelte 템플릿의 글자, 그리고 글자 자리의 식 {…} 안 리터럴.
-//   text-attribute 사용자에게 보이는 HTML 속성과 글자를 그리는 부품 속성(TEXT_NAMES)의 값, 그 이름을 키로 쓴 객체 값과 대입.
+//   text-attribute 속성의 따옴표 값(토큰 속성 TOKEN_ATTRIBUTES·data-*·이벤트·지시어는 뺀다), 글자를 그리는 속성(TEXT_NAMES)의 식,
+//                  그 이름을 키로 쓴 객체 값과 대입(textContent 처럼 DOM 에 글자를 넣는 대입 포함).
 //   sentence       .svelte 의 <script>·속성 식과 .ts 모듈의 리터럴 가운데 영어 문장 모양인 것(영어 단어 2개 이상, 또는 마침표로 끝나는 한 단어).
-// 허용하는 것: 제품 이름·단위·프로토콜 같은 코드 값(ALLOWED_WORDS), 공백 없이 소문자로 시작하는 코드 값('alarm', 'tunnels.title'),
-//   CSS 값, 마크업 문자열, 경로, 주석, 비교 연산의 피연산자.
+//   raw-error      잡은 예외의 원문(e.message, e + '', String(e), `${e}`, e.toString()). 화면에 그대로 보이면 번역되지 않는다.
+// 허용하는 것: 제품 이름·단위·프로토콜 같은 코드 값(ALLOWED_WORDS), CSS 값, 마크업 문자열, 경로·호스트·문구 키, 주석, 비교 연산의 피연산자.
+//   글자 자리(템플릿 글자의 식, TEXT_NAMES 의 값)가 아닌 곳에서는 공백 없이 소문자로 시작하는 값('alarm', 'ghost')도 코드 값으로 본다.
+//   글자 자리에서도 문구·형식 함수(CODE_ARGUMENT_CALLEES)의 인자(t('tunnels.title'), dateTime({month: 'short'}))는 코드 값이다.
+//   예외 원문이라도 로그(console.*), 번역 문구의 값(t(…, {reason: e.message})), 다시 던지는 예외(new Error(e.message))는 허용한다.
 
-export type Finding = {file: string; line: number; rule: "template-text" | "text-attribute" | "sentence"; text: string};
+export type Finding = {file: string; line: number; rule: "template-text" | "text-attribute" | "sentence" | "raw-error"; text: string};
 
-/** 값이 낱말 목록이 아닌 토큰인 속성. 값을 보지 않는다. */
+/** 값이 낱말 목록이 아닌 토큰인 속성. 따옴표 값도 {…} 식도 보지 않는다. */
 const TOKEN_ATTRIBUTES = new Set(["class", "autocomplete", "inputmode", "type", "accept", "role", "id", "for", "name"]);
 
-/** 화면에 그려지는 속성과 객체 키. */
-const TEXT_NAMES = new Set(["aria-label", "aria-description", "title", "placeholder", "alt", "label", "hint", "error", "message", "sub", "ariaLabel"]);
+/** 따옴표 값이 토큰인 속성. 따옴표 값만 건너뛰고 {…} 식은 코드로 검사한다. data-*, 지시어(bind:·class: 등)도 같다. */
+const TOKEN_VALUE_ATTRIBUTES = new Set(["style", "href", "src", "target", "rel", "lang", "dir", "method", "action", "enctype", "pattern", "tabindex",
+    "variant", "size", "tone", "kind", "align", "icon", "viewBox", "xmlns", "d", "points", "fill", "stroke", "transform", "preserveAspectRatio"]);
+const isTokenValueAttribute = (name: string) => TOKEN_ATTRIBUTES.has(name) || TOKEN_VALUE_ATTRIBUTES.has(name)
+    || /^(data-|aria-(hidden|live|current|expanded|controls|labelledby|describedby|haspopup|modal|pressed|checked|selected|disabled|invalid|busy|atomic|relevant|autocomplete|orientation|sort|level|posinset|setsize|owns|activedescendant|required|readonly|multiselectable|errormessage|value(now|min|max))$|stroke-|fill-)|:/.test(name);
+
+/** 화면에 그려지는 속성과 객체 키, DOM 에 글자를 넣는 속성. */
+const TEXT_NAMES = new Set(["aria-label", "aria-description", "aria-roledescription", "aria-valuetext", "aria-placeholder", "title", "placeholder", "alt",
+    "label", "hint", "error", "message", "sub", "ariaLabel", "textContent", "innerText"]);
 
 const ALLOWED_WORDS = new Set([
     "TTTGate",
@@ -36,11 +47,21 @@ const isFormat = (value: string) => /-----(BEGIN|END)\b|\bKEY-----|(^|\s)--[a-z]
 const englishWords = (value: string) => (value.replace(/&\w+;/g, " ").match(/[A-Za-z][A-Za-z0-9']*/g) ?? [])
     .filter((word) => word.length >= 2 && !ALLOWED_WORDS.has(word));
 
-/** 글자 자리의 값이 영어 문구인가. 공백 없이 대문자가 아닌 글자로 시작하면 코드 값으로 본다. */
-const isText = (value: string): boolean => {
+/**
+ * 코드 값 모양. 소문자로 시작해 점으로 이은 호스트·문구 키(gw.example.com, tunnels.title), 빗금으로 시작하는 경로,
+ * 소문자 낱말을 쌍점으로 이은 코드 값(system:migrated), 숫자가 섞이고 글자로 끝나는 예시 ID(edge-1).
+ * "Done."·"Port:"·"On/Off" 처럼 끝이 문장 부호이거나 대문자 낱말을 이은 값은 아니다.
+ */
+const isDottedToken = (plain: string) => /^[a-z0-9][\w-]*([.:][\w-]+)+$/.test(plain) || /^\/[\w./-]*$/.test(plain) || /^(?=.*\d)[\w.:/@-]*\w$/.test(plain);
+
+/**
+ * 값이 영어 문구인가. strict 는 글자 자리(템플릿 글자의 식, 글자 속성)다. 그곳에서는 소문자 한 단어도 문구다.
+ * strict 가 아니면 공백 없이 대문자가 아닌 글자로 시작하는 값을 코드 값으로 본다.
+ */
+const isText = (value: string, strict: boolean): boolean => {
     const plain = value.split(SUBSTITUTION).join(" ").trim();
-    if(isMarkup(plain) || isCss(value) || isFormat(plain)) return false;
-    if(!/\s/.test(plain) && !/^[A-Z]/.test(plain)) return false;
+    if(isMarkup(plain) || isCss(value) || isFormat(plain) || isDottedToken(plain)) return false;
+    if(!strict && !/\s/.test(plain) && !/^[A-Z]/.test(plain)) return false;
     return englishWords(plain).length > 0;
 };
 
@@ -54,8 +75,11 @@ const isSentence = (value: string): boolean => {
     return words.length >= 2;
 };
 
-/** compared: 비교 연산의 피연산자다. thrown: new XxxError(…)·super(…) 의 인자로, 화면에 보이지 않는 개발자용 문구다. */
-type Literal = {value: string; start: number; textSlot: boolean; compared: boolean; thrown: boolean};
+/**
+ * compared: 비교 연산의 피연산자다. thrown: new XxxError(…)·super(…) 의 인자로, 화면에 보이지 않는 개발자용 문구다.
+ * callArg: 문구·형식 함수(CODE_ARGUMENT_CALLEES) 호출의 인자 안에 있다(문구 키, 형식 옵션).
+ */
+type Literal = {value: string; start: number; textSlot: boolean; compared: boolean; thrown: boolean; callArg: boolean};
 
 const EQUALITY = new Set([ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsEqualsToken, ts.SyntaxKind.EqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsToken]);
 const ASSIGN_OR_KEY = new Set([ts.SyntaxKind.ColonToken, ts.SyntaxKind.EqualsToken, ts.SyntaxKind.BarBarEqualsToken, ts.SyntaxKind.QuestionQuestionEqualsToken]);
@@ -84,12 +108,37 @@ const tokensOf = (code: string): Token[] => {
     return tokens;
 };
 
+/** 글자 자리에서도 인자를 코드 값으로 보는 호출. 문구 키와 형식 옵션을 받는다. */
+const CODE_ARGUMENT_CALLEES = new Set(["t", "plural", "has", "dateTime", "number", "list", "toLocaleString", "toLocaleDateString", "toLocaleTimeString",
+    "DateTimeFormat", "NumberFormat", "RelativeTimeFormat", "PluralRules", "ListFormat", "DisplayNames"]);
+
+/** 이 토큰 뒤의 ( 는 함수 호출을 연다. */
+const CALLEE_END = new Set([ts.SyntaxKind.Identifier, ts.SyntaxKind.CloseParenToken, ts.SyntaxKind.CloseBracketToken, ts.SyntaxKind.QuestionDotToken, ts.SyntaxKind.SuperKeyword]);
+
+/** 토큰마다 감싸고 있는 함수 호출의 이름 목록(바깥부터). 이름을 모르는 호출은 빈 문자열이다. console.log 는 "console" 이다. */
+const calleesOf = (tokens: Token[]): string[][] => {
+    const stack: Array<string | undefined> = [];
+    return tokens.map((token, index) => {
+        const enclosing = stack.filter((callee): callee is string => callee !== undefined);
+        if(token.kind === ts.SyntaxKind.OpenParenToken) {
+            const before = tokens[index - 1];
+            if(before === undefined || !CALLEE_END.has(before.kind)) stack.push(undefined);
+            else if(before.kind !== ts.SyntaxKind.Identifier) stack.push("");
+            else stack.push(tokens[index - 2]?.kind === ts.SyntaxKind.DotToken && tokens[index - 3]?.text === "console" ? "console" : before.text);
+        } else if(token.kind === ts.SyntaxKind.CloseParenToken) {
+            stack.pop();
+        }
+        return enclosing;
+    });
+};
+
 /** 코드 조각의 문자열 리터럴. 템플릿 리터럴은 치환 자리를 SUBSTITUTION 으로 바꾼 하나의 값이다. */
 const literalsOf = (code: string): Literal[] => {
     const tokens = tokensOf(code);
+    const callees = calleesOf(tokens);
     const literals: Literal[] = [];
     const open: Array<{index: number; parts: string[]}> = [];
-    const contextOf = (first: number, last: number): Pick<Literal, "textSlot" | "compared" | "thrown"> => {
+    const contextOf = (first: number, last: number): Pick<Literal, "textSlot" | "compared" | "thrown" | "callArg"> => {
         const before = tokens[first - 1];
         const key = tokens[first - 2];
         const after = tokens[last + 1];
@@ -98,7 +147,7 @@ const literalsOf = (code: string): Literal[] => {
         const compared = (before !== undefined && EQUALITY.has(before.kind)) || (after !== undefined && EQUALITY.has(after.kind));
         const thrown = before?.kind === ts.SyntaxKind.OpenParenToken && key !== undefined
             && (key.kind === ts.SyntaxKind.SuperKeyword || (key.kind === ts.SyntaxKind.Identifier && /Error$/.test(key.text) && tokens[first - 3]?.kind === ts.SyntaxKind.NewKeyword));
-        return {textSlot, compared, thrown};
+        return {textSlot, compared, thrown, callArg: callees[first].some((callee) => CODE_ARGUMENT_CALLEES.has(callee))};
     };
     tokens.forEach((token, index) => {
         switch(token.kind) {
@@ -126,22 +175,111 @@ const literalsOf = (code: string): Literal[] => {
 
 type Report = (rule: Finding["rule"], text: string, offset: number) => void;
 
-/** 코드 자리(<script>, 속성 식, 블록 태그, .ts 모듈). 글자 속성 이름에 준 값과 문장 모양의 리터럴을 찾는다. */
+/** source[from] 의 여는 토큰에 짝이 되는 닫는 토큰의 위치. */
+const closingToken = (tokens: Token[], from: number, open: ts.SyntaxKind, close: ts.SyntaxKind): number => {
+    let depth = 0;
+    for(let i = from; i < tokens.length; i++) {
+        if(tokens[i].kind === open) depth++;
+        else if(tokens[i].kind === close && --depth === 0) return i;
+    }
+    return tokens.length - 1;
+};
+
+/** tokens[at] 에서 시작하는 함수 식의 첫 인자 이름. e => …, (e) => …, (e: unknown) => …, async (e) => …, function(e) {…} 를 읽는다. */
+const firstParamOf = (tokens: Token[], at: number): string | undefined => {
+    let i = at;
+    if(tokens[i]?.kind === ts.SyntaxKind.AsyncKeyword) i++;
+    if(tokens[i]?.kind === ts.SyntaxKind.FunctionKeyword) i += tokens[i + 1]?.kind === ts.SyntaxKind.Identifier ? 2 : 1;
+    if(tokens[i]?.kind === ts.SyntaxKind.OpenParenToken) i++;
+    return tokens[i]?.kind === ts.SyntaxKind.Identifier ? tokens[i].text : undefined;
+};
+
+/** 잡은 예외의 이름과 그 이름이 살아 있는 토큰 범위. catch (e) {…}, .catch(e => …), .then(ok, e => …) 다. */
+const caughtNamesOf = (tokens: Token[]): Array<{name: string; from: number; to: number}> => {
+    const scopes: Array<{name: string; from: number; to: number}> = [];
+    tokens.forEach((token, i) => {
+        if(tokens[i + 1]?.kind !== ts.SyntaxKind.OpenParenToken) return;
+        const member = tokens[i - 1]?.kind === ts.SyntaxKind.DotToken || tokens[i - 1]?.kind === ts.SyntaxKind.QuestionDotToken;
+        const close = closingToken(tokens, i + 1, ts.SyntaxKind.OpenParenToken, ts.SyntaxKind.CloseParenToken);
+        if(member && token.text === "catch") {
+            const name = firstParamOf(tokens, i + 2);
+            if(name !== undefined) scopes.push({name, from: i + 2, to: close});
+        } else if(member && token.text === "then") {
+            // 두 번째 인자(실패 처리)의 시작은 첫 인자 다음의 최상위 쉼표 뒤다.
+            let depth = 0;
+            for(let j = i + 2; j < close; j++) {
+                const kind = tokens[j].kind;
+                if(kind === ts.SyntaxKind.OpenParenToken || kind === ts.SyntaxKind.OpenBraceToken || kind === ts.SyntaxKind.OpenBracketToken) depth++;
+                else if(kind === ts.SyntaxKind.CloseParenToken || kind === ts.SyntaxKind.CloseBraceToken || kind === ts.SyntaxKind.CloseBracketToken) depth--;
+                else if(kind === ts.SyntaxKind.CommaToken && depth === 0) {
+                    const name = firstParamOf(tokens, j + 1);
+                    if(name !== undefined) scopes.push({name, from: j + 1, to: close});
+                    break;
+                }
+            }
+        } else if(token.kind === ts.SyntaxKind.CatchKeyword && !member && tokens[i + 2]?.kind === ts.SyntaxKind.Identifier) {
+            const params = closingToken(tokens, i + 1, ts.SyntaxKind.OpenParenToken, ts.SyntaxKind.CloseParenToken);
+            if(tokens[params + 1]?.kind !== ts.SyntaxKind.OpenBraceToken) return;
+            scopes.push({name: tokens[i + 2].text, from: params + 1, to: closingToken(tokens, params + 1, ts.SyntaxKind.OpenBraceToken, ts.SyntaxKind.CloseBraceToken)});
+        }
+    });
+    return scopes;
+};
+
+/** 예외 원문을 써도 되는 호출. 로그, 번역 문구의 값, 다시 던지는 예외(new XxxError(…))다. */
+const RAW_ERROR_ALLOWED_CALLEES = new Set(["console", "t", "plural"]);
+const rawErrorAllowedIn = (callee: string) => RAW_ERROR_ALLOWED_CALLEES.has(callee) || /Error$/.test(callee);
+const STRING_LITERAL = new Set([ts.SyntaxKind.StringLiteral, ts.SyntaxKind.NoSubstitutionTemplateLiteral]);
+
+/** 잡은 예외의 원문을 글자로 만드는 식. */
+const checkRawErrors = (code: string, offset: number, report: Report) => {
+    const tokens = tokensOf(code);
+    const scopes = caughtNamesOf(tokens);
+    if(scopes.length === 0) return;
+    const callees = calleesOf(tokens);
+    const kind = (index: number) => tokens[index]?.kind;
+    const slice = (first: number, last: number) => code.slice(tokens[first].start, tokens[last].start + tokens[last].text.length);
+    tokens.forEach((token, i) => {
+        if(token.kind !== ts.SyntaxKind.Identifier || kind(i - 1) === ts.SyntaxKind.DotToken) return;
+        if(!scopes.some((scope) => scope.name === token.text && i > scope.from && i <= scope.to)) return;
+        if(callees[i].some(rawErrorAllowedIn)) return;
+        const member = kind(i + 1) === ts.SyntaxKind.DotToken || kind(i + 1) === ts.SyntaxKind.QuestionDotToken;
+        let text: string | undefined;
+        if(member && tokens[i + 2]?.text === "message") text = slice(i, i + 2);
+        else if(kind(i - 1) === ts.SyntaxKind.OpenParenToken && kind(i + 1) === ts.SyntaxKind.AsKeyword) {
+            // (e as Error).message
+            const close = closingToken(tokens, i - 1, ts.SyntaxKind.OpenParenToken, ts.SyntaxKind.CloseParenToken);
+            const dot = kind(close + 1);
+            if((dot === ts.SyntaxKind.DotToken || dot === ts.SyntaxKind.QuestionDotToken) && tokens[close + 2]?.text === "message") text = slice(i - 1, close + 2);
+        }
+        else if(member && tokens[i + 2]?.text === "toString" && kind(i + 3) === ts.SyntaxKind.OpenParenToken) text = slice(i, i + 4);
+        else if(kind(i - 1) === ts.SyntaxKind.OpenParenToken && tokens[i - 2]?.text === "String" && kind(i + 1) === ts.SyntaxKind.CloseParenToken) text = slice(i - 2, i + 1);
+        else if(kind(i + 1) === ts.SyntaxKind.PlusToken && STRING_LITERAL.has(kind(i + 2) ?? ts.SyntaxKind.Unknown)) text = slice(i, i + 2);
+        else if(kind(i - 1) === ts.SyntaxKind.PlusToken && STRING_LITERAL.has(kind(i - 2) ?? ts.SyntaxKind.Unknown)) text = slice(i - 2, i);
+        else if((kind(i - 1) === ts.SyntaxKind.TemplateHead || kind(i - 1) === ts.SyntaxKind.TemplateMiddle)
+            && (kind(i + 1) === ts.SyntaxKind.TemplateMiddle || kind(i + 1) === ts.SyntaxKind.TemplateTail)) text = `\${${token.text}}`;
+        if(text !== undefined) report("raw-error", text, offset + token.start);
+    });
+};
+
+/** 코드 자리(<script>, 속성 식, 블록 태그, .ts 모듈). 글자 속성 이름에 준 값과 문장 모양의 리터럴, 예외 원문을 찾는다. */
 const checkCode = (code: string, offset: number, report: Report) => {
     for(const literal of literalsOf(code)) {
         if(literal.compared || literal.thrown) continue;
-        if(literal.textSlot && isText(literal.value)) report("text-attribute", literal.value, offset + literal.start);
+        if(literal.textSlot && isText(literal.value, true)) report("text-attribute", literal.value, offset + literal.start);
         else if(isSentence(literal.value)) report("sentence", literal.value, offset + literal.start);
     }
+    checkRawErrors(code, offset, report);
 };
 
-/** 글자 자리의 식(템플릿 글자의 {…}, 글자 속성의 값). 비교의 피연산자가 아닌 리터럴은 모두 글자다. */
+/** 글자 자리의 식(템플릿 글자의 {…}, 글자 속성의 값). 비교의 피연산자와 함수 인자가 아닌 리터럴은 소문자 한 단어도 글자다. */
 const checkTextExpression = (code: string, offset: number, rule: Finding["rule"], report: Report) => {
     for(const literal of literalsOf(code)) {
         if(literal.compared) continue;
-        if(isText(literal.value)) report(rule, literal.value, offset + literal.start);
+        if(isText(literal.value, !literal.callArg || literal.textSlot)) report(literal.textSlot ? "text-attribute" : rule, literal.value, offset + literal.start);
         else if(isSentence(literal.value)) report("sentence", literal.value, offset + literal.start);
     }
+    checkRawErrors(code, offset, report);
 };
 
 const skipQuoted = (source: string, start: number): number => {
@@ -177,13 +315,13 @@ const skipTemplate = (source: string, start: number): number => {
     return i;
 };
 
-/** 따옴표 속성 값 "a {b} c" 를 글자 조각과 식 조각으로 나눈다. */
+/** 따옴표 속성 값 "a {b} c" 를 글자 조각과 식 조각으로 나눈다. 글자 조각은 늘 글자로 보고, textual(TEXT_NAMES)이면 소문자 한 단어도 글자다. */
 const checkQuotedValue = (source: string, from: number, to: number, textual: boolean, report: Report) => {
     let i = from;
     let text = "";
     let textStart = from;
     const flush = () => {
-        if(textual && isText(text)) report("text-attribute", text.trim(), textStart);
+        if(isText(text, textual)) report("text-attribute", text.trim(), textStart);
         text = "";
     };
     while(i < to) {
@@ -227,6 +365,10 @@ const checkTag = (source: string, start: number, report: Report): number => {
             else if(source[i] === "{") i = closingBrace(source, i) + 1;
             continue;
         }
+        if(isTokenValueAttribute(name) && (source[i] === "\"" || source[i] === "'")) {
+            i = skipQuoted(source, i);
+            continue;
+        }
         if(source[i] === "\"" || source[i] === "'") {
             const end = skipQuoted(source, i);
             checkQuotedValue(source, i + 1, end - 1, textual, report);
@@ -239,7 +381,7 @@ const checkTag = (source: string, start: number, report: Report): number => {
         } else {
             const valueStart = i;
             while(i < source.length && /[^\s>]/.test(source[i])) i++;
-            if(textual && isText(source.slice(valueStart, i))) report("text-attribute", source.slice(valueStart, i), valueStart);
+            if(!isTokenValueAttribute(name) && isText(source.slice(valueStart, i), textual)) report("text-attribute", source.slice(valueStart, i), valueStart);
         }
     }
     return i;
