@@ -278,3 +278,17 @@ describe("#346 인증 앱 교체(결정 1: 휴대폰을 잃고 복구 코드로 
         expect(event?.detail).toMatchObject({replaced: true});
     }));
 });
+
+describe("#346 리뷰: 오래된 등록 대기 항목", () => {
+    it("TOTP 가 꺼진 동안 시작한 등록을, 그 사이 TOTP 가 켜진 뒤 확인하면 409 다(교체에는 비밀번호가 필요하다)", async () => withGroupMfaServer(async (c) => {
+        const auth = await c.authFor("alice", USER_PASSWORD);
+        const stale = await c.call("POST", "/api/me/mfa/enroll", {}, auth);
+        expect(stale.status).toBe(200);
+        // 다른 탭에서 TOTP 를 켠 것과 같다.
+        expect(IdentityStore.instance.setMfa(c.idOf("alice"), {enabled: true, secret: "AAAAAAAAAAAAAAAA", enrolledAt: 1, lastUsedStep: 0, recoveryCodeHashes: []}).success).toBe(true);
+        const confirmed = await c.call("POST", "/api/me/mfa/confirm", {code: c.codeOf(stale.body.secret)}, auth);
+        expect(confirmed.status).toBe(409);
+        expect(confirmed.body.code).toBe("mfa_already_enabled");
+        expect(IdentityStore.instance.user(c.idOf("alice"))!.mfa!.secret).toBe("AAAAAAAAAAAAAAAA");
+    }));
+});

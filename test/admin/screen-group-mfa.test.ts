@@ -158,6 +158,8 @@ test("#346 강제 등록 화면: 패스키를 쓸 수 있는 주소에서는 패
         await hashIs(page, "#/me");
         await page.locator("#me-passkeys").waitFor({state: "visible", timeout: UI_WAIT_MS});
         expect(await page.locator("#mfa-enroll-passkey-unavailable").count()).toBe(0);
+        // 리뷰(결정 7): 패스키만 등록하면 그 뒤로는 비밀번호 로그인이 막힌다는 것을 미리 알린다.
+        expect(await page.locator("#passkey-hint").textContent()).toContain("After this, you'll sign in with a passkey instead of a password.");
 
         const json = (body: object) => ({status: 200, contentType: "application/json", body: JSON.stringify(body)});
         await page.route("**/api/me/passkeys/options", (route) => route.fulfill(json({success: true, options: {
@@ -173,6 +175,9 @@ test("#346 강제 등록 화면: 패스키를 쓸 수 있는 주소에서는 패
         await page.locator("#passkey-name").fill("Phone");
         await page.locator("#passkey-password").fill(RBAC_PASSWORDS.admin);
         await page.locator("#passkey-continue button").click();
+        // 강제 대상이 인증 앱 없이 패스키만 더했으면 인증 앱을 백업으로 권한다(결정 7).
+        await page.getByText("Passkey added. To sign in from an IP address, also set up an authenticator app.", {exact: true})
+            .waitFor({state: "visible", timeout: UI_WAIT_MS});
         const deadline = Date.now() + UI_WAIT_MS;
         while(meReads === 0 && Date.now() < deadline) await page.waitForTimeout(100);
         expect(meReads).toBeGreaterThan(0);
