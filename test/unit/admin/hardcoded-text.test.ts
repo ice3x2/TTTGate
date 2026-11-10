@@ -148,6 +148,27 @@ describe("알림 함수의 인자와 글자 자리의 삼항식", () => {
     });
 });
 
+// 검토 L-1: 화면 부품이 글자로 그리는 이름(text·heading·description·caption)과 알림 인자의 기본 문구(a || 'x', a ?? 'x')도 글자 자리다.
+describe("글자 이름과 알림 인자의 기본 문구", () => {
+    test.each([
+        ["text 키", "const parts = [{text: 'online'}];\n", ["online"]],
+        ["heading·description·caption 키", "const card = {heading: 'Users', description: 'none', caption: 'total'};\n", ["Users", "none", "total"]],
+        ["text 에 대입", "part.text = 'offline';\n", ["offline"]],
+        ["alert 인자의 || 오른쪽", "alert(message || 'Failed');\n", ["Failed"]],
+        ["confirm·prompt 인자의 ?? 오른쪽", "if(confirm(text ?? 'Delete')) remove();\nconst name = prompt(label ?? 'Name', initial || 'value');\n", ["Delete", "Name", "value"]],
+    ])("%s", (_name, source, expected) => {
+        expect(texts(tsModule(source))).toEqual(expected);
+    });
+
+    test("알림 인자의 기본값이 문구 키면 코드 값이다", () => {
+        expect(tsModule("alert(message || t('common.failed'));\nif(confirm(text ?? t('x.y'))) remove();\n")).toEqual([]);
+    });
+
+    test("|| 의 왼쪽이나 알림 밖의 || 는 글자 자리가 아니다", () => {
+        expect(tsModule("const mode = kind || 'auto';\nalert(t(key || 'common.failed'));\n")).toEqual([]);
+    });
+});
+
 // 검토 L-3: download 의 값은 파일 이름, <option value> 는 코드 값이다.
 describe("토큰 값 속성", () => {
     test("download 와 option 의 value 는 글자가 아니다", () => {
@@ -233,6 +254,17 @@ describe("잡은 예외의 원문을 화면에 보이지 않는다", () => {
             "try { await send(); } catch(error) { return failure(t('request.networkFailed', {reason: error instanceof Error ? error.message : String(error)})); }",
             "const shown = result.message;",
             "try { await load(); } catch(e) { throw new Error(e.message); }",
+        ].join("\n");
+        expect(script(body)).toEqual([]);
+    });
+
+    // 검토 L-1: logger.* 도 console.* 처럼 로그다.
+    test("logger 로 남기는 예외 원문은 화면 원문이 아니다", () => {
+        const body = [
+            "try { await load(); } catch(e) {",
+            "    logger.error(e.message, String(e));",
+            "    logger.warn(`${e}`, e);",
+            "}",
         ].join("\n");
         expect(script(body)).toEqual([]);
     });

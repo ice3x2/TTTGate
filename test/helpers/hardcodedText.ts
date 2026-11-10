@@ -32,7 +32,7 @@ const isTokenValueAttribute = (name: string) => TOKEN_ATTRIBUTES.has(name) || TO
 
 /** 화면에 그려지는 속성과 객체 키, DOM 에 글자를 넣는 속성. */
 const TEXT_NAMES = new Set(["aria-label", "aria-description", "aria-roledescription", "aria-valuetext", "aria-placeholder", "title", "placeholder", "alt",
-    "label", "hint", "error", "message", "sub", "ariaLabel", "textContent", "innerText"]);
+    "label", "hint", "error", "message", "sub", "ariaLabel", "textContent", "innerText", "text", "heading", "description", "caption"]);
 
 const ALLOWED_WORDS = new Set([
     "TTTGate",
@@ -119,7 +119,10 @@ const CODE_ARGUMENT_CALLEES = new Set(["t", "plural", "has", "dateTime", "number
 /** 이 토큰 뒤의 ( 는 함수 호출을 연다. */
 const CALLEE_END = new Set([ts.SyntaxKind.Identifier, ts.SyntaxKind.CloseParenToken, ts.SyntaxKind.CloseBracketToken, ts.SyntaxKind.QuestionDotToken, ts.SyntaxKind.SuperKeyword]);
 
-/** 토큰마다 감싸고 있는 함수 호출의 이름 목록(바깥부터). 이름을 모르는 호출은 빈 문자열이다. console.log 는 "console" 이다. */
+/** 로그 객체. console.log·logger.warn 처럼 이 객체의 메서드 호출은 객체 이름으로 본다. */
+const LOG_OBJECTS = new Set(["console", "logger"]);
+
+/** 토큰마다 감싸고 있는 함수 호출의 이름 목록(바깥부터). 이름을 모르는 호출은 빈 문자열이다. console.log 는 "console", logger.warn 은 "logger" 다. */
 const calleesOf = (tokens: Token[]): string[][] => {
     const stack: Array<string | undefined> = [];
     return tokens.map((token, index) => {
@@ -128,7 +131,10 @@ const calleesOf = (tokens: Token[]): string[][] => {
             const before = tokens[index - 1];
             if(before === undefined || !CALLEE_END.has(before.kind)) stack.push(undefined);
             else if(before.kind !== ts.SyntaxKind.Identifier) stack.push("");
-            else stack.push(tokens[index - 2]?.kind === ts.SyntaxKind.DotToken && tokens[index - 3]?.text === "console" ? "console" : before.text);
+            else {
+                const owner = tokens[index - 2]?.kind === ts.SyntaxKind.DotToken ? tokens[index - 3]?.text : undefined;
+                stack.push(owner !== undefined && LOG_OBJECTS.has(owner) ? owner : before.text);
+            }
         } else if(token.kind === ts.SyntaxKind.CloseParenToken) {
             stack.pop();
         }
@@ -196,7 +202,9 @@ const literalsOf = (code: string): Literal[] => {
         const keyed = spanBefore !== undefined && ASSIGN_OR_KEY.has(spanBefore.kind) && spanKey !== undefined
             && (spanKey.kind === ts.SyntaxKind.Identifier || spanKey.kind === ts.SyntaxKind.StringLiteral)
             && TEXT_NAMES.has(spanKey.kind === ts.SyntaxKind.Identifier ? spanKey.text : spanKey.value);
-        const dialogArgument = (spanBefore?.kind === ts.SyntaxKind.OpenParenToken || spanBefore?.kind === ts.SyntaxKind.CommaToken)
+        // 인자 전체이거나, 인자의 기본 문구(alert(message || 'Failed'), confirm(text ?? 'Delete'))다.
+        const defaulted = spanBefore?.kind === ts.SyntaxKind.BarBarToken || spanBefore?.kind === ts.SyntaxKind.QuestionQuestionToken;
+        const dialogArgument = (spanBefore?.kind === ts.SyntaxKind.OpenParenToken || spanBefore?.kind === ts.SyntaxKind.CommaToken || defaulted)
             && (spanAfter === ts.SyntaxKind.CloseParenToken || spanAfter === ts.SyntaxKind.CommaToken)
             && DIALOG_CALLEES.has(callees[spanFirst].at(-1) ?? "");
         const textSlot = keyed || dialogArgument;
@@ -323,7 +331,7 @@ const enclosingOf = (tokens: Token[]): number[] => {
 };
 
 /** 예외 원문을 써도 되는 호출. 로그, 번역 문구의 값, 다시 던지는 예외(new XxxError(…))다. */
-const RAW_ERROR_ALLOWED_CALLEES = new Set(["console", "t", "plural"]);
+const RAW_ERROR_ALLOWED_CALLEES = new Set([...LOG_OBJECTS, "t", "plural"]);
 const rawErrorAllowedIn = (callee: string) => RAW_ERROR_ALLOWED_CALLEES.has(callee) || /Error$/.test(callee);
 /**
  * 예외 객체를 받아 번역 문구를 고르는 함수와, 예외를 그대로 넘기는 함수. 예외 객체를 인자로 받아도 원문을 보이지 않는다.

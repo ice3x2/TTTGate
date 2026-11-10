@@ -1,4 +1,4 @@
-import {errorMessageOf} from "../../admin/src/i18n/serverError";
+import {errorMessageOf, serverErrorKeyOf} from "../../admin/src/i18n/serverError";
 import {translator, type MessageKey, type Params, type Translator} from "../../admin/src/i18n";
 
 // 이슈 349 FR-7·AC-4 — 서버 오류를 응답의 code 로 번역하는 하나의 함수.
@@ -36,10 +36,28 @@ describe("errorMessageOf", () => {
     });
 
     // 검토 L-5: 서버가 응답했지만 문구가 없거나 JSON 이 깨졌으면 '연결하지 못했다' 가 아니다. AdminRequest 가 만든 HTTP 상태 문구를 보인다.
-    test("서버가 응답했는데 화면이 만든 문구면(status > 0) 그 문구다", () => {
-        expect(errorMessageOf({message: "Admin request failed (HTTP 500)", generated: true, status: 500}, "fallback", en)).toBe("Admin request failed (HTTP 500)");
-        expect(errorMessageOf({message: "관리 서버의 응답이 올바른 JSON이 아닙니다(HTTP 502).", generated: true, status: 502}, "fallback", ko))
+    // 검토 M-2: 다만 화면이 상황에 맞는 fallback(예: '터널을 바꾸지 못했다')을 넘겼으면 그 문구를 지킨다. 영어 화면이 바뀌지 않게 한다.
+    test("서버가 응답했는데(status > 0) 화면이 만든 문구면 일반 fallback('연결하지 못했다')을 HTTP 상태 문구로 바꾼다", () => {
+        expect(errorMessageOf({message: "Admin request failed (HTTP 500)", generated: true, status: 500}, en.t("common.unableToConnect"), en))
+            .toBe("Admin request failed (HTTP 500)");
+        expect(errorMessageOf({message: "관리 서버의 응답이 올바른 JSON이 아닙니다(HTTP 502).", generated: true, status: 502}, ko.t("common.unableToConnect"), ko))
             .toBe("관리 서버의 응답이 올바른 JSON이 아닙니다(HTTP 502).");
+    });
+
+    test("서버가 응답했어도(status > 0) 화면이 넘긴 상황별 fallback 은 그대로 둔다 (검토 M-2)", () => {
+        expect(errorMessageOf({message: "Admin request failed (HTTP 500)", generated: true, status: 500}, "Unable to change tunnel 'web'.", en))
+            .toBe("Unable to change tunnel 'web'.");
+        expect(errorMessageOf({message: "Admin request failed (HTTP 500)", generated: true, status: 500}, en.t("tunnelStatus.timeLimitFailed"), en))
+            .toBe(en.t("tunnelStatus.timeLimitFailed"));
+    });
+
+    test("fallback 을 생략하면(status > 0) HTTP 상태 문구다", () => {
+        expect(errorMessageOf({message: "Admin request failed (HTTP 500)", generated: true, status: 500}, undefined, en)).toBe("Admin request failed (HTTP 500)");
+    });
+
+    test("서버에 닿지 못했으면(status 0) fallback 이다", () => {
+        expect(errorMessageOf({message: "Admin network request failed: x", generated: true, status: 0}, en.t("common.unableToConnect"), en))
+            .toBe(en.t("common.unableToConnect"));
         expect(errorMessageOf({message: "Admin network request failed: x", generated: true, status: 0}, "fallback", en)).toBe("fallback");
     });
 
@@ -86,6 +104,11 @@ describe("errorMessageOf — 서버 문구가 한 가지인 code 의 영어 문�
         ["attributes_unknown_key", {key: "color"}, "unknown group attribute: color"],
         ["attribute_bool_invalid", {attribute: "mfa_required", value: "yes"}, "invalid mfa_required: yes"],
         ["TRUSTED_CLIENTS_READ_ONLY", {}, "trustedClients cannot be changed with the server option. Use /api/trustedClients."],
+        // 검토 M-1: 관리 서버가 요청을 처리하다 실패했을 때 지역 변수(failureCode)로 보내는 code.
+        ["internal_error", {}, "Internal Server Error"],
+        ["payload_too_large", {}, "Payload Too Large"],
+        ["request_timeout", {}, "Request Timeout"],
+        ["invalid_json", {}, "Invalid JSON body"],
     ] as Array<[string, Record<string, unknown>, string]>)("%s", (code, values, serverText) => {
         const result = {success: false, code, message: serverText, ...values};
         expect(errorMessageOf(result, "fallback", en)).toBe(serverText);
@@ -180,5 +203,45 @@ describe("이슈 349 2단계 서버 오류 code", () => {
         for(const code of ["not_found", "tunnel_apply_failed", "user_not_found", "group_not_found", "forbidden", "invalid", "duplicate"]) {
             expect(errorMessageOf({code, message: "server text"}, "fallback", ko)).toBe("server text");
         }
+    });
+});
+
+// 검토 L-3: 같은 문구를 두 키에 두지 않는다. login_failed 는 password_incorrect 의 문구, bootstrap_required 는 login.bootstrapRequired 의 문구를 쓴다.
+describe("errorMessageOf — 다른 키의 문구를 쓰는 code", () => {
+    const en = translator("en");
+    const ko = translator("ko");
+
+    test.each([
+        ["login_failed", "The password is incorrect.", "비밀번호가 틀렸습니다."],
+        ["bootstrap_required", "Enter the bootstrap token to set the first password.", "첫 비밀번호를 정하려면 부트스트랩 토큰을 입력하세요."],
+    ])("%s", (code, english, korean) => {
+        expect(errorMessageOf({code, message: "server text"}, "fallback", en)).toBe(english);
+        expect(errorMessageOf({code, message: "server text"}, "fallback", ko)).toBe(korean);
+    });
+
+    test("같은 문구를 담은 키를 따로 두지 않는다", () => {
+        expect(en.has("serverError.login_failed")).toBe(false);
+        expect(en.has("serverError.bootstrap_required")).toBe(false);
+    });
+
+    test("serverErrorKeyOf 는 code 가 쓰는 문구 키다", () => {
+        expect(serverErrorKeyOf("login_failed", en)).toBe("serverError.password_incorrect");
+        expect(serverErrorKeyOf("bootstrap_required", en)).toBe("login.bootstrapRequired");
+        expect(serverErrorKeyOf("port_not_allowed", en)).toBe("serverError.port_not_allowed");
+        expect(serverErrorKeyOf("unknown_code", en)).toBeUndefined();
+        expect(serverErrorKeyOf("toString", en)).toBeUndefined();
+    });
+});
+
+// 검토 L-5: 한국어 문구는 자연스럽게 쓰고, 유효 시간의 단위(분)를 밝힌다. 서버의 ttlMinutes 는 분 단위다.
+describe("errorMessageOf — 한국어 문구", () => {
+    const ko = translator("ko");
+
+    test.each([
+        [{code: "expected_revision_invalid"}, "expectedRevision 값은 1 이상의 정수여야 합니다."],
+        [{code: "expected_certificate_revision_invalid"}, "expectedCertificateRevision 값은 1 이상의 정수여야 합니다."],
+        [{code: "INVALID_TTL", max: 43200}, "유효 시간(ttlMinutes)은 만료 없음(null)이거나 1~43200분 사이의 정수여야 합니다."],
+    ] as Array<[Record<string, unknown>, string]>)("%j", (result, korean) => {
+        expect(errorMessageOf({...result, message: "server text"}, "fallback", ko)).toBe(korean);
     });
 });
