@@ -37,6 +37,9 @@ const openEdit = async (page: Page, port: number) => {
 const waitOption = (page: Page, name: string) =>
     page.getByRole("option", {name: new RegExp(name)}).waitFor({state: "visible", timeout: 10_000});
 
+// 화면의 <select> 도 option 역할을 가지므로 공유 목록 안의 option 만 센다.
+const shareOptions = (page: Page) => page.locator('[role="listbox"][aria-label="Matching users"] [role="option"]');
+
 test("toggle 사용자는 공유된 터널에 스위치가 있고 편집 화면 링크와 추가 버튼이 없다 (FR-12·FR-13)", () => withApp("carol", "#/tunnels", async ({page, calls}) => {
     await card(page, 20001).waitFor({state: "visible", timeout: 10_000});
     await page.waitForFunction(() => document.querySelectorAll('[data-port="20001"] [role="switch"]').length === 1, undefined, {timeout: 10_000});
@@ -80,7 +83,7 @@ test("공유 칸은 키보드만으로 사용자를 더하고 빼며, 저장하�
     await input.focus();
     await page.keyboard.type("b");
     await page.waitForTimeout(600);
-    expect(await page.getByRole("option").count()).toBe(0);
+    expect(await shareOptions(page).count()).toBe(0);
 
     // 2자부터 검색한다. 아래 화살표로 고르고 Enter 로 더한다.
     await page.keyboard.type("o");
