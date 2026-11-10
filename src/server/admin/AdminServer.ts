@@ -963,6 +963,7 @@ class AdminServer {
                     message: 'Unable to restart tunneling server.',
                     partial: runtimeResult.partial,
                     forwardPort: tunnelingOption.forwardPort,
+                    port: tunnelingOption.forwardPort,
                     failedScopes: runtimeResult.failedScopes,
                     warnings: runtimeResult.warnings,
                     revisionState: serverOptionStore.revisionState
@@ -1001,7 +1002,7 @@ class AdminServer {
         const rename = previousForwardPort !== undefined && previousForwardPort !== option.forwardPort;
         const previousOption = store.getTunnelingOption(option.forwardPort);
         if(rename && previousOption) {
-            this.sendApiFailure(res, 409, {code: 'tunnel_port_taken', message: 'The target port is already a configured row.', forwardPort: option.forwardPort}); return;
+            this.sendApiFailure(res, 409, {code: 'tunnel_port_taken', message: 'The target port is already a configured row.', forwardPort: option.forwardPort, port: option.forwardPort}); return;
         }
         const certificateChange = certInfo !== undefined || (rename && certificates.getAllExternalCert()[previousForwardPort!] !== undefined);
         if(certificateChange && !this.admitCertificateRevision(res, expectedCertificateRevision)) return;
@@ -1109,13 +1110,13 @@ class AdminServer {
             const formerIp = from === resolved.ownerId ? {ips: activatorIpsOf(option), removed: []} : withoutFormerOwnerIp(activatorIpsOf(option), from, next);
             const composed = serverOptionStore.composeServerOptionWithTunnelingOption(withActivatorIps(next, formerIp.ips));
             if(!composed.success || !composed.serverOption) {
-                this.sendApiFailure(res, 400, {code: 'tunnel_owner_update_failed', message: 'Tunnel owner update failed.', forwardPort: port});
+                this.sendApiFailure(res, 400, {code: 'tunnel_owner_update_failed', message: 'Tunnel owner update failed.', forwardPort: port, port});
                 return;
             }
             const commitResult = serverOptionStore.commitPreparedServerOption(composed.serverOption);
             if(!commitResult.success) {
                 serverOptionStore.recordRollback('tunnel owner commit failed', ["tunneling-option"]);
-                this.sendApiFailure(res, 500, {code: 'tunnel_owner_commit_failed', message: 'Unable to commit tunnel owner.', forwardPort: port,
+                this.sendApiFailure(res, 500, {code: 'tunnel_owner_commit_failed', message: 'Unable to commit tunnel owner.', forwardPort: port, port,
                     failedScopes: ["tunneling-option"], revisionState: serverOptionStore.revisionState});
                 return;
             }

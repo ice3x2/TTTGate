@@ -13,7 +13,7 @@ import {FAILURE_RESPONSE_FIELDS} from "../../../../src/server/admin/routes";
 //   4. 다른 모듈이 만든 실패의 문구(X.message)를 넘기면 그 실패의 values(values: X.values)도 넘긴다. 문구가 리터럴·상수도
 //      X.message 도 아닌 식이면 값 필드(FAILURE_RESPONSE_FIELDS 가 아닌 필드)를 함께 보낸다.
 //   5. sendApiEnvelope 는 sendApiSuccess·sendApiFailure 안에서만 부른다(성공 여부를 값으로 고르는 응답이 code 를 빠뜨리지 않게).
-//   6. values 의 키로 응답 봉투 필드(success·partial·failedScopes·warnings·code·message)를 쓰지 않는다.
+//   6. values 의 키로 응답 필드(FAILURE_RESPONSE_FIELDS)를 쓰지 않는다. sendApiFailure 가 이 키를 values 에서 버린다.
 //      실패 응답 payload 에 ...X.values 를 펼치지 않고 values: X.values 로 넘긴다(sendApiFailure 가 응답 필드 이름의 값 키를 버린다).
 //   7. res.writeHead(4xx·5xx) 로 실패 응답을 직접 쓰지 않는다. sendApiSuccess·ctx.ok 로 4xx·5xx 를 보내지 않는다.
 // 정적 파일(비 API)의 404 텍스트 응답(writeHead(404) 바로 뒤 end('Not Found'))은 관리 화면이 오류 문구로 쓰지 않으므로 대상이 아니다.
@@ -100,11 +100,10 @@ const coversTemplate = (template: ts.TemplateExpression, properties: readonly ts
     });
 
 /** 응답 봉투(sendApiEnvelope)의 필드. values 는 응답에 펼쳐지므로 이 이름을 키로 쓰면 실패가 성공처럼 보일 수 있다. */
-const ENVELOPE_FIELDS = new Set(["success", "partial", "failedScopes", "warnings", "code", "message"]);
 
 const hasReservedKey = (values: ts.Expression | undefined): boolean =>
     values !== undefined && ts.isObjectLiteralExpression(values) && values.properties.some((property) =>
-        property.name !== undefined && ts.isIdentifier(property.name) && ENVELOPE_FIELDS.has(property.name.text));
+        property.name !== undefined && ts.isIdentifier(property.name) && FAILURE_RESPONSE_FIELDS.has(property.name.text));
 
 const valuesCover = (template: ts.TemplateExpression, values: ts.Expression | undefined): boolean =>
     values !== undefined && ts.isObjectLiteralExpression(values) && coversTemplate(template, values.properties);
@@ -477,6 +476,7 @@ describe("이슈 349 AC-4a — 관리 API 의 실패 응답은 code 를 가진�
             "return {ok: false, message: `${text} is not an IP address`};",
             "return {success: false, status: 409, code: 'x_y', message: `bad ${success}`, values: {success}};",
             "return invalid('x_y', `bad ${partial}`, {partial});",
+            "return invalid('x_y', `bad ${status}`, {status});",
         ];
         expect(withSample(lines, scanResults).map((finding) => [finding.line, finding.problem])).toEqual([
             [1, VALUES_MISSING],
@@ -485,6 +485,7 @@ describe("이슈 349 AC-4a — 관리 API 의 실패 응답은 code 를 가진�
             [7, VALUES_MISSING],
             [8, RESERVED_VALUE_KEY],
             [9, RESERVED_VALUE_KEY],
+            [10, RESERVED_VALUE_KEY],
         ]);
     });
 
