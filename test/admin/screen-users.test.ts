@@ -353,6 +353,35 @@ describe("U4-09 사용자 편집의 Two-factor 행", () => {
         }
     });
 
+    test("#343 상태 글자와 Reset MFA 버튼의 세로 중심이 맞고 상태는 배지가 아니다(켜짐·꺼짐, 360px)", async () => {
+        const app = await startAdminApp({fixture: "rbac-mfa"});
+        try {
+            const {page} = app;
+            const check = async () => {
+                const status = (await page.locator("#user-mfa-status").boundingBox())!;
+                const button = (await page.locator("#user-reset-mfa button").boundingBox())!;
+                expect(Math.abs((status.y + status.height / 2) - (button.y + button.height / 2))).toBeLessThanOrEqual(2);
+                expect(await page.locator("#user-mfa-status .badge").count()).toBe(0);
+            };
+            await page.setViewportSize({width: 1024, height: 800});
+            await page.goto(`${app.url}#/users/${ALICE_ID}`);
+            await page.locator("#user-mfa-status").filter({hasText: "Enabled"}).waitFor({state: "visible", timeout: UI_WAIT_MS});
+            await check();
+            await page.goto(`${app.url}#/users/${BOB_ID}`);
+            await page.locator("#user-mfa-status").filter({hasText: "Off"}).waitFor({state: "visible", timeout: UI_WAIT_MS});
+            await check();
+            await page.setViewportSize({width: 360, height: 800});
+            // 폭을 바꾼 뒤 다시 배치될 때까지 기다린다. 문서나 카드에 가로 넘침이 남으면 시간 초과로 실패한다.
+            await page.waitForFunction(() => {
+                const card = document.querySelector("#user-mfa")!;
+                return document.documentElement.scrollWidth <= window.innerWidth && card.scrollWidth <= card.clientWidth;
+            }, undefined, {timeout: 5_000});
+            expect(app.errors).toEqual([]);
+        } finally {
+            await app.close();
+        }
+    });
+
     test("MFA 가 없는 bob 은 Off 이고 Reset MFA 가 처음부터 비활성이며, 생성 화면에는 행이 없다", async () => {
         const app = await startAdminApp({fixture: "rbac-mfa"});
         try {

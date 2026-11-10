@@ -211,3 +211,35 @@ test("해제 모달에서 비밀번호가 틀리면 오류만 보이고 세션�
     await page.locator("#mfa-disable-confirm button").click();
     await page.locator("#login-password").waitFor({state: "visible", timeout: 10_000});
 }));
+
+// #343: 상태 글자와 버튼이 한 줄에서 같은 세로 중심에 놓이고, 상태는 배지가 아닌 일반 글자다.
+const centerGap = async (page: Page, a: string, b: string): Promise<number> => {
+    const boxA = (await page.locator(a).boundingBox())!;
+    const boxB = (await page.locator(b).boundingBox())!;
+    return Math.abs((boxA.y + boxA.height / 2) - (boxB.y + boxB.height / 2));
+};
+
+/** 폭을 바꾼 뒤 다시 배치될 때까지 기다린다. 문서나 카드에 가로 넘침이 남으면 시간 초과로 실패한다. */
+const noOverflow = (page: Page, card: string) => page.waitForFunction((selector) => {
+    const element = document.querySelector(selector)!;
+    return document.documentElement.scrollWidth <= window.innerWidth && element.scrollWidth <= element.clientWidth;
+}, card, {timeout: 5_000});
+
+test("#343 2단계 인증 줄의 상태 글자와 버튼은 세로 중심이 맞고, 상태는 배지가 아니다", () => withAlice(async ({page}) => {
+    // 한 줄 정렬은 버튼이 한 줄에 들어가는 폭(1024px)에서 본다. 좁은 폭은 버튼이 다음 줄로 내려가도 된다(FR-5).
+    await page.setViewportSize({width: 1024, height: 800});
+    expect(await centerGap(page, "#mfa-status", "#mfa-setup button")).toBeLessThanOrEqual(2);
+    expect(await page.locator("#mfa-status .badge").count()).toBe(0);
+    await page.setViewportSize({width: 360, height: 800});
+    await noOverflow(page, "#me-mfa");
+    await page.setViewportSize({width: 1024, height: 800});
+    await enrollToCodes(page);
+    await finish(page);
+    expect(await centerGap(page, "#mfa-status", "#mfa-disable button")).toBeLessThanOrEqual(2);
+    expect(await page.locator("#mfa-status .badge").count()).toBe(0);
+    const newCodes = (await page.locator("#mfa-new-codes button").boundingBox())!;
+    const disable = (await page.locator("#mfa-disable button").boundingBox())!;
+    expect(Math.abs(newCodes.height - disable.height)).toBeLessThanOrEqual(1);
+    await page.setViewportSize({width: 360, height: 800});
+    await noOverflow(page, "#me-mfa");
+}));
