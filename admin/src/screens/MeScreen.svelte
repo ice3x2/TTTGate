@@ -79,6 +79,7 @@
         codeError = '';
         saved = false;
         enrollStep = 1;
+        replacing = false;
     };
 
     // 모달이 어떤 경로(Cancel, Escape, Done)로 닫혀도 비밀 값을 지운다.
@@ -153,8 +154,32 @@
 
     const finishEnroll = () => {
         enrollOpen = false;
+        if(replacing) toast.push({tone: 'pulse', message: 'Authenticator app replaced.'});
+        replacing = false;
         void run(async () => { await loadMe(); });
     };
+
+    // 이슈 346: 휴대폰을 잃고 복구 코드로 들어온 사용자가 새 휴대폰을 등록한다. 비밀번호를 확인한 뒤 등록 창을 그대로 쓴다.
+    let replaceOpen = $state(false);
+    let replacePassword = $state('');
+    let replaceError = $state('');
+    let replacing = $state(false);
+    const startReplace = () => run(async () => {
+        replaceError = '';
+        clearEnrollment();
+        const result = await MeCtrl.instance.enrollMfa({password: replacePassword});
+        if(!result.success) {
+            replaceError = result.status === 401 ? 'The password is incorrect.' : result.message;
+            return;
+        }
+        replaceOpen = false;
+        replacePassword = '';
+        replacing = true;
+        secret = result.secret;
+        otpauthUri = result.otpauthUri;
+        recoveryCodes = result.recoveryCodes;
+        enrollOpen = true;
+    });
 
     const disable = () => run(async () => {
         disableError = '';
@@ -339,6 +364,7 @@
                             <span id="mfa-recovery-remaining" style="font-size: var(--fs-sm); color: var(--ink-2);">{$me.mfa?.recoveryCodesRemaining ?? 0} recovery codes left</span>
                         </div>
                         <div style="display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center;">
+                            <span id="mfa-replace"><Button disabled={pending} onclick={() => { replaceError = ''; replacePassword = ''; replaceOpen = true; }}>Replace app</Button></span>
                             <span id="mfa-new-codes"><Button disabled={pending} onclick={() => { codesError = ''; newCodes = []; codesOpen = true; }}>New recovery codes</Button></span>
                             <span id="mfa-disable"><Button variant="danger" disabled={pending || totpIsLast} onclick={() => { disableError = ''; disablePassword = ''; disableOpen = true; }}>Disable</Button></span>
                         </div>
@@ -472,6 +498,19 @@
     {#snippet footer()}
         <Button onclick={() => (removeOpen = false)}>Cancel</Button>
         <span id="passkey-remove-confirm"><Button variant="danger" onclick={() => { void removePasskey(); }}>Remove</Button></span>
+    {/snippet}
+</Modal>
+
+<Modal bind:open={replaceOpen} title="Replace authenticator app" class="mfa-replace-modal">
+    <div style="display: flex; flex-direction: column; gap: var(--s-3);">
+        <p style="margin: 0;">Set up a new authenticator app, for example on a new phone. Your current app keeps working until you finish.</p>
+        <Field label="Password" for="mfa-replace-password" error={replaceError || undefined}>
+            <TextInput id="mfa-replace-password" type="password" autocomplete="current-password" bind:value={replacePassword} />
+        </Field>
+    </div>
+    {#snippet footer()}
+        <Button onclick={() => (replaceOpen = false)}>Cancel</Button>
+        <span id="mfa-replace-continue"><Button variant="primary" disabled={pending} onclick={() => { void startReplace(); }}>Continue</Button></span>
     {/snippet}
 </Modal>
 

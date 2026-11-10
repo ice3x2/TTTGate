@@ -31,8 +31,14 @@ class MeCtrl {
     }
 
     /** U4-09: MFA 등록 시작. 평문 secret·복구 코드는 이 응답에만 온다. */
-    public enrollMfa(): Promise<ApiResult<{secret: string; otpauthUri: string; recoveryCodes: string[]}>> {
-        return adminRequest("/api/me/mfa/enroll", {method: "POST"});
+    /**
+     * 인증 앱 등록을 시작한다. 이슈 346: 이미 켜져 있으면 replace 와 비밀번호로 새 인증 앱으로 바꾼다
+     * (확인을 마칠 때까지 기존 인증 앱이 그대로다). 비밀번호가 틀리면 401 password_incorrect 를 실패 값으로 돌려준다.
+     */
+    public enrollMfa(replace?: {password: string}): Promise<ApiResult<{secret: string; otpauthUri: string; recoveryCodes: string[]}>> {
+        if(!replace) return adminRequest("/api/me/mfa/enroll", {method: "POST"});
+        return adminRequest("/api/me/mfa/enroll", {method: "POST", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({replace: true, password: replace.password})}, {credentialCheck: true});
     }
 
     public confirmMfa(code: string): Promise<ApiResult<{mfa: {enabled: boolean; recoveryCodesRemaining: number}}>> {

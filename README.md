@@ -308,7 +308,7 @@ Who can do the first setup:
 
 Use the first case that matches.
 
-1. **You know your password.** Open **My account** and press **Change password**. If you lost your authenticator app, choose **Use a recovery code instead** at the two-factor step of the login. After you sign in, open **My account**. Under **Two-factor authentication**, press **Disable** and enter your password. Then press **Set up** and register a new app. Each recovery code works only once. If `mfaRequiredForSuperusers` is on in `server.yaml`, a superuser cannot use **Disable**. In that case, open **Users**, select your own account and press **Reset MFA**. The server ends your sessions. Sign in again. The server then asks you to set up a new app. If no recovery code is left, follow case 2. If no other superuser can sign in either, follow case 3.
+1. **You know your password.** Open **My account** and press **Change password**. If you lost your authenticator app, choose **Use a recovery code instead** at the two-factor step of the login. After you sign in, open **My account**. Under **Two-factor authentication**, press **Disable** and enter your password. Then press **Set up** and register a new app. Or press **Replace app** to register the new app in one step. Each recovery code works only once. If two-factor authentication is required for your account (`mfaRequiredForSuperusers`, or **Require two-factor authentication** on your group) and the app is your only method, **Disable** stays off. Use **Replace app** instead. If no recovery code is left, follow case 2. If no other superuser can sign in either, follow case 3.
 2. **Another superuser can sign in.** That superuser opens **Users**, selects your account and presses **Reset password**.
    - The console shows a temporary password once. Give it to the user in a safe way.
    - The server ends the sessions of that user. At the next login, the user must set a new password.
@@ -375,6 +375,22 @@ You can add up to 20 passkeys. A passkey that your phone or password manager syn
 Sign in: on the sign-in screen, press **Sign in with a passkey** and choose the passkey. You do not enter a username. After a passkey sign-in or registration on a device, that device shows the passkey button first and folds the password fields behind **Use password**.
 
 Remove a passkey: press **Remove** next to it in **My account**. If you lost a device, sign in on another device and remove its passkey. A superuser can remove all passkeys of a user: open **Users**, select the user and press **Remove passkeys**. This also ends the sessions of that user. The audit log records `passkey_registered`, `passkey_removed` and `passkey_reset`. A passkey sign-in records `login_success` or `login_failure` with `method: passkey`.
+
+#### Require Two-Factor Authentication for a Group
+
+A superuser can require two-factor authentication for all members of a group. Open **Groups**, select the group and turn on **Require two-factor authentication** in the **Sign-in** card. When some members have no two-factor method, the console shows how many before it saves.
+
+- A passkey or an authenticator app counts as two-factor authentication.
+- A member without either must set one up the next time they use the console. Until then, only **My account** opens. This also applies to members who are signed in now.
+- A member who has only passkeys must sign in with a passkey. A password alone does not work. Passkeys do not work at an IP address, so such a member also needs an authenticator app to sign in from an IP address.
+- A member cannot remove their last two-factor method. **Disable** and **Remove** stay off and show the reason.
+- **Users** shows **Required** next to the two-factor status of such a member.
+- Superusers follow the server setting `mfaRequiredForSuperusers` instead. The same rules apply to them: a passkey counts, and the setting applies to sessions that are open now.
+
+A member lost the phone with the authenticator app:
+
+- If a recovery code is left, the member signs in with it, opens **My account** and presses **Replace app**. After the password check, they scan the new QR code and enter a code. The old app keeps working until they finish.
+- Otherwise, a superuser opens **Users**, selects the member and presses **Reset password**. Keep **Also reset two-factor authentication and passkeys** on. The server removes the authenticator app and all passkeys of the member and ends their sessions. Send the temporary password to the member. At the next sign-in, the member sets a new password and then sets up two-factor authentication again. The audit log records `temp_password_issued` with `secondFactorsReset: true`.
 
 ### Client
 
@@ -1224,7 +1240,7 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 
 아래에서 처음으로 들어맞는 경우를 따른다.
 
-1. **비밀번호를 안다.** **My account** 에서 **Change password** 를 누른다. 인증 앱을 잃어버렸다면 로그인 중 2단계 인증 화면에서 **Use a recovery code instead** 를 고른다. 로그인한 뒤 **My account** 의 **Two-factor authentication** 에서 **Disable** 을 누르고 비밀번호를 넣는다. 그다음 **Set up** 을 눌러 새 앱을 등록한다. 복구 코드는 하나당 한 번만 쓸 수 있다. `server.yaml` 에서 `mfaRequiredForSuperusers` 가 켜져 있으면 슈퍼유저는 **Disable** 을 쓸 수 없다. 이때는 **Users** 에서 내 계정을 고르고 **Reset MFA** 를 누른다. 서버가 내 세션을 모두 끊는다. 다시 로그인하면 서버가 새 앱을 등록하라고 안내한다. 남은 복구 코드가 없으면 2번 경우를 따른다. 로그인할 수 있는 다른 슈퍼유저도 없으면 3번 경우를 따른다.
+1. **비밀번호를 안다.** **My account** 에서 **Change password** 를 누른다. 인증 앱을 잃어버렸다면 로그인 중 2단계 인증 화면에서 **Use a recovery code instead** 를 고른다. 로그인한 뒤 **My account** 의 **Two-factor authentication** 에서 **Disable** 을 누르고 비밀번호를 넣는다. 그다음 **Set up** 을 눌러 새 앱을 등록한다. **Replace app** 을 누르면 한 번에 새 앱으로 바꿀 수 있다. 복구 코드는 하나당 한 번만 쓸 수 있다. 내 계정에 2단계 인증이 필수이고(`mfaRequiredForSuperusers`, 또는 그룹의 **Require two-factor authentication**) 인증 앱이 유일한 수단이면 **Disable** 은 꺼져 있다. 이때는 **Replace app** 을 쓴다. 남은 복구 코드가 없으면 2번 경우를 따른다. 로그인할 수 있는 다른 슈퍼유저도 없으면 3번 경우를 따른다.
 2. **로그인할 수 있는 다른 슈퍼유저가 있다.** 그 슈퍼유저가 **Users** 에서 해당 계정을 고르고 **Reset password** 를 누른다.
    - 관리 화면은 임시 비밀번호를 한 번만 보여 준다. 안전한 방법으로 사용자에게 전한다.
    - 서버는 그 사용자의 세션을 모두 끊는다. 사용자는 다음 로그인 때 새 비밀번호를 정해야 한다.
@@ -1291,6 +1307,22 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 로그인: 로그인 화면에서 **Sign in with a passkey** 를 누르고 패스키를 고른다. 사용자 이름은 넣지 않는다. 어떤 기기에서 패스키로 로그인하거나 패스키를 등록한 뒤에는, 그 기기의 로그인 화면이 패스키 버튼을 먼저 보이고 비밀번호 칸은 **Use password** 뒤에 접어 둔다.
 
 패스키 삭제: **My account** 에서 그 패스키 옆의 **Remove** 를 누른다. 기기를 잃어버렸으면 다른 기기로 로그인해 그 기기의 패스키를 지운다. 슈퍼유저는 한 사용자의 패스키를 모두 지울 수 있다. **Users** 에서 사용자를 고르고 **Remove passkeys** 를 누른다. 이때 그 사용자의 세션도 모두 끊긴다. 감사 로그에는 `passkey_registered`, `passkey_removed`, `passkey_reset` 이 남는다. 패스키 로그인은 `method: passkey` 가 붙은 `login_success` 또는 `login_failure` 로 남는다.
+
+#### 그룹에 2단계 인증 강제하기
+
+슈퍼유저는 그룹의 모든 구성원에게 2단계 인증을 요구할 수 있다. **Groups** 에서 그룹을 고르고 **Sign-in** 카드의 **Require two-factor authentication** 을 켠다. 2단계 인증 수단이 없는 구성원이 있으면 저장하기 전에 그 인원을 보여 준다.
+
+- 패스키와 인증 앱은 모두 2단계 인증으로 인정한다.
+- 둘 다 없는 구성원은 다음에 관리 화면을 쓸 때 하나를 등록해야 한다. 등록하기 전에는 **My account** 만 열린다. 지금 로그인해 있는 구성원에게도 적용된다.
+- 패스키만 가진 구성원은 패스키로 로그인해야 한다. 비밀번호만으로는 로그인할 수 없다. 패스키는 IP 주소에서 쓸 수 없으므로, IP 주소로 로그인하려면 인증 앱도 등록해 둔다.
+- 구성원은 마지막 2단계 인증 수단을 지울 수 없다. **Disable** 과 **Remove** 가 꺼진 채 이유를 보인다.
+- **Users** 는 이런 구성원의 2단계 인증 상태 옆에 **Required** 를 보인다.
+- 슈퍼유저에게는 그룹 설정 대신 서버 설정 `mfaRequiredForSuperusers` 가 적용된다. 규칙은 같다. 패스키를 인정하고, 지금 열린 세션에도 적용된다.
+
+구성원이 인증 앱이 든 휴대폰을 잃어버렸다면:
+
+- 남은 복구 코드가 있으면 그 코드로 로그인한 뒤 **My account** 에서 **Replace app** 을 누른다. 비밀번호를 확인한 뒤 새 QR 코드를 찍고 코드를 넣는다. 교체를 마칠 때까지 예전 앱도 그대로 쓸 수 있다.
+- 복구 코드가 없으면 슈퍼유저가 **Users** 에서 그 구성원을 고르고 **Reset password** 를 누른다. **Also reset two-factor authentication and passkeys** 를 켠 채로 둔다. 서버가 그 구성원의 인증 앱과 모든 패스키를 지우고 세션을 끝낸다. 임시 비밀번호를 구성원에게 전한다. 구성원은 다음 로그인 때 새 비밀번호를 정한 뒤 2단계 인증을 다시 등록한다. 감사 로그에는 `temp_password_issued` 가 `secondFactorsReset: true` 와 함께 남는다.
 
 ### 클라이언트
 
