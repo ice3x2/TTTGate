@@ -33,7 +33,7 @@ const groupAttributes = (crud: string, visibility = "private") => ({
     tunnel_crud: crud,
     allowed_port_range: [{from: 20000, to: 20099}],
     allowed_protocols: ["TCP"],
-    max_tunnel_count: 10,
+    max_tunnel_count: 50,
     tunnel_visibility: visibility,
     allowed_trusted_clients: [TRUSTED_CLIENT]
 });
@@ -300,6 +300,69 @@ describe("rbac-tunnel-share (이슈 347)", () => {
         expect((await request("DELETE", `/api/users/${leaverId}`, {}, superuser)).status).toBe(200);
         expect((await storedTunnel(20090)).sharedUserIds).toEqual([tom.id]);
         expect((await storedTunnel(20091)).sharedUserIds).toBeUndefined();
+    });
+
+    it("슈퍼유저와 비활성 사용자는 새로 공유할 수 없고, 이미 저장된 id 는 저장을 막지 않는다 (리뷰 후속)", async () => {
+        for(const id of [superuserId, zedId]) {
+            const response = await saveTunnel(alice.auth, 20095, {sharedUserIds: [id]});
+            expect({id, status: response.status, code: response.body.code}).toEqual({id, status: 422, code: "shared_user_not_found"});
+        }
+        // 슈퍼유저가 저장해도 같다(모든 호출자에 적용).
+        const bySuperuser = await saveTunnel(superuser, 20095, {ownerId: alice.id, sharedUserIds: [zedId]});
+        expect([bySuperuser.status, bySuperuser.body.code]).toEqual([422, "shared_user_not_found"]);
+        expect((await saveTunnel(alice.auth, 20095, {sharedUserIds: [tom.id]})).status).toBe(200);
+        const stored = ServerOptionStore.instance.getTunnelingOption(20095)!;
+        expect(ServerOptionStore.instance.updateTunnelingOption({...stored, sharedUserIds: [tom.id, zedId]})).toBe(true);
+        expect((await saveTunnel(alice.auth, 20095, {sharedUserIds: [tom.id, zedId], destinationPort: 13})).status).toBe(200);
+        expect((await storedTunnel(20095)).sharedUserIds).toEqual([tom.id, zedId]);
+    });
+
+    it("사라진 사용자 id 는 조회에서 빼고, 저장할 때 거절하지 않고 조용히 뺀다 (리뷰 후속)", async () => {
+        const stale = "u_00000000deadbeef";
+        expect((await saveTunnel(alice.auth, 20096, {sharedUserIds: [tom.id]})).status).toBe(200);
+        const stored = ServerOptionStore.instance.getTunnelingOption(20096)!;
+        expect(ServerOptionStore.instance.updateTunnelingOption({...stored, sharedUserIds: [stale, tom.id]})).toBe(true);
+        const row = await rowOf(alice.auth, 20096);
+        expect(row.sharedUserIds).toEqual([tom.id]);
+        expect(row.sharedUsers.map((user: any) => user.id)).toEqual([tom.id]);
+        // 본문에 사라진 id 가 남아 있어도(낡은 화면) 422 가 아니라 빼고 저장한다.
+        expect((await saveTunnel(alice.auth, 20096, {sharedUserIds: [stale, tom.id]})).status).toBe(200);
+        expect((await storedTunnel(20096)).sharedUserIds).toEqual([tom.id]);
+        // 본문에 공유 목록이 없어도 뺀다.
+        expect(ServerOptionStore.instance.updateTunnelingOption({...ServerOptionStore.instance.getTunnelingOption(20096)!, sharedUserIds: [stale, tom.id]})).toBe(true);
+        expect((await saveTunnel(alice.auth, 20096, {destinationPort: 14})).status).toBe(200);
+        expect((await storedTunnel(20096)).sharedUserIds).toEqual([tom.id]);
+    });
+
+    it("재할당으로 새 소유자가 공유에서 빠지면 tunnel_reassigned 감사에 sharedUsersRemoved 를 남긴다 (리뷰 후속)", async () => {
+        expect((await saveTunnel(superuser, 20097, {ownerId: alice.id, sharedUserIds: [tom.id, rita.id]})).status).toBe(200);
+        sink.events.length = 0;
+        expect((await request("PUT", "/api/tunnelingOption/20097/owner", {ownerId: tom.id, expectedRevision: revision()}, superuser)).status).toBe(200);
+        const reassigned = sink.events.find((event) => event.type === "tunnel_reassigned")!;
+        expect(reassigned.detail).toMatchObject({from: alice.id, to: tom.id, sharedUsersRemoved: [tom.id]});
+        sink.events.length = 0;
+        expect((await request("PUT", "/api/tunnelingOption/20097/owner", {ownerId: eve.id, expectedRevision: revision()}, superuser)).status).toBe(200);
+        expect(sink.events.find((event) => event.type === "tunnel_reassigned")!.detail).not.toHaveProperty("sharedUsersRemoved");
+    });
+
+    it("공유 정리 중 설정을 읽지 못해도 사용자 삭제는 성공으로 끝난다 (리뷰 후속)", async () => {
+        const temp = await request("POST", "/api/users", {username: "leaver2", role: "regular"}, superuser);
+        const leaverId = temp.body.user.id;
+        expect((await saveTunnel(alice.auth, 20098, {sharedUserIds: [leaverId]})).status).toBe(200);
+        const store = ServerOptionStore.instance;
+        const original = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(store), "serverOption")!.get!;
+        // 사용자가 지워진 뒤의 설정 읽기만 실패시킨다(권한 판정 등 앞선 읽기는 그대로 둔다).
+        const spy = jest.spyOn(store, "serverOption", "get").mockImplementation(function(this: ServerOptionStore) {
+            if(IdentityStore.instance.user(leaverId) === undefined) throw new Error("read failure");
+            return original.call(this);
+        });
+        try {
+            const deleted = await request("DELETE", `/api/users/${leaverId}`, {}, superuser);
+            expect(deleted.status).toBe(200);
+        } finally {
+            spy.mockRestore();
+        }
+        expect(IdentityStore.instance.user(leaverId)).toBeUndefined();
     });
 
     describe("사용자 검색 GET /api/users/lookup (FR-9)", () => {

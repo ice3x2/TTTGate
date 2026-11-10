@@ -6,7 +6,7 @@ import {MIGRATED_OWNER_ID} from "./IdentityTypes";
 import {Principal} from "./Principal";
 import ServerOptionStore from "../ServerOptionStore";
 import {TunnelingOption} from "../../types/TunnelingOption";
-import {normalizeSharedUserIds, resolveSharedUserIds, sharedUserIdsOf, sharedUsersChange} from "./TunnelSharing";
+import {resolveSharedUserIds, sharedUserIdsOf, sharedUsersChange} from "./TunnelSharing";
 import LoggerFactory from "../../util/logger/LoggerFactory";
 
 const logger = LoggerFactory.getLogger('server', 'TunnelOwnership');
@@ -41,6 +41,11 @@ export function isTunnelEditable(principal: Principal, port: number): boolean {
 /** 이슈 347: 목록 항목의 toggleable. 켜기 라우트와 같은 action 으로 판정한다. */
 export function isTunnelToggleable(principal: Principal, port: number): boolean {
     return authorize(principal, 'tunnel:activate', AuthorizationContext.targetOf(port)).allowed;
+}
+
+/** 이슈 347: 아직 있는 사용자의 공유 id. 조회 응답의 sharedUserIds 와 sharedUsers 가 이 결과 하나를 쓴다. */
+export function existingSharedUserIds(ids: readonly string[]): string[] {
+    return ids.filter((id) => IdentityStore.instance.user(id) !== undefined);
 }
 
 /** 이슈 347: 공유 목록의 사용자 표현. 사라진 사용자는 뺀다. */
@@ -95,10 +100,7 @@ export function admitTunnelWrite(principal: Principal, next: TunnelingOption,
         return owner;
     }
     const before = previousOption ? sharedUserIdsOf(previousOption) : [];
-    const requested: unknown = next.sharedUserIds;
-    const sharing = requested === undefined
-        ? {success: true as const, ids: normalizeSharedUserIds(before, owner.ownerId)}
-        : resolveSharedUserIds(requested, owner.ownerId, (id) => IdentityStore.instance.user(id) !== undefined);
+    const sharing = resolveSharedUserIds(next.sharedUserIds, {ownerId: owner.ownerId, stored: before, userOf: (id) => IdentityStore.instance.user(id)});
     if(!sharing.success) {
         return sharing;
     }
@@ -150,18 +152,17 @@ function admitOwner(principal: Principal, next: TunnelingOption, certInfo: unkno
 export async function removeSharedUserEverywhere(userId: string): Promise<void> {
     const store = ServerOptionStore.instance;
     await store.runConfigurationMutation(async () => {
-        const serverOption = store.serverOption;
-        let changed = false;
-        for(const option of serverOption.tunnelingOptions) {
-            const ids = sharedUserIdsOf(option);
-            if(!ids.includes(userId)) continue;
-            changed = true;
-            withSharedUserIds(option, ids.filter((id) => id !== userId));
-        }
-        if(!changed) return;
-        // 사용자 삭제 응답을 이 실패로 바꾸지 않는다. 남은 id 는 로그로 알린다.
+        // 사용자 삭제 응답을 이 실패로 바꾸지 않는다(읽기·쓰기 모두). 남은 id 는 로그로 알리고, 다음 저장이 조용히 뺀다.
         try {
-            if(!store.commitPreparedServerOption(serverOption).success) {
+            const serverOption = store.serverOption;
+            let changed = false;
+            for(const option of serverOption.tunnelingOptions) {
+                const ids = sharedUserIdsOf(option);
+                if(!ids.includes(userId)) continue;
+                changed = true;
+                withSharedUserIds(option, ids.filter((id) => id !== userId));
+            }
+            if(changed && !store.commitPreparedServerOption(serverOption).success) {
                 logger.error(`failed to remove deleted user ${userId} from tunnel sharing lists`);
             }
         } catch(error) {

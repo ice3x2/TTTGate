@@ -704,6 +704,8 @@ class ExternalPortServerPool {
         }
         this.clearActiveTimeout(port);
         status.active = false;
+        // 이슈 347: 켠 사람은 그 활성에만 속한다. 다음 활성은 새로 켠 사람을 받는다.
+        status.activatedBy = undefined;
         await this.removeHandlerByForwardPort(port);
         return true;
     }

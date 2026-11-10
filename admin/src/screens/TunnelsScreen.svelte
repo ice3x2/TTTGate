@@ -188,7 +188,8 @@
                 {@const busy = pending[option.forwardPort] !== undefined}
                 {@const parts = busy ? [{text: pending[option.forwardPort] ? 'Turning on…' : 'Turning off…', muted: true}] : view.parts}
                 <li data-port={option.forwardPort}>
-                    <a class="tunnel-link" href={`#/tunnels/${option.forwardPort}`}>
+                    <!-- 이슈 347 FR-12: 고칠 수 없는 터널은 편집 화면으로 가지 않는다. 같은 모양을 지키려고 같은 클래스를 쓴다. -->
+                    <svelte:element this={view.link ? 'a' : 'div'} class="tunnel-link" href={view.link ? `#/tunnels/${option.forwardPort}` : undefined}>
                         <span class="tunnel-title">{title}</span>
                         <span class="tunnel-status">{#each parts as part, index}{#if index > 0}<span class="sep">{' · '}</span>{/if}<span class:warn={part.warn} class:muted={part.muted} title={part.title}>{part.text}</span>{/each}</span>
                         {#if !busy && view.clock}
@@ -198,7 +199,7 @@
                                 {#if view.clock.kind === 'limited'}<span class="tunnel-time" class:warn={view.clock.warn} aria-hidden="true">{view.clock.left} · {view.clock.ends}</span>{/if}
                             </span>
                         {/if}
-                    </a>
+                    </svelte:element>
                     {#if view.control === 'lock'}
                         <span class="tunnel-lock" title="View only" aria-label="View only">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>

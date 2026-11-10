@@ -5,7 +5,8 @@ import {
     moveActive,
     removeSharedUser,
     SHARE_SEARCH_DELAY_MS,
-    shareQueryOf
+    shareQueryOf,
+    shareStatusMessage
 } from "../../admin/src/screens/parts/shareUsers";
 
 // 이슈 347 FR-10 — 터널 편집 화면의 공유 칸(자동 완성) 규칙. 순수 함수라 브라우저 없이 확인한다.
@@ -58,5 +59,20 @@ describe("addSharedUser·removeSharedUser — 칩", () => {
     });
     test("빼면 그 사용자만 빠진다", () => {
         expect(removeSharedUser([user("u_a"), user("u_b")], "u_a").map((entry) => entry.id)).toEqual(["u_b"]);
+    });
+});
+
+// 리뷰 후속 — 알림 영역(role=status)은 늘 있고 문구만 바뀐다. 상한이 차면 그 사실을 먼저 알린다.
+describe("shareStatusMessage — 알림 문구", () => {
+    const full = Array.from({length: MAX_SHARED_USERS}, (_, index) => user(`u_${index}`));
+    test("상한이 차면 상한 안내다", () => {
+        expect(shareStatusMessage({chosen: full, searched: true, candidates: []})).toBe("You can share with up to 50 users.");
+    });
+    test("검색했는데 고를 사람이 없으면 없다고 알린다", () => {
+        expect(shareStatusMessage({chosen: [], searched: true, candidates: []})).toBe("No matching users.");
+    });
+    test("그 밖에는 빈 문자열이다", () => {
+        expect(shareStatusMessage({chosen: [], searched: false, candidates: []})).toBe("");
+        expect(shareStatusMessage({chosen: [], searched: true, candidates: [user("u_a")]})).toBe("");
     });
 });

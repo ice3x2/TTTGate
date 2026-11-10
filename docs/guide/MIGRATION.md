@@ -149,6 +149,11 @@ After a downgrade, both fail closed:
 - Members of a `toggle` group cannot turn on even their own tunnels. The older server answers 404, as for a tunnel
   that they cannot see. Saving such a group in an older console is rejected until you choose another tunnel access.
 - The older server ignores `sharedUserIds`, so shared users no longer see the tunnels shared with them.
+- The older server still returns the stored `sharedUserIds` as raw user ids to every user who can see the tunnel in
+  `GET /api/tunnelingOption`, not only to users who can change it.
+- The older server does not remove a deleted user from share lists. After you upgrade again, the server drops ids of
+  users that no longer exist: `GET /api/tunnelingOption` leaves them out, and the next save of the tunnel removes them
+  without an error.
 
 Before you downgrade, change `toggle` groups to `read_only` or `full` if their members must keep working.
 

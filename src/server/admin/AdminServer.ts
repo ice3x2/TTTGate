@@ -49,8 +49,8 @@ import {Action, authorize} from "../rbac/AdminAuthorizer";
 import {LEGACY_PRINCIPAL, principalOf} from "../rbac/Principal";
 import {mfaPolicyOptions} from "./mfaPolicyOptions";
 import {mustEnrollMfa as mustEnrollMfaFor, requiresPasskeyLogin} from "../rbac/MfaPolicy";
-import {admitTunnelWrite, isTunnelEditable, isTunnelToggleable, isTunnelVisibleTo, ownerViewOf, resolveOwnerId, sharedUsersOf, withSharedUserIds} from "../rbac/TunnelOwnership";
-import {normalizeSharedUserIds, sharedUserIdsOf} from "../rbac/TunnelSharing";
+import {admitTunnelWrite, existingSharedUserIds, isTunnelEditable, isTunnelToggleable, isTunnelVisibleTo, ownerViewOf, resolveOwnerId, sharedUsersOf, withSharedUserIds} from "../rbac/TunnelOwnership";
+import {normalizeSharedUserIds, sharedUserIdsOf, sharedUsersChange} from "../rbac/TunnelSharing";
 import {AuthorizationContext} from "../rbac/AuthorizationContext";
 import {AuditEvent, AuditSinkRegistry, recordAuditEvent} from "../audit/AuditSink";
 import {AUDIT_EVENT_TYPES} from "../audit/AuditEventTypes";
@@ -1053,9 +1053,11 @@ class AdminServer {
                 return;
             }
             const from = AuthorizationContext.ownerIdOf(option);
-            // 이슈 347 FR-5: 새 소유자가 공유 목록에 있으면 뺀다.
-            const composed = serverOptionStore.composeServerOptionWithTunnelingOption(withSharedUserIds({...option, ownerId: resolved.ownerId},
-                normalizeSharedUserIds(sharedUserIdsOf(option), resolved.ownerId)));
+            // 이슈 347 FR-5: 새 소유자가 공유 목록에 있으면 뺀다. 빠진 id 는 감사에 남긴다.
+            const sharedBefore = sharedUserIdsOf(option);
+            const sharedAfter = normalizeSharedUserIds(sharedBefore, resolved.ownerId);
+            const {removed: sharedUsersRemoved} = sharedUsersChange(sharedBefore, sharedAfter);
+            const composed = serverOptionStore.composeServerOptionWithTunnelingOption(withSharedUserIds({...option, ownerId: resolved.ownerId}, sharedAfter));
             if(!composed.success || !composed.serverOption) {
                 this.sendApiFailure(res, 400, {message: 'Tunnel owner update failed.', forwardPort: port});
                 return;
@@ -1067,7 +1069,7 @@ class AdminServer {
                     failedScopes: ["tunneling-option"], revisionState: serverOptionStore.revisionState});
                 return;
             }
-            ctx.auditDetail({from, to: resolved.ownerId});
+            ctx.auditDetail({from, to: resolved.ownerId, ...(sharedUsersRemoved.length > 0 ? {sharedUsersRemoved} : {})});
             ctx.reapplyTunnelCaps?.();
             this.sendApiSuccess(res, {forwardPort: port, owner: ownerViewOf(port), revisionState: commitResult.revisionState});
         });
@@ -1784,7 +1786,8 @@ class AdminServer {
                 .map(({sharedUserIds: _stored, ...tunnelingOption}) => {
                     const editable = isTunnelEditable(principal, tunnelingOption.forwardPort);
                     // 이슈 347 FR-6a: 공유 목록은 고칠 수 있는 사람에게만 준다. 다른 공유 사용자의 이름이 드러나지 않게 한다.
-                    const sharedUserIds = editable ? sharedUserIdsOf({sharedUserIds: _stored}) : [];
+                    // 사라진 사용자 id 는 sharedUsers 와 같이 뺀다.
+                    const sharedUserIds = editable ? existingSharedUserIds(sharedUserIdsOf({sharedUserIds: _stored})) : [];
                     return {
                         ...tunnelingOption,
                         owner: ownerViewOf(tunnelingOption.forwardPort),

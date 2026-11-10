@@ -55,6 +55,8 @@ test("toggle 사용자는 공유된 터널에 스위치가 있고 편집 화면 
 
 test("toggle 사용자가 편집 화면 주소로 바로 들어가도 공유 칸과 저장 버튼이 없다 (FR-10)", () => withApp("carol", "#/tunnels/20001", async ({page}) => {
     await page.locator("#tunnel-readonly-note").waitFor({state: "visible", timeout: 10_000});
+    // 켤 수는 있으므로 읽기 전용 안내 대신 켜고 끌 수 있다고 알린다.
+    expect(await page.locator("#tunnel-readonly-note").textContent()).toBe("You can turn this tunnel on or off, but you can't change its settings.");
     expect(await combobox(page).count()).toBe(0);
     expect(await button(page, "Apply and Restart").count()).toBe(0);
 }));

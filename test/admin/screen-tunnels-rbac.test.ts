@@ -104,6 +104,8 @@ test("alice 가 bob 의 공유 터널을 열면 읽기 전용이고 저장·삭�
     await hashIs(page, "#/tunnels/20002");
     await page.locator("#input-destination-host").waitFor({state: "visible", timeout: 10_000});
     await page.locator("#tunnel-readonly-note").waitFor({state: "visible"});
+    // 이슈 347: group_read 로만 보이는 터널은 켤 수도 없으므로 읽기 전용 안내다.
+    expect(await page.locator("#tunnel-readonly-note").textContent()).toBe("This tunnel is shared with you as read only.");
     expect(await page.locator("#input-destination-host").isDisabled()).toBe(true);
     expect(await button(page, "Apply and Restart").count()).toBe(0);
     expect(await button(page, "Stop and Remove").count()).toBe(0);

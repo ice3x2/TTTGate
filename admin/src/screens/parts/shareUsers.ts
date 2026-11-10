@@ -5,8 +5,9 @@ export type SharedUser = {id: string; username: string; displayName: string};
 
 /** 입력이 멈춘 뒤 검색하기까지의 시간(ms). */
 export const SHARE_SEARCH_DELAY_MS = 250;
-/** 서버의 공유 상한과 같다. 넘으면 칩을 더하지 않는다. */
+/** 서버의 공유 상한(src/server/rbac/TunnelSharing.ts 의 MAX_SHARED_USERS)과 같아야 한다. 넘으면 칩을 더하지 않는다. */
 export const MAX_SHARED_USERS = 50;
+// 검색어 길이는 서버의 사용자 검색(src/server/rbac/UserLookup.ts 의 MIN_QUERY_LENGTH·MAX_QUERY_LENGTH)과 같아야 한다.
 const MIN_QUERY = 2;
 const MAX_QUERY = 64;
 
@@ -37,4 +38,14 @@ export function addSharedUser(chosen: SharedUser[], user: SharedUser): SharedUse
 
 export function removeSharedUser(chosen: readonly SharedUser[], id: string): SharedUser[] {
     return chosen.filter((entry) => entry.id !== id);
+}
+
+/**
+ * 알림 영역(role=status)의 문구. 영역은 늘 두고 문구만 바꿔 화면 낭독기가 바뀐 문구를 읽게 한다.
+ * searched 는 검색 결과를 받아 목록이 열린 상태다.
+ */
+export function shareStatusMessage(state: {chosen: readonly SharedUser[]; searched: boolean; candidates: readonly SharedUser[]}): string {
+    if(state.chosen.length >= MAX_SHARED_USERS) return `You can share with up to ${MAX_SHARED_USERS} users.`;
+    if(state.searched && state.candidates.length === 0) return 'No matching users.';
+    return '';
 }

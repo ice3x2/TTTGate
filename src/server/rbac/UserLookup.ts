@@ -4,6 +4,7 @@ import {Role, User} from "./IdentityTypes";
 
 /** 한 번에 돌려주는 결과 수의 상한. */
 export const LOOKUP_LIMIT = 10;
+// 화면의 admin/src/screens/parts/shareUsers.ts 가 같은 길이로 검색 여부를 정한다. 바꾸면 함께 바꾼다.
 const MIN_QUERY_LENGTH = 2;
 const MAX_QUERY_LENGTH = 64;
 
