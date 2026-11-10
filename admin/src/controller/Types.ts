@@ -113,7 +113,9 @@ export type UserView = {id: string; username: string; displayName: string; role:
     /** U4-04 가 더한 필드. */
     mfaEnabled?: boolean;
     /** #336 등록한 패스키 수. */
-    passkeyCount?: number};
+    passkeyCount?: number;
+    /** 이슈 346: 2단계 인증 강제 대상인가(그룹 속성 또는 슈퍼유저 서버 옵션). */
+    mfaRequired?: boolean};
 /** #336 내 계정 화면의 패스키 한 줄. 공개키는 오지 않는다. */
 export type PasskeyView = {id: string; name: string; rpId: string; createdAt: number; lastUsedAt: number | null; backedUp: boolean};
 export type TunnelProtocolName = 'TCP' | 'HTTP' | 'HTTPS' | 'HTTP_REWRITE';
@@ -129,6 +131,8 @@ export type GroupAttributes = {
     admin_ui_section_access: Array<'tunnels' | 'my_audit' | 'my_profile' | 'my_sessions'>;
     tunnel_visibility: 'private' | 'group_read';
     rate_limit: 'unlimited' | '1MB/s' | '10MB/s' | '100MB/s';
+    /** 이슈 346: 이 그룹 사용자는 2단계 인증(TOTP 또는 패스키)을 갖춰야 한다. */
+    mfa_required: boolean;
 };
 export type Group = {id: string; name: string; system: boolean; attributes: GroupAttributes; revision?: number};
 /** U3-04: 단위 2 §3 기본값. 새 그룹 폼의 초기값이자 system:superuser 의 표시용 값이다. */
@@ -144,11 +148,14 @@ export const DEFAULT_GROUP_ATTRIBUTES: GroupAttributes = {
     admin_ui_section_access: ['tunnels', 'my_audit', 'my_profile', 'my_sessions'],
     tunnel_visibility: 'private',
     rate_limit: 'unlimited',
+    mfa_required: false,
 };
 export type MeResponse = {user: UserView; group: {id: string; name: string; attributes: GroupAttributes};
     sections: string[]; migrationBanner: boolean;
     /** U4-09: 본인 MFA 상태와 슈퍼유저 강제 등록 게이트. */
-    mfa?: {enabled: boolean; recoveryCodesRemaining: number}; mustEnrollMfa?: boolean};
+    mfa?: {enabled: boolean; recoveryCodesRemaining: number}; mustEnrollMfa?: boolean;
+    /** 이슈 346: 2단계 인증 강제 대상인가. 마지막 수단을 지우는 버튼을 미리 막는 데 쓴다. */
+    mfaRequired?: boolean};
 export type ApiFailure = {success: false; status: number; message: string; code?: string};
 /** U5-06: 국가 필터·차단 목록·터널 레이트 리밋. */
 export type GeoConfig = {mode: 'off' | 'allow' | 'deny'; countries: string[]; applyToAdmin: boolean; unknownPolicy: 'allow' | 'deny'};

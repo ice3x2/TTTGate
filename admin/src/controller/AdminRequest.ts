@@ -40,12 +40,20 @@ const requestJson = async (url: URL, options: RequestInit, credentialCheck = fal
         return failure(`Invalid JSON response from admin server (HTTP ${response.status})`, response.status);
     }
     if(!response.ok) {
+        if(response.status === 403 && value.code === "mfa_enrollment_required") enrollmentRequired?.();
         const fromServer = typeof value.message === "string" && value.message !== "";
         return {...value, success: false, status: response.status,
             message: fromServer ? value.message : `Admin request failed (HTTP ${response.status})`, ...(fromServer ? {} : {generated: true})};
     }
     return value;
 };
+
+/**
+ * 이슈 346: 서버가 403 mfa_enrollment_required 로 거절했을 때 부를 함수. 로그인한 사이에 2단계 인증 강제가 켜진 경우다.
+ * 앱이 하나를 등록해 내 정보를 다시 읽고 등록 화면으로 옮긴다. 이 파일은 화면 상태를 모르므로 함수만 부른다.
+ */
+let enrollmentRequired: (() => void) | undefined;
+export const onMfaEnrollmentRequired = (listener: (() => void) | undefined): void => { enrollmentRequired = listener; };
 
 let csrfRecovery: Promise<any> | undefined;
 

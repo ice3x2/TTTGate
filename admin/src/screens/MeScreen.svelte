@@ -165,7 +165,10 @@
             await loadMe();
             toast.push({tone: 'pulse', message: 'Two-factor authentication disabled.'});
         } else if(result.code === 'mfa_required') {
-            disableError = 'Superusers must keep two-factor authentication enabled.';
+            // 다른 탭에서 패스키를 지운 경우처럼 화면이 늦었다. 화면을 서버 상태에 맞춘다.
+            disableError = KEEP_ONE_METHOD;
+            await loadMe();
+            await loadPasskeys();
         } else if(result.status === 401) {
             disableError = 'The password is incorrect.';
         } else {
@@ -205,6 +208,10 @@
     // 이슈 336: 패스키 카드. 비밀번호를 다시 확인한 뒤 브라우저가 패스키를 만든다. 비밀번호는 창이 닫히면 상태에서 지운다.
     const passkeySupported = passkeysAvailable();
     let passkeys = $state<PasskeyView[]>([]);
+    // 이슈 346: 강제 대상의 마지막 2단계 수단. 지우는 버튼을 미리 막는다(서버도 409 로 막는다).
+    const KEEP_ONE_METHOD = 'Your account requires two-factor authentication. Keep at least one method.';
+    const totpIsLast = $derived($me?.mfaRequired === true && mfaEnabled && passkeys.length === 0);
+    const passkeyIsLast = $derived($me?.mfaRequired === true && !mfaEnabled && passkeys.length === 1);
     let passkeyOpen = $state(false);
     let passkeyName = $state('');
     let passkeyPassword = $state('');
@@ -270,6 +277,8 @@
         rememberPasskeyPreferred();
         toast.push({tone: 'pulse', message: 'Passkey added.'});
         await loadPasskeys();
+        // 이슈 346: 패스키도 2단계 수단이다. 강제 등록 중이었으면 이제 풀렸으므로 내 정보를 다시 읽는다.
+        await loadMe();
     });
 
     const removePasskey = () => run(async () => {
@@ -278,7 +287,8 @@
         if(!target) return;
         const result = await MeCtrl.instance.removePasskey(target.id);
         if(!result.success) {
-            toast.push({tone: 'alarm', message: result.message});
+            toast.push({tone: 'alarm', message: result.code === 'mfa_required' ? KEEP_ONE_METHOD : result.message});
+            if(result.code === 'mfa_required') { await loadMe(); await loadPasskeys(); }
             return;
         }
         toast.push({tone: 'pulse', message: 'Passkey removed.'});
@@ -288,10 +298,10 @@
     const shortAgent = (agent: string): string => agent.length > UA_LIMIT ? agent.slice(0, UA_LIMIT) + '…' : agent;
 
     onMount(() => { void run(loadSessions); });
-    // 슈퍼유저 MFA 등록 강제 중에는 서버가 패스키 경로를 막으므로 카드를 숨기고 목록도 읽지 않는다. 등록을 마치면 한 번 읽는다.
+    // 이슈 346: 강제 등록 중에도 패스키를 등록할 수 있다. 다만 이 주소에서 패스키를 쓸 수 없으면 카드를 숨기고 목록도 읽지 않는다.
     let passkeysLoaded = false;
     $effect(() => {
-        if(!$me || $me.mustEnrollMfa || passkeysLoaded) return;
+        if(!$me || ($me.mustEnrollMfa && !passkeySupported) || passkeysLoaded) return;
         passkeysLoaded = true;
         void run(loadPasskeys);
     });
@@ -300,7 +310,10 @@
 {#if $me}
     <div style="display: flex; flex-direction: column; gap: var(--s-4); align-items: stretch;">
         {#if $me.mustEnrollMfa}
-            <div id="mfa-required-banner"><Banner tone="warn">Superusers must enable two-factor authentication.</Banner></div>
+            <div id="mfa-required-banner"><Banner tone="warn">Your account requires two-factor authentication. Set up a passkey or an authenticator app to continue.</Banner></div>
+            {#if !passkeySupported}
+                <p id="mfa-enroll-passkey-unavailable" style="margin: 0; color: var(--ink-2); font-size: var(--fs-sm);">Passkeys aren't available at this address, so use an authenticator app. {PASSKEY_CONDITION}</p>
+            {/if}
         {/if}
         <Card label="Account">
             <dl style="display: grid; grid-template-columns: max-content 1fr; gap: var(--s-2) var(--s-4); margin: 0; align-items: center;">
@@ -327,8 +340,14 @@
                         </div>
                         <div style="display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center;">
                             <span id="mfa-new-codes"><Button disabled={pending} onclick={() => { codesError = ''; newCodes = []; codesOpen = true; }}>New recovery codes</Button></span>
-                            <span id="mfa-disable"><Button variant="danger" disabled={pending} onclick={() => { disableError = ''; disablePassword = ''; disableOpen = true; }}>Disable</Button></span>
+                            <span id="mfa-disable"><Button variant="danger" disabled={pending || totpIsLast} onclick={() => { disableError = ''; disablePassword = ''; disableOpen = true; }}>Disable</Button></span>
                         </div>
+                        {#if totpIsLast}
+                            <!-- 이슈 346: 누른 뒤 거절하지 않고, 미리 막고 이유를 보인다. -->
+                            <p id="mfa-disable-blocked" style="margin: 0; flex-basis: 100%; color: var(--ink-2); font-size: var(--fs-sm);">{passkeySupported
+                                ? 'Your account requires two-factor authentication. Add a passkey before you turn this off.'
+                                : "Your account requires two-factor authentication, so this can't be turned off."}</p>
+                        {/if}
                     {:else}
                         <span id="mfa-status" style="font-size: var(--fs-md); color: var(--ink-2);">Off</span>
                         <span id="mfa-setup"><Button variant="primary" disabled={pending} onclick={() => { void startEnroll(); }}>Set up</Button></span>
@@ -337,7 +356,7 @@
             </Card>
         </section>
 
-        {#if !$me.mustEnrollMfa}
+        {#if !$me.mustEnrollMfa || passkeySupported}
         <section id="me-passkeys">
             <Card label="Passkeys">
                 <div style="display: flex; flex-direction: column; gap: var(--s-3);">
@@ -356,10 +375,13 @@
                                             added {new Date(passkey.createdAt).toLocaleDateString()} · {passkey.lastUsedAt === null ? 'never used' : `last used ${relativeTime(passkey.lastUsedAt, now)}`}
                                         </div>
                                     </div>
-                                    <span class="passkey-remove"><Button size="sm" variant="danger" disabled={pending} onclick={() => { removeTarget = passkey; removeOpen = true; }}>Remove</Button></span>
+                                    <span class="passkey-remove"><Button size="sm" variant="danger" disabled={pending || passkeyIsLast} onclick={() => { removeTarget = passkey; removeOpen = true; }}>Remove</Button></span>
                                 </li>
                             {/each}
                         </ul>
+                    {/if}
+                    {#if passkeyIsLast}
+                        <p id="passkey-remove-blocked" style="margin: 0; color: var(--ink-2); font-size: var(--fs-sm);">Your account requires two-factor authentication. Set up an authenticator app or add another passkey before you remove this one.</p>
                     {/if}
                     <div><span id="passkey-add"><Button variant="primary" disabled={pending || !passkeySupported} onclick={openAddPasskey}>Add a passkey</Button></span></div>
                     <p id="passkey-hint" style="margin: 0; color: var(--ink-2); font-size: var(--fs-sm);">{passkeySupported ? PASSKEY_CONDITION : PASSKEY_UNSUPPORTED}</p>
