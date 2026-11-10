@@ -46,7 +46,11 @@ function ownerOf(port: number): OwnerInfo | undefined {
 
 /** #100 (U2-08) 의 라우트가 authorize 에 넘기는 대상. 이슈 347 의 공유 목록은 비어 있지 않을 때만 싣는다. */
 function targetOf(port: number): Target {
-    const option = ServerOptionStore.instance.getTunnelingOption(port);
+    return targetOfOption(ServerOptionStore.instance.getTunnelingOption(port), port);
+}
+
+/** 저장 전의 터널 설정으로 만든 대상. 이슈 348 이 저장하기 전에 켜기 권한을 판정할 때 쓴다(targetOf 와 같은 규칙이다). */
+function targetOfOption(option: TunnelingOption | undefined, port: number): Target {
     const owner = option ? resolveOwner(option) : undefined;
     const sharedUserIds = option ? sharedUserIdsOf(option) : [];
     return {port, owner: owner ? {userId: owner.userId, groupId: owner.groupId} : undefined,
@@ -79,13 +83,14 @@ function portsOfGroup(groupId: string): number[] {
  * 삭제되었거나 켜기 권한을 잃었으면 undefined 이고, 그때는 소유자 그룹 상한만 쓴다.
  * 비밀번호 변경·MFA 등록 요구는 로그인 절차의 일이므로 보지 않는다.
  */
-function activatorOf(userId: string, port: number): OwnerInfo | undefined {
+function activatorOf(userId: string, port: number, target?: Target): OwnerInfo | undefined {
     const user = IdentityStore.instance.user(userId);
     if(!user || user.status !== 'active') {
         return undefined;
     }
+    // 이슈 348: target 을 주면 저장 전의 설정(소유자 재할당 등)으로 판정한다.
     const decision = authorize({userId: user.id, username: user.username, role: user.role, groupId: user.groupId,
-        attributes: groupAttributes(user.groupId), mustChangePassword: false}, 'tunnel:activate', targetOf(port));
+        attributes: groupAttributes(user.groupId), mustChangePassword: false}, 'tunnel:activate', target ?? targetOf(port));
     return decision.allowed ? {userId: user.id, groupId: user.groupId, role: user.role} : undefined;
 }
 
@@ -105,6 +110,7 @@ export const AuthorizationContext = {
     ownerIdOf,
     ownerOf,
     targetOf,
+    targetOfOption,
     groupAttributes,
     portsOfGroup,
     portsOfOwner,

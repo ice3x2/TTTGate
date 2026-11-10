@@ -14,7 +14,7 @@ import {ADMIN_FIXTURES, ADMIN_TEST_PASSWORD, REGULAR_USER, TEMP_USER} from "../h
 import {IdentityStore} from "../../src/server/rbac/IdentityStore";
 import {DEFAULT_GROUP_ID} from "../../src/server/rbac/IdentityTypes";
 import {serializeIdentityFixture} from "../helpers/identityFixture";
-import {RBAC_IDENTITY_FIXTURE, RBAC_PASSWORDS, RBAC_TRUSTED_CLIENTS, RBAC_TUNNELS, RBAC_USER_IDS} from "../helpers/rbacFixture";
+import {RBAC_IDENTITY_FIXTURE, RBAC_LONG_IPV6, RBAC_PASSWORDS, RBAC_TRUSTED_CLIENTS, RBAC_TUNNELS, RBAC_USER_IDS} from "../helpers/rbacFixture";
 import {ClockRngProvider} from "../../src/util/ClockRng";
 import {generateRecoveryCodes, generateSecret, hashRecoveryCode} from "../../src/server/mfa/Totp";
 import {base32Encode} from "../../src/server/mfa/Base32";
@@ -221,8 +221,12 @@ const stub = {
         const store = ServerOptionStore.instance;
         const tunnels = RBAC_TUNNELS.map((tunnel) => ({...TUNNEL_OPTIONS[0], ...tunnel,
             ...(tunnel.protocol === "http" ? {httpOption: TUNNEL_OPTIONS[1].httpOption} : {}),
-            // 이슈 347: alice 의 20001 을 carol 에게 공유한다.
-            ...(fixture === "rbac-toggle" && tunnel.forwardPort === 20001 ? {sharedUserIds: [RBAC_USER_IDS.carol]} : {})}));
+            // 이슈 347: alice 의 20001 을 carol 에게 공유한다. 이슈 348: 20001 에는 alice 의 허용 IP 가 있지만 IP 제한은 꺼져 있다(옛 터널).
+            ...(fixture === "rbac-toggle" && tunnel.forwardPort === 20001
+                ? {sharedUserIds: [RBAC_USER_IDS.carol], activatorIps: {[RBAC_USER_IDS.alice]: "203.0.113.5"}} : {}),
+            // 이슈 348: admin 만 보는 20003 은 IP 제한이 켜져 있고 admin 의 허용 IP 가 긴 IPv6 다(360px 줄 넘침 확인용).
+            ...(fixture === "rbac-toggle" && tunnel.forwardPort === 20003
+                ? {activatorIpOnly: true, activatorIps: {[RBAC_USER_IDS.admin]: RBAC_LONG_IPV6}} : {})}));
         if(!store.updateServerOption({...store.serverOption, tunnelingOptions: tunnels as TunnelingOption[], trustedClients: RBAC_TRUSTED_CLIENTS})) {
             throw new Error("Invalid rbac fixture configuration");
         }

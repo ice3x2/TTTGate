@@ -64,6 +64,9 @@ const EXPECTED_ROUTES: ReadonlyArray<ExpectedRoute> = [
     {method: "DELETE", pattern: "^/api/tunnelingOption$", action: "tunnel:delete", hasTarget: true},
     {method: "PUT", pattern: "^/api/tunnelingOption/(?<port>[^/]*)/owner$", action: "tunnel:reassign", hasTarget: true},
     {method: "POST", pattern: "^/api/tunneling/active/(?<port>[^/]*)$", action: "tunnel:activate", hasTarget: true},
+    // 이슈 348: IP 제한 켜기는 켜기 권한, 끄기는 고치기 권한이다. 내 IP 갱신은 켜기 권한이다.
+    {method: "PUT", pattern: "^/api/tunneling/(?<port>[^/]*)/activatorIpOnly$", action: "activatorIpOnlyAction", hasTarget: true},
+    {method: "POST", pattern: "^/api/tunneling/(?<port>[^/]*)/activatorIp$", action: "tunnel:activate", hasTarget: true},
     {method: "GET", pattern: "^/api/externalServerStatuses$", action: "tunnel:list", hasTarget: true},
     {method: "GET", pattern: "^/api/externalCert/(?<port>[^/]*)$", action: "tunnel:cert", hasTarget: true},
     {method: "POST", pattern: "^/api/externalCert/(?<port>[^/]*)$", action: "tunnel:cert", hasTarget: true},

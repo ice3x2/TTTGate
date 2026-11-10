@@ -106,7 +106,11 @@ type TunnelingOption = {
     /** 소유자 사용자 id 또는 'system:migrated'. 없으면 system:migrated 로 해석한다(#100 U2-08). */
     ownerId?: string,
     /** 이슈 347: 이 터널을 보고 켤 수 있는 사용자 id. 비면 저장하지 않으며 없으면 빈 목록으로 읽는다. */
-    sharedUserIds?: string[]
+    sharedUserIds?: string[],
+    /** 이슈 348: 켠 사람의 IP 에서만 연결을 받는다. 없으면 꺼짐으로 읽는다(옛 터널). 새 터널은 켜진 채 만든다. */
+    activatorIpOnly?: boolean,
+    /** 이슈 348: 허용 IP 목록 {userId → IP}. 서버만 바꾸고 저장 API 본문의 값은 무시한다. 비면 저장하지 않는다. */
+    activatorIps?: Record<string, string>
 }
 
 const DEFAULT_KEY = "hello-TTTGate";

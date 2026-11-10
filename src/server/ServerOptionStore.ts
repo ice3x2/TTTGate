@@ -33,7 +33,7 @@ const ROLLBACK_BACKUP_SUFFIX: string = '.bak';
 // 이전 바이너리는 verificationServerOption 에 허용 목록이 없어 새 필드가 든 yaml 도 읽으므로,
 // .bak 은 수기 편집 손실을 막기 위한 복원 지점이다(설계 §3.1).
 const ROLLBACK_SENSITIVE_TOP_FIELDS = ['connectionSecurity', 'mfaRequiredForSuperusers', 'auditRetentionDays', 'auditQueueSize', 'logLevel', 'closeStallMs', 'closeGraceMs', 'adminAllowedOrigins', 'denialLogRetentionDays'] as const;
-const ROLLBACK_SENSITIVE_TUNNEL_FIELDS = ['ownerId', 'rateLimit', 'sharedUserIds'] as const;
+const ROLLBACK_SENSITIVE_TUNNEL_FIELDS = ['ownerId', 'rateLimit', 'sharedUserIds', 'activatorIpOnly', 'activatorIps'] as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value);

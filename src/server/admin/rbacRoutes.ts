@@ -8,7 +8,7 @@ import {IdentityStore} from "../rbac/IdentityStore";
 import {AuthorizationContext} from "../rbac/AuthorizationContext";
 import {toUserView} from "../rbac/UserView";
 import {lookupUsers, parseLookupQuery} from "../rbac/UserLookup";
-import {removeSharedUserEverywhere} from "../rbac/TunnelOwnership";
+import {removeDeletedUserFromTunnels} from "../rbac/TunnelOwnership";
 import {generateTemporaryPassword} from "../rbac/temporaryPassword";
 import {
     DEFAULT_GROUP_ID,
@@ -172,6 +172,8 @@ const onUpdateUser = async (ctx: RouteContext): Promise<void> => {
     const updated = store.updateUser(ctx.params.id, patch);
     // 그룹·역할이 바뀌면 그 사용자 터널의 수명 상한도 바뀐다(#137).
     if(updated.success && (patch.groupId !== undefined || patch.role !== undefined)) ctx.reapplyTunnelCaps?.();
+    // 이슈 348: 그룹·역할·상태가 바뀌면 켜기 권한이 바뀌어 허용 IP 가 줄 수 있다. 그 IP 의 기존 연결을 끊는다.
+    if(updated.success && (patch.groupId !== undefined || patch.role !== undefined || patch.status !== undefined)) await ctx.enforceActivatorIps?.();
     replyResult(ctx, updated, (user) => ({user: toUserView(user, store.groups(), mfaPolicyOptions())}));
 };
 
@@ -183,8 +185,11 @@ const onDeleteUser = async (ctx: RouteContext): Promise<void> => {
         return;
     }
     const deleted = IdentityStore.instance.deleteUser(ctx.params.id);
-    // 이슈 347 FR-7: 지운 사용자를 터널 공유 목록에서도 뺀다.
-    if(deleted.success) await removeSharedUserEverywhere(ctx.params.id);
+    // 이슈 347 FR-7: 지운 사용자를 터널 공유 목록에서도 뺀다. 이슈 348: 허용 IP 목록의 항목도 지우고 그 IP 의 연결을 끊는다.
+    if(deleted.success) {
+        await removeDeletedUserFromTunnels(ctx.params.id);
+        await ctx.enforceActivatorIps?.();
+    }
     replyResult(ctx, deleted, () => ({}));
 };
 
@@ -277,7 +282,10 @@ const onUpdateGroup = async (ctx: RouteContext): Promise<void> => {
     if(before && isFieldProvided(ctx.body, 'attributes')) {
         ctx.auditDetail({changedKeys: changedAttributeKeys(before.attributes, updated.value.attributes)});
     }
-    if(isFieldProvided(ctx.body, 'attributes')) ctx.reapplyTunnelCaps?.(); // 수명 상한이 바뀌었을 수 있다(#137).
+    if(isFieldProvided(ctx.body, 'attributes')) {
+        ctx.reapplyTunnelCaps?.(); // 수명 상한이 바뀌었을 수 있다(#137).
+        await ctx.enforceActivatorIps?.(); // 이슈 348: 켜기 권한을 잃은 사용자의 IP 연결을 끊는다.
+    }
     ctx.ok({group: toGroupView(updated.value)});
 };
 

@@ -54,6 +54,9 @@ import {normalizeSharedUserIds, sharedUserIdsOf, sharedUsersChange} from "../rba
 import {AuthorizationContext} from "../rbac/AuthorizationContext";
 import {AuditEvent, AuditSinkRegistry, recordAuditEvent} from "../audit/AuditSink";
 import {AUDIT_EVENT_TYPES} from "../audit/AuditEventTypes";
+import {activatorIpOnlyOf, activatorIpsOf, requesterIpOf, withActivatorIps} from "../security/ActivatorIps";
+import {activatorIpStatusOf, withoutFormerOwnerIp} from "../rbac/TunnelActivatorIps";
+import {activatorIpRouteHandlers, recordRequesterIp} from "./activatorIpRoutes";
 
 const logger = LoggerFactory.getLogger('server', 'AdminServer');
 const MFA_NOW = (): number => ClockRngProvider.current().now();
@@ -221,6 +224,8 @@ class AdminServer {
             onGetSecurityGeo: this.onGetSecurityGeo,
             onUpdateSecurityGeo: this.onUpdateSecurityGeo,
             onGetSecurityCountries: this.onGetSecurityCountries,
+            // 이슈 348: 켠 사람의 IP 만 받는 설정과 내 허용 IP 갱신. 핸들러는 activatorIpRoutes.ts 가 갖는다.
+            ...activatorIpRouteHandlers,
             // #286: 관리자 차단 목록. 핸들러는 blocklistRoutes.ts 가 갖는다.
             ...blocklistRouteHandlers({
                 applyConnectionSecurity: (next) => this._tttServer?.applyConnectionSecurity(next),
@@ -331,6 +336,7 @@ class AdminServer {
                fail: (status, code, message) => this.sendApiFailure(res, status, {code, message}),
                auditDetail: (patch) => { Object.assign(auditDetailPatch, patch); },
                mfa: this._mfa, reapplyTunnelCaps: () => this._tttServer?.reapplyActiveCaps?.(),
+               enforceActivatorIps: (port) => this.enforceActivatorIps(port),
                expireSessionCookies: () => this.expireSessionCookies(res)
            };
            if(matched.route.action !== 'public') {
@@ -845,22 +851,30 @@ class AdminServer {
         await this.mutateConfiguration(res, payload, async (serverOptionStore) => {
             // owner·editable·toggleable·sharedUsers 는 목록 응답이 덧붙이는 표시용 필드다(이슈 347 이 뒤의 둘을 더했다).
             // 관리자 UI 가 행을 그대로 되돌려 보내도 저장되지 않게 떼어 낸다.
-            const {certInfo, expectedCertificateRevision, previousForwardPort, owner, editable, toggleable, sharedUsers, ...tunnelingOption} = payload;
-            const admission = admitTunnelWrite(ctx.principal!, tunnelingOption, {certInfo, previousForwardPort});
+            // 이슈 348: 허용 IP 목록(activatorIps)은 서버만 바꾼다. 본문의 값은 버리고 admitTunnelWrite 가 저장된 목록에서 만든다.
+            const {certInfo, expectedCertificateRevision, previousForwardPort, owner, editable, toggleable, sharedUsers, activatorIps: _ignored,
+                ...tunnelingOption} = payload;
+            const admission = admitTunnelWrite(ctx.principal!, tunnelingOption, {certInfo, previousForwardPort, requesterIp: requesterIpOf(ctx.ip)});
             if(!admission.success) {
                 this.sendApiFailure(res, admission.status, {code: admission.code, message: admission.message});
                 return;
             }
             tunnelingOption.ownerId = admission.ownerId;
             withSharedUserIds(tunnelingOption, admission.sharedUserIds);
-            // 이슈 347 FR-16: 공유 목록이 바뀌었으면 더해진 id 와 빠진 id 를 남긴다.
+            if(admission.activatorIpOnly === undefined) delete tunnelingOption.activatorIpOnly;
+            else tunnelingOption.activatorIpOnly = admission.activatorIpOnly;
+            withActivatorIps(tunnelingOption, admission.activatorIps);
+            // 이슈 347 FR-16: 공유 목록이 바뀌었으면 더해진 id 와 빠진 id 를 남긴다. 이슈 348 FR-15: IP 제한이 바뀌었으면 바뀐 값을 남긴다.
             const {sharing} = admission;
             ctx.auditDetail({ownerId: admission.ownerId,
                 ...(sharing.added.length > 0 ? {sharedUsersAdded: sharing.added} : {}),
-                ...(sharing.removed.length > 0 ? {sharedUsersRemoved: sharing.removed} : {})});
+                ...(sharing.removed.length > 0 ? {sharedUsersRemoved: sharing.removed} : {}),
+                ...(admission.activatorIpOnlyChanged ? {activatorIpOnly: admission.activatorIpOnly} : {})});
             if(certInfo !== undefined || previousForwardPort !== undefined) {
                 await this.applyCompoundTunnelingOption(res, tunnelingOption, certInfo, expectedCertificateRevision, previousForwardPort, ctx.auditDetail,
                     ctx.principal!.userId);
+                // 이슈 348: 공유 해제·IP 제한 켜기로 허용 IP 가 줄었을 수 있다. 저장이 실패했어도 지금 저장된 값으로 판정하므로 안전하다.
+                await ctx.enforceActivatorIps?.(tunnelingOption.forwardPort);
                 return;
             }
             let previousOption = serverOptionStore.getTunnelingOption(tunnelingOption.forwardPort);
@@ -925,6 +939,8 @@ class AdminServer {
                 return;
             }
             if(droppedBlocks.length > 0) ctx.auditDetail({droppedBlocks});
+            // 이슈 348: 공유 해제·IP 제한 켜기로 허용 IP 가 줄었을 수 있다. 그 IP 의 기존 연결을 끊는다.
+            await ctx.enforceActivatorIps?.(tunnelingOption.forwardPort);
             this.sendApiSuccess(res, {
                 forwardPort: tunnelingOption.forwardPort,
                 revisionState: commitResult.revisionState
@@ -1057,7 +1073,10 @@ class AdminServer {
             const sharedBefore = sharedUserIdsOf(option);
             const sharedAfter = normalizeSharedUserIds(sharedBefore, resolved.ownerId);
             const {removed: sharedUsersRemoved} = sharedUsersChange(sharedBefore, sharedAfter);
-            const composed = serverOptionStore.composeServerOptionWithTunnelingOption(withSharedUserIds({...option, ownerId: resolved.ownerId}, sharedAfter));
+            const next = withSharedUserIds({...option, ownerId: resolved.ownerId}, sharedAfter);
+            // 이슈 348 FR-5: 이전 소유자가 켜기 권한을 잃으면 허용 IP 목록의 그 사람 항목을 지운다.
+            const formerIp = from === resolved.ownerId ? {ips: activatorIpsOf(option), removed: []} : withoutFormerOwnerIp(activatorIpsOf(option), from, next);
+            const composed = serverOptionStore.composeServerOptionWithTunnelingOption(withActivatorIps(next, formerIp.ips));
             if(!composed.success || !composed.serverOption) {
                 this.sendApiFailure(res, 400, {message: 'Tunnel owner update failed.', forwardPort: port});
                 return;
@@ -1069,8 +1088,10 @@ class AdminServer {
                     failedScopes: ["tunneling-option"], revisionState: serverOptionStore.revisionState});
                 return;
             }
-            ctx.auditDetail({from, to: resolved.ownerId, ...(sharedUsersRemoved.length > 0 ? {sharedUsersRemoved} : {})});
+            ctx.auditDetail({from, to: resolved.ownerId, ...(sharedUsersRemoved.length > 0 ? {sharedUsersRemoved} : {}),
+                ...(formerIp.removed.length > 0 ? {allowedIpsRemoved: formerIp.removed} : {})});
             ctx.reapplyTunnelCaps?.();
+            await ctx.enforceActivatorIps?.(port);
             this.sendApiSuccess(res, {forwardPort: port, owner: ownerViewOf(port), revisionState: commitResult.revisionState});
         });
     }
@@ -1283,6 +1304,12 @@ class AdminServer {
             this.sendApiFailure(res, 400, {message: 'timeout must be a number of seconds from 0 to 10 years'}); return;
         }
         await ServerOptionStore.instance.runConfigurationMutation(async () => {
+            // 이슈 348 FR-3: 켜면 켠 사람의 항목만 지금 요청자 IP 로 넣거나 바꾼다. 켜기 전에 저장해야 새 연결이 새 IP 로 판정된다.
+            // 이미 켜진 터널에 보내는 켜기(시간 변경)도 같다. 끄기는 목록을 바꾸지 않는다.
+            const option = isTunnelActivationRequested(ctx) ? ServerOptionStore.instance.getTunnelingOption(port) : undefined;
+            const placed = option ? recordRequesterIp(ctx, option, 'replace') : undefined;
+            if(option && !placed) return;
+            if(placed?.changed) ctx.auditDetail({allowedIpBefore: placed.before, allowedIp: placed.after});
             let success = false;
             if(this._tttServer) {
                 // 이슈 347: 요청자가 켠 사람이다. 수명 상한에 그 사람의 그룹 상한도 들어간다.
@@ -1290,6 +1317,8 @@ class AdminServer {
                     ? await this._tttServer.activeExternalPortServer(port, timeout, ctx.principal!.userId)
                     : await this._tttServer.inactiveExternalPortServer(port);
             }
+            // 같은 사용자의 이전 IP 에서 온 연결을 끊는다.
+            if(placed?.changed) await ctx.enforceActivatorIps?.(port);
             this.sendApiEnvelope(res, success ? 200 : 400, {success: success, message: success ? '' : 'Unable to change listener active state'});
         });
     }
@@ -1783,6 +1812,9 @@ class AdminServer {
             const principal = ctx.principal!;
             const visible = tunnelingOptions
                 .filter((tunnelingOption) => isTunnelVisibleTo(principal, tunnelingOption.forwardPort))
+                // 이슈 348 FR-6: 허용 IP 목록은 슈퍼유저에게만 준다(다른 사용자의 IP 다). IP 제한은 옛 터널도 값으로 준다.
+                .map(({activatorIps, ...tunnelingOption}) => ({...tunnelingOption, activatorIpOnly: activatorIpOnlyOf(tunnelingOption),
+                    ...(principal.role === 'superuser' && activatorIps !== undefined ? {activatorIps} : {})}))
                 .map(({sharedUserIds: _stored, ...tunnelingOption}) => {
                     const editable = isTunnelEditable(principal, tunnelingOption.forwardPort);
                     // 이슈 347 FR-6a: 공유 목록은 고칠 수 있는 사람에게만 준다. 다른 공유 사용자의 이름이 드러나지 않게 한다.
@@ -1800,12 +1832,26 @@ class AdminServer {
         });
     }
 
+    /** 이슈 348: 허용 IP 가 아닌 기존 연결을 끊는다. 연결 정리가 실패해도 요청은 실패시키지 않는다(새 연결은 판정이 막는다). */
+    private async enforceActivatorIps(port?: number): Promise<void> {
+        try {
+            await this._tttServer?.enforceActivatorIps?.(port);
+        } catch(error) {
+            logger.error(`enforcing activator IPs failed${port === undefined ? '' : ` - port: ${port}`}`, error);
+        }
+    }
+
     private onGetExternalServerStatuses = async (ctx: RouteContext) => {
         const {res} = ctx;
-        let statuses = this._tttServer?.externalServerStatuses() ?? [];
+        const statuses = this._tttServer?.externalServerStatuses() ?? [];
         // 목록과 같은 가시성 판정을 쓴다. 상태로 남의 터널 존재가 새지 않게 한다.
-        statuses = statuses.filter((status) => isTunnelVisibleTo(ctx.principal!, status.port));
-        this.sendApiSuccess(res, {serverTime: Date.now(), statuses});
+        const principal = ctx.principal!;
+        const viewer = {userId: principal.userId, superuser: principal.role === 'superuser'};
+        const store = ServerOptionStore.instance;
+        // 이슈 348 FR-14: 항목마다 IP 제한·내 허용 IP·판정에 쓰이는 항목 수를, 최상위에 지금 요청자 IP 를 싣는다.
+        const visible = statuses.filter((status) => isTunnelVisibleTo(principal, status.port))
+            .map((status) => ({...status, ...activatorIpStatusOf(store.getTunnelingOption(status.port), viewer)}));
+        this.sendApiSuccess(res, {serverTime: Date.now(), requesterIp: requesterIpOf(ctx.ip) ?? null, statuses: visible});
     }
 
     // U5-02 / #117 — 차단 목록 조회·해제 API. 권한은 라우트 표의 security:manage 가 본다.

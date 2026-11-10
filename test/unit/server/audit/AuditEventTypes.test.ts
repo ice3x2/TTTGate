@@ -14,6 +14,8 @@ const EXPECTED_TYPES = [
     "tunnel_created", "tunnel_updated", "tunnel_deleted",
     "tunnel_activated", "tunnel_deactivated", "tunnel_reassigned",
     "tunnel_cert_updated", "tunnel_cert_deleted",
+    // 이슈 348 켠 사람의 IP 만 받는 설정과 내 IP 갱신
+    "tunnel_ip_limit_updated", "tunnel_ip_refreshed",
     "server_option_updated", "admin_cert_updated",
     "security_geo_updated", "security_ban_removed",
     // #286 관리자 차단 목록
@@ -29,8 +31,8 @@ const EXPECTED_TYPES = [
 ];
 
 describe("AuditEventTypes", () => {
-    it("표의 이름 54 개를 모두 담는다", () => {
-        expect(AUDIT_EVENT_TYPE_LIST).toHaveLength(54);
+    it("표의 이름 56 개를 모두 담는다", () => {
+        expect(AUDIT_EVENT_TYPE_LIST).toHaveLength(56);
         expect([...AUDIT_EVENT_TYPE_LIST].sort()).toEqual([...EXPECTED_TYPES].sort());
     });
 

@@ -52,6 +52,15 @@ describe("release documentation and sample config alignment", () => {
         const fields = /ROLLBACK_SENSITIVE_TOP_FIELDS = \[([^\]]*)\]/.exec(store)![1].match(/'[^']+'/g)!.map((field) => field.slice(1, -1));
         expect(fields.length).toBeGreaterThanOrEqual(7);
         for(const field of fields) expect(migration).toContain(`\`${field}\``);
+        // 이슈 348: 터널 단위의 새 필드도 같다(activatorIpOnly·activatorIps 가 더해졌다).
+        const tunnelFields = /ROLLBACK_SENSITIVE_TUNNEL_FIELDS = \[([^\]]*)\]/.exec(store)![1].match(/'[^']+'/g)!.map((field) => field.slice(1, -1));
+        expect(tunnelFields).toEqual(expect.arrayContaining(["activatorIpOnly", "activatorIps"]));
+        for(const field of tunnelFields) expect({field, found: migration.includes(`\`${field}\``)}).toEqual({field, found: true});
+        // 이슈 348 §6: 업그레이드 때 기존 터널은 꺼진 채이고, 되돌리면 제한이 조용히 풀린다(허용 쪽)는 것을 적는다.
+        const downgrade = migration.slice(migration.indexOf("### Downgrading after the activator IP limit"));
+        expect(downgrade).toMatch(/^### Downgrading after the activator IP limit/);
+        expect(downgrade).toMatch(/fails? open/);
+        expect(downgrade).toMatch(/`activatorIps`/);
         expect(readme).toContain("clientId");
         expect(readme).toContain("clientSecret");
     });
