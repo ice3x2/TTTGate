@@ -1,6 +1,6 @@
 import type {Page, Route} from "playwright";
 import {startAdminApp, type AdminApp, ADMIN_APP_TEST_TIMEOUT_MS} from "../helpers/adminApp";
-import {RBAC_IDENTITY_FIXTURE, RBAC_PASSWORDS, RBAC_TRUSTED_CLIENTS, RBAC_USER_IDS} from "../helpers/rbacFixture";
+import {RBAC_CONNECTED_CLIENT_NAME, RBAC_IDENTITY_FIXTURE, RBAC_PASSWORDS, RBAC_TRUSTED_CLIENTS, RBAC_TUNNELS, RBAC_USER_IDS} from "../helpers/rbacFixture";
 
 // 이슈 349 — 브라우저 언어가 ko-KR 이면 관리 화면이 한국어로 보인다(AC-1·AC-4·AC-8, 이슈 344 AC-7).
 // 그 밖의 언어와 ['en-US', 'ko-KR'] 은 영어다(AC-2). 영어 화면 테스트는 각 화면 테스트 파일이 맡는다(AC-6).
@@ -18,12 +18,23 @@ const heading = (page: Page, text: string) =>
 const PROPER_NOUNS = ["TTTGate", "IPv4", "IPv6", "IP", "TLS", "HTTPS", "HTTP", "TCP", "UDP", "CIDR", "ID", "URL", "API", "CSRF", "TOTP", "MFA", "PEM", "JSON",
     "CPU", "RAM", "OS", "QR", "CA", "CORS", "KiB", "MiB", "GiB", "TiB"];
 
-/** 화면에 보이는 데이터(사용자·그룹·클라이언트 이름). 문구가 아니므로 검사에서 뺀다. */
-const DATA_NAMES = [
+/**
+ * 화면에 보이는 데이터(사용자·그룹·클라이언트 이름, 터널의 목적지와 허용 클라이언트). 문구가 아니므로 검사에서 뺀다.
+ * 검토 L-4: 드라이버가 접속해 있다고 알리는 클라이언트 이름도 픽스처의 값을 그대로 넣는다. 신뢰 클라이언트 id 와 우연히 같은 값에 기대지 않는다.
+ */
+const DATA_NAMES = [...new Set([
     ...RBAC_IDENTITY_FIXTURE.users.flatMap((user) => [user.username, user.displayName ?? ""]),
     ...(RBAC_IDENTITY_FIXTURE.groups ?? []).map((group) => group.name), "Default",
     ...RBAC_TRUSTED_CLIENTS.flatMap((client) => [client.clientId, client.displayName]),
-].filter((name) => name !== "").sort((a, b) => b.length - a.length);
+    RBAC_CONNECTED_CLIENT_NAME,
+    ...RBAC_TUNNELS.flatMap((tunnel) => [tunnel.destinationAddress, ...(tunnel.allowedClientIds ?? [])]),
+])].filter((name) => name !== "").sort((a, b) => b.length - a.length);
+
+/**
+ * 검토 H-1: 문구가 아닌 데이터를 그리는 곳. 이 안의 글자는 검사에서 뺀다.
+ * 감사 이벤트의 시각·코드 값·요약·행위자와 대상·세부 내용(FR-12 는 번역하지 않는다), 상태 화면의 접속 클라이언트 이름.
+ */
+const DATA_REGIONS = [".audit-time", ".audit-type-code", ".audit-summary", ".audit-meta", ".audit-detail", ".client-name"].join(", ");
 
 /** 고유 이름과 데이터를 지우고도 남는 세 글자 이상의 영어 낱말. */
 const englishLeft = (text: string): string[] => {
@@ -33,22 +44,48 @@ const englishLeft = (text: string): string[] => {
     return rest.match(/[A-Za-z]{3,}/g) ?? [];
 };
 
-/** 검토 M-3: 화면에 보이는 제목과 모든 버튼의 이름이 한국어인지 본다. 버튼 이름은 aria-label 이 있으면 그것, 없으면 보이는 글자다. */
+/**
+ * 검토 M-3: 화면에 보이는 제목과 모든 버튼의 이름이 한국어인지 본다. 버튼 이름은 aria-label 이 있으면 그것, 없으면 보이는 글자다.
+ * 보이는 글자에서 데이터 영역(DATA_REGIONS)의 글자는 뺀다. 데이터 영역 자체인 제목은 보지 않는다.
+ */
 const expectKorean = async (page: Page, where: string): Promise<void> => {
-    const names = await page.evaluate(() => {
+    const names = await page.evaluate((dataRegions) => {
         const shown = (element: Element) => element.getClientRects().length > 0 && getComputedStyle(element).visibility !== "hidden";
-        return [...document.querySelectorAll("header h1, h2, h3, legend, button, [role=button]")].filter(shown)
-            .map((element) => (element.getAttribute("aria-label") ?? (element as HTMLElement).innerText ?? "").trim())
+        const textOf = (element: HTMLElement) => [...element.querySelectorAll<HTMLElement>(dataRegions)]
+            .reduce((text, data) => data.innerText === "" ? text : text.split(data.innerText).join(" "), element.innerText ?? "");
+        return [...document.querySelectorAll<HTMLElement>("header h1, h2, h3, legend, button, [role=button]")].filter(shown)
+            .filter((element) => !element.matches(dataRegions))
+            .map((element) => (element.getAttribute("aria-label") ?? textOf(element)).trim())
             .filter((name) => name !== "");
-    });
+    }, DATA_REGIONS);
     expect({where, english: names.filter((name) => englishLeft(name).length > 0)}).toEqual({where, english: []});
 };
 
-/** 해시로 화면을 옮기고 그 화면의 한국어 제목을 기다린 뒤, 보이는 제목과 버튼이 모두 한국어인지 본다. */
-const open = async (page: Page, hash: string, title: string): Promise<void> => {
+/**
+ * 해시로 화면을 옮기고 그 화면의 한국어 제목을 기다린 뒤, 보이는 제목과 버튼이 모두 한국어인지 본다.
+ * ready 는 화면이 데이터를 다 그렸을 때 끝난다. 화면을 옮기기 전에 만들어 둔다(auditListed).
+ */
+const open = async (page: Page, hash: string, title: string, ready?: () => Promise<void>): Promise<void> => {
     await page.evaluate((value) => { location.hash = value; }, hash);
     await heading(page, title);
+    await ready?.();
     await expectKorean(page, hash);
+};
+
+/**
+ * 검토 H-1: 감사 화면은 종류 목록을 읽은 뒤 이벤트 목록을 읽어 그린다. 목록 응답을 받고 그 이벤트가 모두 그려질 때까지 기다려,
+ * 검사가 목록을 그리기 전에 끝나거나 그린 뒤에 끝나는 일(시점에 따라 결과가 갈림)을 없앤다. 화면을 옮기기 전에 불러 응답을 놓치지 않는다.
+ */
+const auditListed = (page: Page): (() => Promise<void>) => {
+    const response = page.waitForResponse((candidate) => new URL(candidate.url()).pathname === "/api/audit" && candidate.request().method() === "GET",
+        {timeout: UI_WAIT_MS});
+    // 앞 단계가 실패해 ready 를 부르지 않아도 처리되지 않은 거부가 남지 않게 한다.
+    response.catch(() => undefined);
+    return async () => {
+        const body = await (await response).json() as {events?: unknown[]};
+        await page.waitForFunction((count) => document.querySelectorAll("#audit-list .audit-event").length === count,
+            body.events?.length ?? 0, {timeout: UI_WAIT_MS});
+    };
 };
 
 const withApp = async (options: Parameters<typeof startAdminApp>[0], check: (app: AdminApp) => Promise<void>): Promise<void> => {
@@ -128,7 +165,7 @@ test("AC-1 ko-KR 에서 로그인부터 모든 화면의 제목과 버튼이 한
     await visible(page, "비밀번호 변경");
     await open(page, "#/sessions", "세션");
     await visible(page, "이 사용자의 세션 모두 끝내기");
-    await open(page, "#/audit", "감사 로그");
+    await open(page, "#/audit", "감사 로그", auditListed(page));
     expect(await page.locator('label[for="audit-filter-type"]').textContent()).toContain("종류");
 
     // 사용자 목록·편집, 그룹 목록·편집
@@ -207,7 +244,8 @@ test("AC-8 ko-KR 감사 화면은 이벤트 이름을 한국어로, 코드 값�
             fulfillJson(route, 200, {success: true, events: [event("tunnel_activated"), event("brand_new_event")]}));
         await page.locator("#login-password").waitFor({state: "visible", timeout: UI_WAIT_MS});
         await signIn(page, "admin", RBAC_PASSWORDS.admin);
-        await open(page, "#/audit", "감사 로그");
+        // 모킹한 요약("tunnel_activated summary")은 영어 데이터다. 목록을 다 그린 뒤에 검사해야 데이터 영역을 빼는지 확인된다.
+        await open(page, "#/audit", "감사 로그", auditListed(page));
 
         const known = page.locator('#audit-list .audit-event[data-type="tunnel_activated"]');
         await known.waitFor({state: "visible", timeout: UI_WAIT_MS});

@@ -123,6 +123,46 @@ describe("코드 값 모양 예외가 영어 문구를 놓치지 않는다", () 
     });
 });
 
+// 검토 L-2: 알림 함수의 인자와 글자 자리의 삼항식 갈래는 글자 자리다. 소문자 한 단어·대문자 한 단어도 문구다.
+describe("알림 함수의 인자와 글자 자리의 삼항식", () => {
+    test.each([
+        ["alert 의 한 단어", "alert('Saved');\n", ["Saved"]],
+        ["confirm·prompt 의 한 단어", "if(confirm('Delete')) remove();\nconst name = prompt('Name');\n", ["Delete", "Name"]],
+        ["글자 키 값의 삼항식", "toast.push({message: busy ? 'Saving' : 'Saved'});\n", ["Saving", "Saved"]],
+        ["글자 이름에 대입한 삼항식", "label = open ? 'close' : 'open';\n", ["close", "open"]],
+        ["알림 인자의 삼항식", "alert(ok ? 'Done' : 'Failed');\n", ["Done", "Failed"]],
+        ["겹친 삼항식", "const o = {title: a ? 'One' : b ? 'Two' : 'Three'};\n", ["One", "Two", "Three"]],
+    ])("%s", (_name, source, expected) => {
+        expect(texts(tsModule(source))).toEqual(expected);
+    });
+
+    test("글자 자리가 아닌 삼항식과 알림 인자 속 문구 키는 코드 값이다", () => {
+        const source = [
+            "const tone = failed ? 'alarm' : 'pulse';",
+            "const o = {kind: a ? 'warn' : 'info', message: t(a ? 'x.one' : 'x.two')};",
+            "alert(t('common.saved'));",
+            "if(confirm(t('tunnel.deleteConfirm', {port}))) remove();",
+            "label = cond === 'a' ? t('x.a') : t('x.b');",
+        ].join("\n");
+        expect(tsModule(source)).toEqual([]);
+    });
+});
+
+// 검토 L-3: download 의 값은 파일 이름, <option value> 는 코드 값이다.
+describe("토큰 값 속성", () => {
+    test("download 와 option 의 value 는 글자가 아니다", () => {
+        const source = [
+            "<a href={url} download=\"TTTGate config.yaml\">{t('common.download')}</a>",
+            "<select><option value=\"Regular\">{t('user.roleRegular')}</option></select>",
+        ].join("\n");
+        expect(svelte(source)).toEqual([]);
+    });
+
+    test("option 이 아닌 태그의 value 는 여전히 글자다", () => {
+        expect(texts(svelte("<input type=\"submit\" value=\"Save changes\">\n"))).toEqual(["Save changes"]);
+    });
+});
+
 describe("DOM 글자 속성", () => {
     test("textContent·innerText 에 넣는 영어 문구", () => {
         expect(texts(tsModule("el.textContent = 'hello';\nnode.innerText = 'Loading';\n"))).toEqual(["hello", "Loading"]);
@@ -148,6 +188,39 @@ describe("잡은 예외의 원문을 화면에 보이지 않는다", () => {
         ["then 의 실패 처리 인자", "p.then(ok, (e) => alert(e.message));", ["e.message"]],
     ])("%s", (_name, body, expected) => {
         expect(rawErrors(script(body))).toEqual(expected);
+    });
+
+    // 검토 M-1: 예외 객체를 그대로 넘기거나, 별칭·구조 분해로 꺼낸 원문도 잡는다.
+    test.each([
+        ["예외 객체를 알림 함수에 넘긴다", "try { await load(); } catch(e) { alert(e); }", ["e"]],
+        ["예외 객체를 알림의 message 로 넣는다", "try { await load(); } catch(e) { toast.push({tone: 'alarm', message: e}); }", ["e"]],
+        ["별칭의 message", "try { await load(); } catch(e) { const err = e as Error; alert(err.message); }", ["err.message"]],
+        ["형 단언 없는 별칭", "try { await load(); } catch(e) { const err = e; toast.push({message: err}); }", ["err"]],
+        ["예외를 화면 상태에 대입한다", "try { await load(); } catch(e) { error = e; }", ["e"]],
+        ["예외의 message 를 화면 상태에 대입한다", "load().catch((e) => { status = e.message; });", ["e.message"]],
+        ["catch 인자의 구조 분해", "try { await load(); } catch({message}) { alert(message); }", ["message"]],
+        ["구조 분해에 새 이름", "try { await load(); } catch({message: text}) { status = text; }", ["text"]],
+        ["본문의 구조 분해", "try { await load(); } catch(e) { const {message} = e as Error; toast.push({message}); }", ["message"]],
+        ["Promise.catch 의 구조 분해", "load().catch(({message}) => alert(message));", ["message"]],
+    ])("%s", (_name, body, expected) => {
+        expect(rawErrors(script(body))).toEqual(expected);
+    });
+
+    // 검토 L-1: 원문으로 조건을 따지는 것은 화면에 보이는 것이 아니다.
+    test("예외 원문으로 조건을 따지는 것은 원문 노출이 아니다", () => {
+        const body = [
+            "try { await load(); } catch(e) {",
+            "    if(e.message.includes('abort')) return;",
+            "    if((e as Error).message === 'x') return;",
+            "    if(e.message.startsWith('net') || /timeout/.test(e.message)) retry();",
+            "    const err = e as Error;",
+            "    if(err.message.length === 0 || !err.message) return;",
+            "    if(e instanceof InvalidSession) sessionOut();",
+            "    failed(e);",
+            "    throw e;",
+            "}",
+        ].join("\n");
+        expect(script(body)).toEqual([]);
     });
 
     test("로그·종류 판별·번역 문구의 값은 화면 원문이 아니다", () => {

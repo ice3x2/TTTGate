@@ -1,5 +1,9 @@
-import {type ClientStatus, type SysInfo, type Usage, type VersionInfo} from "./Types";
+import {type ApiResult, type ClientStatus, type SysInfo, type Usage, type VersionInfo} from "./Types";
 import InvalidSession from "./InvalidSession";
+import {adminRequest} from "./AdminRequest";
+
+/** 시스템 정보 요청의 결과. 서버가 거절하거나 서버에 닿지 못하면 실패 값이다. 세션이 끝났으면 InvalidSession 을 던진다. */
+export type SysInfoResult = ApiResult<{sysInfo: SysInfo}>;
 
 
 class ServerStatusCtrl {
@@ -51,44 +55,23 @@ class ServerStatusCtrl {
         return await res.json();
     }
 
-    public async getSysInfo() : Promise<SysInfo> {
+    public async getSysInfo() : Promise<SysInfoResult> {
         if(this._sysInfoCache) {
-            return this._sysInfoCache;
+            return {success: true, sysInfo: this._sysInfoCache};
         }
-        let res = await fetch("/api/sysInfo", {
-            method: "GET",
-            credentials: "same-origin"
-        });
-        let json = await res.json();
-        if(!json || res.status == 401) {
-            throw new InvalidSession();
-        }
-        this._sysInfoCache = json.sysInfo;
-        return json.sysInfo;
+        const result: SysInfoResult = await adminRequest("/api/sysInfo");
+        if(result.success) this._sysInfoCache = result.sysInfo;
+        return result;
     }
 
-    public async getClientSysInfo(id: number) : Promise<SysInfo> {
-        let sysInfo = this._clientSysInfoCache.get(id);
+    public async getClientSysInfo(id: number) : Promise<SysInfoResult> {
+        const sysInfo = this._clientSysInfoCache.get(id);
         if(sysInfo) {
-            return sysInfo;
+            return {success: true, sysInfo};
         }
-        let res = await fetch(`/api/clientSysInfo/${id}`, {
-            method: "GET",
-            credentials: "same-origin"
-        });
-        let json = await res.json();
-
-        if(!json || res.status == 401) {
-            throw new InvalidSession();
-        }
-        if(!json.success) {
-            throw new Error(json.message);
-        }
-
-        sysInfo = json.sysInfo as SysInfo;
-
-        this._clientSysInfoCache.set(id, sysInfo);
-        return sysInfo;
+        const result: SysInfoResult = await adminRequest(`/api/clientSysInfo/${id}`);
+        if(result.success) this._clientSysInfoCache.set(id, result.sysInfo);
+        return result;
     }
 
 

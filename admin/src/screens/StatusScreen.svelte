@@ -1,6 +1,6 @@
 <script lang="ts">
     import {onMount} from 'svelte';
-    import ServerStatusCtrl from '../controller/ServerStatusCtrl';
+    import ServerStatusCtrl, {type SysInfoResult} from '../controller/ServerStatusCtrl';
     import InvalidSession from '../controller/InvalidSession';
     import type {ClientStatus, SysInfo, Usage} from '../controller/Types';
     import Button from '../ui/Button.svelte';
@@ -12,6 +12,7 @@
     import SysinfoPopup from './parts/SysinfoPopup.svelte';
     import {byteToUnit, timeToDMH} from './parts/units';
     import {t} from '../i18n';
+    import {errorMessageOf} from '../i18n/serverError';
 
     let usage = $state<Usage | undefined>();
     let clients = $state<ClientStatus[]>([]);
@@ -57,23 +58,25 @@
         }
     };
 
-    const showInfo = async () => {
+    // 서버가 거절하면 그 code 의 문구를, 서버에 닿지 못하면 연결 실패 문구를 보인다. 예외 원문은 보이지 않는다.
+    const showSysInfo = async (load: () => Promise<SysInfoResult>) => {
         try {
-            sysInfo = await ServerStatusCtrl.instance.getSysInfo();
-            infoOpen = true;
+            const result = await load();
+            if(result.success) {
+                sysInfo = result.sysInfo;
+                infoOpen = true;
+            } else {
+                alert(errorMessageOf(result, t('common.unableToConnect')));
+            }
         } catch(e) {
-            alert(e + '');
+            if(e instanceof InvalidSession) sessionOut();
+            else alert(t('common.unableToConnect'));
         }
     };
 
-    const showClient = async (id: number) => {
-        try {
-            sysInfo = await ServerStatusCtrl.instance.getClientSysInfo(id);
-            infoOpen = true;
-        } catch(e) {
-            if(e instanceof Error) alert(e.message);
-        }
-    };
+    const showInfo = () => showSysInfo(() => ServerStatusCtrl.instance.getSysInfo());
+
+    const showClient = (id: number) => showSysInfo(() => ServerStatusCtrl.instance.getClientSysInfo(id));
 
     onMount(() => {
         startStatusUpdate();

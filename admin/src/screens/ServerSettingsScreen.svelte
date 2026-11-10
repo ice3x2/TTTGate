@@ -38,8 +38,8 @@
         else serverOption.logLevel = value as ServerOption['logLevel'];
     };
     const LOG_LEVEL_OPTIONS = [
-        {value: 'error', label: 'error'}, {value: 'warn', label: 'warn'},
-        {value: 'info', label: 'info'}, {value: 'debug', label: 'debug'},
+        {value: 'error', label: t('server.logLevelError')}, {value: 'warn', label: t('server.logLevelWarn')},
+        {value: 'info', label: t('server.logLevelInfo')}, {value: 'debug', label: t('server.logLevelDebug')},
     ];
     // 입력 칸은 별도 상태다. 칸을 비워도 기본값이 다시 들어오지 않게, 불러올 때와 Reset 때만 서버 값(없으면 기본값)으로 맞춘다.
     let retentionInput = $state<number | null>(DEFAULT_AUDIT_RETENTION_DAYS);

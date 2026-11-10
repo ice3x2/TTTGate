@@ -42,7 +42,7 @@
                     <dt>{t('sysinfo.address')}</dt><dd>{entry.address}</dd>
                     <dt>{t('sysinfo.netmask')}</dt><dd>{entry.netmask}</dd>
                     <dt>{t('sysinfo.mac')}</dt><dd>{entry.mac}</dd>
-                    <dt>{t('sysinfo.internal')}</dt><dd>{entry.internal}</dd>
+                    <dt>{t('sysinfo.internal')}</dt><dd>{t(entry.internal ? 'sysinfo.internalYes' : 'sysinfo.internalNo')}</dd>
                     <dt>{t('sysinfo.family')}</dt><dd>{entry.family}</dd>
                     <dt>{t('sysinfo.cidr')}</dt><dd>{entry.cidr}</dd>
                 </dl>

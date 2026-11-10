@@ -35,6 +35,14 @@ describe("errorMessageOf", () => {
         expect(errorMessageOf({}, "fallback", en)).toBe("fallback");
     });
 
+    // 검토 L-5: 서버가 응답했지만 문구가 없거나 JSON 이 깨졌으면 '연결하지 못했다' 가 아니다. AdminRequest 가 만든 HTTP 상태 문구를 보인다.
+    test("서버가 응답했는데 화면이 만든 문구면(status > 0) 그 문구다", () => {
+        expect(errorMessageOf({message: "Admin request failed (HTTP 500)", generated: true, status: 500}, "fallback", en)).toBe("Admin request failed (HTTP 500)");
+        expect(errorMessageOf({message: "관리 서버의 응답이 올바른 JSON이 아닙니다(HTTP 502).", generated: true, status: 502}, "fallback", ko))
+            .toBe("관리 서버의 응답이 올바른 JSON이 아닙니다(HTTP 502).");
+        expect(errorMessageOf({message: "Admin network request failed: x", generated: true, status: 0}, "fallback", en)).toBe("fallback");
+    });
+
     test("Object 의 속성 이름은 code 로 보지 않는다", () => {
         expect(errorMessageOf({code: "toString", message: ""}, "fallback", en)).toBe("fallback");
         expect(errorMessageOf({code: "constructor", message: "server"}, "fallback", en)).toBe("server");
@@ -57,6 +65,36 @@ describe("errorMessageOf", () => {
         ["passkey_busy", "The server is busy. Try again in a minute."],
     ])("영어 문구는 옛 맵과 같다: %s", (code, expected) => {
         expect(errorMessageOf({code, message: "server text"}, "fallback", en)).toBe(expected);
+    });
+});
+
+// 검토 M-2: 새로 문구를 둔 code 는 영어 화면이 지금과 같다. 영어 문구가 서버가 보내는 문구와 같다.
+describe("errorMessageOf — 서버 문구가 한 가지인 code 의 영어 문구는 서버 문구와 같다", () => {
+    const en = translator("en");
+    const ko = translator("ko");
+
+    test.each([
+        ["login_failed", {}, "The password is incorrect."],
+        ["INVALID_DISPLAY_NAME", {max: 128}, "displayName must be 1-128 characters"],
+        ["INVALID_TTL", {max: 43200}, "ttlMinutes must be null (no expiry) or an integer within 1..43200"],
+        ["password_too_long", {max: 1024}, "password must be at most 1024 characters"],
+        ["query_invalid", {min: 2, max: 64}, "q must be 2 to 64 characters"],
+        ["role_invalid", {roles: ["superuser", "regular"]}, "role must be one of superuser, regular"],
+        ["status_invalid", {statuses: ["active", "disabled"]}, "status must be one of active, disabled"],
+        ["shared_users_too_many", {max: 50}, "a tunnel can be shared with at most 50 users"],
+        ["shared_user_not_found", {userId: "u-1"}, "shared user not found: u-1"],
+        ["attributes_unknown_key", {key: "color"}, "unknown group attribute: color"],
+        ["attribute_bool_invalid", {attribute: "mfa_required", value: "yes"}, "invalid mfa_required: yes"],
+        ["TRUSTED_CLIENTS_READ_ONLY", {}, "trustedClients cannot be changed with the server option. Use /api/trustedClients."],
+    ] as Array<[string, Record<string, unknown>, string]>)("%s", (code, values, serverText) => {
+        const result = {success: false, code, message: serverText, ...values};
+        expect(errorMessageOf(result, "fallback", en)).toBe(serverText);
+        expect(errorMessageOf(result, "fallback", ko)).not.toBe(serverText);
+    });
+
+    test("한국어 문구", () => {
+        expect(errorMessageOf({code: "login_failed"}, "fallback", ko)).toBe("비밀번호가 틀렸습니다.");
+        expect(errorMessageOf({code: "shared_users_too_many", max: 50, message: "x"}, "fallback", ko)).toBe("터널은 최대 50명에게 공유할 수 있습니다.");
     });
 });
 

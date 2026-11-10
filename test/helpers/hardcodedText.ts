@@ -7,9 +7,13 @@ import ts from "typescript";
 // 찾는 것:
 //   template-text  .svelte 템플릿의 글자, 그리고 글자 자리의 식 {…} 안 리터럴.
 //   text-attribute 속성의 따옴표 값(토큰 속성 TOKEN_ATTRIBUTES·data-*·이벤트·지시어는 뺀다), 글자를 그리는 속성(TEXT_NAMES)의 식,
-//                  그 이름을 키로 쓴 객체 값과 대입(textContent 처럼 DOM 에 글자를 넣는 대입 포함).
+//                  그 이름을 키로 쓴 객체 값과 대입(textContent 처럼 DOM 에 글자를 넣는 대입 포함), alert·confirm·prompt 의 인자.
+//                  삼항식의 갈래는 삼항식 전체가 놓인 자리로 따진다(message: busy ? 'Saving' : 'Saved').
 //   sentence       .svelte 의 <script>·속성 식과 .ts 모듈의 리터럴 가운데 영어 문장 모양인 것(영어 단어 2개 이상, 또는 마침표로 끝나는 한 단어).
 //   raw-error      잡은 예외의 원문(e.message, e + '', String(e), `${e}`, e.toString()). 화면에 그대로 보이면 번역되지 않는다.
+//                  별칭(const err = e as Error)과 구조 분해(catch({message}), const {message} = e)도 따라간다.
+//                  예외 객체는 글자 이름의 값({message: e}), 화면 상태에 대입(error = e), 처리 함수가 아닌 함수의 인자(alert(e))일 때 잡는다.
+//                  원문으로 조건을 따지는 것(e.message.includes('abort'), e.message === 'x', isSessionOut(e))은 잡지 않는다.
 // 허용하는 것: 제품 이름·단위·프로토콜 같은 코드 값(ALLOWED_WORDS), CSS 값, 마크업 문자열, 경로·호스트·문구 키, 주석, 비교 연산의 피연산자.
 //   글자 자리(템플릿 글자의 식, TEXT_NAMES 의 값)가 아닌 곳에서는 공백 없이 소문자로 시작하는 값('alarm', 'ghost')도 코드 값으로 본다.
 //   글자 자리에서도 문구·형식 함수(CODE_ARGUMENT_CALLEES)의 인자(t('tunnels.title'), dateTime({month: 'short'}))는 코드 값이다.
@@ -21,7 +25,7 @@ export type Finding = {file: string; line: number; rule: "template-text" | "text
 const TOKEN_ATTRIBUTES = new Set(["class", "autocomplete", "inputmode", "type", "accept", "role", "id", "for", "name"]);
 
 /** 따옴표 값이 토큰인 속성. 따옴표 값만 건너뛰고 {…} 식은 코드로 검사한다. data-*, 지시어(bind:·class: 등)도 같다. */
-const TOKEN_VALUE_ATTRIBUTES = new Set(["style", "href", "src", "target", "rel", "lang", "dir", "method", "action", "enctype", "pattern", "tabindex",
+const TOKEN_VALUE_ATTRIBUTES = new Set(["style", "href", "src", "download", "target", "rel", "lang", "dir", "method", "action", "enctype", "pattern", "tabindex",
     "variant", "size", "tone", "kind", "align", "icon", "viewBox", "xmlns", "d", "points", "fill", "stroke", "transform", "preserveAspectRatio"]);
 const isTokenValueAttribute = (name: string) => TOKEN_ATTRIBUTES.has(name) || TOKEN_VALUE_ATTRIBUTES.has(name)
     || /^(data-|aria-(hidden|live|current|expanded|controls|labelledby|describedby|haspopup|modal|pressed|checked|selected|disabled|invalid|busy|atomic|relevant|autocomplete|orientation|sort|level|posinset|setsize|owns|activedescendant|required|readonly|multiselectable|errormessage|value(now|min|max))$|stroke-|fill-)|:/.test(name);
@@ -132,18 +136,70 @@ const calleesOf = (tokens: Token[]): string[][] => {
     });
 };
 
+/** 인자를 그대로 대화 상자에 보이는 브라우저 함수. 인자 자리는 글자 자리다. */
+const DIALOG_CALLEES = new Set(["alert", "confirm", "prompt"]);
+
+/**
+ * 삼항식 갈래인 리터럴의 시작 위치 → 그 삼항식 전체(겹친 삼항식이면 가장 바깥)의 [시작, 끝).
+ * 갈래가 글자 자리인지는 삼항식 전체의 앞뒤로 따진다(message: busy ? 'Saving' : 'Saved').
+ */
+const ternaryBranchesOf = (code: string): Map<number, {start: number; end: number}> => {
+    const source = ts.createSourceFile("fragment.ts", code, ts.ScriptTarget.Latest, true);
+    const branches = new Map<number, {start: number; end: number}>();
+    const visit = (node: ts.Node, root: ts.ConditionalExpression | undefined): void => {
+        if(!ts.isConditionalExpression(node)) {
+            ts.forEachChild(node, (child) => visit(child, undefined));
+            return;
+        }
+        const outer = root ?? node;
+        visit(node.condition, undefined);
+        for(const branch of [node.whenTrue, node.whenFalse]) {
+            let inner: ts.Expression = branch;
+            while(ts.isParenthesizedExpression(inner)) inner = inner.expression;
+            if(ts.isConditionalExpression(inner)) {
+                visit(inner, outer);
+                continue;
+            }
+            if(ts.isStringLiteral(inner) || ts.isNoSubstitutionTemplateLiteral(inner) || ts.isTemplateExpression(inner)) {
+                branches.set(inner.getStart(source), {start: outer.getStart(source), end: outer.getEnd()});
+            }
+            visit(inner, undefined);
+        }
+    };
+    visit(source, undefined);
+    return branches;
+};
+
 /** 코드 조각의 문자열 리터럴. 템플릿 리터럴은 치환 자리를 SUBSTITUTION 으로 바꾼 하나의 값이다. */
 const literalsOf = (code: string): Literal[] => {
     const tokens = tokensOf(code);
     const callees = calleesOf(tokens);
+    const branches = ternaryBranchesOf(code);
     const literals: Literal[] = [];
     const open: Array<{index: number; parts: string[]}> = [];
+    /** 리터럴이 놓인 식의 토큰 범위. 삼항식 갈래면 삼항식 전체다. */
+    const spanOf = (first: number, last: number): [number, number] => {
+        const branch = branches.get(tokens[first].start);
+        if(branch === undefined) return [first, last];
+        const from = tokens.findIndex((token) => token.start === branch.start);
+        const to = tokens.findIndex((token) => token.start + token.text.length === branch.end);
+        return from < 0 || to < 0 ? [first, last] : [from, to];
+    };
     const contextOf = (first: number, last: number): Pick<Literal, "textSlot" | "compared" | "thrown" | "callArg"> => {
+        const [spanFirst, spanLast] = spanOf(first, last);
         const before = tokens[first - 1];
         const key = tokens[first - 2];
         const after = tokens[last + 1];
-        const textSlot = before !== undefined && ASSIGN_OR_KEY.has(before.kind) && key !== undefined
-            && (key.kind === ts.SyntaxKind.Identifier || key.kind === ts.SyntaxKind.StringLiteral) && TEXT_NAMES.has(key.kind === ts.SyntaxKind.Identifier ? key.text : key.value);
+        const spanBefore = tokens[spanFirst - 1];
+        const spanKey = tokens[spanFirst - 2];
+        const spanAfter = tokens[spanLast + 1]?.kind;
+        const keyed = spanBefore !== undefined && ASSIGN_OR_KEY.has(spanBefore.kind) && spanKey !== undefined
+            && (spanKey.kind === ts.SyntaxKind.Identifier || spanKey.kind === ts.SyntaxKind.StringLiteral)
+            && TEXT_NAMES.has(spanKey.kind === ts.SyntaxKind.Identifier ? spanKey.text : spanKey.value);
+        const dialogArgument = (spanBefore?.kind === ts.SyntaxKind.OpenParenToken || spanBefore?.kind === ts.SyntaxKind.CommaToken)
+            && (spanAfter === ts.SyntaxKind.CloseParenToken || spanAfter === ts.SyntaxKind.CommaToken)
+            && DIALOG_CALLEES.has(callees[spanFirst].at(-1) ?? "");
+        const textSlot = keyed || dialogArgument;
         const compared = (before !== undefined && EQUALITY.has(before.kind)) || (after !== undefined && EQUALITY.has(after.kind));
         const thrown = before?.kind === ts.SyntaxKind.OpenParenToken && key !== undefined
             && (key.kind === ts.SyntaxKind.SuperKeyword || (key.kind === ts.SyntaxKind.Identifier && /Error$/.test(key.text) && tokens[first - 3]?.kind === ts.SyntaxKind.NewKeyword));
@@ -185,25 +241,51 @@ const closingToken = (tokens: Token[], from: number, open: ts.SyntaxKind, close:
     return tokens.length - 1;
 };
 
-/** tokens[at] 에서 시작하는 함수 식의 첫 인자 이름. e => …, (e) => …, (e: unknown) => …, async (e) => …, function(e) {…} 를 읽는다. */
-const firstParamOf = (tokens: Token[], at: number): string | undefined => {
+/**
+ * 잡은 예외를 담은 이름. message 가 참이면 이름이 이미 원문 문구다(catch({message}), const {message} = e, const m = e.message).
+ * at 은 이름을 선언한 토큰이고, from·to 는 이름이 살아 있는 토큰 범위다.
+ */
+type Caught = {name: string; at: number; from: number; to: number; message: boolean};
+type Binding = Pick<Caught, "name" | "at" | "message">;
+
+const DECLARATION = new Set([ts.SyntaxKind.ConstKeyword, ts.SyntaxKind.LetKeyword, ts.SyntaxKind.VarKeyword]);
+
+/** tokens[open] 의 { 로 시작하는 구조 분해에서 message 를 받는 이름. {message}, {message: text}, {message = ''} 를 읽는다. */
+const destructuredMessagesOf = (tokens: Token[], open: number): Binding[] => {
+    const close = closingToken(tokens, open, ts.SyntaxKind.OpenBraceToken, ts.SyntaxKind.CloseBraceToken);
+    const bindings: Binding[] = [];
+    for(let j = open + 1; j < close; j++) {
+        const before = tokens[j - 1].kind;
+        if(tokens[j].text !== "message" || (before !== ts.SyntaxKind.OpenBraceToken && before !== ts.SyntaxKind.CommaToken)) continue;
+        if(tokens[j + 1]?.kind === ts.SyntaxKind.ColonToken && tokens[j + 2]?.kind === ts.SyntaxKind.Identifier) bindings.push({name: tokens[j + 2].text, at: j + 2, message: true});
+        else bindings.push({name: "message", at: j, message: true});
+    }
+    return bindings;
+};
+
+/**
+ * tokens[at] 에서 시작하는 함수 식의 첫 인자. e => …, (e) => …, (e: unknown) => …, async (e) => …, function(e) {…},
+ * 그리고 구조 분해 ({message}) => … 를 읽는다.
+ */
+const firstParamOf = (tokens: Token[], at: number): Binding[] => {
     let i = at;
     if(tokens[i]?.kind === ts.SyntaxKind.AsyncKeyword) i++;
     if(tokens[i]?.kind === ts.SyntaxKind.FunctionKeyword) i += tokens[i + 1]?.kind === ts.SyntaxKind.Identifier ? 2 : 1;
     if(tokens[i]?.kind === ts.SyntaxKind.OpenParenToken) i++;
-    return tokens[i]?.kind === ts.SyntaxKind.Identifier ? tokens[i].text : undefined;
+    if(tokens[i]?.kind === ts.SyntaxKind.Identifier) return [{name: tokens[i].text, at: i, message: false}];
+    return tokens[i]?.kind === ts.SyntaxKind.OpenBraceToken ? destructuredMessagesOf(tokens, i) : [];
 };
 
 /** 잡은 예외의 이름과 그 이름이 살아 있는 토큰 범위. catch (e) {…}, .catch(e => …), .then(ok, e => …) 다. */
-const caughtNamesOf = (tokens: Token[]): Array<{name: string; from: number; to: number}> => {
-    const scopes: Array<{name: string; from: number; to: number}> = [];
+const caughtNamesOf = (tokens: Token[]): Caught[] => {
+    const scopes: Caught[] = [];
+    const add = (bindings: Binding[], from: number, to: number) => bindings.forEach((binding) => scopes.push({...binding, from, to}));
     tokens.forEach((token, i) => {
         if(tokens[i + 1]?.kind !== ts.SyntaxKind.OpenParenToken) return;
         const member = tokens[i - 1]?.kind === ts.SyntaxKind.DotToken || tokens[i - 1]?.kind === ts.SyntaxKind.QuestionDotToken;
         const close = closingToken(tokens, i + 1, ts.SyntaxKind.OpenParenToken, ts.SyntaxKind.CloseParenToken);
         if(member && token.text === "catch") {
-            const name = firstParamOf(tokens, i + 2);
-            if(name !== undefined) scopes.push({name, from: i + 2, to: close});
+            add(firstParamOf(tokens, i + 2), i + 2, close);
         } else if(member && token.text === "then") {
             // 두 번째 인자(실패 처리)의 시작은 첫 인자 다음의 최상위 쉼표 뒤다.
             let depth = 0;
@@ -212,53 +294,165 @@ const caughtNamesOf = (tokens: Token[]): Array<{name: string; from: number; to: 
                 if(kind === ts.SyntaxKind.OpenParenToken || kind === ts.SyntaxKind.OpenBraceToken || kind === ts.SyntaxKind.OpenBracketToken) depth++;
                 else if(kind === ts.SyntaxKind.CloseParenToken || kind === ts.SyntaxKind.CloseBraceToken || kind === ts.SyntaxKind.CloseBracketToken) depth--;
                 else if(kind === ts.SyntaxKind.CommaToken && depth === 0) {
-                    const name = firstParamOf(tokens, j + 1);
-                    if(name !== undefined) scopes.push({name, from: j + 1, to: close});
+                    add(firstParamOf(tokens, j + 1), j + 1, close);
                     break;
                 }
             }
-        } else if(token.kind === ts.SyntaxKind.CatchKeyword && !member && tokens[i + 2]?.kind === ts.SyntaxKind.Identifier) {
+        } else if(token.kind === ts.SyntaxKind.CatchKeyword && !member) {
             const params = closingToken(tokens, i + 1, ts.SyntaxKind.OpenParenToken, ts.SyntaxKind.CloseParenToken);
             if(tokens[params + 1]?.kind !== ts.SyntaxKind.OpenBraceToken) return;
-            scopes.push({name: tokens[i + 2].text, from: params + 1, to: closingToken(tokens, params + 1, ts.SyntaxKind.OpenBraceToken, ts.SyntaxKind.CloseBraceToken)});
+            const bindings = tokens[i + 2]?.kind === ts.SyntaxKind.Identifier ? [{name: tokens[i + 2].text, at: i + 2, message: false}]
+                : tokens[i + 2]?.kind === ts.SyntaxKind.OpenBraceToken ? destructuredMessagesOf(tokens, i + 2) : [];
+            add(bindings, params + 1, closingToken(tokens, params + 1, ts.SyntaxKind.OpenBraceToken, ts.SyntaxKind.CloseBraceToken));
         }
     });
     return scopes;
 };
 
+/** 토큰마다 감싸고 있는 가장 안쪽 여는 괄호((, [, {)의 위치. 없으면 -1 이다. */
+const enclosingOf = (tokens: Token[]): number[] => {
+    const stack: number[] = [];
+    return tokens.map((token, index) => {
+        const enclosing = stack.at(-1) ?? -1;
+        if(token.kind === ts.SyntaxKind.OpenParenToken || token.kind === ts.SyntaxKind.OpenBracketToken || token.kind === ts.SyntaxKind.OpenBraceToken
+            || token.kind === ts.SyntaxKind.TemplateHead) stack.push(index);
+        else if(token.kind === ts.SyntaxKind.CloseParenToken || token.kind === ts.SyntaxKind.CloseBracketToken || token.kind === ts.SyntaxKind.CloseBraceToken
+            || token.kind === ts.SyntaxKind.TemplateTail) stack.pop();
+        return enclosing;
+    });
+};
+
 /** 예외 원문을 써도 되는 호출. 로그, 번역 문구의 값, 다시 던지는 예외(new XxxError(…))다. */
 const RAW_ERROR_ALLOWED_CALLEES = new Set(["console", "t", "plural"]);
 const rawErrorAllowedIn = (callee: string) => RAW_ERROR_ALLOWED_CALLEES.has(callee) || /Error$/.test(callee);
+/**
+ * 예외 객체를 받아 번역 문구를 고르는 함수와, 예외를 그대로 넘기는 함수. 예외 객체를 인자로 받아도 원문을 보이지 않는다.
+ * failed: 화면마다 둔 실패 처리(InvalidSession 이면 세션을 끝내고 아니면 번역 문구를 알린다), browserMessageOf: 패스키 오류의 번역 문구,
+ * reject: Promise 의 실패로 다시 넘긴다. 판별 함수(isXxx·hasXxx)는 isCondition 이, 이름이 Error 로 끝나는 함수는 rawErrorAllowedIn 이 허용한다.
+ */
+const RAW_ERROR_HANDLERS = new Set(["failed", "browserMessageOf", "reject"]);
 const STRING_LITERAL = new Set([ts.SyntaxKind.StringLiteral, ts.SyntaxKind.NoSubstitutionTemplateLiteral]);
+const COMPARISON = new Set([...EQUALITY, ts.SyntaxKind.LessThanToken, ts.SyntaxKind.GreaterThanToken, ts.SyntaxKind.LessThanEqualsToken,
+    ts.SyntaxKind.GreaterThanEqualsToken, ts.SyntaxKind.InstanceOfKeyword]);
+/**
+ * 원문으로 조건을 따지는 메서드와 함수. e.message.includes('abort'), /timeout/.test(e.message) 는 화면에 보이지 않는다.
+ * is·has 로 시작하는 함수(isSessionOut(e), isCertificateError(e))도 판별 함수다.
+ */
+const PREDICATES = new Set(["includes", "startsWith", "endsWith", "indexOf", "lastIndexOf", "match", "test", "search", "length"]);
 
-/** 잡은 예외의 원문을 글자로 만드는 식. */
+/** 잡은 예외의 원문을 글자로 만들거나 화면 쪽으로 넘기는 식. */
 const checkRawErrors = (code: string, offset: number, report: Report) => {
     const tokens = tokensOf(code);
     const scopes = caughtNamesOf(tokens);
     if(scopes.length === 0) return;
     const callees = calleesOf(tokens);
-    const kind = (index: number) => tokens[index]?.kind;
+    const enclosing = enclosingOf(tokens);
+    const declared = new Set(scopes.map((scope) => scope.at));
+    const kind = (index: number) => tokens[index]?.kind ?? ts.SyntaxKind.Unknown;
     const slice = (first: number, last: number) => code.slice(tokens[first].start, tokens[last].start + tokens[last].text.length);
+    const isMember = (index: number) => kind(index) === ts.SyntaxKind.DotToken || kind(index) === ts.SyntaxKind.QuestionDotToken;
+
+    /** String(e), e.toString(), e + '', '' + e, `${e}`. 예외를 글자로 바꾸는 식의 범위다. */
+    const conversionAt = (i: number): [number, number] | undefined => {
+        if(isMember(i + 1) && tokens[i + 2]?.text === "toString" && kind(i + 3) === ts.SyntaxKind.OpenParenToken) return [i, i + 4];
+        if(kind(i - 1) === ts.SyntaxKind.OpenParenToken && tokens[i - 2]?.text === "String" && kind(i + 1) === ts.SyntaxKind.CloseParenToken) return [i - 2, i + 1];
+        if(kind(i + 1) === ts.SyntaxKind.PlusToken && STRING_LITERAL.has(kind(i + 2))) return [i, i + 2];
+        if(kind(i - 1) === ts.SyntaxKind.PlusToken && STRING_LITERAL.has(kind(i - 2))) return [i - 2, i];
+        return undefined;
+    };
+    /** 원문으로 조건을 따지는 자리. 비교·부정·&&·? 의 왼쪽, 판별 메서드, if(…)·while(…) 하나, 판별 함수의 인자다. */
+    const isCondition = (first: number, last: number): boolean => {
+        const before = kind(first - 1);
+        const after = kind(last + 1);
+        if(COMPARISON.has(before) || COMPARISON.has(after)) return true;
+        if(after === ts.SyntaxKind.QuestionToken || after === ts.SyntaxKind.AmpersandAmpersandToken || before === ts.SyntaxKind.ExclamationToken) return true;
+        if(isMember(last + 1) && PREDICATES.has(tokens[last + 2]?.text ?? "")) return true;
+        if(before === ts.SyntaxKind.OpenParenToken && after === ts.SyntaxKind.CloseParenToken
+            && (kind(first - 2) === ts.SyntaxKind.IfKeyword || kind(first - 2) === ts.SyntaxKind.WhileKeyword)) return true;
+        const callee = calleeOfArgument(first, last) ?? "";
+        return PREDICATES.has(callee) || /^(is|has)[A-Z]/.test(callee);
+    };
+    /** 식이 함수 호출의 인자 하나 전체면 그 함수 이름(이름을 모르면 빈 문자열)이다. 인자가 아니면 undefined 다. */
+    const calleeOfArgument = (first: number, last: number): string | undefined => {
+        const open = enclosing[first];
+        const before = kind(first - 1);
+        const after = kind(last + 1);
+        if(open < 0 || kind(open) !== ts.SyntaxKind.OpenParenToken || !CALLEE_END.has(kind(open - 1))) return undefined;
+        if((before !== ts.SyntaxKind.OpenParenToken && before !== ts.SyntaxKind.CommaToken) || (after !== ts.SyntaxKind.CloseParenToken && after !== ts.SyntaxKind.CommaToken)) return undefined;
+        return kind(open - 1) === ts.SyntaxKind.Identifier ? tokens[open - 1].text : "";
+    };
+    /** 글자 이름(TEXT_NAMES)의 값이다. {message: e}, error = e, {message} 처럼 줄여 쓴 값. */
+    const isTextValue = (first: number, last: number): boolean => {
+        const before = tokens[first - 1];
+        const key = tokens[first - 2];
+        if(before !== undefined && ASSIGN_OR_KEY.has(before.kind) && key !== undefined
+            && (key.kind === ts.SyntaxKind.Identifier || key.kind === ts.SyntaxKind.StringLiteral) && TEXT_NAMES.has(key.kind === ts.SyntaxKind.Identifier ? key.text : key.value)) return true;
+        const shorthand = first === last && kind(enclosing[first]) === ts.SyntaxKind.OpenBraceToken
+            && (before?.kind === ts.SyntaxKind.OpenBraceToken || before?.kind === ts.SyntaxKind.CommaToken)
+            && (kind(last + 1) === ts.SyntaxKind.CloseBraceToken || kind(last + 1) === ts.SyntaxKind.CommaToken);
+        return shorthand && TEXT_NAMES.has(tokens[first].text);
+    };
+    /** 선언(const·let·var) 없이 이름에 대입한다. 화면 상태에 넣는 것이다. */
+    const isAssigned = (first: number): boolean => {
+        const before = kind(first - 1);
+        return before === ts.SyntaxKind.EqualsToken || before === ts.SyntaxKind.BarBarEqualsToken || before === ts.SyntaxKind.QuestionQuestionEqualsToken;
+    };
+    /** const name = <식> 의 name. 식 뒤에 as 형이 붙어도 된다. */
+    const declaredNameOf = (first: number): number | undefined =>
+        kind(first - 1) === ts.SyntaxKind.EqualsToken && kind(first - 2) === ts.SyntaxKind.Identifier && DECLARATION.has(kind(first - 3)) ? first - 2 : undefined;
+
     tokens.forEach((token, i) => {
-        if(token.kind !== ts.SyntaxKind.Identifier || kind(i - 1) === ts.SyntaxKind.DotToken) return;
-        if(!scopes.some((scope) => scope.name === token.text && i > scope.from && i <= scope.to)) return;
-        if(callees[i].some(rawErrorAllowedIn)) return;
-        const member = kind(i + 1) === ts.SyntaxKind.DotToken || kind(i + 1) === ts.SyntaxKind.QuestionDotToken;
-        let text: string | undefined;
-        if(member && tokens[i + 2]?.text === "message") text = slice(i, i + 2);
-        else if(kind(i - 1) === ts.SyntaxKind.OpenParenToken && kind(i + 1) === ts.SyntaxKind.AsKeyword) {
-            // (e as Error).message
-            const close = closingToken(tokens, i - 1, ts.SyntaxKind.OpenParenToken, ts.SyntaxKind.CloseParenToken);
-            const dot = kind(close + 1);
-            if((dot === ts.SyntaxKind.DotToken || dot === ts.SyntaxKind.QuestionDotToken) && tokens[close + 2]?.text === "message") text = slice(i - 1, close + 2);
+        if(token.kind !== ts.SyntaxKind.Identifier || isMember(i - 1) || declared.has(i)) return;
+        const scope = scopes.findLast((candidate) => candidate.name === token.text && i > candidate.from && i <= candidate.to);
+        if(scope === undefined || callees[i].some(rawErrorAllowedIn)) return;
+        const conversion = conversionAt(i);
+        if(conversion !== undefined) {
+            report("raw-error", slice(...conversion), offset + tokens[conversion[0]].start);
+            return;
         }
-        else if(member && tokens[i + 2]?.text === "toString" && kind(i + 3) === ts.SyntaxKind.OpenParenToken) text = slice(i, i + 4);
-        else if(kind(i - 1) === ts.SyntaxKind.OpenParenToken && tokens[i - 2]?.text === "String" && kind(i + 1) === ts.SyntaxKind.CloseParenToken) text = slice(i - 2, i + 1);
-        else if(kind(i + 1) === ts.SyntaxKind.PlusToken && STRING_LITERAL.has(kind(i + 2) ?? ts.SyntaxKind.Unknown)) text = slice(i, i + 2);
-        else if(kind(i - 1) === ts.SyntaxKind.PlusToken && STRING_LITERAL.has(kind(i - 2) ?? ts.SyntaxKind.Unknown)) text = slice(i - 2, i);
-        else if((kind(i - 1) === ts.SyntaxKind.TemplateHead || kind(i - 1) === ts.SyntaxKind.TemplateMiddle)
-            && (kind(i + 1) === ts.SyntaxKind.TemplateMiddle || kind(i + 1) === ts.SyntaxKind.TemplateTail)) text = `\${${token.text}}`;
-        if(text !== undefined) report("raw-error", text, offset + token.start);
+        if((kind(i - 1) === ts.SyntaxKind.TemplateHead || kind(i - 1) === ts.SyntaxKind.TemplateMiddle)
+            && (kind(i + 1) === ts.SyntaxKind.TemplateMiddle || kind(i + 1) === ts.SyntaxKind.TemplateTail)) {
+            report("raw-error", `\${${token.text}}`, offset + token.start);
+            return;
+        }
+        // 식의 범위와 그 값이 원문 문구인지. e.message, e?.message, (e as Error).message 는 원문이다.
+        let first = i;
+        let last = i;
+        let message = scope.message;
+        if(!message && isMember(i + 1) && tokens[i + 2]?.text === "message") {
+            last = i + 2;
+            message = true;
+        } else if(!message && kind(i - 1) === ts.SyntaxKind.OpenParenToken && kind(i + 1) === ts.SyntaxKind.AsKeyword) {
+            const close = closingToken(tokens, i - 1, ts.SyntaxKind.OpenParenToken, ts.SyntaxKind.CloseParenToken);
+            if(isMember(close + 1) && tokens[close + 2]?.text === "message") {
+                first = i - 1;
+                last = close + 2;
+                message = true;
+            }
+        }
+        // 별칭. const err = e as Error, const text = e.message 는 이름을 바꿔 원문을 이어 받는다.
+        const alias = declaredNameOf(first);
+        if(alias !== undefined) {
+            scopes.push({name: tokens[alias].text, at: alias, from: alias, to: scope.to, message});
+            declared.add(alias);
+            return;
+        }
+        // 구조 분해. const {message} = e 는 원문을 받는 이름이다.
+        if(!message && kind(first - 1) === ts.SyntaxKind.EqualsToken && kind(first - 2) === ts.SyntaxKind.CloseBraceToken) {
+            const open = enclosing[first - 2];
+            if(kind(open) === ts.SyntaxKind.OpenBraceToken && DECLARATION.has(kind(open - 1))) {
+                for(const binding of destructuredMessagesOf(tokens, open)) {
+                    scopes.push({...binding, from: binding.at, to: scope.to});
+                    declared.add(binding.at);
+                }
+            }
+            return;
+        }
+        // 예외 객체는 글자 이름의 값, 화면 상태에 대입, 처리 함수가 아닌 함수의 인자일 때 화면에 간다(alert(e)).
+        const callee = calleeOfArgument(first, last);
+        const shown = !isCondition(first, last)
+            && (message || isTextValue(first, last) || isAssigned(first) || (callee !== undefined && !RAW_ERROR_HANDLERS.has(callee)));
+        if(shown) report("raw-error", slice(first, last), offset + tokens[first].start);
     });
 };
 
@@ -343,6 +537,7 @@ const checkQuotedValue = (source: string, from: number, to: number, textual: boo
 const checkTag = (source: string, start: number, report: Report): number => {
     let i = start + 1;
     while(i < source.length && /[^\s>/]/.test(source[i])) i++;
+    const tag = source.slice(start + 1, i);
     while(i < source.length) {
         while(/\s/.test(source[i] ?? "")) i++;
         if(source[i] === ">") return i + 1;
@@ -365,7 +560,9 @@ const checkTag = (source: string, start: number, report: Report): number => {
             else if(source[i] === "{") i = closingBrace(source, i) + 1;
             continue;
         }
-        if(isTokenValueAttribute(name) && (source[i] === "\"" || source[i] === "'")) {
+        // <option value> 는 고른 값을 담는 코드 값이다. 글자는 <option> 의 내용이다.
+        const tokenValue = isTokenValueAttribute(name) || (tag === "option" && name === "value");
+        if(tokenValue && (source[i] === "\"" || source[i] === "'")) {
             i = skipQuoted(source, i);
             continue;
         }
@@ -381,7 +578,7 @@ const checkTag = (source: string, start: number, report: Report): number => {
         } else {
             const valueStart = i;
             while(i < source.length && /[^\s>]/.test(source[i])) i++;
-            if(!isTokenValueAttribute(name) && isText(source.slice(valueStart, i), textual)) report("text-attribute", source.slice(valueStart, i), valueStart);
+            if(!tokenValue && isText(source.slice(valueStart, i), textual)) report("text-attribute", source.slice(valueStart, i), valueStart);
         }
     }
     return i;
