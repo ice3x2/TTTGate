@@ -1,8 +1,8 @@
 <script lang="ts">
-    import {startAuthentication} from '@simplewebauthn/browser';
+    import {WebAuthnAbortService, browserSupportsWebAuthnAutofill, startAuthentication, type AuthenticationResponseJSON} from '@simplewebauthn/browser';
     import LoginCtrl, {type LoginResult, type LoginUser} from '../controller/LoginCtrl';
-    import {tick} from 'svelte';
-    import {PASSKEY_CONDITION, PASSKEY_UNSUPPORTED, isCertificateError, passkeyPreferred, passkeysAvailable, rememberPasskeyPreferred} from '../util/passkey';
+    import {onDestroy, onMount, tick} from 'svelte';
+    import {PASSKEY_CONDITION, PASSKEY_UNSUPPORTED, consumeSignedOut, forgetPasskeyPreferred, isCertificateError, passkeyPreferred, passkeysAvailable, rememberPasskeyPreferred} from '../util/passkey';
     import Button from '../ui/Button.svelte';
     import Card from '../ui/Card.svelte';
     import Field from '../ui/Field.svelte';
@@ -57,6 +57,7 @@
             if(ticket !== sent) return;
             if(result.success) {
                 rememberUsername(username.trim() === '' ? 'admin' : username.trim());
+                signedIn = true;
                 onsuccess({user: result.user, mustChangePassword: result.mustChangePassword === true});
                 return;
             }
@@ -78,6 +79,8 @@
     let showPassword = $state(!(passkeySupported && passkeyPreferred()));
 
     const usePassword = async () => {
+        // 이슈 345: 자동 요청이 응답을 기다리고 있으면 취소한다. 취소는 자동 요청 경로에서 문구 없이 끝난다.
+        if(autoRunning) WebAuthnAbortService.cancelCeremony();
         showPassword = true;
         await tick();
         document.getElementById('login-username')?.focus();
@@ -94,42 +97,136 @@
         }
     };
 
-    const passkeySignIn = async () => {
+    // 이슈 345: 로그인이 끝났다. 화면이 사라지기 전에 자동 완성 요청을 다시 걸지 않는다.
+    let signedIn = $state(false);
+
+    /**
+     * 브라우저가 돌려준 패스키 응답을 서버에 보낸다. 버튼이나 자동 요청의 패스키를 서버가 거부하면(이슈 345) 이 기기의
+     * 패스키 우선 표시를 지운다. 자동 완성 경로의 거부는 challenge 만료일 수도 있으므로 표시를 지우지 않는다.
+     */
+    const completePasskey = async (response: AuthenticationResponseJSON, fromAutofill = false): Promise<void> => {
+        const result = await LoginCtrl.loginPasskey(response);
+        if(result.success) {
+            if(result.user) rememberUsername(result.user.username);
+            rememberPasskeyPreferred();
+            signedIn = true;
+            onsuccess({user: result.user, mustChangePassword: result.mustChangePassword === true});
+            return;
+        }
+        if(result.code === 'passkey_invalid' && !fromAutofill) forgetPasskeyPreferred();
+        message = passkeyFailureOf(result);
+        showPassword = true;
+    };
+
+    /**
+     * 패스키 로그인. auto 는 이슈 345 의 화면을 열 때 보내는 자동 요청이다. 자동 요청은 사용자가 고른 동작이 아니므로
+     * 옵션을 받지 못하거나 브라우저가 거절·취소하면 문구 없이 패스키 버튼 화면에 머문다.
+     */
+    // 자동 요청이 진행 중이다. 이 동안에도 Use password 는 누를 수 있다.
+    let autoRunning = $state(false);
+
+    const passkeySignIn = async (auto = false) => {
         if(pending) return;
         pending = true;
+        autoRunning = auto;
         message = '';
         try {
             const options = await LoginCtrl.passkeyOptions();
+            // 옵션을 기다리는 사이 화면을 떠났거나 Use password 를 눌렀으면 요청을 시작하지 않는다.
+            if(destroyed || (auto && showPassword)) return;
             if(!options.success || !options.options) {
+                if(auto) return;
                 message = passkeyFailureOf(options);
                 showPassword = true;
                 return;
             }
             let response;
             try {
+                // 진행 중인 자동 완성(조건부 UI) 요청은 라이브러리가 새 요청을 시작하면서 취소한다.
                 response = await startAuthentication({optionsJSON: options.options});
             } catch(error) {
+                if(auto) return;
                 // 사용자가 브라우저 창을 닫으면 브라우저는 예외로 알린다. 인증서 오류를 취소보다 먼저 본다.
                 message = isCertificateError(error) ? PASSKEY_UNSUPPORTED : 'Sign-in was canceled.';
                 showPassword = true;
                 return;
             }
-            const result = await LoginCtrl.loginPasskey(response);
-            if(result.success) {
-                if(result.user) rememberUsername(result.user.username);
-                rememberPasskeyPreferred();
-                onsuccess({user: result.user, mustChangePassword: result.mustChangePassword === true});
-                return;
-            }
-            message = passkeyFailureOf(result);
-            showPassword = true;
+            await completePasskey(response);
         } catch {
             message = 'Unable to connect to the server.';
             showPassword = true;
         } finally {
             pending = false;
+            autoRunning = false;
         }
     };
+
+    // 이슈 345: 비밀번호 화면에서는 사용자 이름 칸의 자동 완성으로 패스키를 고를 수 있다(조건부 UI).
+    let autofillAvailable = $state(false);
+    let autofillRunning = false;
+    let destroyed = false;
+    // 서버 challenge 는 150초 뒤 만료된다. 브라우저가 자동 완성 요청에 시간 제한을 두지 않을 수 있으므로 100초마다 새로 건다.
+    const AUTOFILL_REFRESH_MS = 100_000;
+
+    const autofillAllowed = (): boolean =>
+        !destroyed && !signedIn && autofillAvailable && !pending && showPassword && ticket === '' && !bootstrapRequired;
+
+    const startAutofill = async () => {
+        if(autofillRunning || !autofillAllowed()) return;
+        autofillRunning = true;
+        let refresh = false;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+            const options = await LoginCtrl.passkeyOptions();
+            if(!options.success || !options.options || !autofillAllowed()) return;
+            let response;
+            try {
+                // 라이브러리는 지원 여부를 확인한 뒤에야 취소 신호를 만든다. 그 사이에 화면을 떠났으면 새로 걸지 않고 정리만 한다.
+                timer = setTimeout(() => { refresh = autofillAllowed(); WebAuthnAbortService.cancelCeremony(); }, AUTOFILL_REFRESH_MS);
+                response = await startAuthentication({optionsJSON: options.options, useBrowserAutofill: true});
+            } catch {
+                // 다른 요청이 시작되었거나, 화면을 떠났거나, 새로 걸려고 취소했다. 사용자에게 알릴 일이 아니다.
+                return;
+            } finally {
+                clearTimeout(timer);
+            }
+            // 비밀번호 제출이 진행 중이면 그 결과를 따른다. 고른 패스키는 버린다.
+            if(pending) return;
+            pending = true;
+            message = '';
+            // 사용자가 직접 고른 패스키이므로 버튼 경로처럼 연결 오류를 알린다.
+            try { await completePasskey(response, true); } catch { message = 'Unable to connect to the server.'; } finally { pending = false; }
+        } catch {
+            // 옵션을 받지 못하면 자동 완성 제안만 빠진다. 비밀번호 로그인은 그대로 쓸 수 있다.
+        } finally {
+            autofillRunning = false;
+            if(refresh) void startAutofill();
+        }
+    };
+
+    // 비밀번호 칸이 보이고 다른 요청이 없으면 자동 완성 요청을 건다. 버튼 요청이 끝나면 다시 건다.
+    $effect(() => {
+        if(autofillAvailable && showPassword && ticket === '' && !bootstrapRequired && !pending && !signedIn) void tick().then(startAutofill);
+    });
+
+    // 2단계(TOTP)로 넘어가거나 첫 비밀번호를 정해야 하면 진행 중인 자동 완성 요청을 취소한다.
+    $effect(() => {
+        if(ticket !== '' || bootstrapRequired) WebAuthnAbortService.cancelCeremony();
+    });
+
+    onMount(() => {
+        // 로그아웃 표시는 화면이 열릴 때마다 한 번 읽고 지운다.
+        const justSignedOut = consumeSignedOut();
+        if(passkeySupported) {
+            void browserSupportsWebAuthnAutofill().then((supported) => { if(!destroyed) autofillAvailable = supported; });
+        }
+        if(passkeySupported && !showPassword && !justSignedOut) void passkeySignIn(true);
+    });
+
+    onDestroy(() => {
+        destroyed = true;
+        WebAuthnAbortService.cancelCeremony();
+    });
 
     const submit = async (e: SubmitEvent) => {
         e.preventDefault();
@@ -153,6 +250,7 @@
             }
             if(result.success) {
                 rememberUsername(effectiveUsername);
+                signedIn = true;
                 onsuccess({user: result.user, mustChangePassword: result.mustChangePassword === true});
                 return;
             }
@@ -187,12 +285,12 @@
             <span id="login-passkey"><Button variant="primary" disabled={pending} onclick={() => { void passkeySignIn(); }}>Sign in with a passkey</Button></span>
             <p id="login-passkey-hint" class="login-hint">{PASSKEY_CONDITION}</p>
             <p id="login-message" role="alert" class="login-message">{message}</p>
-            <button type="button" id="login-use-password" class="login-link" disabled={pending} onclick={() => { void usePassword(); }}>Use password</button>
+            <button type="button" id="login-use-password" class="login-link" disabled={pending && !autoRunning} onclick={() => { void usePassword(); }}>Use password</button>
         </div>
         {:else if ticket === ''}
         <form onsubmit={submit} novalidate>
             <Field label="Username" for="login-username" hint={bootstrapRequired ? 'Choose the first superuser name (default: admin)' : undefined}>
-                <TextInput id="login-username" autocomplete="username" bind:value={username} />
+                <TextInput id="login-username" autocomplete={autofillAvailable && !bootstrapRequired ? 'username webauthn' : 'username'} bind:value={username} />
             </Field>
             <Field label="Password" for="login-password">
                 <TextInput id="login-password" type="password" autocomplete="current-password" bind:value={password} />

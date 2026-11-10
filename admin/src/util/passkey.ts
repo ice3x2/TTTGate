@@ -35,6 +35,29 @@ export const rememberPasskeyPreferred = (): void => {
     try { localStorage.setItem(PREFERRED_KEY, '1'); } catch { /* 저장하지 못하면 다음에도 비밀번호 칸을 먼저 보인다 */ }
 };
 
+/** 이슈 345: 서버가 이 기기의 패스키를 거부했다(예: 관리자가 초기화). 다음 방문부터 자동 요청을 보내지 않는다. */
+export const forgetPasskeyPreferred = (): void => {
+    try { localStorage.removeItem(PREFERRED_KEY); } catch { /* 지우지 못하면 다음에도 자동 요청이 한 번 실패한다 */ }
+};
+
+const SIGNED_OUT_KEY = 'tttgate.signedOut';
+
+/** 이슈 345: 이 탭에서 방금 로그아웃했다. 바로 다음 로그인 화면은 패스키 창을 자동으로 띄우지 않는다. */
+export const markSignedOut = (): void => {
+    try { sessionStorage.setItem(SIGNED_OUT_KEY, '1'); } catch { /* 남기지 못하면 로그아웃 직후에도 자동 요청이 나간다 */ }
+};
+
+/** 로그아웃 표시를 한 번 읽고 지운다. 새로 고침하면 표시가 없으므로 다시 자동 요청을 보낸다. */
+export const consumeSignedOut = (): boolean => {
+    try {
+        const marked = sessionStorage.getItem(SIGNED_OUT_KEY) === '1';
+        sessionStorage.removeItem(SIGNED_OUT_KEY);
+        return marked;
+    } catch {
+        return false;
+    }
+};
+
 export const errorNameOf = (error: unknown): string => error instanceof Error ? error.name : '';
 
 /** 등록 창의 이름 칸에 미리 넣을 기기 종류. */
