@@ -15,17 +15,23 @@ const hashIs = (page: Page, expected: string) =>
     page.waitForFunction((value) => location.hash === value, expected, {timeout: 10_000});
 
 /** 다음 navigator.credentials 호출의 결과를 정한다. 오류면 그 이름·메시지의 DOMException 을 던진다. */
-type CredentialOutcome = {error: {name: string; message: string}} | {ok: true};
+type CredentialOutcome = {error: {name: string; message: string}} | {ok: true} | {hang: true};
 
-/** 페이지가 열리기 전에 navigator.credentials 를 바꾼다. 결과는 window.__passkeyOutcomes 에서 차례로 꺼낸다. */
-const stubCredentials = async (page: Page): Promise<void> => {
-    await page.addInitScript(() => {
+/**
+ * 페이지가 열리기 전에 navigator.credentials 를 바꾼다. 결과는 window.__passkeyOutcomes 에서 차례로 꺼낸다.
+ * initial 은 페이지를 열 때마다 큐에 먼저 넣는다(#345: 화면이 열리자마자 나가는 자동 요청의 결과).
+ * 호출은 window.__passkeyCalls 에 {mediation, aborted} 로 남긴다. 조건부 UI(mediation: conditional) 요청은
+ * 사용자가 자동 완성에서 고르기 전까지 끝나지 않으므로, 결과를 꺼내지 않고 취소될 때까지 기다린다.
+ */
+const stubCredentials = async (page: Page, initial: CredentialOutcome[] = []): Promise<void> => {
+    await page.addInitScript((first) => {
         const w = window as any;
-        w.__passkeyOutcomes = [];
+        w.__passkeyOutcomes = [...first];
+        w.__passkeyCalls = [];
         const buffer = (text: string) => new TextEncoder().encode(text).buffer;
-        const fake = (kind: "create" | "get") => {
-            const outcome = w.__passkeyOutcomes.shift() ?? {ok: true};
-            if(outcome.error) return Promise.reject(new DOMException(outcome.error.message, outcome.error.name));
+        // #345: 실행 브라우저와 관계없이 조건부 UI 를 지원하는 것으로 둔다.
+        Object.defineProperty(PublicKeyCredential, "isConditionalMediationAvailable", {configurable: true, value: () => Promise.resolve(true)});
+        const credential = (kind: "create" | "get") => {
             const response: any = {clientDataJSON: buffer("{}")};
             if(kind === "create") {
                 response.attestationObject = buffer("att");
@@ -35,14 +41,33 @@ const stubCredentials = async (page: Page): Promise<void> => {
                 response.signature = buffer("sig");
                 response.userHandle = buffer("u");
             }
-            return Promise.resolve({id: "Y3JlZA", rawId: buffer("cred"), type: "public-key", response, authenticatorAttachment: "platform",
-                getClientExtensionResults: () => ({})});
+            return {id: "Y3JlZA", rawId: buffer("cred"), type: "public-key", response, authenticatorAttachment: "platform",
+                getClientExtensionResults: () => ({})};
+        };
+        /** 취소 신호를 받을 때까지 끝나지 않는 요청. 조건부 요청은 window.__pickAutofill() 로 사용자가 고른 것처럼 끝낼 수 있다. */
+        const pending = (call: {aborted: boolean}, signal?: AbortSignal, onPick?: (resolve: (value: unknown) => void) => void) =>
+            new Promise((resolve, reject) => {
+                signal?.addEventListener("abort", () => { call.aborted = true; reject(new DOMException("aborted", "AbortError")); });
+                onPick?.(resolve);
+            });
+        const fake = (kind: "create" | "get", options?: {mediation?: string; signal?: AbortSignal}) => {
+            const call = {kind, mediation: options?.mediation ?? "", aborted: false};
+            w.__passkeyCalls.push(call);
+            if(options?.mediation === "conditional") {
+                return pending(call, options.signal, (resolve) => { w.__pickAutofill = () => resolve(credential("get")); });
+            }
+            const outcome = w.__passkeyOutcomes.shift() ?? {ok: true};
+            if(outcome.hang) return pending(call, options?.signal);
+            if(outcome.error) return Promise.reject(new DOMException(outcome.error.message, outcome.error.name));
+            return Promise.resolve(credential(kind));
         };
         Object.defineProperty(navigator, "credentials", {configurable: true, value: {
-            create: () => fake("create"), get: () => fake("get")
+            create: (options: {signal?: AbortSignal}) => fake("create", options), get: (options: {mediation?: string; signal?: AbortSignal}) => fake("get", options)
         }});
-    });
+    }, initial);
 };
+
+const passkeyCalls = (page: Page) => page.evaluate(() => (window as any).__passkeyCalls as Array<{kind: string; mediation: string; aborted: boolean}>);
 
 const queueCredential = (page: Page, outcomes: CredentialOutcome[]) =>
     page.evaluate((value) => { (window as any).__passkeyOutcomes.push(...value); }, outcomes);
@@ -265,11 +290,13 @@ test("부트스트랩이 필요하다는 응답을 받으면 패스키 버튼과
 test("패스키 우선 표시가 있는 기기는 패스키 버튼과 Use password 만 보이고, 실패하거나 Use password 를 누르면 비밀번호 칸을 편다", () =>
     withApp({fixture: "rbac", login: false}, async (app) => {
         const {page} = app;
-        await stubCredentials(page);
+        // #345: 화면이 열리면 자동 요청이 먼저 나간다. 그 결과를 매번 취소로 정한다.
+        await stubCredentials(page, [{error: {name: "NotAllowedError", message: "The operation either timed out or was not allowed."}}]);
         await page.addInitScript(() => { localStorage.setItem("tttgate.passkeyPreferred", "1"); });
         await page.route("**/api/login/passkey/options", (route) => json(route, 200, {success: true, options: LOGIN_OPTIONS}));
         await page.goto(localUrl(app));
         await page.locator("#login-passkey").waitFor({state: "visible", timeout: 30_000});
+        await page.waitForFunction(() => (window as any).__passkeyCalls.length === 1, undefined, {timeout: 10_000});
         expect(await page.locator("#login-password").count()).toBe(0);
         expect(await page.locator("#login-passkey-hint").textContent()).toBe(CONDITION);
 
@@ -279,6 +306,7 @@ test("패스키 우선 표시가 있는 기기는 패스키 버튼과 Use passwo
 
         await page.reload();
         await page.locator("#login-passkey").waitFor({state: "visible", timeout: 30_000});
+        await page.waitForFunction(() => (window as any).__passkeyCalls.length === 1, undefined, {timeout: 10_000});
         await queueCredential(page, [{error: {name: "NotAllowedError", message: "The operation either timed out or was not allowed."}}]);
         await page.locator("#login-passkey button").click();
         await page.locator("#login-message").filter({hasText: "Sign-in was canceled."}).waitFor({state: "visible", timeout: 10_000});
@@ -292,4 +320,170 @@ test("패스키 우선 표시가 없으면 지금처럼 비밀번호 칸을 먼�
         await page.locator("#login-password").waitFor({state: "visible", timeout: 30_000});
         await page.locator("#login-passkey").waitFor({state: "visible", timeout: 10_000});
         expect(await page.locator("#login-use-password").count()).toBe(0);
+    }));
+
+// ── #345 패스키를 쓴 기기에서는 로그인 화면을 열자마자 패스키 창을 띄운다 ─────────────────────
+
+const NOT_ALLOWED: CredentialOutcome = {error: {name: "NotAllowedError", message: "The operation either timed out or was not allowed."}};
+const preferPasskey = (page: Page) => page.addInitScript(() => { localStorage.setItem("tttgate.passkeyPreferred", "1"); });
+const countRequests = (page: Page, pathname: string) => {
+    const counter = {count: 0};
+    page.on("request", (request) => { if(request.method() === "POST" && new URL(request.url()).pathname === pathname) counter.count++; });
+    return counter;
+};
+const nonConditionalGets = async (page: Page) => (await passkeyCalls(page)).filter((call) => call.kind === "get" && call.mediation !== "conditional");
+
+test("#345 패스키를 쓴 기기는 화면을 열자마자 패스키 요청을 한 번 보내고, 취소하면 문구 없이 버튼 화면에 머문다 (AC-1, AC-2)", () =>
+    withApp({fixture: "rbac", login: false}, async (app) => {
+        const {page} = app;
+        await stubCredentials(page, [NOT_ALLOWED]);
+        await preferPasskey(page);
+        const options = countRequests(page, "/api/login/passkey/options");
+        await page.route("**/api/login/passkey/options", (route) => json(route, 200, {success: true, options: LOGIN_OPTIONS}));
+        await page.goto(localUrl(app));
+        await page.waitForFunction(() => (window as any).__passkeyCalls.length >= 1, undefined, {timeout: 30_000});
+        await page.waitForTimeout(500);
+        expect(options.count).toBe(1);
+        expect((await nonConditionalGets(page)).length).toBe(1);
+        expect((await page.locator("#login-message").textContent())?.trim()).toBe("");
+        expect(await page.locator("#login-password").count()).toBe(0);
+        expect(await page.locator("#login-passkey button").isVisible()).toBe(true);
+    }));
+
+test("#345 자동 요청을 서버가 passkey_invalid 로 거부하면 문구와 비밀번호 칸을 보이고, 이 기기의 패스키 우선 표시를 지운다 (AC-2a)", () =>
+    withApp({fixture: "rbac", login: false}, async (app) => {
+        const {page} = app;
+        await stubCredentials(page);
+        await page.goto(localUrl(app));
+        await page.evaluate(() => { localStorage.setItem("tttgate.passkeyPreferred", "1"); });
+        await page.route("**/api/login/passkey/options", (route) => json(route, 200, {success: true, options: LOGIN_OPTIONS}));
+        await page.route("**/api/login/passkey", (route) => json(route, 401, {success: false, code: "passkey_invalid", message: "Passkey sign-in failed."}));
+        await page.reload();
+        await page.locator("#login-message").filter({hasText: "The passkey was not accepted."}).waitFor({state: "visible", timeout: 30_000});
+        await page.locator("#login-password").waitFor({state: "visible", timeout: 10_000});
+        expect(await page.evaluate(() => localStorage.getItem("tttgate.passkeyPreferred"))).toBeNull();
+        await page.reload();
+        await page.locator("#login-password").waitFor({state: "visible", timeout: 30_000});
+        await page.waitForTimeout(500);
+        expect((await nonConditionalGets(page)).length).toBe(0);
+    }));
+
+test("#345 로그아웃 직후의 로그인 화면은 자동 요청을 보내지 않고, 새로 고침하면 다시 보낸다 (AC-3)", () =>
+    withApp({fixture: "rbac", login: false}, async (app) => {
+        const {page} = app;
+        await stubCredentials(page, [NOT_ALLOWED]);
+        await page.goto(localUrl(app));
+        await page.route("**/api/login/passkey/options", (route) => json(route, 200, {success: true, options: LOGIN_OPTIONS}));
+        await loginAs(page, "alice", RBAC_PASSWORDS.alice);
+        await page.evaluate(() => { localStorage.setItem("tttgate.passkeyPreferred", "1"); (window as any).__passkeyCalls.length = 0; });
+        // 좁은 화면에서는 Sign out 이 서랍 안에 있다.
+        await page.locator('[aria-label="Open menu"]').click();
+        await page.locator("#nav-sign-out").click();
+        await page.locator("#login-passkey").waitFor({state: "visible", timeout: 30_000});
+        await page.waitForTimeout(500);
+        expect((await nonConditionalGets(page)).length).toBe(0);
+        await page.reload();
+        await page.waitForFunction(() => (window as any).__passkeyCalls.some((call: {mediation: string}) => call.mediation !== "conditional"), undefined, {timeout: 30_000});
+    }));
+
+test("#345 패스키 우선 표시가 없거나 IP 주소로 열면 자동 요청이 없다 (AC-4)", () =>
+    withApp({fixture: "rbac", login: false}, async (app) => {
+        const {page} = app;
+        await stubCredentials(page);
+        await page.route("**/api/login/passkey/options", (route) => json(route, 200, {success: true, options: LOGIN_OPTIONS}));
+        await page.goto(localUrl(app));
+        await page.locator("#login-password").waitFor({state: "visible", timeout: 30_000});
+        await page.waitForTimeout(500);
+        expect((await nonConditionalGets(page)).length).toBe(0);
+        await page.goto(app.url);
+        await page.evaluate(() => { localStorage.setItem("tttgate.passkeyPreferred", "1"); });
+        await page.reload();
+        await page.locator("#login-password").waitFor({state: "visible", timeout: 30_000});
+        await page.waitForTimeout(500);
+        expect((await passkeyCalls(page)).length).toBe(0);
+    }));
+
+test("#345 비밀번호 화면의 사용자 이름 칸은 자동 완성 패스키를 받고, 패스키 버튼을 누르면 그 요청을 먼저 취소한다 (AC-5, AC-6)", () =>
+    withApp({fixture: "rbac", login: false}, async (app) => {
+        const {page} = app;
+        await stubCredentials(page, [NOT_ALLOWED]);
+        await page.route("**/api/login/passkey/options", (route) => json(route, 200, {success: true, options: LOGIN_OPTIONS}));
+        await page.goto(localUrl(app));
+        await page.locator("#login-password").waitFor({state: "visible", timeout: 30_000});
+        expect(await page.locator("#login-username").getAttribute("autocomplete")).toBe("username webauthn");
+        await page.waitForFunction(() => (window as any).__passkeyCalls.some((call: {mediation: string}) => call.mediation === "conditional"), undefined, {timeout: 10_000});
+        await page.locator("#login-passkey button").click();
+        await page.locator("#login-message").filter({hasText: "Sign-in was canceled."}).waitFor({state: "visible", timeout: 10_000});
+        const calls = await passkeyCalls(page);
+        const conditional = calls.findIndex((call) => call.mediation === "conditional");
+        const button = calls.findIndex((call) => call.mediation !== "conditional");
+        expect(conditional).toBeLessThan(button);
+        expect(calls[conditional].aborted).toBe(true);
+        // 버튼 요청이 끝나면 조건부 요청을 다시 건다. 동시에 진행 중인 요청은 한 개뿐이다.
+        await page.waitForFunction(() => (window as any).__passkeyCalls.filter((call: {mediation: string; aborted: boolean}) => call.mediation === "conditional" && !call.aborted).length === 1, undefined, {timeout: 10_000});
+    }));
+
+test("#345 자동 요청이 끝나지 않아도 Use password 를 누를 수 있고, 누르면 그 요청을 취소하고 비밀번호 칸을 편다", () =>
+    withApp({fixture: "rbac", login: false}, async (app) => {
+        const {page} = app;
+        await stubCredentials(page, [{hang: true}]);
+        await preferPasskey(page);
+        await page.route("**/api/login/passkey/options", (route) => json(route, 200, {success: true, options: LOGIN_OPTIONS}));
+        await page.goto(localUrl(app));
+        await page.waitForFunction(() => (window as any).__passkeyCalls.length === 1, undefined, {timeout: 30_000});
+        expect(await page.locator("#login-use-password").isDisabled()).toBe(false);
+        await page.locator("#login-use-password").click();
+        await page.locator("#login-password").waitFor({state: "visible", timeout: 10_000});
+        expect((await passkeyCalls(page))[0].aborted).toBe(true);
+        expect((await page.locator("#login-message").textContent())?.trim()).toBe("");
+    }));
+
+test("#345 자동 완성 요청은 100초마다 새로 건다(서버 challenge 는 150초 뒤 만료된다)", () =>
+    withApp({fixture: "rbac", login: false}, async (app) => {
+        const {page} = app;
+        await page.clock.install();
+        await stubCredentials(page);
+        await page.route("**/api/login/passkey/options", (route) => json(route, 200, {success: true, options: LOGIN_OPTIONS}));
+        await page.goto(localUrl(app));
+        await page.locator("#login-password").waitFor({state: "visible", timeout: 30_000});
+        await page.waitForFunction(() => (window as any).__passkeyCalls.filter((call: {mediation: string}) => call.mediation === "conditional").length === 1, undefined, {timeout: 10_000});
+        await page.clock.fastForward(99_000);
+        // 실제 시간이 조금 흘러도 100초 경계 전에는 첫 요청이 살아 있어야 한다.
+        expect((await passkeyCalls(page)).filter((call) => call.mediation === "conditional").map((call) => call.aborted)).toEqual([false]);
+        await page.clock.fastForward(2_000);
+        await page.waitForFunction(() => (window as any).__passkeyCalls.filter((call: {mediation: string}) => call.mediation === "conditional").length === 2, undefined, {timeout: 10_000});
+        const conditional = (await passkeyCalls(page)).filter((call) => call.mediation === "conditional");
+        expect(conditional[0].aborted).toBe(true);
+        expect(conditional[1].aborted).toBe(false);
+    }));
+
+test("#345 자동 완성으로 고른 패스키를 서버가 거부해도 이 기기의 패스키 우선 표시는 지우지 않는다", () =>
+    withApp({fixture: "rbac", login: false}, async (app) => {
+        const {page} = app;
+        await stubCredentials(page);
+        await page.route("**/api/login/passkey/options", (route) => json(route, 200, {success: true, options: LOGIN_OPTIONS}));
+        await page.route("**/api/login/passkey", (route) => json(route, 401, {success: false, code: "passkey_invalid", message: "Passkey sign-in failed."}));
+        await page.goto(localUrl(app));
+        await page.locator("#login-password").waitFor({state: "visible", timeout: 30_000});
+        await page.evaluate(() => { localStorage.setItem("tttgate.passkeyPreferred", "1"); });
+        await page.waitForFunction(() => typeof (window as any).__pickAutofill === "function", undefined, {timeout: 10_000});
+        await page.evaluate(() => (window as any).__pickAutofill());
+        await page.locator("#login-message").filter({hasText: "The passkey was not accepted."}).waitFor({state: "visible", timeout: 10_000});
+        expect(await page.evaluate(() => localStorage.getItem("tttgate.passkeyPreferred"))).toBe("1");
+    }));
+
+test("#345 부트스트랩이 필요하면 자동 완성 요청을 취소하고 사용자 이름 칸에서 webauthn 을 뺀다", () =>
+    withApp({fixture: "bootstrap", login: false}, async (app) => {
+        const {page} = app;
+        await stubCredentials(page);
+        await page.route("**/api/login/passkey/options", (route) => json(route, 200, {success: true, options: LOGIN_OPTIONS}));
+        await page.goto(localUrl(app));
+        await page.locator("#login-password").waitFor({state: "visible", timeout: 30_000});
+        await page.waitForFunction(() => (window as any).__passkeyCalls.some((call: {mediation: string}) => call.mediation === "conditional"), undefined, {timeout: 10_000});
+        await page.locator("#login-username").fill("admin");
+        await page.locator("#login-password").fill("first-password-1234");
+        await page.getByRole("button", {name: "OK", exact: true}).click();
+        await page.locator("#bootstrap-token").waitFor({state: "visible", timeout: 10_000});
+        await page.waitForFunction(() => (window as any).__passkeyCalls.every((call: {mediation: string; aborted: boolean}) => call.mediation !== "conditional" || call.aborted), undefined, {timeout: 10_000});
+        expect(await page.locator("#login-username").getAttribute("autocomplete")).toBe("username");
     }));
