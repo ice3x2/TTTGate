@@ -7,6 +7,8 @@
     import Card from '../ui/Card.svelte';
     import Field from '../ui/Field.svelte';
     import TextInput from '../ui/TextInput.svelte';
+    import {t} from '../i18n';
+    import {errorMessageOf} from '../i18n/serverError';
 
     let {onsuccess}: {onsuccess: (result: {user?: LoginUser; mustChangePassword: boolean}) => void} = $props();
 
@@ -93,16 +95,9 @@
         document.getElementById('login-username')?.focus();
     };
 
-    const passkeyFailureOf = (result: LoginResult): string => {
-        if(result.status === 429) return 'Too many login attempts. Please try again later.';
-        switch(result.code) {
-            case 'passkey_invalid': return 'The passkey was not accepted.';
-            case 'passkey_origin_unsupported': return PASSKEY_UNSUPPORTED;
-            case 'passkey_unavailable': return 'Sign in with your password first.';
-            case 'passkey_busy': return 'The server is busy. Try again in a minute.';
-            default: return 'Unable to connect to the server.';
-        }
-    };
+    /** 패스키 로그인이 실패한 이유. 코드별 문구는 이슈 349 의 errorMessageOf 가 고른다. 시도 횟수 제한(429)은 상태 코드로 본다. */
+    const passkeyFailureOf = (result: LoginResult): string =>
+        result.status === 429 ? t('login.tooManyAttempts') : errorMessageOf(result, t('common.unableToConnect'));
 
     // 이슈 345: 로그인이 끝났다. 화면이 사라지기 전에 자동 완성 요청을 다시 걸지 않는다.
     let signedIn = $state(false);

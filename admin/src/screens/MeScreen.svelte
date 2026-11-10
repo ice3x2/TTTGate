@@ -17,6 +17,8 @@
     import {blockNavigation, navigate} from '../router';
     import {useSession} from '../shell/session';
     import {relativeTime} from '../util/relativeTime';
+    import {t} from '../i18n';
+    import {errorMessageOf} from '../i18n/serverError';
     import QrCanvas from './parts/QrCanvas.svelte';
     import {PASSKEY_CONDITION, PASSKEY_UNSUPPORTED, defaultPasskeyName, errorNameOf, isCertificateError, passkeysAvailable, rememberPasskeyPreferred} from '../util/passkey';
 
@@ -248,21 +250,14 @@
         if(!passkeyOpen) passkeyPassword = '';
     });
 
-    const PASSKEY_ERRORS: Record<string, string> = {
-        password_incorrect: 'The password is incorrect.',
-        passkey_already_registered: 'This device already has a passkey for this account.',
-        passkey_limit: 'You can register up to 20 passkeys.',
-        passkey_registration_expired: 'The setup expired. Try again.',
-        passkey_name_invalid: 'Enter a name of 1 to 64 characters.',
-        passkey_invalid: 'The passkey could not be verified. Try again.',
-        passkey_origin_unsupported: PASSKEY_UNSUPPORTED
-    };
-    const serverMessageOf = (result: {code?: string}): string => PASSKEY_ERRORS[result.code ?? ''] ?? 'Unable to connect to the server.';
+    /** 서버가 패스키 등록을 거절한 이유. 코드별 문구는 이슈 349 의 errorMessageOf 가 고른다. */
+    const failureMessageOf = (result: {code?: string; message?: string; generated?: boolean}): string =>
+        errorMessageOf(result, t('common.unableToConnect'));
     /** 브라우저가 패스키를 만들지 못한 이유. 인증서 오류를 NotAllowedError 보다 먼저 본다. */
     const browserMessageOf = (error: unknown): string => {
         if(isCertificateError(error)) return PASSKEY_UNSUPPORTED;
-        if(errorNameOf(error) === 'InvalidStateError') return PASSKEY_ERRORS.passkey_already_registered;
-        return 'The passkey was not created.';
+        if(errorNameOf(error) === 'InvalidStateError') return t('serverError.passkey_already_registered');
+        return t('me.passkeyNotCreated');
     };
 
     const loadPasskeys = async () => {
@@ -281,7 +276,7 @@
         passkeyError = '';
         const options = await MeCtrl.instance.passkeyOptions(passkeyPassword);
         if(!options.success) {
-            passkeyError = serverMessageOf(options);
+            passkeyError = failureMessageOf(options);
             return;
         }
         let response;
@@ -294,7 +289,7 @@
         }
         const saved = await MeCtrl.instance.registerPasskey(passkeyName, response);
         if(!saved.success) {
-            passkeyError = serverMessageOf(saved);
+            passkeyError = failureMessageOf(saved);
             return;
         }
         passkeyOpen = false;

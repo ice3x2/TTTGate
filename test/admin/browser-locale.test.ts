@@ -14,7 +14,7 @@ test.each(BROWSER_FILES)("%s 는 locale 을 준 문맥으로만 페이지를 연
     expect(contexts.filter((call) => !/locale:/.test(call))).toEqual([]);
 });
 
-test("관리 화면을 여는 다른 테스트는 startAdminBrowser 를 거친다", () => {
+test("관리 화면을 여는 다른 테스트는 공용 브라우저 helper(adminBrowser.ts) 를 거친다", () => {
     const dir = path.join(root, "test/admin");
     const direct = fs.readdirSync(dir).filter((name) => name.endsWith(".ts"))
         .filter((name) => /chromium\.launch\(/.test(fs.readFileSync(path.join(dir, name), "utf8")))
@@ -22,7 +22,7 @@ test("관리 화면을 여는 다른 테스트는 startAdminBrowser 를 거친�
     expect(direct.filter((file) => !BROWSER_FILES.includes(file))).toEqual([]);
 });
 
-test("startAdminBrowser 는 기본이 en-US 이고 한국어 화면 테스트용 ko-KR 을 받는다", () => {
+test("공용 브라우저 helper 는 기본이 en-US 이고 한국어 화면 테스트용 ko-KR 을 받는다", () => {
     const source = fs.readFileSync(path.join(root, "test/helpers/adminBrowser.ts"), "utf8");
     expect(source).toMatch(/locale\?: "en-US" \| "ko-KR"/);
     expect(source).toMatch(/locale: options\.locale \?\? "en-US"/);

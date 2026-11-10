@@ -28,7 +28,9 @@
     import TunnelStatusArea from './parts/TunnelStatusArea.svelte';
     import ShareUsersField from './parts/ShareUsersField.svelte';
     import type {SharedUser} from './parts/shareUsers';
-    import {PROTOCOLS, tunnelErrorMessage, tunnelPolicy} from './parts/tunnelPolicy';
+    import {PROTOCOLS, tunnelPolicy} from './parts/tunnelPolicy';
+    import {t} from '../i18n';
+    import {errorMessageOf} from '../i18n/serverError';
 
     // 옛 layout/TunnelOptionSetLayout.svelte 21행의 정의 그대로다.
     type TunnelingOptionEx = Options & {updatable?: boolean, isSync?: boolean, certInfo?: CertInfo, certificateRevision?: number,
@@ -391,7 +393,7 @@
                 navigate('#/tunnels');
             } else {
                 // 접두어는 유지한다(configuration-editor 테스트가 /Fail/ 로 기다린다).
-                toast.push({tone: 'alarm', message: 'Fail to apply tunneling option: ' + tunnelErrorMessage(result.code, result.message)});
+                toast.push({tone: 'alarm', message: t('tunnel.applyFailed', {reason: errorMessageOf(result, result.message)})});
             }
         } catch(e) {
             console.error(e);

@@ -91,15 +91,3 @@ export function tunnelPolicy(me: MeResponse): TunnelPolicy {
     return me.user.role === 'superuser' ? UNRESTRICTED : restrictedPolicy(me.group.attributes);
 }
 
-const ERROR_MESSAGES: Record<string, string> = {
-    port_not_allowed: "This port is outside your group's allowed ranges.",
-    protocol_not_allowed: 'This protocol is not allowed for your group.',
-    rewrite_not_allowed: 'HTTP rewrite options are not allowed for your group.',
-    trusted_client_not_allowed: 'One of the selected trusted clients is not allowed for your group.',
-    tunnel_count_exceeded: 'You have reached your tunnel limit.',
-    buffer_limit_exceeded: "The server buffer is larger than the server's memory cache limit.",
-};
-
-export function tunnelErrorMessage(code: string | undefined, fallback: string): string {
-    return (code !== undefined && Object.prototype.hasOwnProperty.call(ERROR_MESSAGES, code)) ? ERROR_MESSAGES[code] : fallback;
-}
