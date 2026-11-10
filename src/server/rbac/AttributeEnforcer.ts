@@ -1,4 +1,4 @@
-import {AllowedProtocol, Failure, RewritePermissions} from "./IdentityTypes";
+import {AllowedProtocol, Failure, failure, RewritePermissions} from "./IdentityTypes";
 import {Principal} from "./Principal";
 import {TunnelingOption} from "../../types/TunnelingOption";
 
@@ -138,10 +138,6 @@ function assertUsage(next: unknown, mode: unknown, context: unknown): void {
         throw new TypeError('enforce: next must be a tunneling option object');
     }
 }
-
-/** values 는 message 에 끼운 값이다(이슈 349). */
-const failure = (status: 409 | 422, code: string, message: string, values?: Record<string, unknown>): EnforceResult =>
-    ({success: false, status, code, message, values});
 
 /**
  * 일반 유저의 터널 입력을 그룹 속성으로 검사한다. update 때도 next 전체를 검사하므로, 그룹 속성이 나중에 좁아져

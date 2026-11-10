@@ -123,8 +123,35 @@ export type Failure<S extends number = number> = {success: false; status: S; cod
 export type Result<T> = {success: true; value: T} | Failure<404 | 409 | 422>;
 export type ValidationFailure = Failure<422>;
 
-function invalid(code: string, message: string, values?: Record<string, unknown>): ValidationFailure {
-    return {success: false, status: 422, code, message, values};
+/** values 에 넣는 문자열의 최대 길이. 사용자가 보낸 긴 입력을 그대로 되돌려 보내지 않는다. */
+const MAX_FAILURE_VALUE_LENGTH = 100;
+
+type Primitive = string | number | boolean | null;
+
+const isPrimitive = (value: unknown): value is Primitive =>
+    value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
+
+/** 코드 포인트 단위로 자른다. UTF-16 단위로 자르면 서로게이트 쌍이 갈려 화면에 깨진 글자가 남는다. */
+const clipped = (value: Primitive): Primitive =>
+    typeof value === 'string' && value.length > MAX_FAILURE_VALUE_LENGTH ? Array.from(value).slice(0, MAX_FAILURE_VALUE_LENGTH).join('') : value;
+
+/** 원시 값과 원시 값의 배열만 남기고, 문자열은 MAX_FAILURE_VALUE_LENGTH 자로 자른다. 객체처럼 화면이 끼울 수 없는 값은 뺀다. */
+export function failureValues(values: Record<string, unknown>): Record<string, Primitive | Primitive[]> {
+    const kept: Record<string, Primitive | Primitive[]> = {};
+    for(const [name, value] of Object.entries(values)) {
+        if(isPrimitive(value)) kept[name] = clipped(value);
+        else if(Array.isArray(value) && value.every(isPrimitive)) kept[name] = value.map(clipped);
+    }
+    return kept;
+}
+
+/** 실패 결과를 만드는 하나의 함수. rbac 의 다른 모듈도 이것을 쓴다. */
+export function failure<S extends number>(status: S, code: string, message: string, values?: Record<string, unknown>): Failure<S> {
+    return {success: false, status, code, message, values: values === undefined ? undefined : failureValues(values)};
+}
+
+export function invalid(code: string, message: string, values?: Record<string, unknown>): ValidationFailure {
+    return failure(422, code, message, values);
 }
 
 export function validateUsername(value: unknown): {success: true; value: string} | ValidationFailure {

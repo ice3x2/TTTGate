@@ -138,6 +138,13 @@ describe("addBlocklistEntry (#286 REQ-4·REQ-5)", () => {
         expect(result).toMatchObject({ok: true, entry: {address: "203.0.113.7", port: null, note: ""}});
     });
 
+    it("넘겨받은 검증 실패도 문구에 끼운 값을 values 로 갖는다 (이슈 349 FR-7)", () => {
+        expect(addBlocklistEntry([], {address: "nope"}, meta))
+            .toEqual({ok: false, code: "invalid", message: "nope is not an IP address or CIDR range", values: {address: "nope"}});
+        expect(addBlocklistEntry([], {address: "203.0.113.7", note: "x".repeat(201)}, meta))
+            .toEqual({ok: false, code: "invalid", message: "note must be at most 200 characters", values: {max: 200}});
+    });
+
     it("원래 목록은 바꾸지 않는다", () => {
         const entries = [entryOf("203.0.113.1")];
         addBlocklistEntry(entries, {address: "203.0.113.7"}, meta);
@@ -146,9 +153,9 @@ describe("addBlocklistEntry (#286 REQ-4·REQ-5)", () => {
 
     it("같은 주소가 이미 있으면 포트가 달라도 duplicate 이고, 메시지에 기존 적용 범위를 쓴다", () => {
         expect(addBlocklistEntry([entryOf("203.0.113.7", 18080)], {address: "::ffff:203.0.113.7"}, meta))
-            .toEqual({ok: false, code: "duplicate", message: "203.0.113.7 is already blocked on port 18080", values: {address: "203.0.113.7", scope: "port 18080"}});
+            .toEqual({ok: false, code: "duplicate", message: "203.0.113.7 is already blocked on port 18080", values: {address: "203.0.113.7", port: 18080}});
         expect(addBlocklistEntry([entryOf("203.0.113.7")], {address: "203.0.113.7", port: 18080}, meta))
-            .toEqual({ok: false, code: "duplicate", message: "203.0.113.7 is already blocked on all tunnels", values: {address: "203.0.113.7", scope: "all tunnels"}});
+            .toEqual({ok: false, code: "duplicate", message: "203.0.113.7 is already blocked on all tunnels", values: {address: "203.0.113.7", port: null}});
     });
 
     // REQ-5 AC-1: 일시 차단에서 옮기면 All tunnels 항목이 된다. 포트 하나에만 걸린 항목은 그 자리에서 넓힌다.
@@ -166,7 +173,7 @@ describe("addBlocklistEntry (#286 REQ-4·REQ-5)", () => {
 
     it("widen 이어도 이미 All tunnels 이면 duplicate 이고, 목록이 가득 차도 넓힐 수 있다", () => {
         expect(addBlocklistEntry([entryOf("203.0.113.7")], {address: "203.0.113.7"}, {...meta, widen: true}))
-            .toEqual({ok: false, code: "duplicate", message: "203.0.113.7 is already blocked on all tunnels", values: {address: "203.0.113.7", scope: "all tunnels"}});
+            .toEqual({ok: false, code: "duplicate", message: "203.0.113.7 is already blocked on all tunnels", values: {address: "203.0.113.7", port: null}});
         const full = Array.from({length: MAX_BLOCKLIST_ENTRIES}, (_, i) => entryOf(`10.0.${Math.floor(i / 256)}.${i % 256}`, 9000));
         expect(addBlocklistEntry(full, {address: "10.0.0.5"}, {...meta, widen: true})).toMatchObject({ok: true, entry: {address: "10.0.0.5", port: null}});
     });

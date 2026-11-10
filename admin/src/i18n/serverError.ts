@@ -5,11 +5,14 @@ import {serverMessageOf} from '../controller/AdminRequest';
 
 type FailureLike = {code?: unknown; message?: string; generated?: boolean; [field: string]: unknown};
 
-/** 응답의 값 필드 가운데 문구에 끼울 수 있는 것(문자열·숫자). */
-const valuesOf = (result: FailureLike): Record<string, string | number> => {
+const isTextValue = (value: unknown): value is string | number => typeof value === 'string' || typeof value === 'number';
+
+/** 응답의 값 필드 가운데 문구에 끼울 수 있는 것. 문자열·숫자는 그대로, 비어 있지 않은 문자열·숫자의 배열은 그 언어의 목록 표기로 잇는다. */
+const valuesOf = (result: FailureLike, tr: Translator): Record<string, string | number> => {
     const values: Record<string, string | number> = {};
     for(const [name, value] of Object.entries(result)) {
-        if(typeof value === 'string' || typeof value === 'number') values[name] = value;
+        if(isTextValue(value)) values[name] = value;
+        else if(Array.isArray(value) && value.length > 0 && value.every(isTextValue)) values[name] = tr.list(value);
     }
     return values;
 };
@@ -23,7 +26,7 @@ export function errorMessageOf(result: FailureLike, fallback: string, tr: Transl
     const key = typeof result.code === 'string' ? `serverError.${result.code}` : '';
     if(tr.has(key)) {
         const template = tr.t(key);
-        const values = valuesOf(result);
+        const values = valuesOf(result, tr);
         const complete = [...template.matchAll(PLACEHOLDER)].every(([, name]) => Object.hasOwn(values, name));
         if(complete) return tr.t(key, values);
     }

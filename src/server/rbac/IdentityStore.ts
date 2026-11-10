@@ -40,7 +40,9 @@ import {
 
 const logger = LoggerFactory.getLogger('server', 'IdentityStore');
 
-type LoadResult = {success: true; source: 'file' | 'empty'} | {success: false; reason: 'read-error' | 'parse' | 'validation'; message: string};
+type LoadResult = {success: true; source: 'file' | 'empty'} | {success: false; reason: 'read-error' | 'parse' | 'validation'; message: string; values?: Record<string, unknown>};
+/** identity.yaml 을 읽거나 쓰지 못한 결과. values 는 message 에 끼운 값이다(이슈 349 FR-7). */
+type FileFailure = {success: false; message: string; values?: Record<string, unknown>};
 type VerifyResult = {success: true; user: User; rehashed: boolean} | {success: false; reason: 'not-found' | 'disabled' | 'mismatch'};
 type CreateUserInput = {username: string; displayName?: string; role: Role; groupId?: string; mustChangePassword: boolean; migratedFromLegacyAdmin?: boolean}
     & ({password: string} | {passwordHash: string});
@@ -108,8 +110,9 @@ function passkeyNotFound(): Failure<404> {
     return {success: false, status: 404, code: 'passkey_not_found', message: 'Passkey not found.'};
 }
 
-function saveFailedResult(message: string): Failure<422> {
-    return {success: false, status: 422, code: 'identity_save_failed', message};
+/** 저장 실패를 관리 API 의 실패로 바꾼다. 문구에 끼운 오류 코드(values)도 넘긴다(이슈 349 FR-7). */
+function saveFailedResult(failed: FileFailure): Failure<422> {
+    return {success: false, status: 422, code: 'identity_save_failed', message: failed.message, values: failed.values};
 }
 
 /** 이슈 346: 옛 파일에는 mfa_required 가 없다(false). 불리언이 아닌 값은 강제가 꺼지므로 경고를 남긴다. */
@@ -168,7 +171,7 @@ class IdentityStore {
 
         const raw = Files.toStringSync(file);
         if(raw === undefined) {
-            return {success: false, reason: 'read-error', message: `cannot read ${file.toString()}`};
+            return {success: false, reason: 'read-error', message: `cannot read ${file.toString()}`, values: {file: IDENTITY_FILE_NAME}};
         }
 
         let parsed: unknown;
@@ -180,20 +183,20 @@ class IdentityStore {
 
         const parseResult = this.parseIdentityFile(parsed);
         if(!parseResult.success) {
-            return {success: false, reason: 'validation', message: parseResult.message};
+            return {success: false, reason: 'validation', message: parseResult.message, values: parseResult.values};
         }
 
         this._data = parseResult.value;
         return {success: true, source: 'file'};
     }
 
-    private parseIdentityFile(parsed: unknown): {success: true; value: IdentityFile} | {success: false; message: string} {
+    private parseIdentityFile(parsed: unknown): {success: true; value: IdentityFile} | FileFailure {
         if(typeof parsed !== 'object' || parsed === null) {
             return {success: false, message: 'identity.yaml root must be an object'};
         }
         const raw = parsed as {version?: unknown; users?: unknown; groups?: unknown};
         if(raw.version !== 1) {
-            return {success: false, message: `unsupported identity.yaml version: ${raw.version}`};
+            return {success: false, message: `unsupported identity.yaml version: ${raw.version}`, values: {version: raw.version}};
         }
         if(!Array.isArray(raw.users) || !Array.isArray(raw.groups)) {
             return {success: false, message: 'identity.yaml users/groups must be arrays'};
@@ -216,14 +219,14 @@ class IdentityStore {
         const users = withUniquePasskeyIds((raw.users as User[]).map((user) => withValidPasskeys({...user})));
         for(const user of users) {
             if(!groupIds.has(user.groupId)) {
-                return {success: false, message: `user ${user.id} references an unknown groupId: ${user.groupId}`};
+                return {success: false, message: `user ${user.id} references an unknown groupId: ${user.groupId}`, values: {userId: user.id, groupId: user.groupId}};
             }
         }
 
         return {success: true, value: {version: 1, users, groups: normalizedGroups}};
     }
 
-    public save(): {success: true} | {success: false; message: string} {
+    public save(): {success: true} | FileFailure {
         try {
             const serializableGroups = this._data.groups.map((group) => group.id === SYSTEM_SUPERUSER_GROUP_ID
                 ? {...group, attributes: {}}
@@ -240,7 +243,9 @@ class IdentityStore {
             // 응답에는 오류 코드만 싣는다. fs 메시지에는 identity.yaml 의 절대 경로가 들어 있다(#172).
             logger.error('identity.yaml save failed', error);
             const code = error && typeof error === 'object' ? (error as {code?: unknown}).code : undefined;
-            return {success: false, message: `identity file could not be saved${typeof code === 'string' ? ` (${code})` : ''}`};
+            return typeof code === 'string'
+                ? {success: false, message: `identity file could not be saved (${code})`, values: {errorCode: code}}
+                : {success: false, message: 'identity file could not be saved'};
         }
     }
 
@@ -275,7 +280,7 @@ class IdentityStore {
         return this._data.users.filter((u) => u.id !== excludeId && u.role === 'superuser' && u.status === 'active').length;
     }
 
-    private replaceData(next: IdentityFile): {success: true} | {success: false; message: string} {
+    private replaceData(next: IdentityFile): {success: true} | FileFailure {
         const previous = this._data;
         this._data = next;
         const saveResult = this.save();
@@ -356,7 +361,7 @@ class IdentityStore {
 
         const saveResult = this.replaceData({...this._data, users: [...this._data.users, user]});
         if(!saveResult.success) {
-            return saveFailedResult(saveResult.message);
+            return saveFailedResult(saveResult);
         }
         return {success: true, value: cloneUser(user)};
     }
@@ -415,7 +420,7 @@ class IdentityStore {
         nextUsers[index] = updatedUser;
         const saveResult = this.replaceData({...this._data, users: nextUsers});
         if(!saveResult.success) {
-            return saveFailedResult(saveResult.message);
+            return saveFailedResult(saveResult);
         }
         if(updatedUser.status === 'disabled') {
             SessionStore.instance.removeSessionsOfUser(updatedUser.id);
@@ -518,7 +523,7 @@ class IdentityStore {
         const nextUsers = [...this._data.users];
         nextUsers[index] = changed.value.next.length > 0 ? {...rest, passkeys: changed.value.next} : rest;
         const saveResult = this.replaceData({...this._data, users: nextUsers});
-        return saveResult.success ? {success: true, value: changed.value.result} : saveFailedResult(saveResult.message);
+        return saveResult.success ? {success: true, value: changed.value.result} : saveFailedResult(saveResult);
     }
 
     /** 사용자의 mfa 를 next() 결과로 바꿔 저장한다. requireMfa 면 mfa 가 없는 사용자는 409 다. */
@@ -537,7 +542,7 @@ class IdentityStore {
         const nextUsers = [...this._data.users];
         nextUsers[index] = updatedUser;
         const saveResult = this.replaceData({...this._data, users: nextUsers});
-        return saveResult.success ? {success: true, value: undefined} : saveFailedResult(saveResult.message);
+        return saveResult.success ? {success: true, value: undefined} : saveFailedResult(saveResult);
     }
 
     public deleteUser(id: string): Result<void> {
@@ -551,7 +556,7 @@ class IdentityStore {
         }
         const saveResult = this.replaceData({...this._data, users: this._data.users.filter((u) => u.id !== id)});
         if(!saveResult.success) {
-            return saveFailedResult(saveResult.message);
+            return saveFailedResult(saveResult);
         }
         SessionStore.instance.removeSessionsOfUser(id);
         return {success: true, value: undefined};
@@ -578,7 +583,7 @@ class IdentityStore {
         const group: Group = {id: newGroupId(), name, system: false, attributes: attributesResult.value};
         const saveResult = this.replaceData({...this._data, groups: [...this._data.groups, group]});
         if(!saveResult.success) {
-            return saveFailedResult(saveResult.message);
+            return saveFailedResult(saveResult);
         }
         return {success: true, value: cloneGroup(group)};
     }
@@ -624,7 +629,7 @@ class IdentityStore {
         nextGroups[index] = updatedGroup;
         const saveResult = this.replaceData({...this._data, groups: nextGroups});
         if(!saveResult.success) {
-            return saveFailedResult(saveResult.message);
+            return saveFailedResult(saveResult);
         }
         return {success: true, value: cloneGroup(updatedGroup)};
     }
@@ -642,7 +647,7 @@ class IdentityStore {
         }
         const saveResult = this.replaceData({...this._data, groups: this._data.groups.filter((g) => g.id !== id)});
         if(!saveResult.success) {
-            return saveFailedResult(saveResult.message);
+            return saveFailedResult(saveResult);
         }
         return {success: true, value: undefined};
     }
@@ -693,7 +698,7 @@ class IdentityStore {
         nextUsers[currentIndex] = updatedUser;
         const saveResult = this.replaceData({...this._data, users: nextUsers});
         if(!saveResult.success) {
-            return saveFailedResult(saveResult.message);
+            return saveFailedResult(saveResult);
         }
         return {success: true, value: cloneUser(updatedUser)};
     }

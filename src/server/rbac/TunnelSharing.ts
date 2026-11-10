@@ -1,4 +1,4 @@
-import type {Failure, Role, UserStatus} from "./IdentityTypes";
+import {invalid, type Failure, type Role, type UserStatus} from "./IdentityTypes";
 
 // 이슈 347 — 터널 공유 목록의 읽기·검증 규칙. 저장소를 모르는 순수 함수만 둔다.
 
@@ -7,8 +7,6 @@ export const MAX_SHARED_USERS = 50;
 
 export type SharingFailure = Failure<422>;
 export type SharingResult = {success: true; ids: string[]} | SharingFailure;
-
-const invalid = (code: string, message: string, values?: Record<string, unknown>): SharingFailure => ({success: false, status: 422, code, message, values});
 
 /** 저장된 공유 목록. 옛 설정에는 없으므로 빈 목록으로 읽고, 손으로 고친 파일의 문자열 아닌 항목은 버린다. */
 export function sharedUserIdsOf(option: {sharedUserIds?: unknown}): string[] {

@@ -115,3 +115,16 @@ describe("FR-2 ko.ts 와 en.ts 의 키", () => {
         expect([withoutKey, withExtra]).toHaveLength(2);
     });
 });
+
+describe("이슈 349 FR-7 Translator.list — 값 목록을 그 언어의 목록 표기로 잇는다", () => {
+    test("영어는 and 로, 한국어는 및 으로 잇는다", () => {
+        expect(translator("en").list(["TCP", "HTTP", "HTTPS"])).toBe("TCP, HTTP, and HTTPS");
+        expect(translator("ko").list(["TCP", "HTTP", "HTTPS"])).toBe("TCP, HTTP 및 HTTPS");
+    });
+
+    test("숫자도 잇고, 하나뿐이면 그 값이고, 비면 빈 문자열이다", () => {
+        expect(translator("en").list([8080, 8443])).toBe("8080 and 8443");
+        expect(translator("ko").list([8080])).toBe("8080");
+        expect(translator("en").list([])).toBe("");
+    });
+});

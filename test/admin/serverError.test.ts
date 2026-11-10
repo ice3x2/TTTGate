@@ -1,5 +1,5 @@
 import {errorMessageOf} from "../../admin/src/i18n/serverError";
-import {translator} from "../../admin/src/i18n";
+import {translator, type MessageKey, type Params, type Translator} from "../../admin/src/i18n";
 
 // 이슈 349 FR-7·AC-4 — 서버 오류를 응답의 code 로 번역하는 하나의 함수.
 // 옛 tunnelPolicy.tunnelErrorMessage, MeScreen 의 PASSKEY_ERRORS, LoginScreen 의 passkeyFailureOf 를 대신한다.
@@ -57,5 +57,31 @@ describe("errorMessageOf", () => {
         ["passkey_busy", "The server is busy. Try again in a minute."],
     ])("영어 문구는 옛 맵과 같다: %s", (code, expected) => {
         expect(errorMessageOf({code, message: "server text"}, "fallback", en)).toBe(expected);
+    });
+});
+
+describe("errorMessageOf — 배열 값 (이슈 349 FR-7)", () => {
+    // 배열 값을 쓰는 code 의 문구가 아직 리소스에 없으므로, 그런 문구를 가진 Translator 로 확인한다.
+    const withTemplate = (base: Translator): Translator => ({
+        ...base,
+        has: (key: string): key is MessageKey => key === "serverError.port_in_use" || base.has(key),
+        t: (key: MessageKey, params?: Params) => key === ("serverError.port_in_use" as MessageKey)
+            ? `ports: ${params?.ports ?? "{ports}"}` : base.t(key, params),
+    });
+
+    test("문자열·숫자 배열은 그 언어의 목록 표기로 끼운다", () => {
+        const result = {success: false, code: "port_in_use", message: "Port number 8080,8443 is already in use", ports: [8080, 8443]};
+        expect(errorMessageOf(result, "fallback", withTemplate(translator("en")))).toBe("ports: 8080 and 8443");
+        expect(errorMessageOf(result, "fallback", withTemplate(translator("ko")))).toBe("ports: 8080 및 8443");
+    });
+
+    test("빈 배열은 값으로 쓰지 않으므로 서버 문구를 보인다", () => {
+        const result = {code: "port_in_use", message: "server text", ports: []};
+        expect(errorMessageOf(result, "fallback", withTemplate(translator("en")))).toBe("server text");
+    });
+
+    test("객체가 섞인 배열은 값으로 쓰지 않으므로 서버 문구를 보인다", () => {
+        const result = {code: "port_in_use", message: "server text", ports: [{port: 8080}]};
+        expect(errorMessageOf(result, "fallback", withTemplate(translator("en")))).toBe("server text");
     });
 });

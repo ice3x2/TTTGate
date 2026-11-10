@@ -24,7 +24,17 @@ describe("normalizeConnectionSecurity", () => {
         const result = normalizeConnectionSecurity({geo: {mode: "deny", countries: ["XX"]}});
         expect(result).toEqual({
             success: false,
-            message: "connectionSecurity.geo.countries[0] is not an ISO 3166-1 alpha-2 code: XX"
+            message: "connectionSecurity.geo.countries[0] is not an ISO 3166-1 alpha-2 code: XX",
+            values: {index: 0, country: "XX"}
+        });
+    });
+
+    it("carries the values interpolated into a failure message (issue 349 FR-7)", () => {
+        expect(normalizeConnectionSecurity({geo: {mode: "block"}})).toEqual({
+            success: false, message: "connectionSecurity.geo.mode must be one of off, allow, deny", values: {modes: ["off", "allow", "deny"]}
+        });
+        expect(normalizeConnectionSecurity({geo: {countries: [7]}})).toEqual({
+            success: false, message: "connectionSecurity.geo.countries[0] must be a string", values: {index: 0}
         });
     });
 

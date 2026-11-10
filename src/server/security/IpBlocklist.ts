@@ -15,7 +15,8 @@ const PREFIX_PATTERN = /^(0|[1-9]\d{0,2})$/;
 /** 설정 파일의 틀린 항목은 메모리에서 빠지므로 다음 저장 때 파일에서도 빠진다. 경고가 그 사실을 알린다. */
 const DROPPED = 'ignored and dropped at the next save';
 
-type Parsed<T> = {ok: true} & T | {ok: false; message: string};
+/** values 는 message 에 끼운 값이다(이슈 349 FR-7). 관리 API 가 응답 필드로 넘긴다. */
+type Parsed<T> = {ok: true} & T | {ok: false; message: string; values?: Record<string, unknown>};
 
 export type AddBlocklistRequest = {address?: unknown; port?: unknown; note?: unknown};
 export type AddBlocklistResult =
@@ -30,7 +31,7 @@ export type AddBlocklistResult =
 export function parseBlockedAddress(input: unknown): Parsed<{address: string}> {
     if(typeof input !== 'string') return {ok: false, message: 'address must be a string'};
     const text = input.trim();
-    const notAddress = {ok: false as const, message: `${text} is not an IP address or CIDR range`};
+    const notAddress = {ok: false as const, message: `${text} is not an IP address or CIDR range`, values: {address: text}};
     const parts = text.split('/');
     if(parts.length > 2 || parts[0].includes('%')) return notAddress;
     const [host, prefixText] = parts;
@@ -66,12 +67,12 @@ export type AddBlocklistContext = {now: number; createdBy: string; tunnelPorts: 
  */
 export function addBlocklistEntry(entries: readonly BlocklistEntry[], request: AddBlocklistRequest, context: AddBlocklistContext): AddBlocklistResult {
     const address = parseBlockedAddress(request.address);
-    if(!address.ok) return {ok: false, code: 'invalid', message: address.message};
+    if(!address.ok) return {ok: false, code: 'invalid', message: address.message, values: address.values};
     const port = parsePort(request.port);
-    if(!port.ok) return {ok: false, code: 'invalid', message: port.message};
+    if(!port.ok) return {ok: false, code: 'invalid', message: port.message, values: port.values};
     if(port.port !== null && !context.tunnelPorts.has(port.port)) return {ok: false, code: 'invalid', message: `no tunnel uses port ${port.port}`, values: {port: port.port}};
     const note = parseNote(request.note);
-    if(!note.ok) return {ok: false, code: 'invalid', message: note.message};
+    if(!note.ok) return {ok: false, code: 'invalid', message: note.message, values: note.values};
     const entry: BlocklistEntry = {address: address.address, port: port.port, note: note.note, createdAt: context.now, createdBy: context.createdBy};
     const existing = entries.find((candidate) => candidate.address === address.address);
     if(existing) {
@@ -79,13 +80,18 @@ export function addBlocklistEntry(entries: readonly BlocklistEntry[], request: A
             const widened: BlocklistEntry = {...existing, port: null};
             return {ok: true, entry: widened, entries: entries.map((candidate) => candidate === existing ? widened : candidate), widenedFrom: existing.port};
         }
-        const scope = existing.port === null ? 'all tunnels' : `port ${existing.port}`;
-        return {ok: false, code: 'duplicate', message: `${address.address} is already blocked on ${scope}`, values: {address: address.address, scope}};
+        // 적용 범위 문구(all tunnels·port N)는 영어이므로 값으로 보내지 않는다. 화면은 port(모든 터널이면 null)로 문구를 고른다.
+        return {ok: false, code: 'duplicate', message: `${address.address} is already blocked on ${scopeOf(existing.port)}`, values: {address: address.address, port: existing.port}};
     }
     if(entries.length >= MAX_BLOCKLIST_ENTRIES) {
         return {ok: false, code: 'full', message: `the blocklist already has ${MAX_BLOCKLIST_ENTRIES} entries`, values: {max: MAX_BLOCKLIST_ENTRIES}};
     }
     return {ok: true, entry, entries: [...entries, entry]};
+}
+
+/** 항목의 적용 범위를 문구로 쓴다. port 가 null 이면 모든 터널이다. */
+function scopeOf(port: number | null): string {
+    return port === null ? 'all tunnels' : `port ${port}`;
 }
 
 /** 주소를 정규화해 같은 항목을 뺀 새 목록을 돌려준다. 없으면 removed 가 undefined 이고 목록은 그대로다. */
@@ -250,7 +256,7 @@ function parseNote(value: unknown): Parsed<{note: string}> {
     if(value === undefined || value === null) return {ok: true, note: ''};
     if(typeof value !== 'string') return {ok: false, message: 'note must be a string'};
     const note = value.trim();
-    if(note.length > MAX_BLOCKLIST_NOTE_LENGTH) return {ok: false, message: `note must be at most ${MAX_BLOCKLIST_NOTE_LENGTH} characters`};
+    if(note.length > MAX_BLOCKLIST_NOTE_LENGTH) return {ok: false, message: `note must be at most ${MAX_BLOCKLIST_NOTE_LENGTH} characters`, values: {max: MAX_BLOCKLIST_NOTE_LENGTH}};
     return {ok: true, note};
 }
 

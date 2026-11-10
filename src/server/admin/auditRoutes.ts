@@ -14,7 +14,7 @@ const MAX_EPOCH_MS = 8.64e15;
 
 type Fail = (res: ServerResponse, statusCode: number, payload: ApiFailure) => void;
 
-type Parsed = {filter: AuditFilter} | {message: string};
+type Parsed = {filter: AuditFilter} | {message: string; values?: Record<string, unknown>};
 
 /** 쿼리 문자열의 정수. 비었거나 정수 표기가 아니면 undefined 가 아니라 NaN 을 돌려 검증이 걸러내게 한다. */
 const integerOf = (raw: string): number => /^-?\d+$/.test(raw) ? Number(raw) : Number.NaN;
@@ -85,7 +85,7 @@ export function auditRouteHandlers(query: AuditQuery, fail: Fail): RouteHandlers
             const params = new URL(ctx.req.url ?? '/', 'http://localhost').searchParams;
             const parsed = parseAuditQuery(params, ctx);
             if('message' in parsed) {
-                fail(ctx.res, 422, {code: 'audit_query_invalid', status: 422, message: parsed.message});
+                fail(ctx.res, 422, {...parsed.values, code: 'audit_query_invalid', status: 422, message: parsed.message});
                 return;
             }
             const page = await query.query(parsed.filter);

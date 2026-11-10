@@ -25,6 +25,8 @@ export type Translator = {
     number(value: number, maxFractionDigits: number): string;
     /** 이 언어의 날짜·시각 형식. 같은 options 면 한 번 만든 것을 다시 쓴다. */
     dateTime(options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat;
+    /** 값 목록을 이 언어의 목록 표기로 잇는다(영어 "a, b, and c", 한국어 "a, b 및 c"). */
+    list(items: readonly (string | number)[]): string;
 };
 
 const MESSAGES: Record<Locale, Messages> = {en, ko};
@@ -49,6 +51,7 @@ const create = (locale: Locale): Translator => {
     const plurals = new Intl.PluralRules(intl);
     const numbers = new Map<number, Intl.NumberFormat>();
     const dateTimes = new Map<string, Intl.DateTimeFormat>();
+    let lists: Intl.ListFormat | undefined;
     const t = (key: MessageKey, params?: Params): string => fill(messages[key], params);
     return {
         locale, intl, t,
@@ -70,6 +73,10 @@ const create = (locale: Locale): Translator => {
                 dateTimes.set(key, format);
             }
             return format;
+        },
+        list: (items) => {
+            lists ??= new Intl.ListFormat(intl, {type: 'conjunction'});
+            return lists.format(items.map(String));
         },
     };
 };

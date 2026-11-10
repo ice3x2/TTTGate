@@ -133,7 +133,7 @@ const onGetUser = async (ctx: RouteContext): Promise<void> => {
     const store = IdentityStore.instance;
     const user = store.user(ctx.params.id);
     if(!user) {
-        ctx.fail(404, 'user_not_found', `user not found: ${ctx.params.id}`, {id: ctx.params.id});
+        ctx.fail(404, 'user_not_found', `user not found: ${ctx.params.id}`, {userId: ctx.params.id});
         return;
     }
     ctx.ok({user: toUserView(user, store.groups(), mfaPolicyOptions())});
@@ -253,7 +253,7 @@ const onGetGroup = async (ctx: RouteContext): Promise<void> => {
     const store = IdentityStore.instance;
     const group = store.group(ctx.params.id);
     if(!group) {
-        ctx.fail(404, 'group_not_found', `group not found: ${ctx.params.id}`, {id: ctx.params.id});
+        ctx.fail(404, 'group_not_found', `group not found: ${ctx.params.id}`, {groupId: ctx.params.id});
         return;
     }
     const groups = store.groups();

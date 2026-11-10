@@ -5,7 +5,7 @@ import ServerOptionStore from "../ServerOptionStore";
 import SessionStore, {Session} from "./SessionStore";
 import {IdentityStore} from "../rbac/IdentityStore";
 import {IdentityMigration, LEGACY_ADMIN_USERNAME} from "../rbac/IdentityMigration";
-import {MAX_PASSWORD_LENGTH, Role, validatePassword, validateUsername} from "../rbac/IdentityTypes";
+import {failureValues, MAX_PASSWORD_LENGTH, Role, validatePassword, validateUsername} from "../rbac/IdentityTypes";
 import {createHash} from "node:crypto";
 
 import {CertificationStore, CertInfo, PemData} from "../CertificationStore";
@@ -335,7 +335,8 @@ class AdminServer {
            const ctx: RouteContext = {
                req, res, params: matched.params, ip: this.getClientAddress(req),
                ok: (data, status = 200) => this.sendApiSuccess(res, data, status),
-               fail: (status, code, message, values) => this.sendApiFailure(res, status, {...values, code, message}),
+               // 값 필드는 원시 값과 그 배열만, 문자열은 잘라 보낸다(이슈 349 FR-7). 사용자 입력을 그대로 되돌려 보내지 않는다.
+               fail: (status, code, message, values) => this.sendApiFailure(res, status, {...(values === undefined ? {} : failureValues(values)), code, message}),
                auditDetail: (patch) => { Object.assign(auditDetailPatch, patch); },
                mfa: this._mfa, reapplyTunnelCaps: () => this._tttServer?.reapplyActiveCaps?.(),
                enforceActivatorIps: (port) => this.enforceActivatorIps(port),
@@ -661,7 +662,7 @@ class AdminServer {
         const current = store.serverOption;
         const prepared = store.prepareServerOption({...ObjectUtil.cloneDeep(current), trustedClients: next});
         if(!prepared.success || !prepared.serverOption) {
-            this.sendApiFailure(res, 400, {code: 'trusted_clients_invalid', message: prepared.message || 'Invalid trusted clients'});
+            this.sendApiFailure(res, 400, {...prepared.values, code: 'trusted_clients_invalid', message: prepared.message || 'Invalid trusted clients'});
             return undefined;
         }
         const committedBefore = store.captureCommittedState();
@@ -724,7 +725,7 @@ class AdminServer {
             }
             let prepareResult = serverOptionStore.prepareServerOption(ObjectUtil.cloneDeep(requestedServerOption));
             if(!prepareResult.success || !prepareResult.serverOption) {
-                this.sendApiFailure(res, 400, {code: 'server_option_invalid', message: prepareResult.message || 'Invalid server option', updated: false});
+                this.sendApiFailure(res, 400, {...prepareResult.values, code: 'server_option_invalid', message: prepareResult.message || 'Invalid server option', updated: false});
                 return;
             }
             let serverOption = prepareResult.serverOption;
@@ -1032,7 +1033,7 @@ class AdminServer {
         const runtimeBefore = this._tttServer?.captureRuntimeState();
         const prepared = store.prepareServerOptionCommit(composed.serverOption);
         if(!prepared.prepared) {
-            this.sendApiFailure(res, 400, {code: 'tunnel_update_failed', message: prepared.message}); return;
+            this.sendApiFailure(res, 400, {...prepared.values, code: 'tunnel_update_failed', message: prepared.message}); return;
         }
         const preparedCertificate = certificateChange ? certificates.prepareExternalCertificateChange(option.forwardPort, certInfo, rename ? previousForwardPort : undefined) : undefined;
         if(certificateChange && !preparedCertificate) { this.sendApiFailure(res, 400, {code: 'invalid_certificate_filename', message: 'Invalid certificate filename.'}); return; }
@@ -1132,7 +1133,7 @@ class AdminServer {
             if(!Number.isSafeInteger(forwardPort) || forwardPort < 1 || forwardPort > 65535) { this.sendApiFailure(res, 400, {code: 'invalid_port', message: 'forwardPort must be an integer from 1 to 65535'}); return; }
             let previousOption = serverOptionStore.getTunnelingOption(forwardPort);
             if(!previousOption) {
-                this.sendApiFailure(res, 404, {code: 'not_found', message: `External port(${forwardPort}) server already removed.`, forwardPort});
+                this.sendApiFailure(res, 404, {code: 'not_found', message: `External port(${forwardPort}) server already removed.`, forwardPort, port: forwardPort});
                 return;
             }
             const committedBefore = serverOptionStore.captureCommittedState();
@@ -1151,6 +1152,7 @@ class AdminServer {
                     code: 'tunnel_commit_failed',
                     message: `Unable to remove external port(${forwardPort}) configuration.`,
                     forwardPort,
+                    port: forwardPort,
                     failedScopes: ["tunneling-option"],
                     revisionState: serverOptionStore.revisionState
                 });
@@ -1957,7 +1959,7 @@ class AdminServer {
         const {res} = ctx;
         const normalized = normalizeConnectionSecurity({geo: ctx.body});
         if(!normalized.success) {
-            this.sendApiFailure(res, 422, {code: 'geo_invalid', message: normalized.message});
+            this.sendApiFailure(res, 422, {...normalized.values, code: 'geo_invalid', message: normalized.message});
             return;
         }
         const value = normalized.value;
@@ -2102,7 +2104,7 @@ class AdminServer {
     }
 
     private sendApiFailure(res: ServerResponse, statusCode: number, payload: ApiFailure): void {
-        this.sendApiEnvelope(res, statusCode, {success: false, ...payload});
+        this.sendApiEnvelope(res, statusCode, {...payload, success: false});
     }
 
     private pathname(url: string = ''): string {
