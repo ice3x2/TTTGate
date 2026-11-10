@@ -104,7 +104,7 @@ const onListUsers = async (ctx: RouteContext): Promise<void> => {
 const onCreateUser = async (ctx: RouteContext): Promise<void> => {
     const body = ctx.body ?? {};
     if(!ROLES.includes(body.role)) {
-        ctx.fail(422, 'role_invalid', `role must be one of ${ROLES.join(', ')}`);
+        ctx.fail(422, 'role_invalid', `role must be one of ${ROLES.join(', ')}`, {roles: ROLES});
         return;
     }
     const temporary = resolveTemporaryPassword(ctx);
@@ -133,7 +133,7 @@ const onGetUser = async (ctx: RouteContext): Promise<void> => {
     const store = IdentityStore.instance;
     const user = store.user(ctx.params.id);
     if(!user) {
-        ctx.fail(404, 'user_not_found', `user not found: ${ctx.params.id}`);
+        ctx.fail(404, 'user_not_found', `user not found: ${ctx.params.id}`, {id: ctx.params.id});
         return;
     }
     ctx.ok({user: toUserView(user, store.groups(), mfaPolicyOptions())});
@@ -153,14 +153,14 @@ const onUpdateUser = async (ctx: RouteContext): Promise<void> => {
     }
     if(isFieldProvided(body, 'role')) {
         if(!ROLES.includes(body.role)) {
-            ctx.fail(422, 'role_invalid', `role must be one of ${ROLES.join(', ')}`);
+            ctx.fail(422, 'role_invalid', `role must be one of ${ROLES.join(', ')}`, {roles: ROLES});
             return;
         }
         patch.role = body.role as Role;
     }
     if(isFieldProvided(body, 'status')) {
         if(!USER_STATUSES.includes(body.status)) {
-            ctx.fail(422, 'status_invalid', `status must be one of ${USER_STATUSES.join(', ')}`);
+            ctx.fail(422, 'status_invalid', `status must be one of ${USER_STATUSES.join(', ')}`, {statuses: USER_STATUSES});
             return;
         }
         patch.status = body.status as UserStatus;
@@ -181,7 +181,7 @@ const onDeleteUser = async (ctx: RouteContext): Promise<void> => {
     // 소유 터널을 남긴 채 사용자를 지우면 그 터널이 소유자 없는 상태가 된다. 재할당을 먼저 요구한다(#100 U2-08).
     const owned = AuthorizationContext.portsOfOwner(ctx.params.id);
     if(owned.length > 0) {
-        ctx.fail(409, 'user_owns_tunnels', `user still owns tunnels: ${owned.join(', ')}`);
+        ctx.fail(409, 'user_owns_tunnels', `user still owns tunnels: ${owned.join(', ')}`, {ports: owned});
         return;
     }
     const deleted = IdentityStore.instance.deleteUser(ctx.params.id);
@@ -253,7 +253,7 @@ const onGetGroup = async (ctx: RouteContext): Promise<void> => {
     const store = IdentityStore.instance;
     const group = store.group(ctx.params.id);
     if(!group) {
-        ctx.fail(404, 'group_not_found', `group not found: ${ctx.params.id}`);
+        ctx.fail(404, 'group_not_found', `group not found: ${ctx.params.id}`, {id: ctx.params.id});
         return;
     }
     const groups = store.groups();

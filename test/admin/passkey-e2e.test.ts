@@ -33,7 +33,8 @@ const button = (page: Page, name: string) => page.getByRole("button", {name, exa
 
 const openWithAuthenticator = async (url: string): Promise<{page: Page; cdp: CDPSession; errors: string[]}> => {
     browser ??= await chromium.launch();
-    const page = await browser.newPage();
+    // 이슈 349 FR-10: 시스템 언어와 무관하게 영어 화면을 본다.
+    const page = await (await browser.newContext({locale: "en-US"})).newPage();
     // 다른 관리 화면 테스트와 같은 좁은 화면. 로그아웃 메뉴가 서랍 안에 있다.
     await page.setViewportSize({width: 400, height: 800});
     const errors: string[] = [];

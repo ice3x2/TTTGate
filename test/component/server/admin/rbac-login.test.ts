@@ -615,7 +615,7 @@ describe("rbac-login: #96 권한 결정기 · 비밀번호 변경 게이트 · /
         });
     });
 
-    // #251 REQ-3 — 차단된 버킷은 칸이 차 있어도 두 경로 모두 차단 429(code 없음)를 받는다. 확인 순서가 같아야 한다.
+    // #251 REQ-3 — 차단된 버킷은 칸이 차 있어도 두 경로 모두 차단 429(login_blocked, 칸 부족의 login_concurrency_limit 이 아님)를 받는다. 확인 순서가 같아야 한다.
     it("a blocked bucket gets the plain blocked 429 on both login routes even when the slots are full", async () => {
         await withServer(setupBcryptAccount("routes-password"), async ({request, api}) => {
             let release!: () => void;
@@ -629,7 +629,7 @@ describe("rbac-login: #96 권한 결정기 · 비밀번호 변경 게이트 · /
                 AuditSinkRegistry.set({reserve: () => true, record: async (event) => { events.push(event); }});
                 for(const [target, body] of [["/api/login/mfa", {mfaTicket: "nope", code: "123456"}], ["/api/login", {username: "admin", password: "routes-password"}]] as const) {
                     const response = await request("POST", target, body);
-                    expect({target, status: response.status, code: response.body?.code}).toEqual({target, status: 429, code: undefined});
+                    expect({target, status: response.status, code: response.body?.code}).toEqual({target, status: 429, code: "login_blocked"});
                 }
                 // #265: 차단 429 는 본문을 읽기 전에 보내므로 username 을 알 수 없다. 차단 감사로 남긴다.
                 await waitUntil(() => events.some((event) => event.type === "login_failure"), 5_000, "blocked login_failure audit");
@@ -751,7 +751,7 @@ describe("rbac-login: #96 권한 결정기 · 비밀번호 변경 게이트 · /
             const blocked = jest.spyOn(api as any, "isLoginBlocked").mockReturnValueOnce(false).mockReturnValue(true);
             try {
                 const response = await request("POST", "/api/login", {username: "admin", password: "routes-password"});
-                expect({status: response.status, code: response.body?.code}).toEqual({status: 429, code: undefined});
+                expect({status: response.status, code: response.body?.code}).toEqual({status: 429, code: "login_blocked"});
                 expect(verify).not.toHaveBeenCalled();
             } finally {
                 verify.mockRestore();

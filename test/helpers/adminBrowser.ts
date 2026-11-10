@@ -29,9 +29,10 @@ export const ADMIN_BROWSER_TEST_TIMEOUT_MS = ADMIN_BROWSER_START_BUDGET_MS + 60_
 
 /**
  * deadline(절대 시각)을 주면 서버 기동과 브라우저 실행이 그 안에서 끝나야 한다(#273). 실행 기한은 서버가 뜬 뒤 남은 시간으로 정한다.
+ * locale 은 브라우저 언어다. 기본은 en-US 라서 시스템 언어가 한국어인 PC 에서도 영어 화면을 본다(이슈 349 FR-10). 한국어 화면 테스트는 ko-KR 을 준다.
  */
 export const startAdminBrowser = async (options: {apiOrigin?: string, proxyTarget?: string, preview?: boolean, httpAlias?: boolean,
-    startTimeoutMs?: number, deadline?: number} = {}) => {
+    startTimeoutMs?: number, deadline?: number, locale?: "en-US" | "ko-KR"} = {}) => {
     const remaining = (stageMs: number, stage: string): number => {
         if(options.deadline === undefined) return stageMs;
         const left = options.deadline - Date.now();
@@ -89,7 +90,8 @@ export const startAdminBrowser = async (options: {apiOrigin?: string, proxyTarge
         browser = await chromium.launch(options.httpAlias ? {
             args: ["--host-resolver-rules=MAP admin.test 127.0.0.1", "--no-proxy-server"], timeout: launchTimeoutMs,
         } : {timeout: launchTimeoutMs});
-        const page = await browser.newPage();
+        const context = await browser.newContext({locale: options.locale ?? "en-US"});
+        const page = await context.newPage();
         const errors: string[] = [];
         page.on("pageerror", (error) => errors.push(error.message));
         return {page, url, errors, close};

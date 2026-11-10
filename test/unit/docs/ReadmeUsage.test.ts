@@ -208,6 +208,17 @@ describe("README in English and Korean (#310)", () => {
         }
     });
 
+    // 이슈 349 FR-11: 관리 화면의 언어 규칙(브라우저 언어 목록의 첫 값이 ko 또는 ko-* 면 한국어, 아니면 영어)을 두 절 모두 적는다.
+    it.each([["English", "Console Language", () => english], ["한국어", "관리 화면 언어", () => korean]])(
+        "explains how the console picks its language in the %s section", (_label, heading, section) => {
+        const slice = subsectionOf(section(), heading);
+        expect(slice.length).toBeGreaterThan(0);
+        for(const fact of ["`ko`", "`ko-*`", "`navigator.languages`", "`en-US`, `ko-KR`"]) {
+            expect({fact, found: slice.includes(fact)}).toEqual({fact, found: true});
+        }
+        expect(slice).toMatch(/English|영어/);
+    });
+
     it.each([["English", () => english], ["한국어", () => korean]])("lists the activator-ip denial reason in the %s section", (_label, section) => {
         expect(section()).toMatch(/^\| `activator-ip` \| IP limit \|/m);
     });

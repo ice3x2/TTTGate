@@ -1,5 +1,5 @@
 import {ServerResponse} from "http";
-import {RouteContext, RouteHandlers} from "./routes";
+import {ApiFailure, RouteContext, RouteHandlers} from "./routes";
 import {AuditFilter, AuditQuery, AuditTargetKind} from "../audit/AuditQuery";
 import {AUDIT_EVENT_TYPE_LIST, isAuditEventType} from "../audit/AuditEventTypes";
 
@@ -12,7 +12,7 @@ const TARGET_KINDS: readonly AuditTargetKind[] = ['user', 'group', 'tunnel', 'se
 /** Date 가 표현할 수 있는 epoch ms 의 한계(ECMAScript 시간 값 범위). 밖이면 파일 날짜를 계산할 수 없다. */
 const MAX_EPOCH_MS = 8.64e15;
 
-type Fail = (res: ServerResponse, statusCode: number, payload: {[key: string]: any}) => void;
+type Fail = (res: ServerResponse, statusCode: number, payload: ApiFailure) => void;
 
 type Parsed = {filter: AuditFilter} | {message: string};
 
@@ -85,7 +85,7 @@ export function auditRouteHandlers(query: AuditQuery, fail: Fail): RouteHandlers
             const params = new URL(ctx.req.url ?? '/', 'http://localhost').searchParams;
             const parsed = parseAuditQuery(params, ctx);
             if('message' in parsed) {
-                fail(ctx.res, 422, {status: 422, message: parsed.message});
+                fail(ctx.res, 422, {code: 'audit_query_invalid', status: 422, message: parsed.message});
                 return;
             }
             const page = await query.query(parsed.filter);

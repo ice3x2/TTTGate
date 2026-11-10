@@ -164,7 +164,8 @@ describe("R6: 옛 부품·부산물 부재", () => {
     // #102 (U2-10) 이 로그인 주체 스토어 me.ts 를 더했다.
     test("admin/src 의 최상위 항목이 정해진 목록과 같다", () => {
         const entries = fs.readdirSync(path.join(root, "admin/src")).sort();
-        expect(entries).toEqual(["App.svelte", "app.css", "assets", "controller", "main.ts", "me.ts", "router.ts", "screens", "shell", "ui", "util", "vite-env.d.ts"].sort());
+        // 이슈 349: 문구 리소스는 i18n/ 에 둔다.
+        expect(entries).toEqual(["App.svelte", "app.css", "assets", "controller", "i18n", "main.ts", "me.ts", "router.ts", "screens", "shell", "ui", "util", "vite-env.d.ts"].sort());
     });
 
     test("loading.png 는 ui/Loading.svelte 가 쓰므로 남아 있다", () => {

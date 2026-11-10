@@ -14,6 +14,12 @@ import {DEFAULT_ENROLLMENT_TTL_MS} from "../EnrollmentRegistry";
 
 export type {Action, Target};
 
+/**
+ * 이슈 349 FR-7: 실패 응답의 본문. 관리 화면은 code 로 문구를 고르고, 문구에 들어가는 값(포트 번호 등)은 별도 필드에서 받는다.
+ * message 는 번역 맵에 없는 code 를 받은 화면(서버와 화면의 버전이 다른 경우)이 그대로 보이는 영어 문구다.
+ */
+export type ApiFailure = {code: string; message?: string; [field: string]: unknown};
+
 export type RouteContext = {
     /** 활성 터널의 수명 상한을 다시 계산한다(#137). 소유자·사용자 그룹·그룹 속성이 바뀐 뒤 부른다. */
     reapplyTunnelCaps?: () => void;
@@ -31,8 +37,8 @@ export type RouteContext = {
     ip: string;
     /** 성공 응답. status 는 생성 라우트가 201 을 낼 때만 넘긴다. */
     ok: (data: object, status?: number) => void;
-    /** 실패 응답. 401·403 은 route() 가 내므로 핸들러는 404·409·422·503 만 쓴다. */
-    fail: (status: number, code: string, message: string) => void;
+    /** 실패 응답. 401·403 은 route() 가 내므로 핸들러는 404·409·422·503 만 쓴다. message 에 끼운 값은 values 로도 보낸다(이슈 349). */
+    fail: (status: number, code: string, message: string, values?: Record<string, unknown>) => void;
     /** 요청 전에 계산한 audit 메타에 뒤늦게 알게 된 값을 더한다. audited() 가 record 직전에 합친다. */
     auditDetail: (patch: Record<string, unknown>) => void;
     /** #113 (U4-05) 본인 세션을 끊은 응답에 sessionKey·csrfToken 만료 쿠키를 붙인다(POST /api/logout 과 같은 형식). */

@@ -4,7 +4,7 @@ import ServerOptionStore from "../ServerOptionStore";
 import TTTServer from "../TTTServer";
 import {IdentityStore} from "../rbac/IdentityStore";
 import {TrustedClient} from "../../types/TunnelingOption";
-import {RouteContext} from "./routes";
+import {ApiFailure, RouteContext} from "./routes";
 import ObjectUtil from "../../util/ObjectUtil";
 import {MAX_ENROLLMENT_TTL_MS} from "../EnrollmentRegistry";
 
@@ -21,7 +21,7 @@ type TrustedClientRouteDeps = {
     mutateConfiguration: (res: ServerResponse, payload: any, operation: (store: ServerOptionStore) => Promise<void>) => Promise<void>;
     /** 목록을 저장하고 런타임에 적용한다. 성공하면 새 revisionState, 실패하면 응답을 보낸 뒤 undefined. */
     commitTrustedClients: (res: ServerResponse, store: ServerOptionStore, next: TrustedClient[]) => Promise<object | undefined>;
-    sendFailure: (res: ServerResponse, status: number, payload: object) => void;
+    sendFailure: (res: ServerResponse, status: number, payload: ApiFailure) => void;
 };
 
 const newSecret = (): string => crypto.randomBytes(32).toString("hex");
@@ -69,13 +69,13 @@ const trustedClientRouteHandlers = (deps: TrustedClientRouteDeps) => {
             return;
         }
         if(displayName !== undefined && (typeof displayName !== "string" || displayName.trim().length === 0 || displayName.length > MAX_DISPLAY_NAME_LENGTH)) {
-            ctx.fail(400, "INVALID_DISPLAY_NAME", `displayName must be 1-${MAX_DISPLAY_NAME_LENGTH} characters`);
+            ctx.fail(400, "INVALID_DISPLAY_NAME", `displayName must be 1-${MAX_DISPLAY_NAME_LENGTH} characters`, {max: MAX_DISPLAY_NAME_LENGTH});
             return;
         }
         await deps.mutateConfiguration(ctx.res, ctx.body, async (store) => {
             const current = store.serverOption.trustedClients ?? [];
             if(current.some((client) => client.clientId === clientId)) {
-                ctx.fail(409, "CLIENT_EXISTS", `trusted client '${clientId}' already exists`);
+                ctx.fail(409, "CLIENT_EXISTS", `trusted client '${clientId}' already exists`, {clientId});
                 return;
             }
             const created: TrustedClient = {clientId, clientSecret: newSecret(), ...(displayName ? {displayName: displayName.trim()} : {})};
@@ -89,13 +89,13 @@ const trustedClientRouteHandlers = (deps: TrustedClientRouteDeps) => {
         await deps.mutateConfiguration(ctx.res, ctx.body ?? {}, async (store) => {
             const current = store.serverOption.trustedClients ?? [];
             if(!current.some((client) => client.clientId === clientId)) {
-                ctx.fail(404, "CLIENT_NOT_FOUND", `trusted client '${clientId}' does not exist`);
+                ctx.fail(404, "CLIENT_NOT_FOUND", `trusted client '${clientId}' does not exist`, {clientId});
                 return;
             }
             const references = referencesOf(clientId);
             if(references.length > 0) {
                 deps.sendFailure(ctx.res, 409, {code: "CLIENT_IN_USE",
-                    message: `trusted client '${clientId}' is still allowed by tunnels or groups. Remove it there first.`, references});
+                    message: `trusted client '${clientId}' is still allowed by tunnels or groups. Remove it there first.`, clientId, references});
                 return;
             }
             const revisionState = await deps.commitTrustedClients(ctx.res, store, current.filter((client) => client.clientId !== clientId));
@@ -108,7 +108,7 @@ const trustedClientRouteHandlers = (deps: TrustedClientRouteDeps) => {
         await deps.mutateConfiguration(ctx.res, ctx.body ?? {}, async (store) => {
             const current = store.serverOption.trustedClients ?? [];
             if(!current.some((client) => client.clientId === clientId)) {
-                ctx.fail(404, "CLIENT_NOT_FOUND", `trusted client '${clientId}' does not exist`);
+                ctx.fail(404, "CLIENT_NOT_FOUND", `trusted client '${clientId}' does not exist`, {clientId});
                 return;
             }
             const next = current.map((client) => client.clientId === clientId ? {...client, clientSecret: newSecret()} : client);
@@ -122,7 +122,7 @@ const trustedClientRouteHandlers = (deps: TrustedClientRouteDeps) => {
         const ttlMinutes = ctx.body?.ttlMinutes;
         // #313: ttlMinutes 는 1..30일(분) 정수이거나 null(만료 없음)이다. 없으면 기본 15분이다.
         if(ttlMinutes !== undefined && ttlMinutes !== null && (!Number.isInteger(ttlMinutes) || ttlMinutes < 1 || ttlMinutes > MAX_ENROLLMENT_TTL_MINUTES)) {
-            ctx.fail(400, "INVALID_TTL", `ttlMinutes must be null (no expiry) or an integer within 1..${MAX_ENROLLMENT_TTL_MINUTES}`);
+            ctx.fail(400, "INVALID_TTL", `ttlMinutes must be null (no expiry) or an integer within 1..${MAX_ENROLLMENT_TTL_MINUTES}`, {max: MAX_ENROLLMENT_TTL_MINUTES});
             return;
         }
         // #313: provisional 이면 확인(confirm)할 때까지 기본 15분만 유효하다. 관리 화면이 코드를 보여 준 뒤 확인한다.
@@ -147,7 +147,7 @@ const trustedClientRouteHandlers = (deps: TrustedClientRouteDeps) => {
             ctx.auditDetail({issueId: issued.issueId});
             ctx.ok({code: issued.code, expiresAt: issued.expiresAt, issueId: issued.issueId, controlPort: ServerOptionStore.instance.serverOption.port});
         } else if(issued.reason === "unknown-client") {
-            ctx.fail(404, "CLIENT_NOT_FOUND", `trusted client '${clientId}' does not exist`);
+            ctx.fail(404, "CLIENT_NOT_FOUND", `trusted client '${clientId}' does not exist`, {clientId});
         } else if(issued.reason === "superseded") {
             ctx.fail(409, "ENROLLMENT_SUPERSEDED", "a newer enrollment code request or a revocation replaced this request");
         } else if(issued.reason === "tls-required") {
@@ -179,7 +179,7 @@ const trustedClientRouteHandlers = (deps: TrustedClientRouteDeps) => {
             ctx.auditDetail({expiresAt: confirmed.expiresAt});
             ctx.ok({expiresAt: confirmed.expiresAt});
         } else if(confirmed.reason === "unknown-client") {
-            ctx.fail(404, "CLIENT_NOT_FOUND", `trusted client '${clientId}' does not exist`);
+            ctx.fail(404, "CLIENT_NOT_FOUND", `trusted client '${clientId}' does not exist`, {clientId});
         } else {
             ctx.fail(409, "ENROLLMENT_SUPERSEDED", "this code was replaced, revoked or has expired; issue a new code");
         }
