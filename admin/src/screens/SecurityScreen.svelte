@@ -57,15 +57,18 @@
         'ip-blocklist': 'Blocklist',
         'rate-limit-ban': 'Temporarily banned',
         'rate-limit-exceeded': 'Rate limit exceeded',
-        'concurrency-limit': 'Connection limit'
+        'concurrency-limit': 'Connection limit',
+        // 이슈 348: 터널을 켠 사람의 IP 가 아니라서 거절했다.
+        'activator-ip': 'IP limit'
     };
     /** 거절이 있었던 범위만 보인다. 포트 번호 순, 관리 화면은 맨 아래. 관리 화면에는 국가 차단만 생긴다. */
     const denialRows = $derived.by(() => {
         const rows = Object.entries(denialStats.ports)
-            .filter(([, s]) => s.rejectedGeo + s.rejectedBlocklist + s.rejectedBans + s.rejectedExceeded + s.rejectedConcurrency > 0)
+            .filter(([, s]) => s.rejectedGeo + s.rejectedBlocklist + s.rejectedBans + s.rejectedExceeded + s.rejectedConcurrency + (s.rejectedActivatorIp ?? 0) > 0)
             .sort(([a], [b]) => Number(a) - Number(b))
-            .map(([port, s]) => ({scope: port, cells: [s.rejectedGeo, s.rejectedBlocklist, s.rejectedBans, s.rejectedExceeded, s.rejectedConcurrency, s.bannedIps].map(String)}));
-        if(denialStats.admin.rejectedGeo > 0) rows.push({scope: 'admin', cells: [String(denialStats.admin.rejectedGeo), '—', '—', '—', '—', '—']});
+            .map(([port, s]) => ({scope: port, cells: [s.rejectedGeo, s.rejectedBlocklist, s.rejectedBans, s.rejectedExceeded, s.rejectedConcurrency,
+                s.rejectedActivatorIp ?? 0, s.bannedIps].map(String)}));
+        if(denialStats.admin.rejectedGeo > 0) rows.push({scope: 'admin', cells: [String(denialStats.admin.rejectedGeo), '—', '—', '—', '—', '—', '—']});
         return rows;
     });
     let promoting = $state<BanEntry | undefined>(undefined);
@@ -433,7 +436,7 @@
             <p id="denial-stats-empty">No denials recorded.</p>
         {:else}
             <table id="denial-stats-table" style="width: 100%; border-collapse: collapse;">
-                <thead><tr><th>Port</th><th>Country blocked</th><th>Blocklist</th><th>Temporarily banned</th><th>Rate limit exceeded</th><th>Connection limit</th><th>Banned IPs</th></tr></thead>
+                <thead><tr><th>Port</th><th>Country blocked</th><th>Blocklist</th><th>Temporarily banned</th><th>Rate limit exceeded</th><th>Connection limit</th><th>IP limit</th><th>Banned IPs</th></tr></thead>
                 <tbody>
                     {#each denialRows as row (row.scope)}
                         <tr data-scope={row.scope}>

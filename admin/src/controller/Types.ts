@@ -162,10 +162,10 @@ export type GeoConfig = {mode: 'off' | 'allow' | 'deny'; countries: string[]; ap
 export type CountryEntry = {code: string; name: string};
 export type BanEntry = {port: number; ip: string; country?: string; bannedUntil: number; hits: number};
 /** 이슈 327: 거절 사유. 서버의 AdmissionReason 과 같다. */
-export type DenialReason = 'ip-blocklist' | 'geo-deny' | 'rate-limit-ban' | 'rate-limit-exceeded' | 'concurrency-limit';
-/** 이슈 327: 포트별 누적 거절 건수(서버가 시작한 뒤부터). */
+export type DenialReason = 'ip-blocklist' | 'geo-deny' | 'rate-limit-ban' | 'rate-limit-exceeded' | 'concurrency-limit' | 'activator-ip';
+/** 이슈 327: 포트별 누적 거절 건수(서버가 시작한 뒤부터). 이슈 348: rejectedActivatorIp 는 켠 사람의 IP 가 아니라서 거절한 수다(옛 서버에는 없다). */
 export type PortDenialStats = {rejectedGeo: number; rejectedBlocklist: number; rejectedBans: number;
-    rejectedExceeded: number; rejectedConcurrency: number; bannedIps: number};
+    rejectedExceeded: number; rejectedConcurrency: number; rejectedActivatorIp?: number; bannedIps: number};
 export type DenialStats = {ports: Record<string, PortDenialStats>; admin: {rejectedGeo: number}};
 /** 이슈 327: 최근 거절 한 건. scope 는 포트 번호이거나 관리 화면('admin')이다. */
 export type RecentDenial = {at: number; ip: string; scope: number | 'admin'; reason: DenialReason; country: string | null};
