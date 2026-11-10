@@ -188,3 +188,38 @@ test("#346 로그인 중에 강제가 켜지면 다음 요청이 막히는 순�
         await hashIs(page, "#/me");
         await page.locator("#mfa-required-banner").waitFor({state: "visible", timeout: UI_WAIT_MS});
     }));
+
+test("#346 인증 앱 교체: 비밀번호를 확인한 뒤 새 키로 등록하고, 확인을 마치면 바뀐다(결정 1)", () =>
+    withApp({fixture: "rbac", login: {username: "alice", password: RBAC_PASSWORDS.alice}}, async ({page, url}) => {
+        await page.goto(`${url}#/me`);
+        await page.locator("#mfa-setup button").waitFor({state: "visible", timeout: UI_WAIT_MS});
+        const enrollWith = async () => {
+            const modal = page.locator(".mfa-enroll-modal");
+            await modal.waitFor({state: "visible", timeout: UI_WAIT_MS});
+            const value = (await page.locator("#mfa-secret").textContent())!.trim();
+            await page.locator("#mfa-next button").click();
+            await page.locator("#mfa-code").fill(generate(base32Decode(value)!, Date.now()));
+            await page.locator("#mfa-confirm button").click();
+            await page.locator("#mfa-saved").check();
+            await page.locator("#mfa-done button").click();
+            await modal.waitFor({state: "detached", timeout: UI_WAIT_MS});
+            return value;
+        };
+        await page.locator("#mfa-setup button").click();
+        const first = await enrollWith();
+        await page.locator("#mfa-status").filter({hasText: "Enabled"}).waitFor({state: "visible", timeout: UI_WAIT_MS});
+
+        await page.locator("#mfa-replace button").click();
+        const ask = page.locator(".mfa-replace-modal");
+        await ask.waitFor({state: "visible", timeout: UI_WAIT_MS});
+        await page.locator("#mfa-replace-password").fill("wrong-password-1");
+        await page.locator("#mfa-replace-continue button").click();
+        await ask.getByText("The password is incorrect.", {exact: true}).waitFor({state: "visible", timeout: UI_WAIT_MS});
+        await page.locator("#mfa-replace-password").fill(RBAC_PASSWORDS.alice);
+        await page.locator("#mfa-replace-continue button").click();
+        await ask.waitFor({state: "detached", timeout: UI_WAIT_MS});
+        const second = await enrollWith();
+        expect(second).not.toBe(first);
+        await page.getByText("Authenticator app replaced.", {exact: true}).waitFor({state: "visible", timeout: UI_WAIT_MS});
+        expect((await page.locator("#mfa-status").textContent())?.trim()).toBe("Enabled");
+    }));
