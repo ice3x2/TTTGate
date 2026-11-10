@@ -66,7 +66,7 @@
                 sysInfo = result.sysInfo;
                 infoOpen = true;
             } else {
-                alert(errorMessageOf(result, t('common.unableToConnect')));
+                alert(errorMessageOf(result));
             }
         } catch(e) {
             if(e instanceof InvalidSession) sessionOut();

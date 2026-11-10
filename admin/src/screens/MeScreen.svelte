@@ -242,7 +242,7 @@
 
     /** 서버가 패스키 등록을 거절한 이유. 코드별 문구는 이슈 349 의 errorMessageOf 가 고른다. */
     const failureMessageOf = (result: {code?: string; message?: string; generated?: boolean}): string =>
-        errorMessageOf(result, t('common.unableToConnect'));
+        errorMessageOf(result);
     /** 브라우저가 패스키를 만들지 못한 이유. 인증서 오류를 NotAllowedError 보다 먼저 본다. */
     const browserMessageOf = (error: unknown): string => {
         if(isCertificateError(error)) return t('serverError.passkey_origin_unsupported');

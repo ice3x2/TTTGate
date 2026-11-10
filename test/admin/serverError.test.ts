@@ -35,29 +35,17 @@ describe("errorMessageOf", () => {
         expect(errorMessageOf({}, "fallback", en)).toBe("fallback");
     });
 
-    // 검토 L-5: 서버가 응답했지만 문구가 없거나 JSON 이 깨졌으면 '연결하지 못했다' 가 아니다. AdminRequest 가 만든 HTTP 상태 문구를 보인다.
-    // 검토 M-2: 다만 화면이 상황에 맞는 fallback(예: '터널을 바꾸지 못했다')을 넘겼으면 그 문구를 지킨다. 영어 화면이 바뀌지 않게 한다.
-    test("서버가 응답했는데(status > 0) 화면이 만든 문구면 일반 fallback('연결하지 못했다')을 HTTP 상태 문구로 바꾼다", () => {
-        expect(errorMessageOf({message: "Admin request failed (HTTP 500)", generated: true, status: 500}, en.t("common.unableToConnect"), en))
-            .toBe("Admin request failed (HTTP 500)");
-        expect(errorMessageOf({message: "관리 서버의 응답이 올바른 JSON이 아닙니다(HTTP 502).", generated: true, status: 502}, ko.t("common.unableToConnect"), ko))
-            .toBe("관리 서버의 응답이 올바른 JSON이 아닙니다(HTTP 502).");
-    });
-
-    test("서버가 응답했어도(status > 0) 화면이 넘긴 상황별 fallback 은 그대로 둔다 (검토 M-2)", () => {
+    // 검토 L-C: 화면이 넘긴 fallback 은 문자열을 비교해 바꾸지 않고 그대로 보인다. 일반 문구가 필요한 화면은 fallback 을 생략한다.
+    test("서버가 응답했어도(status > 0) 화면이 넘긴 fallback 은 그대로 둔다 (검토 M-2)", () => {
         expect(errorMessageOf({message: "Admin request failed (HTTP 500)", generated: true, status: 500}, "Unable to change tunnel 'web'.", en))
             .toBe("Unable to change tunnel 'web'.");
         expect(errorMessageOf({message: "Admin request failed (HTTP 500)", generated: true, status: 500}, en.t("tunnelStatus.timeLimitFailed"), en))
             .toBe(en.t("tunnelStatus.timeLimitFailed"));
-    });
-
-    test("fallback 을 생략하면(status > 0) HTTP 상태 문구다", () => {
-        expect(errorMessageOf({message: "Admin request failed (HTTP 500)", generated: true, status: 500}, undefined, en)).toBe("Admin request failed (HTTP 500)");
+        expect(errorMessageOf({message: "Admin request failed (HTTP 500)", generated: true, status: 500}, en.t("common.unableToConnect"), en))
+            .toBe(en.t("common.unableToConnect"));
     });
 
     test("서버에 닿지 못했으면(status 0) fallback 이다", () => {
-        expect(errorMessageOf({message: "Admin network request failed: x", generated: true, status: 0}, en.t("common.unableToConnect"), en))
-            .toBe(en.t("common.unableToConnect"));
         expect(errorMessageOf({message: "Admin network request failed: x", generated: true, status: 0}, "fallback", en)).toBe("fallback");
     });
 
@@ -147,15 +135,32 @@ describe("errorMessageOf — 배열 값 (이슈 349 FR-7)", () => {
     });
 });
 
-// 이슈 349 2단계 — fallback 을 생략하면 실패 값의 문구다. AdminRequest 가 만든 문구(네트워크 실패 등)도 그대로 보인다.
+// 이슈 349 검토 L-C — fallback 을 생략하면 일반 문구다. 서버가 응답했으면(status > 0) AdminRequest 가 만든 HTTP 상태 문구,
+// 서버에 닿지 못했거나 보일 문구가 없으면 '서버에 연결하지 못했다' 다. 예외 원문(Failed to fetch 등)은 보이지 않는다(검토 H-1).
 describe("errorMessageOf 의 기본 fallback", () => {
     const en = translator("en");
     const ko = translator("ko");
 
-    test("생략하면 실패 값의 문구다", () => {
-        expect(errorMessageOf({message: "Admin network request failed: x", generated: true})).toBe("Admin network request failed: x");
-        expect(errorMessageOf({code: "unknown_code", message: "server says"})).toBe("server says");
-        expect(errorMessageOf({})).toBe("");
+    test("생략하면(status > 0) AdminRequest 가 만든 HTTP 상태 문구다", () => {
+        expect(errorMessageOf({message: "Admin request failed (HTTP 500)", generated: true, status: 500}, undefined, en)).toBe("Admin request failed (HTTP 500)");
+        expect(errorMessageOf({message: "관리 서버의 응답이 올바른 JSON이 아닙니다(HTTP 502).", generated: true, status: 502}, undefined, ko))
+            .toBe("관리 서버의 응답이 올바른 JSON이 아닙니다(HTTP 502).");
+    });
+
+    test("생략하면(status 0) 예외 원문 대신 연결 실패 문구다", () => {
+        expect(errorMessageOf({message: "Admin network request failed: Failed to fetch", generated: true, status: 0}, undefined, en))
+            .toBe(en.t("common.unableToConnect"));
+        expect(errorMessageOf({message: "관리 서버에 연결하지 못했습니다: Failed to fetch", generated: true, status: 0}, undefined, ko))
+            .toBe(ko.t("common.unableToConnect"));
+    });
+
+    test("생략했는데 보일 문구가 없으면 연결 실패 문구다", () => {
+        expect(errorMessageOf({}, undefined, en)).toBe(en.t("common.unableToConnect"));
+        expect(errorMessageOf({code: "unknown_code", message: "", status: 403}, undefined, ko)).toBe(ko.t("common.unableToConnect"));
+    });
+
+    test("생략해도 서버 문구는 그대로 보인다", () => {
+        expect(errorMessageOf({code: "unknown_code", message: "server says"}, undefined, en)).toBe("server says");
     });
 
     test("알려진 code 는 생략해도 번역한다", () => {
@@ -206,14 +211,13 @@ describe("이슈 349 2단계 서버 오류 code", () => {
     });
 });
 
-// 검토 L-3: 같은 문구를 두 키에 두지 않는다. login_failed 는 password_incorrect 의 문구, bootstrap_required 는 login.bootstrapRequired 의 문구를 쓴다.
+// 검토 L-3: 같은 문구를 두 키에 두지 않는다. login_failed 는 password_incorrect 의 문구를 쓴다.
 describe("errorMessageOf — 다른 키의 문구를 쓰는 code", () => {
     const en = translator("en");
     const ko = translator("ko");
 
     test.each([
         ["login_failed", "The password is incorrect.", "비밀번호가 틀렸습니다."],
-        ["bootstrap_required", "Enter the bootstrap token to set the first password.", "첫 비밀번호를 정하려면 부트스트랩 토큰을 입력하세요."],
     ])("%s", (code, english, korean) => {
         expect(errorMessageOf({code, message: "server text"}, "fallback", en)).toBe(english);
         expect(errorMessageOf({code, message: "server text"}, "fallback", ko)).toBe(korean);
@@ -224,9 +228,14 @@ describe("errorMessageOf — 다른 키의 문구를 쓰는 code", () => {
         expect(en.has("serverError.bootstrap_required")).toBe(false);
     });
 
+    // 검토 L-B: bootstrap_required 는 bootstrap_password_weak·bootstrap_rejected 처럼 LoginScreen 이 응답의 플래그로 자기 문구를 고른다.
+    test("bootstrap_required 는 화면이 정하는 code 라 문구 키가 없다", () => {
+        expect(serverErrorKeyOf("bootstrap_required", en)).toBeUndefined();
+        expect(errorMessageOf({code: "bootstrap_required", message: "server text"}, "fallback", ko)).toBe("server text");
+    });
+
     test("serverErrorKeyOf 는 code 가 쓰는 문구 키다", () => {
         expect(serverErrorKeyOf("login_failed", en)).toBe("serverError.password_incorrect");
-        expect(serverErrorKeyOf("bootstrap_required", en)).toBe("login.bootstrapRequired");
         expect(serverErrorKeyOf("port_not_allowed", en)).toBe("serverError.port_not_allowed");
         expect(serverErrorKeyOf("unknown_code", en)).toBeUndefined();
         expect(serverErrorKeyOf("toString", en)).toBeUndefined();
@@ -241,6 +250,8 @@ describe("errorMessageOf — 한국어 문구", () => {
         [{code: "expected_revision_invalid"}, "expectedRevision 값은 1 이상의 정수여야 합니다."],
         [{code: "expected_certificate_revision_invalid"}, "expectedCertificateRevision 값은 1 이상의 정수여야 합니다."],
         [{code: "INVALID_TTL", max: 43200}, "유효 시간(ttlMinutes)은 만료 없음(null)이거나 1~43200분 사이의 정수여야 합니다."],
+        // 검토 L-D: '시간이 지났다' 는 남은 시간이 끝났다는 뜻으로 읽힌다. 요청이 제한 시간 안에 끝나지 않았다고 쓴다.
+        [{code: "request_timeout"}, "요청이 제한 시간 안에 끝나지 않았습니다."],
     ] as Array<[Record<string, unknown>, string]>)("%j", (result, korean) => {
         expect(errorMessageOf({...result, message: "server text"}, "fallback", ko)).toBe(korean);
     });

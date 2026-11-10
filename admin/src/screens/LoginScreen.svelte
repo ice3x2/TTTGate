@@ -67,7 +67,7 @@
             if(result.code === 'mfa_ticket_invalid') startOver(errorMessageOf(result));
             else if(result.status === 429) message = t('login.tooManyCodeAttempts');
             else if(result.status === 422) message = t('login.enterCode');
-            else message = errorMessageOf(result) || t('common.unableToConnect');
+            else message = errorMessageOf(result);
         } catch {
             message = t('common.unableToConnect');
         } finally {
@@ -97,7 +97,7 @@
 
     /** 패스키 로그인이 실패한 이유. 코드별 문구는 이슈 349 의 errorMessageOf 가 고른다. 시도 횟수 제한(429)은 상태 코드로 본다. */
     const passkeyFailureOf = (result: LoginResult): string =>
-        result.status === 429 ? t('login.tooManyAttempts') : errorMessageOf(result, t('common.unableToConnect'));
+        result.status === 429 ? t('login.tooManyAttempts') : errorMessageOf(result);
 
     // 이슈 345: 로그인이 끝났다. 화면이 사라지기 전에 자동 완성 요청을 다시 걸지 않는다.
     let signedIn = $state(false);
@@ -275,7 +275,7 @@
             } else if(result.bootstrapRequired) {
                 message = t(bootstrapToken ? 'login.bootstrapFailed' : 'login.bootstrapRequired');
             } else {
-                message = errorMessageOf(result) || t('serverError.password_incorrect');
+                message = errorMessageOf(result, t('serverError.password_incorrect'));
             }
         } catch {
             message = t('common.unableToConnect');

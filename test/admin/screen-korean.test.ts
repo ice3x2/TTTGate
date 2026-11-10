@@ -51,8 +51,20 @@ const englishLeft = (text: string): string[] => {
 const expectKorean = async (page: Page, where: string): Promise<void> => {
     const names = await page.evaluate((dataRegions) => {
         const shown = (element: Element) => element.getClientRects().length > 0 && getComputedStyle(element).visibility !== "hidden";
-        const textOf = (element: HTMLElement) => [...element.querySelectorAll<HTMLElement>(dataRegions)]
-            .reduce((text, data) => data.innerText === "" ? text : text.split(data.innerText).join(" "), element.innerText ?? "");
+        // 데이터 영역 안의 글자 노드를 건너뛰고 보이는 글자 노드만 모은다. 데이터 영역의 글자를 전체 글자에서 문자열로 지우면,
+        // 한 영역의 글자("tunnel_activated")가 다른 영역의 글자("tunnel_activated summary") 안에 있을 때 먼저 지워져 뒤의 영역이 지워지지 않는다.
+        // 복제본은 화면에 그려지지 않아 innerText 가 숨은 글자까지 돌려주므로, 원래 요소의 글자 노드를 직접 걷는다.
+        const textOf = (element: HTMLElement) => {
+            const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+            const parts: string[] = [];
+            for(let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+                const parent = node.parentElement;
+                const region = parent?.closest(dataRegions);
+                if(parent === null || (region != null && element.contains(region)) || !shown(parent)) continue;
+                parts.push(node.textContent ?? "");
+            }
+            return parts.join(" ");
+        };
         return [...document.querySelectorAll<HTMLElement>("header h1, h2, h3, legend, button, [role=button]")].filter(shown)
             .filter((element) => !element.matches(dataRegions))
             .map((element) => (element.getAttribute("aria-label") ?? textOf(element)).trim())

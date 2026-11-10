@@ -282,7 +282,7 @@ export const ko: Messages = {
     'serverError.TRUSTED_CLIENTS_READ_ONLY': '신뢰 클라이언트는 서버 설정으로 바꿀 수 없습니다. /api/trustedClients를 쓰세요.',
     'serverError.internal_error': '서버 내부 오류가 났습니다.',
     'serverError.payload_too_large': '요청 본문이 너무 큽니다.',
-    'serverError.request_timeout': '요청 시간이 지났습니다.',
+    'serverError.request_timeout': '요청이 제한 시간 안에 끝나지 않았습니다.',
     'serverError.invalid_json': '요청 본문이 올바른 JSON이 아닙니다.',
     'serverError.credential_invalid': 'password와 passwordHash 가운데 하나만 넣어야 합니다.',
     'serverError.password_too_long': '비밀번호는 {max}자 이하여야 합니다.',
