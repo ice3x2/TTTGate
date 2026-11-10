@@ -1,11 +1,9 @@
-import {i18n, type Translator} from './index';
+import {i18n, PLACEHOLDER, type Translator} from './index';
 import {serverMessageOf} from '../controller/AdminRequest';
 
 // 이슈 349 FR-7 — 서버 실패 응답을 화면 문구로 바꾸는 하나의 함수. 코드별 문구는 리소스의 serverError.<code> 다.
 
 type FailureLike = {code?: unknown; message?: string; generated?: boolean; [field: string]: unknown};
-
-const PLACEHOLDER = /\{(\w+)\}/g;
 
 /** 응답의 값 필드 가운데 문구에 끼울 수 있는 것(문자열·숫자). */
 const valuesOf = (result: FailureLike): Record<string, string | number> => {

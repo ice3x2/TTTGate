@@ -5,6 +5,9 @@ import {i18n, type Translator} from '../../i18n';
 // 같은 함수가 두 벌 있던 것을 한 곳으로 모았다.
 // 이슈 349 FR-6: 숫자는 Intl 로, 시간 단위는 리소스로 적는다. 크기 단위 기호는 어느 언어든 같다. tr 을 생략하면 앱의 언어다.
 
+/** 소수를 버린 정수를 그 언어로 적는다. */
+export const wholeNumber = (value: number, tr: Translator = i18n()): string => tr.number(Math.floor(value), 0);
+
 export const byteToUnit = (length: number, hideUnit = false, tr: Translator = i18n()): string => {
     const tib = 1024 * 1024 * 1024 * 1024;
     const gib = 1024 * 1024 * 1024;
@@ -36,19 +39,18 @@ export const timeToDMH = (ms: number, tr: Translator = i18n()): string => {
 // 경과 시간의 0 하한만 원본과 다르다. uptime 은 서버 시각인데 빼는 쪽은 클라이언트 시계라서,
 // 클라이언트 시계가 서버보다 늦으면 원본은 "-5s" 같은 음수를 찍었다.
 export const startupTime = (uptime: number, tr: Translator = i18n()): string => {
-    const whole = (value: number) => tr.number(Math.floor(value), 0);
     if(!uptime) {
-        return tr.t('time.uptimeSeconds', {seconds: whole(0)});
+        return tr.t('time.uptimeSeconds', {seconds: wholeNumber(0, tr)});
     }
     const time = Math.max(0, Date.now() - uptime);
     if(time > 1000 * 60 * 60 * 24) {
-        return tr.t('time.uptimeDays', {days: whole(time / (1000 * 60 * 60 * 24)), hours: whole((time % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))});
+        return tr.t('time.uptimeDays', {days: wholeNumber(time / (1000 * 60 * 60 * 24), tr), hours: wholeNumber((time % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60), tr)});
     } else if(time > 1000 * 60 * 60) {
-        return tr.t('time.uptimeHours', {hours: whole(time / (1000 * 60 * 60)), minutes: whole((time % (1000 * 60 * 60)) / (1000 * 60))});
+        return tr.t('time.uptimeHours', {hours: wholeNumber(time / (1000 * 60 * 60), tr), minutes: wholeNumber((time % (1000 * 60 * 60)) / (1000 * 60), tr)});
     } else if(time > 1000 * 60) {
-        return tr.t('time.uptimeMinutes', {minutes: whole(time / (1000 * 60))});
+        return tr.t('time.uptimeMinutes', {minutes: wholeNumber(time / (1000 * 60), tr)});
     } else {
-        return tr.t('time.uptimeSeconds', {seconds: whole(time / 1000)});
+        return tr.t('time.uptimeSeconds', {seconds: wholeNumber(time / 1000, tr)});
     }
 };
 

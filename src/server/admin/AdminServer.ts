@@ -30,7 +30,7 @@ import {moveBlocklistPort, withPortAlias} from "../security/IpBlocklist";
 import {rateLimitBucketOf} from "../security/ConnectionRateLimiter";
 import {normalizeConnectionSecurity} from "../security/connectionSecurity";
 import {listCountries} from "../security/countries";
-import {ApiFailure, auditEventOf, AuditRouteMeta, buildAdminRoutes, decodedPathSegment, errorLabelOf, isTunnelActivationRequested, parseActiveTimeout, parsePathId, parsePathPort, Route, RouteContext} from "./routes";
+import {ApiFailure, auditEventOf, AuditRouteMeta, buildAdminRoutes, decodedPathSegment, errorLabelOf, failWith, isTunnelActivationRequested, parseActiveTimeout, parsePathId, parsePathPort, Route, RouteContext} from "./routes";
 import {createLoginFailureAuditor} from "./loginFailureAudit";
 import {bodyRejectionEvent, isBodyRejectionAuditable} from "./bodyRejectionAudit";
 import {truncateAuditValue} from "./auditValue";
@@ -880,7 +880,7 @@ class AdminServer {
                 ...tunnelingOption} = payload;
             const admission = admitTunnelWrite(ctx.principal!, tunnelingOption, {certInfo, previousForwardPort, requesterIp: requesterIpOf(ctx.ip)});
             if(!admission.success) {
-                this.sendApiFailure(res, admission.status, {code: admission.code, message: admission.message});
+                failWith(ctx, admission);
                 return;
             }
             tunnelingOption.ownerId = admission.ownerId;
@@ -1093,7 +1093,7 @@ class AdminServer {
             }
             const resolved = resolveOwnerId(ctx.body?.ownerId);
             if(!resolved.success) {
-                this.sendApiFailure(res, resolved.status, {code: resolved.code, message: resolved.message});
+                failWith(ctx, resolved);
                 return;
             }
             const from = AuthorizationContext.ownerIdOf(option);
@@ -1256,7 +1256,7 @@ class AdminServer {
         }
         const newPassword = validatePassword(ctx.body?.['newPassword']);
         if(!newPassword.success) {
-            this.sendApiFailure(res, newPassword.status, {code: newPassword.code, message: newPassword.message});
+            failWith(ctx, newPassword);
             return;
         }
         const currentPassword = typeof ctx.body?.['currentPassword'] == 'string' ? ctx.body['currentPassword'] : '';
@@ -1269,7 +1269,7 @@ class AdminServer {
         }
         const updated = await store.setPassword(principal.userId, newPassword.value, {clearMustChange: true});
         if(!updated.success) {
-            this.sendApiFailure(res, updated.status, {code: updated.code, message: updated.message});
+            failWith(ctx, updated);
             return;
         }
         SessionStore.instance.removeSessionsOfUser(principal.userId, {except: ctx.session!.key});
@@ -1286,7 +1286,7 @@ class AdminServer {
         }
         const updated = IdentityStore.instance.updateUser(principal.userId, {migrationAcknowledged: true});
         if(!updated.success) {
-            this.sendApiFailure(res, updated.status, {code: updated.code, message: updated.message});
+            failWith(ctx, updated);
             return;
         }
         this.sendApiSuccess(res);

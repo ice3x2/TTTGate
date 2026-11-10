@@ -1,14 +1,14 @@
-import type {Role, UserStatus} from "./IdentityTypes";
+import type {Failure, Role, UserStatus} from "./IdentityTypes";
 
 // 이슈 347 — 터널 공유 목록의 읽기·검증 규칙. 저장소를 모르는 순수 함수만 둔다.
 
 /** 한 터널을 공유할 수 있는 사용자 수의 상한(FR-5). 화면의 admin/src/screens/parts/shareUsers.ts 가 같은 값을 쓴다. */
 export const MAX_SHARED_USERS = 50;
 
-export type SharingFailure = {success: false; status: 422; code: string; message: string};
+export type SharingFailure = Failure<422>;
 export type SharingResult = {success: true; ids: string[]} | SharingFailure;
 
-const invalid = (code: string, message: string): SharingFailure => ({success: false, status: 422, code, message});
+const invalid = (code: string, message: string, values?: Record<string, unknown>): SharingFailure => ({success: false, status: 422, code, message, values});
 
 /** 저장된 공유 목록. 옛 설정에는 없으므로 빈 목록으로 읽고, 손으로 고친 파일의 문자열 아닌 항목은 버린다. */
 export function sharedUserIdsOf(option: {sharedUserIds?: unknown}): string[] {
@@ -39,7 +39,7 @@ export function resolveSharedUserIds(requested: unknown,
     const ids = normalizeSharedUserIds(source, context.ownerId)
         .filter((id) => !context.stored.includes(id) || context.userOf(id) !== undefined);
     if(ids.length > MAX_SHARED_USERS) {
-        return invalid('shared_users_too_many', `a tunnel can be shared with at most ${MAX_SHARED_USERS} users`);
+        return invalid('shared_users_too_many', `a tunnel can be shared with at most ${MAX_SHARED_USERS} users`, {max: MAX_SHARED_USERS});
     }
     const rejected = ids.find((id) => {
         if(context.stored.includes(id)) return false;
@@ -48,7 +48,7 @@ export function resolveSharedUserIds(requested: unknown,
     });
     if(rejected !== undefined) {
         // 존재·역할·상태를 구별하지 않고 같은 코드로 답한다(어느 id 가 슈퍼유저인지 드러내지 않는다).
-        return invalid('shared_user_not_found', `shared user not found: ${rejected}`);
+        return invalid('shared_user_not_found', `shared user not found: ${rejected}`, {userId: rejected});
     }
     return {success: true, ids};
 }

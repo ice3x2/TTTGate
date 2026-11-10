@@ -1,7 +1,7 @@
 import SessionStore, {Session} from "./SessionStore";
 import {mfaPolicyOptions} from "./mfaPolicyOptions";
 import {isMfaRequired, removesLastSecondFactor} from "../rbac/MfaPolicy";
-import {auditEventOf, isFieldProvided, RouteContext, RouteHandlers} from "./routes";
+import {auditEventOf, failWith, isFieldProvided, RouteContext, RouteHandlers} from "./routes";
 import {recordAuditEvent} from "../audit/AuditSink";
 import {AUDIT_EVENT_TYPES} from "../audit/AuditEventTypes";
 import {IdentityStore} from "../rbac/IdentityStore";
@@ -45,7 +45,7 @@ type GroupView = Group & {memberCount: number};
  */
 function replyResult<T>(ctx: RouteContext, result: Result<T>, onSuccess: (value: T) => object, successStatus: number = 200): void {
     if(!result.success) {
-        ctx.fail(result.status, result.code, result.message);
+        failWith(ctx, result);
         return;
     }
     ctx.ok(onSuccess(result.value), successStatus);
@@ -121,7 +121,7 @@ const onCreateUser = async (ctx: RouteContext): Promise<void> => {
         mustChangePassword: true
     });
     if(!created.success) {
-        ctx.fail(created.status, created.code, created.message);
+        failWith(ctx, created);
         return;
     }
     ctx.auditDetail({userId: created.value.id});
@@ -146,7 +146,7 @@ const onUpdateUser = async (ctx: RouteContext): Promise<void> => {
     if(isFieldProvided(body, 'displayName')) {
         const displayName = validateDisplayName(body.displayName);
         if(!displayName.success) {
-            ctx.fail(displayName.status, displayName.code, displayName.message);
+            failWith(ctx, displayName);
             return;
         }
         patch.displayName = displayName.value;
@@ -197,7 +197,7 @@ const onDeleteUser = async (ctx: RouteContext): Promise<void> => {
 const onLookupUsers = async (ctx: RouteContext): Promise<void> => {
     const parsed = parseLookupQuery(new URL(ctx.req.url ?? '/', 'http://localhost').searchParams.get('q'));
     if(!parsed.success) {
-        ctx.fail(parsed.status, parsed.code, parsed.message);
+        failWith(ctx, parsed);
         return;
     }
     ctx.ok({users: lookupUsers(IdentityStore.instance.users(), parsed.query, ctx.principal!)});
@@ -218,7 +218,7 @@ const onResetUserPassword = async (ctx: RouteContext): Promise<void> => {
     // 해시와 mustChangePassword(#145), 그리고 2단계 수단 삭제를 한 번에 저장한다.
     const updated = await store.setPassword(ctx.params.id, temporary.password, {requireChange: true, clearSecondFactors: resetSecondFactors});
     if(!updated.success) {
-        ctx.fail(updated.status, updated.code, updated.message);
+        failWith(ctx, updated);
         return;
     }
     // 발급받은 사람이 새 비밀번호로 다시 들어오도록 기존 세션을 모두 끊는다.
@@ -276,7 +276,7 @@ const onUpdateGroup = async (ctx: RouteContext): Promise<void> => {
     const expectedRevision = typeof ctx.body?.expectedRevision === 'number' ? ctx.body.expectedRevision : undefined;
     const updated = store.updateGroup(ctx.params.id, patch, expectedRevision);
     if(!updated.success) {
-        ctx.fail(updated.status, updated.code, updated.message);
+        failWith(ctx, updated);
         return;
     }
     if(before && isFieldProvided(ctx.body, 'attributes')) {
@@ -519,7 +519,7 @@ const onResetUserMfa = async (ctx: RouteContext): Promise<void> => {
     }
     const cleared = store.clearMfa(ctx.params.id);
     if(!cleared.success) {
-        ctx.fail(cleared.status, cleared.code, cleared.message);
+        failWith(ctx, cleared);
         return;
     }
     SessionStore.instance.removeSessionsOfUser(ctx.params.id);

@@ -33,6 +33,20 @@ describe("tunnelTitle", () => {
     });
 });
 
+describe("formatEnds — 시각 형식", () => {
+    test("같은 언어의 Intl.DateTimeFormat 을 다시 만들지 않는다", () => {
+        const ko = translator("ko");
+        formatEnds(NOW + 60_000, NOW, ko);
+        const created = jest.spyOn(Intl, "DateTimeFormat");
+        try {
+            expect(formatEnds(NOW + 60_000, NOW, ko)).toBe(formatEnds(NOW + 60_000, NOW, ko));
+            expect(created).not.toHaveBeenCalled();
+        } finally {
+            created.mockRestore();
+        }
+    });
+});
+
 describe("#344 formatRemaining — 남은 시간", () => {
     test.each([
         [0, "0m 00s left"], [-5, "0m 00s left"], [5, "0m 05s left"], [3000, "50m 00s left"], [3599, "59m 59s left"],

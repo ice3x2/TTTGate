@@ -4,6 +4,7 @@ import {Action, Target} from "../rbac/AdminAuthorizer";
 import {Principal} from "../rbac/Principal";
 import ServerOptionStore from "../ServerOptionStore";
 import {AuthorizationContext} from "../rbac/AuthorizationContext";
+import type {Failure} from "../rbac/IdentityTypes";
 import type {AuditEvent, AuditTarget} from "../audit/AuditSink";
 import {AUDIT_EVENT_TYPES, AuditEventType} from "../audit/AuditEventTypes";
 import {ClockRngProvider} from "../../util/ClockRng";
@@ -46,6 +47,14 @@ export type RouteContext = {
     /** #112 (U4-04) MFA 메모리 저장소. AdminServer 가 한 벌을 갖고 요청마다 넘긴다. */
     mfa?: {pending: PendingEnrollmentStore; tickets: MfaTicketStore};
 };
+
+/**
+ * 다른 모듈(IdentityStore·enforce 등)이 만든 실패를 그대로 응답한다. 이슈 349: message 에 끼운 값(values)도 응답 필드로 넘긴다.
+ * 실패 결과를 넘기는 응답은 모두 이 함수를 쓴다.
+ */
+export function failWith(ctx: RouteContext, failure: Pick<Failure, 'status' | 'code' | 'message' | 'values'>): void {
+    ctx.fail(failure.status, failure.code, failure.message, failure.values);
+}
 
 export type RouteAction = Action | 'public' | 'session' | ((ctx: RouteContext) => Action);
 

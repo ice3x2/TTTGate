@@ -1,5 +1,6 @@
 import type {Options, TunnelingStatus} from '../../controller/Options';
 import {i18n, type Translator} from '../../i18n';
+import {wholeNumber} from './units';
 
 // 이슈 338 — 터널 목록 한 줄(REQ-5·REQ-8)과 끄기를 되돌릴 때의 timeout(REQ-15). 화면은 이 결과를 그리기만 한다.
 
@@ -25,6 +26,7 @@ export function tunnelTitle(option: Options): string {
 
 const WARN_SECONDS = 10 * 60;
 const pad2 = (value: number) => String(value).padStart(2, '0');
+const ENDS_TIME: Intl.DateTimeFormatOptions = {hour: '2-digit', minute: '2-digit', hourCycle: 'h23'};
 
 /**
  * #344 남은 시간. 1시간 미만은 분·초, 24시간 미만은 시·분, 그 이상은 일·시다. 0 이하는 0m 00s 다.
@@ -32,17 +34,16 @@ const pad2 = (value: number) => String(value).padStart(2, '0');
  */
 export function formatRemaining(seconds: number, tr: Translator = i18n()): string {
     const left = Math.max(0, Math.floor(seconds));
-    const whole = (value: number) => tr.number(Math.floor(value), 0);
-    if(left < 3600) return tr.t('clock.leftMinutes', {minutes: whole(left / 60), seconds: pad2(left % 60)});
-    if(left < 86_400) return tr.t('clock.leftHours', {hours: whole(left / 3600), minutes: whole((left % 3600) / 60)});
-    return tr.t('clock.leftDays', {days: whole(left / 86_400), hours: whole((left % 86_400) / 3600)});
+    if(left < 3600) return tr.t('clock.leftMinutes', {minutes: wholeNumber(left / 60, tr), seconds: pad2(left % 60)});
+    if(left < 86_400) return tr.t('clock.leftHours', {hours: wholeNumber(left / 3600, tr), minutes: wholeNumber((left % 3600) / 60, tr)});
+    return tr.t('clock.leftDays', {days: wholeNumber(left / 86_400, tr), hours: wholeNumber((left % 86_400) / 3600, tr)});
 }
 
 /** #344 종료 시각. 브라우저 시간대로 보이고, now(서버 시각)와 날짜가 다르면 월·일을 붙인다. 시:분은 Intl 의 24시간 표기다. */
 export function formatEnds(endsAt: number, now: number, tr: Translator = i18n()): string {
     const end = new Date(endsAt);
     const today = new Date(now);
-    const time = new Intl.DateTimeFormat(tr.intl, {hour: '2-digit', minute: '2-digit', hourCycle: 'h23'}).format(end);
+    const time = tr.dateTime(ENDS_TIME).format(end);
     const sameDay = end.getFullYear() === today.getFullYear() && end.getMonth() === today.getMonth() && end.getDate() === today.getDate();
     return sameDay ? tr.t('clock.endsToday', {time})
         : tr.t('clock.endsOtherDay', {month: tr.number(end.getMonth() + 1, 0), day: tr.number(end.getDate(), 0), time});
@@ -80,12 +81,12 @@ const ownerPart = (option: Options, meId: string): RowPart | undefined => {
     return {text: owner.username !== undefined ? `@${owner.username}` : owner.id};
 };
 
-const statePartsOf = (status: TunnelingStatus): RowPart[] => {
+const statePartsOf = (status: TunnelingStatus, tr: Translator = i18n()): RowPart[] => {
     const offline = status.clientConnected === false;
     if(!status.active) return offline ? [{text: 'Off'}, {text: 'client offline'}] : [{text: 'Off'}];
     const parts: RowPart[] = [{text: 'On'}];
     if(offline) parts.push({text: 'client offline', warn: true});
-    if(status.sessions > 0) parts.push({text: i18n().plural('tunnel.connections', status.sessions)});
+    if(status.sessions > 0) parts.push({text: tr.plural('tunnel.connections', status.sessions)});
     return parts;
 };
 

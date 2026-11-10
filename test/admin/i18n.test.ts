@@ -98,6 +98,14 @@ describe("FR-2 ko.ts 와 en.ts 의 키", () => {
         expect(Object.keys(messages).filter((key) => names(messages[key]).join() !== names(other[key]).join())).toEqual([]);
     });
 
+    test("한국어 문구는 자연스러운 표현을 쓴다", () => {
+        expect(ko["serverError.trusted_client_not_allowed"]).toBe("선택한 신뢰 클라이언트 가운데 그룹에 허용되지 않은 것이 있습니다.");
+        expect(ko["serverError.passkey_busy"]).toBe("서버에 요청이 많습니다. 1분 뒤에 다시 시도하세요.");
+        expect(ko["request.csrfNotRestored"]).toBe("CSRF 토큰 쿠키를 다시 받지 못했습니다.");
+    });
+
+    // jest 는 isolatedModules 로 형을 검사하지 않으므로 아래 @ts-expect-error 는 jest 실행에서 확인되지 않는다.
+    // 이 검사는 `npm run typecheck`(tsconfig.test.json)가 강제하고, CI 의 typecheck 작업(code-regression.yml)이 이를 돌린다.
     test("키가 빠지거나 남으면 형 검사에서 실패한다(AC-3)", () => {
         const {["common.unableToConnect"]: _dropped, ...missing} = en;
         // @ts-expect-error 키가 하나 빠진 객체는 Messages 가 아니다.

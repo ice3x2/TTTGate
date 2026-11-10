@@ -17,6 +17,7 @@ import {
     createSystemGroups,
     DEFAULT_GROUP_ATTRIBUTES,
     DEFAULT_GROUP_ID,
+    Failure,
     Group,
     GroupAttributes,
     IdentityFile,
@@ -103,11 +104,11 @@ function groupNameOf(value: unknown): string | undefined {
     return trimmed.length >= 1 && trimmed.length <= 64 ? trimmed : undefined;
 }
 
-function passkeyNotFound(): {success: false; status: 404; code: string; message: string} {
+function passkeyNotFound(): Failure<404> {
     return {success: false, status: 404, code: 'passkey_not_found', message: 'Passkey not found.'};
 }
 
-function saveFailedResult(message: string): {success: false; status: 422; code: string; message: string} {
+function saveFailedResult(message: string): Failure<422> {
     return {success: false, status: 422, code: 'identity_save_failed', message};
 }
 
@@ -291,7 +292,7 @@ class IdentityStore {
         }
         const username = usernameResult.value;
         if(this._data.users.some((u) => u.username === username)) {
-            return {success: false, status: 409, code: 'username_taken', message: `username already taken: ${username}`};
+            return {success: false, status: 409, code: 'username_taken', message: `username already taken: ${username}`, values: {username}};
         }
 
         // 수정 경로와 같은 규칙으로 검증한다(#144). 없으면 username 을 쓴다.
@@ -318,7 +319,7 @@ class IdentityStore {
             }
             const group = this._data.groups.find((g) => g.id === requestedGroupId);
             if(!group) {
-                return {success: false, status: 422, code: 'group_not_found', message: `group not found: ${requestedGroupId}`};
+                return {success: false, status: 422, code: 'group_not_found', message: `group not found: ${requestedGroupId}`, values: {groupId: requestedGroupId}};
             }
             groupId = requestedGroupId;
         }
@@ -331,7 +332,7 @@ class IdentityStore {
             }
             passwordHash = await bcrypt.hash(passwordResult.value, IdentityStore.bcryptCost);
             if(this._data.users.some((u) => u.username === username)) {
-                return {success: false, status: 409, code: 'username_taken', message: `username already taken: ${username}`};
+                return {success: false, status: 409, code: 'username_taken', message: `username already taken: ${username}`, values: {username}};
             }
         } else {
             passwordHash = (input as {passwordHash: string}).passwordHash;
@@ -363,7 +364,7 @@ class IdentityStore {
     public updateUser(id: string, patch: {displayName?: string; role?: Role; status?: UserStatus; groupId?: string; mustChangePassword?: boolean; migrationAcknowledged?: boolean}): Result<User> {
         const index = this._data.users.findIndex((u) => u.id === id);
         if(index < 0) {
-            return {success: false, status: 404, code: 'user_not_found', message: `user not found: ${id}`};
+            return {success: false, status: 404, code: 'user_not_found', message: `user not found: ${id}`, values: {userId: id}};
         }
         const current = this._data.users[index];
         const effectiveRole = patch.role ?? current.role;
@@ -468,7 +469,8 @@ class IdentityStore {
             return {success: false, status: 409, code: 'passkey_already_registered', message: 'This passkey is already registered.'};
         }
         return this.replacePasskeys(id, (current) => current.length >= PASSKEY_LIMIT
-            ? {success: false, status: 409, code: 'passkey_limit', message: `You can register up to ${PASSKEY_LIMIT} passkeys.`}
+            ? {success: false, status: 409, code: 'passkey_limit', message: `You can register up to ${PASSKEY_LIMIT} passkeys.`,
+                values: {limit: PASSKEY_LIMIT}}
             : {success: true, value: {next: [...current, clonePasskey(passkey)], result: undefined}});
     }
 
@@ -507,7 +509,7 @@ class IdentityStore {
     private replacePasskeys<T>(id: string, change: (current: Passkey[]) => Result<{next: Passkey[]; result: T}>): Result<T> {
         const index = this._data.users.findIndex((u) => u.id === id);
         if(index < 0) {
-            return {success: false, status: 404, code: 'user_not_found', message: `user not found: ${id}`};
+            return {success: false, status: 404, code: 'user_not_found', message: `user not found: ${id}`, values: {userId: id}};
         }
         const current = this._data.users[index];
         const changed = change(current.passkeys ?? []);
@@ -523,7 +525,7 @@ class IdentityStore {
     private replaceMfa(id: string, next: (current: UserMfa | undefined) => UserMfa | undefined, requireMfa: boolean): Result<void> {
         const index = this._data.users.findIndex((u) => u.id === id);
         if(index < 0) {
-            return {success: false, status: 404, code: 'user_not_found', message: `user not found: ${id}`};
+            return {success: false, status: 404, code: 'user_not_found', message: `user not found: ${id}`, values: {userId: id}};
         }
         const current = this._data.users[index];
         if(requireMfa && !current.mfa) {
@@ -541,7 +543,7 @@ class IdentityStore {
     public deleteUser(id: string): Result<void> {
         const user = this._data.users.find((u) => u.id === id);
         if(!user) {
-            return {success: false, status: 404, code: 'user_not_found', message: `user not found: ${id}`};
+            return {success: false, status: 404, code: 'user_not_found', message: `user not found: ${id}`, values: {userId: id}};
         }
         if(user.role === 'superuser' && user.status === 'active' && this.countOtherActiveSuperusers(id) === 0) {
             this.recordLastSuperuserGuardHit(id, 'delete');
@@ -584,7 +586,7 @@ class IdentityStore {
     public updateGroup(id: string, patch: {name?: string; attributes?: Partial<GroupAttributes>}, expectedRevision?: number): Result<Group> {
         const index = this._data.groups.findIndex((g) => g.id === id);
         if(index < 0) {
-            return {success: false, status: 404, code: 'group_not_found', message: `group not found: ${id}`};
+            return {success: false, status: 404, code: 'group_not_found', message: `group not found: ${id}`, values: {groupId: id}};
         }
         if(id === SYSTEM_SUPERUSER_GROUP_ID) {
             return {success: false, status: 422, code: 'system_group_readonly', message: 'the superuser group is read-only'};
@@ -633,10 +635,10 @@ class IdentityStore {
         }
         const group = this._data.groups.find((g) => g.id === id);
         if(!group) {
-            return {success: false, status: 404, code: 'group_not_found', message: `group not found: ${id}`};
+            return {success: false, status: 404, code: 'group_not_found', message: `group not found: ${id}`, values: {groupId: id}};
         }
         if(this.membersOf(id).length > 0) {
-            return {success: false, status: 409, code: 'group_not_empty', message: `group has members: ${id}`};
+            return {success: false, status: 409, code: 'group_not_empty', message: `group has members: ${id}`, values: {groupId: id}};
         }
         const saveResult = this.replaceData({...this._data, groups: this._data.groups.filter((g) => g.id !== id)});
         if(!saveResult.success) {
@@ -667,7 +669,7 @@ class IdentityStore {
                              options: {clearMustChange?: boolean; requireChange?: boolean; clearSecondFactors?: boolean}): Promise<Result<User>> {
         const index = this._data.users.findIndex((u) => u.id === id);
         if(index < 0) {
-            return {success: false, status: 404, code: 'user_not_found', message: `user not found: ${id}`};
+            return {success: false, status: 404, code: 'user_not_found', message: `user not found: ${id}`, values: {userId: id}};
         }
         const passwordResult = validatePassword(password);
         if(!passwordResult.success) {
@@ -677,7 +679,7 @@ class IdentityStore {
 
         const currentIndex = this._data.users.findIndex((u) => u.id === id);
         if(currentIndex < 0) {
-            return {success: false, status: 404, code: 'user_not_found', message: `user not found: ${id}`};
+            return {success: false, status: 404, code: 'user_not_found', message: `user not found: ${id}`, values: {userId: id}};
         }
         const current = this._data.users[currentIndex];
         const {mfa: _mfa, passkeys: _passkeys, ...withoutSecondFactors} = current;

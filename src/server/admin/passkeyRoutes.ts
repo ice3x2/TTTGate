@@ -2,7 +2,7 @@ import {IncomingMessage} from "http";
 import {mfaPolicyOptions} from "./mfaPolicyOptions";
 import {isMfaRequired, removesLastSecondFactor} from "../rbac/MfaPolicy";
 import type * as WebAuthnServer from "@simplewebauthn/server";
-import {RouteContext, RouteHandlers, decodedPathSegment} from "./routes";
+import {RouteContext, RouteHandlers, decodedPathSegment, failWith} from "./routes";
 import {LoginGuard} from "./mfaLoginRoutes";
 import {passwordConfirmed, selfUserOf} from "./rbacRoutes";
 import {IdentityStore} from "../rbac/IdentityStore";
@@ -157,7 +157,7 @@ export function passkeyRouteHandlers(state: PasskeyState, guard: LoginGuard): Ro
         };
         const saved = IdentityStore.instance.addPasskey(user.id, passkey);
         if(!saved.success) {
-            ctx.fail(saved.status, saved.code, saved.message);
+            failWith(ctx, saved);
             return;
         }
         ctx.auditDetail({passkeyId: passkey.id, name});
@@ -184,7 +184,7 @@ export function passkeyRouteHandlers(state: PasskeyState, guard: LoginGuard): Ro
         }
         const removed = IdentityStore.instance.removePasskey(user.id, id);
         if(!removed.success) {
-            ctx.fail(removed.status, removed.code, removed.message);
+            failWith(ctx, removed);
             return;
         }
         ctx.auditDetail({passkeyId: removed.value.id, name: removed.value.name});
@@ -196,7 +196,7 @@ export function passkeyRouteHandlers(state: PasskeyState, guard: LoginGuard): Ro
         const store = IdentityStore.instance;
         const cleared = store.clearPasskeys(ctx.params.id);
         if(!cleared.success) {
-            ctx.fail(cleared.status, cleared.code, cleared.message);
+            failWith(ctx, cleared);
             return;
         }
         SessionStore.instance.removeSessionsOfUser(ctx.params.id);

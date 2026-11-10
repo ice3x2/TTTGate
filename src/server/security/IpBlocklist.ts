@@ -20,7 +20,7 @@ type Parsed<T> = {ok: true} & T | {ok: false; message: string};
 export type AddBlocklistRequest = {address?: unknown; port?: unknown; note?: unknown};
 export type AddBlocklistResult =
     {ok: true; entry: BlocklistEntry; entries: BlocklistEntry[]; widenedFrom?: number} |
-    {ok: false; code: 'invalid' | 'duplicate' | 'full'; message: string};
+    {ok: false; code: 'invalid' | 'duplicate' | 'full'; message: string; values?: Record<string, unknown>};
 
 /**
  * 주소나 CIDR 대역을 정규화한다. IPv4-mapped 주소와 /96 이상의 그 대역은 표기(점·16진수)와 무관하게 IPv4 로,
@@ -69,7 +69,7 @@ export function addBlocklistEntry(entries: readonly BlocklistEntry[], request: A
     if(!address.ok) return {ok: false, code: 'invalid', message: address.message};
     const port = parsePort(request.port);
     if(!port.ok) return {ok: false, code: 'invalid', message: port.message};
-    if(port.port !== null && !context.tunnelPorts.has(port.port)) return {ok: false, code: 'invalid', message: `no tunnel uses port ${port.port}`};
+    if(port.port !== null && !context.tunnelPorts.has(port.port)) return {ok: false, code: 'invalid', message: `no tunnel uses port ${port.port}`, values: {port: port.port}};
     const note = parseNote(request.note);
     if(!note.ok) return {ok: false, code: 'invalid', message: note.message};
     const entry: BlocklistEntry = {address: address.address, port: port.port, note: note.note, createdAt: context.now, createdBy: context.createdBy};
@@ -80,10 +80,10 @@ export function addBlocklistEntry(entries: readonly BlocklistEntry[], request: A
             return {ok: true, entry: widened, entries: entries.map((candidate) => candidate === existing ? widened : candidate), widenedFrom: existing.port};
         }
         const scope = existing.port === null ? 'all tunnels' : `port ${existing.port}`;
-        return {ok: false, code: 'duplicate', message: `${address.address} is already blocked on ${scope}`};
+        return {ok: false, code: 'duplicate', message: `${address.address} is already blocked on ${scope}`, values: {address: address.address, scope}};
     }
     if(entries.length >= MAX_BLOCKLIST_ENTRIES) {
-        return {ok: false, code: 'full', message: `the blocklist already has ${MAX_BLOCKLIST_ENTRIES} entries`};
+        return {ok: false, code: 'full', message: `the blocklist already has ${MAX_BLOCKLIST_ENTRIES} entries`, values: {max: MAX_BLOCKLIST_ENTRIES}};
     }
     return {ok: true, entry, entries: [...entries, entry]};
 }

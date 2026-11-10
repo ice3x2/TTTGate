@@ -14,7 +14,7 @@ describe("parseLookupQuery", () => {
         expect(parseLookupQuery("  bo ")).toEqual({success: true, query: "bo"});
         expect(parseLookupQuery("x".repeat(64))).toEqual({success: true, query: "x".repeat(64)});
         for(const raw of [null, "", " b ", "x".repeat(65)]) {
-            expect({raw, result: parseLookupQuery(raw)}).toMatchObject({raw, result: {success: false, status: 422, code: "query_invalid"}});
+            expect({raw, result: parseLookupQuery(raw)}).toMatchObject({raw, result: {success: false, status: 422, code: "query_invalid", values: {min: 2, max: 64}}});
         }
     });
 });

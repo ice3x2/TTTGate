@@ -37,6 +37,21 @@ describe("relativeTime", () => {
         expect(relativeTime(now - 5 * 60_000, now, translator("en"))).toBe("5 min ago");
     });
 
+    test("formatLocal 은 같은 언어·같은 형식의 Intl.DateTimeFormat 을 다시 만들지 않는다", () => {
+        const at = new Date(2026, 0, 2, 13, 4, 5).getTime();
+        const ko = translator("ko");
+        formatLocal(at, true, ko);
+        formatLocal(at, false, ko);
+        const created = jest.spyOn(Intl, "DateTimeFormat");
+        try {
+            expect(formatLocal(at, true, ko)).toBe("2026-01-02 13:04:05");
+            expect(formatLocal(at, false, ko)).toBe("2026-01-02 13:04");
+            expect(created).not.toHaveBeenCalled();
+        } finally {
+            created.mockRestore();
+        }
+    });
+
     test("formatLocal 은 한국어에서도 YYYY-MM-DD HH:mm(:ss) 다", () => {
         const at = new Date(2026, 0, 2, 13, 4, 5).getTime();
         expect(formatLocal(at, false, translator("ko"))).toBe("2026-01-02 13:04");

@@ -32,7 +32,7 @@ export const ko: Messages = {
     'request.invalidJson': '관리 서버의 응답이 올바른 JSON 이 아닙니다(HTTP {status}).',
     'request.httpFailed': '관리 요청이 실패했습니다(HTTP {status}).',
     'request.crossOrigin': '관리 요청은 같은 출처로만 보낼 수 있습니다.',
-    'request.csrfNotRestored': 'CSRF 토큰 쿠키를 되살리지 못했습니다.',
+    'request.csrfNotRestored': 'CSRF 토큰 쿠키를 다시 받지 못했습니다.',
 
     'time.justNow': '방금',
     'time.minutesAgo': '{count}분 전',
@@ -63,7 +63,7 @@ export const ko: Messages = {
     'serverError.port_not_allowed': '이 포트는 그룹에 허용된 범위 밖에 있습니다.',
     'serverError.protocol_not_allowed': '이 프로토콜은 그룹에 허용되지 않습니다.',
     'serverError.rewrite_not_allowed': 'HTTP 다시 쓰기 옵션은 그룹에 허용되지 않습니다.',
-    'serverError.trusted_client_not_allowed': '고른 신뢰 클라이언트 가운데 그룹에 허용되지 않은 것이 있습니다.',
+    'serverError.trusted_client_not_allowed': '선택한 신뢰 클라이언트 가운데 그룹에 허용되지 않은 것이 있습니다.',
     'serverError.tunnel_count_exceeded': '만들 수 있는 터널 수를 모두 썼습니다.',
     'serverError.buffer_limit_exceeded': '서버 버퍼가 서버의 메모리 캐시 한도보다 큽니다.',
     'serverError.password_incorrect': '비밀번호가 틀렸습니다.',
@@ -74,5 +74,5 @@ export const ko: Messages = {
     'serverError.passkey_invalid': '패스키를 확인하지 못했습니다.',
     'serverError.passkey_origin_unsupported': '패스키는 신뢰할 수 있는 HTTPS 인증서가 있는 도메인 이름이나 localhost 에서만 쓸 수 있습니다. 이 주소에서는 쓸 수 없습니다.',
     'serverError.passkey_unavailable': '먼저 비밀번호로 로그인하세요.',
-    'serverError.passkey_busy': '서버가 바쁩니다. 1분 뒤에 다시 시도하세요.',
+    'serverError.passkey_busy': '서버에 요청이 많습니다. 1분 뒤에 다시 시도하세요.',
 };

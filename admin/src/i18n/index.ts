@@ -23,6 +23,8 @@ export type Translator = {
     has(key: string): key is MessageKey;
     /** 자릿수 구분 없이 소수 maxFractionDigits 자리까지 적은 숫자. */
     number(value: number, maxFractionDigits: number): string;
+    /** 이 언어의 날짜·시각 형식. 같은 options 면 한 번 만든 것을 다시 쓴다. */
+    dateTime(options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat;
 };
 
 const MESSAGES: Record<Locale, Messages> = {en, ko};
@@ -34,15 +36,19 @@ export function detectLocale(languages: readonly string[] | undefined, language?
     return first !== undefined && /^ko(-|$)/i.test(first) ? 'ko' : 'en';
 }
 
+/** 문구의 자리표시자 {name}. 문구를 채우는 fill 과 서버 오류 문구의 값 확인(serverError.ts)이 함께 쓴다. */
+export const PLACEHOLDER = /\{(\w+)\}/g;
+
 const fill = (template: string, params: Params | undefined): string =>
     params === undefined ? template
-        : template.replace(/\{(\w+)\}/g, (whole, name: string) => Object.hasOwn(params, name) ? String(params[name]) : whole);
+        : template.replace(PLACEHOLDER, (whole, name: string) => Object.hasOwn(params, name) ? String(params[name]) : whole);
 
 const create = (locale: Locale): Translator => {
     const messages = MESSAGES[locale];
     const intl = INTL_TAG[locale];
     const plurals = new Intl.PluralRules(intl);
     const numbers = new Map<number, Intl.NumberFormat>();
+    const dateTimes = new Map<string, Intl.DateTimeFormat>();
     const t = (key: MessageKey, params?: Params): string => fill(messages[key], params);
     return {
         locale, intl, t,
@@ -55,6 +61,15 @@ const create = (locale: Locale): Translator => {
                 numbers.set(maxFractionDigits, format);
             }
             return format.format(value);
+        },
+        dateTime: (options) => {
+            const key = JSON.stringify(options);
+            let format = dateTimes.get(key);
+            if(!format) {
+                format = new Intl.DateTimeFormat(intl, options);
+                dateTimes.set(key, format);
+            }
+            return format;
         },
     };
 };
