@@ -38,7 +38,7 @@ describe("AdminRequest 의 오류 문구", () => {
         startI18n({languages: ["ko-KR"]}, {lang: ""});
         expect(await failures()).toEqual([
             "관리 서버에 연결하지 못했습니다: boom",
-            "관리 서버의 응답이 올바른 JSON 이 아닙니다(HTTP 502).",
+            "관리 서버의 응답이 올바른 JSON이 아닙니다(HTTP 502).",
             "관리 요청이 실패했습니다(HTTP 500).",
             "관리 요청은 같은 출처로만 보낼 수 있습니다.",
         ]);

@@ -93,6 +93,9 @@ export const i18n = (): Translator => current;
 /** 앱의 언어로 만든 문구. */
 export const t = (key: MessageKey, params?: Params): string => current.t(key, params);
 
+/** 앱의 언어로 고른 복수형 문구. */
+export const plural = (key: PluralKey, count: number, params?: Params): string => current.plural(key, count, params);
+
 /** FR-3·FR-5: 브라우저 언어로 앱의 언어를 정하고 <html lang> 에 적는다. 앱이 시작할 때 한 번 부른다. */
 export function startI18n(browser: {readonly languages?: readonly string[]; readonly language?: string}, root: {lang: string}): Locale {
     current = TRANSLATORS[detectLocale(browser.languages, browser.language)];

@@ -1,4 +1,5 @@
 import type {Options, TunnelingStatus} from '../../controller/Options';
+import {i18n, type Translator} from '../../i18n';
 
 // 이슈 348 — 터널 목록 줄의 IP 제한 토글과 내 IP 갱신 버튼(FR-16·FR-17·FR-18). 화면은 이 결과를 그리기만 한다.
 // 토글은 터널의 켜짐·꺼짐과 독립이다. 터널이 꺼졌거나 리스너가 없어도 같은 규칙으로 보인다(FR-2a).
@@ -21,9 +22,7 @@ export type IpLimitView = {
     refresh: {enabled: boolean; emphasized: boolean; label: string};
 };
 
-const REFRESH_LABEL = 'Update to my IP';
-
-export function ipLimitView(input: {option: Options; status?: TunnelingStatus; requesterIp: string | null; busy?: boolean}): IpLimitView | undefined {
+export function ipLimitView(input: {option: Options; status?: TunnelingStatus; requesterIp: string | null; busy?: boolean}, tr: Translator = i18n()): IpLimitView | undefined {
     const {option, status, requesterIp, busy = false} = input;
     // 켜기 권한이 없는 줄(자물쇠)에는 없다. 옛 서버 응답에는 toggleable 이 없으므로 editable 을 따른다.
     if((option.toggleable ?? option.editable) === false) return undefined;
@@ -34,17 +33,19 @@ export function ipLimitView(input: {option: Options; status?: TunnelingStatus; r
     // 끄기는 고치기 권한이 필요하다. 켜기 권한만 있으면 켜진 토글은 잠긴 켜짐이다(FR-12).
     const locked = on && !editable;
     // 상태를 아직 못 읽었으면 내 항목을 모르므로 경고·강조하지 않는다.
-    const refresh = {enabled: on && !busy, emphasized: on && status !== undefined && requesterIp !== null && requesterIp !== myIp, label: REFRESH_LABEL};
+    const refresh = {enabled: on && !busy, emphasized: on && status !== undefined && requesterIp !== null && requesterIp !== myIp, label: tr.t('ipLimit.refresh')};
     if(!on) {
-        return {on, text: 'IP limit off', extra: undefined, warn: false, pressable: !busy, locked: false, label: 'IP limit, off', title: 'IP limit, off', refresh};
+        const label = tr.t('ipLimit.offLabel');
+        return {on, text: tr.t('ipLimit.off'), extra: undefined, warn: false, pressable: !busy, locked: false, label, title: label, refresh};
     }
+    const lockedPart = locked ? [tr.t('ipLimit.cannotTurnOff')] : [];
     if(status === undefined) {
-        const label = ['IP limit, on', ...(locked ? ["can't turn off"] : [])].join(', ');
-        return {on, text: 'IP limit on', extra: undefined, warn: false, pressable: !locked && !busy, locked, label, title: label, refresh};
+        const label = [tr.t('ipLimit.onLabel'), ...lockedPart].join(', ');
+        return {on, text: tr.t('ipLimit.on'), extra: undefined, warn: false, pressable: !locked && !busy, locked, label, title: label, refresh};
     }
-    const label = ['IP limit, on', myIp === null ? 'your IP is not allowed' : `allowed IP ${myIp}`,
-        ...(others > 0 ? [`and ${others} more`] : []), ...(locked ? ["can't turn off"] : [])].join(', ');
-    return {on, text: myIp ?? 'My IP not set', extra: others > 0 ? `+${others}` : undefined, warn: myIp === null,
+    const label = [tr.t('ipLimit.onLabel'), myIp === null ? tr.t('ipLimit.myIpNotAllowed') : tr.t('ipLimit.allowedIp', {ip: myIp}),
+        ...(others > 0 ? [tr.t('ipLimit.andMore', {count: others})] : []), ...lockedPart].join(', ');
+    return {on, text: myIp ?? tr.t('ipLimit.myIpNotSet'), extra: others > 0 ? `+${others}` : undefined, warn: myIp === null,
         pressable: !locked && !busy, locked, label, title: label, refresh};
 }
 

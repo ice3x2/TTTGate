@@ -1,4 +1,5 @@
 import type {GroupAttributes, MeResponse, TunnelProtocolName} from '../../controller/Types';
+import {i18n, type Translator} from '../../i18n';
 
 // U3-06: 터널 화면이 그룹 속성을 반영하는 규칙. 순수 모듈이라 .svelte 와 svelte 패키지를 import 하지 않는다
 // (test/admin/tunnelPolicy.test.ts 가 ts-jest 로 직접 부른다). 서버가 최종 판정하므로 여기서는 표시와 기본값만 정한다.
@@ -22,7 +23,8 @@ export type TunnelPolicy = {
     canCreate(ownedCount: number): boolean;
     limitReached(ownedCount: number): boolean;
     maxTunnelCount: number;
-    portHint(): string;
+    /** 포트 칸의 안내. tr 을 생략하면 앱의 언어다. */
+    portHint(tr?: Translator): string;
     initialPort(): number | null;
     isPortAllowed(port: number): boolean;
     protocolOptions(current: 'tcp' | 'http' | 'https'): Array<{value: string; label: string}>;
@@ -57,8 +59,8 @@ function restrictedPolicy(attributes: GroupAttributes): TunnelPolicy {
         canCreate: (ownedCount) => full && max > 0 && ownedCount < max,
         limitReached: (ownedCount) => full && max > 0 && ownedCount >= max,
         maxTunnelCount: max,
-        portHint: () => ranges.length === 0 ? 'No ports are allowed for your group.'
-            : 'Allowed ranges: ' + ranges.map((range) => `${range.from}–${range.to}`).join(', '),
+        portHint: (tr = i18n()) => ranges.length === 0 ? tr.t('tunnel.noPortsAllowed')
+            : tr.t('tunnel.allowedRanges', {ranges: ranges.map((range) => `${range.from}–${range.to}`).join(', ')}),
         initialPort: () => ranges.length === 0 ? null : ranges[0].from,
         isPortAllowed: (port) => ranges.some((range) => port >= range.from && port <= range.to),
         protocolOptions: (current) => {

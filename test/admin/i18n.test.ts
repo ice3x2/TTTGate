@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import {detectLocale, i18n, startI18n, t, translator} from "../../admin/src/i18n";
+import {detectLocale, i18n, plural, startI18n, t, translator} from "../../admin/src/i18n";
 import {en, type Messages} from "../../admin/src/i18n/en";
 import {ko} from "../../admin/src/i18n/ko";
 
@@ -34,6 +34,13 @@ describe("FR-5 startI18n — 앱을 시작할 때 한 번 정하고 <html lang> 
         expect(root.lang).toBe("ko");
         expect(i18n().locale).toBe("ko");
         expect(t("common.unableToConnect")).toBe(ko["common.unableToConnect"]);
+    });
+
+    test("plural 은 앱의 언어로 복수형을 고른다", () => {
+        startI18n({languages: ["ko-KR"]}, {lang: ""});
+        expect(plural("tunnel.connections", 2)).toBe("연결 2개");
+        startI18n({languages: ["en-US"]}, {lang: ""});
+        expect(plural("tunnel.connections", 1)).toBe("1 connection");
     });
 
     test("그 밖의 언어면 lang 이 en 이다", () => {

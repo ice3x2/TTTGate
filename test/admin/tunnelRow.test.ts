@@ -226,3 +226,36 @@ describe("undoTimeoutOf — 끄기를 되돌릴 때의 timeout", () => {
         expect(undoTimeoutOf(status({activeStart: NOW - 10_000, activeTimeout: 10}), NOW)).toBeUndefined();
     });
 });
+
+// 이슈 349 FR-8 — 상태 줄의 문구도 정한 언어로 만든다. 언어는 마지막 인자로 넘긴다.
+describe("이슈 349 한국어 상태 줄", () => {
+    const ko = translator("ko");
+    const koView = (o: Options, s: TunnelingStatus | undefined, loaded = true) => tunnelRowView({option: o, status: s, loaded, meId: ME, serverTime: NOW}, ko);
+    const koText = (o: Options, s: TunnelingStatus | undefined, loaded = true) => koView(o, s, loaded).parts.map((part) => part.text).join(" · ");
+
+    test("상태를 읽기 전, 리스너가 없을 때, 상태가 없을 때", () => {
+        expect(koText(option(), undefined, false)).toBe("확인 중…");
+        expect(koText(option(), status({online: false}))).toBe("2222 포트를 열 수 없음");
+        expect(koText(option(), undefined)).toBe("실행 중이 아님");
+    });
+
+    test("켜짐·꺼짐과 클라이언트 연결, 연결 수", () => {
+        expect(koText(option(), status({active: false, clientConnected: false}))).toBe("꺼짐 · 클라이언트 연결 끊김");
+        expect(koText(option(), status({sessions: 2, clientConnected: false}))).toBe("켜짐 · 클라이언트 연결 끊김 · 연결 2개");
+    });
+
+    test("보기만 가능한 터널", () => {
+        expect(koText(option({editable: false, toggleable: false}), status())).toBe("켜짐 · 보기만 가능");
+        expect(koText(option({editable: false, toggleable: false}), status({online: false}))).toBe("사용할 수 없음 · 보기만 가능");
+    });
+
+    test("옮겨 온 터널의 소유자와 인증서 경고", () => {
+        expect(koText(option({owner: {id: "system:migrated"}}), status())).toBe("켜짐 · 업그레이드 전 터널");
+        const cert = koView(option({tls: true, allowSelfSignedDestinationCert: true}), status());
+        expect(cert.parts.at(-1)).toEqual({text: "인증서 확인 안 함", warn: true, title: "클라이언트가 대상 서버의 인증서를 확인하지 않습니다."});
+    });
+
+    test("켜진 터널의 시계도 같은 언어다", () => {
+        expect(koView(option(), status({activeStart: NOW, activeTimeout: 3000})).clock).toMatchObject({left: "50분 00초 남음"});
+    });
+});

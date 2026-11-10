@@ -85,3 +85,62 @@ describe("errorMessageOf — 배열 값 (이슈 349 FR-7)", () => {
         expect(errorMessageOf(result, "fallback", withTemplate(translator("en")))).toBe("server text");
     });
 });
+
+// 이슈 349 2단계 — fallback 을 생략하면 실패 값의 문구다. AdminRequest 가 만든 문구(네트워크 실패 등)도 그대로 보인다.
+describe("errorMessageOf 의 기본 fallback", () => {
+    const en = translator("en");
+    const ko = translator("ko");
+
+    test("생략하면 실패 값의 문구다", () => {
+        expect(errorMessageOf({message: "Admin network request failed: x", generated: true})).toBe("Admin network request failed: x");
+        expect(errorMessageOf({code: "unknown_code", message: "server says"})).toBe("server says");
+        expect(errorMessageOf({})).toBe("");
+    });
+
+    test("알려진 code 는 생략해도 번역한다", () => {
+        expect(errorMessageOf({code: "login_blocked", message: "Too many login attempts"}, undefined, ko)).toBe("로그인 시도가 너무 많습니다.");
+        expect(errorMessageOf({code: "login_blocked", message: "Too many login attempts"}, undefined, en)).toBe("Too many login attempts");
+    });
+});
+
+// 2단계에서 더한 code 의 영어 문구는 지금 영어 화면에 보이는 문구와 같다(AC-6). 대개 서버 문구이고, 화면이 code 로 따로 고르던
+// 문구(username_taken·last_superuser·user_owns_tunnels·group_not_empty·group_revision_conflict·mfa_enrollment_expired·mfa_required)는 그 문구다.
+// 값이 들어가는 문구는 응답의 값 필드로 같은 문구를 만든다.
+describe("이슈 349 2단계 서버 오류 code", () => {
+    const en = translator("en");
+    const ko = translator("ko");
+
+    test.each([
+        [{code: "invalid_session"}, "Invalid session", "세션이 유효하지 않습니다."],
+        [{code: "login_blocked"}, "Too many login attempts", "로그인 시도가 너무 많습니다."],
+        [{code: "login_concurrency_limit"}, "Too many login attempts", "로그인 시도가 너무 많습니다."],
+        [{code: "csrf_token_missing"}, "Missing CSRF token", "CSRF 토큰이 없습니다."],
+        [{code: "csrf_token_mismatch"}, "CSRF token mismatch", "CSRF 토큰이 맞지 않습니다."],
+        [{code: "forbidden_origin"}, "Forbidden origin", "허용되지 않은 출처입니다."],
+        [{code: "configuration_changed"}, "Configuration changed. Reload before saving.", "설정이 바뀌었습니다. 저장하기 전에 다시 불러오세요."],
+        [{code: "certificate_changed"}, "Certificate changed. Reload before saving.", "인증서가 바뀌었습니다. 저장하기 전에 다시 불러오세요."],
+        [{code: "port_in_use", ports: [8080]}, "Port number 8080 is already in use", "이미 사용 중인 포트입니다: 8080"],
+        [{code: "port_unusable", forwardPort: 70000}, "70000 is an unusable port number.", "쓸 수 없는 포트 번호입니다: 70000"],
+        [{code: "listener_stop_failed", forwardPort: 8080}, "Unable to stop external port(8080) listener.", "외부 포트 8080의 리스너를 멈추지 못했습니다."],
+        [{code: "username_taken", username: "alice"}, "That username is already in use.", "이미 사용 중인 사용자 이름입니다."],
+        [{code: "last_superuser"}, "At least one active superuser must remain.", "활성 슈퍼유저가 적어도 한 명은 있어야 합니다."],
+        [{code: "user_owns_tunnels", ports: [8080]}, "Reassign this user's tunnels first.", "먼저 이 사용자의 터널을 다른 사용자에게 넘기세요."],
+        [{code: "group_not_empty", groupId: "g_1"}, "Move the members to another group first.", "먼저 구성원을 다른 그룹으로 옮기세요."],
+        [{code: "group_revision_conflict"}, "Someone else changed this group. Reload to see the latest values.", "다른 사람이 이 그룹을 바꿨습니다. 다시 불러와 최신 값을 확인하세요."],
+        [{code: "CLIENT_EXISTS", clientId: "edge"}, "trusted client 'edge' already exists", "이미 있는 신뢰 클라이언트입니다: edge"],
+        [{code: "mfa_code_invalid"}, "The code is incorrect.", "코드가 틀렸습니다."],
+        [{code: "mfa_ticket_invalid"}, "The sign-in expired. Start again.", "로그인 시간이 지났습니다. 처음부터 다시 하세요."],
+        [{code: "session_not_found"}, "Session not found", "세션을 찾을 수 없습니다."],
+        [{code: "mfa_enrollment_required"}, "Enable two-factor authentication first.", "먼저 2단계 인증을 켜세요."],
+        [{code: "full", max: 1000}, "the blocklist already has 1000 entries", "차단 목록이 가득 찼습니다(최대 1000개)."],
+    ] as Array<[Record<string, unknown>, string, string]>)("%j", (result, english, korean) => {
+        expect(errorMessageOf({...result, message: "server text"}, "fallback", en)).toBe(english);
+        expect(errorMessageOf({...result, message: "server text"}, "fallback", ko)).toBe(korean);
+    });
+
+    test("여러 문구를 쓰는 code(not_found 등)는 번역하지 않고 서버 문구를 보인다", () => {
+        for(const code of ["not_found", "tunnel_apply_failed", "user_not_found", "group_not_found", "forbidden", "invalid", "duplicate"]) {
+            expect(errorMessageOf({code, message: "server text"}, "fallback", ko)).toBe("server text");
+        }
+    });
+});

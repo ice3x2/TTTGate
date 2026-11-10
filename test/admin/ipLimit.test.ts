@@ -1,5 +1,6 @@
 import type {Options, TunnelingStatus} from "../../admin/src/controller/Options";
 import {ipLimitView, withIpResult} from "../../admin/src/screens/parts/ipLimit";
+import {translator} from "../../admin/src/i18n";
 
 // 이슈 348 FR-16·FR-17·FR-18 — 터널 목록 줄의 IP 제한 토글과 갱신 버튼(순수 함수). 화면은 이 결과를 그리기만 한다.
 
@@ -123,5 +124,29 @@ describe("withIpResult", () => {
         const next = withIpResult({options, statuses: {2222: status(ON_MINE)}}, 2222, {myAllowedIp: "198.51.100.1"});
         expect(next.options).toBe(options);
         expect(next.statuses[2222].myAllowedIp).toBe("198.51.100.1");
+    });
+});
+
+// 이슈 349 FR-8 — IP 제한 토글의 글자와 보조 기술용 이름도 정한 언어로 만든다. 언어는 마지막 인자로 넘긴다.
+describe("이슈 349 한국어 IP 제한", () => {
+    const ko = translator("ko");
+
+    test("꺼져 있을 때", () => {
+        const view = ipLimitView({option: option(), status: status(), requesterIp: null}, ko)!;
+        expect(view).toMatchObject({text: "IP 제한 꺼짐", label: "IP 제한, 꺼짐", title: "IP 제한, 꺼짐"});
+        expect(view.refresh.label).toBe("내 IP로 바꾸기");
+    });
+
+    test("켜져 있을 때의 이름", () => {
+        expect(ipLimitView({option: option(), status: status({...ON_MINE, allowedIpCount: 3}), requesterIp: null}, ko)!.label)
+            .toBe("IP 제한, 켜짐, 허용 IP 203.0.113.5, 그 밖에 2개");
+        const none = ipLimitView({option: option(), status: status({activatorIpOnly: true, myAllowedIp: null, allowedIpCount: 1}), requesterIp: null}, ko)!;
+        expect(none).toMatchObject({text: "내 IP 없음", label: "IP 제한, 켜짐, 내 IP는 허용되지 않음, 그 밖에 1개"});
+        expect(ipLimitView({option: option({editable: false, toggleable: true}), status: status(ON_MINE), requesterIp: null}, ko)!.label)
+            .toBe("IP 제한, 켜짐, 허용 IP 203.0.113.5, 끌 수 없음");
+    });
+
+    test("상태를 읽기 전", () => {
+        expect(ipLimitView({option: option({activatorIpOnly: true}), status: undefined, requesterIp: null}, ko)).toMatchObject({text: "IP 제한 켜짐", label: "IP 제한, 켜짐"});
     });
 });

@@ -16,7 +16,6 @@ export type RowView = {parts: RowPart[]; control: RowControl; checked: boolean; 
 type BaseView = Omit<RowView, 'link'>;
 
 const MIGRATED_OWNER_ID = 'system:migrated';
-const CERT_UNVERIFIED_TITLE = 'The client does not verify the destination server certificate.';
 
 export function tunnelTitle(option: Options): string {
     if(option.name) return option.name;
@@ -74,43 +73,43 @@ export function undoTimeoutOf(status: TunnelingStatus, serverTime: number): numb
     return remainingMs > 0 ? Math.ceil(remainingMs / 1000) : undefined;
 }
 
-const ownerPart = (option: Options, meId: string): RowPart | undefined => {
+const ownerPart = (option: Options, meId: string, tr: Translator): RowPart | undefined => {
     const owner = option.owner;
     if(!owner || owner.id === meId) return undefined;
-    if(owner.id === MIGRATED_OWNER_ID) return {text: 'migrated'};
+    if(owner.id === MIGRATED_OWNER_ID) return {text: tr.t('tunnel.migratedOwner')};
     return {text: owner.username !== undefined ? `@${owner.username}` : owner.id};
 };
 
-const statePartsOf = (status: TunnelingStatus, tr: Translator = i18n()): RowPart[] => {
+const statePartsOf = (status: TunnelingStatus, tr: Translator): RowPart[] => {
     const offline = status.clientConnected === false;
-    if(!status.active) return offline ? [{text: 'Off'}, {text: 'client offline'}] : [{text: 'Off'}];
-    const parts: RowPart[] = [{text: 'On'}];
-    if(offline) parts.push({text: 'client offline', warn: true});
+    if(!status.active) return offline ? [{text: tr.t('tunnel.off')}, {text: tr.t('tunnel.clientOffline')}] : [{text: tr.t('tunnel.off')}];
+    const parts: RowPart[] = [{text: tr.t('tunnel.on')}];
+    if(offline) parts.push({text: tr.t('tunnel.clientOffline'), warn: true});
     if(status.sessions > 0) parts.push({text: tr.plural('tunnel.connections', status.sessions)});
     return parts;
 };
 
-const baseOf = (input: {option: Options; status?: TunnelingStatus; loaded: boolean; serverTime: number}): BaseView => {
+const baseOf = (input: {option: Options; status?: TunnelingStatus; loaded: boolean; serverTime: number}, tr: Translator): BaseView => {
     const {option, status, loaded, serverTime} = input;
-    if(!loaded) return {parts: [{text: 'Checking…', muted: true}], control: 'disabled', checked: false};
+    if(!loaded) return {parts: [{text: tr.t('tunnel.checking'), muted: true}], control: 'disabled', checked: false};
     // 이슈 347: 스위치는 켜기 권한(toggleable)으로 정한다. 옛 서버 응답에는 없으므로 editable 을 따른다.
     if((option.toggleable ?? option.editable) === false) {
-        const parts = status?.online ? [{text: status.active ? 'On' : 'Off'}] : [{text: 'Unavailable'}];
-        return {parts: [...parts, {text: 'view only'}], control: 'lock', checked: status?.online === true && status.active, clock: clockOf(status, serverTime)};
+        const parts = status?.online ? [{text: tr.t(status.active ? 'tunnel.on' : 'tunnel.off')}] : [{text: tr.t('tunnel.unavailable')}];
+        return {parts: [...parts, {text: tr.t('tunnel.viewOnly')}], control: 'lock', checked: status?.online === true && status.active, clock: clockOf(status, serverTime, tr)};
     }
-    if(!status) return {parts: [{text: 'Not running', warn: true}], control: 'disabled', checked: false};
-    if(!status.online) return {parts: [{text: `Can't open port ${option.forwardPort}`, warn: true}], control: 'disabled', checked: false};
-    return {parts: statePartsOf(status), control: 'switch', checked: status.active, clock: clockOf(status, serverTime)};
+    if(!status) return {parts: [{text: tr.t('tunnel.notRunning'), warn: true}], control: 'disabled', checked: false};
+    if(!status.online) return {parts: [{text: tr.t('tunnel.cannotOpenPort', {port: option.forwardPort}), warn: true}], control: 'disabled', checked: false};
+    return {parts: statePartsOf(status, tr), control: 'switch', checked: status.active, clock: clockOf(status, serverTime, tr)};
 };
 
-export function tunnelRowView(input: {option: Options; status?: TunnelingStatus; loaded: boolean; meId: string; serverTime: number}): RowView {
-    const base = {...baseOf(input), link: input.option.editable !== false};
+export function tunnelRowView(input: {option: Options; status?: TunnelingStatus; loaded: boolean; meId: string; serverTime: number}, tr: Translator = i18n()): RowView {
+    const base = {...baseOf(input, tr), link: input.option.editable !== false};
     if(!input.loaded) return base;
     const extra: RowPart[] = [];
-    const owner = ownerPart(input.option, input.meId);
+    const owner = ownerPart(input.option, input.meId, tr);
     if(owner) extra.push(owner);
     if(input.option.tls === true && input.option.allowSelfSignedDestinationCert === true) {
-        extra.push({text: 'cert not verified', warn: true, title: CERT_UNVERIFIED_TITLE});
+        extra.push({text: tr.t('tunnel.certNotVerified'), warn: true, title: tr.t('tunnel.certNotVerifiedTitle')});
     }
     return {...base, parts: [...base.parts, ...extra]};
 }

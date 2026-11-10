@@ -1,3 +1,5 @@
+import {i18n, type Translator} from '../../i18n';
+
 // 이슈 347 FR-10: 터널 편집 화면의 공유 칸(자동 완성) 규칙. 순수 모듈이라 .svelte 를 import 하지 않는다
 // (test/admin/shareUsers.test.ts 가 ts-jest 로 직접 부른다). 서버가 최종 판정하므로 여기서는 입력의 모양만 맞춘다.
 
@@ -44,8 +46,8 @@ export function removeSharedUser(chosen: readonly SharedUser[], id: string): Sha
  * 알림 영역(role=status)의 문구. 영역은 늘 두고 문구만 바꿔 화면 낭독기가 바뀐 문구를 읽게 한다.
  * searched 는 검색 결과를 받아 목록이 열린 상태다.
  */
-export function shareStatusMessage(state: {chosen: readonly SharedUser[]; searched: boolean; candidates: readonly SharedUser[]}): string {
-    if(state.chosen.length >= MAX_SHARED_USERS) return `You can share with up to ${MAX_SHARED_USERS} users.`;
-    if(state.searched && state.candidates.length === 0) return 'No matching users.';
+export function shareStatusMessage(state: {chosen: readonly SharedUser[]; searched: boolean; candidates: readonly SharedUser[]}, tr: Translator = i18n()): string {
+    if(state.chosen.length >= MAX_SHARED_USERS) return tr.t('share.limit', {max: MAX_SHARED_USERS});
+    if(state.searched && state.candidates.length === 0) return tr.t('share.noMatches');
     return '';
 }
