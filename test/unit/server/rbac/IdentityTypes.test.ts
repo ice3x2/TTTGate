@@ -1,6 +1,7 @@
 import {
     createSystemGroups,
     DEFAULT_GROUP_ATTRIBUTES,
+    failure,
     newGroupId,
     newUserId,
     validateGroupAttributes,
@@ -133,5 +134,35 @@ describe("IdentityTypes id generators", () => {
     it("generates ids matching the expected shape", () => {
         expect(newUserId()).toMatch(/^u_[0-9a-f]{16}$/);
         expect(newGroupId()).toMatch(/^g_[0-9a-f]{16}$/);
+    });
+});
+
+describe("IdentityTypes.failure — 실패 결과의 values (이슈 349 FR-7)", () => {
+    it("values 에는 원시 값과 원시 값의 배열만 남긴다", () => {
+        const values = {text: "a", count: 3, flag: true, none: null, list: [1, "b", false, null], object: {a: 1}, nested: [{a: 1}], missing: undefined};
+        expect(failure(409, "x_y", "m", values))
+            .toEqual({success: false, status: 409, code: "x_y", message: "m", values: {text: "a", count: 3, flag: true, none: null, list: [1, "b", false, null]}});
+    });
+
+    it("긴 문자열은 100자로 자른다", () => {
+        const result = failure(422, "x_y", "m", {text: "a".repeat(500), list: ["b".repeat(300)]});
+        expect(result.values).toEqual({text: "a".repeat(100), list: ["b".repeat(100)]});
+    });
+
+    it("자를 때 서로게이트 쌍을 가르지 않는다(코드 포인트 단위)", () => {
+        const result = failure(422, "x_y", "m", {text: "a".repeat(99) + "😀" + "b"});
+        expect(result.values).toEqual({text: "a".repeat(99) + "😀"});
+    });
+
+    it("values 가 없으면 values 도 없다", () => {
+        expect(failure(422, "x_y", "m").values).toBeUndefined();
+    });
+
+    it("검증 실패도 객체 값은 보내지 않고 긴 입력은 잘라 보낸다", () => {
+        const crud = validateGroupAttributes({tunnel_crud: {evil: "x".repeat(1000)}}, DEFAULT_GROUP_ATTRIBUTES);
+        expect(crud).toMatchObject({success: false, code: "attribute_enum_invalid"});
+        expect(!crud.success && crud.values).toEqual({attribute: "tunnel_crud"});
+        const username = validateUsername("A".repeat(500));
+        expect(!username.success && username.values).toEqual({username: "A".repeat(100)});
     });
 });

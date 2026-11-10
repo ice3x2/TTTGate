@@ -1,6 +1,7 @@
 <script lang="ts">
     import {toasts, toast} from './toast';
     import type {Tone} from './tone';
+    import {t} from '../i18n';
 
     const GLYPH: Record<Tone, string> = {pulse: '✓', alarm: '!', warn: '!', trace: 'i', signal: '•', neutral: '•'};
 </script>
@@ -14,7 +15,7 @@
                 {@const action = item.action}
                 <button type="button" class="toast-action" onclick={() => { toast.dismiss(item.id); action.run(); }}>{action.label}</button>
             {/if}
-            <button type="button" class="toast-close" aria-label="Dismiss" onclick={() => toast.dismiss(item.id)}>×</button>
+            <button type="button" class="toast-close" aria-label={t('common.dismiss')} onclick={() => toast.dismiss(item.id)}>×</button>
         </div>
     {/each}
 </div>

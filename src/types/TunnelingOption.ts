@@ -155,8 +155,11 @@ const defaultRateLimit = (protocol: Protocol | undefined): RateLimitOption => {
     return {enabled: true, ...base, customized: false};
 };
 
+/** 설정 값 검증의 실패. values 는 message 에 끼운 값이다(이슈 349 FR-7). 관리 API 가 응답 필드로 넘긴다. */
+export type OptionFailure = {success: false; message: string; values?: Record<string, unknown>};
+
 const normalizeRateLimit = (protocol: Protocol | undefined, input: unknown):
-    {success: true; rateLimit: RateLimitOption} | {success: false; message: string} => {
+    {success: true; rateLimit: RateLimitOption} | OptionFailure => {
     const fallback = defaultRateLimit(protocol);
     if(input === undefined) {
         return {success: true, rateLimit: fallback};
@@ -178,7 +181,7 @@ const normalizeRateLimit = (protocol: Protocol | undefined, input: unknown):
         if(value === undefined) continue;
         const [min, max] = RATE_LIMIT_RANGE[field];
         if(typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) {
-            return {success: false, message: `rateLimit.${field} must be an integer within ${min}..${max}`};
+            return {success: false, message: `rateLimit.${field} must be an integer within ${min}..${max}`, values: {field, min, max}};
         }
         numbers[field] = value;
     }
@@ -206,7 +209,7 @@ const normalizeRateLimit = (protocol: Protocol | undefined, input: unknown):
 type NormalizationClientOptionWarner = (msg: string) => void;
 
 const DEFAULT_SESSION_TTL_MS = 3_600_000;
-const resolveSessionTtlMs = (value: unknown): {success: true; ttlMs: number} | {success: false; message: string} => {
+const resolveSessionTtlMs = (value: unknown): {success: true; ttlMs: number} | OptionFailure => {
     if(value === undefined) return {success: true, ttlMs: DEFAULT_SESSION_TTL_MS};
     if(typeof value !== 'number' || !Number.isFinite(value) || (value !== 0 && (value < 1000 || value > DEFAULT_SESSION_TTL_MS)))
         return {success: false, message: 'sessionTtlMs must be 0 or within 1000..3600000'};
@@ -219,12 +222,12 @@ const AUDIT_RETENTION_DAYS_RANGE = [1, 3650] as const;
 const AUDIT_QUEUE_SIZE_RANGE = [100, 100_000] as const;
 
 /** 0 은 무제한(PRD §12 Q3). 1..3650 은 입력 오류를 걸러내는 범위이지 정책 상한이 아니다. */
-const resolveAuditRetentionDays = (value: unknown): {success: true; days: number} | {success: false; message: string} => {
+const resolveAuditRetentionDays = (value: unknown): {success: true; days: number} | OptionFailure => {
     if(value === undefined) return {success: true, days: DEFAULT_AUDIT_RETENTION_DAYS};
     const [min, max] = AUDIT_RETENTION_DAYS_RANGE;
     const days = value as number;
     if(!Number.isInteger(days) || (days !== 0 && (days < min || days > max)))
-        return {success: false, message: `auditRetentionDays must be 0 or an integer within ${min}..${max}`};
+        return {success: false, message: `auditRetentionDays must be 0 or an integer within ${min}..${max}`, values: {min, max}};
     return {success: true, days};
 };
 
@@ -232,10 +235,11 @@ const DEFAULT_DENIAL_LOG_RETENTION_DAYS = 20;
 const MAX_DENIAL_LOG_RETENTION_DAYS = 3650;
 
 /** #327: 0 이하는 거절 로그를 끈다는 뜻이다. 하한은 없다. 3650 은 입력 오류를 걸러내는 상한이다. */
-const resolveDenialLogRetentionDays = (value: unknown): {success: true; days: number} | {success: false; message: string} => {
+const resolveDenialLogRetentionDays = (value: unknown): {success: true; days: number} | OptionFailure => {
     if(value === undefined) return {success: true, days: DEFAULT_DENIAL_LOG_RETENTION_DAYS};
     if(!Number.isInteger(value) || (value as number) > MAX_DENIAL_LOG_RETENTION_DAYS)
-        return {success: false, message: `denialLogRetentionDays must be an integer of at most ${MAX_DENIAL_LOG_RETENTION_DAYS} (0 or less turns the denial log off)`};
+        return {success: false, message: `denialLogRetentionDays must be an integer of at most ${MAX_DENIAL_LOG_RETENTION_DAYS} (0 or less turns the denial log off)`,
+            values: {max: MAX_DENIAL_LOG_RETENTION_DAYS}};
     return {success: true, days: value as number};
 };
 
@@ -244,9 +248,10 @@ const TUNNEL_NAME_MAX_LENGTH = 40;
 const TUNNEL_NAME_FORBIDDEN = /[\u0000-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069]/;
 
 /** #338: 터널 이름. 앞뒤 공백을 뺀 1~40 코드 포인트다. 값이 없거나 공백뿐이면 이름이 없다(name: undefined). */
-const resolveTunnelName = (value: unknown): {success: true; name: string | undefined} | {success: false; message: string} => {
+const resolveTunnelName = (value: unknown): {success: true; name: string | undefined} | OptionFailure => {
     if(value === undefined) return {success: true, name: undefined};
-    const invalid = {success: false as const, message: `name must be 1 to ${TUNNEL_NAME_MAX_LENGTH} characters without control characters`};
+    const invalid = {success: false as const, message: `name must be 1 to ${TUNNEL_NAME_MAX_LENGTH} characters without control characters`,
+        values: {max: TUNNEL_NAME_MAX_LENGTH}};
     if(typeof value !== 'string') return invalid;
     const trimmed = value.trim();
     if(trimmed.length === 0) return {success: true, name: undefined};
@@ -259,10 +264,10 @@ const LOG_LEVELS: readonly LogLevel[] = ['error', 'warn', 'info', 'debug'];
 const DEFAULT_LOG_LEVEL: LogLevel = 'info';
 
 /** #267: 값이 없는 예전 설정은 info 다. 대소문자를 바꾸거나 별칭을 받지 않는다. */
-const resolveLogLevel = (value: unknown): {success: true; level: LogLevel} | {success: false; message: string} => {
+const resolveLogLevel = (value: unknown): {success: true; level: LogLevel} | OptionFailure => {
     if(value === undefined) return {success: true, level: DEFAULT_LOG_LEVEL};
     if(typeof value !== 'string' || !(LOG_LEVELS as readonly string[]).includes(value))
-        return {success: false, message: `logLevel must be one of ${LOG_LEVELS.join(', ')}`};
+        return {success: false, message: `logLevel must be one of ${LOG_LEVELS.join(', ')}`, values: {levels: LOG_LEVELS}};
     return {success: true, level: value as LogLevel};
 };
 
@@ -271,20 +276,22 @@ const resolveLogLevel = (value: unknown): {success: true; level: LogLevel} | {su
  * http 는 받지 않는다. TLS 관리 서버의 세션 쿠키는 Secure 라서 http 페이지에서는 브라우저가 버리고 로그인이 되풀이된다.
  * 비교하기 쉽게 URL.origin 형태(호스트 소문자, 기본 포트 생략)로 정규화한다. 없으면 빈 목록이다.
  */
-const resolveAdminAllowedOrigins = (value: unknown): {success: true; origins: string[]} | {success: false; message: string} => {
+const resolveAdminAllowedOrigins = (value: unknown): {success: true; origins: string[]} | OptionFailure => {
     if(value === undefined) return {success: true, origins: []};
-    const invalid = (detail: string) => ({success: false as const,
-        message: `adminAllowedOrigins must be a list of https origins like https://admin.example.com (${detail})`});
-    if(!Array.isArray(value)) return invalid('not a list');
+    // 틀린 항목(entry)은 값으로 보낸다. 목록이 아닐 때의 설명(not a list)은 영어 문구라 값으로 보내지 않는다.
+    const invalid = (entry?: string) => entry === undefined
+        ? {success: false as const, message: 'adminAllowedOrigins must be a list of https origins like https://admin.example.com (not a list)'}
+        : {success: false as const, message: `adminAllowedOrigins must be a list of https origins like https://admin.example.com (bad entry: ${entry})`, values: {entry}};
+    if(!Array.isArray(value)) return invalid();
     const origins: string[] = [];
     for(const item of value) {
-        if(typeof item !== 'string' || item.trim().length === 0 || item.includes('*')) return invalid(`bad entry: ${String(item)}`);
+        if(typeof item !== 'string' || item.trim().length === 0 || item.includes('*')) return invalid(String(item));
         const text = item.trim();
         let url: URL;
-        try { url = new URL(text); } catch { return invalid(`bad entry: ${text}`); }
+        try { url = new URL(text); } catch { return invalid(text); }
         if(url.protocol !== 'https:' || url.username || url.password || url.search || url.hash
             || url.pathname !== '/' || !/^https:\/\/[^/?#]+\/?$/i.test(text)) {
-            return invalid(`bad entry: ${text}`);
+            return invalid(text);
         }
         origins.push(url.origin);
     }
@@ -298,21 +305,21 @@ const CLOSE_STALL_MS_RANGE = [1_000, 600_000] as const;
 const CLOSE_GRACE_MS_RANGE = [1_000, 120_000] as const;
 
 const resolveCloseDeadline = (name: string, value: unknown, fallback: number, [min, max]: readonly [number, number]):
-    {success: true; ms: number} | {success: false; message: string} => {
+    {success: true; ms: number} | OptionFailure => {
     if(value === undefined) return {success: true, ms: fallback};
     if(!Number.isInteger(value) || (value as number) < min || (value as number) > max)
-        return {success: false, message: `${name} must be an integer within ${min}..${max}`};
+        return {success: false, message: `${name} must be an integer within ${min}..${max}`, values: {name, min, max}};
     return {success: true, ms: value as number};
 };
 const resolveCloseStallMs = (value: unknown) => resolveCloseDeadline('closeStallMs', value, DEFAULT_CLOSE_STALL_MS, CLOSE_STALL_MS_RANGE);
 const resolveCloseGraceMs = (value: unknown) => resolveCloseDeadline('closeGraceMs', value, DEFAULT_CLOSE_GRACE_MS, CLOSE_GRACE_MS_RANGE);
 
-const resolveAuditQueueSize = (value: unknown): {success: true; size: number} | {success: false; message: string} => {
+const resolveAuditQueueSize = (value: unknown): {success: true; size: number} | OptionFailure => {
     if(value === undefined) return {success: true, size: DEFAULT_AUDIT_QUEUE_SIZE};
     const [min, max] = AUDIT_QUEUE_SIZE_RANGE;
     const size = value as number;
     if(!Number.isInteger(size) || size < min || size > max)
-        return {success: false, message: `auditQueueSize must be an integer within ${min}..${max}`};
+        return {success: false, message: `auditQueueSize must be an integer within ${min}..${max}`, values: {min, max}};
     return {success: true, size};
 };
 

@@ -1,5 +1,6 @@
 import type {Options, TunnelingStatus} from "../../admin/src/controller/Options";
 import {clockOf, formatEnds, formatRemaining, tunnelRowView, tunnelTitle, undoTimeoutOf} from "../../admin/src/screens/parts/tunnelRow";
+import {translator} from "../../admin/src/i18n";
 
 // #338 REQ-5·REQ-8·REQ-15 — 터널 목록 한 줄의 제목·상태 줄·스위치(순수 함수).
 
@@ -29,6 +30,20 @@ describe("tunnelTitle", () => {
     });
     test("목적지 포트가 없으면 뺀다", () => {
         expect(tunnelTitle(option({destinationPort: undefined}))).toBe(":2222 → 10.0.0.5");
+    });
+});
+
+describe("formatEnds — 시각 형식", () => {
+    test("같은 언어의 Intl.DateTimeFormat 을 다시 만들지 않는다", () => {
+        const ko = translator("ko");
+        formatEnds(NOW + 60_000, NOW, ko);
+        const created = jest.spyOn(Intl, "DateTimeFormat");
+        try {
+            expect(formatEnds(NOW + 60_000, NOW, ko)).toBe(formatEnds(NOW + 60_000, NOW, ko));
+            expect(created).not.toHaveBeenCalled();
+        } finally {
+            created.mockRestore();
+        }
     });
 });
 
@@ -88,6 +103,36 @@ describe("#344 clockOf — 켜진 터널의 시계", () => {
     });
     test("26시간 남았고 종료일이 다음 날이면 날짜가 붙는다 (AC-6)", () => {
         expect(clockOf(status({activeStart: NOW, activeTimeout: 26 * 3600}), NOW)).toMatchObject({left: "1d 2h left", ends: "ends 1/16 19:00"});
+    });
+});
+
+// 이슈 349 FR-6 — 이슈 344 AC-7. 언어는 마지막 인자로 넘긴다. 넘기지 않으면 앱이 시작할 때 정한 언어(테스트에서는 영어)다.
+describe("이슈 349 한국어 시계", () => {
+    const ko = translator("ko");
+
+    test.each([
+        [3000, "50분 00초 남음"], [5, "0분 05초 남음"], [2 * 3600 + 13 * 60, "2시간 13분 남음"], [26 * 3600, "1일 2시간 남음"],
+    ])("%i 초 → %s", (seconds, expected) => {
+        expect(formatRemaining(seconds, ko)).toBe(expected);
+    });
+
+    test("종료 시각은 같은 날이면 시:분, 다른 날이면 월·일을 붙인다", () => {
+        expect(formatEnds(NOW + 90 * 60_000, NOW, ko)).toBe("18:30 종료");
+        expect(formatEnds(NOW + 7 * 3600_000, NOW, ko)).toBe("1월 16일 00:00 종료");
+    });
+
+    test("시계 이름", () => {
+        expect(clockOf(status({activeTimeout: 0}), NOW, ko)).toEqual({kind: "unlimited", label: "시간 제한 없음"});
+        expect(clockOf(status({activeStart: NOW - 600_000, activeTimeout: 3600}), NOW, ko)).toMatchObject({
+            left: "50분 00초 남음", ends: "17:50 종료", label: "50분 00초 남음, 17:50 종료"});
+        expect(clockOf(status({activeStart: NOW, activeTimeout: 9 * 60}), NOW, ko)).toMatchObject({label: "곧 종료, 9분 00초 남음, 17:09 종료"});
+    });
+
+    test("영어를 넘겨도 지금과 같다", () => {
+        const en = translator("en");
+        expect(formatRemaining(3000, en)).toBe("50m 00s left");
+        expect(formatEnds(NOW + 26 * 3600_000, NOW, en)).toBe("ends 1/16 19:00");
+        expect(clockOf(status({activeTimeout: 0}), NOW, en)).toEqual({kind: "unlimited", label: "No time limit"});
     });
 });
 
@@ -179,5 +224,38 @@ describe("undoTimeoutOf — 끄기를 되돌릴 때의 timeout", () => {
     });
     test("기한이 지났으면 되돌리지 않는다(undefined)", () => {
         expect(undoTimeoutOf(status({activeStart: NOW - 10_000, activeTimeout: 10}), NOW)).toBeUndefined();
+    });
+});
+
+// 이슈 349 FR-8 — 상태 줄의 문구도 정한 언어로 만든다. 언어는 마지막 인자로 넘긴다.
+describe("이슈 349 한국어 상태 줄", () => {
+    const ko = translator("ko");
+    const koView = (o: Options, s: TunnelingStatus | undefined, loaded = true) => tunnelRowView({option: o, status: s, loaded, meId: ME, serverTime: NOW}, ko);
+    const koText = (o: Options, s: TunnelingStatus | undefined, loaded = true) => koView(o, s, loaded).parts.map((part) => part.text).join(" · ");
+
+    test("상태를 읽기 전, 리스너가 없을 때, 상태가 없을 때", () => {
+        expect(koText(option(), undefined, false)).toBe("확인 중…");
+        expect(koText(option(), status({online: false}))).toBe("2222 포트를 열 수 없음");
+        expect(koText(option(), undefined)).toBe("실행 중이 아님");
+    });
+
+    test("켜짐·꺼짐과 클라이언트 연결, 연결 수", () => {
+        expect(koText(option(), status({active: false, clientConnected: false}))).toBe("꺼짐 · 클라이언트 연결 끊김");
+        expect(koText(option(), status({sessions: 2, clientConnected: false}))).toBe("켜짐 · 클라이언트 연결 끊김 · 연결 2개");
+    });
+
+    test("보기 전용 터널", () => {
+        expect(koText(option({editable: false, toggleable: false}), status())).toBe("켜짐 · 보기 전용");
+        expect(koText(option({editable: false, toggleable: false}), status({online: false}))).toBe("사용할 수 없음 · 보기 전용");
+    });
+
+    test("옮겨 온 터널의 소유자와 인증서 경고", () => {
+        expect(koText(option({owner: {id: "system:migrated"}}), status())).toBe("켜짐 · 업그레이드 전 터널");
+        const cert = koView(option({tls: true, allowSelfSignedDestinationCert: true}), status());
+        expect(cert.parts.at(-1)).toEqual({text: "인증서 확인 안 함", warn: true, title: "클라이언트가 대상 서버의 인증서를 확인하지 않습니다."});
+    });
+
+    test("켜진 터널의 시계도 같은 언어다", () => {
+        expect(koView(option(), status({activeStart: NOW, activeTimeout: 3000})).clock).toMatchObject({left: "50분 00초 남음"});
     });
 });

@@ -2,7 +2,7 @@ import {authorize} from "./AdminAuthorizer";
 import {AuthorizationContext} from "./AuthorizationContext";
 import {enforce} from "./AttributeEnforcer";
 import {IdentityStore} from "./IdentityStore";
-import {MIGRATED_OWNER_ID} from "./IdentityTypes";
+import {Failure, MIGRATED_OWNER_ID} from "./IdentityTypes";
 import {Principal} from "./Principal";
 import ServerOptionStore from "../ServerOptionStore";
 import {TunnelingOption} from "../../types/TunnelingOption";
@@ -19,7 +19,7 @@ export type OwnerView = {id: string; username?: string};
 /** 이슈 347: 공유 목록 칩에 그리는 사용자 표현. */
 export type SharedUserView = {id: string; username: string; displayName: string};
 
-type TunnelDenial = {success: false; status: number; code: string; message: string};
+type TunnelDenial = Failure;
 type OwnerAdmission = {success: true; ownerId: string} | TunnelDenial;
 /**
  * sharedUserIds 는 저장할 공유 목록이다(이슈 347). 본문에 없으면 저장된 목록을 그대로 둔다.
@@ -75,11 +75,11 @@ export function ownerViewOf(port: number): OwnerView {
 }
 
 /** 재할당이 받는 ownerId. 사용자 id 이거나 system:migrated 여야 한다. */
-export function resolveOwnerId(value: unknown): {success: true; ownerId: string} | {success: false; status: 422; code: string; message: string} {
+export function resolveOwnerId(value: unknown): {success: true; ownerId: string} | Failure<422> {
     if(typeof value === 'string' && (value === MIGRATED_OWNER_ID || IdentityStore.instance.user(value) !== undefined)) {
         return {success: true, ownerId: value};
     }
-    return {success: false, status: 422, code: 'owner_not_found', message: `owner not found: ${String(value)}`};
+    return {success: false, status: 422, code: 'owner_not_found', message: `owner not found: ${String(value)}`, values: {ownerId: String(value)}};
 }
 
 const trustedClientIdsOf = (): string[] =>
@@ -180,7 +180,7 @@ function admitOwner(principal: Principal, next: TunnelingOption, certInfo: unkno
             maxServerBufferMiB: ServerOptionStore.instance.serverOption.globalMemCacheLimit,
             currentServerBufferMiB: previousOption?.bufferLimitOnServer});
     if(!result.success) {
-        return denied(result.status, result.code, result.message);
+        return result;
     }
     return {success: true, ownerId: principal.userId};
 }

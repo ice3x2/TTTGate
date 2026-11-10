@@ -67,6 +67,20 @@ describe("ServerOptionStore connectionSecurity normalization", () => {
         expect(reloaded.readServerOption().success).toBe(false);
     });
 
+    it("forwards the values of a failure message through prepareServerOption and prepareServerOptionCommit (issue 349 FR-7)", () => {
+        const store = ServerOptionStore.instance;
+        const geo = {...store.serverOption, connectionSecurity: {geo: {mode: "deny", countries: ["XX"]}}} as any;
+        expect(store.prepareServerOption(geo)).toEqual({
+            success: false, message: "connectionSecurity.geo.countries[0] is not an ISO 3166-1 alpha-2 code: XX", values: {index: 0, country: "XX"}
+        });
+        const logLevel = {...store.serverOption, logLevel: "loud"} as any;
+        expect(store.prepareServerOptionCommit(logLevel)).toEqual({
+            success: false, message: "logLevel must be one of error, warn, info, debug", values: {levels: ["error", "warn", "info", "debug"]}
+        });
+        const queue = {...store.serverOption, auditQueueSize: 1} as any;
+        expect(store.prepareServerOption(queue)).toMatchObject({success: false, values: {min: 100, max: 100_000}});
+    });
+
     it("normalizes connectionSecurity.geo.countries through verificationServerOption", () => {
         const store = ServerOptionStore.instance;
         const candidate = {

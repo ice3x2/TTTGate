@@ -1,4 +1,4 @@
-import {Role, User} from "./IdentityTypes";
+import {Failure, Role, User} from "./IdentityTypes";
 
 // 이슈 347 FR-9 — 터널 공유 칸의 사용자 검색. 저장소를 모르는 순수 함수만 둔다.
 
@@ -11,11 +11,12 @@ const MAX_QUERY_LENGTH = 64;
 /** 검색 결과에 싣는 값. 비밀번호 해시·MFA·패스키·그룹은 싣지 않는다. */
 export type LookupUserView = {id: string; username: string; displayName: string};
 
-export function parseLookupQuery(raw: string | null): {success: true; query: string} | {success: false; status: 422; code: string; message: string} {
+export function parseLookupQuery(raw: string | null): {success: true; query: string} | Failure<422> {
     const query = (raw ?? '').trim();
     const length = Array.from(query).length;
     if(length < MIN_QUERY_LENGTH || length > MAX_QUERY_LENGTH) {
-        return {success: false, status: 422, code: 'query_invalid', message: `q must be ${MIN_QUERY_LENGTH} to ${MAX_QUERY_LENGTH} characters`};
+        return {success: false, status: 422, code: 'query_invalid', message: `q must be ${MIN_QUERY_LENGTH} to ${MAX_QUERY_LENGTH} characters`,
+            values: {min: MIN_QUERY_LENGTH, max: MAX_QUERY_LENGTH}};
     }
     return {success: true, query};
 }

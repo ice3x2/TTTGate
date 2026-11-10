@@ -194,6 +194,12 @@ The console accepts a login or a change only from these pages:
 
 Other addresses get `403 Forbidden origin`. Write an IPv6 address in square brackets, for example `https://[::1]:9300`.
 
+#### Console Language
+
+The console shows its text in Korean or in English. It uses the first language in the language list of the browser (`navigator.languages`). If that list is empty, it uses `navigator.language`. If the language is `ko` or `ko-*` (for example `ko-KR`), the console is in Korean. For all other languages, the console is in English. For example, if the list is `en-US`, `ko-KR`, the console is in English, because `en-US` is first.
+
+To change the language, move the language to the top of the language settings of your browser and reload the page. The console has no language menu. Server logs and the command line stay in English.
+
 #### Open the Console from Another Computer
 
 By default, the console listens only on the server host. Use one of these ways:
@@ -1169,6 +1175,12 @@ net.ipv4.tcp_wmem = 4096 16384 1048576
 - origin 이 `adminAllowedOrigins` 에 있는 페이지
 
 그 밖의 주소에는 `403 Forbidden origin` 으로 답한다. IPv6 주소는 대괄호로 감싸 적는다. 예: `https://[::1]:9300`.
+
+#### 관리 화면 언어
+
+관리 화면은 한국어나 영어로 보인다. 브라우저 언어 목록(`navigator.languages`)의 첫 언어를 따르고, 목록이 비어 있으면 `navigator.language` 를 따른다. 그 언어가 `ko` 나 `ko-*`(예: `ko-KR`)이면 한국어로, 그 밖의 언어면 영어로 보인다. 예를 들어 목록이 `en-US`, `ko-KR` 순서이면 `en-US` 가 첫 언어이므로 영어로 보인다.
+
+언어를 바꾸려면 브라우저 언어 설정에서 원하는 언어를 맨 위로 옮긴 뒤 페이지를 새로 고친다. 관리 화면에는 언어 선택 메뉴가 없다. 서버 로그와 명령줄 출력은 영어 그대로다.
 
 #### 다른 컴퓨터에서 관리 화면 열기
 

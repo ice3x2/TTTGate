@@ -198,6 +198,12 @@ describe("security-blocklist", () => {
         expect(events[events.length - 1].outcome).toBe("failure");
     });
 
+    it("잘못된 긴 주소는 값 필드에 100자까지만 되돌려 보낸다 (이슈 349 FR-7)", async () => {
+        const response = await request("POST", "/api/security/blocklist", {address: "x".repeat(300)}, su);
+        expect(response.status).toBe(422);
+        expect(response.body).toMatchObject({success: false, code: "invalid", address: "x".repeat(100)});
+    });
+
     it("주소가 문자열이 아니면 감사 대상 id 는 invalid 다", async () => {
         const response = await request("POST", "/api/security/blocklist", {}, su);
         expect(response.status).toBe(422);

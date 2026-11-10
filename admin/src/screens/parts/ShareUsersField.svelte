@@ -3,6 +3,7 @@
     import InvalidSession from '../../controller/InvalidSession';
     import UsersCtrl from '../../controller/UsersCtrl';
     import {addSharedUser, candidatesOf, moveActive, removeSharedUser, SHARE_SEARCH_DELAY_MS, shareQueryOf, shareStatusMessage, type SharedUser} from './shareUsers';
+    import {t} from '../../i18n';
 
     // 이슈 347 FR-10: 공유할 사용자를 자동 완성으로 고르는 칸. combobox 패턴(role=combobox, aria-expanded, aria-activedescendant)을 따른다.
     // 위·아래 화살표와 Enter, 마우스로 고르고 Esc 로 닫는다. 고른 사용자는 칩이며 칩의 × 버튼으로 뺀다.
@@ -111,21 +112,21 @@
 
 <div class="share">
     {#if users.length > 0}
-        <ul id="tunnel-share-chips" class="share-chips" aria-label="Shared users">
+        <ul id="tunnel-share-chips" class="share-chips" aria-label={t('share.sharedUsers')}>
             {#each users as user (user.id)}
                 <li class="share-chip" data-user-id={user.id}>
                     <span>{user.displayName}</span><span class="share-chip-name">@{user.username}</span>
-                    <button type="button" class="share-chip-remove" aria-label={`Remove ${user.username}`} onclick={() => remove(user)}>×</button>
+                    <button type="button" class="share-chip-remove" aria-label={t('share.remove', {username: user.username})} onclick={() => remove(user)}>×</button>
                 </li>
             {/each}
         </ul>
     {/if}
     <div class="share-box">
-        <input bind:this={field} id={INPUT_ID} class="share-input" type="text" autocomplete="off" placeholder="Search users by name"
+        <input bind:this={field} id={INPUT_ID} class="share-input" type="text" autocomplete="off" placeholder={t('share.search')}
             role="combobox" aria-autocomplete="list" aria-controls={LIST_ID} aria-expanded={open && candidates.length > 0}
             aria-activedescendant={open && active >= 0 ? optionId(active) : undefined}
             bind:value={input} oninput={onInput} onkeydown={onKeydown} onblur={() => { cancelSearch(); close(); }}>
-        <ul id={LIST_ID} class="share-list" role="listbox" aria-label="Matching users" hidden={!open || candidates.length === 0}>
+        <ul id={LIST_ID} class="share-list" role="listbox" aria-label={t('share.matches')} hidden={!open || candidates.length === 0}>
             {#each candidates as user, index (user.id)}
                 <!-- 누르는 동안 입력 칸의 포커스를 잃지 않게 mousedown 을 막는다(blur 가 목록을 닫는다).
                      키보드 선택은 입력 칸이 aria-activedescendant 로 맡으므로 항목에는 키 처리기를 두지 않는다. -->

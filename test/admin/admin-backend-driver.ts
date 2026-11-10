@@ -14,7 +14,7 @@ import {ADMIN_FIXTURES, ADMIN_TEST_PASSWORD, REGULAR_USER, TEMP_USER} from "../h
 import {IdentityStore} from "../../src/server/rbac/IdentityStore";
 import {DEFAULT_GROUP_ID} from "../../src/server/rbac/IdentityTypes";
 import {serializeIdentityFixture} from "../helpers/identityFixture";
-import {RBAC_IDENTITY_FIXTURE, RBAC_LONG_IPV6, RBAC_PASSWORDS, RBAC_TRUSTED_CLIENTS, RBAC_TUNNELS, RBAC_USER_IDS} from "../helpers/rbacFixture";
+import {RBAC_CONNECTED_CLIENT_NAME, RBAC_IDENTITY_FIXTURE, RBAC_LONG_IPV6, RBAC_PASSWORDS, RBAC_TRUSTED_CLIENTS, RBAC_TUNNELS, RBAC_USER_IDS} from "../helpers/rbacFixture";
 import {ClockRngProvider} from "../../src/util/ClockRng";
 import {generateRecoveryCodes, generateSecret, hashRecoveryCode} from "../../src/server/mfa/Totp";
 import {base32Encode} from "../../src/server/mfa/Base32";
@@ -180,7 +180,7 @@ const stub = {
     clientStatus(...args: unknown[]): Array<ClientStatus> {
         record("clientStatus", args);
         return [{
-            id: 1, name: "client-a", clientId: "client-a", protocolVersion: 2, controlProtocolMode: "legacy",
+            id: 1, name: RBAC_CONNECTED_CLIENT_NAME, clientId: RBAC_CONNECTED_CLIENT_NAME, protocolVersion: 2, controlProtocolMode: "legacy",
             legacy: true, uptime: 65000, address: "127.0.0.1:50000", activeSessionCount: 0
         }];
     },
@@ -188,7 +188,7 @@ const stub = {
         record("getClientSysInfo", [id]);
         if(id !== 1) return undefined;
         return {
-            osInfo: {platform: "linux", release: "6.1", type: "Linux", hostname: "client-a"},
+            osInfo: {platform: "linux", release: "6.1", type: "Linux", hostname: RBAC_CONNECTED_CLIENT_NAME},
             ram: 8589934592,
             cpuInfo: {model: "Fixture CPU", speed: 2400, cores: 4},
             network: {

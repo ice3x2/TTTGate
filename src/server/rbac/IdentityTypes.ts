@@ -115,11 +115,43 @@ export function cloneGroupAttributes(attributes: GroupAttributes): GroupAttribut
     };
 }
 
-export type Result<T> = {success: true; value: T} | {success: false; status: 404 | 409 | 422; code: string; message: string};
-export type ValidationFailure = {success: false; status: 422; code: string; message: string};
+/**
+ * 실패 결과. 이슈 349 FR-7: values 는 message 에 끼운 값이다. 관리 API 가 응답 필드로 넘기고, 화면은 같은 이름의 자리표시자에 끼운다.
+ * message 에 값을 끼우면 values 에도 넣는다(test/unit/server/admin/failure-code.test.ts 가 확인한다).
+ */
+export type Failure<S extends number = number> = {success: false; status: S; code: string; message: string; values?: Record<string, unknown>};
+export type Result<T> = {success: true; value: T} | Failure<404 | 409 | 422>;
+export type ValidationFailure = Failure<422>;
 
-function invalid(code: string, message: string): ValidationFailure {
-    return {success: false, status: 422, code, message};
+/** values 에 넣는 문자열의 최대 길이. 사용자가 보낸 긴 입력을 그대로 되돌려 보내지 않는다. */
+const MAX_FAILURE_VALUE_LENGTH = 100;
+
+type Primitive = string | number | boolean | null;
+
+const isPrimitive = (value: unknown): value is Primitive =>
+    value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
+
+/** 코드 포인트 단위로 자른다. UTF-16 단위로 자르면 서로게이트 쌍이 갈려 화면에 깨진 글자가 남는다. */
+const clipped = (value: Primitive): Primitive =>
+    typeof value === 'string' && value.length > MAX_FAILURE_VALUE_LENGTH ? Array.from(value).slice(0, MAX_FAILURE_VALUE_LENGTH).join('') : value;
+
+/** 원시 값과 원시 값의 배열만 남기고, 문자열은 MAX_FAILURE_VALUE_LENGTH 자로 자른다. 객체처럼 화면이 끼울 수 없는 값은 뺀다. */
+export function failureValues(values: Record<string, unknown>): Record<string, Primitive | Primitive[]> {
+    const kept: Record<string, Primitive | Primitive[]> = {};
+    for(const [name, value] of Object.entries(values)) {
+        if(isPrimitive(value)) kept[name] = clipped(value);
+        else if(Array.isArray(value) && value.every(isPrimitive)) kept[name] = value.map(clipped);
+    }
+    return kept;
+}
+
+/** 실패 결과를 만드는 하나의 함수. rbac 의 다른 모듈도 이것을 쓴다. */
+export function failure<S extends number>(status: S, code: string, message: string, values?: Record<string, unknown>): Failure<S> {
+    return {success: false, status, code, message, values: values === undefined ? undefined : failureValues(values)};
+}
+
+export function invalid(code: string, message: string, values?: Record<string, unknown>): ValidationFailure {
+    return failure(422, code, message, values);
 }
 
 export function validateUsername(value: unknown): {success: true; value: string} | ValidationFailure {
@@ -128,7 +160,7 @@ export function validateUsername(value: unknown): {success: true; value: string}
     }
     const normalized = value.trim().toLowerCase();
     if(normalized.length < 3 || normalized.length > 32 || !/^[a-z0-9._-]+$/.test(normalized)) {
-        return invalid('username_invalid', `username is invalid: ${value}`);
+        return invalid('username_invalid', `username is invalid: ${value}`, {username: value});
     }
     return {success: true, value: normalized};
 }
@@ -139,17 +171,17 @@ export function validateDisplayName(value: unknown): {success: true; value: stri
     }
     const normalized = value.trim();
     if(normalized.length < 1 || normalized.length > 64) {
-        return invalid('display_name_invalid', `displayName is invalid: ${value}`);
+        return invalid('display_name_invalid', `displayName is invalid: ${value}`, {displayName: value});
     }
     return {success: true, value: normalized};
 }
 
 export function validatePassword(value: unknown): {success: true; value: string} | ValidationFailure {
     if(typeof value !== 'string' || value.trim().length < MIN_PASSWORD_LENGTH) {
-        return invalid('password_too_short', `password must be at least ${MIN_PASSWORD_LENGTH} characters`);
+        return invalid('password_too_short', `password must be at least ${MIN_PASSWORD_LENGTH} characters`, {min: MIN_PASSWORD_LENGTH});
     }
     if(value.trim().length > MAX_PASSWORD_LENGTH) {
-        return invalid('password_too_long', `password must be at most ${MAX_PASSWORD_LENGTH} characters`);
+        return invalid('password_too_long', `password must be at most ${MAX_PASSWORD_LENGTH} characters`, {max: MAX_PASSWORD_LENGTH});
     }
     return {success: true, value: value.trim()};
 }
@@ -188,7 +220,7 @@ export function validateGroupAttributes(patch: unknown, base: GroupAttributes): 
     const patchObject = patch as Record<string, unknown>;
     for(const key of Object.keys(patchObject)) {
         if(!GROUP_ATTRIBUTE_KEYS.includes(key)) {
-            return invalid('attributes_unknown_key', `unknown group attribute: ${key}`);
+            return invalid('attributes_unknown_key', `unknown group attribute: ${key}`, {key});
         }
     }
 
@@ -197,14 +229,15 @@ export function validateGroupAttributes(patch: unknown, base: GroupAttributes): 
     if(merged.mfa_required === undefined) merged.mfa_required = false;
 
     if(!TUNNEL_CRUD_VALUES.includes(merged.tunnel_crud as TunnelCrud)) {
-        return invalid('attribute_enum_invalid', `invalid tunnel_crud: ${merged.tunnel_crud}`);
+        return invalid('attribute_enum_invalid', `invalid tunnel_crud: ${merged.tunnel_crud}`, {attribute: 'tunnel_crud', value: merged.tunnel_crud});
     }
     if(!isNonNegativeInt(merged.max_tunnel_count)) {
-        return invalid('attribute_int_invalid', `invalid max_tunnel_count: ${merged.max_tunnel_count}`);
+        return invalid('attribute_int_invalid', `invalid max_tunnel_count: ${merged.max_tunnel_count}`, {attribute: 'max_tunnel_count', value: merged.max_tunnel_count});
     }
     // 상한 10년. 활성화 API 의 타임아웃 상한과 같아, 꺼 둔 터널을 다시 켤 때 화면이 되돌려 보내는 값이 거절되지 않는다(#141).
     if(!isNonNegativeInt(merged.max_tunnel_duration_ms) || merged.max_tunnel_duration_ms > MAX_TUNNEL_DURATION_MS) {
-        return invalid('attribute_int_invalid', `invalid max_tunnel_duration_ms: ${merged.max_tunnel_duration_ms}`);
+        return invalid('attribute_int_invalid', `invalid max_tunnel_duration_ms: ${merged.max_tunnel_duration_ms}`,
+            {attribute: 'max_tunnel_duration_ms', value: merged.max_tunnel_duration_ms});
     }
     if(!Array.isArray(merged.allowed_port_range) || !merged.allowed_port_range.every(isValidPortRange)) {
         return invalid('port_range_invalid', 'invalid allowed_port_range');
@@ -213,7 +246,8 @@ export function validateGroupAttributes(patch: unknown, base: GroupAttributes): 
         return invalid('attribute_enum_invalid', 'invalid allowed_protocols');
     }
     if(!isNonNegativeInt(merged.max_concurrent_connections)) {
-        return invalid('attribute_int_invalid', `invalid max_concurrent_connections: ${merged.max_concurrent_connections}`);
+        return invalid('attribute_int_invalid', `invalid max_concurrent_connections: ${merged.max_concurrent_connections}`,
+            {attribute: 'max_concurrent_connections', value: merged.max_concurrent_connections});
     }
     if(!Array.isArray(merged.allowed_trusted_clients)
         || !merged.allowed_trusted_clients.every((client) => typeof client === 'string' && client.length > 0 && client !== '*')) {
@@ -227,13 +261,13 @@ export function validateGroupAttributes(patch: unknown, base: GroupAttributes): 
         return invalid('attribute_enum_invalid', 'invalid admin_ui_section_access');
     }
     if(!TUNNEL_VISIBILITY_VALUES.includes(merged.tunnel_visibility as TunnelVisibility)) {
-        return invalid('attribute_enum_invalid', `invalid tunnel_visibility: ${merged.tunnel_visibility}`);
+        return invalid('attribute_enum_invalid', `invalid tunnel_visibility: ${merged.tunnel_visibility}`, {attribute: 'tunnel_visibility', value: merged.tunnel_visibility});
     }
     if(!RATE_LIMIT_VALUES.includes(merged.rate_limit as RateLimitPreset)) {
-        return invalid('attribute_enum_invalid', `invalid rate_limit: ${merged.rate_limit}`);
+        return invalid('attribute_enum_invalid', `invalid rate_limit: ${merged.rate_limit}`, {attribute: 'rate_limit', value: merged.rate_limit});
     }
     if(typeof merged.mfa_required !== 'boolean') {
-        return invalid('attribute_bool_invalid', `invalid mfa_required: ${merged.mfa_required}`);
+        return invalid('attribute_bool_invalid', `invalid mfa_required: ${merged.mfa_required}`, {attribute: 'mfa_required', value: merged.mfa_required});
     }
 
     const protocols = merged.allowed_protocols as AllowedProtocol[];

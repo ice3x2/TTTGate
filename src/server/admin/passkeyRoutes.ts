@@ -2,7 +2,7 @@ import {IncomingMessage} from "http";
 import {mfaPolicyOptions} from "./mfaPolicyOptions";
 import {isMfaRequired, removesLastSecondFactor} from "../rbac/MfaPolicy";
 import type * as WebAuthnServer from "@simplewebauthn/server";
-import {RouteContext, RouteHandlers, decodedPathSegment} from "./routes";
+import {RouteContext, RouteHandlers, decodedPathSegment, failWith} from "./routes";
 import {LoginGuard} from "./mfaLoginRoutes";
 import {passwordConfirmed, selfUserOf} from "./rbacRoutes";
 import {IdentityStore} from "../rbac/IdentityStore";
@@ -109,7 +109,7 @@ export function passkeyRouteHandlers(state: PasskeyState, guard: LoginGuard): Ro
         if(!scope || !await passwordConfirmed(ctx, user)) return;
         const owned = user.passkeys ?? [];
         if(owned.length >= PASSKEY_LIMIT) {
-            ctx.fail(409, 'passkey_limit', `You can register up to ${PASSKEY_LIMIT} passkeys.`);
+            ctx.fail(409, 'passkey_limit', `You can register up to ${PASSKEY_LIMIT} passkeys.`, {limit: PASSKEY_LIMIT});
             return;
         }
         const options = await (await webAuthn()).generateRegistrationOptions({
@@ -157,7 +157,7 @@ export function passkeyRouteHandlers(state: PasskeyState, guard: LoginGuard): Ro
         };
         const saved = IdentityStore.instance.addPasskey(user.id, passkey);
         if(!saved.success) {
-            ctx.fail(saved.status, saved.code, saved.message);
+            failWith(ctx, saved);
             return;
         }
         ctx.auditDetail({passkeyId: passkey.id, name});
@@ -184,7 +184,7 @@ export function passkeyRouteHandlers(state: PasskeyState, guard: LoginGuard): Ro
         }
         const removed = IdentityStore.instance.removePasskey(user.id, id);
         if(!removed.success) {
-            ctx.fail(removed.status, removed.code, removed.message);
+            failWith(ctx, removed);
             return;
         }
         ctx.auditDetail({passkeyId: removed.value.id, name: removed.value.name});
@@ -196,7 +196,7 @@ export function passkeyRouteHandlers(state: PasskeyState, guard: LoginGuard): Ro
         const store = IdentityStore.instance;
         const cleared = store.clearPasskeys(ctx.params.id);
         if(!cleared.success) {
-            ctx.fail(cleared.status, cleared.code, cleared.message);
+            failWith(ctx, cleared);
             return;
         }
         SessionStore.instance.removeSessionsOfUser(ctx.params.id);
@@ -229,7 +229,7 @@ export function passkeyRouteHandlers(state: PasskeyState, guard: LoginGuard): Ro
         if(!scope || !loginAvailable(ctx)) return;
         // admitLogin 은 본문을 읽기 전에 차단을 봤다. 본문을 받는 사이 차단되었을 수 있으므로 다시 본다(#265).
         if(guard.isBlocked(req)) {
-            guard.sendFailure(res, 429, {message: 'Too many login attempts'});
+            guard.sendFailure(res, 429, {code: 'login_blocked', message: 'Too many login attempts'});
             return;
         }
         const challengeScope: ChallengeScope = {...scope, ip: ctx.ip};
@@ -279,7 +279,7 @@ export function passkeyRouteHandlers(state: PasskeyState, guard: LoginGuard): Ro
         if(!used.success) {
             // 카운터를 저장하지 못하면 복제 탐지를 보장할 수 없으므로 세션을 주지 않는다. 사용자의 잘못이 아니므로 세지 않는다.
             auditFailure('store');
-            guard.sendFailure(res, 503, {status: 503, message: 'Unable to complete sign-in. Try again.'});
+            guard.sendFailure(res, 503, {code: 'sign_in_unavailable', status: 503, message: 'Unable to complete sign-in. Try again.'});
             return;
         }
         await guard.issueSession(req, res, store.user(user.id)!, {method: 'passkey', passkeyId: passkey.id});

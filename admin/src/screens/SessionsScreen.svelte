@@ -15,6 +15,8 @@
     import {me} from '../me';
     import {useSession} from '../shell/session';
     import {formatLocal, relativeTime} from '../util/relativeTime';
+    import {errorMessageOf} from '../i18n/serverError';
+    import {t} from '../i18n';
 
     // U4-06: #/sessions. 슈퍼유저는 전체 세션을 보고 끊는다. 일반 유저는 본인 세션과 "다른 기기 로그아웃" 만 있다.
     const session = useSession();
@@ -34,7 +36,7 @@
 
     const visible = $derived(superuser && filterUser !== '' ? sessions.filter((entry) => entry.userId === filterUser) : sessions);
     // 필터 선택지는 사용자 목록에서 만든다(세션이 모두 끊겨도 고른 사용자가 선택지에 남는다).
-    let userOptions = $state<Array<{value: string; label: string}>>([{value: '', label: 'All users'}]);
+    let userOptions = $state<Array<{value: string; label: string}>>([{value: '', label: t('filter.allUsers')}]);
     const filterName = $derived(userOptions.find((option) => option.value === filterUser)?.label ?? '');
     const selfSelected = $derived(filterUser !== '' && filterUser === $me?.user.id);
 
@@ -50,11 +52,11 @@
                 loaded = true;
                 // 필터로 고른 사용자의 세션이 모두 사라져도 필터는 유지한다.
             } else if(!quiet) {
-                toast.push({tone: 'alarm', message: result.message});
+                toast.push({tone: 'alarm', message: errorMessageOf(result)});
             }
         } catch(error) {
             if(error instanceof InvalidSession) session.invalidate();
-            else if(!quiet) toast.push({tone: 'alarm', message: 'Unable to connect to the server.'});
+            else if(!quiet) toast.push({tone: 'alarm', message: t('common.unableToConnect')});
         }
     };
 
@@ -64,7 +66,7 @@
             await task();
         } catch(error) {
             if(error instanceof InvalidSession) session.invalidate();
-            else toast.push({tone: 'alarm', message: 'Unable to connect to the server.'});
+            else toast.push({tone: 'alarm', message: t('common.unableToConnect')});
         } finally {
             pending = false;
         }
@@ -83,7 +85,7 @@
             const result = await SessionsCtrl.instance.kill(target.id);
             if(!result.success) {
                 // 이미 끝난 세션이면 목록이 낡았다. 다음 폴링을 기다리지 않고 다시 읽는다.
-                toast.push({tone: 'alarm', message: result.message});
+                toast.push({tone: 'alarm', message: errorMessageOf(result)});
                 await load();
                 return;
             }
@@ -91,7 +93,7 @@
                 session.invalidate();
                 return;
             }
-            toast.push({tone: 'pulse', message: 'Session ended.'});
+            toast.push({tone: 'pulse', message: t('sessions.ended')});
             await load();
         });
     };
@@ -103,14 +105,14 @@
         void run(async () => {
             const result = await SessionsCtrl.instance.killAllForUser(userId);
             if(!result.success) {
-                toast.push({tone: 'alarm', message: result.message});
+                toast.push({tone: 'alarm', message: errorMessageOf(result)});
                 return;
             }
             if(result.self) {
                 session.invalidate();
                 return;
             }
-            toast.push({tone: 'pulse', message: `Ended ${result.removed} session(s).`});
+            toast.push({tone: 'pulse', message: t('sessions.endedCount', {count: result.removed})});
             await load();
         });
     };
@@ -118,10 +120,10 @@
     const logoutOthers = () => run(async () => {
         const result = await MeCtrl.instance.logoutOthers();
         if(!result.success) {
-            toast.push({tone: 'alarm', message: result.message});
+            toast.push({tone: 'alarm', message: errorMessageOf(result)});
             return;
         }
-        toast.push({tone: 'pulse', message: `Signed out ${result.removed} other device(s).`});
+        toast.push({tone: 'pulse', message: t('sessions.signedOutOthers', {count: result.removed})});
         await load();
     });
 
@@ -129,7 +131,7 @@
         if(superuser) {
             void run(async () => {
                 const users = await UsersCtrl.instance.list();
-                if(users.success) userOptions = [{value: '', label: 'All users'}, ...users.users.map((user) => ({value: user.id, label: user.username}))];
+                if(users.success) userOptions = [{value: '', label: t('filter.allUsers')}, ...users.users.map((user) => ({value: user.id, label: user.username}))];
             });
         }
         void load();
@@ -142,17 +144,17 @@
 <div style="display: flex; flex-direction: column; gap: var(--s-4);">
     {#if superuser}
         <div style="display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: flex-end;">
-            <Field label="User" for="sessions-filter-user">
+            <Field label={t('filter.user')} for="sessions-filter-user">
                 <Select id="sessions-filter-user" options={userOptions} bind:value={filterUser} />
             </Field>
-            <span id="sessions-end-all-user"><Button variant="danger" disabled={filterUser === '' || pending} onclick={() => (endAllOpen = true)}>End all for user</Button></span>
+            <span id="sessions-end-all-user"><Button variant="danger" disabled={filterUser === '' || pending} onclick={() => (endAllOpen = true)}>{t('sessions.endAllForUser')}</Button></span>
         </div>
     {:else}
-        <div><span id="sessions-logout-others"><Button disabled={pending} onclick={() => { void logoutOthers(); }}>Sign out other devices</Button></span></div>
+        <div><span id="sessions-logout-others"><Button disabled={pending} onclick={() => { void logoutOthers(); }}>{t('sessions.signOutOthers')}</Button></span></div>
     {/if}
 
     {#if loaded && visible.length === 0}
-        <p id="sessions-empty">No active sessions.</p>
+        <p id="sessions-empty">{t('sessions.empty')}</p>
     {/if}
     <ul id="sessions-list" style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-3);">
         {#each visible as entry (entry.id)}
@@ -162,13 +164,13 @@
                         <div style="min-width: 0; display: flex; flex-direction: column; gap: var(--s-1);">
                             <div style="display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center;">
                                 <span class="session-user">{entry.username}</span>
-                                {#if entry.current}<Chip tone="signal">this device</Chip>{/if}
+                                {#if entry.current}<Chip tone="signal">{t('sessions.thisDevice')}</Chip>{/if}
                             </div>
-                            <div class="mono" style="color: var(--ink-2);">started {formatLocal(entry.createdAt, false)} · last seen {relativeTime(entry.lastSeenAt, now)}</div>
+                            <div class="mono" style="color: var(--ink-2);">{t('sessions.meta', {started: formatLocal(entry.createdAt, false), lastSeen: relativeTime(entry.lastSeenAt, now)})}</div>
                             <div class="mono" style="color: var(--ink-2); overflow-wrap: anywhere;">{entry.ip} · <span title={entry.userAgent}>{shortAgent(entry.userAgent)}</span></div>
                         </div>
                         {#if superuser}
-                            <Button variant="danger" size="sm" class="session-end" disabled={pending} onclick={() => askEnd(entry)}>End</Button>
+                            <Button variant="danger" size="sm" class="session-end" disabled={pending} onclick={() => askEnd(entry)}>{t('sessions.end')}</Button>
                         {/if}
                     </div>
                 </Card>
@@ -177,17 +179,17 @@
     </ul>
 </div>
 
-<Modal bind:open={endOpen} title="End session" class="end-session-modal">
-    {endTarget?.current ? 'End this session? You will be signed out.' : `End this session for ${endTarget?.username ?? ''}?`}
+<Modal bind:open={endOpen} title={t('sessions.endSession')} class="end-session-modal">
+    {endTarget?.current ? t('sessions.endSelfConfirm') : t('sessions.endConfirm', {username: endTarget?.username ?? ''})}
     {#snippet footer()}
-        <Button onclick={() => (endOpen = false)}>Cancel</Button>
-        <span id="confirm-end"><Button variant="danger" onclick={endOne}>End</Button></span>
+        <Button onclick={() => (endOpen = false)}>{t('common.cancel')}</Button>
+        <span id="confirm-end"><Button variant="danger" onclick={endOne}>{t('sessions.end')}</Button></span>
     {/snippet}
 </Modal>
-<Modal bind:open={endAllOpen} title="End all sessions" class="end-all-modal">
-    {selfSelected ? `End all sessions for ${filterName}? You will be signed out.` : `End all sessions for ${filterName}?`}
+<Modal bind:open={endAllOpen} title={t('user.endAllSessions')} class="end-all-modal">
+    {selfSelected ? t('sessions.endAllSelfConfirm', {username: filterName}) : t('user.endAllConfirm', {username: filterName})}
     {#snippet footer()}
-        <Button onclick={() => (endAllOpen = false)}>Cancel</Button>
-        <span id="confirm-end-all"><Button variant="danger" onclick={endAll}>End all</Button></span>
+        <Button onclick={() => (endAllOpen = false)}>{t('common.cancel')}</Button>
+        <span id="confirm-end-all"><Button variant="danger" onclick={endAll}>{t('sessions.endAll')}</Button></span>
     {/snippet}
 </Modal>

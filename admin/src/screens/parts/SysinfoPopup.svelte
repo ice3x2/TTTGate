@@ -3,6 +3,7 @@
     import Button from '../../ui/Button.svelte';
     import Modal from '../../ui/Modal.svelte';
     import {byteToUnit} from './units';
+    import {t} from '../../i18n';
 
     let {
         open = $bindable(false),
@@ -15,42 +16,42 @@
     const interfaces = $derived(sysInfo ? Object.entries(sysInfo.network) : []);
 </script>
 
-<Modal bind:open title="System info">
+<Modal bind:open title={t('sysinfo.title')}>
     {#if sysInfo}
-        <h3>HW Info</h3>
+        <h3>{t('sysinfo.hardware')}</h3>
         <dl>
             <dt>CPU</dt><dd>{sysInfo.cpuInfo.model}</dd>
-            <dt>Clock</dt><dd>{sysInfo.cpuInfo.speed}</dd>
-            <dt>Cores</dt><dd>{sysInfo.cpuInfo.cores}</dd>
+            <dt>{t('sysinfo.clock')}</dt><dd>{sysInfo.cpuInfo.speed}</dd>
+            <dt>{t('sysinfo.cores')}</dt><dd>{sysInfo.cpuInfo.cores}</dd>
             <dt>RAM</dt><dd>{byteToUnit(sysInfo.ram)}</dd>
         </dl>
 
-        <h3>OS Info</h3>
+        <h3>{t('sysinfo.os')}</h3>
         <dl>
-            <dt>Type</dt><dd>{sysInfo.osInfo.type}</dd>
-            <dt>Platform</dt><dd>{sysInfo.osInfo.platform}</dd>
-            <dt>Release</dt><dd>{sysInfo.osInfo.release}</dd>
-            <dt>hostname</dt><dd>{sysInfo.osInfo.hostname}</dd>
+            <dt>{t('sysinfo.type')}</dt><dd>{sysInfo.osInfo.type}</dd>
+            <dt>{t('sysinfo.platform')}</dt><dd>{sysInfo.osInfo.platform}</dd>
+            <dt>{t('sysinfo.release')}</dt><dd>{sysInfo.osInfo.release}</dd>
+            <dt>{t('sysinfo.hostname')}</dt><dd>{sysInfo.osInfo.hostname}</dd>
         </dl>
 
-        <h3>Network</h3>
+        <h3>{t('sysinfo.network')}</h3>
         {#each interfaces as [name, entries] (name)}
             <h4>{name}</h4>
             {#each entries as entry}
                 <dl>
-                    <dt>address</dt><dd>{entry.address}</dd>
-                    <dt>netmask</dt><dd>{entry.netmask}</dd>
-                    <dt>mac</dt><dd>{entry.mac}</dd>
-                    <dt>internal</dt><dd>{entry.internal}</dd>
-                    <dt>family</dt><dd>{entry.family}</dd>
-                    <dt>cidr</dt><dd>{entry.cidr}</dd>
+                    <dt>{t('sysinfo.address')}</dt><dd>{entry.address}</dd>
+                    <dt>{t('sysinfo.netmask')}</dt><dd>{entry.netmask}</dd>
+                    <dt>{t('sysinfo.mac')}</dt><dd>{entry.mac}</dd>
+                    <dt>{t('sysinfo.internal')}</dt><dd>{t(entry.internal ? 'sysinfo.internalYes' : 'sysinfo.internalNo')}</dd>
+                    <dt>{t('sysinfo.family')}</dt><dd>{entry.family}</dd>
+                    <dt>{t('sysinfo.cidr')}</dt><dd>{entry.cidr}</dd>
                 </dl>
             {/each}
         {/each}
     {/if}
 
     {#snippet footer()}
-        <Button variant="primary" onclick={() => (open = false)}>OK</Button>
+        <Button variant="primary" onclick={() => (open = false)}>{t('common.ok')}</Button>
     {/snippet}
 </Modal>
 

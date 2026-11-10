@@ -9,6 +9,8 @@
     import {navigate} from '../router';
     import {defaultHash} from '../shell/nav';
     import {signOut, useSession} from '../shell/session';
+    import {errorMessageOf} from '../i18n/serverError';
+    import {t} from '../i18n';
 
     // U3-02: #/me/password. 임시 비밀번호 상태(forced)면 App 이 이 화면에 고정하고 메뉴·뒤로 가기를 숨긴다.
     const session = useSession();
@@ -24,10 +26,10 @@
 
     /** 순서대로 검사해 첫 오류 하나만 돌려준다. */
     const validate = (): {current?: string; next?: string; confirm?: string} => {
-        if(current === '') return {current: 'Enter your current password.'};
-        if(next.length < 8) return {next: 'Use at least 8 characters.'};
-        if(next === current) return {next: 'Choose a password different from the current one.'};
-        if(confirm !== next) return {confirm: 'Passwords do not match.'};
+        if(current === '') return {current: t('password.enterCurrent')};
+        if(next.length < 8) return {next: t('password.tooShort')};
+        if(next === current) return {next: t('password.sameAsCurrent')};
+        if(confirm !== next) return {confirm: t('password.mismatch')};
         return {};
     };
 
@@ -43,25 +45,25 @@
         try {
             const result = await MeCtrl.instance.changePassword(current, next);
             if(!result.success) {
-                message = result.message ?? '';
+                message = errorMessageOf(result);
                 return;
             }
             const principal = await loadMe();
             if(!principal) {
                 // 비밀번호는 이미 바뀌었다. 계정 정보를 다시 읽지 못했으므로 이동하지 않고 알린다.
-                message = 'Password changed, but the account could not be reloaded. Reload the page.';
+                message = t('password.changedReloadFailed');
                 return;
             }
             if(wasForced) {
                 navigate(defaultHash(principal.sections));
             } else {
-                toast.push({tone: 'pulse', message: 'Password changed.'});
+                toast.push({tone: 'pulse', message: t('password.changed')});
                 navigate('#/me');
             }
         } catch(error) {
             // adminRequest 는 네트워크 오류를 실패 값으로 돌려준다. 여기에는 InvalidSession 과 예상하지 못한 예외만 온다.
             if(error instanceof InvalidSession) session.invalidate();
-            else message = 'Unable to connect to the server.';
+            else message = t('common.unableToConnect');
         } finally {
             pending = false;
         }
@@ -70,25 +72,25 @@
 
 <div style="display: flex; flex-direction: column; gap: var(--s-4);">
     {#if forced}
-        <p id="pw-forced-note">Set a new password before continuing.</p>
+        <p id="pw-forced-note">{t('password.forcedNote')}</p>
     {/if}
     <form onsubmit={submit} novalidate style="display: flex; flex-direction: column; gap: var(--s-4);">
-        <Field label={forced ? 'Temporary password' : 'Current password'} for="pw-current" error={errors.current}>
+        <Field label={t(forced ? 'user.tempPassword' : 'password.current')} for="pw-current" error={errors.current}>
             <TextInput id="pw-current" type="password" autocomplete="current-password" invalid={errors.current !== undefined} bind:value={current} />
         </Field>
-        <Field label="New password" hint="At least 8 characters." for="pw-new" error={errors.next}>
+        <Field label={t('password.new')} hint={t('password.minHint')} for="pw-new" error={errors.next}>
             <TextInput id="pw-new" type="password" autocomplete="new-password" invalid={errors.next !== undefined} bind:value={next} />
         </Field>
-        <Field label="Confirm new password" for="pw-confirm" error={errors.confirm}>
+        <Field label={t('password.confirm')} for="pw-confirm" error={errors.confirm}>
             <TextInput id="pw-confirm" type="password" autocomplete="new-password" invalid={errors.confirm !== undefined} bind:value={confirm} />
         </Field>
         {#if message}
             <p id="pw-message" role="alert">{message}</p>
         {/if}
-        <div><Button variant="primary" type="submit" disabled={pending}>Change password</Button></div>
+        <div><Button variant="primary" type="submit" disabled={pending}>{t('nav.changePassword')}</Button></div>
     </form>
     {#if forced}
         <!-- 강제 변경 중에는 드로어가 숨겨지므로 이 버튼이 유일한 탈출구다. 드로어의 Sign out 과 같은 경로다. -->
-        <div><Button variant="ghost" onclick={() => { void signOut(session); }}>Sign out</Button></div>
+        <div><Button variant="ghost" onclick={() => { void signOut(session); }}>{t('common.signOut')}</Button></div>
     {/if}
 </div>

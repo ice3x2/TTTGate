@@ -1,4 +1,5 @@
 import {byteToUnit, startupTime, timeToDMH, toSize} from "../../admin/src/screens/parts/units";
+import {translator} from "../../admin/src/i18n";
 
 // screens/parts/units.ts 는 옛 layout/ServerStatusLayout.svelte 와 layout/SysinfoPopup.svelte 에
 // 두 벌로 있던 표시 단위 변환을 한 곳으로 모은 것이다. 이 테스트는 그 이동이 정확했는지 고정한다.
@@ -119,6 +120,42 @@ describe("startupTime", () => {
 
     test.each([[0], [NaN]])("시작 시각이 %s 처럼 거짓 값이면 0s 로 적는다", (uptime) => {
         expect(startupTime(uptime)).toBe("0s");
+    });
+});
+
+// 이슈 349 FR-6: 숫자는 Intl 로, 시간 단위는 리소스로 적는다. 언어는 마지막 인자로 넘긴다.
+describe("한국어 표기", () => {
+    const ko = translator("ko");
+
+    beforeEach(() => { jest.spyOn(Date, "now").mockReturnValue(1_800_000_000_000); });
+    afterEach(() => { jest.restoreAllMocks(); });
+
+    test("timeToDMH 는 일·시간·분·초로 적는다", () => {
+        expect(timeToDMH(93784000, ko)).toBe("1일 2시간 3분 4초");
+        expect(timeToDMH(0, ko)).toBe("0일 0시간 0분 0초");
+    });
+
+    test("startupTime 은 가장 큰 두 단위로 적는다", () => {
+        const now = 1_800_000_000_000;
+        expect(startupTime(now - (86_400_000 + 3_600_000 + 1), ko)).toBe("1일 1시간");
+        expect(startupTime(now - (3_600_000 + 60_000 + 1), ko)).toBe("1시간 1분");
+        expect(startupTime(now - 120_001, ko)).toBe("2분");
+        expect(startupTime(now - 5_000, ko)).toBe("5초");
+        expect(startupTime(0, ko)).toBe("0초");
+    });
+
+    test("크기 단위는 한국어에서도 같은 기호다", () => {
+        expect(byteToUnit(1536, false, ko)).toBe("1.5KiB");
+        expect(byteToUnit(1536, true, ko)).toBe("1.5");
+        expect(toSize(1177, ko)).toBe("1.14Kb");
+        expect(toSize(1e21, ko)).toBe("931322574615.47Gb");
+    });
+
+    test("영어를 넘겨도 지금과 같다", () => {
+        const en = translator("en");
+        expect(timeToDMH(93784000, en)).toBe("1d 2h 3m 4s");
+        expect(byteToUnit(TIB + 1, false, en)).toBe("1TiB");
+        expect(toSize(NaN, en)).toBe("NaNB");
     });
 });
 

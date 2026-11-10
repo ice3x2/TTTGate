@@ -1,4 +1,6 @@
 import type {Options, TunnelingStatus} from '../../controller/Options';
+import {i18n, type Translator} from '../../i18n';
+import {wholeNumber} from './units';
 
 // 이슈 338 — 터널 목록 한 줄(REQ-5·REQ-8)과 끄기를 되돌릴 때의 timeout(REQ-15). 화면은 이 결과를 그리기만 한다.
 
@@ -14,7 +16,6 @@ export type RowView = {parts: RowPart[]; control: RowControl; checked: boolean; 
 type BaseView = Omit<RowView, 'link'>;
 
 const MIGRATED_OWNER_ID = 'system:migrated';
-const CERT_UNVERIFIED_TITLE = 'The client does not verify the destination server certificate.';
 
 export function tunnelTitle(option: Options): string {
     if(option.name) return option.name;
@@ -24,36 +25,41 @@ export function tunnelTitle(option: Options): string {
 
 const WARN_SECONDS = 10 * 60;
 const pad2 = (value: number) => String(value).padStart(2, '0');
+const ENDS_TIME: Intl.DateTimeFormatOptions = {hour: '2-digit', minute: '2-digit', hourCycle: 'h23'};
 
-/** #344 남은 시간. 1시간 미만은 분·초, 24시간 미만은 시·분, 그 이상은 일·시다. 0 이하는 0m 00s 다. */
-export function formatRemaining(seconds: number): string {
+/**
+ * #344 남은 시간. 1시간 미만은 분·초, 24시간 미만은 시·분, 그 이상은 일·시다. 0 이하는 0m 00s 다.
+ * 이슈 349 FR-6: 문구는 리소스, 숫자는 Intl 이다. tr 을 생략하면 앱의 언어다.
+ */
+export function formatRemaining(seconds: number, tr: Translator = i18n()): string {
     const left = Math.max(0, Math.floor(seconds));
-    if(left < 3600) return `${Math.floor(left / 60)}m ${pad2(left % 60)}s left`;
-    if(left < 86_400) return `${Math.floor(left / 3600)}h ${Math.floor((left % 3600) / 60)}m left`;
-    return `${Math.floor(left / 86_400)}d ${Math.floor((left % 86_400) / 3600)}h left`;
+    if(left < 3600) return tr.t('clock.leftMinutes', {minutes: wholeNumber(left / 60, tr), seconds: pad2(left % 60)});
+    if(left < 86_400) return tr.t('clock.leftHours', {hours: wholeNumber(left / 3600, tr), minutes: wholeNumber((left % 3600) / 60, tr)});
+    return tr.t('clock.leftDays', {days: wholeNumber(left / 86_400, tr), hours: wholeNumber((left % 86_400) / 3600, tr)});
 }
 
-/** #344 종료 시각. 브라우저 시간대로 보이고, now(서버 시각)와 날짜가 다르면 월/일을 붙인다. */
-export function formatEnds(endsAt: number, now: number): string {
+/** #344 종료 시각. 브라우저 시간대로 보이고, now(서버 시각)와 날짜가 다르면 월·일을 붙인다. 시:분은 Intl 의 24시간 표기다. */
+export function formatEnds(endsAt: number, now: number, tr: Translator = i18n()): string {
     const end = new Date(endsAt);
     const today = new Date(now);
-    const time = `${pad2(end.getHours())}:${pad2(end.getMinutes())}`;
+    const time = tr.dateTime(ENDS_TIME).format(end);
     const sameDay = end.getFullYear() === today.getFullYear() && end.getMonth() === today.getMonth() && end.getDate() === today.getDate();
-    return sameDay ? `ends ${time}` : `ends ${end.getMonth() + 1}/${end.getDate()} ${time}`;
+    return sameDay ? tr.t('clock.endsToday', {time})
+        : tr.t('clock.endsOtherDay', {month: tr.number(end.getMonth() + 1, 0), day: tr.number(end.getDate(), 0), time});
 }
 
 /** #344 켜진 터널의 시계. 꺼졌거나 열리지 않았으면 없다. 시각은 서버 시각(serverTime)만 쓴다. */
-export function clockOf(status: TunnelingStatus | undefined, serverTime: number): ClockView | undefined {
+export function clockOf(status: TunnelingStatus | undefined, serverTime: number, tr: Translator = i18n()): ClockView | undefined {
     if(!status || !status.online || !status.active) return undefined;
-    if(!(status.activeTimeout > 0)) return {kind: 'unlimited', label: 'No time limit'};
+    if(!(status.activeTimeout > 0)) return {kind: 'unlimited', label: tr.t('clock.noLimit')};
     const endsAt = status.activeStart + status.activeTimeout * 1000;
     const leftSeconds = Math.max(0, Math.floor((endsAt - serverTime) / 1000));
-    const left = formatRemaining(leftSeconds);
-    const ends = formatEnds(endsAt, serverTime);
+    const left = formatRemaining(leftSeconds, tr);
+    const ends = formatEnds(endsAt, serverTime, tr);
     const warn = leftSeconds <= WARN_SECONDS;
     // 경고색은 눈으로만 보이므로 보조 기술용 이름에 같은 뜻을 붙인다.
     return {kind: 'limited', fraction: Math.min(1, leftSeconds / status.activeTimeout), left, ends, warn,
-        label: `${warn ? 'Ending soon, ' : ''}${left}, ${ends}`};
+        label: tr.t(warn ? 'clock.labelEndingSoon' : 'clock.label', {left, ends})};
 }
 
 /** 기한까지 남은 밀리초. 기한이 없으면 undefined. */
@@ -67,43 +73,43 @@ export function undoTimeoutOf(status: TunnelingStatus, serverTime: number): numb
     return remainingMs > 0 ? Math.ceil(remainingMs / 1000) : undefined;
 }
 
-const ownerPart = (option: Options, meId: string): RowPart | undefined => {
+const ownerPart = (option: Options, meId: string, tr: Translator): RowPart | undefined => {
     const owner = option.owner;
     if(!owner || owner.id === meId) return undefined;
-    if(owner.id === MIGRATED_OWNER_ID) return {text: 'migrated'};
+    if(owner.id === MIGRATED_OWNER_ID) return {text: tr.t('tunnel.migratedOwner')};
     return {text: owner.username !== undefined ? `@${owner.username}` : owner.id};
 };
 
-const statePartsOf = (status: TunnelingStatus): RowPart[] => {
+const statePartsOf = (status: TunnelingStatus, tr: Translator): RowPart[] => {
     const offline = status.clientConnected === false;
-    if(!status.active) return offline ? [{text: 'Off'}, {text: 'client offline'}] : [{text: 'Off'}];
-    const parts: RowPart[] = [{text: 'On'}];
-    if(offline) parts.push({text: 'client offline', warn: true});
-    if(status.sessions > 0) parts.push({text: `${status.sessions} connection${status.sessions === 1 ? '' : 's'}`});
+    if(!status.active) return offline ? [{text: tr.t('tunnel.off')}, {text: tr.t('tunnel.clientOffline')}] : [{text: tr.t('tunnel.off')}];
+    const parts: RowPart[] = [{text: tr.t('tunnel.on')}];
+    if(offline) parts.push({text: tr.t('tunnel.clientOffline'), warn: true});
+    if(status.sessions > 0) parts.push({text: tr.plural('tunnel.connections', status.sessions)});
     return parts;
 };
 
-const baseOf = (input: {option: Options; status?: TunnelingStatus; loaded: boolean; serverTime: number}): BaseView => {
+const baseOf = (input: {option: Options; status?: TunnelingStatus; loaded: boolean; serverTime: number}, tr: Translator): BaseView => {
     const {option, status, loaded, serverTime} = input;
-    if(!loaded) return {parts: [{text: 'Checking…', muted: true}], control: 'disabled', checked: false};
+    if(!loaded) return {parts: [{text: tr.t('tunnel.checking'), muted: true}], control: 'disabled', checked: false};
     // 이슈 347: 스위치는 켜기 권한(toggleable)으로 정한다. 옛 서버 응답에는 없으므로 editable 을 따른다.
     if((option.toggleable ?? option.editable) === false) {
-        const parts = status?.online ? [{text: status.active ? 'On' : 'Off'}] : [{text: 'Unavailable'}];
-        return {parts: [...parts, {text: 'view only'}], control: 'lock', checked: status?.online === true && status.active, clock: clockOf(status, serverTime)};
+        const parts = status?.online ? [{text: tr.t(status.active ? 'tunnel.on' : 'tunnel.off')}] : [{text: tr.t('tunnel.unavailable')}];
+        return {parts: [...parts, {text: tr.t('tunnel.viewOnly')}], control: 'lock', checked: status?.online === true && status.active, clock: clockOf(status, serverTime, tr)};
     }
-    if(!status) return {parts: [{text: 'Not running', warn: true}], control: 'disabled', checked: false};
-    if(!status.online) return {parts: [{text: `Can't open port ${option.forwardPort}`, warn: true}], control: 'disabled', checked: false};
-    return {parts: statePartsOf(status), control: 'switch', checked: status.active, clock: clockOf(status, serverTime)};
+    if(!status) return {parts: [{text: tr.t('tunnel.notRunning'), warn: true}], control: 'disabled', checked: false};
+    if(!status.online) return {parts: [{text: tr.t('tunnel.cannotOpenPort', {port: option.forwardPort}), warn: true}], control: 'disabled', checked: false};
+    return {parts: statePartsOf(status, tr), control: 'switch', checked: status.active, clock: clockOf(status, serverTime, tr)};
 };
 
-export function tunnelRowView(input: {option: Options; status?: TunnelingStatus; loaded: boolean; meId: string; serverTime: number}): RowView {
-    const base = {...baseOf(input), link: input.option.editable !== false};
+export function tunnelRowView(input: {option: Options; status?: TunnelingStatus; loaded: boolean; meId: string; serverTime: number}, tr: Translator = i18n()): RowView {
+    const base = {...baseOf(input, tr), link: input.option.editable !== false};
     if(!input.loaded) return base;
     const extra: RowPart[] = [];
-    const owner = ownerPart(input.option, input.meId);
+    const owner = ownerPart(input.option, input.meId, tr);
     if(owner) extra.push(owner);
     if(input.option.tls === true && input.option.allowSelfSignedDestinationCert === true) {
-        extra.push({text: 'cert not verified', warn: true, title: CERT_UNVERIFIED_TITLE});
+        extra.push({text: tr.t('tunnel.certNotVerified'), warn: true, title: tr.t('tunnel.certNotVerifiedTitle')});
     }
     return {...base, parts: [...base.parts, ...extra]};
 }

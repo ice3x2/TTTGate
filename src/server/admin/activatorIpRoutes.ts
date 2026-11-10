@@ -14,12 +14,12 @@ export function commitTunnelOption(ctx: RouteContext, option: TunnelingOption, k
     const store = ServerOptionStore.instance;
     const composed = store.composeServerOptionWithTunnelingOption(option);
     if(!composed.success || !composed.serverOption) {
-        ctx.fail(400, 'tunnel_update_failed', `Unable to update tunnel ${option.forwardPort}.`);
+        ctx.fail(400, 'tunnel_update_failed', `Unable to update tunnel ${option.forwardPort}.`, {port: option.forwardPort});
         return false;
     }
     if(!store.commitPreparedServerOption(composed.serverOption, {keepRevision}).success) {
         store.recordRollback('tunnel allowed IP commit failed', ['tunneling-option']);
-        ctx.fail(500, 'tunnel_commit_failed', `Unable to save tunnel ${option.forwardPort}.`);
+        ctx.fail(500, 'tunnel_commit_failed', `Unable to save tunnel ${option.forwardPort}.`, {port: option.forwardPort});
         return false;
     }
     return true;
@@ -57,7 +57,7 @@ const onSetActivatorIpOnly = async (ctx: RouteContext): Promise<void> => {
     await ServerOptionStore.instance.runConfigurationMutation(async () => {
         const option = ServerOptionStore.instance.getTunnelingOption(port);
         if(!option) {
-            ctx.fail(404, 'not_found', `External port(${port}) is not configured.`);
+            ctx.fail(404, 'not_found', `External port(${port}) is not configured.`, {port});
             return;
         }
         const changed = activatorIpOnlyOf(option) !== enabled;
@@ -86,7 +86,7 @@ const onRefreshActivatorIp = async (ctx: RouteContext): Promise<void> => {
     await ServerOptionStore.instance.runConfigurationMutation(async () => {
         const option = ServerOptionStore.instance.getTunnelingOption(port);
         if(!option) {
-            ctx.fail(404, 'not_found', `External port(${port}) is not configured.`);
+            ctx.fail(404, 'not_found', `External port(${port}) is not configured.`, {port});
             return;
         }
         const placed = recordRequesterIp(ctx, option, 'replace');

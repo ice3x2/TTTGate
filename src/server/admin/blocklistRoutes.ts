@@ -3,13 +3,13 @@ import ServerOptionStore from "../ServerOptionStore";
 import {AdmissionController} from "../security/AdmissionController";
 import {addBlocklistEntry, AddBlocklistResult, isPortNumber, MAX_BLOCKLIST_ENTRIES, removeBlocklistEntry} from "../security/IpBlocklist";
 import {BlocklistEntry, ConnectionSecurityOption, DEFAULT_GEO_CONFIG, ServerOption} from "../../types/TunnelingOption";
-import {decodedPathSegment, RouteContext, RouteHandlers} from "./routes";
+import {ApiFailure, decodedPathSegment, RouteContext, RouteHandlers} from "./routes";
 import {truncateAuditValue} from "./auditValue";
 
 // #286 — 관리자 차단 목록 API. AdminServer.ts 가 2,000줄을 넘지 않도록 rbacRoutes.ts·auditRoutes.ts 처럼 따로 둔다.
 // server.yaml 의 connectionSecurity.blocklist 에 저장하고 applyConnectionSecurity 로 바로 적용한다.
 
-type Fail = (res: ServerResponse, statusCode: number, payload: {[key: string]: any}) => void;
+type Fail = (res: ServerResponse, statusCode: number, payload: ApiFailure) => void;
 type ApplyConnectionSecurity = (next: ConnectionSecurityOption) => void;
 
 /** connectionSecurity 를 바꾼 결과. */
@@ -61,8 +61,8 @@ const parseFromBan = (value: unknown): {port: number; ip: string} | undefined | 
 };
 
 export function blocklistRouteHandlers(deps: {applyConnectionSecurity: ApplyConnectionSecurity; fail: Fail}): RouteHandlers {
-    const notReady = (res: ServerResponse) => deps.fail(res, 503, {message: 'server configuration is not ready'});
-    const commitFailed = (res: ServerResponse) => deps.fail(res, 500, {message: 'Unable to commit server option.'});
+    const notReady = (res: ServerResponse) => deps.fail(res, 503, {code: 'configuration_not_ready', message: 'server configuration is not ready'});
+    const commitFailed = (res: ServerResponse) => deps.fail(res, 500, {code: 'server_option_commit_failed', message: 'Unable to commit server option.'});
 
     const onGetSecurityBlocklist = async (ctx: RouteContext): Promise<void> => {
         const read = ServerOptionStore.instance.readServerOption();
@@ -103,7 +103,7 @@ export function blocklistRouteHandlers(deps: {applyConnectionSecurity: ApplyConn
             // 이미 All tunnels 로 막힌 주소(widen 으로도 넓힐 것이 없는 중복)의 일시 차단은 더 의미가 없으므로 푼다(REQ-5 AC-3).
             const unbanned = result.code === 'duplicate' && fromBan ? AdmissionController.instance.rateLimiter.unban(fromBan.port, fromBan.ip) : undefined;
             if(unbanned !== undefined) ctx.auditDetail({fromBan, unbanned});
-            deps.fail(res, result.code === 'invalid' ? 422 : 409, {code: result.code, message: result.message, ...(unbanned === undefined ? {} : {unbanned})});
+            deps.fail(res, result.code === 'invalid' ? 422 : 409, {code: result.code, message: result.message, values: result.values, ...(unbanned === undefined ? {} : {unbanned})});
             return;
         }
         if(update === 'commit-failed') {
@@ -122,7 +122,7 @@ export function blocklistRouteHandlers(deps: {applyConnectionSecurity: ApplyConn
         const {res} = ctx;
         const address = decodedPathSegment(ctx.params.address);
         if(address === undefined || address.length === 0) {
-            deps.fail(res, 400, {message: 'invalid address'});
+            deps.fail(res, 400, {code: 'invalid_address', message: 'invalid address'});
             return;
         }
         let removed = undefined as BlocklistEntry | undefined;

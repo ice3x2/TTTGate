@@ -1,5 +1,6 @@
 import {DEFAULT_GROUP_ATTRIBUTES, type GroupAttributes, type MeResponse, type Role} from "../../admin/src/controller/Types";
-import {tunnelErrorMessage, tunnelPolicy} from "../../admin/src/screens/parts/tunnelPolicy";
+import {tunnelPolicy} from "../../admin/src/screens/parts/tunnelPolicy";
+import {translator} from "../../admin/src/i18n";
 import {RBAC_IDENTITY_FIXTURE} from "../helpers/rbacFixture";
 
 // U3-06 / #108 — 터널 화면의 그룹 속성 정책(순수 함수). tunnelPolicy 는 user.role 과 group.attributes 만 읽는다.
@@ -86,10 +87,14 @@ describe("tunnelPolicy", () => {
         expect(input.httpOption).toEqual({rewriteHostInTextBody: true});
     });
 
-    test("tunnelErrorMessage 는 알려진 코드만 문구로 바꾼다", () => {
-        expect(tunnelErrorMessage("port_not_allowed", "x")).toBe("This port is outside your group's allowed ranges.");
-        expect(tunnelErrorMessage("unknown_code", "server says")).toBe("server says");
-        expect(tunnelErrorMessage(undefined, "fallback")).toBe("fallback");
-        expect(tunnelErrorMessage("toString", "fallback")).toBe("fallback");
+    // 오류 코드의 문구는 이슈 349 의 errorMessageOf(test/admin/serverError.test.ts)가 맡는다.
+});
+
+// 이슈 349 FR-8 — 포트 안내도 정한 언어로 만든다. 언어는 portHint 의 인자로 넘긴다.
+describe("이슈 349 한국어 포트 안내", () => {
+    const ko = translator("ko");
+    test("허용 범위와 허용 포트 없음", () => {
+        expect(tunnelPolicy(meOf("regular", FIELD_TEAM)).portHint(ko)).toBe("허용 범위: 20000–20099");
+        expect(tunnelPolicy(meOf("regular", DEFAULT_GROUP_ATTRIBUTES)).portHint(ko)).toBe("그룹에 허용된 포트가 없습니다.");
     });
 });

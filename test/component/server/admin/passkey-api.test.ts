@@ -218,6 +218,8 @@ describe("passkey registration (#336 REQ-4~7)", () => {
         const saved = await c.call("POST", "/api/me/passkeys", {name: "Key", response: authenticator.create(options.body.options)}, auth);
         expect(saved.status).toBe(409);
         expect(saved.body.code).toBe("passkey_limit");
+        // 이슈 349 H-1: 저장소가 만든 실패의 값(상한)도 응답 필드로 넘긴다. 화면이 문구의 {limit} 에 끼운다.
+        expect(saved.body.limit).toBe(20);
         const again = await c.call("POST", "/api/me/passkeys/options", {password: USER_PASSWORD}, auth);
         expect(again.status).toBe(409);
         expect(again.body.code).toBe("passkey_limit");

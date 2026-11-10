@@ -11,6 +11,8 @@
     import {toast} from '../ui/toast';
     import {navigate} from '../router';
     import {useSession} from '../shell/session';
+    import {errorMessageOf} from '../i18n/serverError';
+    import {t} from '../i18n';
 
     // U3-03: #/users. 카드 목록과 클라이언트 필터. 카드 이동은 <a href> 기본 동작이다.
     const session = useSession();
@@ -31,23 +33,23 @@
         try {
             const result = await UsersCtrl.instance.list();
             if(result.success) users = result.users;
-            else toast.push({tone: 'alarm', message: result.message});
+            else toast.push({tone: 'alarm', message: errorMessageOf(result)});
             loaded = true;
         } catch(error) {
             // adminRequest 는 네트워크 오류를 실패 값으로 돌려준다. 여기에는 InvalidSession 과 예상하지 못한 예외만 온다.
             if(error instanceof InvalidSession) session.invalidate();
-            else toast.push({tone: 'alarm', message: 'Unable to connect to the server.'});
+            else toast.push({tone: 'alarm', message: t('common.unableToConnect')});
         }
     });
 </script>
 
 <div style="display: flex; flex-direction: column; gap: var(--s-4);">
     <div style="display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; justify-content: space-between;">
-        <Button variant="primary" onclick={() => navigate('#/users/new')}>Add user</Button>
-        <TextInput id="users-filter" placeholder="Filter by name or group" bind:value={filter} />
+        <Button variant="primary" onclick={() => navigate('#/users/new')}>{t('users.add')}</Button>
+        <TextInput id="users-filter" placeholder={t('users.filter')} bind:value={filter} />
     </div>
     {#if loaded && visible.length === 0}
-        <p style="color: var(--ink-2);">No users match.</p>
+        <p style="color: var(--ink-2);">{t('users.noMatches')}</p>
     {/if}
     <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-3);">
         {#each visible as user (user.id)}
@@ -56,9 +58,9 @@
                     <a href={'#/users/' + user.id} style="display: block; color: inherit; text-decoration: none;">
                         <div style="display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center;">
                             <span>{user.displayName}</span>
-                            <Chip tone={user.role === 'superuser' ? 'signal' : 'neutral'}>{user.role}</Chip>
-                            <Badge tone={user.status === 'active' ? 'pulse' : 'alarm'}>{user.status}</Badge>
-                            {#if user.mustChangePassword}<Chip tone="warn">temp password</Chip>{/if}
+                            <Chip tone={user.role === 'superuser' ? 'signal' : 'neutral'}>{t(user.role === 'superuser' ? 'users.roleSuperuser' : 'users.roleRegular')}</Chip>
+                            <Badge tone={user.status === 'active' ? 'pulse' : 'alarm'}>{t(user.status === 'active' ? 'users.statusActive' : 'users.statusDisabled')}</Badge>
+                            {#if user.mustChangePassword}<Chip tone="warn">{t('users.tempPassword')}</Chip>{/if}
                         </div>
                         <div class="mono" style="margin-top: var(--s-1); color: var(--ink-2);">@{user.username} · {user.groupName}</div>
                     </a>

@@ -163,12 +163,15 @@ test("등록 창은 응답마다 정한 문구를 보이고, 성공하면 닫히
             [409, "passkey_limit", "You can register up to 20 passkeys."],
             [409, "passkey_registration_expired", "The setup expired. Try again."],
             [422, "passkey_name_invalid", "Enter a name of 1 to 64 characters."],
-            [400, "passkey_invalid", "The passkey could not be verified. Try again."],
+            // 이슈 349: 로그인과 등록의 passkey_invalid 문구를 하나로 합쳤다.
+            [400, "passkey_invalid", "The passkey was not accepted."],
             [422, "passkey_origin_unsupported", UNSUPPORTED],
-            [500, "internal", "Unable to connect to the server."],
+            // 이슈 349 AC-4: 번역 맵에 없는 code 는 서버 문구를 그대로 보인다.
+            [500, "internal", "server text"],
         ];
         for(const [status, code, expected] of failures) {
-            registrations.push({status, body: {success: false, code, message: "server text"}});
+            // 이슈 349 FR-7: 문구에 들어가는 값(패스키 한도)은 별도 필드로 온다.
+            registrations.push({status, body: {success: false, code, message: "server text", limit: 20}});
             await attempt(expected);
         }
 
@@ -262,8 +265,9 @@ test("로그인 화면의 패스키 버튼은 조건 안내와 함께 보이고,
         await attempt("Too many login attempts. Please try again later.");
         verifies.push({status: 503, body: {success: false, code: "passkey_busy", message: "busy"}});
         await attempt("The server is busy. Try again in a minute.");
-        verifies.push({status: 503, body: {success: false, message: "Unable to complete sign-in. Try again."}});
-        await attempt("Unable to connect to the server.");
+        // 이슈 349 AC-4: 번역 맵에 없는 code 는 서버 문구를 그대로 보인다.
+        verifies.push({status: 503, body: {success: false, code: "sign_in_unavailable", message: "Unable to complete sign-in. Try again."}});
+        await attempt("Unable to complete sign-in. Try again.");
 
         optionResponses.push({status: 503, body: {success: false, code: "passkey_unavailable", message: "x"}});
         await attempt("Sign in with your password first.");

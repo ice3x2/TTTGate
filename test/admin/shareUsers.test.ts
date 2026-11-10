@@ -8,6 +8,7 @@ import {
     shareQueryOf,
     shareStatusMessage
 } from "../../admin/src/screens/parts/shareUsers";
+import {translator} from "../../admin/src/i18n";
 
 // 이슈 347 FR-10 — 터널 편집 화면의 공유 칸(자동 완성) 규칙. 순수 함수라 브라우저 없이 확인한다.
 const user = (id: string, username = id) => ({id, username, displayName: username.toUpperCase()});
@@ -74,5 +75,15 @@ describe("shareStatusMessage — 알림 문구", () => {
     test("그 밖에는 빈 문자열이다", () => {
         expect(shareStatusMessage({chosen: [], searched: false, candidates: []})).toBe("");
         expect(shareStatusMessage({chosen: [], searched: true, candidates: [user("u_a")]})).toBe("");
+    });
+});
+
+// 이슈 349 FR-8 — 알림 문구도 정한 언어로 만든다.
+describe("이슈 349 한국어 알림 문구", () => {
+    const ko = translator("ko");
+    test("상한과 결과 없음", () => {
+        const full = Array.from({length: MAX_SHARED_USERS}, (_, index) => user(`u_${index}`));
+        expect(shareStatusMessage({chosen: full, searched: true, candidates: []}, ko)).toBe("최대 50명과 공유할 수 있습니다.");
+        expect(shareStatusMessage({chosen: [], searched: true, candidates: []}, ko)).toBe("일치하는 사용자가 없습니다.");
     });
 });

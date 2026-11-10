@@ -1,6 +1,6 @@
 <script lang="ts">
     import {onMount} from 'svelte';
-    import ServerStatusCtrl from '../controller/ServerStatusCtrl';
+    import ServerStatusCtrl, {type SysInfoResult} from '../controller/ServerStatusCtrl';
     import InvalidSession from '../controller/InvalidSession';
     import type {ClientStatus, SysInfo, Usage} from '../controller/Types';
     import Button from '../ui/Button.svelte';
@@ -11,6 +11,8 @@
     import {useSession} from '../shell/session';
     import SysinfoPopup from './parts/SysinfoPopup.svelte';
     import {byteToUnit, timeToDMH} from './parts/units';
+    import {t} from '../i18n';
+    import {errorMessageOf} from '../i18n/serverError';
 
     let usage = $state<Usage | undefined>();
     let clients = $state<ClientStatus[]>([]);
@@ -29,7 +31,7 @@
         alertOpen = true;
     };
 
-    const sessionOut = () => alert('Session is expired. Please login again.', () => session.invalidate());
+    const sessionOut = () => alert(t('common.sessionExpired'), () => session.invalidate());
 
     const loadServerStatus = async (): Promise<boolean> => {
         try {
@@ -56,23 +58,25 @@
         }
     };
 
-    const showInfo = async () => {
+    // 서버가 거절하면 그 code 의 문구를, 서버에 닿지 못하면 연결 실패 문구를 보인다. 예외 원문은 보이지 않는다.
+    const showSysInfo = async (load: () => Promise<SysInfoResult>) => {
         try {
-            sysInfo = await ServerStatusCtrl.instance.getSysInfo();
-            infoOpen = true;
+            const result = await load();
+            if(result.success) {
+                sysInfo = result.sysInfo;
+                infoOpen = true;
+            } else {
+                alert(errorMessageOf(result));
+            }
         } catch(e) {
-            alert(e + '');
+            if(e instanceof InvalidSession) sessionOut();
+            else alert(t('common.unableToConnect'));
         }
     };
 
-    const showClient = async (id: number) => {
-        try {
-            sysInfo = await ServerStatusCtrl.instance.getClientSysInfo(id);
-            infoOpen = true;
-        } catch(e) {
-            if(e instanceof Error) alert(e.message);
-        }
-    };
+    const showInfo = () => showSysInfo(() => ServerStatusCtrl.instance.getSysInfo());
+
+    const showClient = (id: number) => showSysInfo(() => ServerStatusCtrl.instance.getClientSysInfo(id));
 
     onMount(() => {
         startStatusUpdate();
@@ -82,7 +86,7 @@
 
 <div class="status">
     <div class="status-bar">
-        <Button variant="ghost" size="sm" onclick={showInfo}>INFO</Button>
+        <Button variant="ghost" size="sm" onclick={showInfo}>{t('status.info')}</Button>
         {#if usage}<Chip mono class="status-uptime">{timeToDMH(usage.uptime)}</Chip>{/if}
     </div>
 
@@ -90,31 +94,31 @@
         <div class="gauges">
             <Gauge title="CPU" value={usage.cpu.process} max={100}
                 message={`${usage.cpu.process}/${usage.cpu.total}%`} />
-            <Gauge title="Memory" value={usage.memory.process} max={usage.memory.total}
+            <Gauge title={t('status.memory')} value={usage.memory.process} max={usage.memory.total}
                 message={`${byteToUnit(usage.memory.process)}/${byteToUnit(usage.memory.total)}`} />
-            <Gauge title="Heap" value={usage.heap.used} max={usage.heap.total}
+            <Gauge title={t('status.heap')} value={usage.heap.used} max={usage.heap.total}
                 message={`${byteToUnit(usage.heap.used)}/${byteToUnit(usage.heap.total)}`} />
-            <Gauge title="Buffer" value={usage.totalBuffer.used} max={usage.totalBuffer.total}
+            <Gauge title={t('status.buffer')} value={usage.totalBuffer.used} max={usage.totalBuffer.total}
                 message={`${byteToUnit(usage.totalBuffer.used)}/${byteToUnit(usage.totalBuffer.total)}`} />
         </div>
     {/if}
 
-    <h2 class="section-title">Client list</h2>
+    <h2 class="section-title">{t('status.clientList')}</h2>
     {#if clients.length === 0}
-        <p class="empty">No clients connected.</p>
+        <p class="empty">{t('status.noClients')}</p>
     {:else}
         <ul class="client-list">
             {#each clients as client (client.id)}
                 <li>
-                    <div class="client-tap" role="button" tabindex="0" aria-label={`Client ${client.id} details`}
+                    <div class="client-tap" role="button" tabindex="0" aria-label={t('status.clientDetails', {id: client.id})}
                         onclick={() => showClient(client.id)}
                         onkeydown={(e) => { if(e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showClient(client.id); } }}>
                         <Card label={`ID: ${client.id}`}>
                             <h3 class="client-name">{client.name}</h3>
                             <dl class="client-meta">
-                                <dt>Address</dt><dd>{client.address}</dd>
-                                <dt>Uptime</dt><dd>{timeToDMH(client.uptime)}</dd>
-                                <dt>Active session</dt><dd>{client.activeSessionCount}</dd>
+                                <dt>{t('status.address')}</dt><dd>{client.address}</dd>
+                                <dt>{t('status.uptime')}</dt><dd>{timeToDMH(client.uptime)}</dd>
+                                <dt>{t('status.activeSession')}</dt><dd>{client.activeSessionCount}</dd>
                             </dl>
                         </Card>
                     </div>
@@ -125,10 +129,10 @@
 
     <SysinfoPopup bind:open={infoOpen} {sysInfo} />
 
-    <Modal bind:open={alertOpen} title="Status">
+    <Modal bind:open={alertOpen} title={t('nav.status')}>
         {alertMessage}
         {#snippet footer()}
-            <Button variant="primary" onclick={() => { alertOpen = false; alertClose(); }}>OK</Button>
+            <Button variant="primary" onclick={() => { alertOpen = false; alertClose(); }}>{t('common.ok')}</Button>
         {/snippet}
     </Modal>
 </div>

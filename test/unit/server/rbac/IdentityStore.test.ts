@@ -424,6 +424,31 @@ describe("IdentityStore", () => {
             spy.mockRestore();
         }
     });
+
+    it("does not put the absolute path of an unreadable identity file into values (issue 349 FR-7)", () => {
+        fs.mkdirSync(Path.dirname(identityYamlPath()), {recursive: true});
+        fs.writeFileSync(identityYamlPath(), "version: 1\n");
+        const spy = jest.spyOn(Files, "toStringSync").mockReturnValue(undefined);
+        try {
+            const result = IdentityStore.instance.load();
+            expect(result).toMatchObject({success: false, reason: "read-error", values: {file: "identity.yaml"}});
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
+    it("sends the error code of a failed save as a value field (issue 349 FR-7)", async () => {
+        IdentityStore.instance.load();
+        const spy = jest.spyOn(Files, "writeAtomicBatchSync").mockImplementation(() => {
+            throw Object.assign(new Error("permission denied"), {code: "EACCES"});
+        });
+        try {
+            const result = await IdentityStore.instance.createUser({username: "olivia", role: "regular", password: "olivia-password-1", mustChangePassword: false});
+            expect(result).toEqual({success: false, status: 422, code: "identity_save_failed", message: "identity file could not be saved (EACCES)", values: {errorCode: "EACCES"}});
+        } finally {
+            spy.mockRestore();
+        }
+    });
 });
 
 describe("IdentityStore MFA (#112 U4-04)", () => {
