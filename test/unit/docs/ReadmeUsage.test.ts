@@ -197,6 +197,21 @@ describe("README in English and Korean (#310)", () => {
         }
     });
 
+    // 이슈 348 §6: 켠 사람의 IP 만 받는 설정의 기본값·업그레이드·운영 주의를 두 절 모두 그 소절 안에 적는다.
+    it.each([["English", "Limit a Tunnel to the IPs That Turned It On", () => english], ["한국어", "켠 사람의 IP 에서만 연결 받기", () => korean]])(
+        "explains the activator IP limit in the %s section", (_label, heading, section) => {
+        const slice = subsectionOf(section(), heading);
+        expect(slice.length).toBeGreaterThan(0);
+        for(const fact of ["`activatorIpOnly`", "`activator-ip`", "`-trustXForwardedFor`", "IPv6", "IPv4", "CDN", "`tunnel_ip_limit_updated`",
+            "`tunnel_ip_refreshed`", "`PUT /api/tunneling/<port>/activatorIpOnly`", "`POST /api/tunneling/<port>/activatorIp`", "`userland-proxy`"]) {
+            expect({fact, found: slice.includes(fact)}).toEqual({fact, found: true});
+        }
+    });
+
+    it.each([["English", () => english], ["한국어", () => korean]])("lists the activator-ip denial reason in the %s section", (_label, section) => {
+        expect(section()).toMatch(/^\| `activator-ip` \| IP limit \|/m);
+    });
+
     it.each([["English", "Command-Line Reference", () => english], ["한국어", "명령줄 레퍼런스", () => korean]])(
         "documents every option and command as its own table row in the %s CLI reference", (_label, heading, section) => {
         const reference = referenceOf(section(), heading);

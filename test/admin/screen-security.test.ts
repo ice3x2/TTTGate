@@ -331,9 +331,9 @@ test("거절 집계와 최근 거절은 처음에 비어 있고, 거절이 생�
     await app.seedBan(20001, "203.0.113.9");
     const statsRow = page.locator('#denial-stats-table tr[data-scope="20001"]');
     await statsRow.waitFor({state: "visible", timeout: 15_000});
-    expect(await statsRow.locator("td").allTextContents()).toEqual(["20001", "0", "0", "0", "1", "0", "1"]);
+    expect(await statsRow.locator("td").allTextContents()).toEqual(["20001", "0", "0", "0", "1", "0", "0", "1"]);
     expect(await page.locator("#denial-stats-table thead th").allTextContents()).toEqual(
-        ["Port", "Country blocked", "Blocklist", "Temporarily banned", "Rate limit exceeded", "Connection limit", "Banned IPs"]);
+        ["Port", "Country blocked", "Blocklist", "Temporarily banned", "Rate limit exceeded", "Connection limit", "IP limit", "Banned IPs"]);
 
     const recentRow = page.locator("#denial-recent-table tbody tr").first();
     await recentRow.waitFor({state: "visible", timeout: 15_000});

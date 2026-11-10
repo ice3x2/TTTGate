@@ -115,7 +115,7 @@ describe("AdminServer security stats route", () => {
         AdmissionController.instance.admit({kind: "tunnel", port: 20002, protocol: "tcp"}, "203.0.113.5");
         const response = await f.request("GET", "/api/security/stats", {}, headers);
         expect(JSON.parse(response.body).stats.ports["20002"]).toEqual({rejectedGeo: 0, rejectedBlocklist: 1, rejectedBans: 0,
-            rejectedExceeded: 0, rejectedConcurrency: 0, bannedIps: 0});
+            rejectedExceeded: 0, rejectedConcurrency: 0, rejectedActivatorIp: 0, bannedIps: 0});
     }));
 
     // #327 REQ-5 · AC-2b · AC-2c: 최근 거절. 국가 필터가 꺼져 있으면 국가를 싣지 않는다.

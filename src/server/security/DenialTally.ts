@@ -6,7 +6,7 @@ export type DenialScope = number | 'admin';
 export type DenialCounts = Record<AdmissionReason, number>;
 
 const emptyCounts = (): DenialCounts =>
-    ({'ip-blocklist': 0, 'geo-deny': 0, 'rate-limit-ban': 0, 'rate-limit-exceeded': 0, 'concurrency-limit': 0});
+    ({'ip-blocklist': 0, 'geo-deny': 0, 'rate-limit-ban': 0, 'rate-limit-exceeded': 0, 'concurrency-limit': 0, 'activator-ip': 0});
 
 /**
  * #327 REQ-1: 범위·사유별 누적 거절 건수. 프로세스가 도는 동안 늘기만 한다.

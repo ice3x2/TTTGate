@@ -1,5 +1,6 @@
 export type AdmissionScope = {kind: 'tunnel'; port: number; protocol: 'tcp' | 'http' | 'https'} | {kind: 'admin'};
-export type AdmissionReason = 'ip-blocklist' | 'geo-deny' | 'rate-limit-ban' | 'rate-limit-exceeded' | 'concurrency-limit';
+// 이슈 348: activator-ip 는 터널을 켠 사람의 IP 가 아니라서 거부한 연결이다.
+export type AdmissionReason = 'ip-blocklist' | 'geo-deny' | 'rate-limit-ban' | 'rate-limit-exceeded' | 'concurrency-limit' | 'activator-ip';
 export type AdmissionDenial = {allowed: false; reason: AdmissionReason; retryAfterMs?: number};
 export type AdmissionDecision = {allowed: true} | AdmissionDenial;
 

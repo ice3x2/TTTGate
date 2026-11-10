@@ -684,6 +684,8 @@ test("새 터널 화면은 삭제 버튼 없이 기본값을 채우고 Start 로
             rateLimit: {enabled: true, windowMs: 60000, maxConnections: 30, banMs: 600000, customized: false},
             // #347: 새 터널은 공유 사용자 없이 만든다.
             sharedUserIds: [],
+            // 이슈 348: 새 터널은 켠 사람의 IP 만 받는 설정이 켜진 채 만든다.
+            activatorIpOnly: true,
             expectedRevision: list.revisionState.currentRevision,
         }]);
         expect(app.errors).toEqual([]);

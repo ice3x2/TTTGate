@@ -15,6 +15,7 @@
     import {tunnelPolicy} from './parts/tunnelPolicy';
     import {StatusPoller} from './parts/statusPoller';
     import {tunnelRowView, tunnelTitle, undoTimeoutOf} from './parts/tunnelRow';
+    import {ipLimitView, withIpResult, type IpLimitView} from './parts/ipLimit';
     import Clock from '../ui/Clock.svelte';
 
     // 이슈 338: 로그인하면 먼저 보이는 화면이다. 터널마다 제목·상태 한 줄·스위치를 그리고 한 번 눌러 켜고 끈다.
@@ -33,6 +34,10 @@
     let loading = $state(false);
     /** 요청 중인 포트와 요청한 상태. 폴링 결과가 이 행을 덮지 않는다. */
     let pending = $state<Record<number, boolean>>({});
+    /** 이슈 348: IP 제한·갱신 요청 중인 포트. 그 줄의 두 버튼만 잠근다. */
+    let ipPending = $state<Record<number, true>>({});
+    /** 이슈 348: 서버가 본 지금 내 IP. 내 허용 IP 와 다르면 갱신 버튼을 강조한다. */
+    let requesterIp = $state<string | null>(null);
     let confirmTarget = $state<{option: Options; sessions: number} | undefined>(undefined);
     let confirmOpen = $state(false);
 
@@ -71,6 +76,7 @@
             for(const status of result.statuses) next[status.port] = status;
             statuses = next;
             serverTime = result.serverTime;
+            requesterIp = result.requesterIp ?? null;
             lastReadAt = Date.now();
             now = lastReadAt;
             statusLoaded = true;
@@ -149,6 +155,49 @@
         void request(option, next, 0);
     };
 
+    /** 이슈 348: 한 줄의 IP 제한·갱신 요청. 요청 중이면 무시하고, 끝나면 상태를 다시 읽어 개수(+N)까지 맞춘다. */
+    const ipRequest = async (option: Options, failure: string, send: () => Promise<{success: boolean; message?: string} & Record<string, unknown>>,
+                             patch: (result: Record<string, unknown>) => Partial<TunnelingStatus>): Promise<void> => {
+        const port = option.forwardPort;
+        if(ipPending[port]) return;
+        ipPending = {...ipPending, [port]: true};
+        poller.invalidate();
+        try {
+            const result = await send();
+            if(!result.success) {
+                toast.push({tone: 'alarm', message: serverMessageOf(result) || failure});
+                return;
+            }
+            ({options, statuses} = withIpResult({options, statuses}, port, patch(result)));
+            await poller.refresh();
+        } catch(e) {
+            if(e instanceof InvalidSession) {
+                sessionOut();
+                return;
+            }
+            toast.push({tone: 'alarm', message: failure});
+        } finally {
+            const {[port]: _done, ...rest} = ipPending;
+            ipPending = rest;
+        }
+    };
+
+    /** IP 제한 토글. 잠긴 켜짐(켜기 권한만 있음)이나 요청 중이면 요청을 보내지 않는다. */
+    const toggleIpLimit = (option: Options, view: IpLimitView) => {
+        if(!view.pressable) return;
+        const next = !view.on;
+        void ipRequest(option, `Unable to change the IP limit of ${tunnelTitle(option)}.`,
+            () => ServerOptionCtrl.instance.setActivatorIpOnly(option.forwardPort, next),
+            (result) => ({activatorIpOnly: next, myAllowedIp: (result.myAllowedIp as string | null | undefined) ?? null}));
+    };
+
+    /** 내 허용 IP 를 지금 IP 로 바꾼다. 결과 IP 를 바로 보인다. */
+    const refreshIp = (option: Options) => {
+        void ipRequest(option, `Unable to update your IP for ${tunnelTitle(option)}.`,
+            () => ServerOptionCtrl.instance.refreshActivatorIp(option.forwardPort),
+            (result) => ({myAllowedIp: result.allowedIp as string}));
+    };
+
     const confirmOff = () => {
         const target = confirmTarget;
         confirmOpen = false;
@@ -187,6 +236,7 @@
                 {@const view = tunnelRowView({option, status: statuses[option.forwardPort], loaded: statusLoaded, meId: $me?.user.id ?? '', serverTime})}
                 {@const busy = pending[option.forwardPort] !== undefined}
                 {@const parts = busy ? [{text: pending[option.forwardPort] ? 'Turning on…' : 'Turning off…', muted: true}] : view.parts}
+                {@const ipView = ipLimitView({option, status: statuses[option.forwardPort], requesterIp, busy: ipPending[option.forwardPort] === true})}
                 <li data-port={option.forwardPort}>
                     <!-- 이슈 347 FR-12: 고칠 수 없는 터널은 편집 화면으로 가지 않는다. 같은 모양을 지키려고 같은 클래스를 쓴다. -->
                     <svelte:element this={view.link ? 'a' : 'div'} class="tunnel-link" href={view.link ? `#/tunnels/${option.forwardPort}` : undefined}>
@@ -209,6 +259,22 @@
                             <Switch size="lg" ariaLabel={title} on={busy ? pending[option.forwardPort] : view.checked} {busy}
                                 disabled={view.control === 'disabled'} onrequest={(next) => toggle(option, next)} />
                         </span>
+                    {/if}
+                    {#if ipView}
+                        <!-- 이슈 348: 줄 링크 밖에 둔다(누르면 편집 화면으로 가지 않는다). 터널이 꺼져도 같은 규칙으로 보인다. -->
+                        <div class="tunnel-ip-row">
+                            <button type="button" class="tunnel-ip-toggle" class:on={ipView.on} class:locked={ipView.locked}
+                                aria-label={ipView.label} title={ipView.title} aria-disabled={ipView.pressable ? undefined : 'true'}
+                                onclick={() => toggleIpLimit(option, ipView)}>
+                                {#if ipView.locked}<svg class="tunnel-ip-lock" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>{/if}
+                                <span class="ip-text" class:warn={ipView.warn}>{ipView.text}</span>{#if ipView.extra}{' '}<span class="ip-extra">{ipView.extra}</span>{/if}
+                            </button>
+                            <button type="button" class="tunnel-ip-refresh" class:emphasized={ipView.refresh.emphasized}
+                                aria-label={ipView.refresh.label} title={ipView.refresh.label} disabled={!ipView.refresh.enabled}
+                                onclick={() => refreshIp(option)}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+                            </button>
+                        </div>
                     {/if}
                 </li>
             {/each}
@@ -235,7 +301,7 @@
     .tunnel-summary { margin: 0 0 var(--s-3); font-size: var(--fs-sm); color: var(--ink-2); display: flex; flex-wrap: wrap; gap: var(--s-3); }
     .stale { color: var(--warn); }
     .tunnel-list { list-style: none; margin: 0; padding: 0; background: var(--bg-2); border-radius: var(--r-3); overflow: hidden; }
-    .tunnel-list li { display: flex; align-items: center; gap: var(--s-3); min-height: 64px; padding: 0 var(--s-3) 0 0; }
+    .tunnel-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--s-3); min-height: 64px; padding: 0 var(--s-3) 0 0; }
     .tunnel-list li + li { box-shadow: 0 -1px 0 var(--line-0); }
     .tunnel-link { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: var(--s-3) 0 var(--s-3) var(--s-4); color: inherit; text-decoration: none; }
     .tunnel-title { font-size: var(--fs-lg); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -248,4 +314,20 @@
     .tunnel-switch { flex: 0 0 auto; min-width: 52px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
     .tunnel-lock { flex: 0 0 auto; width: 52px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; color: var(--ink-3); }
     .empty { color: var(--ink-2); }
+    /* 이슈 348: IP 제한 토글과 갱신 버튼은 상태 줄 아래 한 줄을 쓴다. 360px 에서도 넘치지 않게 토글이 줄어들고 IP 는 줄임표로 줄인다. */
+    .tunnel-ip-row { flex: 1 0 100%; min-width: 0; display: flex; align-items: center; gap: var(--s-2); padding: 0 0 var(--s-3) var(--s-4); }
+    .tunnel-ip-toggle { min-width: 0; max-width: 100%; min-height: 32px; display: inline-flex; align-items: center; gap: var(--s-1);
+        padding: 0 var(--s-3); border-radius: 999px; border: 1px solid var(--line-1); background: var(--bg-3); color: var(--ink-2);
+        font: inherit; font-size: var(--fs-sm); cursor: pointer; }
+    .tunnel-ip-toggle.on { background: var(--pulse-glow); border-color: var(--pulse-dim); color: var(--pulse); }
+    .tunnel-ip-toggle.locked { cursor: default; }
+    .tunnel-ip-toggle[aria-disabled='true']:not(.locked) { cursor: progress; }
+    .tunnel-ip-toggle .ip-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--ff-mono); }
+    .tunnel-ip-toggle.on .ip-text.warn { color: var(--warn); font-family: inherit; }
+    .tunnel-ip-toggle .ip-extra { flex: 0 0 auto; }
+    .tunnel-ip-lock { flex: 0 0 auto; }
+    .tunnel-ip-refresh { flex: 0 0 auto; width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center;
+        border: 1px solid transparent; border-radius: var(--r-3); background: transparent; color: var(--ink-2); cursor: pointer; }
+    .tunnel-ip-refresh.emphasized { color: var(--warn); border-color: var(--warn); }
+    .tunnel-ip-refresh:disabled { color: var(--ink-3); border-color: transparent; cursor: default; }
 </style>

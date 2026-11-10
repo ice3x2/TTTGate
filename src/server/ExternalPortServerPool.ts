@@ -48,6 +48,8 @@ interface OnTerminateSessionCallback {
 const OPTION_BUNDLE_KEY : string = "portTunnelOption";
 const PORT_BUNDLE_KEY : string = "portNumber";
 const SESSION_ID_BUNDLE_KEY : string = "ID";
+// 이슈 348: 세션의 원격 주소. 허용 IP 가 바뀌면 이 값으로 끊을 세션을 고른다(HttpHandler 는 감싼 소켓이 닫힌 뒤에도 읽어야 한다).
+const REMOTE_ADDRESS_BUNDLE_KEY : string = "remoteAddress";
 
 type ExternalPortServerStatus = {
     port: number,
@@ -608,6 +610,7 @@ class ExternalPortServerPool {
             handler.setBufferSizeLimit(bufferSizeLimit);
             handler.setBundle(OPTION_BUNDLE_KEY, option);
             handler.setBundle(PORT_BUNDLE_KEY, server.port);
+            handler.setBundle(REMOTE_ADDRESS_BUNDLE_KEY, handler.socket?.remoteAddress);
 
             if(option.protocol == "http" || option.protocol == "https") {
                 logger.info(`Bound HttpHandler - id:${sessionID}, port:${server.port}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
@@ -695,6 +698,18 @@ class ExternalPortServerPool {
             .filter((handler: SocketHandler | HttpHandler)=> handler.getBundle(OPTION_BUNDLE_KEY)?.forwardPort == port )
             .map((handler: SocketHandler | HttpHandler) => { return handler.getBundle(SESSION_ID_BUNDLE_KEY)!; });
         await this.destroyHandlers(ids);
+    }
+
+    /**
+     * 이슈 348: 그 포트에서 refuse 가 참인 원격 주소의 세션을 끊고, 끊은 수를 돌려준다. 리스너는 그대로 둔다.
+     * 허용 IP 목록이나 IP 제한이 바뀌었을 때 이미 들어와 있는 연결에 같은 판정을 적용한다.
+     */
+    public async closeSessionsWhere(port: number, refuse: (remoteAddress: string | undefined) => boolean) : Promise<number> {
+        const ids = Array.from(this._handlerMap.values())
+            .filter((handler) => handler.getBundle(PORT_BUNDLE_KEY) === port && refuse(handler.getBundle(REMOTE_ADDRESS_BUNDLE_KEY)))
+            .map((handler) => handler.getBundle(SESSION_ID_BUNDLE_KEY) as number);
+        await this.destroyHandlers(ids);
+        return ids.length;
     }
 
     public async inactive(port: number) : Promise<boolean> {

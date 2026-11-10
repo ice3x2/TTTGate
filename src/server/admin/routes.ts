@@ -17,6 +17,11 @@ export type {Action, Target};
 export type RouteContext = {
     /** 활성 터널의 수명 상한을 다시 계산한다(#137). 소유자·사용자 그룹·그룹 속성이 바뀐 뒤 부른다. */
     reapplyTunnelCaps?: () => void;
+    /**
+     * 이슈 348: 허용 IP 목록·IP 제한·켜기 권한이 바뀐 뒤 부른다. 허용 IP 가 아닌 기존 연결을 끊는다. port 가 없으면 모든 터널이다.
+     * 실패해도 요청은 실패시키지 않는다(로그만 남긴다).
+     */
+    enforceActivatorIps?: (port?: number) => Promise<void>;
     req: IncomingMessage;
     res: ServerResponse;
     params: Record<string, string>;
@@ -175,6 +180,15 @@ const tunnelCertAudit = (ctx: RouteContext): AuditRouteMeta => auditMeta(AUDIT_E
  */
 export const isFieldProvided = (body: any, key: string): boolean => body?.[key] !== undefined;
 
+/**
+ * 이슈 348 FR-12: IP 제한 켜기는 켜기 권한, 끄기는 고치기 권한이다. 공유받은 사용자 한 명이 모든 사용자의 보호를 풀지 못하게 한다.
+ * 본문이 boolean 이 아니면 켜기 권한으로 판정하고 핸들러가 422 로 답한다.
+ */
+export const activatorIpOnlyAction = (ctx: RouteContext): Action => ctx.body?.enabled === false ? 'tunnel:update' : 'tunnel:activate';
+
+/** 이슈 348: 감사 메타는 검증 전에 만든다. boolean 이 아닌 본문 값은 남기지 않는다. */
+const enabledForAudit = (value: unknown): boolean | 'invalid' => typeof value === 'boolean' ? value : 'invalid';
+
 /** 활성화 타임아웃(초)의 상한: 10년. 그룹 수명 상한(UI 최대 1년)보다 넉넉하고 타이머 계산이 안전한 범위다. */
 const MAX_ACTIVE_TIMEOUT_SECONDS = 10 * 365 * 86_400;
 
@@ -280,6 +294,12 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
         audit: (ctx) => auditMeta(isTunnelActivationRequested(ctx) ? AUDIT_EVENT_TYPES.tunnel_activated : AUDIT_EVENT_TYPES.tunnel_deactivated, tunnelAuditTarget(ctx),
             tunnelOwnerAudit(ctx)),
         handler: 'onActiveTunneling'},
+    // 이슈 348: 켠 사람의 IP 만 받는 설정과 내 허용 IP 갱신. 둘 다 리스너를 다시 띄우지 않는다.
+    {method: 'PUT', pattern: new RegExp('^/api/tunneling/(?<port>[^/]*)/activatorIpOnly$'), action: activatorIpOnlyAction, target: tunnelTarget,
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.tunnel_ip_limit_updated, tunnelAuditTarget(ctx), {enabled: enabledForAudit(ctx.body?.enabled)}),
+        handler: 'onSetActivatorIpOnly'},
+    {method: 'POST', pattern: new RegExp('^/api/tunneling/(?<port>[^/]*)/activatorIp$'), action: 'tunnel:activate', target: tunnelTarget,
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.tunnel_ip_refreshed, tunnelAuditTarget(ctx)), handler: 'onRefreshActivatorIp'},
     {method: 'GET', pattern: new RegExp('^/api/externalServerStatuses$'), action: 'tunnel:list', target: tunnelTarget, handler: 'onGetExternalServerStatuses'},
     {method: 'GET', pattern: new RegExp('^/api/externalCert/(?<port>[^/]*)$'), action: 'tunnel:cert', target: tunnelTarget, handler: 'onGetExternalServerCert'},
     {method: 'POST', pattern: new RegExp('^/api/externalCert/(?<port>[^/]*)$'), action: 'tunnel:cert', target: tunnelTarget, audit: tunnelCertAudit, handler: 'onUpdateExternalServerCert'},

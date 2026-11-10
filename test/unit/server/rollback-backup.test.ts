@@ -246,3 +246,21 @@ test('a top-level denialLogRetentionDays alone, with every other sensitive field
     expect(result.success).toBe(true);
     expect(fs.readFileSync(boot.backupYaml, 'utf-8')).toBe(LEGACY_YAML);
 });
+
+// 이슈 348: 허용 IP 목록은 서버가 관리하는 실행 상태라 리비전을 올리지 않고 저장한다. 그래도 업그레이드 .bak 은 같은 배치로 남는다.
+test('a save that keeps the revision persists the yaml, leaves the state file alone, and still takes the backup', async () => {
+    const boot = await bootLegacyStore('rollback-backup-keep-revision');
+    const {connectionSecurity, mfaRequiredForSuperusers, auditRetentionDays, auditQueueSize, logLevel, closeStallMs, closeGraceMs,
+        adminAllowedOrigins, denialLogRetentionDays, ...withoutSensitive} = boot.store.serverOption;
+    const {rateLimit, ownerId, ...bare} = legacyTunnel(boot.store);
+    const result = boot.store.commitPreparedServerOption({
+        ...withoutSensitive, tunnelingOptions: [{...bare, activatorIps: {u_1: '203.0.113.1'}} as TunnelingOption]
+    } as ServerOption, {keepRevision: true});
+    expect(result.success).toBe(true);
+    expect(YAML.parse(fs.readFileSync(boot.configYaml, 'utf-8')).tunnelingOptions[0].activatorIps).toEqual({u_1: '203.0.113.1'});
+    expect(boot.store.getTunnelingOption(LEGACY_FORWARD_PORT)!.activatorIps).toEqual({u_1: '203.0.113.1'});
+    expect(boot.store.revisionState.currentRevision).toBe(7);
+    expect(fs.readFileSync(boot.stateJson, 'utf-8')).toBe(LEGACY_STATE_JSON);
+    expect(fs.readFileSync(boot.backupYaml, 'utf-8')).toBe(LEGACY_YAML);
+    expect(fs.readFileSync(boot.backupState, 'utf-8')).toBe(LEGACY_STATE_JSON);
+});

@@ -19,6 +19,8 @@ import {ConcurrencyDenial, ConcurrencyLimiter} from "./security/ConcurrencyLimit
 import {PRESET_BYTES_PER_SECOND} from "./security/BandwidthLimiter";
 import AuthorizationContext from "./rbac/AuthorizationContext";
 import {auditDirPath, FileAuditSink} from "./audit/FileAuditSink";
+import {activatorIpRestriction} from "./rbac/TunnelActivatorIps";
+import {isActivatorIpAllowed} from "./security/ActivatorIps";
 const logger = LoggerFactory.getLogger('server', 'TTTServer');
 
 type RuntimeApplyResult = {
@@ -82,6 +84,8 @@ class TTTServer {
         const admission = AdmissionController.instance;
         admission.attachConcurrency(new ConcurrencyLimiter(AuthorizationContext, (port) => admission.sessionCount(port)));
         admission.onConcurrencyDenied = this.onConcurrencyDenied;
+        // 이슈 348: 켠 사람의 IP 만 받는 터널의 허용 IP. 저장된 목록과 지금의 켜기 권한을 판정 때마다 읽는다.
+        admission.attachActivatorIps(activatorIpRestriction);
         // U5-09 / #124 — 일반 유저 그룹의 대역폭 프리셋. unlimited·슈퍼유저·migrated 는 정책이 없어 버킷도 없다.
         this._externalPortServerPool.BandwidthPolicy = (port) => {
             const owner = AuthorizationContext.ownerOf(port);
@@ -334,6 +338,20 @@ class TTTServer {
         if(disconnected.length > 0) logger.info(`trusted clients changed; disconnected: ${disconnected.join(', ')}`);
     }
 
+    /**
+     * 이슈 348: 허용 IP 목록·IP 제한·켜기 권한이 바뀐 뒤 부른다. 허용 IP 가 아닌 기존 연결을 끊는다(새 연결은 판정이 막는다).
+     * port 를 주지 않으면 리스너가 있는 모든 터널을 본다.
+     */
+    public async enforceActivatorIps(port?: number): Promise<void> {
+        const ports = port === undefined ? Object.keys(this._appliedExternal).map(Number) : [port];
+        for(const target of ports) {
+            const allowed = activatorIpRestriction(target);
+            if(allowed === undefined) continue;
+            const closed = await this._externalPortServerPool.closeSessionsWhere(target, (address) => !isActivatorIpAllowed(allowed, address));
+            if(closed > 0) logger.info(`tunnel ${target}: closed ${closed} connection(s) not from an allowed activator IP`);
+        }
+    }
+
     /** 켜져 있는 모든 외부 포트의 수명 상한을 다시 계산한다(#137 — 소유자·그룹·그룹 속성 변경 뒤). */
     public reapplyActiveCaps(): void {
         for(const port of Object.keys(this._appliedExternal).map(Number)) {
@@ -569,10 +587,13 @@ class TTTServer {
         }
     }
 
-    /** #338 이름과 이슈 347 공유 목록은 런타임이 쓰지 않는다. 둘만 다르면 리스너를 다시 시작하지 않는다. */
+    /**
+     * #338 이름과 이슈 347 공유 목록은 런타임이 쓰지 않는다. 이슈 348 의 IP 제한과 허용 IP 목록은 판정이 저장소에서 바로 읽는다.
+     * 이것들만 다르면 리스너를 다시 시작하지 않는다.
+     */
     private static sameExceptName(a: TunnelingOption, b: TunnelingOption): boolean {
-        const {name: _a, sharedUserIds: _sharedA, ...restA} = a;
-        const {name: _b, sharedUserIds: _sharedB, ...restB} = b;
+        const {name: _a, sharedUserIds: _sharedA, activatorIpOnly: _onlyA, activatorIps: _ipsA, ...restA} = a;
+        const {name: _b, sharedUserIds: _sharedB, activatorIpOnly: _onlyB, activatorIps: _ipsB, ...restB} = b;
         return ObjectUtil.canonicalEquals(restA, restB);
     }
 

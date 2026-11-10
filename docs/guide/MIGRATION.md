@@ -63,7 +63,8 @@ example `C:\TTTGate\config`. Substitute your own installation root in every comm
 
 The two `.bak` files hold the configuration as it was on disk immediately before the first save that added a
 new field (`connectionSecurity`, `mfaRequiredForSuperusers`, `auditRetentionDays`, `auditQueueSize`, `logLevel`,
-`closeStallMs`, `closeGraceMs`, `adminAllowedOrigins`, `denialLogRetentionDays`, or a tunnel's `ownerId` or `rateLimit`). Keeping them is a manual decision: **retain them for at least 14 days**
+`closeStallMs`, `closeGraceMs`, `adminAllowedOrigins`, `denialLogRetentionDays`, or a tunnel's `ownerId`, `rateLimit`,
+`sharedUserIds`, `activatorIpOnly` or `activatorIps`). Keeping them is a manual decision: **retain them for at least 14 days**
 after the upgrade, and remove them yourself once you have accepted the new configuration.
 
 A tunnel can also carry a new optional `name` (1 to 40 characters, shown in the tunnel list). The previous
@@ -156,6 +157,26 @@ After a downgrade, both fail closed:
   without an error.
 
 Before you downgrade, change `toggle` groups to `read_only` or `full` if their members must keep working.
+
+### Downgrading after the activator IP limit (2.3.0)
+
+2.3.0 adds two tunnel fields to `config/server.yaml`: `activatorIpOnly` turns on the limit that accepts connections
+only from the IP address of each user who turned the tunnel on, and `activatorIps` keeps one allowed address per
+user. Tunnels without `activatorIpOnly` read as off, so the upgrade does not cut connections that are open. New
+tunnels have it on. Turn it on for each existing tunnel after the upgrade.
+
+After a downgrade, the limit fails open:
+
+- The older server ignores both fields, so every tunnel accepts connections from every address again. It does not
+  warn about this.
+- When an older console or API call saves such a tunnel, the older server can drop `activatorIpOnly` and
+  `activatorIps` from the file. After you upgrade again, these tunnels have the limit off and an empty list.
+  Check them and turn the limit on again. Each user then turns the tunnel on or presses **Update to my IP** once.
+- The older server returns `activatorIps` to every user who can see the tunnel in `GET /api/tunnelingOption`,
+  not only to superusers.
+
+If a tunnel must stay protected, keep it off during the downgrade, or limit it with the blocklist or the country
+filter until you upgrade again.
 
 ## 5. Legacy-fallback mode
 

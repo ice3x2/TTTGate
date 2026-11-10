@@ -177,8 +177,11 @@ class ServerOptionCtrl {
     }
 
 
-    /** 이슈 338: signal 로 멈춘 읽기를 끊을 수 있다(상태 폴링의 기한). */
-    public async loadTunnelingStatus(signal?: AbortSignal) : Promise<{serverTime: number,statuses: Array<TunnelingStatus>}> {
+    /**
+     * 이슈 338: signal 로 멈춘 읽기를 끊을 수 있다(상태 폴링의 기한).
+     * 이슈 348: requesterIp 는 서버가 본 지금 내 IP 다. 모르거나 옛 서버면 null 이다.
+     */
+    public async loadTunnelingStatus(signal?: AbortSignal) : Promise<{serverTime: number, requesterIp: string | null, statuses: Array<TunnelingStatus>}> {
         let res = await fetch("/api/externalServerStatuses", {
             method: "GET",
             credentials: "same-origin",
@@ -188,7 +191,22 @@ class ServerOptionCtrl {
         if(!json || res.status == 401) {
             throw new InvalidSession();
         }
-        return {serverTime : json['serverTime'] as number, statuses:  json['statuses'] as Array<TunnelingStatus>};
+        return {serverTime : json['serverTime'] as number, requesterIp: typeof json['requesterIp'] === 'string' ? json['requesterIp'] : null,
+            statuses:  json['statuses'] as Array<TunnelingStatus>};
+    }
+
+    /** 이슈 348 FR-12: IP 제한을 켜고 끈다. 끄기는 고치기 권한이 필요하다(켜기 권한만 있으면 403 read_only). */
+    public setActivatorIpOnly(port: number, enabled: boolean) : Promise<ApiResult<{forwardPort: number; activatorIpOnly: boolean; myAllowedIp: string | null}>> {
+        return adminRequest(`/api/tunneling/${port}/activatorIpOnly`, {
+            method: "PUT", headers: {'Content-Type': 'application/json'}, body: JSON.stringify({enabled})
+        });
+    }
+
+    /** 이슈 348 FR-13: 내 허용 IP 를 지금 IP 로 바꾼다. 터널이 꺼져 있어도 된다. */
+    public refreshActivatorIp(port: number) : Promise<ApiResult<{forwardPort: number; allowedIp: string; previousIp: string | null}>> {
+        return adminRequest(`/api/tunneling/${port}/activatorIp`, {
+            method: "POST", headers: {'Content-Type': 'application/json'}, body: JSON.stringify({})
+        });
     }
 
     /** 실패하면 status 가 HTTP 상태다. 네트워크 실패는 0 이다(adminRequest 의 실패 값). */

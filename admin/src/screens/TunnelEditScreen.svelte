@@ -107,7 +107,9 @@
         bufferLimitOnClient: 10,
         bufferLimitOnServer: 10,
         allowedClientNamesQuery: '',
-        rateLimit: defaultRateLimit('tcp')
+        rateLimit: defaultRateLimit('tcp'),
+        // 이슈 348 FR-1: 새 터널은 켠 사람의 IP 만 받는 설정이 켜진 채 만든다.
+        activatorIpOnly: true
     });
 
     // 옛 _validServerBuffer(86행) 그대로다.
@@ -637,6 +639,12 @@
             <Field label="Startup"
                 hint="Applies when the server starts, when the tunnel is created, and when you save a tunnel that is not Online. Saving an Online tunnel keeps its activation switch and its timer.">
                 <Checkbox id="input-inactive-on-startup" label="Inactive on startup" bind:checked={option.inactiveOnStartup} />
+            </Field>
+            <Field label="Allowed IP"
+                hint="Accepts connections only from the IP of each person who turned this tunnel on or updated their IP. Turn it off when a CDN or reverse proxy sits in front of this tunnel.">
+                <!-- 이슈 348 FR-19: 옛 터널은 서버가 false 로 준다. 함수 바인딩으로 undefined 도 꺼짐으로 받는다. -->
+                <Checkbox id="input-activator-ip-only" label="Only from the IP of whoever turned it on"
+                    bind:checked={() => option!.activatorIpOnly === true, (on) => (option!.activatorIpOnly = on)} />
             </Field>
         </div>
     </Card>

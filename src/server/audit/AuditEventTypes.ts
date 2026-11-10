@@ -24,6 +24,8 @@ export const AUDIT_EVENT_TYPES = {
     tunnel_created: 'tunnel_created', tunnel_updated: 'tunnel_updated', tunnel_deleted: 'tunnel_deleted',
     tunnel_activated: 'tunnel_activated', tunnel_deactivated: 'tunnel_deactivated', tunnel_reassigned: 'tunnel_reassigned',
     tunnel_cert_updated: 'tunnel_cert_updated', tunnel_cert_deleted: 'tunnel_cert_deleted',
+    // 이슈 348: 켠 사람의 IP 만 받는 설정을 바꿨다(detail.enabled), 요청자가 자기 허용 IP 를 갱신했다(detail 에 이전·새 IP).
+    tunnel_ip_limit_updated: 'tunnel_ip_limit_updated', tunnel_ip_refreshed: 'tunnel_ip_refreshed',
     // 서버
     server_option_updated: 'server_option_updated', admin_cert_updated: 'admin_cert_updated',
     // 신뢰 클라이언트·등록(#212). 코드·비밀값은 감사에 남기지 않는다.

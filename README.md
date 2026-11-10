@@ -262,7 +262,7 @@ By default, the console listens only on the server host. Use one of these ways:
 
 With an SSH tunnel or a reverse proxy, the console sees every connection from `127.0.0.1`. The country filter of the admin console (**Security** → **Apply to admin console**) therefore decides on the proxy or tunnel address, not on the real client address. Apply country limits on the proxy instead (for example nginx `allow`/`deny` or a GeoIP module).
 
-`-trustXForwardedFor` changes the client address that the login lockout, the audit log, the session list and the binding of two-factor login tickets use. It does not change the country filter.
+`-trustXForwardedFor` changes the client address that the login lockout, the audit log, the session list and the binding of two-factor login tickets use. It also changes the address that the IP limit of a tunnel saves for you (see [Limit a Tunnel to the IPs That Turned It On](#limit-a-tunnel-to-the-ips-that-turned-it-on)). It does not change the country filter.
 
 #### If the Console Does Not Open
 
@@ -350,6 +350,7 @@ After you sign in, the console opens the **Tunnels** list. This is the same for 
 - **Undo:** after each change, a message with **Undo** stays for 5 seconds. Undo of a turn-off turns the tunnel on again with the time that was left. It does not bring back cut connections.
 - **Status line:** `On`, `Off`, `client offline` (no connected client may serve this tunnel), `N connections`, the time left, `Can't open port <port>`, the owner of a tunnel that is not yours, and `cert not verified`. A tunnel that you can only view shows a lock instead of a switch.
 - **Name:** give a tunnel a name in its edit screen (**Name**, optional, up to 40 characters). Without a name, the row shows the port and the destination. Saving only a new name does not restart the tunnel, so open connections stay.
+- **IP limit:** the button below the status line shows whether the tunnel accepts only the IPs of the people who turned it on, and the refresh button next to it updates your IP. See [Limit a Tunnel to the IPs That Turned It On](#limit-a-tunnel-to-the-ips-that-turned-it-on).
 - **Details:** tap a row to open its edit screen. Its **Status** area shows uptime, sessions, traffic, blocked connections and the **Time limit** timer. Only tunnels that you can change open an edit screen.
 
 #### Sign In with a Passkey
@@ -409,6 +410,29 @@ Share a tunnel with other users:
 - When you delete a user, the server removes the user from every share list.
 - Time limit: when someone turns on a tunnel, the server uses the shorter limit of the owner's group and of that person's group. A superuser, a group with no limit and a `system:migrated` owner add no limit. The limit stays when the owner saves the tunnel later. When another user turns the tunnel on again, for example with the **Time limit** timer, the limit of that user applies.
 - The audit log records the owner as `ownerId` for `tunnel_activated` and `tunnel_deactivated`. For a changed share list, `tunnel_updated` records `sharedUsersAdded` and `sharedUsersRemoved`.
+
+#### Limit a Tunnel to the IPs That Turned It On
+
+Tunnels that stay open for a long time, such as RDP, get many password-guessing attempts. With the IP limit on, a tunnel accepts connections only from the IP address of each person who turned it on. The server closes connections from other addresses before it reads any data.
+
+- **Setting:** each tunnel has the setting `activatorIpOnly`. In the edit screen, it is **Allowed IP** → **Only from the IP of whoever turned it on**. New tunnels have it on. Tunnels that you saved with an earlier version have it off, so an upgrade does not cut connections that are open. Turn it on for each tunnel.
+- **Allowed IPs:** the server keeps one IP address for each user of a tunnel (`activatorIps` in `config/server.yaml`). When you turn a tunnel on in the console, the server sets your entry to the address of your browser. The entries of other users stay. This also applies when you turn on a tunnel that is already on, for example with the **Time limit** timer. Turning a tunnel off, the end of its time limit and a server restart do not clear the list.
+- **In the tunnel list:** each row that you can turn on shows the IP limit button below the status line. Gray **IP limit off** means the limit is off. Green shows your allowed IP, with `+N` when other users have entries. An orange `My IP not set` means that the list has no entry for you. The refresh button next to it (**Update to my IP**) sets your entry to your current address. It works while the tunnel is off. The console highlights it when your current address is not your allowed IP. The buttons stay available when the tunnel is off.
+- **Who can change it:** everyone who can turn the tunnel on can turn the limit on and update their own IP. Only users who can change the tunnel can turn the limit off. A shared user sees a limit that is on with a small lock and cannot turn it off. One shared user cannot remove the protection for all users.
+- **Refused connections:** on a TLS tunnel, the server closes the connection before the TLS handshake. The denial shows as `activator-ip` (**IP limit**) in [Denied Connections](#denied-connections). The server uses the address of the TCP connection. It does not use `X-Forwarded-For` or other request headers, because the client sets them.
+- **Removed entries:** the server removes the entry of a user when you remove the user from the share list, when you delete the user, and when you move the tunnel to another owner and the old owner can no longer turn it on. Entries of disabled users and of users who lost the permission stay in the file, but they do not allow connections. When an entry changes, the server also closes open connections from addresses that are no longer allowed.
+- **Audit log:** `tunnel_ip_limit_updated` records `enabled`. `tunnel_ip_refreshed` records `allowedIpBefore` and `allowedIp`. When turning a tunnel on changes your entry, `tunnel_activated` records the same two values. When a save in the edit screen changes the limit, `tunnel_updated` records `activatorIpOnly`.
+- **API:** `PUT /api/tunneling/<port>/activatorIpOnly` with `{"enabled": true}` or `{"enabled": false}`, and `POST /api/tunneling/<port>/activatorIp` to update your IP. `GET /api/externalServerStatuses` returns `activatorIpOnly`, `myAllowedIp` and `allowedIpCount` for each tunnel, and your current address as `requesterIp`. Only superusers get the entries of all users (`allowedIps`).
+
+Before you rely on it:
+
+- A superuser who creates a tunnel for another user adds only the superuser's own IP. The owner must turn the tunnel on or press **Update to my IP** before they can connect.
+- Behind a reverse proxy, start the server with `-trustXForwardedFor` (and `-trustedProxyHops`), so that the server sees the address of the browser. Otherwise every user gets the address of the proxy. Through an SSH tunnel, the console sees `127.0.0.1`, so connections from the internet are refused. Then open the console another way, or turn the limit off.
+- When you turn a tunnel on with your phone and connect from a PC, the two addresses can differ. Press **Update to my IP** on the PC.
+- One PC can open the console over IPv6 and the tunnel over IPv4 (dual stack). The two addresses then differ and the connection is refused. Open the console and the tunnel the same way, for example both with an IPv4 address.
+- An address that other people also use, for example in a café or a hotel, stays allowed until you update your IP. Press **Update to my IP** when you use another network.
+- Do not use the limit for an HTTP or HTTPS tunnel behind a CDN or a reverse proxy. Every connection then comes from the proxy, so the server refuses all of them.
+- If console requests and tunnel connections reach the server from the same NAT or proxy address (for example the Docker `userland-proxy` or a reverse proxy on the same host), the server saves that shared address as your IP, so the limit lets every connection in.
 
 ### Client
 
@@ -783,7 +807,7 @@ Check whether TTTGate runs, as a sentence and as JSON:
 
 #### Denied Connections
 
-The server refuses a connection for one of five reasons:
+The server refuses a connection for one of six reasons:
 
 | Reason | Shown as | Meaning |
 |---|---|---|
@@ -792,6 +816,7 @@ The server refuses a connection for one of five reasons:
 | `rate-limit-ban` | Temporarily banned | The address is banned for a time after too many connections. |
 | `rate-limit-exceeded` | Rate limit exceeded | The address made too many connections in the rate-limit window. |
 | `concurrency-limit` | Connection limit | The tunnel owner's group reached its limit of connections at the same time. |
+| `activator-ip` | IP limit | The tunnel accepts only the IPs of the people who turned it on, and the address is not one of them. See [Limit a Tunnel to the IPs That Turned It On](#limit-a-tunnel-to-the-ips-that-turned-it-on). |
 
 You can see denials in three places:
 
@@ -925,6 +950,7 @@ The server logs a warning at startup for each of these:
 - HTTP tunnels reject a request whose header block is larger than 64 KiB (earlier: 8 MiB) with `431`.
 - Admin passwords are limited to 1024 characters (leading and trailing whitespace is not counted). A longer password cannot be set, and a login with a longer password fails without a password check. If you use a longer password, change it before you upgrade.
 - The admin server handles at most 5 login requests (`/api/login` and `/api/login/mfa` together) at the same time from one network (IPv4 /24, IPv6 /64). More requests get `429` with code `login_concurrency_limit`. Try again after the earlier requests finish.
+- Tunnels that you saved with an earlier version have the IP limit (`activatorIpOnly`) off after the upgrade, so connections that are open are not cut. New tunnels have it on. Turn it on for each existing tunnel. See [Limit a Tunnel to the IPs That Turned It On](#limit-a-tunnel-to-the-ips-that-turned-it-on).
 - The admin server keeps at most 20 login sessions per user and 10,000 in total. A new login closes the session that was used least recently and records a `session_killed` audit event with actor `system`. Scripts that log in to the admin API must call `POST /api/logout` when they finish. Otherwise each run closes an older session of the same account, for example a browser session.
 
 ### Mixed-Version Rollout Policy
@@ -1212,7 +1238,7 @@ net.ipv4.tcp_wmem = 4096 16384 1048576
 
 SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연결이 `127.0.0.1` 에서 온 것으로 보인다. 그래서 관리 화면의 국가 필터(**Security** → **Apply to admin console**)는 실제 클라이언트 주소가 아니라 프록시나 터널의 주소로 판정한다. 국가 제한은 프록시에서 건다(예: nginx `allow`/`deny` 나 GeoIP 모듈).
 
-`-trustXForwardedFor` 는 로그인 잠금, 감사 로그, 세션 목록이 쓰는 클라이언트 주소와 2단계 로그인 티켓을 묶어 두는 클라이언트 주소를 바꾼다. 국가 필터는 바꾸지 않는다.
+`-trustXForwardedFor` 는 로그인 잠금, 감사 로그, 세션 목록이 쓰는 클라이언트 주소와 2단계 로그인 티켓을 묶어 두는 클라이언트 주소를 바꾼다. 터널의 IP 제한이 내 IP 로 저장하는 주소도 바꾼다([켠 사람의 IP 에서만 연결 받기](#켠-사람의-ip-에서만-연결-받기) 참고). 국가 필터는 바꾸지 않는다.
 
 #### 관리 화면이 열리지 않을 때
 
@@ -1300,6 +1326,7 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 - **되돌리기:** 바꿀 때마다 **Undo** 가 붙은 알림이 5초 동안 보인다. 끄기를 되돌리면 끈 순간에 남아 있던 시간으로 다시 켠다. 끊긴 연결은 돌아오지 않는다.
 - **상태 줄:** `On`, `Off`, `client offline`(이 터널을 맡을 수 있는 클라이언트가 연결되어 있지 않음), `N connections`, 남은 시간, `Can't open port <포트>`, 내 것이 아닌 터널의 소유자, `cert not verified` 를 보인다. 보기만 허락된 터널은 스위치 대신 자물쇠를 보인다.
 - **이름:** 터널 편집 화면의 **Name**(선택, 40자까지)에 이름을 넣는다. 이름이 없으면 포트와 목적지를 보인다. 이름만 바꿔 저장하면 터널을 다시 시작하지 않으므로 진행 중인 연결이 남는다.
+- **IP 제한:** 상태 줄 아래 버튼은 그 터널이 켠 사람의 IP 에서만 연결을 받는지 보이고, 옆의 갱신 버튼은 내 IP 를 지금 주소로 바꾼다. [켠 사람의 IP 에서만 연결 받기](#켠-사람의-ip-에서만-연결-받기)를 읽는다.
 - **자세히:** 줄을 누르면 편집 화면이 열린다. **Status** 영역에 가동 시간, 세션, 트래픽, 차단 수, **Time limit** 타이머가 있다. 편집 화면은 고칠 수 있는 터널에서만 열린다.
 
 #### 패스키로 로그인
@@ -1359,6 +1386,29 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 - 사용자를 지우면 서버가 모든 공유 목록에서 그 사용자를 뺀다.
 - 사용 시간 상한: 터널을 켜면 소유자 그룹 상한과 켠 사람 그룹 상한 가운데 짧은 값을 쓴다. 슈퍼유저, 상한이 없는 그룹, `system:migrated` 소유자는 비교에서 빠진다. 나중에 소유자가 터널을 저장해도 이 상한은 그대로다. 다른 사용자가 다시 켜면(예: **Time limit** 타이머) 그 사용자의 상한을 쓴다.
 - 감사 로그의 `tunnel_activated`·`tunnel_deactivated` 에는 소유자가 `ownerId` 로 남는다. 공유 목록이 바뀌면 `tunnel_updated` 에 `sharedUsersAdded`·`sharedUsersRemoved` 가 남는다.
+
+#### 켠 사람의 IP 에서만 연결 받기
+
+RDP 처럼 오래 열어 두는 터널에는 비밀번호를 무작위로 넣어 보는 공격이 계속 들어온다. IP 제한을 켜면 터널을 켠 사람의 IP 주소에서 오는 연결만 받는다. 다른 주소의 연결은 데이터를 읽기 전에 닫는다.
+
+- **설정:** 터널마다 `activatorIpOnly` 설정이 있다. 편집 화면에서는 **Allowed IP** → **Only from the IP of whoever turned it on** 이다. 새 터널은 켜진 채 만들어진다. 이전 버전에서 저장한 터널은 꺼져 있으므로, 업그레이드해도 열려 있는 연결이 끊기지 않는다. 터널마다 직접 켠다.
+- **허용 IP:** 서버는 터널마다 사용자별로 IP 주소를 하나씩 둔다(`config/server.yaml` 의 `activatorIps`). 관리 화면에서 터널을 켜면 내 항목이 지금 브라우저의 주소로 바뀐다. 다른 사용자의 항목은 그대로다. 이미 켜진 터널을 다시 켤 때(예: **Time limit** 타이머)도 같다. 터널을 끄거나, 사용 시간이 끝나거나, 서버를 다시 시작해도 목록은 지워지지 않는다.
+- **터널 목록:** 켤 수 있는 터널의 줄에는 상태 줄 아래에 IP 제한 버튼이 있다. 회색 **IP limit off** 는 꺼진 상태다. 초록색은 내 허용 IP 를 보이고, 다른 사용자의 항목이 있으면 `+N` 을 붙인다. 주황색 `My IP not set` 은 목록에 내 항목이 없다는 뜻이다. 옆의 갱신 버튼(**Update to my IP**)을 누르면 내 항목이 지금 주소로 바뀐다. 터널이 꺼져 있어도 된다. 지금 주소가 내 허용 IP 와 다르면 갱신 버튼이 강조된다. 터널이 꺼져도 두 버튼은 그대로 쓸 수 있다.
+- **바꿀 수 있는 사람:** 터널을 켤 수 있는 사람은 누구나 IP 제한을 켜고 자기 IP 를 갱신할 수 있다. IP 제한을 끄는 것은 터널을 고칠 수 있는 사람만 할 수 있다. 공유받은 사용자에게는 켜진 IP 제한이 작은 자물쇠와 함께 보이고, 끌 수 없다. 공유받은 사용자 한 명이 모두의 보호를 풀지 못하게 하기 위해서다.
+- **거절된 연결:** TLS 터널에서는 TLS 핸드셰이크 전에 연결을 닫는다. 거절은 [거절된 연결](#거절된-연결)에 `activator-ip`(**IP limit**)로 남는다. 서버는 TCP 연결의 주소를 쓴다. `X-Forwarded-For` 같은 요청 헤더는 접속하는 쪽이 마음대로 정할 수 있으므로 쓰지 않는다.
+- **지워지는 항목:** 공유 목록에서 사용자를 빼거나, 사용자를 지우거나, 소유자를 바꿔 이전 소유자가 더는 터널을 켤 수 없으면 서버가 그 사용자의 항목을 지운다. 비활성 사용자와 권한을 잃은 사용자의 항목은 파일에 남지만 연결을 허용하지 않는다. 항목이 바뀌면 더는 허용되지 않는 주소에서 열려 있던 연결도 닫는다.
+- **감사 로그:** `tunnel_ip_limit_updated` 에 `enabled` 가 남는다. `tunnel_ip_refreshed` 에 `allowedIpBefore`·`allowedIp` 가 남는다. 터널을 켜서 내 항목이 바뀌면 `tunnel_activated` 에 같은 두 값이 남는다. 편집 화면의 저장으로 IP 제한이 바뀌면 `tunnel_updated` 에 `activatorIpOnly` 가 남는다.
+- **API:** `PUT /api/tunneling/<port>/activatorIpOnly` 에 `{"enabled": true}` 나 `{"enabled": false}` 를 보낸다. 내 IP 갱신은 `POST /api/tunneling/<port>/activatorIp` 다. `GET /api/externalServerStatuses` 는 터널마다 `activatorIpOnly`, `myAllowedIp`, `allowedIpCount` 를, 최상위에 지금 내 주소 `requesterIp` 를 준다. 모든 사용자의 항목(`allowedIps`)은 슈퍼유저에게만 준다.
+
+쓰기 전에 알아 둘 점:
+
+- 슈퍼유저가 다른 사용자의 터널을 만들어 바로 켜면 슈퍼유저의 IP 만 들어 있다. 소유자는 터널을 켜거나 **Update to my IP** 를 눌러야 연결할 수 있다.
+- 관리 화면이 역방향 프록시 뒤에 있으면 `-trustXForwardedFor`(와 `-trustedProxyHops`)로 서버를 시작해야 서버가 브라우저의 주소를 본다. 그러지 않으면 모든 사용자의 IP 가 프록시 주소가 된다. SSH 터널로 관리 화면을 열면 서버에는 `127.0.0.1` 로 보이므로 인터넷에서 오는 연결이 모두 거절된다. 이때는 다른 방법으로 관리 화면을 열거나 IP 제한을 끈다.
+- 휴대폰으로 터널을 켜고 PC 에서 접속하면 두 주소가 다를 수 있다. 이때 PC 에서 **Update to my IP** 를 누른다.
+- 같은 PC 라도 관리 화면은 IPv6 로, 터널 연결은 IPv4 로 나갈 수 있다(듀얼 스택). 그러면 두 주소가 달라 연결이 거절된다. 관리 화면과 터널을 같은 방식으로 연다. 예를 들어 둘 다 IPv4 주소로 연다.
+- 카페나 호텔처럼 여러 사람이 함께 쓰는 주소는 내가 IP 를 갱신할 때까지 허용된다. 다른 네트워크로 옮기면 **Update to my IP** 를 누른다.
+- CDN 이나 역방향 프록시 뒤에 있는 HTTP·HTTPS 터널에는 IP 제한을 쓰지 않는다. 모든 연결이 프록시에서 오므로 서버가 모두 거절한다.
+- 관리 화면 요청과 터널 연결이 같은 NAT·프록시 주소로 서버에 들어오면(예: Docker `userland-proxy`, 같은 호스트의 역방향 프록시) 서버가 그 공유 주소를 내 IP 로 저장하므로, IP 제한이 모든 연결을 받아들인다.
 
 ### 클라이언트
 
@@ -1733,7 +1783,7 @@ TTTGate 가 돌고 있는지 문장과 JSON 으로 확인한다.
 
 #### 거절된 연결
 
-서버는 다섯 가지 사유로 연결을 거절한다.
+서버는 여섯 가지 사유로 연결을 거절한다.
 
 | 사유 | 화면 표기 | 뜻 |
 |---|---|---|
@@ -1742,6 +1792,7 @@ TTTGate 가 돌고 있는지 문장과 JSON 으로 확인한다.
 | `rate-limit-ban` | Temporarily banned | 연결이 너무 많아 일정 시간 동안 차단된 주소다. |
 | `rate-limit-exceeded` | Rate limit exceeded | 레이트 리미트 창 안에서 연결이 너무 많았다. |
 | `concurrency-limit` | Connection limit | 터널 소유자 그룹의 동시 연결 한도에 닿았다. |
+| `activator-ip` | IP limit | 터널을 켠 사람의 IP 만 받는 터널인데, 그 주소가 아니다. [켠 사람의 IP 에서만 연결 받기](#켠-사람의-ip-에서만-연결-받기)를 읽는다. |
 
 거절은 세 곳에서 볼 수 있다.
 
@@ -1875,6 +1926,7 @@ TTTGate 가 돌고 있는지 문장과 JSON 으로 확인한다.
 - HTTP 터널은 헤더 블록이 64 KiB(이전: 8 MiB)보다 큰 요청을 `431` 로 거부한다.
 - 관리자 비밀번호는 1024자까지다(앞뒤 공백은 세지 않는다). 더 긴 비밀번호는 정할 수 없고, 더 긴 비밀번호로 로그인하면 비밀번호를 확인하지 않고 실패한다. 더 긴 비밀번호를 쓰고 있다면 업그레이드하기 전에 바꾼다.
 - 관리 서버는 한 네트워크(IPv4 /24, IPv6 /64)에서 동시에 오는 로그인 요청(`/api/login` 과 `/api/login/mfa` 합계)을 5개까지만 처리한다. 그보다 많은 요청은 코드 `login_concurrency_limit` 와 함께 `429` 를 받는다. 앞선 요청이 끝난 뒤 다시 시도한다.
+- 이전 버전에서 저장한 터널은 업그레이드한 뒤 IP 제한(`activatorIpOnly`)이 꺼져 있으므로 열려 있는 연결이 끊기지 않는다. 새 터널은 켜진 채 만들어진다. 기존 터널은 터널마다 직접 켠다. [켠 사람의 IP 에서만 연결 받기](#켠-사람의-ip-에서만-연결-받기)를 읽는다.
 - 관리 서버는 사용자마다 로그인 세션을 20개, 전체로는 10,000개까지 유지한다. 새로 로그인하면 가장 오래 쓰지 않은 세션을 닫고, 행위자 `system` 으로 `session_killed` 감사 이벤트를 남긴다. 관리 API 에 로그인하는 스크립트는 끝날 때 반드시 `POST /api/logout` 을 호출한다. 그러지 않으면 실행할 때마다 같은 계정의 오래된 세션(예: 브라우저 세션)이 닫힌다.
 
 ### 버전 혼합 배포 정책
