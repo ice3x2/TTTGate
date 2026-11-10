@@ -445,7 +445,8 @@ test("목적지 호스트를 바꿔 저장하면 본문 전체가 그대로 나�
         expect(await app.page.locator("li[data-port]").count()).toBe(2);
 
         // 목록 응답의 소유 정보(ownerId·owner·editable)는 저장 본문에 싣지 않는다. 소유자 변경은 전용 API 만 한다.
-        const {ownerId: _ownerId, owner: _owner, editable: _editable, ...storedBody} = stored;
+        // #347: 화면용 toggleable·sharedUsers 도 싣지 않는다. 공유 목록은 sharedUserIds 로만 보낸다.
+        const {ownerId: _ownerId, owner: _owner, editable: _editable, toggleable: _toggleable, sharedUsers: _sharedUsers, ...storedBody} = stored;
         expect(sent).toEqual([{
             ...storedBody,
             httpOption: stored.httpOption ?? EMPTY_HTTP_OPTION,
@@ -681,6 +682,8 @@ test("새 터널 화면은 삭제 버튼 없이 기본값을 채우고 Start 로
             allowedClientNames: [],
             // U5-06: 새 터널은 TCP 기본 레이트 리밋으로 시작한다.
             rateLimit: {enabled: true, windowMs: 60000, maxConnections: 30, banMs: 600000, customized: false},
+            // #347: 새 터널은 공유 사용자 없이 만든다.
+            sharedUserIds: [],
             expectedRevision: list.revisionState.currentRevision,
         }]);
         expect(app.errors).toEqual([]);

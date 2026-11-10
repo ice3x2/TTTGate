@@ -120,7 +120,7 @@ export type UserView = {id: string; username: string; displayName: string; role:
 export type PasskeyView = {id: string; name: string; rpId: string; createdAt: number; lastUsedAt: number | null; backedUp: boolean};
 export type TunnelProtocolName = 'TCP' | 'HTTP' | 'HTTPS' | 'HTTP_REWRITE';
 export type GroupAttributes = {
-    tunnel_crud: 'none' | 'read_only' | 'full';
+    tunnel_crud: 'none' | 'read_only' | 'toggle' | 'full';
     max_tunnel_count: number;
     max_tunnel_duration_ms: number;
     allowed_port_range: Array<{from: number; to: number}>;

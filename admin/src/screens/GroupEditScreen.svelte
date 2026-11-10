@@ -28,7 +28,8 @@
     type Permission = keyof GroupAttributes['http_tunnel_rewrite_permissions'];
 
     const HOUR_MS = 3_600_000;
-    const CRUD = [{value: 'none', label: 'None'}, {value: 'read_only', label: 'Read only'}, {value: 'full', label: 'Full'}];
+    // 이슈 347: toggle 은 자기에게 할당되었거나 공유된 터널을 켜고 끄기만 한다.
+    const CRUD = [{value: 'none', label: 'None'}, {value: 'read_only', label: 'Read only'}, {value: 'toggle', label: 'Toggle only'}, {value: 'full', label: 'Full'}];
     const PROTOCOLS: Array<{value: TunnelProtocolName; label: string}> = [
         {value: 'TCP', label: 'TCP'}, {value: 'HTTP', label: 'HTTP'}, {value: 'HTTPS', label: 'HTTPS'}, {value: 'HTTP_REWRITE', label: 'HTTP rewrite'}];
     const PERMISSIONS: Array<{value: Permission; label: string}> = [

@@ -1,9 +1,10 @@
-import type {Target} from "./AdminAuthorizer";
+import {authorize, Target} from "./AdminAuthorizer";
 import {IdentityStore} from "./IdentityStore";
 import {cloneGroupAttributes, DEFAULT_GROUP_ATTRIBUTES, GroupAttributes, MIGRATED_OWNER_ID, Role} from "./IdentityTypes";
 import ServerOptionStore from "../ServerOptionStore";
 import {TunnelingOption} from "../../types/TunnelingOption";
 import LoggerFactory from "../../util/logger/LoggerFactory";
+import {sharedUserIdsOf} from "./TunnelSharing";
 
 const logger = LoggerFactory.getLogger('server', 'AuthorizationContext');
 
@@ -43,10 +44,13 @@ function ownerOf(port: number): OwnerInfo | undefined {
     return option ? resolveOwner(option) : undefined;
 }
 
-/** #100 (U2-08) 의 라우트가 authorize 에 넘기는 대상. */
+/** #100 (U2-08) 의 라우트가 authorize 에 넘기는 대상. 이슈 347 의 공유 목록은 비어 있지 않을 때만 싣는다. */
 function targetOf(port: number): Target {
-    const owner = ownerOf(port);
-    return {port, owner: owner ? {userId: owner.userId, groupId: owner.groupId} : undefined};
+    const option = ServerOptionStore.instance.getTunnelingOption(port);
+    const owner = option ? resolveOwner(option) : undefined;
+    const sharedUserIds = option ? sharedUserIdsOf(option) : [];
+    return {port, owner: owner ? {userId: owner.userId, groupId: owner.groupId} : undefined,
+        ...(sharedUserIds.length > 0 ? {sharedUserIds} : {})};
 }
 
 /** 없는 그룹이면 기본값의 복사본을 준다. 어느 경우든 저장소·상수와 참조를 공유하지 않는다. */
@@ -70,6 +74,21 @@ function portsOfGroup(groupId: string): number[] {
         .sort((left, right) => left - right);
 }
 
+/**
+ * 이슈 347 FR-15: 수명 상한에 넣을 켠 사람. 지금 그 포트를 켤 수 있는 활성 사용자만 준다.
+ * 삭제되었거나 켜기 권한을 잃었으면 undefined 이고, 그때는 소유자 그룹 상한만 쓴다.
+ * 비밀번호 변경·MFA 등록 요구는 로그인 절차의 일이므로 보지 않는다.
+ */
+function activatorOf(userId: string, port: number): OwnerInfo | undefined {
+    const user = IdentityStore.instance.user(userId);
+    if(!user || user.status !== 'active') {
+        return undefined;
+    }
+    const decision = authorize({userId: user.id, username: user.username, role: user.role, groupId: user.groupId,
+        attributes: groupAttributes(user.groupId), mustChangePassword: false}, 'tunnel:activate', targetOf(port));
+    return decision.allowed ? {userId: user.id, groupId: user.groupId, role: user.role} : undefined;
+}
+
 function isSuperuserOwned(port: number): boolean {
     return ownerOf(port)?.role === 'superuser';
 }
@@ -91,6 +110,7 @@ export const AuthorizationContext = {
     portsOfOwner,
     isSuperuserOwned,
     ownedCount,
+    activatorOf,
     resetForTest(): void {
         warnedOrphanPorts.clear();
     }

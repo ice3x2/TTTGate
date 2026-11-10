@@ -7,6 +7,8 @@ import {AUDIT_EVENT_TYPES} from "../audit/AuditEventTypes";
 import {IdentityStore} from "../rbac/IdentityStore";
 import {AuthorizationContext} from "../rbac/AuthorizationContext";
 import {toUserView} from "../rbac/UserView";
+import {lookupUsers, parseLookupQuery} from "../rbac/UserLookup";
+import {removeSharedUserEverywhere} from "../rbac/TunnelOwnership";
 import {generateTemporaryPassword} from "../rbac/temporaryPassword";
 import {
     DEFAULT_GROUP_ID,
@@ -180,7 +182,20 @@ const onDeleteUser = async (ctx: RouteContext): Promise<void> => {
         ctx.fail(409, 'user_owns_tunnels', `user still owns tunnels: ${owned.join(', ')}`);
         return;
     }
-    replyResult(ctx, IdentityStore.instance.deleteUser(ctx.params.id), () => ({}));
+    const deleted = IdentityStore.instance.deleteUser(ctx.params.id);
+    // 이슈 347 FR-7: 지운 사용자를 터널 공유 목록에서도 뺀다.
+    if(deleted.success) await removeSharedUserEverywhere(ctx.params.id);
+    replyResult(ctx, deleted, () => ({}));
+};
+
+/** 이슈 347 FR-9: 공유할 사용자 검색. 호출마다 감사하지 않는다(권한 거부는 route() 가 access_denied 로 남긴다). */
+const onLookupUsers = async (ctx: RouteContext): Promise<void> => {
+    const parsed = parseLookupQuery(new URL(ctx.req.url ?? '/', 'http://localhost').searchParams.get('q'));
+    if(!parsed.success) {
+        ctx.fail(parsed.status, parsed.code, parsed.message);
+        return;
+    }
+    ctx.ok({users: lookupUsers(IdentityStore.instance.users(), parsed.query, ctx.principal!)});
 };
 
 const onResetUserPassword = async (ctx: RouteContext): Promise<void> => {
@@ -521,6 +536,7 @@ export const rbacRouteHandlers: RouteHandlers = {
     onRegenerateRecoveryCodes,
     onResetUserMfa,
     onListUsers,
+    onLookupUsers,
     onCreateUser,
     onGetUser,
     onUpdateUser,

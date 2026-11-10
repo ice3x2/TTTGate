@@ -3,7 +3,8 @@ import type {Passkey} from "../passkey/Passkey";
 
 export type Role = 'superuser' | 'regular';
 export type UserStatus = 'active' | 'disabled';
-export type TunnelCrud = 'none' | 'read_only' | 'full';
+/** 이슈 347: toggle 은 터널 보기와 켜고 끄기만 준다(만들기·고치기·지우기 없음). */
+export type TunnelCrud = 'none' | 'read_only' | 'toggle' | 'full';
 export type AllowedProtocol = 'TCP' | 'HTTP' | 'HTTPS' | 'HTTP_REWRITE';
 export type AdminUiSection = 'tunnels' | 'my_audit' | 'my_profile' | 'my_sessions';
 export type TunnelVisibility = 'private' | 'group_read';
@@ -75,7 +76,7 @@ export const MAX_PASSWORD_LENGTH = 1024;
 
 const ALLOWED_PROTOCOLS: readonly AllowedProtocol[] = ['TCP', 'HTTP', 'HTTPS', 'HTTP_REWRITE'];
 const ADMIN_UI_SECTIONS: readonly AdminUiSection[] = ['tunnels', 'my_audit', 'my_profile', 'my_sessions'];
-const TUNNEL_CRUD_VALUES: readonly TunnelCrud[] = ['none', 'read_only', 'full'];
+const TUNNEL_CRUD_VALUES: readonly TunnelCrud[] = ['none', 'read_only', 'toggle', 'full'];
 const TUNNEL_VISIBILITY_VALUES: readonly TunnelVisibility[] = ['private', 'group_read'];
 const RATE_LIMIT_VALUES: readonly RateLimitPreset[] = ['unlimited', '1MB/s', '10MB/s', '100MB/s'];
 const GROUP_ATTRIBUTE_KEYS: readonly string[] = [

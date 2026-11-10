@@ -26,6 +26,8 @@
     import HeaderAppender from './parts/HeaderAppender.svelte';
     import InputCertFile from './parts/InputCertFile.svelte';
     import TunnelStatusArea from './parts/TunnelStatusArea.svelte';
+    import ShareUsersField from './parts/ShareUsersField.svelte';
+    import type {SharedUser} from './parts/shareUsers';
     import {PROTOCOLS, tunnelErrorMessage, tunnelPolicy} from './parts/tunnelPolicy';
 
     // 옛 layout/TunnelOptionSetLayout.svelte 21행의 정의 그대로다.
@@ -44,6 +46,12 @@
     const restricted = $derived(policy?.restricted === true);
     const isNew = $derived(param === 'new');
     const readOnly = $derived(!isNew && option?.editable === false);
+    // 이슈 347: 켜고 끄기(상태 영역의 Timer)는 고치기와 따로 판정한다. 옛 서버 응답에는 toggleable 이 없다.
+    const toggleable = $derived(option?.toggleable ?? !readOnly);
+    // 이슈 347 FR-10: 공유 칸의 칩. 고칠 수 있는 사람에게만 서버가 sharedUsers 를 준다.
+    let sharedUsers = $state<SharedUser[]>([]);
+    // 사용자 검색은 슈퍼유저와 full 그룹만 쓴다. 새 터널 화면에 직접 들어온 다른 사용자에게는 칸을 보이지 않는다.
+    const canShare = $derived(!readOnly && (!restricted || $me?.group.attributes.tunnel_crud === 'full'));
     const portError = $derived(restricted && option && typeof option.forwardPort === 'number' && !policy!.isPortAllowed(option.forwardPort)
         ? 'Port is outside the allowed ranges.' : undefined);
     const protocolOptions = $derived(policy && option ? policy.protocolOptions(option.protocol ?? 'tcp') : PROTOCOLS);
@@ -193,6 +201,7 @@
                 }
                 option = fresh;
                 nameInput = '';
+                sharedUsers = [];
                 syncRateInputs();
                 loading = false;
                 return;
@@ -213,6 +222,7 @@
             if(!found.rateLimit) found.rateLimit = defaultRateLimit(found.protocol);
             option = found;
             nameInput = found.name ?? '';
+            sharedUsers = found.sharedUsers ?? [];
             loadedOutsideIds = (found.allowedClientIds ?? []).filter((id) => !(policy?.trustedClients ?? []).includes(id));
             syncRateInputs();
             ownerId = found.owner?.id ?? '';
@@ -258,6 +268,8 @@
             option.owner = result.owner;
             option.ownerId = result.owner.id;
             ownerId = result.owner.id;
+            // 서버는 새 소유자를 공유 목록에서 뺀다(이슈 347). 칩도 맞춘다.
+            sharedUsers = sharedUsers.filter((user) => user.id !== result.owner.id);
             toast.push({tone: 'pulse', message: 'Owner changed.'});
         } catch(e) {
             console.error(e);
@@ -351,6 +363,8 @@
             return;
         }
         loading = true;
+        // 이슈 347: 공유 목록은 id 로만 보낸다. 서버가 중복·소유자를 빼고 없는 사용자를 거절한다.
+        option.sharedUserIds = sharedUsers.map((user) => user.id);
         if(restricted) {
             // 일반 유저는 allowedClientNames 를 보내지 않는다(서버가 422 legacy_client_names_not_allowed 로 거부한다).
             policy!.normalizeHttpOption(option);
@@ -429,10 +443,11 @@
 
 {#if option}
 {#if !isNew}
-    <TunnelStatusArea port={option.originalForwardPort ?? option.forwardPort} editable={!readOnly} onsessionout={sessionOut} />
+    <TunnelStatusArea port={option.originalForwardPort ?? option.forwardPort} editable={toggleable} onsessionout={sessionOut} />
 {/if}
 {#if readOnly}
-    <p id="tunnel-readonly-note">This tunnel is shared with you as read only.</p>
+    <!-- 이슈 347: 켤 수는 있지만 고칠 수 없는 사용자(toggle 소유자·공유받은 사용자)에게는 켜고 끌 수 있다고 알린다. -->
+    <p id="tunnel-readonly-note">{toggleable ? "You can turn this tunnel on or off, but you can't change its settings." : 'This tunnel is shared with you as read only.'}</p>
 {/if}
 <form class="tunnel-edit" onsubmit={(e) => e.preventDefault()}>
 <!-- 읽기 전용이면 fieldset 이 안의 입력(부품·appender 포함)을 모두 비활성화한다. -->
@@ -445,6 +460,15 @@
                         <Select id="tunnel-owner" options={owners} bind:value={ownerId} />
                         <Button disabled={ownerId === (option.owner?.id ?? '')} onclick={() => (ownerOpen = true)}>Change owner</Button>
                     </div>
+                </Field>
+            </div>
+        </Card>
+    {/if}
+    {#if canShare}
+        <Card>
+            <div class="form-stack">
+                <Field label="Shared with" for="tunnel-share-input" hint="Shared users can see this tunnel and turn it on or off. They cannot change it.">
+                    <ShareUsersField bind:users={sharedUsers} ownerId={option.owner?.id ?? $me?.user.id} onsessionout={sessionOut} />
                 </Field>
             </div>
         </Card>

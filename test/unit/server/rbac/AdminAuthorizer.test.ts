@@ -483,3 +483,65 @@ describe("AdminAuthorizer mustEnrollMfa 게이트 (#127 U4-08)", () => {
         expect(authorize({...PRINCIPALS["regular(full,private)"], mustEnrollMfa: false}, "tunnel:list")).toEqual({allowed: true});
     });
 });
+
+// 이슈 347 — 켜기 권한(tunnel:activate)을 고치기 권한과 나누고, 공유 목록에 든 사용자도 보고 켤 수 있다.
+describe("AdminAuthorizer 켜기·공유 (이슈 347)", () => {
+    const principalOf = (tunnelCrud: TunnelCrud, tunnelVisibility: TunnelVisibility = "private"): Principal =>
+        regularPrincipal(tunnelCrud, tunnelVisibility);
+    const own: Target = {port: 1, owner: {userId: SELF_USER_ID, groupId: SELF_GROUP_ID}};
+    const sharedWithMe: Target = {port: 1, owner: {userId: OTHER_USER_ID, groupId: OTHER_GROUP_ID}, sharedUserIds: [SELF_USER_ID]};
+    const notShared: Target = {port: 1, owner: {userId: OTHER_USER_ID, groupId: OTHER_GROUP_ID}, sharedUserIds: ["u_third"]};
+    const sameGroup: Target = {port: 1, owner: {userId: OTHER_USER_ID, groupId: SELF_GROUP_ID}};
+    const READ_ONLY = {allowed: false, status: 403, code: "read_only"};
+    const NOT_FOUND = {allowed: false, status: 404, code: "not_found"};
+
+    it("toggle 은 자기 터널을 보고 켜지만 고치기·지우기·만들기는 거부한다 (AC-1)", () => {
+        const toggle = principalOf("toggle");
+        expect(authorize(toggle, "tunnel:list")).toEqual({allowed: true});
+        expect(authorize(toggle, "tunnel:read", own)).toEqual({allowed: true});
+        expect(authorize(toggle, "tunnel:activate", own)).toEqual({allowed: true});
+        expect(authorize(toggle, "tunnel:update", own)).toEqual(READ_ONLY);
+        expect(authorize(toggle, "tunnel:delete", own)).toEqual(READ_ONLY);
+        expect(authorize(toggle, "tunnel:create")).toEqual({allowed: false, status: 403, code: "tunnel_create_forbidden"});
+    });
+
+    it("공유된 터널은 none 이 아니면 보고 켤 수 있고, 공유만으로는 고칠 수 없다 (AC-2·AC-4)", () => {
+        for(const crud of ["toggle", "read_only", "full"] as TunnelCrud[]) {
+            const principal = principalOf(crud);
+            expect({crud, read: authorize(principal, "tunnel:read", sharedWithMe)}).toEqual({crud, read: {allowed: true}});
+            expect({crud, activate: authorize(principal, "tunnel:activate", sharedWithMe)}).toEqual({crud, activate: {allowed: true}});
+            expect({crud, update: authorize(principal, "tunnel:update", sharedWithMe)}).toEqual({crud, update: READ_ONLY});
+            expect({crud, remove: authorize(principal, "tunnel:delete", sharedWithMe)}).toEqual({crud, remove: READ_ONLY});
+        }
+    });
+
+    it("none 은 공유되어 있어도 보지도 켜지도 못한다 (FR-3)", () => {
+        const none = principalOf("none");
+        expect(authorize(none, "tunnel:read", sharedWithMe)).toEqual(NOT_FOUND);
+        expect(authorize(none, "tunnel:activate", sharedWithMe)).toEqual(NOT_FOUND);
+    });
+
+    it("공유되지 않은 남의 터널은 private 이면 404, group_read 로만 보이면 403 read_only 다 (AC-2)", () => {
+        expect(authorize(principalOf("toggle"), "tunnel:activate", notShared)).toEqual(NOT_FOUND);
+        expect(authorize(principalOf("toggle", "group_read"), "tunnel:activate", sameGroup)).toEqual(READ_ONLY);
+    });
+
+    it("read_only 의 소유 터널은 여전히 켤 수 없다 (AC-4)", () => {
+        expect(authorize(principalOf("read_only"), "tunnel:activate", own)).toEqual(READ_ONLY);
+    });
+
+    it("소유자 없는 터널도 공유되면 보고 켤 수 있다", () => {
+        const migratedShared: Target = {port: 1, sharedUserIds: [SELF_USER_ID]};
+        expect(authorize(principalOf("toggle"), "tunnel:activate", migratedShared)).toEqual({allowed: true});
+        expect(authorize(principalOf("toggle"), "tunnel:update", migratedShared)).toEqual(READ_ONLY);
+    });
+
+    it("사용자 검색(user:lookup)은 슈퍼유저와 full 만 쓴다 (FR-9·AC-5)", () => {
+        expect(authorize(PRINCIPALS["superuser"], "user:lookup")).toEqual({allowed: true});
+        expect(authorize(principalOf("full"), "user:lookup")).toEqual({allowed: true});
+        for(const crud of ["toggle", "read_only", "none"] as TunnelCrud[]) {
+            expect({crud, decision: authorize(principalOf(crud), "user:lookup")})
+                .toEqual({crud, decision: {allowed: false, status: 403, code: "forbidden"}});
+        }
+    });
+});

@@ -20,6 +20,11 @@ class UsersCtrl {
         return adminRequest("/api/users");
     }
 
+    /** 이슈 347: 터널 공유 칸의 사용자 검색. 슈퍼유저와 tunnel_crud 가 full 인 사용자만 쓴다. */
+    public lookup(query: string): Promise<ApiResult<{users: Array<{id: string; username: string; displayName: string}>}>> {
+        return adminRequest(`/api/users/lookup?q=${encodeURIComponent(query)}`);
+    }
+
     public get(id: string): Promise<ApiResult<{user: UserView}>> {
         return adminRequest(`/api/users/${id}`);
     }

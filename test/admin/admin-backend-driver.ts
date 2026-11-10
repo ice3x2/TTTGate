@@ -34,7 +34,7 @@ const fixture = (process.argv[3] ?? "bootstrap") as AdminFixture;
 if(!ADMIN_FIXTURES.includes(fixture)) {
     process.exit(2);
 }
-const rbac = fixture === "rbac" || fixture === "rbac-no-audit" || fixture === "rbac-mfa";
+const rbac = fixture === "rbac" || fixture === "rbac-no-audit" || fixture === "rbac-mfa" || fixture === "rbac-toggle";
 
 // U4-07: 테스트가 TOTP 코드를 계산할 수 있게 서버 시계는 실시각 + 누적 offset 이다(advanceClock IPC 가 offset 을 늘린다).
 let clockOffset = 0;
@@ -220,7 +220,9 @@ const stub = {
     if(rbac) {
         const store = ServerOptionStore.instance;
         const tunnels = RBAC_TUNNELS.map((tunnel) => ({...TUNNEL_OPTIONS[0], ...tunnel,
-            ...(tunnel.protocol === "http" ? {httpOption: TUNNEL_OPTIONS[1].httpOption} : {})}));
+            ...(tunnel.protocol === "http" ? {httpOption: TUNNEL_OPTIONS[1].httpOption} : {}),
+            // 이슈 347: alice 의 20001 을 carol 에게 공유한다.
+            ...(fixture === "rbac-toggle" && tunnel.forwardPort === 20001 ? {sharedUserIds: [RBAC_USER_IDS.carol]} : {})}));
         if(!store.updateServerOption({...store.serverOption, tunnelingOptions: tunnels as TunnelingOption[], trustedClients: RBAC_TRUSTED_CLIENTS})) {
             throw new Error("Invalid rbac fixture configuration");
         }
@@ -244,6 +246,10 @@ const stub = {
             enrolledAt: Date.now(), lastUsedStep: -1, recoveryCodeHashes: codes.map((code) => hashRecoveryCode(code, RBAC_USER_IDS.alice))});
         if(!enabled.success) throw new Error("Invalid rbac-mfa fixture");
         mfaRecoveryCodes = codes;
+    }
+    if(fixture === "rbac-toggle") {
+        const grouped = IdentityStore.instance.updateGroup(DEFAULT_GROUP_ID, {attributes: {tunnel_crud: "toggle"}});
+        if(!grouped.success) throw new Error("Invalid rbac-toggle fixture");
     }
     if(fixture === "rbac-no-audit") {
         const grouped = IdentityStore.instance.updateGroup(DEFAULT_GROUP_ID, {attributes: {admin_ui_section_access: ["tunnels", "my_profile", "my_sessions"]}});

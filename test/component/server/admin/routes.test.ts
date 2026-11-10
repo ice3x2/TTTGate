@@ -84,6 +84,8 @@ const EXPECTED_ROUTES: ReadonlyArray<ExpectedRoute> = [
     // U2-06 / #98 이 더한 사용자·그룹 관리 라우트. 핸들러는 rbacRoutes.ts 에 있다.
     {method: "GET", pattern: "^/api/users$", action: "user:manage", hasTarget: false},
     {method: "POST", pattern: "^/api/users$", action: "user:manage", hasTarget: false},
+    // 이슈 347: 사용자 검색. /api/users/:id 보다 먼저 맞아야 한다.
+    {method: "GET", pattern: "^/api/users/lookup$", action: "user:lookup", hasTarget: false},
     {method: "GET", pattern: "^/api/users/(?<id>[^/]+)$", action: "user:manage", hasTarget: false},
     {method: "PUT", pattern: "^/api/users/(?<id>[^/]+)$", action: "user:manage", hasTarget: false},
     {method: "DELETE", pattern: "^/api/users/(?<id>[^/]+)$", action: "user:manage", hasTarget: false},

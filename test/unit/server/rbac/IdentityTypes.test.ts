@@ -59,6 +59,11 @@ describe("IdentityTypes.validateGroupAttributes", () => {
             .toMatchObject({success: false, code: "attribute_int_invalid"});
     });
 
+    it("이슈 347: tunnel_crud 에 toggle 을 받는다", () => {
+        const result = validateGroupAttributes({tunnel_crud: "toggle"}, DEFAULT_GROUP_ATTRIBUTES);
+        expect(result).toMatchObject({success: true, value: {tunnel_crud: "toggle"}});
+    });
+
     it("returns a deep-equal copy of the base attributes when the patch is empty", () => {
         const result = validateGroupAttributes({}, DEFAULT_GROUP_ATTRIBUTES);
         expect(result.success).toBe(true);

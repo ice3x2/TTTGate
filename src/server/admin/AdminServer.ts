@@ -49,7 +49,8 @@ import {Action, authorize} from "../rbac/AdminAuthorizer";
 import {LEGACY_PRINCIPAL, principalOf} from "../rbac/Principal";
 import {mfaPolicyOptions} from "./mfaPolicyOptions";
 import {mustEnrollMfa as mustEnrollMfaFor, requiresPasskeyLogin} from "../rbac/MfaPolicy";
-import {admitTunnelWrite, isTunnelEditable, isTunnelVisibleTo, ownerViewOf, resolveOwnerId} from "../rbac/TunnelOwnership";
+import {admitTunnelWrite, existingSharedUserIds, isTunnelEditable, isTunnelToggleable, isTunnelVisibleTo, ownerViewOf, resolveOwnerId, sharedUsersOf, withSharedUserIds} from "../rbac/TunnelOwnership";
+import {normalizeSharedUserIds, sharedUserIdsOf, sharedUsersChange} from "../rbac/TunnelSharing";
 import {AuthorizationContext} from "../rbac/AuthorizationContext";
 import {AuditEvent, AuditSinkRegistry, recordAuditEvent} from "../audit/AuditSink";
 import {AUDIT_EVENT_TYPES} from "../audit/AuditEventTypes";
@@ -842,17 +843,24 @@ class AdminServer {
         const {res} = ctx;
         const payload = ctx.body;
         await this.mutateConfiguration(res, payload, async (serverOptionStore) => {
-            // owner·editable 은 목록 응답이 덧붙이는 표시용 필드다. 관리자 UI 가 행을 그대로 되돌려 보내도 저장되지 않게 떼어 낸다.
-            const {certInfo, expectedCertificateRevision, previousForwardPort, owner, editable, ...tunnelingOption} = payload;
+            // owner·editable·toggleable·sharedUsers 는 목록 응답이 덧붙이는 표시용 필드다(이슈 347 이 뒤의 둘을 더했다).
+            // 관리자 UI 가 행을 그대로 되돌려 보내도 저장되지 않게 떼어 낸다.
+            const {certInfo, expectedCertificateRevision, previousForwardPort, owner, editable, toggleable, sharedUsers, ...tunnelingOption} = payload;
             const admission = admitTunnelWrite(ctx.principal!, tunnelingOption, {certInfo, previousForwardPort});
             if(!admission.success) {
                 this.sendApiFailure(res, admission.status, {code: admission.code, message: admission.message});
                 return;
             }
             tunnelingOption.ownerId = admission.ownerId;
-            ctx.auditDetail({ownerId: admission.ownerId});
+            withSharedUserIds(tunnelingOption, admission.sharedUserIds);
+            // 이슈 347 FR-16: 공유 목록이 바뀌었으면 더해진 id 와 빠진 id 를 남긴다.
+            const {sharing} = admission;
+            ctx.auditDetail({ownerId: admission.ownerId,
+                ...(sharing.added.length > 0 ? {sharedUsersAdded: sharing.added} : {}),
+                ...(sharing.removed.length > 0 ? {sharedUsersRemoved: sharing.removed} : {})});
             if(certInfo !== undefined || previousForwardPort !== undefined) {
-                await this.applyCompoundTunnelingOption(res, tunnelingOption, certInfo, expectedCertificateRevision, previousForwardPort, ctx.auditDetail);
+                await this.applyCompoundTunnelingOption(res, tunnelingOption, certInfo, expectedCertificateRevision, previousForwardPort, ctx.auditDetail,
+                    ctx.principal!.userId);
                 return;
             }
             let previousOption = serverOptionStore.getTunnelingOption(tunnelingOption.forwardPort);
@@ -888,7 +896,9 @@ class AdminServer {
             // #286 새 터널이면 그 포트에 남아 있던 고아 차단 항목이 빠졌을 수 있다. 리스너를 열기 전에 판정에 반영한다.
             if(!previousOption) this._tttServer?.applyConnectionSecurity?.(serverOptionStore.serverOption.connectionSecurity);
             let runtimeResult = await this.applyRuntimeSafely('tunneling option', `external-listener:${tunnelingOption.forwardPort}`,
-                () => this._tttServer?.applyTunnelingOption(serverOptionStore.getTunnelingOption(tunnelingOption.forwardPort)!, previousOption)) ?? {
+                // 이슈 347: 새 터널이 바로 켜지면 만든 사람이 켠 사람이다.
+                () => this._tttServer?.applyTunnelingOption(serverOptionStore.getTunnelingOption(tunnelingOption.forwardPort)!, previousOption,
+                    undefined, undefined, previousOption ? undefined : ctx.principal!.userId)) ?? {
                 success: false,
                 partial: false,
                 warnings: [],
@@ -935,7 +945,8 @@ class AdminServer {
     }
 
     private async applyCompoundTunnelingOption(res: ServerResponse, option: TunnelingOption, certInfo: CertInfo | undefined,
-        expectedCertificateRevision: unknown, previousForwardPort?: number, auditDetail: (patch: Record<string, unknown>) => void = () => {}): Promise<void> {
+        expectedCertificateRevision: unknown, previousForwardPort?: number, auditDetail: (patch: Record<string, unknown>) => void = () => {},
+        creatorId?: string): Promise<void> {
         const store = ServerOptionStore.instance, certificates = CertificationStore.instance;
         if(previousForwardPort !== undefined && (!Number.isSafeInteger(previousForwardPort) || previousForwardPort < 1 || previousForwardPort > 65535 || !store.getTunnelingOption(previousForwardPort))) {
             this.sendApiFailure(res, 400, {message: 'The original configured row does not exist.'}); return;
@@ -999,7 +1010,7 @@ class AdminServer {
             // 새 터널이면 그 포트에 남아 있던 고아 항목이 빠졌으므로 리스너를 열기 전에 반영한다.
             else if(!previousOption) this._tttServer?.applyConnectionSecurity?.(store.serverOption.connectionSecurity);
             if(this._tttServer) runtime = await this._tttServer.applyTunnelingOption(store.getTunnelingOption(option.forwardPort)!, previousOption, certInfo,
-                rename ? previousForwardPort : undefined);
+                rename ? previousForwardPort : undefined, previousOption || rename ? undefined : creatorId);
             if(runtime.success && rename && !await this._tttServer!.stopExternalPortServer(previousForwardPort!, true)) {
                 runtime.success = false; runtime.failedScopes.push(`external-listener:${previousForwardPort}`);
             }
@@ -1042,7 +1053,11 @@ class AdminServer {
                 return;
             }
             const from = AuthorizationContext.ownerIdOf(option);
-            const composed = serverOptionStore.composeServerOptionWithTunnelingOption({...option, ownerId: resolved.ownerId});
+            // 이슈 347 FR-5: 새 소유자가 공유 목록에 있으면 뺀다. 빠진 id 는 감사에 남긴다.
+            const sharedBefore = sharedUserIdsOf(option);
+            const sharedAfter = normalizeSharedUserIds(sharedBefore, resolved.ownerId);
+            const {removed: sharedUsersRemoved} = sharedUsersChange(sharedBefore, sharedAfter);
+            const composed = serverOptionStore.composeServerOptionWithTunnelingOption(withSharedUserIds({...option, ownerId: resolved.ownerId}, sharedAfter));
             if(!composed.success || !composed.serverOption) {
                 this.sendApiFailure(res, 400, {message: 'Tunnel owner update failed.', forwardPort: port});
                 return;
@@ -1054,7 +1069,7 @@ class AdminServer {
                     failedScopes: ["tunneling-option"], revisionState: serverOptionStore.revisionState});
                 return;
             }
-            ctx.auditDetail({from, to: resolved.ownerId});
+            ctx.auditDetail({from, to: resolved.ownerId, ...(sharedUsersRemoved.length > 0 ? {sharedUsersRemoved} : {})});
             ctx.reapplyTunnelCaps?.();
             this.sendApiSuccess(res, {forwardPort: port, owner: ownerViewOf(port), revisionState: commitResult.revisionState});
         });
@@ -1270,8 +1285,9 @@ class AdminServer {
         await ServerOptionStore.instance.runConfigurationMutation(async () => {
             let success = false;
             if(this._tttServer) {
+                // 이슈 347: 요청자가 켠 사람이다. 수명 상한에 그 사람의 그룹 상한도 들어간다.
                 success = isTunnelActivationRequested(ctx)
-                    ? await this._tttServer.activeExternalPortServer(port, timeout)
+                    ? await this._tttServer.activeExternalPortServer(port, timeout, ctx.principal!.userId)
                     : await this._tttServer.inactiveExternalPortServer(port);
             }
             this.sendApiEnvelope(res, success ? 200 : 400, {success: success, message: success ? '' : 'Unable to change listener active state'});
@@ -1767,11 +1783,19 @@ class AdminServer {
             const principal = ctx.principal!;
             const visible = tunnelingOptions
                 .filter((tunnelingOption) => isTunnelVisibleTo(principal, tunnelingOption.forwardPort))
-                .map((tunnelingOption) => ({
-                    ...tunnelingOption,
-                    owner: ownerViewOf(tunnelingOption.forwardPort),
-                    editable: isTunnelEditable(principal, tunnelingOption.forwardPort)
-                }));
+                .map(({sharedUserIds: _stored, ...tunnelingOption}) => {
+                    const editable = isTunnelEditable(principal, tunnelingOption.forwardPort);
+                    // 이슈 347 FR-6a: 공유 목록은 고칠 수 있는 사람에게만 준다. 다른 공유 사용자의 이름이 드러나지 않게 한다.
+                    // 사라진 사용자 id 는 sharedUsers 와 같이 뺀다.
+                    const sharedUserIds = editable ? existingSharedUserIds(sharedUserIdsOf({sharedUserIds: _stored})) : [];
+                    return {
+                        ...tunnelingOption,
+                        owner: ownerViewOf(tunnelingOption.forwardPort),
+                        editable,
+                        toggleable: isTunnelToggleable(principal, tunnelingOption.forwardPort),
+                        ...(editable ? {sharedUserIds, sharedUsers: sharedUsersOf(sharedUserIds)} : {})
+                    };
+                });
             this.sendApiSuccess(res, {tunnelingOptions: visible, revisionState: store.revisionState});
         });
     }

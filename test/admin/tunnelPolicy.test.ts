@@ -65,6 +65,13 @@ describe("tunnelPolicy", () => {
         expect(policy.limitReached(0)).toBe(false);
     });
 
+    // 이슈 347 FR-13: 켜기·끄기만 하는 그룹에는 터널 추가 버튼이 없다.
+    test("toggle 그룹은 만들 수 없지만 한도 도달로 보지 않는다", () => {
+        const policy = tunnelPolicy(meOf("regular", {...DEFAULT_GROUP_ATTRIBUTES, tunnel_crud: "toggle"}));
+        expect(policy.canCreate(0)).toBe(false);
+        expect(policy.limitReached(0)).toBe(false);
+    });
+
     test("슈퍼유저는 제한이 없고 httpOption 을 바꾸지 않는다", () => {
         const policy = tunnelPolicy(meOf("superuser", DEFAULT_GROUP_ATTRIBUTES));
         expect(policy.restricted).toBe(false);
