@@ -111,6 +111,25 @@ describe("tunnelRowView", () => {
         expect(text(option({editable: false}), undefined)).toBe("Unavailable · view only");
     });
 
+    // 이슈 347 FR-12: 켤 수 있으면(toggleable) 스위치, 아니면 자물쇠다. 고칠 수 없으면 편집 화면으로 가지 않는다.
+    test("이슈 347: 고칠 수 없어도 켤 수 있으면 스위치이고 view only 를 붙이지 않으며 편집 링크가 없다", () => {
+        const shared = option({editable: false, toggleable: true, owner: {id: "u_alice", username: "alice"}});
+        expect(view(shared, status())).toMatchObject({control: "switch", checked: true, link: false});
+        expect(text(shared, status())).toBe("On · @alice");
+    });
+
+    test("이슈 347: 켤 수도 없으면 자물쇠이고 편집 링크가 없다", () => {
+        expect(view(option({editable: false, toggleable: false}), status())).toMatchObject({control: "lock", link: false});
+        expect(text(option({editable: false, toggleable: false}), status())).toBe("On · view only");
+    });
+
+    test("이슈 347: 고칠 수 있으면 편집 링크가 있다. toggleable 이 없는 옛 응답은 editable 을 따른다", () => {
+        expect(view(option({editable: true, toggleable: true}), status())).toMatchObject({control: "switch", link: true});
+        expect(view(option(), status())).toMatchObject({control: "switch", link: true});
+        expect(view(option({editable: false}), status())).toMatchObject({control: "lock", link: false});
+        expect(view(option({editable: false, toggleable: true}), undefined, false)).toMatchObject({control: "disabled", link: false});
+    });
+
     test("상태 목록에 포트가 없으면 Not running(경고)이다", () => {
         expect(view(option(), undefined)).toMatchObject({control: "disabled", checked: false, parts: [{text: "Not running", warn: true}]});
     });

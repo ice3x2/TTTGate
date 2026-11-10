@@ -123,6 +123,21 @@ describe("AuthorizationContext", () => {
         expect(AuthorizationContext.targetOf(65000)).toEqual({port: 65000, owner: undefined});
     });
 
+    it("이슈 347: targetOf 는 저장된 공유 목록을 싣는다", () => {
+        expect(ServerOptionStore.instance.updateTunnelingOption({...tcpTunnel(20006, ADMIN), sharedUserIds: [ALICE]})).toBe(true);
+        expect(AuthorizationContext.targetOf(20006)).toEqual({port: 20006, owner: {userId: ADMIN, groupId: "system:superuser"}, sharedUserIds: [ALICE]});
+    });
+
+    it("이슈 347: activatorOf 는 그 포트를 지금 켤 수 있는 사용자만 준다", () => {
+        expect(ServerOptionStore.instance.updateTunnelingOption({...tcpTunnel(20006, ADMIN), sharedUserIds: [ALICE]})).toBe(true);
+        expect(AuthorizationContext.activatorOf(ALICE, 20002)).toEqual({userId: ALICE, groupId: FIELD, role: "regular"});
+        expect(AuthorizationContext.activatorOf(ALICE, 20006)).toEqual({userId: ALICE, groupId: FIELD, role: "regular"});
+        expect(AuthorizationContext.activatorOf(ADMIN, 20002)).toEqual({userId: ADMIN, groupId: "system:superuser", role: "superuser"});
+        // 공유되지 않은 남의 터널, 삭제된 사용자는 켠 사람으로 보지 않는다(FR-15).
+        expect(AuthorizationContext.activatorOf(ALICE, 20004)).toBeUndefined();
+        expect(AuthorizationContext.activatorOf(GHOST, 20002)).toBeUndefined();
+    });
+
     it("그룹 포트·소유 수·슈퍼유저 소유는 실재하는 소유자만 센다", () => {
         expect(AuthorizationContext.portsOfGroup(FIELD)).toEqual([20002]);
         expect(AuthorizationContext.portsOfGroup("system:superuser")).toEqual([20004]);

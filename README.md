@@ -350,7 +350,7 @@ After you sign in, the console opens the **Tunnels** list. This is the same for 
 - **Undo:** after each change, a message with **Undo** stays for 5 seconds. Undo of a turn-off turns the tunnel on again with the time that was left. It does not bring back cut connections.
 - **Status line:** `On`, `Off`, `client offline` (no connected client may serve this tunnel), `N connections`, the time left, `Can't open port <port>`, the owner of a tunnel that is not yours, and `cert not verified`. A tunnel that you can only view shows a lock instead of a switch.
 - **Name:** give a tunnel a name in its edit screen (**Name**, optional, up to 40 characters). Without a name, the row shows the port and the destination. Saving only a new name does not restart the tunnel, so open connections stay.
-- **Details:** tap a row to open its edit screen. Its **Status** area shows uptime, sessions, traffic, blocked connections and the **Time limit** timer.
+- **Details:** tap a row to open its edit screen. Its **Status** area shows uptime, sessions, traffic, blocked connections and the **Time limit** timer. Only tunnels that you can change open an edit screen.
 
 #### Sign In with a Passkey
 
@@ -391,6 +391,24 @@ A member lost the phone with the authenticator app:
 
 - If a recovery code is left, the member signs in with it, opens **My account** and presses **Replace app**. After the password check, they scan the new QR code and enter a code. The old app keeps working until they finish.
 - Otherwise, a superuser opens **Users**, selects the member and presses **Reset password**. Keep **Also reset two-factor authentication and passkeys** on. The server removes the authenticator app and all passkeys of the member and ends their sessions. Send the temporary password to the member. At the next sign-in, the member sets a new password and then sets up two-factor authentication again. The audit log records `temp_password_issued` with `secondFactorsReset: true`.
+
+#### Toggle-Only Groups and Shared Tunnels
+
+A group can let its members only turn tunnels on and off. In **Groups**, set **Tunnel access** to **Toggle only** (`tunnel_crud: toggle`). Members of this group see the tunnels they own or that are shared with them and turn them on and off. They cannot add, change or remove tunnels, so the list has no **Add tunneling service** button and its rows do not open an edit screen. A superuser assigns a tunnel to such a member with **Change owner** in the edit screen.
+
+Share a tunnel with other users:
+
+1. Open the edit screen of a tunnel that you can change. A superuser can do this for every tunnel.
+2. In **Shared with**, type at least 2 characters of a username or display name. Pick a user from the list with the arrow keys and Enter, or with the mouse. Esc closes the list.
+3. A picked user appears as a chip. Press the **×** on the chip to remove the user. Then save the tunnel.
+
+- A shared user sees the tunnel and turns it on and off, unless their group has **Tunnel access** set to **None**. A shared user cannot change or remove the tunnel. Users of a **Read only** group can turn on tunnels shared with them, but not their own.
+- A tunnel can be shared with up to 50 users. The search finds active users in all groups. It does not show superusers to other users, because superusers can turn on every tunnel. Only superusers and **Full** members can search.
+- Only users who can change the tunnel see its share list.
+- Saving only a new share list does not restart the tunnel, so open connections stay.
+- When you delete a user, the server removes the user from every share list.
+- Time limit: when someone turns on a tunnel, the server uses the shorter limit of the owner's group and of that person's group. A superuser, a group with no limit and a `system:migrated` owner add no limit. The limit stays when the owner saves the tunnel later. When another user turns the tunnel on again, for example with the **Time limit** timer, the limit of that user applies.
+- The audit log records the owner as `ownerId` for `tunnel_activated` and `tunnel_deactivated`. For a changed share list, `tunnel_updated` records `sharedUsersAdded` and `sharedUsersRemoved`.
 
 ### Client
 
@@ -1282,7 +1300,7 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 - **되돌리기:** 바꿀 때마다 **Undo** 가 붙은 알림이 5초 동안 보인다. 끄기를 되돌리면 끈 순간에 남아 있던 시간으로 다시 켠다. 끊긴 연결은 돌아오지 않는다.
 - **상태 줄:** `On`, `Off`, `client offline`(이 터널을 맡을 수 있는 클라이언트가 연결되어 있지 않음), `N connections`, 남은 시간, `Can't open port <포트>`, 내 것이 아닌 터널의 소유자, `cert not verified` 를 보인다. 보기만 허락된 터널은 스위치 대신 자물쇠를 보인다.
 - **이름:** 터널 편집 화면의 **Name**(선택, 40자까지)에 이름을 넣는다. 이름이 없으면 포트와 목적지를 보인다. 이름만 바꿔 저장하면 터널을 다시 시작하지 않으므로 진행 중인 연결이 남는다.
-- **자세히:** 줄을 누르면 편집 화면이 열린다. **Status** 영역에 가동 시간, 세션, 트래픽, 차단 수, **Time limit** 타이머가 있다.
+- **자세히:** 줄을 누르면 편집 화면이 열린다. **Status** 영역에 가동 시간, 세션, 트래픽, 차단 수, **Time limit** 타이머가 있다. 편집 화면은 고칠 수 있는 터널에서만 열린다.
 
 #### 패스키로 로그인
 
@@ -1323,6 +1341,24 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 
 - 남은 복구 코드가 있으면 그 코드로 로그인한 뒤 **My account** 에서 **Replace app** 을 누른다. 비밀번호를 확인한 뒤 새 QR 코드를 찍고 코드를 넣는다. 교체를 마칠 때까지 예전 앱도 그대로 쓸 수 있다.
 - 복구 코드가 없으면 슈퍼유저가 **Users** 에서 그 구성원을 고르고 **Reset password** 를 누른다. **Also reset two-factor authentication and passkeys** 를 켠 채로 둔다. 서버가 그 구성원의 인증 앱과 모든 패스키를 지우고 세션을 끝낸다. 임시 비밀번호를 구성원에게 전한다. 구성원은 다음 로그인 때 새 비밀번호를 정한 뒤 2단계 인증을 다시 등록한다. 감사 로그에는 `temp_password_issued` 가 `secondFactorsReset: true` 와 함께 남는다.
+
+#### 켜기·끄기만 하는 그룹과 터널 공유
+
+그룹 구성원에게 터널을 켜고 끄는 일만 맡길 수 있다. **Groups** 에서 **Tunnel access** 를 **Toggle only**(`tunnel_crud: toggle`)로 정한다. 이 그룹 구성원은 자기가 소유했거나 자기에게 공유된 터널을 보고 켜고 끈다. 터널을 더하거나 고치거나 지울 수는 없으므로, 목록에 **Add tunneling service** 버튼이 없고 줄을 눌러도 편집 화면이 열리지 않는다. 이런 구성원에게 터널을 맡기려면 슈퍼유저가 편집 화면의 **Change owner** 로 소유자를 바꾼다.
+
+다른 사용자에게 터널을 공유하려면:
+
+1. 고칠 수 있는 터널의 편집 화면을 연다. 슈퍼유저는 모든 터널을 고칠 수 있다.
+2. **Shared with** 칸에 사용자 이름이나 표시 이름을 2자 이상 입력한다. 목록에서 위·아래 화살표와 Enter, 또는 마우스로 사용자를 고른다. Esc 를 누르면 목록이 닫힌다.
+3. 고른 사용자는 칩으로 보인다. 칩의 **×** 를 누르면 뺀다. 그다음 터널을 저장한다.
+
+- 공유받은 사용자는 그 터널을 보고 켜고 끈다. 단, 그 사용자 그룹의 **Tunnel access** 가 **None** 이면 쓸 수 없다. 공유만으로는 터널을 고치거나 지울 수 없다. **Read only** 그룹 사용자는 자기 터널은 켤 수 없지만 공유받은 터널은 켤 수 있다.
+- 한 터널은 50명까지 공유할 수 있다. 검색은 모든 그룹의 활성 사용자에서 찾는다. 슈퍼유저는 모든 터널을 켤 수 있으므로 다른 사용자의 검색 결과에 나오지 않는다. 검색은 슈퍼유저와 **Full** 구성원만 쓸 수 있다.
+- 공유 목록은 그 터널을 고칠 수 있는 사용자에게만 보인다.
+- 공유 목록만 바꿔 저장하면 터널을 다시 시작하지 않으므로 진행 중인 연결이 남는다.
+- 사용자를 지우면 서버가 모든 공유 목록에서 그 사용자를 뺀다.
+- 사용 시간 상한: 터널을 켜면 소유자 그룹 상한과 켠 사람 그룹 상한 가운데 짧은 값을 쓴다. 슈퍼유저, 상한이 없는 그룹, `system:migrated` 소유자는 비교에서 빠진다. 나중에 소유자가 터널을 저장해도 이 상한은 그대로다. 다른 사용자가 다시 켜면(예: **Time limit** 타이머) 그 사용자의 상한을 쓴다.
+- 감사 로그의 `tunnel_activated`·`tunnel_deactivated` 에는 소유자가 `ownerId` 로 남는다. 공유 목록이 바뀌면 `tunnel_updated` 에 `sharedUsersAdded`·`sharedUsersRemoved` 가 남는다.
 
 ### 클라이언트
 

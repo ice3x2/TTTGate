@@ -150,6 +150,12 @@ const enrollmentIssueIdForAudit = (value: unknown): number | 'invalid' => Number
  */
 export const isTunnelActivationRequested = (ctx: RouteContext): boolean => ctx.body?.active == true;
 
+/** 이슈 347 FR-16: 켜기·끄기 감사의 detail 에 남길 소유자 id. 켠 사람은 감사의 행위자다. */
+const tunnelOwnerAudit = (ctx: RouteContext): Record<string, unknown> => {
+    const option = ServerOptionStore.instance.getTunnelingOption(tunnelPortOf(ctx));
+    return option ? {ownerId: AuthorizationContext.ownerIdOf(option)} : {};
+};
+
 /** 터널 감사 대상의 id 는 포트다. 경로 세그먼트가 없으면 본문의 forwardPort 를 쓴다. */
 const tunnelAuditTarget = (ctx: RouteContext): AuditTarget =>
     ({kind: 'tunnel', id: truncateAuditValue(String(ctx.params.port ?? ctx.body?.forwardPort))});
@@ -271,7 +277,8 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
     {method: 'PUT', pattern: new RegExp('^/api/tunnelingOption/(?<port>[^/]*)/owner$'), action: 'tunnel:reassign', target: tunnelTarget,
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.tunnel_reassigned, tunnelAuditTarget(ctx)), handler: 'onReassignTunnelOwner'},
     {method: 'POST', pattern: new RegExp('^/api/tunneling/active/(?<port>[^/]*)$'), action: 'tunnel:activate', target: tunnelTarget,
-        audit: (ctx) => auditMeta(isTunnelActivationRequested(ctx) ? AUDIT_EVENT_TYPES.tunnel_activated : AUDIT_EVENT_TYPES.tunnel_deactivated, tunnelAuditTarget(ctx)),
+        audit: (ctx) => auditMeta(isTunnelActivationRequested(ctx) ? AUDIT_EVENT_TYPES.tunnel_activated : AUDIT_EVENT_TYPES.tunnel_deactivated, tunnelAuditTarget(ctx),
+            tunnelOwnerAudit(ctx)),
         handler: 'onActiveTunneling'},
     {method: 'GET', pattern: new RegExp('^/api/externalServerStatuses$'), action: 'tunnel:list', target: tunnelTarget, handler: 'onGetExternalServerStatuses'},
     {method: 'GET', pattern: new RegExp('^/api/externalCert/(?<port>[^/]*)$'), action: 'tunnel:cert', target: tunnelTarget, handler: 'onGetExternalServerCert'},
@@ -306,6 +313,8 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
     {method: 'POST', pattern: new RegExp('^/api/users$'), action: 'user:manage',
         // 생성 전이라 id 가 없다. 요청한 username 을 대상으로 적고 새 id 는 핸들러가 auditDetail 로 더한다.
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.user_created, {kind: 'user', id: truncateAuditValue(String(ctx.body?.username))}), handler: 'onCreateUser'},
+    // 이슈 347 FR-9: 공유할 사용자 검색. 아래 /api/users/:id(슈퍼유저 전용)보다 먼저 맞아야 한다(표는 첫 항목을 쓴다).
+    {method: 'GET', pattern: new RegExp('^/api/users/lookup$'), action: 'user:lookup', handler: 'onLookupUsers'},
     {method: 'GET', pattern: new RegExp('^/api/users/(?<id>[^/]+)$'), action: 'user:manage', handler: 'onGetUser'},
     {method: 'PUT', pattern: new RegExp('^/api/users/(?<id>[^/]+)$'), action: 'user:manage',
         audit: (ctx) => auditMeta(userUpdateAuditType(ctx), pathIdTarget('user')(ctx)), handler: 'onUpdateUser'},

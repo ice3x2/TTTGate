@@ -140,6 +140,18 @@ When an older console saves such a group, the attribute is dropped from the file
 upgrade again the group no longer requires two-factor authentication. Check the group after you upgrade again.
 An API call to an older server that sends `mfa_required` is rejected with 422 `attributes_unknown_key`.
 
+### Downgrading after toggle-only groups and tunnel sharing (2.3.0)
+
+2.3.0 adds the `tunnel_crud` value `toggle` to `config/identity.yaml` and the tunnel field `sharedUserIds` to
+`config/server.yaml`. Tunnels without `sharedUserIds` read as not shared, so an upgrade needs no action.
+After a downgrade, both fail closed:
+
+- Members of a `toggle` group cannot turn on even their own tunnels. The older server answers 404, as for a tunnel
+  that they cannot see. Saving such a group in an older console is rejected until you choose another tunnel access.
+- The older server ignores `sharedUserIds`, so shared users no longer see the tunnels shared with them.
+
+Before you downgrade, change `toggle` groups to `read_only` or `full` if their members must keep working.
+
 ## 5. Legacy-fallback mode
 
 If `identity.yaml` exists but cannot be read or parsed, the server does not refuse to start. It enters

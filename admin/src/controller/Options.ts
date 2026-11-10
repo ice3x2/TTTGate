@@ -73,8 +73,14 @@ type Options = {
     owner?: {id: string; username?: string};
     /** 서버에 저장된 소유자 id. 목록 응답에만 실리고 저장 본문에서는 뺀다(ServerOptionCtrl.updateTunnelingOption). */
     ownerId?: string;
-    /** U3-06: GET 응답. false 면 읽기 전용(그룹 공유)이다. */
+    /** U3-06: GET 응답. false 면 고칠 수 없다(그룹 공유·공유받은 터널·켜기 전용 그룹). */
     editable?: boolean;
+    /** 이슈 347: GET 응답. 켜고 끌 수 있는가. 옛 서버 응답에는 없다(editable 을 따른다). */
+    toggleable?: boolean;
+    /** 이슈 347: 공유 사용자 id. 고칠 수 있는 사람의 GET 응답에만 있고, 저장 본문에 싣는다. */
+    sharedUserIds?: string[];
+    /** 이슈 347: 공유 사용자 표현(칩용). GET 응답에만 있고 저장 본문에서는 뺀다. */
+    sharedUsers?: Array<{id: string; username: string; displayName: string}>;
     /** U3-06: 일반 유저는 allowedClientNames 대신 이것만 쓴다. */
     allowedClientIds?: Array<string>;
     /** U5-06: 접속 레이트 리밋. 서버가 늘 채워 돌려준다. */

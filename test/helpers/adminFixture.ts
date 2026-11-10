@@ -4,7 +4,8 @@
 
 // 'rbac-no-audit' 은 rbac 에서 default 그룹의 admin_ui_section_access 에 my_audit 만 뺀 변형이다(U4-06, carol 용).
 // 'rbac-mfa' 는 rbac 에서 alice 에게 MFA 를 켠 변형이다(U4-07).
-export const ADMIN_FIXTURES = ['bootstrap', 'password', 'with-tunnels', 'regular-user', 'rbac', 'rbac-no-audit', 'rbac-mfa'] as const;
+// 'rbac-toggle' 은 rbac 에서 default 그룹(carol)을 켜기·끄기만(toggle)으로 바꾸고 alice 의 20001 을 carol 에게 공유한 변형이다(이슈 347).
+export const ADMIN_FIXTURES = ['bootstrap', 'password', 'with-tunnels', 'regular-user', 'rbac', 'rbac-no-audit', 'rbac-mfa', 'rbac-toggle'] as const;
 
 export type AdminFixture = typeof ADMIN_FIXTURES[number];
 

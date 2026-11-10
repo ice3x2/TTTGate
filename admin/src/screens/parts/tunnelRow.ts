@@ -9,7 +9,9 @@ export type RowControl = 'switch' | 'disabled' | 'lock';
 export type ClockView =
     | {kind: 'limited'; fraction: number; left: string; ends: string; warn: boolean; label: string}
     | {kind: 'unlimited'; label: string};
-export type RowView = {parts: RowPart[]; control: RowControl; checked: boolean; clock?: ClockView};
+/** link: 줄을 누르면 편집 화면으로 가는가. 고칠 수 있을 때만이다(이슈 347). */
+export type RowView = {parts: RowPart[]; control: RowControl; checked: boolean; clock?: ClockView; link: boolean};
+type BaseView = Omit<RowView, 'link'>;
 
 const MIGRATED_OWNER_ID = 'system:migrated';
 const CERT_UNVERIFIED_TITLE = 'The client does not verify the destination server certificate.';
@@ -81,10 +83,11 @@ const statePartsOf = (status: TunnelingStatus): RowPart[] => {
     return parts;
 };
 
-const baseOf = (input: {option: Options; status?: TunnelingStatus; loaded: boolean; serverTime: number}): RowView => {
+const baseOf = (input: {option: Options; status?: TunnelingStatus; loaded: boolean; serverTime: number}): BaseView => {
     const {option, status, loaded, serverTime} = input;
     if(!loaded) return {parts: [{text: 'Checking…', muted: true}], control: 'disabled', checked: false};
-    if(option.editable === false) {
+    // 이슈 347: 스위치는 켜기 권한(toggleable)으로 정한다. 옛 서버 응답에는 없으므로 editable 을 따른다.
+    if((option.toggleable ?? option.editable) === false) {
         const parts = status?.online ? [{text: status.active ? 'On' : 'Off'}] : [{text: 'Unavailable'}];
         return {parts: [...parts, {text: 'view only'}], control: 'lock', checked: status?.online === true && status.active, clock: clockOf(status, serverTime)};
     }
@@ -94,7 +97,7 @@ const baseOf = (input: {option: Options; status?: TunnelingStatus; loaded: boole
 };
 
 export function tunnelRowView(input: {option: Options; status?: TunnelingStatus; loaded: boolean; meId: string; serverTime: number}): RowView {
-    const base = baseOf(input);
+    const base = {...baseOf(input), link: input.option.editable !== false};
     if(!input.loaded) return base;
     const extra: RowPart[] = [];
     const owner = ownerPart(input.option, input.meId);

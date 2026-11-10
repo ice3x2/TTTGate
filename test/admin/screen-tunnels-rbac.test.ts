@@ -98,7 +98,11 @@ test("alice 가 TLS 를 켜도 인증서 입력 대신 생성 안내가 보이�
 }, 2));
 
 test("alice 가 bob 의 공유 터널을 열면 읽기 전용이고 저장·삭제 버튼이 없다", () => withTunnels("alice", async ({page}) => {
-    await openTunnel(page, 20002);
+    // 이슈 347 FR-12: 고칠 수 없는 터널은 목록에 편집 링크가 없다. 주소로 바로 연다.
+    expect(await card(page, 20002).locator("a").count()).toBe(0);
+    await page.goto(`${page.url().split("#")[0]}#/tunnels/20002`);
+    await hashIs(page, "#/tunnels/20002");
+    await page.locator("#input-destination-host").waitFor({state: "visible", timeout: 10_000});
     await page.locator("#tunnel-readonly-note").waitFor({state: "visible"});
     expect(await page.locator("#input-destination-host").isDisabled()).toBe(true);
     expect(await button(page, "Apply and Restart").count()).toBe(0);

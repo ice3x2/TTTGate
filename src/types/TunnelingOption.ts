@@ -104,7 +104,9 @@ type TunnelingOption = {
     keepAlive: number,
     rateLimit?: RateLimitOption,
     /** 소유자 사용자 id 또는 'system:migrated'. 없으면 system:migrated 로 해석한다(#100 U2-08). */
-    ownerId?: string
+    ownerId?: string,
+    /** 이슈 347: 이 터널을 보고 켤 수 있는 사용자 id. 비면 저장하지 않으며 없으면 빈 목록으로 읽는다. */
+    sharedUserIds?: string[]
 }
 
 const DEFAULT_KEY = "hello-TTTGate";
