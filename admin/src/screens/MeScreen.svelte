@@ -318,7 +318,7 @@
 
         <section id="me-mfa">
             <Card label="Two-factor authentication">
-                <!-- #343: 왼쪽은 상태, 오른쪽은 동작 버튼이다. 폭이 모자라면 버튼 묶음이 다음 줄로 내려간다. -->
+                <!-- 이슈 343: 왼쪽은 상태, 오른쪽은 동작 버튼이다. 폭이 모자라면 버튼 묶음이 다음 줄로 내려간다. -->
                 <div style="display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; justify-content: space-between;">
                     {#if mfaEnabled}
                         <div style="display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center;">
