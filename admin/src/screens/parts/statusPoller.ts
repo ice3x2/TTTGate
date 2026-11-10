@@ -6,7 +6,8 @@ import type {TunnelingStatus} from '../../controller/Options';
 // - 상태를 바꾸기 직전에 invalidate 를 부르면 그 앞에 시작한 읽기의 결과를 버린다(낡은 결과가 바꾼 행을 되돌리지 않게).
 // - 세션이 끝나면 멈춘다. 그 밖의 실패는 알리고 다음 회차에 다시 읽는다.
 
-export type StatusSnapshot = {serverTime: number; statuses: TunnelingStatus[]};
+// 이슈 348: requesterIp 는 서버가 본 지금 내 IP 다(갱신 버튼 강조에 쓴다). 옛 서버면 없다.
+export type StatusSnapshot = {serverTime: number; requesterIp?: string | null; statuses: TunnelingStatus[]};
 
 export type StatusPollerOptions = {
     load: (signal: AbortSignal) => Promise<StatusSnapshot>;

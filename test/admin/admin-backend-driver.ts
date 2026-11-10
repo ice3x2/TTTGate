@@ -14,7 +14,7 @@ import {ADMIN_FIXTURES, ADMIN_TEST_PASSWORD, REGULAR_USER, TEMP_USER} from "../h
 import {IdentityStore} from "../../src/server/rbac/IdentityStore";
 import {DEFAULT_GROUP_ID} from "../../src/server/rbac/IdentityTypes";
 import {serializeIdentityFixture} from "../helpers/identityFixture";
-import {RBAC_IDENTITY_FIXTURE, RBAC_PASSWORDS, RBAC_TRUSTED_CLIENTS, RBAC_TUNNELS, RBAC_USER_IDS} from "../helpers/rbacFixture";
+import {RBAC_CONNECTED_CLIENT_NAME, RBAC_IDENTITY_FIXTURE, RBAC_LONG_IPV6, RBAC_PASSWORDS, RBAC_TRUSTED_CLIENTS, RBAC_TUNNELS, RBAC_USER_IDS} from "../helpers/rbacFixture";
 import {ClockRngProvider} from "../../src/util/ClockRng";
 import {generateRecoveryCodes, generateSecret, hashRecoveryCode} from "../../src/server/mfa/Totp";
 import {base32Encode} from "../../src/server/mfa/Base32";
@@ -34,7 +34,7 @@ const fixture = (process.argv[3] ?? "bootstrap") as AdminFixture;
 if(!ADMIN_FIXTURES.includes(fixture)) {
     process.exit(2);
 }
-const rbac = fixture === "rbac" || fixture === "rbac-no-audit" || fixture === "rbac-mfa";
+const rbac = fixture === "rbac" || fixture === "rbac-no-audit" || fixture === "rbac-mfa" || fixture === "rbac-toggle";
 
 // U4-07: 테스트가 TOTP 코드를 계산할 수 있게 서버 시계는 실시각 + 누적 offset 이다(advanceClock IPC 가 offset 을 늘린다).
 let clockOffset = 0;
@@ -180,7 +180,7 @@ const stub = {
     clientStatus(...args: unknown[]): Array<ClientStatus> {
         record("clientStatus", args);
         return [{
-            id: 1, name: "client-a", clientId: "client-a", protocolVersion: 2, controlProtocolMode: "legacy",
+            id: 1, name: RBAC_CONNECTED_CLIENT_NAME, clientId: RBAC_CONNECTED_CLIENT_NAME, protocolVersion: 2, controlProtocolMode: "legacy",
             legacy: true, uptime: 65000, address: "127.0.0.1:50000", activeSessionCount: 0
         }];
     },
@@ -188,7 +188,7 @@ const stub = {
         record("getClientSysInfo", [id]);
         if(id !== 1) return undefined;
         return {
-            osInfo: {platform: "linux", release: "6.1", type: "Linux", hostname: "client-a"},
+            osInfo: {platform: "linux", release: "6.1", type: "Linux", hostname: RBAC_CONNECTED_CLIENT_NAME},
             ram: 8589934592,
             cpuInfo: {model: "Fixture CPU", speed: 2400, cores: 4},
             network: {
@@ -220,7 +220,13 @@ const stub = {
     if(rbac) {
         const store = ServerOptionStore.instance;
         const tunnels = RBAC_TUNNELS.map((tunnel) => ({...TUNNEL_OPTIONS[0], ...tunnel,
-            ...(tunnel.protocol === "http" ? {httpOption: TUNNEL_OPTIONS[1].httpOption} : {})}));
+            ...(tunnel.protocol === "http" ? {httpOption: TUNNEL_OPTIONS[1].httpOption} : {}),
+            // 이슈 347: alice 의 20001 을 carol 에게 공유한다. 이슈 348: 20001 에는 alice 의 허용 IP 가 있지만 IP 제한은 꺼져 있다(옛 터널).
+            ...(fixture === "rbac-toggle" && tunnel.forwardPort === 20001
+                ? {sharedUserIds: [RBAC_USER_IDS.carol], activatorIps: {[RBAC_USER_IDS.alice]: "203.0.113.5"}} : {}),
+            // 이슈 348: admin 만 보는 20003 은 IP 제한이 켜져 있고 admin 의 허용 IP 가 긴 IPv6 다(360px 줄 넘침 확인용).
+            ...(fixture === "rbac-toggle" && tunnel.forwardPort === 20003
+                ? {activatorIpOnly: true, activatorIps: {[RBAC_USER_IDS.admin]: RBAC_LONG_IPV6}} : {})}));
         if(!store.updateServerOption({...store.serverOption, tunnelingOptions: tunnels as TunnelingOption[], trustedClients: RBAC_TRUSTED_CLIENTS})) {
             throw new Error("Invalid rbac fixture configuration");
         }
@@ -244,6 +250,10 @@ const stub = {
             enrolledAt: Date.now(), lastUsedStep: -1, recoveryCodeHashes: codes.map((code) => hashRecoveryCode(code, RBAC_USER_IDS.alice))});
         if(!enabled.success) throw new Error("Invalid rbac-mfa fixture");
         mfaRecoveryCodes = codes;
+    }
+    if(fixture === "rbac-toggle") {
+        const grouped = IdentityStore.instance.updateGroup(DEFAULT_GROUP_ID, {attributes: {tunnel_crud: "toggle"}});
+        if(!grouped.success) throw new Error("Invalid rbac-toggle fixture");
     }
     if(fixture === "rbac-no-audit") {
         const grouped = IdentityStore.instance.updateGroup(DEFAULT_GROUP_ID, {attributes: {admin_ui_section_access: ["tunnels", "my_profile", "my_sessions"]}});

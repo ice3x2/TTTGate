@@ -145,7 +145,8 @@ class ServerOptionCtrl {
         const option: Record<string, unknown> = {...tunnelingOption};
         // ownerId·owner·editable 은 목록 응답이 실어 준 값이다. 소유자 변경은 reassignOwner 만 하므로 저장 본문에서 뺀다.
         // 남겨 두면 화면을 연 시점의 ownerId 가 실려, 같은 화면에서 바꾼 소유자가 저장 때 되돌아간다.
-        for(const name of ['certInfo', 'certificateRevision', 'originalCertificateRevision', 'originalForwardPort', 'previousForwardPort', 'expectedCertificateRevision', 'isSync', 'updatable', 'allowedClientNamesQuery', 'activeTimeout', 'ownerId', 'owner', 'editable']) delete option[name];
+        // 이슈 347: toggleable·sharedUsers 도 표시용이다. 공유 목록은 sharedUserIds 로만 보낸다.
+        for(const name of ['certInfo', 'certificateRevision', 'originalCertificateRevision', 'originalForwardPort', 'previousForwardPort', 'expectedCertificateRevision', 'isSync', 'updatable', 'allowedClientNamesQuery', 'activeTimeout', 'ownerId', 'owner', 'editable', 'toggleable', 'sharedUsers']) delete option[name];
         return adminRequest("/api/tunnelingOption", {
             method: "POST",
             credentials: "same-origin",
@@ -176,8 +177,11 @@ class ServerOptionCtrl {
     }
 
 
-    /** 이슈 338: signal 로 멈춘 읽기를 끊을 수 있다(상태 폴링의 기한). */
-    public async loadTunnelingStatus(signal?: AbortSignal) : Promise<{serverTime: number,statuses: Array<TunnelingStatus>}> {
+    /**
+     * 이슈 338: signal 로 멈춘 읽기를 끊을 수 있다(상태 폴링의 기한).
+     * 이슈 348: requesterIp 는 서버가 본 지금 내 IP 다. 모르거나 옛 서버면 null 이다.
+     */
+    public async loadTunnelingStatus(signal?: AbortSignal) : Promise<{serverTime: number, requesterIp: string | null, statuses: Array<TunnelingStatus>}> {
         let res = await fetch("/api/externalServerStatuses", {
             method: "GET",
             credentials: "same-origin",
@@ -187,7 +191,22 @@ class ServerOptionCtrl {
         if(!json || res.status == 401) {
             throw new InvalidSession();
         }
-        return {serverTime : json['serverTime'] as number, statuses:  json['statuses'] as Array<TunnelingStatus>};
+        return {serverTime : json['serverTime'] as number, requesterIp: typeof json['requesterIp'] === 'string' ? json['requesterIp'] : null,
+            statuses:  json['statuses'] as Array<TunnelingStatus>};
+    }
+
+    /** 이슈 348 FR-12: IP 제한을 켜고 끈다. 끄기는 고치기 권한이 필요하다(켜기 권한만 있으면 403 read_only). */
+    public setActivatorIpOnly(port: number, enabled: boolean) : Promise<ApiResult<{forwardPort: number; activatorIpOnly: boolean; myAllowedIp: string | null}>> {
+        return adminRequest(`/api/tunneling/${port}/activatorIpOnly`, {
+            method: "PUT", headers: {'Content-Type': 'application/json'}, body: JSON.stringify({enabled})
+        });
+    }
+
+    /** 이슈 348 FR-13: 내 허용 IP 를 지금 IP 로 바꾼다. 터널이 꺼져 있어도 된다. */
+    public refreshActivatorIp(port: number) : Promise<ApiResult<{forwardPort: number; allowedIp: string; previousIp: string | null}>> {
+        return adminRequest(`/api/tunneling/${port}/activatorIp`, {
+            method: "POST", headers: {'Content-Type': 'application/json'}, body: JSON.stringify({})
+        });
     }
 
     /** 실패하면 status 가 HTTP 상태다. 네트워크 실패는 0 이다(adminRequest 의 실패 값). */

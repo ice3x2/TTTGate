@@ -75,7 +75,7 @@ describe("IdentityStore passkeys (#336)", () => {
         IdentityStore.instance.load();
         const id = await createUser("alice");
         for(let i = 0; i < 20; i++) expect(IdentityStore.instance.addPasskey(id, passkey(`cred-${i}`)).success).toBe(true);
-        expect(IdentityStore.instance.addPasskey(id, passkey("cred-20"))).toMatchObject({success: false, status: 409, code: "passkey_limit"});
+        expect(IdentityStore.instance.addPasskey(id, passkey("cred-20"))).toMatchObject({success: false, status: 409, code: "passkey_limit", values: {limit: 20}});
         expect(IdentityStore.instance.user(id)!.passkeys).toHaveLength(20);
     });
 

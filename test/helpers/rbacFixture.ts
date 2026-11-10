@@ -45,6 +45,12 @@ export const RBAC_TUNNELS: Array<{forwardPort: number; protocol: 'tcp' | 'http';
     {forwardPort: 20003, protocol: 'tcp', destinationAddress: '127.0.0.1', destinationPort: 8083},
 ];
 
+/** 이슈 348: 'rbac-toggle' 의 20003 에 심는 admin 의 허용 IP. 긴 IPv6 가 360px 줄을 넘치게 하지 않는지 본다. */
+export const RBAC_LONG_IPV6 = '2001:db8:85a3:1234:5678:8a2e:370:7334';
+
+/** 관리 백엔드 드라이버(admin-backend-driver.ts)가 접속해 있다고 알리는 클라이언트의 이름과 호스트 이름. 상태 화면에 보인다. */
+export const RBAC_CONNECTED_CLIENT_NAME = 'client-a';
+
 export const RBAC_TRUSTED_CLIENTS: Array<{clientId: string; clientSecret: string; displayName: string}> = [
     {clientId: 'client-a', clientSecret: 'client-a-secret-0123456789abcdef', displayName: 'Client A'},
     {clientId: 'client-b', clientSecret: 'client-b-secret-0123456789abcdef', displayName: 'Client B'},

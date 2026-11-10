@@ -48,6 +48,8 @@ interface OnTerminateSessionCallback {
 const OPTION_BUNDLE_KEY : string = "portTunnelOption";
 const PORT_BUNDLE_KEY : string = "portNumber";
 const SESSION_ID_BUNDLE_KEY : string = "ID";
+// 이슈 348: 세션의 원격 주소. 허용 IP 가 바뀌면 이 값으로 끊을 세션을 고른다(HttpHandler 는 감싼 소켓이 닫힌 뒤에도 읽어야 한다).
+const REMOTE_ADDRESS_BUNDLE_KEY : string = "remoteAddress";
 
 type ExternalPortServerStatus = {
     port: number,
@@ -60,6 +62,8 @@ type ExternalPortServerStatus = {
     activeTimeout: number,
     /** 사용자가 요청한 시간(초, 0=무기한). 재적용·롤백·상한 변경 때 이 값과 현재 상한으로 다시 계산한다(#137). */
     requestedTimeout?: number,
+    /** 이슈 347: 이 활성을 켠 사용자 id. 메모리에만 두며 상한 계산에 쓴다. 서버 기동 때의 자동 활성에는 없다. */
+    activatedBy?: string,
     rx: number,
     tx: number,
     rejected: {geo: number, rateLimit: number},
@@ -86,7 +90,7 @@ class ExternalPortServerPool {
     private _bandwidthPolicy: ((port: number) => {groupId: string; bytesPerSecond: number} | undefined) | null = null;
     private readonly _sendQueues = new Map<number, SendQueue>();
     // U5-07 / #122 — 포트별 최대 활성 시간(초)과 그 상한으로 만료됐을 때의 알림. rbac 를 모르도록 주입받는다.
-    private _activeTimeoutCap : ((port: number) => number | undefined) | null = null;
+    private _activeTimeoutCap : ((port: number, activatedBy?: string) => number | undefined) | null = null;
     private _onAutoExpire : ((port: number, info: {timeoutSeconds: number; cappedByGroup: boolean}) => void) | null = null;
     private _closeWaitTimeout : number = 60 * 1000;
 
@@ -252,7 +256,7 @@ class ExternalPortServerPool {
         this._bandwidthPolicy = policy;
     }
 
-    public set ActiveTimeoutCap(cap: ((port: number) => number | undefined) | null) {
+    public set ActiveTimeoutCap(cap: ((port: number, activatedBy?: string) => number | undefined) | null) {
         this._activeTimeoutCap = cap;
     }
 
@@ -606,6 +610,7 @@ class ExternalPortServerPool {
             handler.setBufferSizeLimit(bufferSizeLimit);
             handler.setBundle(OPTION_BUNDLE_KEY, option);
             handler.setBundle(PORT_BUNDLE_KEY, server.port);
+            handler.setBundle(REMOTE_ADDRESS_BUNDLE_KEY, handler.socket?.remoteAddress);
 
             if(option.protocol == "http" || option.protocol == "https") {
                 logger.info(`Bound HttpHandler - id:${sessionID}, port:${server.port}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
@@ -695,6 +700,18 @@ class ExternalPortServerPool {
         await this.destroyHandlers(ids);
     }
 
+    /**
+     * 이슈 348: 그 포트에서 refuse 가 참인 원격 주소의 세션을 끊고, 끊은 수를 돌려준다. 리스너는 그대로 둔다.
+     * 허용 IP 목록이나 IP 제한이 바뀌었을 때 이미 들어와 있는 연결에 같은 판정을 적용한다.
+     */
+    public async closeSessionsWhere(port: number, refuse: (remoteAddress: string | undefined) => boolean) : Promise<number> {
+        const ids = Array.from(this._handlerMap.values())
+            .filter((handler) => handler.getBundle(PORT_BUNDLE_KEY) === port && refuse(handler.getBundle(REMOTE_ADDRESS_BUNDLE_KEY)))
+            .map((handler) => handler.getBundle(SESSION_ID_BUNDLE_KEY) as number);
+        await this.destroyHandlers(ids);
+        return ids.length;
+    }
+
     public async inactive(port: number) : Promise<boolean> {
         let status = this._statusMap.get(port);
         if(!status) {
@@ -702,6 +719,8 @@ class ExternalPortServerPool {
         }
         this.clearActiveTimeout(port);
         status.active = false;
+        // 이슈 347: 켠 사람은 그 활성에만 속한다. 다음 활성은 새로 켠 사람을 받는다.
+        status.activatedBy = undefined;
         await this.removeHandlerByForwardPort(port);
         return true;
     }
@@ -724,10 +743,14 @@ class ExternalPortServerPool {
     public async reapplyActiveCap(port: number) : Promise<void> {
         const status = this._statusMap.get(port);
         if(!status || !status.active) return;
-        await this.active(port, status.requestedTimeout ?? status.activeTimeout, {startedAt: status.activeStart});
+        await this.active(port, status.requestedTimeout ?? status.activeTimeout, {startedAt: status.activeStart, activatedBy: status.activatedBy});
     }
 
-    public async active(port: number, timeout?: number, options: {startedAt?: number} = {}) : Promise<boolean> {
+    /**
+     * options.activatedBy 는 이 활성을 켠 사람이다(이슈 347). 넘기지 않으면 켠 사람이 없는 활성으로 바뀐다.
+     * 재적용·재시작처럼 상태를 이어받는 호출은 이전 상태의 activatedBy 를 그대로 넘긴다.
+     */
+    public async active(port: number, timeout?: number, options: {startedAt?: number; activatedBy?: string} = {}) : Promise<boolean> {
         let status = this._statusMap.get(port);
         if(!status) {
             return false;
@@ -737,7 +760,7 @@ class ExternalPortServerPool {
         // 상한이 있으면 타임아웃 없음(0 이하)과 상한보다 긴 요청을 상한으로 자른다.
         // 상한과 같은 값도 상한 만료로 본다. 재적용(restoreExternalPortStatus)은 이미 잘린 값을 다시 넘기므로,
         // '<' 로 비교하면 옵션을 고쳐 터널을 다시 만든 뒤의 만료가 감사에서 빠진다.
-        const cap = this._activeTimeoutCap?.(port);
+        const cap = this._activeTimeoutCap?.(port, options.activatedBy);
         const cappedByGroup = cap !== undefined && (timeout <= 0 || cap <= timeout);
         if(cappedByGroup) timeout = cap!;
         const effectiveTimeout = timeout;
@@ -745,6 +768,7 @@ class ExternalPortServerPool {
         status.active = true;
         status.activeTimeout = timeout;
         status.requestedTimeout = requested;
+        status.activatedBy = options.activatedBy;
         // 재적용·롤백·상한 재계산은 원래 시작 시각을 넘긴다. 처음부터 다시 걸면 만료가 계속 미뤄진다(#137).
         status.activeStart = options.startedAt !== undefined && options.startedAt > 0 ? options.startedAt : Date.now();
         if(timeout > 0){

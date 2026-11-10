@@ -19,6 +19,8 @@ import {ConcurrencyDenial, ConcurrencyLimiter} from "./security/ConcurrencyLimit
 import {PRESET_BYTES_PER_SECOND} from "./security/BandwidthLimiter";
 import AuthorizationContext from "./rbac/AuthorizationContext";
 import {auditDirPath, FileAuditSink} from "./audit/FileAuditSink";
+import {activatorIpRestriction} from "./rbac/TunnelActivatorIps";
+import {isActivatorIpAllowed} from "./security/ActivatorIps";
 const logger = LoggerFactory.getLogger('server', 'TTTServer');
 
 type RuntimeApplyResult = {
@@ -75,12 +77,15 @@ class TTTServer {
         this._externalPortServerPool.OnNewSessionCallback = this.onNewSession;
         this._externalPortServerPool.OnTerminateSessionCallback = this.OnTerminateSession;
         // U5-07 / #122 — 일반 유저 터널의 활성 시간을 그룹 max_tunnel_duration_ms 로 제한한다.
-        this._externalPortServerPool.ActiveTimeoutCap = (port) => maxActiveSeconds(port, AuthorizationContext);
+        // 이슈 347: 켠 사람이 있으면 그 사람의 그룹 상한과도 비교한다.
+        this._externalPortServerPool.ActiveTimeoutCap = (port, activatedBy) => maxActiveSeconds(port, AuthorizationContext, activatedBy);
         this._externalPortServerPool.OnAutoExpireCallback = this.onTunnelAutoExpire;
         // U5-08 / #123 — 일반 유저 그룹의 동시 연결 상한. 소유자·그룹은 판정 때마다 AuthorizationContext 에서 읽는다.
         const admission = AdmissionController.instance;
         admission.attachConcurrency(new ConcurrencyLimiter(AuthorizationContext, (port) => admission.sessionCount(port)));
         admission.onConcurrencyDenied = this.onConcurrencyDenied;
+        // 이슈 348: 켠 사람의 IP 만 받는 터널의 허용 IP. 저장된 목록과 지금의 켜기 권한을 판정 때마다 읽는다.
+        admission.attachActivatorIps(activatorIpRestriction);
         // U5-09 / #124 — 일반 유저 그룹의 대역폭 프리셋. unlimited·슈퍼유저·migrated 는 정책이 없어 버킷도 없다.
         this._externalPortServerPool.BandwidthPolicy = (port) => {
             const owner = AuthorizationContext.ownerOf(port);
@@ -201,7 +206,8 @@ class TTTServer {
         const requested = lastServerStatus.requestedTimeout ?? lastServerStatus.activeTimeout;
         this._externalPortServerPool.setActiveTimeout(port, requested);
         if(lastServerStatus.active) {
-            await this._externalPortServerPool.active(port, requested, {startedAt: lastServerStatus.activeStart});
+            // 이슈 347: 켠 사람도 이어받는다. 설정을 저장했다고 켠 사람의 더 짧은 상한이 풀리면 안 된다.
+            await this._externalPortServerPool.active(port, requested, {startedAt: lastServerStatus.activeStart, activatedBy: lastServerStatus.activatedBy});
             return;
         }
         if(!lastServerStatus.active) {
@@ -273,14 +279,20 @@ class TTTServer {
 
 
     /** 설정된 터널마다의 상태. #338: clientConnected 는 그 터널을 맡을 수 있는 클라이언트가 연결되어 있는지다. */
-    public externalServerStatuses() : Array<ExternalPortServerStatus & {clientConnected: boolean}> {
+    public externalServerStatuses() : Array<Omit<ExternalPortServerStatus, 'activatedBy'> & {clientConnected: boolean}> {
         return ServerOptionStore.instance.serverOption.tunnelingOptions.map((tunnelOption) => ({
-            ...this._externalPortServerPool.getServerStatus(tunnelOption.forwardPort),
+            // 이슈 347: 켠 사람은 상한 계산용이다. 상태 API 로 다른 사용자의 id 를 내보내지 않는다.
+            ...TTTServer.withoutActivator(this._externalPortServerPool.getServerStatus(tunnelOption.forwardPort)),
             clientConnected: this._tunnelServer.hasEligibleClient(
                 this._allowClientNamesMap.get(tunnelOption.forwardPort), this._allowClientIdsMap.get(tunnelOption.forwardPort))
         }));
     }
 
+
+    private static withoutActivator(status: ExternalPortServerStatus): Omit<ExternalPortServerStatus, 'activatedBy'> {
+        const {activatedBy: _activatedBy, ...rest} = status;
+        return rest;
+    }
 
     public externalServerStatus(port: number) : ExternalPortServerStatus {
         return this._externalPortServerPool.getServerStatus(port);
@@ -324,6 +336,20 @@ class TTTServer {
     private applyTrustedClients(next: ServerOption): void {
         const disconnected = this._tunnelServer.updateTrustedClients(next.trustedClients ?? []);
         if(disconnected.length > 0) logger.info(`trusted clients changed; disconnected: ${disconnected.join(', ')}`);
+    }
+
+    /**
+     * 이슈 348: 허용 IP 목록·IP 제한·켜기 권한이 바뀐 뒤 부른다. 허용 IP 가 아닌 기존 연결을 끊는다(새 연결은 판정이 막는다).
+     * port 를 주지 않으면 리스너가 있는 모든 터널을 본다.
+     */
+    public async enforceActivatorIps(port?: number): Promise<void> {
+        const ports = port === undefined ? Object.keys(this._appliedExternal).map(Number) : [port];
+        for(const target of ports) {
+            const allowed = activatorIpRestriction(target);
+            if(allowed === undefined) continue;
+            const closed = await this._externalPortServerPool.closeSessionsWhere(target, (address) => !isActivatorIpAllowed(allowed, address));
+            if(closed > 0) logger.info(`tunnel ${target}: closed ${closed} connection(s) not from an allowed activator IP`);
+        }
     }
 
     /** 켜져 있는 모든 외부 포트의 수명 상한을 다시 계산한다(#137 — 소유자·그룹·그룹 속성 변경 뒤). */
@@ -405,7 +431,8 @@ class TTTServer {
                     const remaining = beforeStatus.activeTimeout > 0
                         ? beforeStatus.activeStart + beforeStatus.activeTimeout * 1000 - Date.now() : 1;
                     if(beforeStatus.active && remaining > 0) {
-                        await this._externalPortServerPool.active(port, beforeStatus.requestedTimeout ?? beforeStatus.activeTimeout, {startedAt: beforeStatus.activeStart});
+                        await this._externalPortServerPool.active(port, beforeStatus.requestedTimeout ?? beforeStatus.activeTimeout,
+                            {startedAt: beforeStatus.activeStart, activatedBy: beforeStatus.activatedBy});
                     } else await this._externalPortServerPool.inactive(port);
                 }
                 this._allowClientNamesMap.delete(port);
@@ -560,17 +587,23 @@ class TTTServer {
         }
     }
 
+    /**
+     * #338 이름과 이슈 347 공유 목록은 런타임이 쓰지 않는다. 이슈 348 의 IP 제한과 허용 IP 목록은 판정이 저장소에서 바로 읽는다.
+     * 이것들만 다르면 리스너를 다시 시작하지 않는다.
+     */
     private static sameExceptName(a: TunnelingOption, b: TunnelingOption): boolean {
-        const {name: _a, ...restA} = a;
-        const {name: _b, ...restB} = b;
+        const {name: _a, sharedUserIds: _sharedA, activatorIpOnly: _onlyA, activatorIps: _ipsA, ...restA} = a;
+        const {name: _b, sharedUserIds: _sharedB, activatorIpOnly: _onlyB, activatorIps: _ipsB, ...restB} = b;
         return ObjectUtil.canonicalEquals(restA, restB);
     }
 
     /**
      * @param previousForwardPort 외부 포트를 바꾸는 중이면 옛 포트. 옛 리스너가 돌고 있으면 새 리스너가 그 활성 상태를 이어받는다(#279, #281).
      *   포트를 바꿀 때는 새 포트에 행이 없으므로 previousOption 을 함께 넘기지 않는다. 실패 복원은 같은 포트의 previousOption 만 다룬다.
+     * @param creatorId 새 터널이 바로 켜지면 그 켠 사람이다(이슈 347). 상태를 이어받는 리스너에는 쓰지 않는다.
      */
-    public async applyTunnelingOption(nextOption: TunnelingOption, previousOption?: TunnelingOption, stagedCert?: CertInfo, previousForwardPort?: number): Promise<RuntimeApplyResult> {
+    public async applyTunnelingOption(nextOption: TunnelingOption, previousOption?: TunnelingOption, stagedCert?: CertInfo, previousForwardPort?: number,
+                                      creatorId?: string): Promise<RuntimeApplyResult> {
         const port = nextOption.forwardPort;
         const lastServerStatus = this._externalPortServerPool.getServerStatus(port);
         const inheritedStatus = previousForwardPort === undefined ? lastServerStatus : this._externalPortServerPool.getServerStatus(previousForwardPort);
@@ -600,7 +633,7 @@ class TTTServer {
             }
             await this._externalPortServerPool.startServer(nextOption, nextCert);
             if(inherits) await this.restoreExternalPortStatus(port, inheritedStatus);
-            else await this.activateNewListener(nextOption);
+            else await this.activateNewListener(nextOption, creatorId);
             this.applyAllowedClientsForPort(nextOption);
             this._appliedExternal[port] = {option: ObjectUtil.cloneDeep(nextOption), cert: ObjectUtil.cloneDeep(nextCert),
                 configurationRevision: ServerOptionStore.instance.revisionState.currentRevision,
@@ -731,8 +764,9 @@ class TTTServer {
         return stopped;
     }
 
-    public async activeExternalPortServer(port: number, timeout: number) : Promise<boolean> {
-        return await this._externalPortServerPool.active(port, timeout);
+    /** @param activatorId 켜는 사용자. 이미 켜진 터널이면 이 사람이 새 켠 사람이 된다(이슈 347). */
+    public async activeExternalPortServer(port: number, timeout: number, activatorId?: string) : Promise<boolean> {
+        return await this._externalPortServerPool.active(port, timeout, {activatedBy: activatorId});
     }
 
     public async inactiveExternalPortServer(port: number) : Promise<boolean> {
@@ -745,10 +779,11 @@ class TTTServer {
     /**
      * 새로 띄운 리스너는 startServer 가 inactiveOnStartup 에 따라 켜 둔다. 그 자동 활성에는 타이머가 없으므로,
      * 상한이 있는 터널은 active() 로 다시 켜 상한 타이머를 건다. 서버 기동과 새 터널 추가가 같이 쓴다(#281).
+     * 이슈 347: 새 터널을 만든 사람(creatorId)이 있으면 그 사람이 켠 사람이다. 서버 기동 때는 켠 사람이 없다.
      */
-    private async activateNewListener(option: TunnelingOption): Promise<void> {
-        if(!option.inactiveOnStartup && maxActiveSeconds(option.forwardPort, AuthorizationContext) !== undefined) {
-            await this._externalPortServerPool.active(option.forwardPort);
+    private async activateNewListener(option: TunnelingOption, creatorId?: string): Promise<void> {
+        if(!option.inactiveOnStartup && (creatorId !== undefined || maxActiveSeconds(option.forwardPort, AuthorizationContext) !== undefined)) {
+            await this._externalPortServerPool.active(option.forwardPort, undefined, {activatedBy: creatorId});
         }
     }
 

@@ -400,7 +400,8 @@ describe("IdentityStore", () => {
         const superuserGroup = parsed.groups.find((g: {id: string}) => g.id === "system:superuser");
         const defaultGroup = parsed.groups.find((g: {id: string}) => g.id === "default");
         expect(superuserGroup.attributes).toEqual({});
-        expect(Object.keys(defaultGroup.attributes)).toHaveLength(11);
+        // #346 에서 mfa_required 가 더해져 12개다.
+        expect(Object.keys(defaultGroup.attributes)).toHaveLength(12);
 
         IdentityStore.resetForTest();
         IdentityStore.instance.load();
@@ -419,6 +420,31 @@ describe("IdentityStore", () => {
             const result = await IdentityStore.instance.createUser({username: "oliver", role: "regular", password: "oliver-password-1", mustChangePassword: false});
             expect(result).toMatchObject({success: false, status: 422, code: "identity_save_failed"});
             expect(IdentityStore.instance.users()).toHaveLength(usersBefore);
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
+    it("does not put the absolute path of an unreadable identity file into values (issue 349 FR-7)", () => {
+        fs.mkdirSync(Path.dirname(identityYamlPath()), {recursive: true});
+        fs.writeFileSync(identityYamlPath(), "version: 1\n");
+        const spy = jest.spyOn(Files, "toStringSync").mockReturnValue(undefined);
+        try {
+            const result = IdentityStore.instance.load();
+            expect(result).toMatchObject({success: false, reason: "read-error", values: {file: "identity.yaml"}});
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
+    it("sends the error code of a failed save as a value field (issue 349 FR-7)", async () => {
+        IdentityStore.instance.load();
+        const spy = jest.spyOn(Files, "writeAtomicBatchSync").mockImplementation(() => {
+            throw Object.assign(new Error("permission denied"), {code: "EACCES"});
+        });
+        try {
+            const result = await IdentityStore.instance.createUser({username: "olivia", role: "regular", password: "olivia-password-1", mustChangePassword: false});
+            expect(result).toEqual({success: false, status: 422, code: "identity_save_failed", message: "identity file could not be saved (EACCES)", values: {errorCode: "EACCES"}});
         } finally {
             spy.mockRestore();
         }

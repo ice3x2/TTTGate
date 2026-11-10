@@ -417,7 +417,7 @@ describe("rbac-tunnel-ownership", () => {
     it("재할당의 잘못된 입력과 권한 없는 호출은 거부된다", async () => {
         const revision = () => ServerOptionStore.instance.revisionState.currentRevision;
         const unknownUser = await request("PUT", "/api/tunnelingOption/20011/owner", {ownerId: "u_none", expectedRevision: revision()}, superuser);
-        expect({status: unknownUser.status, code: unknownUser.body.code}).toEqual({status: 422, code: "owner_not_found"});
+        expect({status: unknownUser.status, code: unknownUser.body.code, ownerId: unknownUser.body.ownerId}).toEqual({status: 422, code: "owner_not_found", ownerId: "u_none"});
 
         const unknownPort = await request("PUT", "/api/tunnelingOption/65000/owner", {ownerId: carol.id, expectedRevision: revision()}, superuser);
         expect(unknownPort.status).toBe(404);

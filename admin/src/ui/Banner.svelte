@@ -1,6 +1,7 @@
 <script lang="ts">
     import type {Snippet} from 'svelte';
     import type {Tone} from './tone';
+    import {t} from '../i18n';
 
     let {
         tone,
@@ -20,7 +21,7 @@
 <div class="banner {tone} {className}" role="status">
     <div class="banner-body">{@render children?.()}</div>
     {#if dismissible}
-        <button type="button" class="banner-close" aria-label="Dismiss" onclick={() => ondismiss?.()}>×</button>
+        <button type="button" class="banner-close" aria-label={t('common.dismiss')} onclick={() => ondismiss?.()}>×</button>
     {/if}
 </div>
 

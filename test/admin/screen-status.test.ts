@@ -134,3 +134,50 @@ test("상태 화면은 1초마다 다시 읽고 화면을 떠나면 폴링을 �
         await app.close();
     }
 }, ADMIN_APP_TEST_TIMEOUT_MS);
+
+// 이슈 349 검토 H-1: 시스템 정보를 열지 못하면 예외 원문("Error: …", "TypeError: Failed to fetch") 대신 번역한 문구를 보인다.
+describe("시스템 정보를 열지 못할 때의 안내(ko-KR)", () => {
+    const startKoreanStatus = async () => {
+        const app = await startAdminApp({locale: "ko-KR"});
+        await app.page.evaluate(() => { location.hash = "#/status"; });
+        await app.page.waitForFunction(() => location.hash === "#/status", undefined, {timeout: 10_000});
+        await app.page.waitForFunction(() => document.querySelectorAll(".client-list > li").length === 1, undefined, {timeout: 15_000});
+        return app;
+    };
+
+    const alertText = async (page: Page): Promise<string> => {
+        const dialog = page.getByRole("dialog", {name: "상태"});
+        await dialog.waitFor({state: "visible", timeout: 10_000});
+        return (await dialog.locator(".modal-body").textContent()) ?? "";
+    };
+
+    test("서버가 invalid_client_id 로 거절하면 그 코드의 한국어 문구를 보인다", async () => {
+        const app = await startKoreanStatus();
+        try {
+            await app.page.route("**/api/clientSysInfo/1", (route) => route.fulfill({status: 400, contentType: "application/json",
+                body: JSON.stringify({success: false, code: "invalid_client_id", message: "Invalid client ID"})}));
+            await app.page.getByRole("button", {name: "클라이언트 1 상세 정보", exact: true}).click();
+
+            const text = await alertText(app.page);
+            expect(text).toContain("클라이언트 ID가 올바르지 않습니다.");
+            expect(text).not.toContain("Invalid client ID");
+            expect(app.errors).toEqual([]);
+        } finally {
+            await app.close();
+        }
+    }, ADMIN_APP_TEST_TIMEOUT_MS);
+
+    test("서버에 닿지 못하면 예외 원문 대신 연결 실패 문구를 보인다", async () => {
+        const app = await startKoreanStatus();
+        try {
+            await app.page.route("**/api/sysInfo", (route) => route.abort());
+            await app.page.getByRole("button", {name: "정보", exact: true}).click();
+
+            const text = await alertText(app.page);
+            expect(text).toContain("서버에 연결하지 못했습니다.");
+            expect(text).not.toMatch(/Error|fetch/);
+        } finally {
+            await app.close();
+        }
+    }, ADMIN_APP_TEST_TIMEOUT_MS);
+});

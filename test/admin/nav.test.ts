@@ -1,4 +1,5 @@
 import {chrome, defaultHash, isDefaultHash, navScreen, NAV, SECTION_OF_SCREEN, visibleNav} from "../../admin/src/shell/nav";
+import {translator} from "../../admin/src/i18n";
 
 // U3-01 / #103 — 내비게이션 순수 함수. 섹션으로 드로어 항목과 기본 해시를 정한다.
 
@@ -33,7 +34,7 @@ describe("nav", () => {
     });
 
     test("NAV 는 10개 항목을 정해진 순서로 갖는다(#213 이 Server settings 뒤에 Trusted clients 를 넣었다)", () => {
-        expect(NAV.map((item) => item.title)).toEqual(["Tunnels", "Status", "Server settings", "Trusted clients", "Users", "Groups", "Security", "Audit log", "Sessions", "My account"]);
+        expect(visibleNav(SUPERUSER_SECTIONS).map((item) => item.title)).toEqual(["Tunnels", "Status", "Server settings", "Trusted clients", "Users", "Groups", "Security", "Audit log", "Sessions", "My account"]);
         // 편집 화면이 목록과 같은 섹션이어야 가드가 #/users/new 같은 해시도 막는다.
         expect(SECTION_OF_SCREEN).toEqual({
             status: "status", tunnels: "tunnels", "tunnel-edit": "tunnels", server: "server",
@@ -44,7 +45,7 @@ describe("nav", () => {
     });
 
     test("visibleNav 는 섹션에 있는 항목만 순서대로 돌려준다", () => {
-        expect(visibleNav(SUPERUSER_SECTIONS).map((item) => item.title)).toEqual(NAV.map((item) => item.title));
+        expect(visibleNav(SUPERUSER_SECTIONS).map((item) => item.hash)).toEqual(NAV.map((item) => item.hash));
         expect(visibleNav(["tunnels", "audit", "me", "sessions"]).map((item) => item.title)).toEqual(["Tunnels", "Audit log", "Sessions", "My account"]);
         const hashes = visibleNav(SUPERUSER_SECTIONS).map((item) => item.hash);
         expect(hashes.indexOf("#/audit")).toBeLessThan(hashes.indexOf("#/sessions"));
@@ -65,5 +66,29 @@ describe("nav", () => {
     test("isDefaultHash 는 사용자가 고른 해시가 아닌 기본 해시만 참이다(#338)", () => {
         for(const hash of ["", "#", "#/", "#/status", "#/tunnels"]) expect(isDefaultHash(hash)).toBe(true);
         for(const hash of ["#/users", "#/tunnels/20001", "#/me", "#/denied"]) expect(isDefaultHash(hash)).toBe(false);
+    });
+});
+
+// 이슈 349 FR-8 — 드로어 항목과 화면 제목도 정한 언어로 만든다. 언어는 마지막 인자로 넘긴다.
+describe("이슈 349 한국어 제목", () => {
+    const ko = translator("ko");
+
+    test("드로어 항목", () => {
+        expect(visibleNav(SUPERUSER_SECTIONS, ko).map((item) => item.title))
+            .toEqual(["터널", "상태", "서버 설정", "신뢰 클라이언트", "사용자", "그룹", "보안", "감사 로그", "세션", "내 계정"]);
+    });
+
+    test("화면 제목", () => {
+        expect(chrome({screen: "tunnel-edit", param: "new"}, ko)).toEqual({title: "새 터널", back: "#/tunnels"});
+        expect(chrome({screen: "tunnel-edit", param: "8080"}, ko)).toEqual({title: "터널 8080", back: "#/tunnels"});
+        expect(chrome({screen: "user-edit", param: "new"}, ko)).toEqual({title: "새 사용자", back: "#/users"});
+        expect(chrome({screen: "user-edit", param: "u_1"}, ko)).toEqual({title: "사용자", back: "#/users"});
+        expect(chrome({screen: "group-edit", param: "new"}, ko)).toEqual({title: "새 그룹", back: "#/groups"});
+        expect(chrome({screen: "group-edit", param: "default"}, ko)).toEqual({title: "그룹", back: "#/groups"});
+        expect(chrome({screen: "me-password"}, ko)).toEqual({title: "비밀번호 변경", back: "#/me"});
+        expect(chrome({screen: "denied"}, ko)).toEqual({title: "접근 권한 없음"});
+        expect(chrome({screen: "audit"}, ko)).toEqual({title: "감사 로그"});
+        expect(chrome({screen: "clients"}, ko)).toEqual({title: "신뢰 클라이언트"});
+        expect(chrome({screen: "status"}, ko)).toEqual({title: "상태"});
     });
 });

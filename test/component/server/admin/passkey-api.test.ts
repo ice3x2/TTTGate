@@ -218,6 +218,8 @@ describe("passkey registration (#336 REQ-4~7)", () => {
         const saved = await c.call("POST", "/api/me/passkeys", {name: "Key", response: authenticator.create(options.body.options)}, auth);
         expect(saved.status).toBe(409);
         expect(saved.body.code).toBe("passkey_limit");
+        // 이슈 349 H-1: 저장소가 만든 실패의 값(상한)도 응답 필드로 넘긴다. 화면이 문구의 {limit} 에 끼운다.
+        expect(saved.body.limit).toBe(20);
         const again = await c.call("POST", "/api/me/passkeys/options", {password: USER_PASSWORD}, auth);
         expect(again.status).toBe(409);
         expect(again.body.code).toBe("passkey_limit");
@@ -263,11 +265,11 @@ describe("passkey registration (#336 REQ-4~7)", () => {
         expect(response.body.code).toBe("password_change_required");
     }));
 
-    it("슈퍼유저 MFA 등록 강제 중에는 패스키를 다룰 수 없다", async () => withPasskeyServer(async (c) => {
+    // #346: 패스키도 2단계 수단이므로 강제 등록 중에 등록할 수 있다(AC-10).
+    it("슈퍼유저 MFA 등록 강제 중에도 패스키를 등록할 수 있다", async () => withPasskeyServer(async (c) => {
         const auth = await c.authFor("admin", ADMIN_PASSWORD);
         const response = await c.call("POST", "/api/me/passkeys/options", {password: ADMIN_PASSWORD}, auth);
-        expect(response.status).toBe(403);
-        expect(response.body.code).toBe("mfa_enrollment_required");
+        expect(response.status).toBe(200);
     }, {mfaRequiredForSuperusers: true}));
 });
 
@@ -318,7 +320,8 @@ describe("passkey login (#336 REQ-8~10)", () => {
         expect(success).toMatchObject({target: {kind: "user", id: c.idOf("alice")}, detail: {method: "passkey", passkeyId: credentialId}});
     }));
 
-    it("슈퍼유저 MFA 강제는 기존 규칙대로 세션에 남는다", async () => withPasskeyServer(async (c) => {
+    // #346: 패스키는 2단계 수단이다. 패스키가 있는 슈퍼유저는 강제 등록 상태가 아니다(AC-8).
+    it("슈퍼유저 MFA 강제 중에도 패스키로 로그인하면 강제 등록 상태가 아니다", async () => withPasskeyServer(async (c) => {
         // 등록은 MFA 강제 중에 막히므로, 인증기가 만든 자격증명을 저장소에 바로 넣고 로그인한다.
         const authenticator = new SoftAuthenticator(c.local);
         authenticator.create({rp: {id: "localhost"}, user: {id: Buffer.from(c.idOf("admin")).toString("base64url")}, challenge: "AAAA"});
@@ -329,7 +332,7 @@ describe("passkey login (#336 REQ-8~10)", () => {
         });
         const response = await c.passkeyLogin(authenticator);
         expect(response.status).toBe(200);
-        expect(response.body).toMatchObject({user: {username: "admin"}, mustEnrollMfa: true});
+        expect(response.body).toMatchObject({user: {username: "admin"}, mustEnrollMfa: false});
     }, {mfaRequiredForSuperusers: true}));
 
     it("같은 응답을 다시 보내면 401 passkey_invalid(challenge)다", async () => withPasskeyServer(async (c) => {

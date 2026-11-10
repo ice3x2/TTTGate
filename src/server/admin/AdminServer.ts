@@ -5,7 +5,7 @@ import ServerOptionStore from "../ServerOptionStore";
 import SessionStore, {Session} from "./SessionStore";
 import {IdentityStore} from "../rbac/IdentityStore";
 import {IdentityMigration, LEGACY_ADMIN_USERNAME} from "../rbac/IdentityMigration";
-import {MAX_PASSWORD_LENGTH, Role, validatePassword, validateUsername} from "../rbac/IdentityTypes";
+import {failureValues, MAX_PASSWORD_LENGTH, Role, validatePassword, validateUsername} from "../rbac/IdentityTypes";
 import {createHash} from "node:crypto";
 
 import {CertificationStore, CertInfo, PemData} from "../CertificationStore";
@@ -30,7 +30,7 @@ import {moveBlocklistPort, withPortAlias} from "../security/IpBlocklist";
 import {rateLimitBucketOf} from "../security/ConnectionRateLimiter";
 import {normalizeConnectionSecurity} from "../security/connectionSecurity";
 import {listCountries} from "../security/countries";
-import {auditEventOf, AuditRouteMeta, buildAdminRoutes, decodedPathSegment, errorLabelOf, isTunnelActivationRequested, parseActiveTimeout, parsePathId, parsePathPort, Route, RouteContext} from "./routes";
+import {ApiFailure, auditEventOf, FAILURE_RESPONSE_FIELDS, AuditRouteMeta, buildAdminRoutes, decodedPathSegment, errorLabelOf, failWith, isTunnelActivationRequested, parseActiveTimeout, parsePathId, parsePathPort, Route, RouteContext} from "./routes";
 import {createLoginFailureAuditor} from "./loginFailureAudit";
 import {bodyRejectionEvent, isBodyRejectionAuditable} from "./bodyRejectionAudit";
 import {truncateAuditValue} from "./auditValue";
@@ -47,10 +47,16 @@ import {AuditQuery} from "../audit/AuditQuery";
 import {auditDirPath} from "../audit/FileAuditSink";
 import {Action, authorize} from "../rbac/AdminAuthorizer";
 import {LEGACY_PRINCIPAL, principalOf} from "../rbac/Principal";
-import {admitTunnelWrite, isTunnelEditable, isTunnelVisibleTo, ownerViewOf, resolveOwnerId} from "../rbac/TunnelOwnership";
+import {mfaPolicyOptions} from "./mfaPolicyOptions";
+import {mustEnrollMfa as mustEnrollMfaFor, requiresPasskeyLogin} from "../rbac/MfaPolicy";
+import {admitTunnelWrite, existingSharedUserIds, isTunnelEditable, isTunnelToggleable, isTunnelVisibleTo, ownerViewOf, resolveOwnerId, sharedUsersOf, withSharedUserIds} from "../rbac/TunnelOwnership";
+import {normalizeSharedUserIds, sharedUserIdsOf, sharedUsersChange} from "../rbac/TunnelSharing";
 import {AuthorizationContext} from "../rbac/AuthorizationContext";
 import {AuditEvent, AuditSinkRegistry, recordAuditEvent} from "../audit/AuditSink";
 import {AUDIT_EVENT_TYPES} from "../audit/AuditEventTypes";
+import {activatorIpOnlyOf, activatorIpsOf, requesterIpOf, withActivatorIps} from "../security/ActivatorIps";
+import {activatorIpStatusOf, withoutFormerOwnerIp} from "../rbac/TunnelActivatorIps";
+import {activatorIpRouteHandlers, recordRequesterIp} from "./activatorIpRoutes";
 
 const logger = LoggerFactory.getLogger('server', 'AdminServer');
 const MFA_NOW = (): number => ClockRngProvider.current().now();
@@ -79,6 +85,8 @@ const LOGIN_MAX_IN_FLIGHT = LOGIN_MAX_FAILURES;
 const ADMIN_JSON_BODY_LIMIT_BYTES = 1 * 1024 * 1024; // 1MiB
 // #265: 로그인 본문 상한. 비밀번호(최대 1024자)와 MFA 코드면 충분하다. 칸을 잡은 채 큰 본문을 들고 있지 않게 한다.
 const LOGIN_JSON_BODY_LIMIT_BYTES = 16 * 1024;
+/** 비밀번호 로그인 실패. 사용자 없음·비활성·비밀번호 틀림을 가리지 않는다(사용자 열거 방지). 문구는 이슈 349 전과 같이 비운다. */
+const LOGIN_FAILED: ApiFailure = {code: 'login_failed'};
 const ADMIN_REQUEST_IDLE_TIMEOUT_MS = 10_000;
 // #297: 본문을 읽기 전에 거절한 요청의 남은 본문을 버리며 읽는 상한. JSON 본문 상한을 조금 넘는 요청도 거절 응답을 받게 2배로 둔다.
 const REJECTED_BODY_DRAIN_LIMIT_BYTES = 2 * ADMIN_JSON_BODY_LIMIT_BYTES;
@@ -179,7 +187,7 @@ class AdminServer {
             fail: async (req) => { this.recordLoginFailure(req); await this.delayFailedLogin(req); },
             issueSession: (req, res, user, loginDetail) => this.completeLogin(req, res, user.id,
                 {id: user.id, username: user.username, displayName: user.displayName, role: user.role}, user.mustChangePassword, loginDetail),
-            sendFailure: (res, status, payload) => this.sendApiFailure(res, status, payload),
+            sendFailure: (res, status, payload: ApiFailure) => this.sendApiFailure(res, status, payload),
             emitAudit: (event) => this.emitAudit(event)
         };
         this._routes = buildAdminRoutes({
@@ -218,10 +226,12 @@ class AdminServer {
             onGetSecurityGeo: this.onGetSecurityGeo,
             onUpdateSecurityGeo: this.onUpdateSecurityGeo,
             onGetSecurityCountries: this.onGetSecurityCountries,
+            // 이슈 348: 켠 사람의 IP 만 받는 설정과 내 허용 IP 갱신. 핸들러는 activatorIpRoutes.ts 가 갖는다.
+            ...activatorIpRouteHandlers,
             // #286: 관리자 차단 목록. 핸들러는 blocklistRoutes.ts 가 갖는다.
             ...blocklistRouteHandlers({
                 applyConnectionSecurity: (next) => this._tttServer?.applyConnectionSecurity(next),
-                fail: (res, status, payload) => this.sendApiFailure(res, status, payload)
+                fail: (res, status, payload: ApiFailure) => this.sendApiFailure(res, status, payload)
             }),
             // U2-06 / #98: 사용자·그룹 핸들러는 rbacRoutes.ts 가 갖는다(AdminServer.ts 를 2,000줄 아래로 유지).
             ...rbacRouteHandlers,
@@ -230,10 +240,10 @@ class AdminServer {
                 tttServer: () => this._tttServer,
                 mutateConfiguration: (res, payload, operation) => this.mutateConfiguration(res, payload, operation),
                 commitTrustedClients: (res, store, next) => this.commitTrustedClients(res, store, next),
-                sendFailure: (res, status, payload) => this.sendApiFailure(res, status, payload)
+                sendFailure: (res, status, payload: ApiFailure) => this.sendApiFailure(res, status, payload)
             }),
             // U4-02 / #110: 감사 조회. 422 본문에 status 를 담아야 하므로 sendApiFailure 를 넘긴다.
-            ...auditRouteHandlers(new AuditQuery(auditDirPath()), (res, status, payload) => this.sendApiFailure(res, status, payload))
+            ...auditRouteHandlers(new AuditQuery(auditDirPath()), (res, status, payload: ApiFailure) => this.sendApiFailure(res, status, payload))
         });
     }
 
@@ -309,14 +319,14 @@ class AdminServer {
 
            if(!matched) {
                if(pathname.startsWith("/api/")) {
-                   this.sendApiFailure(res, 404, {message: 'Not Found'});
+                   this.sendApiFailure(res, 404, {code: 'not_found', message: 'Not Found'});
                    return;
                }
                if(method == 'GET') {
                    await this.onGetWebResource(req, res, pathname);
                    return;
                }
-               this.sendApiFailure(res, 404, {message: 'Not Found'});
+               this.sendApiFailure(res, 404, {code: 'not_found', message: 'Not Found'});
                return;
            }
 
@@ -325,23 +335,24 @@ class AdminServer {
            const ctx: RouteContext = {
                req, res, params: matched.params, ip: this.getClientAddress(req),
                ok: (data, status = 200) => this.sendApiSuccess(res, data, status),
-               fail: (status, code, message) => this.sendApiFailure(res, status, {code, message}),
+               fail: (status, code, message, values) => this.sendApiFailure(res, status, {code, message, values}),
                auditDetail: (patch) => { Object.assign(auditDetailPatch, patch); },
                mfa: this._mfa, reapplyTunnelCaps: () => this._tttServer?.reapplyActiveCaps?.(),
+               enforceActivatorIps: (port) => this.enforceActivatorIps(port),
                expireSessionCookies: () => this.expireSessionCookies(res)
            };
            if(matched.route.action !== 'public') {
                const session = this.resolveSession(req);
                if(!session) {
-                   this.sendApiFailure(res, 401, {message: 'Invalid session'});
+                   this.sendApiFailure(res, 401, {code: 'invalid_session', message: 'Invalid session'});
                    return;
                }
                ctx.session = session;
-               const principal = principalOf(session, IdentityStore.instance);
+               const principal = principalOf(session, IdentityStore.instance, mfaPolicyOptions());
                if(!principal) {
                    // 사용자가 삭제되었거나 비활성화되었다 — 세션도 함께 끊는다.
                    await SessionStore.instance.removeSession(session.key);
-                   this.sendApiFailure(res, 401, {message: 'Invalid session'});
+                   this.sendApiFailure(res, 401, {code: 'invalid_session', message: 'Invalid session'});
                    return;
                }
                ctx.principal = principal;
@@ -385,21 +396,25 @@ class AdminServer {
             try {
                 const code = e && typeof e === 'object' ? e.code : undefined;
                 let status = 500;
+                let failureCode = 'internal_error';
                 let message = 'Internal Server Error'; // 예외 문자열은 로그에만 남긴다(#146).
                 if(code === 'E_BODY_TOO_LARGE') {
                     status = 413;
+                    failureCode = 'payload_too_large';
                     message = 'Payload Too Large';
                 } else if(code === 'E_REQ_TIMEOUT') {
                     status = 408;
+                    failureCode = 'request_timeout';
                     message = 'Request Timeout';
                 } else if(e instanceof SyntaxError) {
                     status = 400;
+                    failureCode = 'invalid_json';
                     message = 'Invalid JSON body';
                 }
                 // 클라이언트 오류(본문 형식·크기·시간 초과)는 인증 없이 요청마다 생기므로 스택 없이 debug 로만 남긴다(#171).
                 if(status === 500) logger.warn('HTTP Admin server processing error', e); else logger.debug(`HTTP Admin request rejected: ${status} ${message}`);
                 if(!res.headersSent) {
-                    this.sendApiFailure(res, status, {message, url: url,
+                    this.sendApiFailure(res, status, {code: failureCode, message, url: url,
                         partial: Boolean(e?.recoveryFailedPaths?.length),
                         failedScopes: e?.recoveryFailedPaths?.length ? [`${e.persistenceScope ?? 'configuration'}-restore`] : []});
                 }
@@ -519,15 +534,15 @@ class AdminServer {
             let certInfo = json['certInfo'];
             let certStore = CertificationStore.instance;
             if(!ObjectUtil.equalsType(EMPTY_CERT_INFO, certInfo) || !certStore.prepareAdminServerCert(certInfo)) {
-                this.sendApiFailure(res, 400, {message: 'Invalid certificate'});
+                this.sendApiFailure(res, 400, {code: 'invalid_certificate', message: 'Invalid certificate'});
                 return;
             }
             const committedBefore = certStore.captureCommittedState({info: certInfo, type: 'admin'});
-            if(!committedBefore) { this.sendApiFailure(res, 400, {message: 'Invalid certificate filename.'}); return; }
+            if(!committedBefore) { this.sendApiFailure(res, 400, {code: 'invalid_certificate_filename', message: 'Invalid certificate filename.'}); return; }
             const tlsBefore = this._currentTlsOptions ? {...this._currentTlsOptions} : undefined;
             const pendingRestartScopes = this._tls ? [] : ['admin-cert'];
             const success = await certStore.commitAdminServerCert(certInfo, {markLastKnownGood: this._tls, pendingRestartScopes});
-            if(!success) { this.sendApiFailure(res, 400, {message: 'Invalid certificate'}); return; }
+            if(!success) { this.sendApiFailure(res, 400, {code: 'invalid_certificate', message: 'Invalid certificate'}); return; }
             const hotSwapped = this.applyTlsCertificateHotSwap(certInfo);
             if(this._tls && !hotSwapped) {
                 const failures = await this.restoreCertificateBaseline(committedBefore);
@@ -535,7 +550,7 @@ class AdminServer {
                     try { (this._server as https.Server).setSecureContext(tlsBefore); this._currentTlsOptions = tlsBefore; }
                     catch(error) { logger.error('admin TLS restore failed', error); failures.push('admin-cert-restore'); }
                 }
-                this.sendApiFailure(res, 400, {message: 'Unable to apply administrator certificate', partial: failures.length > 0,
+                this.sendApiFailure(res, 400, {code: 'certificate_apply_failed', message: 'Unable to apply administrator certificate', partial: failures.length > 0,
                     failedScopes: ['admin-cert', ...failures], revisionState: certStore.revisionState});
                 return;
             }
@@ -602,7 +617,7 @@ class AdminServer {
 
     private async mutateConfiguration(res: ServerResponse, payload: any, operation: (store: ServerOptionStore) => Promise<void>): Promise<void> {
         if(!payload || Array.isArray(payload) || !Number.isSafeInteger(payload.expectedRevision) || payload.expectedRevision <= 0) {
-            this.sendApiFailure(res, 400, {message: 'A positive safe-integer expectedRevision is required.'});
+            this.sendApiFailure(res, 400, {code: 'expected_revision_invalid', message: 'A positive safe-integer expectedRevision is required.'});
             return;
         }
         const expectedRevision = payload.expectedRevision;
@@ -610,7 +625,7 @@ class AdminServer {
         const store = ServerOptionStore.instance;
         await store.runConfigurationMutation(async () => {
             if(expectedRevision !== store.revisionState.currentRevision) {
-                this.sendApiFailure(res, 409, {message: 'Configuration changed. Reload before saving.', revisionState: store.revisionState});
+                this.sendApiFailure(res, 409, {code: 'configuration_changed', message: 'Configuration changed. Reload before saving.', revisionState: store.revisionState});
                 return;
             }
             await operation(store);
@@ -646,7 +661,7 @@ class AdminServer {
         const current = store.serverOption;
         const prepared = store.prepareServerOption({...ObjectUtil.cloneDeep(current), trustedClients: next});
         if(!prepared.success || !prepared.serverOption) {
-            this.sendApiFailure(res, 400, {message: prepared.message || 'Invalid trusted clients'});
+            this.sendApiFailure(res, 400, {code: 'trusted_clients_invalid', message: prepared.message || 'Invalid trusted clients', values: prepared.values});
             return undefined;
         }
         const committedBefore = store.captureCommittedState();
@@ -654,14 +669,14 @@ class AdminServer {
         const commit = store.commitPreparedServerOption(prepared.serverOption, {markLastKnownGood: true, pendingRestartScopes: []});
         if(!commit.success) {
             store.recordRollback('trusted client commit failed', ['server-option']);
-            this.sendApiFailure(res, 500, {message: 'Unable to commit trusted clients.', revisionState: store.revisionState});
+            this.sendApiFailure(res, 500, {code: 'trusted_clients_commit_failed', message: 'Unable to commit trusted clients.', revisionState: store.revisionState});
             return undefined;
         }
         const runtime = typeof (this._tttServer as any)?.applyServerOption == 'function'
             ? await this.applyServerOptionSafely(prepared.serverOption, current) : undefined;
         if(runtime && !runtime.success) {
             const failures = await this.restoreConfigurationBaseline(committedBefore, runtimeBefore);
-            this.sendApiFailure(res, 500, {message: 'Unable to apply trusted clients.', failedScopes: [...runtime.failedScopes, ...failures]});
+            this.sendApiFailure(res, 500, {code: 'trusted_clients_apply_failed', message: 'Unable to apply trusted clients.', failedScopes: [...runtime.failedScopes, ...failures]});
             return undefined;
         }
         return commit.revisionState;
@@ -698,9 +713,18 @@ class AdminServer {
                     .filter((port) => Number.isInteger(port) && !currentPorts.has(port) && this._tttServer?.externalServerStatus?.(port)?.online !== true);
                 droppedBlocks = ServerOptionStore.releasePortBlocks(requestedServerOption, newPorts);
             }
+            // 이슈 348: 허용 IP 목록은 서버만 바꾼다. 본문의 목록은 버리고 같은 포트의 저장된 목록을 지킨다(새 포트는 비운다).
+            if(Array.isArray(requestedServerOption.tunnelingOptions)) {
+                requestedServerOption.tunnelingOptions = requestedServerOption.tunnelingOptions.map((tunnel: unknown) => {
+                    if(typeof tunnel !== 'object' || tunnel === null || Array.isArray(tunnel)) return tunnel;
+                    const requested = tunnel as TunnelingOption;
+                    const stored = currentServerOption.tunnelingOptions.find((option) => option.forwardPort === requested.forwardPort);
+                    return withActivatorIps({...requested}, stored ? activatorIpsOf(stored) : {});
+                });
+            }
             let prepareResult = serverOptionStore.prepareServerOption(ObjectUtil.cloneDeep(requestedServerOption));
             if(!prepareResult.success || !prepareResult.serverOption) {
-                this.sendApiFailure(res, 400, {message: prepareResult.message || 'Invalid server option', updated: false});
+                this.sendApiFailure(res, 400, {code: 'server_option_invalid', message: prepareResult.message || 'Invalid server option', values: prepareResult.values, updated: false});
                 return;
             }
             let serverOption = prepareResult.serverOption;
@@ -718,6 +742,7 @@ class AdminServer {
             if(updates['adminPort'] != undefined) {
                 if(updates['adminPort'] == serverOption.port) {
                     this.sendApiFailure(res, 400, {
+                        code: 'admin_port_conflict',
                         message: 'Input error: Admin server port and Tunnel server port number cannot be the same.',
                         updated: false,
                         updates
@@ -729,6 +754,7 @@ class AdminServer {
             if(updates['port'] != undefined) {
                 if(updates['port'] == serverOption.adminPort || (updates['adminPort'] != undefined && updates['adminPort'] == updates['port'])) {
                     this.sendApiFailure(res, 400, {
+                        code: 'admin_port_conflict',
                         message: 'Input error: Admin server port and Tunnel server port number cannot be the same.',
                         updated: false,
                         updates
@@ -740,6 +766,7 @@ class AdminServer {
             let policyDecision = evaluateAdminSecurityPolicy(serverOption);
             if(!policyDecision.allowed) {
                 this.sendApiFailure(res, 400, {
+                    code: 'admin_security_policy',
                     message: formatAdminSecurityPolicyErrors(policyDecision),
                     updated: false,
                     legacyFlagsRequired: policyDecision.missingFlags
@@ -750,7 +777,9 @@ class AdminServer {
             if(usablePorts.length != updatePorts.length) {
                 let notUsablePorts = updatePorts.filter((port) => !usablePorts.includes(port));
                 this.sendApiFailure(res, 400, {
+                    code: 'port_in_use',
                     message: `Port number ${notUsablePorts} is already in use`,
+                    ports: notUsablePorts,
                     updated: false,
                     updates
                 });
@@ -775,6 +804,7 @@ class AdminServer {
             if(!commitResult.success) {
                 serverOptionStore.recordRollback('server option commit failed', ["server-option"]);
                 this.sendApiFailure(res, 500, {
+                    code: 'server_option_commit_failed',
                     message: 'Unable to commit server option.',
                     updated: false,
                     failedScopes: ["server-option"],
@@ -812,6 +842,7 @@ class AdminServer {
                 runtimeResult.partial = recoveryFailures.length > 0;
                 runtimeResult.failedScopes.push(...recoveryFailures);
                 this.sendApiFailure(res, 400, {
+                    code: 'server_option_apply_failed',
                     message: 'Unable to apply server option.',
                     partial: runtimeResult.partial,
                     updated: false,
@@ -824,6 +855,8 @@ class AdminServer {
                 return;
             }
             if(droppedBlocks.length > 0) ctx.auditDetail({droppedBlocks: auditBlocks(droppedBlocks)});
+            // 이슈 348: IP 제한이 바뀌었을 수 있으므로 허용 IP 가 아닌 기존 연결을 끊는다.
+            await ctx.enforceActivatorIps?.();
             this.sendApiSuccess(res, {
                 partial: runtimeResult.partial,
                 updated: true,
@@ -840,17 +873,32 @@ class AdminServer {
         const {res} = ctx;
         const payload = ctx.body;
         await this.mutateConfiguration(res, payload, async (serverOptionStore) => {
-            // owner·editable 은 목록 응답이 덧붙이는 표시용 필드다. 관리자 UI 가 행을 그대로 되돌려 보내도 저장되지 않게 떼어 낸다.
-            const {certInfo, expectedCertificateRevision, previousForwardPort, owner, editable, ...tunnelingOption} = payload;
-            const admission = admitTunnelWrite(ctx.principal!, tunnelingOption, {certInfo, previousForwardPort});
+            // owner·editable·toggleable·sharedUsers 는 목록 응답이 덧붙이는 표시용 필드다(이슈 347 이 뒤의 둘을 더했다).
+            // 관리자 UI 가 행을 그대로 되돌려 보내도 저장되지 않게 떼어 낸다.
+            // 이슈 348: 허용 IP 목록(activatorIps)은 서버만 바꾼다. 본문의 값은 버리고 admitTunnelWrite 가 저장된 목록에서 만든다.
+            const {certInfo, expectedCertificateRevision, previousForwardPort, owner, editable, toggleable, sharedUsers, activatorIps: _ignored,
+                ...tunnelingOption} = payload;
+            const admission = admitTunnelWrite(ctx.principal!, tunnelingOption, {certInfo, previousForwardPort, requesterIp: requesterIpOf(ctx.ip)});
             if(!admission.success) {
-                this.sendApiFailure(res, admission.status, {code: admission.code, message: admission.message});
+                failWith(ctx, admission);
                 return;
             }
             tunnelingOption.ownerId = admission.ownerId;
-            ctx.auditDetail({ownerId: admission.ownerId});
+            withSharedUserIds(tunnelingOption, admission.sharedUserIds);
+            if(admission.activatorIpOnly === undefined) delete tunnelingOption.activatorIpOnly;
+            else tunnelingOption.activatorIpOnly = admission.activatorIpOnly;
+            withActivatorIps(tunnelingOption, admission.activatorIps);
+            // 이슈 347 FR-16: 공유 목록이 바뀌었으면 더해진 id 와 빠진 id 를 남긴다. 이슈 348 FR-15: IP 제한이 바뀌었으면 바뀐 값을 남긴다.
+            const {sharing} = admission;
+            ctx.auditDetail({ownerId: admission.ownerId,
+                ...(sharing.added.length > 0 ? {sharedUsersAdded: sharing.added} : {}),
+                ...(sharing.removed.length > 0 ? {sharedUsersRemoved: sharing.removed} : {}),
+                ...(admission.activatorIpOnlyChanged ? {activatorIpOnly: admission.activatorIpOnly} : {})});
             if(certInfo !== undefined || previousForwardPort !== undefined) {
-                await this.applyCompoundTunnelingOption(res, tunnelingOption, certInfo, expectedCertificateRevision, previousForwardPort, ctx.auditDetail);
+                await this.applyCompoundTunnelingOption(res, tunnelingOption, certInfo, expectedCertificateRevision, previousForwardPort, ctx.auditDetail,
+                    ctx.principal!.userId);
+                // 이슈 348: 공유 해제·IP 제한 켜기로 허용 IP 가 줄었을 수 있다. 저장이 실패했어도 지금 저장된 값으로 판정하므로 안전하다.
+                await ctx.enforceActivatorIps?.(tunnelingOption.forwardPort);
                 return;
             }
             let previousOption = serverOptionStore.getTunnelingOption(tunnelingOption.forwardPort);
@@ -858,15 +906,19 @@ class AdminServer {
             const droppedBlocks = auditBlocks(composeResult.droppedBlocks);
             if(!composeResult.success || !composeResult.serverOption) {
                 this.sendApiFailure(res, 400, {
+                    code: 'tunnel_update_failed',
                     message: 'Tunneling options update failed.',
-                    forwardPort: tunnelingOption.forwardPort
+                    forwardPort: tunnelingOption.forwardPort,
+                    port: tunnelingOption.forwardPort
                 });
                 return;
             }
             if(!previousOption && !await UsablePortChecker.check(tunnelingOption.forwardPort)) {
                 this.sendApiFailure(res, 400, {
+                    code: 'port_unusable',
                     message: `${tunnelingOption.forwardPort} is an unusable port number.`,
-                    forwardPort: tunnelingOption.forwardPort
+                    forwardPort: tunnelingOption.forwardPort,
+                    port: tunnelingOption.forwardPort
                 });
                 return;
             }
@@ -876,8 +928,10 @@ class AdminServer {
             if(!commitResult.success) {
                 serverOptionStore.recordRollback('tunneling option commit failed', ["tunneling-option"]);
                 this.sendApiFailure(res, 500, {
+                    code: 'tunnel_commit_failed',
                     message: 'Unable to commit tunneling option.',
                     forwardPort: tunnelingOption.forwardPort,
+                    port: tunnelingOption.forwardPort,
                     failedScopes: ["tunneling-option"],
                     revisionState: serverOptionStore.revisionState
                 });
@@ -886,7 +940,9 @@ class AdminServer {
             // #286 새 터널이면 그 포트에 남아 있던 고아 차단 항목이 빠졌을 수 있다. 리스너를 열기 전에 판정에 반영한다.
             if(!previousOption) this._tttServer?.applyConnectionSecurity?.(serverOptionStore.serverOption.connectionSecurity);
             let runtimeResult = await this.applyRuntimeSafely('tunneling option', `external-listener:${tunnelingOption.forwardPort}`,
-                () => this._tttServer?.applyTunnelingOption(serverOptionStore.getTunnelingOption(tunnelingOption.forwardPort)!, previousOption)) ?? {
+                // 이슈 347: 새 터널이 바로 켜지면 만든 사람이 켠 사람이다.
+                () => this._tttServer?.applyTunnelingOption(serverOptionStore.getTunnelingOption(tunnelingOption.forwardPort)!, previousOption,
+                    undefined, undefined, previousOption ? undefined : ctx.principal!.userId)) ?? {
                 success: false,
                 partial: false,
                 warnings: [],
@@ -903,9 +959,11 @@ class AdminServer {
                 runtimeResult.partial = recoveryFailures.length > 0;
                 runtimeResult.failedScopes.push(...recoveryFailures);
                 this.sendApiFailure(res, 400, {
+                    code: 'tunnel_apply_failed',
                     message: 'Unable to restart tunneling server.',
                     partial: runtimeResult.partial,
                     forwardPort: tunnelingOption.forwardPort,
+                    port: tunnelingOption.forwardPort,
                     failedScopes: runtimeResult.failedScopes,
                     warnings: runtimeResult.warnings,
                     revisionState: serverOptionStore.revisionState
@@ -913,6 +971,8 @@ class AdminServer {
                 return;
             }
             if(droppedBlocks.length > 0) ctx.auditDetail({droppedBlocks});
+            // 이슈 348: 공유 해제·IP 제한 켜기로 허용 IP 가 줄었을 수 있다. 그 IP 의 기존 연결을 끊는다.
+            await ctx.enforceActivatorIps?.(tunnelingOption.forwardPort);
             this.sendApiSuccess(res, {
                 forwardPort: tunnelingOption.forwardPort,
                 revisionState: commitResult.revisionState
@@ -922,38 +982,39 @@ class AdminServer {
 
     private admitCertificateRevision(res: ServerResponse, revision: unknown): boolean {
         if(!Number.isSafeInteger(revision) || (revision as number) <= 0) {
-            this.sendApiFailure(res, 400, {message: 'A positive safe-integer expectedCertificateRevision is required.'});
+            this.sendApiFailure(res, 400, {code: 'expected_certificate_revision_invalid', message: 'A positive safe-integer expectedCertificateRevision is required.'});
             return false;
         }
         if(revision !== CertificationStore.instance.revisionState.currentRevision) {
-            this.sendApiFailure(res, 409, {message: 'Certificate changed. Reload before saving.', certificateRevisionState: CertificationStore.instance.revisionState});
+            this.sendApiFailure(res, 409, {code: 'certificate_changed', message: 'Certificate changed. Reload before saving.', certificateRevisionState: CertificationStore.instance.revisionState});
             return false;
         }
         return true;
     }
 
     private async applyCompoundTunnelingOption(res: ServerResponse, option: TunnelingOption, certInfo: CertInfo | undefined,
-        expectedCertificateRevision: unknown, previousForwardPort?: number, auditDetail: (patch: Record<string, unknown>) => void = () => {}): Promise<void> {
+        expectedCertificateRevision: unknown, previousForwardPort?: number, auditDetail: (patch: Record<string, unknown>) => void = () => {},
+        creatorId?: string): Promise<void> {
         const store = ServerOptionStore.instance, certificates = CertificationStore.instance;
         if(previousForwardPort !== undefined && (!Number.isSafeInteger(previousForwardPort) || previousForwardPort < 1 || previousForwardPort > 65535 || !store.getTunnelingOption(previousForwardPort))) {
-            this.sendApiFailure(res, 400, {message: 'The original configured row does not exist.'}); return;
+            this.sendApiFailure(res, 400, {code: 'previous_tunnel_not_found', message: 'The original configured row does not exist.'}); return;
         }
         const rename = previousForwardPort !== undefined && previousForwardPort !== option.forwardPort;
         const previousOption = store.getTunnelingOption(option.forwardPort);
         if(rename && previousOption) {
-            this.sendApiFailure(res, 409, {message: 'The target port is already a configured row.'}); return;
+            this.sendApiFailure(res, 409, {code: 'tunnel_port_taken', message: 'The target port is already a configured row.', forwardPort: option.forwardPort, port: option.forwardPort}); return;
         }
         const certificateChange = certInfo !== undefined || (rename && certificates.getAllExternalCert()[previousForwardPort!] !== undefined);
         if(certificateChange && !this.admitCertificateRevision(res, expectedCertificateRevision)) return;
-        if(!certificates.hasValidFileNames(certInfo)) { this.sendApiFailure(res, 400, {message: 'Invalid certificate filename.'}); return; }
+        if(!certificates.hasValidFileNames(certInfo)) { this.sendApiFailure(res, 400, {code: 'invalid_certificate_filename', message: 'Invalid certificate filename.'}); return; }
         if(certInfo !== undefined && (!certInfo || !certInfo.key || !certInfo.cert || !certInfo.ca ||
             !ObjectUtil.equalsType(EMPTY_CERT_INFO, certInfo) || !certificates.prepareExternalServerCert(certInfo))) {
-            this.sendApiFailure(res, 400, {message: 'Invalid certificate.'}); return;
+            this.sendApiFailure(res, 400, {code: 'invalid_certificate', message: 'Invalid certificate.'}); return;
         }
         const composed = store.composeServerOptionWithTunnelingOption(ObjectUtil.cloneDeep(option));
         const droppedBlocks = auditBlocks(composed.droppedBlocks);
         if(!composed.success || !composed.serverOption) {
-            this.sendApiFailure(res, 400, {message: 'Tunneling options update failed.'}); return;
+            this.sendApiFailure(res, 400, {code: 'tunnel_update_failed', message: 'Tunneling options update failed.', forwardPort: option.forwardPort, port: option.forwardPort}); return;
         }
         let movedBlocks: Array<{address: string; from: number; to: number}> = [];
         if(rename) {
@@ -967,25 +1028,25 @@ class AdminServer {
             }
         }
         if(!previousOption && !await UsablePortChecker.check(option.forwardPort)) {
-            this.sendApiFailure(res, 400, {message: `${option.forwardPort} is an unusable port number.`}); return;
+            this.sendApiFailure(res, 400, {code: 'port_unusable', message: `${option.forwardPort} is an unusable port number.`, forwardPort: option.forwardPort, port: option.forwardPort}); return;
         }
         const certificateBefore = certificates.captureCommittedState(certInfo ? {info: certInfo, type: 'external'} : undefined);
-        if(!certificateBefore) { this.sendApiFailure(res, 400, {message: 'Invalid certificate filename.'}); return; }
+        if(!certificateBefore) { this.sendApiFailure(res, 400, {code: 'invalid_certificate_filename', message: 'Invalid certificate filename.'}); return; }
         const committedBefore = store.captureCommittedState();
         const runtimeBefore = this._tttServer?.captureRuntimeState();
         const prepared = store.prepareServerOptionCommit(composed.serverOption);
         if(!prepared.prepared) {
-            this.sendApiFailure(res, 400, {message: prepared.message}); return;
+            this.sendApiFailure(res, 400, {code: 'tunnel_update_failed', message: prepared.message, values: prepared.values}); return;
         }
         const preparedCertificate = certificateChange ? certificates.prepareExternalCertificateChange(option.forwardPort, certInfo, rename ? previousForwardPort : undefined) : undefined;
-        if(certificateChange && !preparedCertificate) { this.sendApiFailure(res, 400, {message: 'Invalid certificate filename.'}); return; }
+        if(certificateChange && !preparedCertificate) { this.sendApiFailure(res, 400, {code: 'invalid_certificate_filename', message: 'Invalid certificate filename.'}); return; }
         try {
             Files.writeAtomicBatchSync([...prepared.prepared.files, ...(preparedCertificate?.files ?? [])]);
         } catch(error) {
             const failedPaths = (error as {recoveryFailedPaths?: string[]}).recoveryFailedPaths ?? [];
             const failedScopes = [...new Set(failedPaths.map(file => prepared.prepared!.files.some(entry => entry.file.toString() === file) ? 'configuration-restore' : 'certificate-restore'))];
             logger.error('Compound publication failed', error);
-            this.sendApiFailure(res, 500, {message: 'Compound publication failed', partial: failedScopes.length > 0, failedScopes}); return;
+            this.sendApiFailure(res, 500, {code: 'tunnel_commit_failed', message: 'Compound publication failed', partial: failedScopes.length > 0, failedScopes}); return;
         }
         store.publishPreparedServerOption(prepared.prepared);
         if(preparedCertificate) certificates.publishPreparedCertificateChange(preparedCertificate);
@@ -997,7 +1058,7 @@ class AdminServer {
             // 새 터널이면 그 포트에 남아 있던 고아 항목이 빠졌으므로 리스너를 열기 전에 반영한다.
             else if(!previousOption) this._tttServer?.applyConnectionSecurity?.(store.serverOption.connectionSecurity);
             if(this._tttServer) runtime = await this._tttServer.applyTunnelingOption(store.getTunnelingOption(option.forwardPort)!, previousOption, certInfo,
-                rename ? previousForwardPort : undefined);
+                rename ? previousForwardPort : undefined, previousOption || rename ? undefined : creatorId);
             if(runtime.success && rename && !await this._tttServer!.stopExternalPortServer(previousForwardPort!, true)) {
                 runtime.success = false; runtime.failedScopes.push(`external-listener:${previousForwardPort}`);
             }
@@ -1014,7 +1075,7 @@ class AdminServer {
                     committedBefore.revisionState.currentRevision + 1, committedBefore.revisionState.currentRevision); }
                 catch(error) { logger.error('rollback diagnostic persistence failed', error); recoveryFailures.push('configuration-rollback-metadata'); }
             }
-            this.sendApiFailure(res, 400, {message: 'Unable to apply compound tunneling option.', partial: recoveryFailures.length > 0,
+            this.sendApiFailure(res, 400, {code: 'tunnel_apply_failed', message: 'Unable to apply compound tunneling option.', partial: recoveryFailures.length > 0,
                 failedScopes: [...runtime.failedScopes, ...recoveryFailures], revisionState: store.revisionState, certificateRevisionState: certificates.revisionState}); return;
         }
         if(movedBlocks.length > 0 || droppedBlocks.length > 0) {
@@ -1031,29 +1092,38 @@ class AdminServer {
         await this.mutateConfiguration(res, ctx.body, async (serverOptionStore) => {
             const option = serverOptionStore.getTunnelingOption(port);
             if(!option) {
-                this.sendApiFailure(res, 404, {code: 'not_found', message: `External port(${port}) is not configured.`});
+                this.sendApiFailure(res, 404, {code: 'not_found', message: `External port(${port}) is not configured.`, port});
                 return;
             }
             const resolved = resolveOwnerId(ctx.body?.ownerId);
             if(!resolved.success) {
-                this.sendApiFailure(res, resolved.status, {code: resolved.code, message: resolved.message});
+                failWith(ctx, resolved);
                 return;
             }
             const from = AuthorizationContext.ownerIdOf(option);
-            const composed = serverOptionStore.composeServerOptionWithTunnelingOption({...option, ownerId: resolved.ownerId});
+            // 이슈 347 FR-5: 새 소유자가 공유 목록에 있으면 뺀다. 빠진 id 는 감사에 남긴다.
+            const sharedBefore = sharedUserIdsOf(option);
+            const sharedAfter = normalizeSharedUserIds(sharedBefore, resolved.ownerId);
+            const {removed: sharedUsersRemoved} = sharedUsersChange(sharedBefore, sharedAfter);
+            const next = withSharedUserIds({...option, ownerId: resolved.ownerId}, sharedAfter);
+            // 이슈 348 FR-5: 이전 소유자가 켜기 권한을 잃으면 허용 IP 목록의 그 사람 항목을 지운다.
+            const formerIp = from === resolved.ownerId ? {ips: activatorIpsOf(option), removed: []} : withoutFormerOwnerIp(activatorIpsOf(option), from, next);
+            const composed = serverOptionStore.composeServerOptionWithTunnelingOption(withActivatorIps(next, formerIp.ips));
             if(!composed.success || !composed.serverOption) {
-                this.sendApiFailure(res, 400, {message: 'Tunnel owner update failed.', forwardPort: port});
+                this.sendApiFailure(res, 400, {code: 'tunnel_owner_update_failed', message: 'Tunnel owner update failed.', forwardPort: port, port});
                 return;
             }
             const commitResult = serverOptionStore.commitPreparedServerOption(composed.serverOption);
             if(!commitResult.success) {
                 serverOptionStore.recordRollback('tunnel owner commit failed', ["tunneling-option"]);
-                this.sendApiFailure(res, 500, {message: 'Unable to commit tunnel owner.', forwardPort: port,
+                this.sendApiFailure(res, 500, {code: 'tunnel_owner_commit_failed', message: 'Unable to commit tunnel owner.', forwardPort: port, port,
                     failedScopes: ["tunneling-option"], revisionState: serverOptionStore.revisionState});
                 return;
             }
-            ctx.auditDetail({from, to: resolved.ownerId});
+            ctx.auditDetail({from, to: resolved.ownerId, ...(sharedUsersRemoved.length > 0 ? {sharedUsersRemoved} : {}),
+                ...(formerIp.removed.length > 0 ? {allowedIpsRemoved: formerIp.removed} : {})});
             ctx.reapplyTunnelCaps?.();
+            await ctx.enforceActivatorIps?.(port);
             this.sendApiSuccess(res, {forwardPort: port, owner: ownerViewOf(port), revisionState: commitResult.revisionState});
         });
     }
@@ -1063,10 +1133,10 @@ class AdminServer {
         const json = ctx.body;
         await this.mutateConfiguration(res, json, async (serverOptionStore) => {
             const forwardPort = json['forwardPort'];
-            if(!Number.isSafeInteger(forwardPort) || forwardPort < 1 || forwardPort > 65535) { this.sendApiFailure(res, 400, {message: 'forwardPort must be an integer from 1 to 65535'}); return; }
+            if(!Number.isSafeInteger(forwardPort) || forwardPort < 1 || forwardPort > 65535) { this.sendApiFailure(res, 400, {code: 'invalid_port', message: 'forwardPort must be an integer from 1 to 65535'}); return; }
             let previousOption = serverOptionStore.getTunnelingOption(forwardPort);
             if(!previousOption) {
-                this.sendApiFailure(res, 404, {message: `External port(${forwardPort}) server already removed.`, forwardPort});
+                this.sendApiFailure(res, 404, {code: 'not_found', message: `External port(${forwardPort}) server already removed.`, forwardPort, port: forwardPort});
                 return;
             }
             const committedBefore = serverOptionStore.captureCommittedState();
@@ -1075,15 +1145,17 @@ class AdminServer {
             // #286 그 터널에만 건 차단 항목도 함께 빠진다. 터널 소유자는 security:manage 없이도 지우므로 풀린 차단을 감사에 남긴다.
             const droppedBlocks = auditBlocks(composeResult.droppedBlocks);
             if(!composeResult.success || !composeResult.serverOption) {
-                this.sendApiFailure(res, 400, {message: `External port(${forwardPort}) server already removed.`, forwardPort});
+                this.sendApiFailure(res, 400, {code: 'tunnel_remove_failed', message: `External port(${forwardPort}) server already removed.`, forwardPort, port: forwardPort});
                 return;
             }
             let commitResult = serverOptionStore.commitPreparedServerOption(composeResult.serverOption);
             if(!commitResult.success) {
                 serverOptionStore.recordRollback('tunneling option remove commit failed', ["tunneling-option"]);
                 this.sendApiFailure(res, 500, {
+                    code: 'tunnel_commit_failed',
                     message: `Unable to remove external port(${forwardPort}) configuration.`,
                     forwardPort,
+                    port: forwardPort,
                     failedScopes: ["tunneling-option"],
                     revisionState: serverOptionStore.revisionState
                 });
@@ -1104,8 +1176,10 @@ class AdminServer {
                         catch(error) { logger.error('rollback diagnostic persistence failed', error); recoveryFailures.push('configuration-rollback-metadata'); }
                     }
                     this.sendApiFailure(res, 400, {
+                        code: 'listener_stop_failed',
                         message: `Unable to stop external port(${forwardPort}) listener.`,
                         forwardPort,
+                        port: forwardPort,
                         partial: recoveryFailures.length > 0,
                         failedScopes: [`external-listener:${forwardPort}`, ...recoveryFailures],
                         revisionState: serverOptionStore.revisionState
@@ -1137,14 +1211,14 @@ class AdminServer {
         const user = IdentityStore.instance.user(session.userId);
         if(!user || user.status === 'disabled') {
             await SessionStore.instance.removeSession(session.key);
-            this.sendApiFailure(res, 401, {valid: false, message: 'Invalid session'});
+            this.sendApiFailure(res, 401, {code: 'invalid_session', valid: false, message: 'Invalid session'});
             return;
         }
         this.sendApiSuccess(res, {
             valid: true,
             user: {id: user.id, username: user.username, displayName: user.displayName, role: user.role},
             mustChangePassword: user.mustChangePassword,
-            mustEnrollMfa: session.mustEnrollMfa === true
+            mustEnrollMfa: ctx.principal?.mustEnrollMfa === true
         });
     }
 
@@ -1188,7 +1262,7 @@ class AdminServer {
         }
         const newPassword = validatePassword(ctx.body?.['newPassword']);
         if(!newPassword.success) {
-            this.sendApiFailure(res, newPassword.status, {code: newPassword.code, message: newPassword.message});
+            failWith(ctx, newPassword);
             return;
         }
         const currentPassword = typeof ctx.body?.['currentPassword'] == 'string' ? ctx.body['currentPassword'] : '';
@@ -1201,7 +1275,7 @@ class AdminServer {
         }
         const updated = await store.setPassword(principal.userId, newPassword.value, {clearMustChange: true});
         if(!updated.success) {
-            this.sendApiFailure(res, updated.status, {code: updated.code, message: updated.message});
+            failWith(ctx, updated);
             return;
         }
         SessionStore.instance.removeSessionsOfUser(principal.userId, {except: ctx.session!.key});
@@ -1218,7 +1292,7 @@ class AdminServer {
         }
         const updated = IdentityStore.instance.updateUser(principal.userId, {migrationAcknowledged: true});
         if(!updated.success) {
-            this.sendApiFailure(res, updated.status, {code: updated.code, message: updated.message});
+            failWith(ctx, updated);
             return;
         }
         this.sendApiSuccess(res);
@@ -1246,11 +1320,11 @@ class AdminServer {
         });
     }
 
-    private getNumberInPath = async (ctx: RouteContext, paramName: string, errorMessage: string ='Invalid port' ) : Promise<number | undefined> => {
+    private getNumberInPath = async (ctx: RouteContext, paramName: string, failure: ApiFailure = {code: 'invalid_port', message: 'Invalid port'}) : Promise<number | undefined> => {
         // 권한 판정과 같은 파싱을 쓴다(#138). parseInt 는 "20.010e3" 을 20 으로 읽어 판정과 어긋난다.
         const num = paramName === 'port' ? parsePathPort(ctx.params[paramName]) : parsePathId(ctx.params[paramName]);
         if(num === undefined) {
-            this.sendApiFailure(ctx.res, 400, {message:errorMessage});
+            this.sendApiFailure(ctx.res, 400, failure);
             return undefined;
         }
         return num;
@@ -1263,16 +1337,26 @@ class AdminServer {
         let json = ctx.body;
         const timeout = isTunnelActivationRequested(ctx) ? parseActiveTimeout(json['timeout']) : 0; // 끌 때는 쓰지 않는다
         if(timeout === undefined) {
-            this.sendApiFailure(res, 400, {message: 'timeout must be a number of seconds from 0 to 10 years'}); return;
+            this.sendApiFailure(res, 400, {code: 'timeout_invalid', message: 'timeout must be a number of seconds from 0 to 10 years'}); return;
         }
         await ServerOptionStore.instance.runConfigurationMutation(async () => {
+            // 이슈 348 FR-3: 켜면 켠 사람의 항목만 지금 요청자 IP 로 넣거나 바꾼다. 켜기 전에 저장해야 새 연결이 새 IP 로 판정된다.
+            // 이미 켜진 터널에 보내는 켜기(시간 변경)도 같다. 끄기는 목록을 바꾸지 않는다.
+            const option = isTunnelActivationRequested(ctx) ? ServerOptionStore.instance.getTunnelingOption(port) : undefined;
+            const placed = option ? recordRequesterIp(ctx, option, 'replace') : undefined;
+            if(option && !placed) return;
+            if(placed?.changed) ctx.auditDetail({allowedIpBefore: placed.before, allowedIp: placed.after});
             let success = false;
             if(this._tttServer) {
+                // 이슈 347: 요청자가 켠 사람이다. 수명 상한에 그 사람의 그룹 상한도 들어간다.
                 success = isTunnelActivationRequested(ctx)
-                    ? await this._tttServer.activeExternalPortServer(port, timeout)
+                    ? await this._tttServer.activeExternalPortServer(port, timeout, ctx.principal!.userId)
                     : await this._tttServer.inactiveExternalPortServer(port);
             }
-            this.sendApiEnvelope(res, success ? 200 : 400, {success: success, message: success ? '' : 'Unable to change listener active state'});
+            // 같은 사용자의 이전 IP 에서 온 연결을 끊는다.
+            if(placed?.changed) await ctx.enforceActivatorIps?.(port);
+            if(success) this.sendApiSuccess(res, {message: ''});
+            else this.sendApiFailure(res, 400, {code: 'tunnel_state_change_failed', message: 'Unable to change listener active state'});
         });
     }
 
@@ -1284,7 +1368,7 @@ class AdminServer {
         await ServerOptionStore.instance.runConfigurationMutation(async () => {
             if(!this.admitCertificateRevision(res, payload?.expectedCertificateRevision)) return;
             if(!await CertificationStore.instance.removeForExternalServer(port)) {
-                this.sendApiFailure(res, 400, {message: 'Invalid certificate filename.'}); return;
+                this.sendApiFailure(res, 400, {code: 'invalid_certificate_filename', message: 'Invalid certificate filename.'}); return;
             }
             this.sendApiSuccess(res, {revisionState: CertificationStore.instance.revisionState});
         });
@@ -1300,11 +1384,11 @@ class AdminServer {
             let certStore = CertificationStore.instance;
             let previousCert = certStore.getExternalCert(port);
             if(!ObjectUtil.equalsType(EMPTY_CERT_INFO, certInfo) || !certStore.prepareExternalServerCert(certInfo)) {
-                this.sendApiFailure(res, 400, {message: 'Invalid certificate'});
+                this.sendApiFailure(res, 400, {code: 'invalid_certificate', message: 'Invalid certificate'});
                 return;
             }
             const committedBefore = certStore.captureCommittedState({info: certInfo, type: 'external'});
-            if(!committedBefore) { this.sendApiFailure(res, 400, {message: 'Invalid certificate filename.'}); return; }
+            if(!committedBefore) { this.sendApiFailure(res, 400, {code: 'invalid_certificate_filename', message: 'Invalid certificate filename.'}); return; }
             const runtimeBefore = this._tttServer?.captureRuntimeState?.();
             let success = await certStore.commitExternalServerCert(port, certInfo, {
                 markLastKnownGood: true,
@@ -1313,6 +1397,7 @@ class AdminServer {
             if(!success) {
                 certStore.recordRollback('external certificate commit failed', [`external-cert:${port}`]);
                 this.sendApiFailure(res, 500, {
+                    code: 'certificate_commit_failed',
                     message: 'Unable to commit certificate',
                     failedScopes: [`external-cert:${port}`],
                     revisionState: certStore.revisionState
@@ -1337,6 +1422,7 @@ class AdminServer {
                 runtimeResult.partial = recoveryFailures.length > 0;
                 runtimeResult.failedScopes.push(...recoveryFailures);
                 this.sendApiFailure(res, 400, {
+                    code: 'certificate_apply_failed',
                     message: 'Invalid certificate',
                     partial: runtimeResult.partial,
                     failedScopes: runtimeResult.failedScopes,
@@ -1367,7 +1453,7 @@ class AdminServer {
             let certStore = CertificationStore.instance;
             let certInfo = certStore.getExternalCert(port);
             if(certInfo == undefined) {
-                this.sendApiFailure(res, 400, {message: 'Invalid port'});
+                this.sendApiFailure(res, 400, {code: 'invalid_port', message: 'Invalid port'});
                 return;
             }
             this.sendApiSuccess(res, {certInfo: certInfo, revisionState: certStore.revisionState});
@@ -1376,11 +1462,11 @@ class AdminServer {
 
     private onGetClientSysInfo = async (ctx: RouteContext) => {
         const {res} = ctx;
-        let id = await this.getNumberInPath(ctx, 'id', "Invalid client ID");
+        let id = await this.getNumberInPath(ctx, 'id', {code: 'invalid_client_id', message: 'Invalid client ID'});
         if(id == undefined) return;
         let sysInfo = this._tttServer?.getClientSysInfo(id);
         if(sysInfo == undefined) {
-            this.sendApiFailure(res, 400, {message: 'Invalid client ID'});
+            this.sendApiFailure(res, 400, {code: 'invalid_client_id', message: 'Invalid client ID'});
             return;
         }
         this.sendApiSuccess(res, {sysInfo});
@@ -1412,11 +1498,11 @@ class AdminServer {
     }
 
     private onLogin = async (ctx: RouteContext) => {
-        await this.performLogin(ctx);
+        const reason = await this.performLogin(ctx);
         // 성공은 completeLogin 이 남긴다(새 세션 해시를 그곳에서만 알 수 있다).
         if(ctx.res.statusCode === 200) return;
         // username 이 없으면 'admin' 으로 적지 않는다(별칭은 #102 에서 지웠다). 형식 처리는 loginFailureAudit 에 있다(#139).
-        const event = this._loginFailureAudit(ctx.body, ctx.ip, this.buildLoginAttemptKey(ctx.req), ctx.res.statusCode, this.now());
+        const event = this._loginFailureAudit(ctx.body, ctx.ip, this.buildLoginAttemptKey(ctx.req), ctx.res.statusCode, this.now(), reason);
         if(event) this.emitAudit(event);
     }
 
@@ -1430,13 +1516,13 @@ class AdminServer {
     private admitLogin(ctx: RouteContext, kind: 'password' | 'mfa' | 'passkey'): boolean {
         const {req, res} = ctx;
         const bucket = this.buildLoginAttemptKey(req);
-        const reject = (payload: {code?: string, message: string}, reason?: 'concurrency_limit'): false => {
+        const reject = (payload: ApiFailure, reason?: 'concurrency_limit'): false => {
             AdminServer.sendRejectionWhileDiscardingBody(req, res, () => this.sendApiFailure(res, 429, payload));
             const event = kind === 'password' ? this._loginFailureAudit(undefined, ctx.ip, bucket, 429, this.now(), reason) : undefined;
             if(event) this.emitAudit(event);
             return false;
         };
-        if(this.isLoginBlocked(req)) return reject({message: 'Too many login attempts'});
+        if(this.isLoginBlocked(req)) return reject({code: 'login_blocked', message: 'Too many login attempts'});
         const inFlight = this._loginInFlight.get(bucket) ?? 0;
         if(inFlight >= LOGIN_MAX_IN_FLIGHT) {
             return reject({code: 'login_concurrency_limit', message: 'Too many login attempts'}, 'concurrency_limit');
@@ -1458,7 +1544,7 @@ class AdminServer {
         const {req, res} = ctx;
         // admitLogin 은 본문을 읽기 전에 차단을 봤다. 본문을 받는 사이 버킷이 차단되었을 수 있으므로 검증 전에 다시 본다(#265).
         if(this.isLoginBlocked(req)) {
-            this.sendApiFailure(res, 429, {message: 'Too many login attempts'});
+            this.sendApiFailure(res, 429, {code: 'login_blocked', message: 'Too many login attempts'});
             return;
         }
         const json: any = ctx.body;
@@ -1481,12 +1567,12 @@ class AdminServer {
             this.recordLoginFailure(req);
             await this.delayFailedLogin(req);
             if(IdentityMigration.bootstrapRequired()) {
-                this.sendApiFailure(res, 403, {
+                this.sendApiFailure(res, 403, {code: 'bootstrap_required',
                     bootstrapRequired: true, invalidBootstrapToken: false, weakPassword: false, invalidUsername: true
                 });
                 return;
             }
-            this.sendApiFailure(res, 401);
+            this.sendApiFailure(res, 401, LOGIN_FAILED);
             return;
         }
 
@@ -1497,10 +1583,11 @@ class AdminServer {
                 await this.delayFailedLogin(req);
                 if(!result.bootstrapRequired) {
                     // completeBootstrap이 부트스트랩 플래그가 이미 꺼진 상태에서 호출된 경우(레이스).
-                    this.sendApiFailure(res, 401);
+                    this.sendApiFailure(res, 401, LOGIN_FAILED);
                     return;
                 }
                 this.sendApiFailure(res, result.weakPassword ? 400 : 403, {
+                    code: result.weakPassword ? 'bootstrap_password_weak' : 'bootstrap_rejected',
                     bootstrapRequired: true,
                     invalidBootstrapToken: result.invalidBootstrapToken,
                     weakPassword: result.weakPassword,
@@ -1519,7 +1606,7 @@ class AdminServer {
             // 길이는 저장 정책(validatePassword)과 같게 앞뒤 공백을 뺀 값으로 센다.
             this.recordLoginFailure(req);
             await this.delayFailedLogin(req);
-            this.sendApiFailure(res, 401);
+            this.sendApiFailure(res, 401, LOGIN_FAILED);
             return;
         }
 
@@ -1528,7 +1615,7 @@ class AdminServer {
             if(!legacyOk) {
                 this.recordLoginFailure(req);
                 await this.delayFailedLogin(req);
-                this.sendApiFailure(res, 401);
+                this.sendApiFailure(res, 401, LOGIN_FAILED);
                 return;
             }
             await this.completeLogin(req, res, 'legacy-admin', {
@@ -1542,10 +1629,17 @@ class AdminServer {
             // not-found/disabled/mismatch를 구분하지 않는다(사용자 열거 방지).
             this.recordLoginFailure(req);
             await this.delayFailedLogin(req);
-            this.sendApiFailure(res, 401);
+            this.sendApiFailure(res, 401, LOGIN_FAILED);
             return;
         }
         const user = verifyResult.user;
+        const userGroup = IdentityStore.instance.group(user.groupId);
+        if(requiresPasskeyLogin(user, userGroup?.attributes, mfaPolicyOptions())) {
+            // 이슈 346: 2단계 인증 강제 대상이 패스키만 가졌다. 비밀번호 하나로 세션을 주면 강제가 무의미해진다.
+            // 비밀번호는 맞았으므로 실패 횟수를 늘리지 않고, 성공도 아니므로 초기화하지도 않는다.
+            this.sendApiFailure(res, 403, {code: 'passkey_required', message: 'This account signs in with a passkey.'});
+            return 'passkey_required';
+        }
         if(user.mfa?.enabled === true) {
             // #127 (U4-08): 2단계가 끝나야 성공이다. 실패 카운터 초기화·login_success·쿠키는 /api/login/mfa 가 한다.
             const mfaTicket = this._mfa.tickets.issue(user.id, this.getClientAddress(req));
@@ -1565,13 +1659,13 @@ class AdminServer {
                                  mustChangePassword: boolean, loginDetail?: Record<string, unknown>): Promise<void> {
         this.resetLoginAttempts(req);
         const userAgent = req.headers['user-agent'];
-        // #127 (U4-08): 슈퍼유저 MFA 강제는 로그인 시점에만 계산한다(이미 열린 세션은 소급하지 않는다).
-        const mustEnrollMfa = ServerOptionStore.instance.serverOption.mfaRequiredForSuperusers === true && user.role === 'superuser'
-            && userId !== 'legacy-admin' && IdentityStore.instance.user(userId)?.mfa?.enabled !== true;
+        // 이슈 346: 강제 판정은 MfaPolicy 하나로 한다. 세션에는 저장하지 않고 요청마다 다시 계산한다(principalOf).
+        const stored = IdentityStore.instance.user(userId);
+        const mustEnrollMfa = stored !== undefined
+            && mustEnrollMfaFor(stored, IdentityStore.instance.group(stored.groupId)?.attributes, mfaPolicyOptions());
         const sessionKey = await SessionStore.instance.newSession(userId, {
             ip: this.getClientAddress(req),
             userAgent: typeof userAgent == 'string' ? userAgent : undefined,
-            mustEnrollMfa,
             // #250: 세션 상한에 닿아 끝낸 세션을 감사 로그에 남긴다. 사용자 요청이 아니므로 행위자는 system 이고,
             // 원인이 된 로그인은 detail.triggeredBy 에 남긴다. ip 도 그 로그인의 주소다(끝난 세션의 주소가 아니다).
             onEvicted: (evicted, reason) => this.emitAudit({
@@ -1758,21 +1852,46 @@ class AdminServer {
             const principal = ctx.principal!;
             const visible = tunnelingOptions
                 .filter((tunnelingOption) => isTunnelVisibleTo(principal, tunnelingOption.forwardPort))
-                .map((tunnelingOption) => ({
-                    ...tunnelingOption,
-                    owner: ownerViewOf(tunnelingOption.forwardPort),
-                    editable: isTunnelEditable(principal, tunnelingOption.forwardPort)
-                }));
+                // 이슈 348 FR-6: 허용 IP 목록은 슈퍼유저에게만 준다(다른 사용자의 IP 다). IP 제한은 옛 터널도 값으로 준다.
+                .map(({activatorIps, ...tunnelingOption}) => ({...tunnelingOption, activatorIpOnly: activatorIpOnlyOf(tunnelingOption),
+                    ...(principal.role === 'superuser' && activatorIps !== undefined ? {activatorIps} : {})}))
+                .map(({sharedUserIds: _stored, ...tunnelingOption}) => {
+                    const editable = isTunnelEditable(principal, tunnelingOption.forwardPort);
+                    // 이슈 347 FR-6a: 공유 목록은 고칠 수 있는 사람에게만 준다. 다른 공유 사용자의 이름이 드러나지 않게 한다.
+                    // 사라진 사용자 id 는 sharedUsers 와 같이 뺀다.
+                    const sharedUserIds = editable ? existingSharedUserIds(sharedUserIdsOf({sharedUserIds: _stored})) : [];
+                    return {
+                        ...tunnelingOption,
+                        owner: ownerViewOf(tunnelingOption.forwardPort),
+                        editable,
+                        toggleable: isTunnelToggleable(principal, tunnelingOption.forwardPort),
+                        ...(editable ? {sharedUserIds, sharedUsers: sharedUsersOf(sharedUserIds)} : {})
+                    };
+                });
             this.sendApiSuccess(res, {tunnelingOptions: visible, revisionState: store.revisionState});
         });
     }
 
+    /** 이슈 348: 허용 IP 가 아닌 기존 연결을 끊는다. 연결 정리가 실패해도 요청은 실패시키지 않는다(새 연결은 판정이 막는다). */
+    private async enforceActivatorIps(port?: number): Promise<void> {
+        try {
+            await this._tttServer?.enforceActivatorIps?.(port);
+        } catch(error) {
+            logger.error(`enforcing activator IPs failed${port === undefined ? '' : ` - port: ${port}`}`, error);
+        }
+    }
+
     private onGetExternalServerStatuses = async (ctx: RouteContext) => {
         const {res} = ctx;
-        let statuses = this._tttServer?.externalServerStatuses() ?? [];
+        const statuses = this._tttServer?.externalServerStatuses() ?? [];
         // 목록과 같은 가시성 판정을 쓴다. 상태로 남의 터널 존재가 새지 않게 한다.
-        statuses = statuses.filter((status) => isTunnelVisibleTo(ctx.principal!, status.port));
-        this.sendApiSuccess(res, {serverTime: Date.now(), statuses});
+        const principal = ctx.principal!;
+        const viewer = {userId: principal.userId, superuser: principal.role === 'superuser'};
+        const store = ServerOptionStore.instance;
+        // 이슈 348 FR-14: 항목마다 IP 제한·내 허용 IP·판정에 쓰이는 항목 수를, 최상위에 지금 요청자 IP 를 싣는다.
+        const visible = statuses.filter((status) => isTunnelVisibleTo(principal, status.port))
+            .map((status) => ({...status, ...activatorIpStatusOf(store.getTunnelingOption(status.port), viewer)}));
+        this.sendApiSuccess(res, {serverTime: Date.now(), requesterIp: requesterIpOf(ctx.ip) ?? null, statuses: visible});
     }
 
     // U5-02 / #117 — 차단 목록 조회·해제 API. 권한은 라우트 표의 security:manage 가 본다.
@@ -1792,12 +1911,12 @@ class AdminServer {
         const {res} = ctx;
         const port = parsePathPort(ctx.params.port);
         if(port === undefined) {
-            this.sendApiFailure(res, 400, {message: 'invalid port'});
+            this.sendApiFailure(res, 400, {code: 'invalid_port', message: 'invalid port'});
             return;
         }
         const ip = decodedPathSegment(ctx.params.ip);
         if(ip === undefined || ip.length === 0) {
-            this.sendApiFailure(res, 400, {message: 'invalid ip'});
+            this.sendApiFailure(res, 400, {code: 'invalid_ip', message: 'invalid ip'});
             return;
         }
         // unban 은 리미터가 입력을 같은 버킷(IPv6 /64, IPv4-mapped → IPv4)으로 바꿔 지운다(#167).
@@ -1834,7 +1953,7 @@ class AdminServer {
     private onGetSecurityGeo = async (ctx: RouteContext) => {
         const geo = this.storedGeoConfig();
         if(geo === undefined) {
-            this.sendApiFailure(ctx.res, 503, {message: 'server configuration is not ready'});
+            this.sendApiFailure(ctx.res, 503, {code: 'configuration_not_ready', message: 'server configuration is not ready'});
             return;
         }
         this.sendApiSuccess(ctx.res, {geo});
@@ -1844,14 +1963,14 @@ class AdminServer {
         const {res} = ctx;
         const normalized = normalizeConnectionSecurity({geo: ctx.body});
         if(!normalized.success) {
-            this.sendApiFailure(res, 422, {message: normalized.message});
+            this.sendApiFailure(res, 422, {code: 'geo_invalid', message: normalized.message, values: normalized.values});
             return;
         }
         const value = normalized.value;
         // #286: 국가 필터만 바꾼다. 차단 목록은 지금 값을 그대로 둔다.
         const update = await updateConnectionSecurity((next) => this._tttServer?.applyConnectionSecurity(next), (current) => ({...current, geo: value.geo}));
         if(update !== 'applied') {
-            this.sendApiFailure(res, 500, {message: 'Unable to commit server option.'});
+            this.sendApiFailure(res, 500, {code: 'server_option_commit_failed', message: 'Unable to commit server option.'});
             return;
         }
         // 감사 메타는 요청 전에 계산되므로 정규화된 값은 여기서 더한다.
@@ -1988,8 +2107,12 @@ class AdminServer {
         this.sendApiEnvelope(res, statusCode, {success: true, ...payload});
     }
 
-    private sendApiFailure(res: ServerResponse, statusCode: number, payload: {[key: string]: any} = {}): void {
-        this.sendApiEnvelope(res, statusCode, {success: false, ...payload});
+    /** 값 필드(응답 필드가 아닌 필드와 values)는 이 한 곳에서 failureValues 로 거른다. values 는 응답 필드를 덮지 못한다(이슈 349 FR-7). */
+    private sendApiFailure(res: ServerResponse, statusCode: number, payload: ApiFailure): void {
+        const {values, ...fields} = payload;
+        const responseFields = Object.entries(fields).filter(([name]) => FAILURE_RESPONSE_FIELDS.has(name));
+        const valueFields = [...Object.entries(values ?? {}), ...Object.entries(fields)].filter(([name]) => !FAILURE_RESPONSE_FIELDS.has(name));
+        this.sendApiEnvelope(res, statusCode, {...failureValues(Object.fromEntries(valueFields)), ...Object.fromEntries(responseFields), success: false});
     }
 
     private pathname(url: string = ''): string {
@@ -2178,7 +2301,7 @@ class AdminServer {
         const origin = req.headers['origin'];
         const originStr = Array.isArray(origin) ? origin[0] : origin;
         if(originStr !== undefined && !this.isOriginAllowed(originStr)) {
-            this.sendApiFailure(res, 403, {message: 'Forbidden origin'});
+            this.sendApiFailure(res, 403, {code: 'forbidden_origin', message: 'Forbidden origin'});
             return false;
         }
         const allowances = AdminSecurityPolicyRegistry.current();
@@ -2198,11 +2321,11 @@ class AdminServer {
         // 쿠키 탈취만으로 CSRF 헤더 없이 상태변경을 호출할 수 없도록 강제.
         if(hasSession) {
             if(!cookieToken || !headerToken) {
-                this.sendApiFailure(res, 403, {message: 'Missing CSRF token'});
+                this.sendApiFailure(res, 403, {code: 'csrf_token_missing', message: 'Missing CSRF token'});
                 return false;
             }
             if(!timingSafeStringEqual(headerToken, cookieToken, 'utf8')) {
-                this.sendApiFailure(res, 403, {message: 'CSRF token mismatch'});
+                this.sendApiFailure(res, 403, {code: 'csrf_token_mismatch', message: 'CSRF token mismatch'});
                 return false;
             }
             return true;
@@ -2217,12 +2340,12 @@ class AdminServer {
         // allowLegacyAdminHttp + requireCsrfHeader 조합 시 non-browser 경로에서도 토큰 헤더를 요구한다.
         if(allowances.allowLegacyAdminHttp) {
             if(!headerToken) {
-                this.sendApiFailure(res, 403, {message: 'Missing CSRF token'});
+                this.sendApiFailure(res, 403, {code: 'csrf_token_missing', message: 'Missing CSRF token'});
                 return false;
             }
             // cookieToken 이 있으면 일치 검증, 없으면 레거시 클라이언트의 헤더-only 경로 허용.
             if(cookieToken && !timingSafeStringEqual(headerToken, cookieToken, 'utf8')) {
-                this.sendApiFailure(res, 403, {message: 'CSRF token mismatch'});
+                this.sendApiFailure(res, 403, {code: 'csrf_token_mismatch', message: 'CSRF token mismatch'});
                 return false;
             }
             return true;
@@ -2233,11 +2356,11 @@ class AdminServer {
             return true;
         }
         if(!headerToken || !cookieToken) {
-            this.sendApiFailure(res, 403, {message: 'Missing CSRF token'});
+            this.sendApiFailure(res, 403, {code: 'csrf_token_missing', message: 'Missing CSRF token'});
             return false;
         }
         if(!timingSafeStringEqual(headerToken, cookieToken, 'utf8')) {
-            this.sendApiFailure(res, 403, {message: 'CSRF token mismatch'});
+            this.sendApiFailure(res, 403, {code: 'csrf_token_mismatch', message: 'CSRF token mismatch'});
             return false;
         }
         return true;

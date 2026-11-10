@@ -282,12 +282,16 @@ describe("U4-09 서버 설정 Security 카드", () => {
             const saved = page.waitForResponse((response) => response.request().method() === "POST"
                 && new URL(response.url()).pathname === "/api/serverOption", {timeout: 15_000});
             await page.getByRole("button", {name: "Apply", exact: true}).click();
-            expect((await (await saved).json()).success).toBe(true);
-            // 저장 뒤 화면은 관리자 주소로 다시 이동하므로, 서버에서 다시 읽어 남았는지 본다.
-            const stored = await page.evaluate(async () => (await (await fetch("/api/serverOption", {credentials: "same-origin"})).json()).serverOption);
-            expect(stored.mfaRequiredForSuperusers).toBe(true);
-            expect(stored.auditRetentionDays).toBe(30);
-            expect(stored.auditQueueSize).toBe(1000);
+            const response = await saved;
+            expect((await response.json()).success).toBe(true);
+            const sent = JSON.parse(response.request().postData() ?? "{}");
+            expect(sent.mfaRequiredForSuperusers).toBe(true);
+            expect(sent.auditRetentionDays).toBe(30);
+            expect(sent.auditQueueSize).toBe(1000);
+            // #346 FR-7: 강제는 요청마다 판정한다. 2단계 인증이 없는 이 슈퍼유저는 다음 요청부터 막히고 등록 화면으로 간다.
+            await page.evaluate(() => { location.hash = "#/users"; });
+            await page.waitForFunction(() => location.hash === "#/me", undefined, {timeout: 15_000});
+            await page.locator("#mfa-required-banner").waitFor({state: "visible", timeout: 10_000});
             expect(app.errors).toEqual([]);
         } finally {
             await app.close();

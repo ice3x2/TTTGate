@@ -4,12 +4,15 @@ import {normalizeBlocklist} from "./IpBlocklist";
 
 const GEO_MODES: ReadonlyArray<GeoMode> = ['off', 'allow', 'deny'];
 
+/** values 는 message 에 끼운 값이다(이슈 349 FR-7). 관리 API 가 응답 필드로 넘긴다. */
+type Failure = {success: false; message: string; values?: Record<string, unknown>};
+
 /** warnings 는 저장 API 응답으로 알리는 국가 필터 경고, blocklistWarnings 는 설정 파일에서 건너뛴 차단 항목이다. */
 type NormalizeResult =
     {success: true; value: ConnectionSecurityOption; warnings: string[]; blocklistWarnings: string[]} |
-    {success: false; message: string};
+    Failure;
 
-type GeoResult = {success: true; geo: GeoConfig; warnings: string[]} | {success: false; message: string};
+type GeoResult = {success: true; geo: GeoConfig; warnings: string[]} | Failure;
 
 // U5-03 / #118 — server.yaml 및 /api/serverOption 저장 경로 공용 connectionSecurity 검증.
 // #286 — 차단 목록은 틀린 항목이 있어도 실패하지 않는다. 그 항목만 건너뛰고 경고로 알린다.
@@ -40,7 +43,7 @@ function normalizeGeo(input: unknown): GeoResult {
     let mode: GeoMode = DEFAULT_GEO_CONFIG.mode;
     if(geoSource.mode !== undefined) {
         if(typeof geoSource.mode !== 'string' || !GEO_MODES.includes(geoSource.mode as GeoMode)) {
-            return {success: false, message: `connectionSecurity.geo.mode must be one of ${GEO_MODES.join(', ')}`};
+            return {success: false, message: `connectionSecurity.geo.mode must be one of ${GEO_MODES.join(', ')}`, values: {modes: GEO_MODES}};
         }
         mode = geoSource.mode as GeoMode;
     }
@@ -54,11 +57,11 @@ function normalizeGeo(input: unknown): GeoResult {
         for(let i = 0; i < geoSource.countries.length; i++) {
             const raw = geoSource.countries[i];
             if(typeof raw !== 'string') {
-                return {success: false, message: `connectionSecurity.geo.countries[${i}] must be a string`};
+                return {success: false, message: `connectionSecurity.geo.countries[${i}] must be a string`, values: {index: i}};
             }
             const code = raw.trim().toUpperCase();
             if(!ISO_ALPHA2.has(code)) {
-                return {success: false, message: `connectionSecurity.geo.countries[${i}] is not an ISO 3166-1 alpha-2 code: ${raw}`};
+                return {success: false, message: `connectionSecurity.geo.countries[${i}] is not an ISO 3166-1 alpha-2 code: ${raw}`, values: {index: i, country: raw}};
             }
             if(!normalized.includes(code)) normalized.push(code);
         }

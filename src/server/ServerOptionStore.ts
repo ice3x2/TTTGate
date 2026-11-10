@@ -14,7 +14,9 @@ import {normalizeConnectionSecurity} from "./security/connectionSecurity";
 import {dropBlocklistPort, dropOrphanBlocklistEntries} from "./security/IpBlocklist";
 
 /** 터널 행을 넣거나 뺀 서버 설정. droppedBlocks 는 그 포트에서 함께 빠진 차단 항목이다(#286, 감사용). */
-type ComposedServerOption = {success: boolean, message: string, serverOption?: ServerOption, droppedBlocks?: BlocklistEntry[]};
+/** values 는 message 에 끼운 값이다(이슈 349 FR-7). 관리 API 가 응답 필드로 넘긴다. */
+type FailureValues = Record<string, unknown>;
+type ComposedServerOption = {success: boolean, message: string, values?: FailureValues, serverOption?: ServerOption, droppedBlocks?: BlocklistEntry[]};
 
 const logger = LoggerFactory.getLogger('server', 'ServerOptionStore');
 
@@ -33,7 +35,7 @@ const ROLLBACK_BACKUP_SUFFIX: string = '.bak';
 // 이전 바이너리는 verificationServerOption 에 허용 목록이 없어 새 필드가 든 yaml 도 읽으므로,
 // .bak 은 수기 편집 손실을 막기 위한 복원 지점이다(설계 §3.1).
 const ROLLBACK_SENSITIVE_TOP_FIELDS = ['connectionSecurity', 'mfaRequiredForSuperusers', 'auditRetentionDays', 'auditQueueSize', 'logLevel', 'closeStallMs', 'closeGraceMs', 'adminAllowedOrigins', 'denialLogRetentionDays'] as const;
-const ROLLBACK_SENSITIVE_TUNNEL_FIELDS = ['ownerId', 'rateLimit'] as const;
+const ROLLBACK_SENSITIVE_TUNNEL_FIELDS = ['ownerId', 'rateLimit', 'sharedUserIds', 'activatorIpOnly', 'activatorIps'] as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -46,6 +48,12 @@ const hasRollbackSensitiveField = (option: unknown): boolean => {
     return tunnels.some((tunnel) => isRecord(tunnel)
         && ROLLBACK_SENSITIVE_TUNNEL_FIELDS.some((field) => tunnel[field] !== undefined));
 };
+
+/**
+ * keepRevision: 서버가 관리하는 실행 상태(이슈 348 의 허용 IP 목록)만 바꾸는 저장이다. 설정 리비전을 올리지 않아
+ * 그 사이에 열어 둔 편집 화면의 저장(expectedRevision)이 409 로 막히지 않는다. 사용자가 고치는 설정에는 쓰지 않는다.
+ */
+type CommitOptions = {markLastKnownGood?: boolean, pendingRestartScopes?: string[], keepRevision?: boolean};
 
 type ConfigLoadStatus = {ready: true; source: 'loaded' | 'created' | 'reset'} |
     {ready: false; reason: 'non-file' | 'read-error' | 'empty' | 'parse' | 'validation'};
@@ -104,7 +112,7 @@ class ServerOptionStore {
         return ObjectUtil.cloneDeep(this._revisionState);
     }
 
-    public prepareServerOption(serverOption: ServerOption): {success: boolean, message: string, serverOption?: ServerOption} {
+    public prepareServerOption(serverOption: ServerOption): {success: boolean, message: string, values?: FailureValues, serverOption?: ServerOption} {
         if(!this._loadStatus.ready) return {success: false, message: 'server configuration is not ready'};
         if(!serverOption.tunnelingOptions) {
             serverOption.tunnelingOptions = this._serverOption.tunnelingOptions;
@@ -117,7 +125,7 @@ class ServerOptionStore {
         const normalizedOption = ObjectUtil.cloneDeep(tunnelingOption);
         const result = this.verificationTunnelingOption(normalizedOption);
         if(!result.success) {
-            return {success: false, message: result.message};
+            return {success: false, message: result.message, values: result.values};
         }
         const serverOption = this.serverOption;
         const index = serverOption.tunnelingOptions.findIndex((option) => option.forwardPort == tunnelingOption.forwardPort);
@@ -154,7 +162,7 @@ class ServerOptionStore {
         const serverOption = this.serverOption;
         const index = serverOption.tunnelingOptions.findIndex((option) => option.forwardPort == forwardPort);
         if(index < 0) {
-            return {success: false, message: `forwardPort ${forwardPort} is not registered`};
+            return {success: false, message: `forwardPort ${forwardPort} is not registered`, values: {port: forwardPort}};
         }
         serverOption.tunnelingOptions.splice(index, 1);
         // #286 그 터널에만 건 차단 항목도 함께 지운다.
@@ -164,26 +172,33 @@ class ServerOptionStore {
 
     public commitPreparedServerOption(
         serverOption: ServerOption,
-        options: {markLastKnownGood?: boolean, pendingRestartScopes?: string[]} = {}
-    ): {success: boolean, message: string, revisionState?: RevisionState} {
+        options: CommitOptions = {}
+    ): {success: boolean, message: string, values?: FailureValues, revisionState?: RevisionState} {
         if(!this._loadStatus.ready) return {success: false, message: 'server configuration is not ready'};
         const result = this.prepareServerOptionCommit(serverOption, options);
-        if(!result.prepared) return {success: false, message: result.message};
+        if(!result.prepared) return {success: false, message: result.message, values: result.values};
         Files.writeAtomicBatchSync(result.prepared.files);
         this.publishPreparedServerOption(result.prepared);
         return {success: true, message: "", revisionState: this.revisionState};
     }
 
-    public prepareServerOptionCommit(serverOption: ServerOption,
-        options: {markLastKnownGood?: boolean, pendingRestartScopes?: string[]} = {}) {
+    public prepareServerOptionCommit(serverOption: ServerOption, options: CommitOptions = {}) {
         if(!this._loadStatus.ready) return {success: false, message: 'server configuration is not ready'};
         const result = this.prepareServerOption(ObjectUtil.cloneDeep(serverOption));
         if(!result.success) {
-            return {success: false, message: result.message};
+            return {success: false, message: result.message, values: result.values};
         }
         const updatedValues = ObjectUtil.findUpdates(this._serverOption, result.serverOption!);
         logger.info(`commitPreparedServerOption - ${JSON.stringify(redactSecrets(updatedValues))}`);
         const revisionState = this.revisionState;
+        if(options.keepRevision === true) {
+            // 리비전 상태는 그대로이므로 .server.state.json 은 쓰지 않는다. 업그레이드 .bak 은 같은 배치로 남긴다.
+            const files: AtomicFileValue[] = [
+                ...this.rollbackBackupFiles(serverOption),
+                {file: this._configFile, data: YAML.stringify(result.serverOption), mode: 0o600},
+            ];
+            return {success: true, message: "", prepared: {serverOption: result.serverOption!, revisionState, files}};
+        }
         revisionState.currentRevision += 1;
         revisionState.lastCommittedAt = Date.now();
         revisionState.pendingRestartScopes = [...new Set([...revisionState.pendingRestartScopes, ...(options.pendingRestartScopes ?? [])])];
@@ -478,7 +493,7 @@ class ServerOptionStore {
         }
     }
 
-    public verificationServerOption(option: ServerOption) : {success: boolean, message: string, serverOption?: ServerOption} {
+    public verificationServerOption(option: ServerOption) : {success: boolean, message: string, values?: FailureValues, serverOption?: ServerOption} {
         if(Array.isArray(option.tunnelingOptions)) {
             const normalizedTunnels = option.tunnelingOptions.map(tunnel =>
                 tunnel && typeof tunnel === 'object' && !Array.isArray(tunnel) ? {...tunnel} : tunnel);
@@ -567,7 +582,7 @@ class ServerOptionStore {
         }));
         const connectionSecurity = normalizeConnectionSecurity(option.connectionSecurity);
         if(!connectionSecurity.success) {
-            return {success: false, message: connectionSecurity.message};
+            return {success: false, message: connectionSecurity.message, values: connectionSecurity.values};
         }
         // #286 차단 목록의 틀린 항목은 실패가 아니라 경고다. 그 항목만 빼고 계속한다.
         connectionSecurity.blocklistWarnings.forEach((warning) => logger.warn(warning));
@@ -575,7 +590,7 @@ class ServerOptionStore {
         return {success: true, message: "", serverOption: option};
     }
 
-    private normalizeServerBufferLimit(option: TunnelingOption): {success: boolean; message: string} {
+    private normalizeServerBufferLimit(option: TunnelingOption): {success: boolean; message: string; values?: FailureValues} {
         const value = option.bufferLimitOnServer;
         if(value === undefined) {
             option.bufferLimitOnServer = 8;
@@ -588,7 +603,7 @@ class ServerOptionStore {
     public verificationTunnelingOption(
         option: TunnelingOption,
         normalizationMode: TunnelingOptionNormalizationMode = "new-config"
-    ) : {success: boolean,forwardPort: number, message: string} {
+    ) : {success: boolean,forwardPort: number, message: string, values?: FailureValues} {
         if(!option.forwardPort) {
             return {success: false,forwardPort: -1, message: "forwardPort is undefined"};
         }
@@ -607,7 +622,7 @@ class ServerOptionStore {
         // #338: 이름. 새 설정은 틀린 이름을 거절하고, 파일에서 읽을 때는 그 이름만 버린다(서버 기동을 막지 않는다).
         const name = resolveTunnelName(option.name);
         if(!name.success && normalizationMode !== "legacy-load") {
-            return {success: false, forwardPort: option.forwardPort, message: name.message};
+            return {success: false, forwardPort: option.forwardPort, message: name.message, values: name.values};
         }
         if(!name.success) logger.warn(`forwardPort ${option.forwardPort}: ignored an invalid tunnel name in server.yaml`);
         if(name.success && name.name !== undefined) option.name = name.name;
@@ -615,7 +630,7 @@ class ServerOptionStore {
         const buffer = this.normalizeServerBufferLimit(option);
         if(!buffer.success) return {...buffer, forwardPort: option.forwardPort};
         const rateLimit = normalizeRateLimit(option.protocol, option.rateLimit);
-        if(!rateLimit.success) return {success: false, forwardPort: option.forwardPort, message: rateLimit.message};
+        if(!rateLimit.success) return {success: false, forwardPort: option.forwardPort, message: rateLimit.message, values: rateLimit.values};
         option.rateLimit = rateLimit.rateLimit;
         if(option.bufferLimitOnClient == undefined) {
             option.bufferLimitOnClient = 8;

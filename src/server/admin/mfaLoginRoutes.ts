@@ -1,5 +1,5 @@
 import {IncomingMessage, ServerResponse} from "http";
-import {RouteContext} from "./routes";
+import {ApiFailure, RouteContext} from "./routes";
 import {IdentityStore} from "../rbac/IdentityStore";
 import {User} from "../rbac/IdentityTypes";
 import {AuditEvent} from "../audit/AuditSink";
@@ -19,7 +19,7 @@ export type LoginGuard = {
     fail(req: IncomingMessage): Promise<void>;
     /** resetLoginAttempts + 세션·쿠키 발급 + login_success 감사. loginDetail 은 login_success 의 detail 이 된다(#336 패스키). */
     issueSession(req: IncomingMessage, res: ServerResponse, user: User, loginDetail?: Record<string, unknown>): Promise<void>;
-    sendFailure(res: ServerResponse, statusCode: number, payload: {[key: string]: any}): void;
+    sendFailure(res: ServerResponse, statusCode: number, payload: ApiFailure): void;
     emitAudit(event: AuditEvent): void;
 };
 
@@ -30,14 +30,14 @@ export function mfaLoginHandler(tickets: MfaTicketStore, guard: LoginGuard) {
     return async (ctx: RouteContext): Promise<void> => {
         const {req, res} = ctx;
         if(guard.isBlocked(req)) {
-            guard.sendFailure(res, 429, {message: 'Too many login attempts'});
+            guard.sendFailure(res, 429, {code: 'login_blocked', message: 'Too many login attempts'});
             return;
         }
         const body = ctx.body ?? {};
         const code = typeof body.code === 'string' ? body.code : undefined;
         const recoveryCode = typeof body.recoveryCode === 'string' ? body.recoveryCode : undefined;
         if((code === undefined) === (recoveryCode === undefined)) {
-            guard.sendFailure(res, 422, {status: 422, message: 'Provide code or recoveryCode'});
+            guard.sendFailure(res, 422, {code: 'mfa_code_missing', status: 422, message: 'Provide code or recoveryCode'});
             return;
         }
         const ticketValue = typeof body.mfaTicket === 'string' ? body.mfaTicket : '';
@@ -66,7 +66,7 @@ export function mfaLoginHandler(tickets: MfaTicketStore, guard: LoginGuard) {
                 // 사용자의 잘못이 아니므로 티켓 시도·백오프는 세지 않고 503 으로 알린다.
                 if(!store.markMfaStep(user.id, result.step).success) {
                     audit(AUDIT_EVENT_TYPES.mfa_failure, 'failure', {reason: 'store'});
-                    guard.sendFailure(res, 503, {status: 503, message: 'Unable to complete sign-in. Try again.'});
+                    guard.sendFailure(res, 503, {code: 'sign_in_unavailable', status: 503, message: 'Unable to complete sign-in. Try again.'});
                     return;
                 }
                 accepted = true;

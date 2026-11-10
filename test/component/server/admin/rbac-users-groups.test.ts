@@ -460,12 +460,13 @@ describe("rbac-users-groups", () => {
         const users = (await f.request("GET", "/api/users", {}, f.admin.auth)).body.users;
         const idOf = (username: string) => users.find((user: any) => user.username === username).id;
 
+        // #346: 초기화는 2단계 수단 초기화 여부도 남긴다(본문에 없으면 false).
         const generatedOnReset = await issue("POST", `/api/users/${idOf("alice")}/password-reset`, {});
-        expect(generatedOnReset).toEqual([{generated: true}]);
+        expect(generatedOnReset).toEqual([{generated: true, secondFactorsReset: false}]);
 
         const specifiedOnReset = await issue("POST", `/api/users/${idOf("bob")}/password-reset`,
             {temporaryPassword: "admin-specified-reset-password"});
-        expect(specifiedOnReset).toEqual([{generated: false}]);
+        expect(specifiedOnReset).toEqual([{generated: false, secondFactorsReset: false}]);
     }));
 
     it("CSRF 헤더 없이 보낸 사용자 생성은 403 이다", async () => withRbacServer(async (f) => {

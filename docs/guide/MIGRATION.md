@@ -63,7 +63,8 @@ example `C:\TTTGate\config`. Substitute your own installation root in every comm
 
 The two `.bak` files hold the configuration as it was on disk immediately before the first save that added a
 new field (`connectionSecurity`, `mfaRequiredForSuperusers`, `auditRetentionDays`, `auditQueueSize`, `logLevel`,
-`closeStallMs`, `closeGraceMs`, `adminAllowedOrigins`, `denialLogRetentionDays`, or a tunnel's `ownerId` or `rateLimit`). Keeping them is a manual decision: **retain them for at least 14 days**
+`closeStallMs`, `closeGraceMs`, `adminAllowedOrigins`, `denialLogRetentionDays`, or a tunnel's `ownerId`, `rateLimit`,
+`sharedUserIds`, `activatorIpOnly` or `activatorIps`). Keeping them is a manual decision: **retain them for at least 14 days**
 after the upgrade, and remove them yourself once you have accepted the new configuration.
 
 A tunnel can also carry a new optional `name` (1 to 40 characters, shown in the tunnel list). The previous
@@ -131,6 +132,51 @@ curl -sk https://127.0.0.1:9300/api/version
 
 The server must start and answer `/api/version` with 200. If it instead logs a configuration validation
 failure, do not downgrade without restoring the `.bak` files first.
+
+### Downgrading after group two-factor enforcement (2.3.0)
+
+2.3.0 adds the group attribute `mfa_required` to `config/identity.yaml`. Older versions ignore it when they read
+the file, so group enforcement stops after a downgrade: members can then sign in with a password alone.
+When an older console saves such a group, the attribute is dropped from the file without a warning, so after an
+upgrade again the group no longer requires two-factor authentication. Check the group after you upgrade again.
+An API call to an older server that sends `mfa_required` is rejected with 422 `attributes_unknown_key`.
+
+### Downgrading after toggle-only groups and tunnel sharing (2.3.0)
+
+2.3.0 adds the `tunnel_crud` value `toggle` to `config/identity.yaml` and the tunnel field `sharedUserIds` to
+`config/server.yaml`. Tunnels without `sharedUserIds` read as not shared, so an upgrade needs no action.
+After a downgrade, both fail closed:
+
+- Members of a `toggle` group cannot turn on even their own tunnels. The older server answers 404, as for a tunnel
+  that they cannot see. Saving such a group in an older console is rejected until you choose another tunnel access.
+- The older server ignores `sharedUserIds`, so shared users no longer see the tunnels shared with them.
+- The older server still returns the stored `sharedUserIds` as raw user ids to every user who can see the tunnel in
+  `GET /api/tunnelingOption`, not only to users who can change it.
+- The older server does not remove a deleted user from share lists. After you upgrade again, the server drops ids of
+  users that no longer exist: `GET /api/tunnelingOption` leaves them out, and the next save of the tunnel removes them
+  without an error.
+
+Before you downgrade, change `toggle` groups to `read_only` or `full` if their members must keep working.
+
+### Downgrading after the activator IP limit (2.3.0)
+
+2.3.0 adds two tunnel fields to `config/server.yaml`: `activatorIpOnly` turns on the limit that accepts connections
+only from the IP address of each user who turned the tunnel on, and `activatorIps` keeps one allowed address per
+user. Tunnels without `activatorIpOnly` read as off, so the upgrade does not cut connections that are open. New
+tunnels have it on. Turn it on for each existing tunnel after the upgrade.
+
+After a downgrade, the limit fails open:
+
+- The older server ignores both fields, so every tunnel accepts connections from every address again. It does not
+  warn about this.
+- When an older console or API call saves such a tunnel, the older server can drop `activatorIpOnly` and
+  `activatorIps` from the file. After you upgrade again, these tunnels have the limit off and an empty list.
+  Check them and turn the limit on again. Each user then turns the tunnel on or presses **Update to my IP** once.
+- The older server returns `activatorIps` to every user who can see the tunnel in `GET /api/tunnelingOption`,
+  not only to superusers.
+
+If a tunnel must stay protected, keep it off during the downgrade, or limit it with the blocklist or the country
+filter until you upgrade again.
 
 ## 5. Legacy-fallback mode
 

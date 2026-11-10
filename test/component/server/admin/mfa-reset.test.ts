@@ -36,4 +36,12 @@ describe("mfa-reset", () => {
         const admin = await f.login("admin", ADMIN_PASSWORD);
         expect((await f.request("POST", `/api/users/${f.idOf("bob")}/mfa/reset`, {}, {Cookie: admin.auth!.Cookie})).status).toBe(403);
     }));
+
+    it("실패 응답의 값 필드는 긴 입력을 100자로 잘라 보낸다 (이슈 349 FR-7)", async () => withMfaServer(async (f) => {
+        const admin = await f.login("admin", ADMIN_PASSWORD);
+        const id = "u_" + "x".repeat(500);
+        const missing = await f.request("GET", `/api/users/${id}`, {}, admin.auth!);
+        expect([missing.status, missing.body.code, missing.body.userId]).toEqual([404, "user_not_found", id.slice(0, 100)]);
+        expect(missing.body.message).toBe(`user not found: ${id}`);
+    }));
 });

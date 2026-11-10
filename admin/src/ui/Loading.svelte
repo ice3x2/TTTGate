@@ -1,5 +1,6 @@
 <script lang="ts">
     import loadingImg from '../assets/loading.png';
+    import {t} from '../i18n';
 
     let {
         overlay = false,
@@ -10,7 +11,7 @@
     } = $props();
 </script>
 
-<div class="loading {overlay ? 'overlay' : ''} {className}" role="status" aria-label="Loading">
+<div class="loading {overlay ? 'overlay' : ''} {className}" role="status" aria-label={t('common.loading')}>
     <img src={loadingImg} alt="" class="spin">
 </div>
 

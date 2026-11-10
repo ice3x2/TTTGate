@@ -59,10 +59,11 @@ const FIRST_SCREEN_TIMEOUT_MS = 150_000;
 /**
  * login: true(기본)는 admin / ADMIN_TEST_PASSWORD 로, 객체면 그 계정으로 로그인한 뒤 상태 화면까지 기다린다.
  * false 면 로그인 화면에서 멈춘다(#102 U2-10 이 계정 지정을 더했다).
+ * locale 은 브라우저 언어다. 기본은 en-US 이고, 한국어 화면 테스트는 ko-KR 을 준다(이슈 349). 로그인 버튼 이름도 그 언어로 찾는다.
  */
 export const startAdminApp = async (options: {fixture?: AdminFixture; login?: boolean | {username: string; password: string};
     /** U4-06: 브라우저 로그인 전에 서버 측에 만들어 둘 세션. 로그인 진입점이 아니라 사전 세션 시드다. */
-    extraLogins?: Array<{as: string; userAgent: string}>} = {}): Promise<AdminApp> => {
+    extraLogins?: Array<{as: string; userAgent: string}>; locale?: "en-US" | "ko-KR"} = {}): Promise<AdminApp> => {
     const fixture: AdminFixture = options.fixture ?? 'password';
     const shouldLogin = options.login !== false;
     const account = typeof options.login === 'object' ? options.login : {username: 'admin', password: ADMIN_TEST_PASSWORD};
@@ -159,13 +160,13 @@ export const startAdminApp = async (options: {fixture?: AdminFixture; login?: bo
             if(!result.ok) throw new Error(`extraLogins: ${extra.as} could not sign in: ${output}`);
         }
 
-        browser = await startAdminBrowser({apiOrigin: origin, deadline});
+        browser = await startAdminBrowser({apiOrigin: origin, deadline, locale: options.locale});
         const page = browser.page;
         await page.setViewportSize({width: 400, height: 800});
         await page.goto(browser.url, {timeout: within(30_000, "first-navigation")});
 
         if(shouldLogin) {
-            const ok = () => page.getByRole("button", {name: "OK", exact: true}).click();
+            const ok = () => page.getByRole("button", {name: options.locale === "ko-KR" ? "확인" : "OK", exact: true}).click();
             const password = page.locator("#login-password");
             // 첫 화면은 개발 서버가 Svelte 를 처음 컴파일한 뒤에 뜬다. 부하에서 30초를 넘을 수 있다(#181).
             await password.waitFor({state: "visible", timeout: within(FIRST_SCREEN_TIMEOUT_MS, "first-screen")});

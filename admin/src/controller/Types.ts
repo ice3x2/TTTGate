@@ -113,12 +113,14 @@ export type UserView = {id: string; username: string; displayName: string; role:
     /** U4-04 가 더한 필드. */
     mfaEnabled?: boolean;
     /** #336 등록한 패스키 수. */
-    passkeyCount?: number};
+    passkeyCount?: number;
+    /** 이슈 346: 2단계 인증 강제 대상인가(그룹 속성 또는 슈퍼유저 서버 옵션). */
+    mfaRequired?: boolean};
 /** #336 내 계정 화면의 패스키 한 줄. 공개키는 오지 않는다. */
 export type PasskeyView = {id: string; name: string; rpId: string; createdAt: number; lastUsedAt: number | null; backedUp: boolean};
 export type TunnelProtocolName = 'TCP' | 'HTTP' | 'HTTPS' | 'HTTP_REWRITE';
 export type GroupAttributes = {
-    tunnel_crud: 'none' | 'read_only' | 'full';
+    tunnel_crud: 'none' | 'read_only' | 'toggle' | 'full';
     max_tunnel_count: number;
     max_tunnel_duration_ms: number;
     allowed_port_range: Array<{from: number; to: number}>;
@@ -129,6 +131,8 @@ export type GroupAttributes = {
     admin_ui_section_access: Array<'tunnels' | 'my_audit' | 'my_profile' | 'my_sessions'>;
     tunnel_visibility: 'private' | 'group_read';
     rate_limit: 'unlimited' | '1MB/s' | '10MB/s' | '100MB/s';
+    /** 이슈 346: 이 그룹 사용자는 2단계 인증(TOTP 또는 패스키)을 갖춰야 한다. */
+    mfa_required: boolean;
 };
 export type Group = {id: string; name: string; system: boolean; attributes: GroupAttributes; revision?: number};
 /** U3-04: 단위 2 §3 기본값. 새 그룹 폼의 초기값이자 system:superuser 의 표시용 값이다. */
@@ -144,21 +148,24 @@ export const DEFAULT_GROUP_ATTRIBUTES: GroupAttributes = {
     admin_ui_section_access: ['tunnels', 'my_audit', 'my_profile', 'my_sessions'],
     tunnel_visibility: 'private',
     rate_limit: 'unlimited',
+    mfa_required: false,
 };
 export type MeResponse = {user: UserView; group: {id: string; name: string; attributes: GroupAttributes};
     sections: string[]; migrationBanner: boolean;
     /** U4-09: 본인 MFA 상태와 슈퍼유저 강제 등록 게이트. */
-    mfa?: {enabled: boolean; recoveryCodesRemaining: number}; mustEnrollMfa?: boolean};
+    mfa?: {enabled: boolean; recoveryCodesRemaining: number}; mustEnrollMfa?: boolean;
+    /** 이슈 346: 2단계 인증 강제 대상인가. 마지막 수단을 지우는 버튼을 미리 막는 데 쓴다. */
+    mfaRequired?: boolean};
 export type ApiFailure = {success: false; status: number; message: string; code?: string};
 /** U5-06: 국가 필터·차단 목록·터널 레이트 리밋. */
 export type GeoConfig = {mode: 'off' | 'allow' | 'deny'; countries: string[]; applyToAdmin: boolean; unknownPolicy: 'allow' | 'deny'};
 export type CountryEntry = {code: string; name: string};
 export type BanEntry = {port: number; ip: string; country?: string; bannedUntil: number; hits: number};
 /** 이슈 327: 거절 사유. 서버의 AdmissionReason 과 같다. */
-export type DenialReason = 'ip-blocklist' | 'geo-deny' | 'rate-limit-ban' | 'rate-limit-exceeded' | 'concurrency-limit';
-/** 이슈 327: 포트별 누적 거절 건수(서버가 시작한 뒤부터). */
+export type DenialReason = 'ip-blocklist' | 'geo-deny' | 'rate-limit-ban' | 'rate-limit-exceeded' | 'concurrency-limit' | 'activator-ip';
+/** 이슈 327: 포트별 누적 거절 건수(서버가 시작한 뒤부터). 이슈 348: rejectedActivatorIp 는 켠 사람의 IP 가 아니라서 거절한 수다(옛 서버에는 없다). */
 export type PortDenialStats = {rejectedGeo: number; rejectedBlocklist: number; rejectedBans: number;
-    rejectedExceeded: number; rejectedConcurrency: number; bannedIps: number};
+    rejectedExceeded: number; rejectedConcurrency: number; rejectedActivatorIp?: number; bannedIps: number};
 export type DenialStats = {ports: Record<string, PortDenialStats>; admin: {rejectedGeo: number}};
 /** 이슈 327: 최근 거절 한 건. scope 는 포트 번호이거나 관리 화면('admin')이다. */
 export type RecentDenial = {at: number; ip: string; scope: number | 'admin'; reason: DenialReason; country: string | null};

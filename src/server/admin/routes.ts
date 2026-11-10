@@ -4,6 +4,7 @@ import {Action, Target} from "../rbac/AdminAuthorizer";
 import {Principal} from "../rbac/Principal";
 import ServerOptionStore from "../ServerOptionStore";
 import {AuthorizationContext} from "../rbac/AuthorizationContext";
+import type {Failure} from "../rbac/IdentityTypes";
 import type {AuditEvent, AuditTarget} from "../audit/AuditSink";
 import {AUDIT_EVENT_TYPES, AuditEventType} from "../audit/AuditEventTypes";
 import {ClockRngProvider} from "../../util/ClockRng";
@@ -14,9 +15,29 @@ import {DEFAULT_ENROLLMENT_TTL_MS} from "../EnrollmentRegistry";
 
 export type {Action, Target};
 
+/**
+ * 이슈 349 FR-7: 실패 응답의 본문. 관리 화면은 code 로 문구를 고르고, 문구에 들어가는 값(포트 번호 등)은 별도 필드에서 받는다.
+ * message 는 번역 맵에 없는 code 를 받은 화면(서버와 화면의 버전이 다른 경우)이 그대로 보이는 영어 문구다.
+ */
+export type ApiFailure = {code: string; message?: string; values?: Record<string, unknown>; [field: string]: unknown};
+
+/**
+ * 실패 응답에서 값 필드가 아닌 필드(봉투·상태·구조 정보). sendApiFailure 는 이 필드를 그대로 싣고, 나머지 필드와 values 는
+ * 값 필드로 보아 failureValues 로 거른다. values 안의 이 이름은 응답 필드를 덮지 못하게 버린다(이슈 349 FR-7).
+ */
+export const FAILURE_RESPONSE_FIELDS: ReadonlySet<string> = new Set([
+    'success', 'code', 'message', 'partial', 'failedScopes', 'warnings', 'status', 'valid', 'url',
+    'updated', 'updates', 'revisionState', 'certificateRevisionState', 'restartRequiredScopes', 'references',
+]);
+
 export type RouteContext = {
     /** 활성 터널의 수명 상한을 다시 계산한다(#137). 소유자·사용자 그룹·그룹 속성이 바뀐 뒤 부른다. */
     reapplyTunnelCaps?: () => void;
+    /**
+     * 이슈 348: 허용 IP 목록·IP 제한·켜기 권한이 바뀐 뒤 부른다. 허용 IP 가 아닌 기존 연결을 끊는다. port 가 없으면 모든 터널이다.
+     * 실패해도 요청은 실패시키지 않는다(로그만 남긴다).
+     */
+    enforceActivatorIps?: (port?: number) => Promise<void>;
     req: IncomingMessage;
     res: ServerResponse;
     params: Record<string, string>;
@@ -26,8 +47,8 @@ export type RouteContext = {
     ip: string;
     /** 성공 응답. status 는 생성 라우트가 201 을 낼 때만 넘긴다. */
     ok: (data: object, status?: number) => void;
-    /** 실패 응답. 401·403 은 route() 가 내므로 핸들러는 404·409·422·503 만 쓴다. */
-    fail: (status: number, code: string, message: string) => void;
+    /** 실패 응답. 401·403 은 route() 가 내므로 핸들러는 404·409·422·503 만 쓴다. message 에 끼운 값은 values 로도 보낸다(이슈 349). */
+    fail: (status: number, code: string, message: string, values?: Record<string, unknown>) => void;
     /** 요청 전에 계산한 audit 메타에 뒤늦게 알게 된 값을 더한다. audited() 가 record 직전에 합친다. */
     auditDetail: (patch: Record<string, unknown>) => void;
     /** #113 (U4-05) 본인 세션을 끊은 응답에 sessionKey·csrfToken 만료 쿠키를 붙인다(POST /api/logout 과 같은 형식). */
@@ -35,6 +56,14 @@ export type RouteContext = {
     /** #112 (U4-04) MFA 메모리 저장소. AdminServer 가 한 벌을 갖고 요청마다 넘긴다. */
     mfa?: {pending: PendingEnrollmentStore; tickets: MfaTicketStore};
 };
+
+/**
+ * 다른 모듈(IdentityStore·enforce 등)이 만든 실패를 그대로 응답한다. 이슈 349: message 에 끼운 값(values)도 응답 필드로 넘긴다.
+ * 실패 결과를 넘기는 응답은 모두 이 함수를 쓴다.
+ */
+export function failWith(ctx: RouteContext, failure: Pick<Failure, 'status' | 'code' | 'message' | 'values'>): void {
+    ctx.fail(failure.status, failure.code, failure.message, failure.values);
+}
 
 export type RouteAction = Action | 'public' | 'session' | ((ctx: RouteContext) => Action);
 
@@ -150,6 +179,12 @@ const enrollmentIssueIdForAudit = (value: unknown): number | 'invalid' => Number
  */
 export const isTunnelActivationRequested = (ctx: RouteContext): boolean => ctx.body?.active == true;
 
+/** 이슈 347 FR-16: 켜기·끄기 감사의 detail 에 남길 소유자 id. 켠 사람은 감사의 행위자다. */
+const tunnelOwnerAudit = (ctx: RouteContext): Record<string, unknown> => {
+    const option = ServerOptionStore.instance.getTunnelingOption(tunnelPortOf(ctx));
+    return option ? {ownerId: AuthorizationContext.ownerIdOf(option)} : {};
+};
+
 /** 터널 감사 대상의 id 는 포트다. 경로 세그먼트가 없으면 본문의 forwardPort 를 쓴다. */
 const tunnelAuditTarget = (ctx: RouteContext): AuditTarget =>
     ({kind: 'tunnel', id: truncateAuditValue(String(ctx.params.port ?? ctx.body?.forwardPort))});
@@ -168,6 +203,15 @@ const tunnelCertAudit = (ctx: RouteContext): AuditRouteMeta => auditMeta(AUDIT_E
  * 이 함수 하나만 불러, 감사가 말하는 변경과 실제로 반영된 변경이 갈리지 않게 한다.
  */
 export const isFieldProvided = (body: any, key: string): boolean => body?.[key] !== undefined;
+
+/**
+ * 이슈 348 FR-12: IP 제한 켜기는 켜기 권한, 끄기는 고치기 권한이다. 공유받은 사용자 한 명이 모든 사용자의 보호를 풀지 못하게 한다.
+ * 본문이 boolean 이 아니면 켜기 권한으로 판정하고 핸들러가 422 로 답한다.
+ */
+export const activatorIpOnlyAction = (ctx: RouteContext): Action => ctx.body?.enabled === false ? 'tunnel:update' : 'tunnel:activate';
+
+/** 이슈 348: 감사 메타는 검증 전에 만든다. boolean 이 아닌 본문 값은 남기지 않는다. */
+const enabledForAudit = (value: unknown): boolean | 'invalid' => typeof value === 'boolean' ? value : 'invalid';
 
 /** 활성화 타임아웃(초)의 상한: 10년. 그룹 수명 상한(UI 최대 1년)보다 넉넉하고 타이머 계산이 안전한 범위다. */
 const MAX_ACTIVE_TIMEOUT_SECONDS = 10 * 365 * 86_400;
@@ -271,8 +315,15 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
     {method: 'PUT', pattern: new RegExp('^/api/tunnelingOption/(?<port>[^/]*)/owner$'), action: 'tunnel:reassign', target: tunnelTarget,
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.tunnel_reassigned, tunnelAuditTarget(ctx)), handler: 'onReassignTunnelOwner'},
     {method: 'POST', pattern: new RegExp('^/api/tunneling/active/(?<port>[^/]*)$'), action: 'tunnel:activate', target: tunnelTarget,
-        audit: (ctx) => auditMeta(isTunnelActivationRequested(ctx) ? AUDIT_EVENT_TYPES.tunnel_activated : AUDIT_EVENT_TYPES.tunnel_deactivated, tunnelAuditTarget(ctx)),
+        audit: (ctx) => auditMeta(isTunnelActivationRequested(ctx) ? AUDIT_EVENT_TYPES.tunnel_activated : AUDIT_EVENT_TYPES.tunnel_deactivated, tunnelAuditTarget(ctx),
+            tunnelOwnerAudit(ctx)),
         handler: 'onActiveTunneling'},
+    // 이슈 348: 켠 사람의 IP 만 받는 설정과 내 허용 IP 갱신. 둘 다 리스너를 다시 띄우지 않는다.
+    {method: 'PUT', pattern: new RegExp('^/api/tunneling/(?<port>[^/]*)/activatorIpOnly$'), action: activatorIpOnlyAction, target: tunnelTarget,
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.tunnel_ip_limit_updated, tunnelAuditTarget(ctx), {enabled: enabledForAudit(ctx.body?.enabled)}),
+        handler: 'onSetActivatorIpOnly'},
+    {method: 'POST', pattern: new RegExp('^/api/tunneling/(?<port>[^/]*)/activatorIp$'), action: 'tunnel:activate', target: tunnelTarget,
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.tunnel_ip_refreshed, tunnelAuditTarget(ctx)), handler: 'onRefreshActivatorIp'},
     {method: 'GET', pattern: new RegExp('^/api/externalServerStatuses$'), action: 'tunnel:list', target: tunnelTarget, handler: 'onGetExternalServerStatuses'},
     {method: 'GET', pattern: new RegExp('^/api/externalCert/(?<port>[^/]*)$'), action: 'tunnel:cert', target: tunnelTarget, handler: 'onGetExternalServerCert'},
     {method: 'POST', pattern: new RegExp('^/api/externalCert/(?<port>[^/]*)$'), action: 'tunnel:cert', target: tunnelTarget, audit: tunnelCertAudit, handler: 'onUpdateExternalServerCert'},
@@ -306,6 +357,8 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
     {method: 'POST', pattern: new RegExp('^/api/users$'), action: 'user:manage',
         // 생성 전이라 id 가 없다. 요청한 username 을 대상으로 적고 새 id 는 핸들러가 auditDetail 로 더한다.
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.user_created, {kind: 'user', id: truncateAuditValue(String(ctx.body?.username))}), handler: 'onCreateUser'},
+    // 이슈 347 FR-9: 공유할 사용자 검색. 아래 /api/users/:id(슈퍼유저 전용)보다 먼저 맞아야 한다(표는 첫 항목을 쓴다).
+    {method: 'GET', pattern: new RegExp('^/api/users/lookup$'), action: 'user:lookup', handler: 'onLookupUsers'},
     {method: 'GET', pattern: new RegExp('^/api/users/(?<id>[^/]+)$'), action: 'user:manage', handler: 'onGetUser'},
     {method: 'PUT', pattern: new RegExp('^/api/users/(?<id>[^/]+)$'), action: 'user:manage',
         audit: (ctx) => auditMeta(userUpdateAuditType(ctx), pathIdTarget('user')(ctx)), handler: 'onUpdateUser'},

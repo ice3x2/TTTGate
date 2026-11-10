@@ -3,6 +3,7 @@
     import Button from '../../ui/Button.svelte';
     import Checkbox from '../../ui/Checkbox.svelte';
     import TextInput from '../../ui/TextInput.svelte';
+    import {t} from '../../i18n';
 
     let {options = $bindable<CustomHeader[]>([])}: {options?: CustomHeader[]} = $props();
 
@@ -25,15 +26,15 @@
 <div class="rules">
     {#each options as option, index}
         <div class="rule">
-            <TextInput placeholder="Name" bind:value={option.name} />
+            <TextInput placeholder={t('header.name')} bind:value={option.name} />
             <span class="colon">:</span>
-            <TextInput placeholder="Value" bind:value={option.value} />
+            <TextInput placeholder={t('header.value')} bind:value={option.value} />
             {#if index === options.length - 1}
                 <Button size="sm" onclick={add}>+</Button>
             {:else}
                 <Button size="sm" onclick={() => remove(index)}>-</Button>
             {/if}
-            <Checkbox class="check" id={`${uid}-replace-${index}`} label="Replace header" bind:checked={option.replace} />
+            <Checkbox class="check" id={`${uid}-replace-${index}`} label={t('header.replace')} bind:checked={option.replace} />
         </div>
     {/each}
 </div>

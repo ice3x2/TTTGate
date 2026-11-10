@@ -26,7 +26,11 @@
     import HeaderAppender from './parts/HeaderAppender.svelte';
     import InputCertFile from './parts/InputCertFile.svelte';
     import TunnelStatusArea from './parts/TunnelStatusArea.svelte';
-    import {PROTOCOLS, tunnelErrorMessage, tunnelPolicy} from './parts/tunnelPolicy';
+    import ShareUsersField from './parts/ShareUsersField.svelte';
+    import type {SharedUser} from './parts/shareUsers';
+    import {PROTOCOLS, tunnelPolicy} from './parts/tunnelPolicy';
+    import {t} from '../i18n';
+    import {errorMessageOf} from '../i18n/serverError';
 
     // 옛 layout/TunnelOptionSetLayout.svelte 21행의 정의 그대로다.
     type TunnelingOptionEx = Options & {updatable?: boolean, isSync?: boolean, certInfo?: CertInfo, certificateRevision?: number,
@@ -34,7 +38,7 @@
 
     let {param}: {param: string} = $props();
 
-    const ENABLED = [{value: 'true', label: 'Enabled'}, {value: 'false', label: 'Disabled'}];
+    const ENABLED = [{value: 'true', label: t('tunnelEdit.enabled')}, {value: 'false', label: t('tunnelEdit.disabled')}];
 
     let option = $state<TunnelingOptionEx | undefined>();
     let snapshotRevision = 0;
@@ -44,8 +48,14 @@
     const restricted = $derived(policy?.restricted === true);
     const isNew = $derived(param === 'new');
     const readOnly = $derived(!isNew && option?.editable === false);
+    // 이슈 347: 켜고 끄기(상태 영역의 Timer)는 고치기와 따로 판정한다. 옛 서버 응답에는 toggleable 이 없다.
+    const toggleable = $derived(option?.toggleable ?? !readOnly);
+    // 이슈 347 FR-10: 공유 칸의 칩. 고칠 수 있는 사람에게만 서버가 sharedUsers 를 준다.
+    let sharedUsers = $state<SharedUser[]>([]);
+    // 사용자 검색은 슈퍼유저와 full 그룹만 쓴다. 새 터널 화면에 직접 들어온 다른 사용자에게는 칸을 보이지 않는다.
+    const canShare = $derived(!readOnly && (!restricted || $me?.group.attributes.tunnel_crud === 'full'));
     const portError = $derived(restricted && option && typeof option.forwardPort === 'number' && !policy!.isPortAllowed(option.forwardPort)
-        ? 'Port is outside the allowed ranges.' : undefined);
+        ? t('tunnelEdit.portOutside') : undefined);
     const protocolOptions = $derived(policy && option ? policy.protocolOptions(option.protocol ?? 'tcp') : PROTOCOLS);
 
     // 슈퍼유저의 소유자 변경. 저장 버튼과 별개로 즉시 반영한다.
@@ -64,7 +74,7 @@
 
     let alertOpen = $state(false);
     let alertMessage = $state('');
-    let alertButton = $state('OK');
+    let alertButton = $state(t('common.ok'));
     let alertClose = $state<() => void>(() => {});
 
     const session = useSession();
@@ -76,9 +86,9 @@
         alertOpen = true;
     };
 
-    const sessionOut = () => alert('Session is expired. Please login again.', 'OK', () => session.invalidate());
+    const sessionOut = () => alert(t('common.sessionExpired'), t('common.ok'), () => session.invalidate());
 
-    const connectionFail = () => alert('Unable to connect to the server.', 'Retry', () => load());
+    const connectionFail = () => alert(t('common.unableToConnect'), t('common.retry'), () => load());
 
     // 옛 _addEmptyOption(200~228행)이 넣던 값 그대로다.
     const emptyOption = (): TunnelingOptionEx => ({
@@ -99,7 +109,9 @@
         bufferLimitOnClient: 10,
         bufferLimitOnServer: 10,
         allowedClientNamesQuery: '',
-        rateLimit: defaultRateLimit('tcp')
+        rateLimit: defaultRateLimit('tcp'),
+        // 이슈 348 FR-1: 새 터널은 켠 사람의 IP 만 받는 설정이 켜진 채 만든다.
+        activatorIpOnly: true
     });
 
     // 옛 _validServerBuffer(86행) 그대로다.
@@ -193,6 +205,7 @@
                 }
                 option = fresh;
                 nameInput = '';
+                sharedUsers = [];
                 syncRateInputs();
                 loading = false;
                 return;
@@ -213,6 +226,7 @@
             if(!found.rateLimit) found.rateLimit = defaultRateLimit(found.protocol);
             option = found;
             nameInput = found.name ?? '';
+            sharedUsers = found.sharedUsers ?? [];
             loadedOutsideIds = (found.allowedClientIds ?? []).filter((id) => !(policy?.trustedClients ?? []).includes(id));
             syncRateInputs();
             ownerId = found.owner?.id ?? '';
@@ -234,7 +248,7 @@
     const loadOwners = async () => {
         const result = await UsersCtrl.instance.list();
         if(!result.success) {
-            toast.push({tone: 'alarm', message: result.message});
+            toast.push({tone: 'alarm', message: errorMessageOf(result)});
             return;
         }
         ownerUsers = result.users;
@@ -251,14 +265,16 @@
             const result = await ServerOptionCtrl.instance.reassignOwner(option.forwardPort, ownerId, snapshotRevision);
             loading = false;
             if(!result.success) {
-                toast.push({tone: 'alarm', message: result.message});
+                toast.push({tone: 'alarm', message: errorMessageOf(result)});
                 return;
             }
             snapshotRevision = result.revisionState.currentRevision;
             option.owner = result.owner;
             option.ownerId = result.owner.id;
             ownerId = result.owner.id;
-            toast.push({tone: 'pulse', message: 'Owner changed.'});
+            // 서버는 새 소유자를 공유 목록에서 뺀다(이슈 347). 칩도 맞춘다.
+            sharedUsers = sharedUsers.filter((user) => user.id !== result.owner.id);
+            toast.push({tone: 'pulse', message: t('tunnelEdit.ownerChanged')});
         } catch(e) {
             console.error(e);
             loading = false;
@@ -335,22 +351,24 @@
         nameError = '';
         const name = nameInput.trim();
         if(Array.from(name).length > NAME_MAX) {
-            nameError = `Use up to ${NAME_MAX} characters.`;
+            nameError = t('tunnelEdit.nameTooLong', {max: NAME_MAX});
             return;
         }
         if(name === '') delete option.name;
         else option.name = name;
         // 그룹 밖 id 가 남아 있으면 서버가 422 trusted_client_not_allowed 로 거부한다. 요청 전에 이유를 보인다.
         if(restricted && outsideGroupClientIds.length > 0) {
-            trustedError = 'Remove the client IDs your group does not allow.';
+            trustedError = t('tunnelEdit.removeDisallowedIds');
             return;
         }
         // 고를 대상이 있을 때만 막는다. 그룹이 허용한 클라이언트가 없으면 서버가 순서대로 판정한다(포트 검사가 먼저다).
         if(restricted && policy!.trustedClients.length > 0 && (option.allowedClientIds ?? []).length === 0) {
-            trustedError = 'Select at least one trusted client.';
+            trustedError = t('tunnelEdit.selectTrustedClient');
             return;
         }
         loading = true;
+        // 이슈 347: 공유 목록은 id 로만 보낸다. 서버가 중복·소유자를 빼고 없는 사용자를 거절한다.
+        option.sharedUserIds = sharedUsers.map((user) => user.id);
         if(restricted) {
             // 일반 유저는 allowedClientNames 를 보내지 않는다(서버가 422 legacy_client_names_not_allowed 로 거부한다).
             policy!.normalizeHttpOption(option);
@@ -371,11 +389,11 @@
                 });
             loading = false;
             if(result.success) {
-                toast.push({tone: 'pulse', message: 'Success to apply tunneling option'});
+                toast.push({tone: 'pulse', message: t('tunnelEdit.applied')});
                 navigate('#/tunnels');
             } else {
                 // 접두어는 유지한다(configuration-editor 테스트가 /Fail/ 로 기다린다).
-                toast.push({tone: 'alarm', message: 'Fail to apply tunneling option: ' + tunnelErrorMessage(result.code, result.message)});
+                toast.push({tone: 'alarm', message: t('tunnel.applyFailed', {reason: errorMessageOf(result)})});
             }
         } catch(e) {
             console.error(e);
@@ -397,10 +415,10 @@
             const result = await ServerOptionCtrl.instance.removeTunnelingOption(payload, snapshotRevision);
             loading = false;
             if(result.success) {
-                toast.push({tone: 'pulse', message: 'Tunneling option has been removed. The external server has been shut down.'});
+                toast.push({tone: 'pulse', message: t('tunnelEdit.removed')});
                 navigate('#/tunnels');
             } else {
-                toast.push({tone: 'alarm', message: 'Fail: ' + result.message});
+                toast.push({tone: 'alarm', message: t('tunnelEdit.removeFailed', {reason: errorMessageOf(result)})});
             }
         } catch(e) {
             console.error(e);
@@ -429,10 +447,11 @@
 
 {#if option}
 {#if !isNew}
-    <TunnelStatusArea port={option.originalForwardPort ?? option.forwardPort} editable={!readOnly} onsessionout={sessionOut} />
+    <TunnelStatusArea port={option.originalForwardPort ?? option.forwardPort} editable={toggleable} onsessionout={sessionOut} />
 {/if}
 {#if readOnly}
-    <p id="tunnel-readonly-note">This tunnel is shared with you as read only.</p>
+    <!-- 이슈 347: 켤 수는 있지만 고칠 수 없는 사용자(toggle 소유자·공유받은 사용자)에게는 켜고 끌 수 있다고 알린다. -->
+    <p id="tunnel-readonly-note">{t(toggleable ? 'tunnelEdit.toggleOnlyNote' : 'tunnelEdit.readOnlyNote')}</p>
 {/if}
 <form class="tunnel-edit" onsubmit={(e) => e.preventDefault()}>
 <!-- 읽기 전용이면 fieldset 이 안의 입력(부품·appender 포함)을 모두 비활성화한다. -->
@@ -440,88 +459,97 @@
     {#if !isNew && !restricted}
         <Card>
             <div class="form-stack">
-                <Field label="Owner" for="tunnel-owner">
+                <Field label={t('tunnelEdit.owner')} for="tunnel-owner">
                     <div style="display: flex; gap: var(--s-2); align-items: center;">
                         <Select id="tunnel-owner" options={owners} bind:value={ownerId} />
-                        <Button disabled={ownerId === (option.owner?.id ?? '')} onclick={() => (ownerOpen = true)}>Change owner</Button>
+                        <Button disabled={ownerId === (option.owner?.id ?? '')} onclick={() => (ownerOpen = true)}>{t('tunnelEdit.changeOwner')}</Button>
                     </div>
+                </Field>
+            </div>
+        </Card>
+    {/if}
+    {#if canShare}
+        <Card>
+            <div class="form-stack">
+                <Field label={t('tunnelEdit.sharedWith')} for="tunnel-share-input" hint={t('tunnelEdit.sharedWithHint')}>
+                    <ShareUsersField bind:users={sharedUsers} ownerId={option.owner?.id ?? $me?.user.id} onsessionout={sessionOut} />
                 </Field>
             </div>
         </Card>
     {/if}
     <Card>
         <div class="form-stack">
-            <Field label="Name" for="input-name" hint="Optional" error={nameError || undefined}>
+            <Field label={t('tunnelEdit.name')} for="input-name" hint={t('tunnelEdit.optional')} error={nameError || undefined}>
                 <TextInput id="input-name" autocomplete="off" bind:value={nameInput} />
             </Field>
-            <Field label="External server port" for="input-external-port" hint={restricted ? policy!.portHint() : undefined} error={portError}>
+            <Field label={t('tunnelEdit.externalPort')} for="input-external-port" hint={restricted ? policy!.portHint() : undefined} error={portError}>
                 <NumberInput id="input-external-port" min={1} max={65535} bind:value={option.forwardPort}
                     oninput={(v) => (option!.forwardPort = clampPort(v) as number)} />
             </Field>
-            <Checkbox id="input-tls" label="Secure tunneling Server/Client" bind:checked={option.tls}
+            <Checkbox id="input-tls" label={t('tunnelEdit.secureTunneling')} bind:checked={option.tls}
                 disabled={option.protocol !== 'tcp'} onchange={() => onChangeSecureTunneling(option!.forwardPort)} />
             {#if option.tls === true}
                 {#if restricted}
-                    <p id="tunnel-cert-note">A generated certificate will be used.</p>
+                    <p id="tunnel-cert-note">{t('tunnelEdit.generatedCert')}</p>
                 {:else}
                     <div id="tunnel-cert">
                         <InputCertFile certInfo={option.certInfo} hideMessage={true} onupdate={(value) => (option!.certInfo = value)} />
                     </div>
                 {/if}
-                <Field label="Destination certificate"
-                    hint="When checked, the client accepts any certificate from the destination server, including self-signed ones. Use it only on a trusted network.">
+                <Field label={t('tunnelEdit.destinationCert')}
+                    hint={t('tunnelEdit.destinationCertHint')}>
                     <!-- 옛 설정에는 이 값이 없어 undefined 다. 기본값이 있는 bind 는 undefined 를 받지 못하므로 함수 바인딩을 쓴다. -->
-                    <Checkbox id="input-allow-self-signed" label="Skip certificate verification (allow self-signed)"
+                    <Checkbox id="input-allow-self-signed" label={t('tunnelEdit.skipVerification')}
                         bind:checked={() => option!.allowSelfSignedDestinationCert === true, (on) => (option!.allowSelfSignedDestinationCert = on)} />
                 </Field>
             {/if}
-            <Field label="Destination host" for="input-destination-host">
+            <Field label={t('tunnelEdit.destinationHost')} for="input-destination-host">
                 <TextInput id="input-destination-host" bind:value={option.destinationAddress} />
             </Field>
-            <Field label="Destination port" for="input-destination-port">
+            <Field label={t('tunnelEdit.destinationPort')} for="input-destination-port">
                 <NumberInput id="input-destination-port" min={1} max={65535} bind:value={option.destinationPort}
                     oninput={(v) => (option!.destinationPort = clampPort(v) as number)} />
             </Field>
             {#if restricted}
-                <Field label="Trusted clients" error={trustedError || undefined}>
+                <Field label={t('nav.trustedClients')} error={trustedError || undefined}>
                     <div style="display: flex; flex-wrap: wrap; gap: var(--s-4);">
                         {#each restrictedClientIds as clientId (clientId)}
                             <Checkbox id={`tunnel-trusted-${clientId}`}
-                                label={loadedOutsideIds.includes(clientId) ? `${clientId} (not allowed for your group)` : clientId}
+                                label={loadedOutsideIds.includes(clientId) ? t('tunnelEdit.clientNotAllowed', {clientId}) : clientId}
                                 bind:checked={() => trusted(clientId), (on) => setTrusted(clientId, on)} />
                         {:else}
-                            <p>No trusted clients are allowed for your group.</p>
+                            <p>{t('tunnelEdit.noTrustedClientsForGroup')}</p>
                         {/each}
                     </div>
                 </Field>
                 {#if outsideGroupClientIds.length > 0}
-                    <p id="tunnel-trusted-not-allowed" role="note" style="margin: 0; color: var(--alarm);">Your group does not allow {outsideGroupClientIds.join(', ')}. Clear it before you save.</p>
+                    <p id="tunnel-trusted-not-allowed" role="note" style="margin: 0; color: var(--alarm);">{t('tunnelEdit.groupDisallows', {ids: outsideGroupClientIds.join(', ')})}</p>
                 {/if}
             {:else}
-                <Field label="Trusted client IDs">
+                <Field label={t('tunnelEdit.trustedClientIds')}>
                     <div style="display: flex; flex-wrap: wrap; gap: var(--s-4);">
                         {#each superuserClientIds as clientId (clientId)}
                             <Checkbox id={`tunnel-client-id-${clientId}`} label={allTrustedClients.find((c) => c.clientId === clientId)?.displayName ?? clientId}
                                 bind:checked={() => option!.allowedClientIds?.includes(clientId) === true, (on) => setSuperuserClientId(clientId, on)} />
                         {:else}
-                            <p>No trusted clients are registered.</p>
+                            <p>{t('group.noTrustedClients')}</p>
                         {/each}
                     </div>
                 </Field>
-                <Field label="Allowed client names (Separate names with semicolon(;))" for="input-allow-client-names">
+                <Field label={t('tunnelEdit.allowedClientNames')} for="input-allow-client-names">
                     <TextInput id="input-allow-client-names" bind:value={option.allowedClientNamesQuery} />
                 </Field>
                 {#if groupsUnavailable && (option.allowedClientIds ?? []).length > 0}
-                    <p id="tunnel-client-ids-owner-unknown" role="note" style="margin: 0; color: var(--ink-2);">Could not read the owner's group, so these IDs are not checked against it.</p>
+                    <p id="tunnel-client-ids-owner-unknown" role="note" style="margin: 0; color: var(--ink-2);">{t('tunnelEdit.ownerGroupUnknown')}</p>
                 {/if}
                 {#if notAllowedForOwner.length > 0}
-                    <p id="tunnel-client-ids-not-allowed" role="alert" style="margin: 0; color: var(--alarm);">The owner's group does not allow {notAllowedForOwner.join(', ')}. The owner cannot save this tunnel until it is removed.</p>
+                    <p id="tunnel-client-ids-not-allowed" role="alert" style="margin: 0; color: var(--alarm);">{t('tunnelEdit.ownerGroupDisallows', {ids: notAllowedForOwner.join(', ')})}</p>
                 {/if}
                 {#if (option.allowedClientIds ?? []).length > 0}
-                    <p id="tunnel-client-ids-priority" role="note" style="margin: 0; color: var(--ink-2);">Trusted client IDs are set, so the client names above are ignored.</p>
+                    <p id="tunnel-client-ids-priority" role="note" style="margin: 0; color: var(--ink-2);">{t('tunnelEdit.idsOverrideNames')}</p>
                 {/if}
             {/if}
-            <Field label="Keep-Alive timeout (ms)" for="input-active-timeout">
+            <Field label={t('tunnelEdit.keepAlive')} for="input-active-timeout">
                 <!-- 새 터널에는 keepAlive 가 없다. 그대로 bind 하면 fallback 이 있는 prop 에 undefined 가 들어가 Svelte 가 거부하므로,
                      읽기는 null 로 바꾸고 쓰기는 빈 값을 다시 undefined 로 되돌려 옛 저장 본문과 같은 모양을 지킨다. -->
                 <NumberInput id="input-active-timeout"
@@ -529,62 +557,62 @@
             </Field>
         </div>
     </Card>
-    <Card label="Buffer limit per session (MiB)">
+    <Card label={t('tunnelEdit.bufferLimit')}>
         <div class="two-col">
-            <Field label="Server" for="input-buffer-limit-server"
-                error={validServerBuffer(option.bufferLimitOnServer) ? undefined : 'Server buffer must be a finite number of at least 1 MiB.'}>
+            <Field label={t('tunnelEdit.server')} for="input-buffer-limit-server"
+                error={validServerBuffer(option.bufferLimitOnServer) ? undefined : t('tunnelEdit.serverBufferInvalid')}>
                 <NumberInput id="input-buffer-limit-server" min={1} step="any"
                     invalid={!validServerBuffer(option.bufferLimitOnServer)} bind:value={option.bufferLimitOnServer} />
             </Field>
-            <Field label="Client" for="input-buffer-limit-client">
+            <Field label={t('tunnelEdit.client')} for="input-buffer-limit-client">
                 <NumberInput id="input-buffer-limit-client" bind:value={option.bufferLimitOnClient}
                     oninput={(v) => (option!.bufferLimitOnClient = clampClientBuffer(v) as number)} />
             </Field>
         </div>
         <ul class="notes">
-            <li>Server buffer: finite values of at least 1 MiB; fractions are allowed.</li>
-            <li>Client buffer: nonpositive values retain the existing unlimited setting.</li>
-            <li>Positive limits spill excess buffered data to the file cache.</li>
+            <li>{t('tunnelEdit.serverBufferNote')}</li>
+            <li>{t('tunnelEdit.clientBufferNote')}</li>
+            <li>{t('tunnelEdit.spillNote')}</li>
         </ul>
     </Card>
     <Card>
         <div class="form-stack">
-            <Field label="Protocol" for="select-protocol">
+            <Field label={t('tunnelEdit.protocol')} for="select-protocol">
                 <Select id="select-protocol" options={protocolOptions} bind:value={option.protocol} onchange={onChangeProtocol} />
             </Field>
             {#if option.rateLimit}
-                <Card label="Rate limit">
+                <Card label={t('tunnelEdit.rateLimit')}>
                     <div class="form-stack">
                         <!-- 스위치도 사용자가 고친 값이다(D9). 끈 뒤 프로토콜을 바꿔도 기본값으로 되돌리지 않는다. -->
-                        <Switch ariaLabel="Rate limit enabled" disabled={readOnly} bind:on={option.rateLimit.enabled}
+                        <Switch ariaLabel={t('tunnelEdit.rateLimitEnabled')} disabled={readOnly} bind:on={option.rateLimit.enabled}
                             onchange={() => { if(option?.rateLimit) option.rateLimit.customized = true; }} />
-                        <Field label="Window (seconds)" for="input-rate-window" error={!rateTouched.window || inRange(rateWindow, RATE_RANGES.window) ? undefined : '1..3600'}>
+                        <Field label={t('tunnelEdit.window')} for="input-rate-window" error={!rateTouched.window || inRange(rateWindow, RATE_RANGES.window) ? undefined : '1..3600'}>
                             <NumberInput id="input-rate-window" min={1} max={3600} invalid={rateTouched.window && !inRange(rateWindow, RATE_RANGES.window)}
                                 bind:value={rateWindow} oninput={() => onRateInput('window')} />
                         </Field>
-                        <Field label="Max connections per IP" for="input-rate-max" error={!rateTouched.max || inRange(rateMax, RATE_RANGES.max) ? undefined : '1..100000'}>
+                        <Field label={t('tunnelEdit.maxPerIp')} for="input-rate-max" error={!rateTouched.max || inRange(rateMax, RATE_RANGES.max) ? undefined : '1..100000'}>
                             <NumberInput id="input-rate-max" min={1} max={100000} invalid={rateTouched.max && !inRange(rateMax, RATE_RANGES.max)}
                                 bind:value={rateMax} oninput={() => onRateInput('max')} />
                         </Field>
-                        <Field label="Ban duration (minutes)" for="input-rate-ban" error={!rateTouched.ban || inRange(rateBan, RATE_RANGES.ban) ? undefined : '1..1440'}>
+                        <Field label={t('tunnelEdit.banDuration')} for="input-rate-ban" error={!rateTouched.ban || inRange(rateBan, RATE_RANGES.ban) ? undefined : '1..1440'}>
                             <NumberInput id="input-rate-ban" min={1} max={1440} invalid={rateTouched.ban && !inRange(rateBan, RATE_RANGES.ban)}
                                 bind:value={rateBan} oninput={() => onRateInput('ban')} />
                         </Field>
-                        <p class="notes" style="margin: 0; padding: 0; list-style: none;">Blocks an IP that opens more than N connections within the window. Browsers open several connections per page; keep HTTP limits higher.</p>
+                        <p class="notes" style="margin: 0; padding: 0; list-style: none;">{t('tunnelEdit.rateLimitNote')}</p>
                     </div>
                 </Card>
             {/if}
             {#if (option.protocol === 'http' || option.protocol === 'https') && (policy?.showHttpOptions ?? true)}
-                <h2 class="section-title">HTTP options</h2>
+                <h2 class="section-title">{t('tunnelEdit.httpOptions')}</h2>
                 {#if policy?.rewrite.host ?? true}
-                    <Field label="Replace host (address) in text body" for="select-change-host-in-body">
+                    <Field label={t('tunnelEdit.replaceHost')} for="select-change-host-in-body">
                         <Select id="select-change-host-in-body" options={ENABLED}
                             value={String(option.httpOption.rewriteHostInTextBody ?? true)}
                             onchange={(v) => (option!.httpOption.rewriteHostInTextBody = v === 'true')} />
                     </Field>
                 {/if}
                 {#if policy?.rewrite.cors ?? true}
-                    <Field label="Replace Access-Control-Allow-Origin header" for="select-change-acao">
+                    <Field label={t('tunnelEdit.replaceAcao')} for="select-change-acao">
                         <Select id="select-change-acao" options={ENABLED}
                             value={String(option.httpOption.replaceAccessControlAllowOrigin ?? false)}
                             onchange={(v) => (option!.httpOption.replaceAccessControlAllowOrigin = v === 'true')} />
@@ -592,27 +620,33 @@
                 {/if}
                 {#if policy?.rewrite.header ?? true}
                     <div id="http-request-headers">
-                        <Field label="Inject request header">
+                        <Field label={t('tunnelEdit.injectRequestHeader')}>
                             <HeaderAppender bind:options={option.httpOption.customRequestHeaders} />
                         </Field>
                     </div>
                     <div id="http-response-headers">
-                        <Field label="Inject response header">
+                        <Field label={t('tunnelEdit.injectResponseHeader')}>
                             <HeaderAppender bind:options={option.httpOption.customResponseHeaders} />
                         </Field>
                     </div>
                 {/if}
                 {#if policy?.rewrite.body ?? true}
                     <div id="http-body-rewrite">
-                        <Field label="Replace text in body">
+                        <Field label={t('tunnelEdit.replaceBody')}>
                             <BodyReplaceAppender bind:options={option.httpOption.bodyRewriteRules} />
                         </Field>
                     </div>
                 {/if}
             {/if}
-            <Field label="Startup"
-                hint="Applies when the server starts, when the tunnel is created, and when you save a tunnel that is not Online. Saving an Online tunnel keeps its activation switch and its timer.">
-                <Checkbox id="input-inactive-on-startup" label="Inactive on startup" bind:checked={option.inactiveOnStartup} />
+            <Field label={t('tunnelEdit.startup')}
+                hint={t('tunnelEdit.startupHint')}>
+                <Checkbox id="input-inactive-on-startup" label={t('tunnelEdit.inactiveOnStartup')} bind:checked={option.inactiveOnStartup} />
+            </Field>
+            <Field label={t('tunnelEdit.allowedIp')}
+                hint={t('tunnelEdit.allowedIpHint')}>
+                <!-- 이슈 348 FR-19: 옛 터널은 서버가 false 로 준다. 함수 바인딩으로 undefined 도 꺼짐으로 받는다. -->
+                <Checkbox id="input-activator-ip-only" label={t('tunnelEdit.activatorIpOnly')}
+                    bind:checked={() => option!.activatorIpOnly === true, (on) => (option!.activatorIpOnly = on)} />
             </Field>
         </div>
     </Card>
@@ -620,29 +654,29 @@
 </form>
 {#if !readOnly}
 <div class="edit-bar">
-    <Button variant="primary" disabled={!updatable} onclick={apply}>{option.isSync ? 'Apply and Restart' : 'Start'}</Button>
+    <Button variant="primary" disabled={!updatable} onclick={apply}>{t(option.isSync ? 'tunnelEdit.applyAndRestart' : 'tunnelEdit.start')}</Button>
     {#if option.isSync}
-        <Button variant="danger" onclick={() => (confirmOpen = true)}>Stop and Remove</Button>
+        <Button variant="danger" onclick={() => (confirmOpen = true)}>{t('tunnelEdit.stopAndRemove')}</Button>
     {/if}
 </div>
 {/if}
-<Modal bind:open={ownerOpen} title="Change owner">
-    Move tunnel {option.forwardPort} to {ownerLabel}?
+<Modal bind:open={ownerOpen} title={t('tunnelEdit.changeOwner')}>
+    {t('tunnelEdit.moveConfirm', {port: option.forwardPort, owner: ownerLabel})}
     {#snippet footer()}
-        <Button onclick={() => (ownerOpen = false)}>Cancel</Button>
-        <Button variant="primary" onclick={() => { void reassign(); }}>Move</Button>
+        <Button onclick={() => (ownerOpen = false)}>{t('common.cancel')}</Button>
+        <Button variant="primary" onclick={() => { void reassign(); }}>{t('tunnelEdit.move')}</Button>
     {/snippet}
 </Modal>
-<Modal bind:open={confirmOpen} title="Remove tunnel">
-    Remove tunnel {option.forwardPort}? The external server will be stopped.
+<Modal bind:open={confirmOpen} title={t('tunnelEdit.removeTitle')}>
+    {t('tunnelEdit.removeConfirm', {port: option.forwardPort})}
     {#snippet footer()}
-        <Button onclick={() => (confirmOpen = false)}>Cancel</Button>
-        <Button variant="danger" onclick={() => { confirmOpen = false; remove(); }}>Remove</Button>
+        <Button onclick={() => (confirmOpen = false)}>{t('common.cancel')}</Button>
+        <Button variant="danger" onclick={() => { confirmOpen = false; remove(); }}>{t('common.remove')}</Button>
     {/snippet}
 </Modal>
 {/if}
 {#if loading}<Loading overlay />{/if}
-<Modal bind:open={alertOpen} title="Tunnel">
+<Modal bind:open={alertOpen} title={t('tunnelEdit.alertTitle')}>
     {alertMessage}
     {#snippet footer()}
         <Button variant="primary" onclick={() => { alertOpen = false; alertClose(); }}>{alertButton}</Button>

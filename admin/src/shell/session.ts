@@ -2,6 +2,7 @@ import {getContext, setContext} from 'svelte';
 import LoginCtrl from '../controller/LoginCtrl';
 import {clearMe} from '../me';
 import {navigate} from '../router';
+import {markSignedOut} from '../util/passkey';
 
 export type SessionContext = {invalidate(): void};
 
@@ -19,6 +20,7 @@ export const useSession = (): SessionContext => getContext<SessionContext | unde
 export async function signOut(ctx: SessionContext): Promise<void> {
     try { await LoginCtrl.logout(); } catch { /* 이미 끊긴 세션이면 InvalidSession 이 온다. 로그인 화면으로 가는 것은 같다 */ }
     clearMe();
+    markSignedOut();
     // 해시를 남기면 다음에 로그인한 다른 사용자가 권한 없는 화면에서 시작한다. 기본 화면으로 되돌린다.
     navigate('#/tunnels');
     ctx.invalidate();

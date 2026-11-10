@@ -29,7 +29,7 @@ describe("AdmissionController denial records (#327)", () => {
         expect(controller.admit({kind: "admin"}, "127.0.0.1", 5)).toMatchObject({reason: "geo-deny"});
 
         expect(controller.snapshot()).toEqual({
-            ports: {"1": {rejectedGeo: 1, rejectedBlocklist: 1, rejectedBans: 1, rejectedExceeded: 1, rejectedConcurrency: 1, bannedIps: 1}},
+            ports: {"1": {rejectedGeo: 1, rejectedBlocklist: 1, rejectedBans: 1, rejectedExceeded: 1, rejectedConcurrency: 1, rejectedActivatorIp: 0, bannedIps: 1}},
             admin: {rejectedGeo: 1}
         });
     });
@@ -41,7 +41,7 @@ describe("AdmissionController denial records (#327)", () => {
         controller.admit({kind: "tunnel", port: 7, protocol: "tcp"}, "127.0.0.1", 0);
 
         expect(controller.snapshot().ports["7"]).toEqual({rejectedGeo: 1, rejectedBlocklist: 0, rejectedBans: 0,
-            rejectedExceeded: 0, rejectedConcurrency: 0, bannedIps: 0});
+            rejectedExceeded: 0, rejectedConcurrency: 0, rejectedActivatorIp: 0, bannedIps: 0});
     });
 
     it("AC-1c keeps the counts after the tunnel is reconfigured or released, also for the tunnel status counts", () => {

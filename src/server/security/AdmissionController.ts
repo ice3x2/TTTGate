@@ -11,6 +11,7 @@ import {IpBlocklist} from "./IpBlocklist";
 import {DenialScope, DenialTally} from "./DenialTally";
 import {RecentDenial, RecentDenials} from "./RecentDenials";
 import {DenialFileLog} from "./DenialFileLog";
+import {isActivatorIpAllowed} from "./ActivatorIps";
 
 export type TunnelRateLimitSource = {
     forwardPort: number;
@@ -20,9 +21,15 @@ export type TunnelRateLimitSource = {
 export const PRUNE_INTERVAL_MS = 30_000;
 
 export type PortDenialStats = {rejectedGeo: number; rejectedBlocklist: number; rejectedBans: number;
-    rejectedExceeded: number; rejectedConcurrency: number; bannedIps: number};
+    rejectedExceeded: number; rejectedConcurrency: number; rejectedActivatorIp: number; bannedIps: number};
+
+/** 이슈 348: 포트별 허용 IP. undefined 면 그 포트는 IP 제한이 꺼져 있다. */
+export type ActivatorIpProvider = (port: number) => ReadonlySet<string> | undefined;
 
 const IP_BLOCKLIST_DENY: AdmissionDenial = Object.freeze({allowed: false, reason: 'ip-blocklist'});
+const ACTIVATOR_IP_DENY: AdmissionDenial = Object.freeze({allowed: false, reason: 'activator-ip'});
+/** 이슈 348: 주소를 모르는 연결의 거부 기록에 남기는 IP 표기. */
+const UNKNOWN_ADDRESS = 'unknown';
 
 export class AdmissionController implements AdmissionPolicy {
     private static _instance: AdmissionController | undefined;
@@ -52,6 +59,8 @@ export class AdmissionController implements AdmissionPolicy {
     // #123 (U5-08) 동시 연결 상한. 소유자·그룹은 TTTServer 가 넘긴 limiter 가 판정 시점에 읽는다(rbac 를 import 하지 않는다).
     private _concurrency: ConcurrencyLimiter | null = null;
     private _onConcurrencyDenied: ((port: number, denial: ConcurrencyDenial, now: number) => void) | null = null;
+    // 이슈 348: 켠 사람의 IP 만 받는 터널의 허용 IP. 저장소와 권한은 TTTServer 가 넘긴 함수가 판정 시점에 읽는다.
+    private _activatorIps: ActivatorIpProvider | null = null;
     private readonly _concurrencyAuditGate = new AuditRateGate(60_000);
     private _pruneTimer: NodeJS.Timeout | undefined;
 
@@ -124,6 +133,11 @@ export class AdmissionController implements AdmissionPolicy {
         this._concurrency = limiter;
     }
 
+    /** 이슈 348: 포트별 허용 IP 공급 함수. null 이면 어느 터널도 IP 로 제한하지 않는다. */
+    public attachActivatorIps(provider: ActivatorIpProvider | null): void {
+        this._activatorIps = provider;
+    }
+
     /** 동시 연결 상한 거절 알림. 포트·그룹별 1분에 한 번만 부른다(감사용). */
     public set onConcurrencyDenied(callback: ((port: number, denial: ConcurrencyDenial, now: number) => void) | null) {
         this._onConcurrencyDenied = callback;
@@ -139,7 +153,8 @@ export class AdmissionController implements AdmissionPolicy {
     }
 
     public admit(scope: AdmissionScope, remoteAddress: string | undefined, now: number = Date.now()): AdmissionDecision {
-        if (remoteAddress === undefined) return ADMIT;
+        // 주소를 모르면 다른 판정은 허용하지만, 켠 사람의 IP 만 받는 터널은 거부한다(이슈 348).
+        if (remoteAddress === undefined) return this.refusedActivatorIp(scope, undefined, now) ?? ADMIT;
         const ip = normalizeRemoteAddress(remoteAddress);
 
         const refused = this.refusedAddress(scope, ip, now);
@@ -176,23 +191,36 @@ export class AdmissionController implements AdmissionPolicy {
     }
 
     /**
-     * #287 TLS 외부 포트가 핸드셰이크 전에 부르는 판정. 이미 거절하기로 정해진 주소(차단 목록, 레이트 리밋 차단 중)만 거절한다.
-     * 국가 조회·레이트 리밋 계수·동시 연결 상한은 핸드셰이크 뒤의 admit 이 한다.
+     * #287 TLS 외부 포트가 핸드셰이크 전에 부르는 판정. 이미 거절하기로 정해진 주소(차단 목록, 레이트 리밋 차단 중, 이슈 348 의
+     * 켠 사람이 아닌 IP)만 거절한다. 국가 조회·레이트 리밋 계수·동시 연결 상한은 핸드셰이크 뒤의 admit 이 한다.
      */
     public admitBeforeHandshake(scope: AdmissionScope, remoteAddress: string | undefined, now: number = Date.now()): AdmissionDecision {
-        if (remoteAddress === undefined) return ADMIT;
+        if (remoteAddress === undefined) return this.refusedActivatorIp(scope, undefined, now) ?? ADMIT;
         return this.refusedAddress(scope, normalizeRemoteAddress(remoteAddress), now) ?? ADMIT;
     }
 
     /**
      * 이미 거절하기로 정해진 터널 연결이면 그 거절을 거절 집계에 남기고 돌려준다. 관리 화면에는 적용하지 않는다.
      * 차단 목록(#286)을 먼저 본다. 그러면 국가 조회와 레이트 리밋 카운터를 쓰기 전에 거절한다.
+     * 이슈 348: 그 다음이 켠 사람의 IP 판정이다. 허용되지 않은 IP 는 국가 조회와 레이트 리밋 계수를 쓰지 않는다.
      */
     private refusedAddress(scope: AdmissionScope, ip: string, now: number): AdmissionDenial | undefined {
         if (scope.kind !== 'tunnel') return undefined;
         const denial = this.blocklist.isBlocked(scope.port, ip) ? IP_BLOCKLIST_DENY : this.rateLimiter.banned(scope.port, ip, now);
-        if (denial) this.recordDenial(scope, ip, denial.reason, now);
-        return denial;
+        if (denial) {
+            this.recordDenial(scope, ip, denial.reason, now);
+            return denial;
+        }
+        return this.refusedActivatorIp(scope, ip, now);
+    }
+
+    /** 이슈 348: IP 제한이 켜진 터널에서 허용 IP 가 아니면(주소를 모르면 포함) 거절을 기록하고 돌려준다. */
+    private refusedActivatorIp(scope: AdmissionScope, ip: string | undefined, now: number): AdmissionDenial | undefined {
+        if (scope.kind !== 'tunnel') return undefined;
+        const allowed = this._activatorIps?.(scope.port);
+        if (allowed === undefined || isActivatorIpAllowed(allowed, ip)) return undefined;
+        this.recordDenial(scope, ip ?? UNKNOWN_ADDRESS, ACTIVATOR_IP_DENY.reason, now);
+        return ACTIVATOR_IP_DENY;
     }
 
     private recordDenial(scope: AdmissionScope, ip: string, reason: AdmissionReason, now: number): void {
@@ -226,6 +254,7 @@ export class AdmissionController implements AdmissionPolicy {
                 rejectedBans: counts['rate-limit-ban'],
                 rejectedExceeded: counts['rate-limit-exceeded'],
                 rejectedConcurrency: counts['concurrency-limit'],
+                rejectedActivatorIp: counts['activator-ip'],
                 bannedIps: this.rateLimiter.stats(port).bannedIps
             };
         }

@@ -1,4 +1,6 @@
 import type {ClientStatus, SysInfo, Usage} from "../../admin/src/controller/Types";
+import {translator} from "../../admin/src/i18n";
+import {errorMessageOf} from "../../admin/src/i18n/serverError";
 
 // ServerStatusCtrl 의 메서드마다 AdminServer 가 감싸 보내는 봉투가 다르다.
 // 이 테스트는 각 메서드가 자기 봉투를 풀어 값을 돌려주는지 하나씩 대조해 고정한다.
@@ -34,14 +36,18 @@ const originalFetch = globalThis.fetch;
 let requested: string[] = [];
 
 // 경로마다 응답을 고정한다. 등록하지 않은 경로를 부르면 그 자리에서 드러나게 한다.
+// AdminRequest 를 거치는 메서드는 절대 주소로 부르므로 경로만 떼어 기록한다.
 const stubFetch = (responses: {[path: string]: StubResponse}): void => {
     (globalThis as any).fetch = async (input: string): Promise<any> => {
-        requested.push(input);
-        const entry = responses[input];
-        if(!entry) throw new Error(`Unexpected fetch: ${input}`);
-        return {status: entry.status ?? 200, json: async () => entry.body};
+        const path = new URL(input, "http://localhost:9300/").pathname;
+        requested.push(path);
+        const entry = responses[path];
+        if(!entry) throw new Error(`Unexpected fetch: ${path}`);
+        return new Response(JSON.stringify(entry.body), {status: entry.status ?? 200});
     };
 };
+
+const globals = globalThis as {window?: unknown};
 
 // 싱글턴 캐시가 테스트 사이에 새지 않도록 모듈 그래프를 매번 새로 만든다.
 // InvalidSession 도 같은 그래프에서 가져와야 instanceof 가 성립한다.
@@ -53,8 +59,14 @@ const loadModules = (): {ctrl: any; InvalidSession: any} => {
     };
 };
 
-beforeEach(() => { requested = []; });
-afterEach(() => { (globalThis as any).fetch = originalFetch; });
+beforeEach(() => {
+    requested = [];
+    globals.window = {location: new URL("http://localhost:9300/")};
+});
+afterEach(() => {
+    (globalThis as any).fetch = originalFetch;
+    delete globals.window;
+});
 
 test("getSysUsage 는 {success, sysUsage} 봉투를 풀어 cpu·memory 를 한 단계로 읽게 한다", async () => {
     stubFetch({"/api/sysUsage": {body: {success: true, sysUsage: USAGE}}});
@@ -81,47 +93,78 @@ test("getSysUsage 는 시스템 정보 캐시를 채우지 않으므로 뒤이�
     const {ctrl} = loadModules();
 
     await ctrl.instance.getSysUsage();
-    const sysInfo: SysInfo = await ctrl.instance.getSysInfo();
+    const result = await ctrl.instance.getSysInfo();
 
     expect(requested).toEqual(["/api/sysUsage", "/api/sysInfo"]);
-    expect(sysInfo.cpuInfo.model).toBe("Fixture CPU");
+    expect(result.sysInfo.cpuInfo.model).toBe("Fixture CPU");
 });
 
-test("getSysInfo 는 {success, sysInfo} 봉투를 풀고 두 번째 호출은 캐시로 답한다", async () => {
+// 이슈 349 검토 H-1: 시스템 정보 두 메서드는 실패를 예외가 아니라 실패 값으로 돌려준다. 화면은 errorMessageOf 로 번역해 보인다.
+test("getSysInfo 는 {success: true, sysInfo} 를 돌려주고 두 번째 호출은 캐시로 답한다", async () => {
     stubFetch({"/api/sysInfo": {body: {success: true, sysInfo: SYS_INFO}}});
     const {ctrl} = loadModules();
 
-    const first: SysInfo = await ctrl.instance.getSysInfo();
-    const second: SysInfo = await ctrl.instance.getSysInfo();
+    const first = await ctrl.instance.getSysInfo();
+    const second = await ctrl.instance.getSysInfo();
 
-    expect(first.osInfo.hostname).toBe("server-a");
-    expect(first.ram).toBe(8589934592);
-    expect(first.network.eth0[0].address).toBe("10.0.0.2");
-    expect((first as any).success).toBeUndefined();
+    expect(first.success).toBe(true);
+    const sysInfo: SysInfo = first.sysInfo;
+    expect(sysInfo.osInfo.hostname).toBe("server-a");
+    expect(sysInfo.ram).toBe(8589934592);
+    expect(sysInfo.network.eth0[0].address).toBe("10.0.0.2");
     expect(second).toEqual(first);
     expect(requested).toEqual(["/api/sysInfo"]);
 });
 
-test("getClientSysInfo 는 {success, sysInfo} 봉투를 풀고 id 별로 캐시한다", async () => {
+test("getClientSysInfo 는 {success: true, sysInfo} 를 돌려주고 id 별로 캐시한다", async () => {
     stubFetch({"/api/clientSysInfo/1": {body: {success: true, sysInfo: SYS_INFO}}});
     const {ctrl} = loadModules();
 
-    const first: SysInfo = await ctrl.instance.getClientSysInfo(1);
-    const second: SysInfo = await ctrl.instance.getClientSysInfo(1);
+    const first = await ctrl.instance.getClientSysInfo(1);
+    const second = await ctrl.instance.getClientSysInfo(1);
 
-    expect(first.cpuInfo.cores).toBe(4);
-    expect(first.osInfo.type).toBe("Linux");
-    expect((first as any).success).toBeUndefined();
-    expect((first as any).sysInfo).toBeUndefined();
-    expect(second).toBe(first);
+    expect(first.success).toBe(true);
+    expect(first.sysInfo.cpuInfo.cores).toBe(4);
+    expect(first.sysInfo.osInfo.type).toBe("Linux");
+    expect(second.sysInfo).toBe(first.sysInfo);
     expect(requested).toEqual(["/api/clientSysInfo/1"]);
 });
 
-test("getClientSysInfo 는 success 가 false 면 서버 문구를 담은 Error 를 던진다", async () => {
-    stubFetch({"/api/clientSysInfo/2": {status: 400, body: {success: false, message: "Invalid client ID"}}});
+test("getClientSysInfo 는 서버가 거절하면 code 를 담은 실패 값을 돌려주고 캐시하지 않는다", async () => {
+    stubFetch({"/api/clientSysInfo/2": {status: 400, body: {success: false, code: "invalid_client_id", message: "Invalid client ID"}}});
     const {ctrl} = loadModules();
 
-    await expect(ctrl.instance.getClientSysInfo(2)).rejects.toThrow("Invalid client ID");
+    const result = await ctrl.instance.getClientSysInfo(2);
+    await ctrl.instance.getClientSysInfo(2);
+
+    expect(result).toMatchObject({success: false, status: 400, code: "invalid_client_id"});
+    expect(errorMessageOf(result, "fallback", translator("ko"))).toBe("클라이언트 ID가 올바르지 않습니다.");
+    expect(errorMessageOf(result, "fallback", translator("en"))).toBe("Invalid client ID");
+    expect(requested).toEqual(["/api/clientSysInfo/2", "/api/clientSysInfo/2"]);
+});
+
+test("getSysInfo 는 서버가 거절하면 실패 값을 돌려주고 캐시하지 않는다", async () => {
+    stubFetch({"/api/sysInfo": {status: 403, body: {success: false, code: "forbidden", message: "Forbidden"}}});
+    const {ctrl} = loadModules();
+
+    const result = await ctrl.instance.getSysInfo();
+    await ctrl.instance.getSysInfo();
+
+    expect(result).toMatchObject({success: false, status: 403, code: "forbidden"});
+    expect(requested).toEqual(["/api/sysInfo", "/api/sysInfo"]);
+});
+
+test("시스템 정보 요청이 서버에 닿지 못하면 실패 값이 되고, 화면 문구는 원문 대신 대체 문구다", async () => {
+    (globalThis as any).fetch = async (): Promise<any> => { throw new TypeError("Failed to fetch"); };
+    const {ctrl} = loadModules();
+
+    const server = await ctrl.instance.getSysInfo();
+    const client = await ctrl.instance.getClientSysInfo(1);
+
+    expect(server.success).toBe(false);
+    expect(client.success).toBe(false);
+    expect(errorMessageOf(server, "연결 실패", translator("ko"))).toBe("연결 실패");
+    expect(errorMessageOf(client, "연결 실패", translator("ko"))).toBe("연결 실패");
 });
 
 test("getClientStatus 는 {success, statuses} 봉투를 풀어 배열을 돌려준다", async () => {

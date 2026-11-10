@@ -1,4 +1,4 @@
-import {AllowedProtocol, RewritePermissions} from "./IdentityTypes";
+import {AllowedProtocol, Failure, failure, RewritePermissions} from "./IdentityTypes";
 import {Principal} from "./Principal";
 import {TunnelingOption} from "../../types/TunnelingOption";
 
@@ -11,7 +11,7 @@ export type EnforceMode = 'create' | 'update';
  */
 export type EnforceContext = {ownedCount: number; trustedClientIds: string[]; maxServerBufferMiB?: number; currentServerBufferMiB?: number};
 
-export type EnforceResult = {success: true} | {success: false; status: 403 | 409 | 422; code: string; message: string};
+export type EnforceResult = {success: true} | Failure<403 | 409 | 422>;
 
 const ALLOWED: EnforceResult = Object.freeze({success: true});
 
@@ -139,8 +139,6 @@ function assertUsage(next: unknown, mode: unknown, context: unknown): void {
     }
 }
 
-const failure = (status: 409 | 422, code: string, message: string): EnforceResult => ({success: false, status, code, message});
-
 /**
  * 일반 유저의 터널 입력을 그룹 속성으로 검사한다. update 때도 next 전체를 검사하므로, 그룹 속성이 나중에 좁아져
  * 이미 범위 밖이 된 터널은 일반 유저가 고칠 수 없다. 첫 실패에서 멈춘다.
@@ -154,25 +152,25 @@ export function enforce(principal: Principal, next: TunnelingOption, mode: Enfor
     const attributes: Record<string, unknown> = isRecord(principal.attributes) ? principal.attributes : {};
 
     if(mode === 'create' && context.ownedCount >= tunnelLimitOf(attributes)) {
-        return failure(409, 'tunnel_count_exceeded', `tunnel count limit reached (${tunnelLimitOf(attributes)})`);
+        return failure(409, 'tunnel_count_exceeded', `tunnel count limit reached (${tunnelLimitOf(attributes)})`, {limit: tunnelLimitOf(attributes)});
     }
     if(!isPortAllowed(attributes, next.forwardPort)) {
-        return failure(422, 'port_not_allowed', `forwardPort ${String(next.forwardPort)} is outside allowed_port_range`);
+        return failure(422, 'port_not_allowed', `forwardPort ${String(next.forwardPort)} is outside allowed_port_range`, {port: next.forwardPort});
     }
     const protocols = requiredProtocols(next);
     if(protocols === undefined) {
-        return failure(422, 'protocol_not_allowed', `protocol ${String(next.protocol)} is not supported`);
+        return failure(422, 'protocol_not_allowed', `protocol ${String(next.protocol)} is not supported`, {protocol: next.protocol});
     }
     const allowedProtocols = listOf(attributes.allowed_protocols);
     const missingProtocol = protocols.find((protocol) => !allowedProtocols.includes(protocol));
     if(missingProtocol !== undefined) {
-        return failure(422, 'protocol_not_allowed', `protocol ${missingProtocol} is not in allowed_protocols`);
+        return failure(422, 'protocol_not_allowed', `protocol ${missingProtocol} is not in allowed_protocols`, {protocol: missingProtocol});
     }
     const maxBuffer = context.maxServerBufferMiB;
     // 이미 저장된 값을 바꾸지 않는 수정은 받는다. 상한을 낮춘 뒤에도 기존 터널의 다른 항목은 고칠 수 있어야 한다.
     const unchangedBuffer = context.currentServerBufferMiB !== undefined && next.bufferLimitOnServer === context.currentServerBufferMiB;
     if(!unchangedBuffer && typeof maxBuffer === 'number' && maxBuffer > 0 && typeof next.bufferLimitOnServer === 'number' && next.bufferLimitOnServer > maxBuffer) {
-        return failure(422, 'buffer_limit_exceeded', `bufferLimitOnServer must be at most ${maxBuffer} MiB`);
+        return failure(422, 'buffer_limit_exceeded', `bufferLimitOnServer must be at most ${maxBuffer} MiB`, {max: maxBuffer});
     }
     if(!hasNoLegacyClientNames(next.allowedClientNames)) {
         return failure(422, 'legacy_client_names_not_allowed', 'allowedClientNames is not allowed; use allowedClientIds');
@@ -184,7 +182,8 @@ export function enforce(principal: Principal, next: TunnelingOption, mode: Enfor
     const deniedRewrite = requestedRewrites(next).find((entry) => !isRewriteGranted(attributes, entry.permission));
     if(deniedRewrite !== undefined) {
         return failure(422, 'rewrite_not_allowed',
-            `http rewrite permission '${deniedRewrite.permission}' is required by ${deniedRewrite.field}`);
+            `http rewrite permission '${deniedRewrite.permission}' is required by ${deniedRewrite.field}`,
+            {permission: deniedRewrite.permission, field: deniedRewrite.field});
     }
     return ALLOWED;
 }

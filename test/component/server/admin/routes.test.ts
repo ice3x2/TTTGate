@@ -64,6 +64,9 @@ const EXPECTED_ROUTES: ReadonlyArray<ExpectedRoute> = [
     {method: "DELETE", pattern: "^/api/tunnelingOption$", action: "tunnel:delete", hasTarget: true},
     {method: "PUT", pattern: "^/api/tunnelingOption/(?<port>[^/]*)/owner$", action: "tunnel:reassign", hasTarget: true},
     {method: "POST", pattern: "^/api/tunneling/active/(?<port>[^/]*)$", action: "tunnel:activate", hasTarget: true},
+    // 이슈 348: IP 제한 켜기는 켜기 권한, 끄기는 고치기 권한이다. 내 IP 갱신은 켜기 권한이다.
+    {method: "PUT", pattern: "^/api/tunneling/(?<port>[^/]*)/activatorIpOnly$", action: "activatorIpOnlyAction", hasTarget: true},
+    {method: "POST", pattern: "^/api/tunneling/(?<port>[^/]*)/activatorIp$", action: "tunnel:activate", hasTarget: true},
     {method: "GET", pattern: "^/api/externalServerStatuses$", action: "tunnel:list", hasTarget: true},
     {method: "GET", pattern: "^/api/externalCert/(?<port>[^/]*)$", action: "tunnel:cert", hasTarget: true},
     {method: "POST", pattern: "^/api/externalCert/(?<port>[^/]*)$", action: "tunnel:cert", hasTarget: true},
@@ -84,6 +87,8 @@ const EXPECTED_ROUTES: ReadonlyArray<ExpectedRoute> = [
     // U2-06 / #98 이 더한 사용자·그룹 관리 라우트. 핸들러는 rbacRoutes.ts 에 있다.
     {method: "GET", pattern: "^/api/users$", action: "user:manage", hasTarget: false},
     {method: "POST", pattern: "^/api/users$", action: "user:manage", hasTarget: false},
+    // 이슈 347: 사용자 검색. /api/users/:id 보다 먼저 맞아야 한다.
+    {method: "GET", pattern: "^/api/users/lookup$", action: "user:lookup", hasTarget: false},
     {method: "GET", pattern: "^/api/users/(?<id>[^/]+)$", action: "user:manage", hasTarget: false},
     {method: "PUT", pattern: "^/api/users/(?<id>[^/]+)$", action: "user:manage", hasTarget: false},
     {method: "DELETE", pattern: "^/api/users/(?<id>[^/]+)$", action: "user:manage", hasTarget: false},

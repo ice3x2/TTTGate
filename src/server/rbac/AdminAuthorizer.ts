@@ -4,10 +4,14 @@ import {AdminUiSection} from "./IdentityTypes";
 export type Action =
     | 'user:manage' | 'group:manage' | 'server:manage' | 'security:manage' | 'session:manage' | 'audit:read-all'
     | 'tunnel:list' | 'tunnel:create' | 'tunnel:read' | 'tunnel:update' | 'tunnel:delete' | 'tunnel:activate' | 'tunnel:cert' | 'tunnel:reassign'
+    | 'user:lookup'
     | 'status:read' | 'me:read' | 'me:password' | 'me:sessions' | 'me:mfa' | 'me:passkey' | 'audit:read-self';
 
-/** owner 가 없으면 system:migrated 소유이거나 아직 존재하지 않는 터널이다. 라우트 계층이 채운다. */
-export type Target = {port?: number; owner?: {userId: string; groupId: string}};
+/**
+ * owner 가 없으면 system:migrated 소유이거나 아직 존재하지 않는 터널이다. 라우트 계층이 채운다.
+ * sharedUserIds 는 이슈 347 의 공유 목록이다. 없으면 공유가 없다.
+ */
+export type Target = {port?: number; owner?: {userId: string; groupId: string}; sharedUserIds?: readonly string[]};
 
 export type Decision = {allowed: true} | {allowed: false; status: 403 | 404; code: string};
 
@@ -21,7 +25,8 @@ const TUNNEL_ACCESS_DISABLED: Decision = {allowed: false, status: 403, code: 'tu
 const TUNNEL_CREATE_FORBIDDEN: Decision = {allowed: false, status: 403, code: 'tunnel_create_forbidden'};
 const PASSWORD_CHANGE_REQUIRED: Decision = {allowed: false, status: 403, code: 'password_change_required'};
 const MFA_ENROLLMENT_REQUIRED: Decision = {allowed: false, status: 403, code: 'mfa_enrollment_required'};
-const MFA_ENROLLMENT_ACTIONS: ReadonlySet<Action> = new Set<Action>(['me:read', 'me:password', 'me:mfa', 'me:sessions']);
+// 이슈 346: 패스키도 2단계 수단이므로 등록 중에 패스키를 등록할 수 있다.
+const MFA_ENROLLMENT_ACTIONS: ReadonlySet<Action> = new Set<Action>(['me:read', 'me:password', 'me:mfa', 'me:sessions', 'me:passkey']);
 
 const SUPERUSER_SECTIONS: readonly Section[] = ['status', 'tunnels', 'server', 'users', 'groups', 'security', 'audit', 'sessions', 'me'];
 
@@ -43,29 +48,40 @@ function isGroupShared(principal: Principal, target?: Target): boolean {
         && target.owner.groupId === principal.groupId;
 }
 
+/** 이슈 347: 공유 목록에 든 터널인가. 소유자와 무관하다. */
+function isSharedWith(principal: Principal, target?: Target): boolean {
+    return target?.sharedUserIds?.includes(principal.userId) === true;
+}
+
 function canReadTunnel(principal: Principal, target?: Target): boolean {
     if(principal.attributes.tunnel_crud === 'none') {
         return false;
     }
-    return isOwned(principal, target) || isGroupShared(principal, target);
+    return isOwned(principal, target) || isGroupShared(principal, target) || isSharedWith(principal, target);
 }
 
 /**
- * tunnel:update / tunnel:delete / tunnel:activate 의 공통 판정.
+ * tunnel:update / tunnel:delete 의 판정. 소유자이고 full 일 때만 고친다(공유만으로는 고칠 수 없다).
  * 읽을 수는 있으나 고칠 수 없으면 403 read_only, 애초에 읽을 수도 없으면 404 로 존재를 숨긴다.
  */
 function authorizeTunnelWrite(principal: Principal, target?: Target): Decision {
-    const owned = isOwned(principal, target);
-    if(!owned && canReadTunnel(principal, target)) {
-        return READ_ONLY;
-    }
-    if(owned && principal.attributes.tunnel_crud === 'full') {
+    if(isOwned(principal, target) && principal.attributes.tunnel_crud === 'full') {
         return ALLOWED;
     }
-    if(owned && principal.attributes.tunnel_crud === 'read_only') {
-        return READ_ONLY;
+    return canReadTunnel(principal, target) ? READ_ONLY : NOT_FOUND;
+}
+
+/**
+ * 이슈 347: tunnel:activate 는 고치기와 따로 판정한다. 소유자는 full·toggle 이면, 공유된 사용자는 none 이 아니면 켠다.
+ * 거부 응답은 고치기와 같다(보이면 403 read_only, 안 보이면 404).
+ */
+function authorizeTunnelActivate(principal: Principal, target?: Target): Decision {
+    const crud = principal.attributes.tunnel_crud;
+    const ownerCanToggle = isOwned(principal, target) && (crud === 'full' || crud === 'toggle');
+    if(crud !== 'none' && (ownerCanToggle || isSharedWith(principal, target))) {
+        return ALLOWED;
     }
-    return NOT_FOUND;
+    return canReadTunnel(principal, target) ? READ_ONLY : NOT_FOUND;
 }
 
 /**
@@ -100,8 +116,12 @@ export function authorize(principal: Principal, action: Action, target?: Target)
             return canReadTunnel(principal, target) ? ALLOWED : NOT_FOUND;
         case 'tunnel:update':
         case 'tunnel:delete':
-        case 'tunnel:activate':
             return authorizeTunnelWrite(principal, target);
+        case 'tunnel:activate':
+            return authorizeTunnelActivate(principal, target);
+        case 'user:lookup':
+            // 이슈 347: 공유할 사용자를 고르는 검색이다. 터널을 고칠 수 있는 그룹만 쓴다.
+            return principal.attributes.tunnel_crud === 'full' ? ALLOWED : FORBIDDEN;
         default:
             // user:manage group:manage server:manage security:manage session:manage
             // audit:read-all status:read tunnel:reassign tunnel:cert — 슈퍼유저 전용.

@@ -1700,7 +1700,7 @@ export function clearMe(): void;                  // me.set(undefined)
 
 - `#/me`, `#/me/password`, 사용자·그룹 화면, 마이그레이션 배너를 만들지 않는다(3 단위). `Banner` 부품을 여기서 쓰지 않는다.
 - `ui/` 부품에서 `fetch` 하지 않는다(R1). hex 색·외부 URL 금지(R2·R5).
-- 한국어·다국어 문구를 넣지 않는다(D5).
+- ~~한국어·다국어 문구를 넣지 않는다(D5).~~ D5 는 이슈 349 에서 폐기되었다. 관리 화면 문구는 `admin/src/i18n/` 의 리소스로 넣는다.
 - username 을 쿠키·세션스토리지에 저장하지 않는다(`localStorage['tttgate.lastUsername']` 하나).
 - `LoginCtrl.login` 의 `key` 매개변수·서버의 `key` 별칭을 남겨 두지 않는다(진입점 하나).
 - 별칭 호출부를 일부만 고치고 서버 별칭을 남기지 않는다(전부 고치고 제거한다).

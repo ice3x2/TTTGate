@@ -16,18 +16,20 @@
     import {me} from '../me';
     import {useSession} from '../shell/session';
     import {formatLocal} from '../util/relativeTime';
+    import {t} from '../i18n';
+    import {auditEventName, auditTypeOption} from './parts/auditEvent';
 
     // U4-06: #/audit. 슈퍼유저는 전체, 일반 유저는 서버가 본인 이벤트만 준다(클라이언트 필터 없음). 50 건씩 읽는다.
     const session = useSession();
     const LIMIT = 50;
-    const RANGES = [{id: '24h', label: '24h'}, {id: '7d', label: '7d'}, {id: '30d', label: '30d'}, {id: 'all', label: 'All'}];
+    const RANGES = [{id: '24h', label: t('audit.range24h')}, {id: '7d', label: t('audit.range7d')}, {id: '30d', label: t('audit.range30d')}, {id: 'all', label: t('audit.rangeAll')}];
     const RANGE_MS: Record<string, number> = {'24h': 86_400_000, '7d': 7 * 86_400_000, '30d': 30 * 86_400_000};
-    const OUTCOMES = [{value: '', label: 'All outcomes'}, {value: 'success', label: 'Success'}, {value: 'failure', label: 'Failure'}];
+    const OUTCOMES = [{value: '', label: t('audit.allOutcomes')}, {value: 'success', label: t('audit.success')}, {value: 'failure', label: t('audit.failure')}];
 
     const superuser = $derived($me?.user.role === 'superuser');
 
-    let typeOptions = $state<Array<{value: string; label: string}>>([{value: '', label: 'All types'}]);
-    let userOptions = $state<Array<{value: string; label: string}>>([{value: '', label: 'All users'}]);
+    let typeOptions = $state<Array<{value: string; label: string}>>([{value: '', label: t('audit.allTypes')}]);
+    let userOptions = $state<Array<{value: string; label: string}>>([{value: '', label: t('filter.allUsers')}]);
     let type = $state('');
     let userId = $state('');
     let outcome = $state('');
@@ -43,7 +45,7 @@
 
     const failed = (error: unknown) => {
         if(error instanceof InvalidSession) session.invalidate();
-        else toast.push({tone: 'alarm', message: 'Failed to load audit events.'});
+        else toast.push({tone: 'alarm', message: t('audit.loadFailed')});
     };
 
     const query = (): AuditQueryInput => ({
@@ -69,7 +71,7 @@
                 events = result.events;
                 nextCursor = result.nextCursor;
             } else {
-                toast.push({tone: 'alarm', message: 'Failed to load audit events.'});
+                toast.push({tone: 'alarm', message: t('audit.loadFailed')});
             }
         } catch(error) {
             failed(error);
@@ -89,7 +91,7 @@
                 events = [...events, ...result.events];
                 nextCursor = result.nextCursor;
             } else {
-                toast.push({tone: 'alarm', message: 'Failed to load audit events.'});
+                toast.push({tone: 'alarm', message: t('audit.loadFailed')});
             }
         } catch(error) {
             failed(error);
@@ -101,10 +103,10 @@
     onMount(async () => {
         try {
             const types = await AuditCtrl.instance.types();
-            if(types.success) typeOptions = [{value: '', label: 'All types'}, ...types.types.map((value) => ({value, label: value}))];
+            if(types.success) typeOptions = [{value: '', label: t('audit.allTypes')}, ...types.types.map((value) => auditTypeOption(value))];
             if(superuser) {
                 const users = await UsersCtrl.instance.list();
-                if(users.success) userOptions = [{value: '', label: 'All users'}, ...users.users.map((user) => ({value: user.id, label: user.username}))];
+                if(users.success) userOptions = [{value: '', label: t('filter.allUsers')}, ...users.users.map((user) => ({value: user.id, label: user.username}))];
             }
         } catch(error) {
             // 선택지를 못 읽어도 목록은 읽는다. 세션이 끝났으면 여기서 멈춘다.
@@ -119,15 +121,15 @@
     <section id="audit-filters">
         <Card compact>
             <div style="display: flex; flex-direction: column; gap: var(--s-3);">
-                <Field label="Type" for="audit-filter-type">
+                <Field label={t('audit.type')} for="audit-filter-type">
                     <Select id="audit-filter-type" options={typeOptions} bind:value={type} onchange={() => { void reload(); }} />
                 </Field>
                 {#if superuser}
-                    <Field label="User" for="audit-filter-user">
+                    <Field label={t('filter.user')} for="audit-filter-user">
                         <Select id="audit-filter-user" options={userOptions} bind:value={userId} onchange={() => { void reload(); }} />
                     </Field>
                 {/if}
-                <Field label="Outcome" for="audit-filter-outcome">
+                <Field label={t('audit.outcome')} for="audit-filter-outcome">
                     <Select id="audit-filter-outcome" options={OUTCOMES} bind:value={outcome} onchange={() => { void reload(); }} />
                 </Field>
                 <div id="audit-range"><Tabs items={RANGES} bind:active={range} onchange={() => { void reload(); }} /></div>
@@ -137,10 +139,12 @@
 
     {#if !loading && events.length === 0}
         <!-- 서버는 한 번에 훑는 줄 수에 상한을 둔다. 커서가 있으면 아직 다 훑지 않은 것이지 기록이 없는 것이 아니다. -->
-        <p id="audit-empty">{nextCursor ? 'No matching events in the part scanned so far. Load more to keep searching older events.' : 'No events in this range.'}</p>
+        <p id="audit-empty">{t(nextCursor ? 'audit.noMatchesYet' : 'audit.empty')}</p>
     {/if}
     <ul id="audit-list" style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-3);">
         {#each events as event, i (i)}
+            {@const name = auditEventName(event.type)}
+            <!-- 이슈 349 FR-12: 이벤트 이름은 번역하고 코드 값을 보조 글자로 함께 보인다. 번역 맵에 없는 코드는 코드 값만 보인다. -->
             <li class="audit-event" data-type={event.type} data-outcome={event.outcome}>
                 <Card compact>
                     <button type="button" class="audit-toggle" aria-expanded={expanded[i] === true}
@@ -148,8 +152,9 @@
                         onclick={() => (expanded[i] = !expanded[i])}>
                         <div style="display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center;">
                             <span class="mono audit-time">{formatLocal(event.at, true)}</span>
-                            <Badge tone={event.outcome === 'success' ? 'pulse' : 'alarm'}>{event.outcome}</Badge>
-                            <Chip>{event.type}</Chip>
+                            <Badge tone={event.outcome === 'success' ? 'pulse' : 'alarm'}>{t(event.outcome === 'success' ? 'audit.outcomeSuccess' : 'audit.outcomeFailure')}</Badge>
+                            {#if name}<Chip class="audit-type-name">{name}</Chip>{/if}
+                            <span class="mono audit-type-code" style="color: var(--ink-2); font-size: var(--fs-xs);">{event.type}</span>
                         </div>
                         <div style="margin-top: var(--s-1);"><span class="audit-summary">{event.summary}</span></div>
                         <div style="margin-top: var(--s-1); color: var(--ink-2);">
@@ -164,7 +169,7 @@
         {/each}
     </ul>
     {#if nextCursor}
-        <div><span id="audit-load-more"><Button disabled={loading} onclick={() => { void loadMore(); }}>Load more</Button></span></div>
+        <div><span id="audit-load-more"><Button disabled={loading} onclick={() => { void loadMore(); }}>{t('audit.loadMore')}</Button></span></div>
     {/if}
     {#if loading}<Loading />{/if}
 </div>

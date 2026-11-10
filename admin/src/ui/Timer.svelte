@@ -3,6 +3,7 @@
     import Field from './Field.svelte';
     import NumberInput from './NumberInput.svelte';
     import Button from './Button.svelte';
+    import {t} from '../i18n';
 
     let {
         seconds,
@@ -31,14 +32,14 @@
     });
 
     const timeString = (left: number): string => {
-        if(left <= 0) return '0m 0s';
+        if(left <= 0) return t('timer.minutesSeconds', {m: 0, s: 0});
         const m = Math.floor(left / 60) % 60;
         const h = Math.floor(left / 3600) % 24;
         const s = Math.floor(left % 60);
         const d = Math.floor(left / 86400);
-        if(d > 0) return `${d}d ${h}h ${m}m`;
-        if(h > 0) return `${h}h ${m}m ${s}s`;
-        return `${m}m ${s}s`;
+        if(d > 0) return t('timer.daysHoursMinutes', {d, h, m});
+        if(h > 0) return t('timer.hoursMinutesSeconds', {h, m, s});
+        return t('timer.minutesSeconds', {m, s});
     };
 
     const deg = $derived(total <= 0 ? 95 : Math.floor(95 + (total - Math.min(seconds, total)) / total * (440 - 95)));
@@ -59,13 +60,13 @@
         <circle cx="12" cy="12" r="10" class="face" />
         <line class="hand" x1="12" y1="12" x2="12" y2="5" style={`rotate: ${deg}deg`} />
     </svg>
-    <Modal bind:open title="Tunneling activity restriction time">
+    <Modal bind:open title={t('timer.title')}>
         <div class="timer-fields">
-            <Field label="Days" for={`${uid}-day`}><NumberInput id={`${uid}-day`} min={0} max={3650} bind:value={day} /></Field>
-            <Field label="Hours" for={`${uid}-hour`}><NumberInput id={`${uid}-hour`} min={0} max={23} bind:value={hour} /></Field>
-            <Field label="Minutes" for={`${uid}-min`}><NumberInput id={`${uid}-min`} min={0} max={59} bind:value={min} /></Field>
+            <Field label={t('timer.days')} for={`${uid}-day`}><NumberInput id={`${uid}-day`} min={0} max={3650} bind:value={day} /></Field>
+            <Field label={t('timer.hours')} for={`${uid}-hour`}><NumberInput id={`${uid}-hour`} min={0} max={23} bind:value={hour} /></Field>
+            <Field label={t('timer.minutes')} for={`${uid}-min`}><NumberInput id={`${uid}-min`} min={0} max={59} bind:value={min} /></Field>
         </div>
-        {#snippet footer()}<Button onclick={() => (open = false)}>Cancel</Button><Button variant="primary" onclick={confirm}>OK</Button>{/snippet}
+        {#snippet footer()}<Button onclick={() => (open = false)}>{t('common.cancel')}</Button><Button variant="primary" onclick={confirm}>{t('common.ok')}</Button>{/snippet}
     </Modal>
 </div>
 

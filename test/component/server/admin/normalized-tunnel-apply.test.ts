@@ -143,3 +143,25 @@ test("a name-only compound save of a TLS tunnel with the same certificate keeps 
         expect(await fingerprint(port)).toBe(certificate.fingerprintSha256);
     } finally { await service.close(); }
 }));
+
+// 이슈 347 AC-6 — 공유 목록만 바꾼 저장도 이름처럼 리스너를 다시 시작하지 않는다.
+test("a share-list-only save keeps the running listener", async () => withConfigurationServer(async f => {
+    const service = await startEchoServer();
+    try {
+        const created = await f.request("POST", "/api/users", {username: "sharee", role: "regular"});
+        expect(created.statusCode).toBe(201);
+        const shareeId = JSON.parse(created.body).user.id;
+        const port = await getFreePort();
+        const option = {forwardPort: port, protocol: "tcp", tls: false, destinationAddress: "127.0.0.1", destinationPort: service.port, keepAlive: 0};
+        expect((await save(f, "ordinary", option)).statusCode).toBe(200);
+        expect((await f.request("POST", `/api/tunneling/active/${port}`, {active: true, timeout: 600})).statusCode).toBe(200);
+        const before = f.tunnel.externalServerStatus(port);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        expect((await save(f, "ordinary", {...option, sharedUserIds: [shareeId]})).statusCode).toBe(200);
+
+        const after = f.tunnel.externalServerStatus(port);
+        expect(after).toMatchObject({online: true, active: true, uptime: before.uptime, activeStart: before.activeStart});
+        expect(f.store.getTunnelingOption(port).sharedUserIds).toEqual([shareeId]);
+    } finally { await service.close(); }
+}));

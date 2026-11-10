@@ -3,6 +3,7 @@
     import Button from '../../ui/Button.svelte';
     import Field from '../../ui/Field.svelte';
     import TextInput from '../../ui/TextInput.svelte';
+    import {t} from '../../i18n';
 
     let {options = $bindable<RewriteRule[]>([])}: {options?: RewriteRule[]} = $props();
 
@@ -25,22 +26,22 @@
 <div class="rules">
     {#each options as option, index}
         <div class="rule">
-            <Field label="From" for={`${uid}-from-${index}`}>
+            <Field label={t('rewrite.from')} for={`${uid}-from-${index}`}>
                 <TextInput id={`${uid}-from-${index}`} bind:value={option.from} />
             </Field>
-            <Field label="To" for={`${uid}-to-${index}`}>
+            <Field label={t('rewrite.to')} for={`${uid}-to-${index}`}>
                 <TextInput id={`${uid}-to-${index}`} bind:value={option.to} />
             </Field>
             <div class="rule-actions">
                 {#if index === options.length - 1}
-                    <Button size="sm" onclick={add}>Add</Button>
+                    <Button size="sm" onclick={add}>{t('common.add')}</Button>
                 {:else}
-                    <Button size="sm" onclick={() => remove(index)}>Remove</Button>
+                    <Button size="sm" onclick={() => remove(index)}>{t('common.remove')}</Button>
                 {/if}
             </div>
         </div>
     {/each}
-    <p class="hint">You can use a JavaScript-formatted regular expression in the 'From' input box.</p>
+    <p class="hint">{t('rewrite.fromHint')}</p>
 </div>
 
 <style>

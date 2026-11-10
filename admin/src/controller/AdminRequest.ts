@@ -1,4 +1,5 @@
 import InvalidSession from "./InvalidSession";
+import {t} from "../i18n";
 
 // 이슈 338: generated 는 서버가 보낸 문구가 아니라 이 파일이 만든 문구라는 표시다(serverMessageOf 가 본다).
 const failure = (message: string, status = 0) => ({success: false, status, message, generated: true});
@@ -20,7 +21,7 @@ const requestJson = async (url: URL, options: RequestInit, credentialCheck = fal
     try {
         response = await fetch(url.href, {...options, credentials: "same-origin", redirect: "error"});
     } catch(error) {
-        return failure(`Admin network request failed: ${error instanceof Error ? error.message : String(error)}`);
+        return failure(t("request.networkFailed", {reason: error instanceof Error ? error.message : String(error)}));
     }
     if(response.status === 401 && credentialCheck) {
         const value = await response.json().catch(() => undefined);
@@ -34,25 +35,33 @@ const requestJson = async (url: URL, options: RequestInit, credentialCheck = fal
     try {
         value = await response.json();
     } catch {
-        return failure(`Invalid JSON response from admin server (HTTP ${response.status})`, response.status);
+        return failure(t("request.invalidJson", {status: response.status}), response.status);
     }
     if(!value || typeof value !== "object" || Array.isArray(value) || (response.ok && typeof value.success !== "boolean")) {
-        return failure(`Invalid JSON response from admin server (HTTP ${response.status})`, response.status);
+        return failure(t("request.invalidJson", {status: response.status}), response.status);
     }
     if(!response.ok) {
+        if(response.status === 403 && value.code === "mfa_enrollment_required") enrollmentRequired?.();
         const fromServer = typeof value.message === "string" && value.message !== "";
         return {...value, success: false, status: response.status,
-            message: fromServer ? value.message : `Admin request failed (HTTP ${response.status})`, ...(fromServer ? {} : {generated: true})};
+            message: fromServer ? value.message : t("request.httpFailed", {status: response.status}), ...(fromServer ? {} : {generated: true})};
     }
     return value;
 };
+
+/**
+ * 이슈 346: 서버가 403 mfa_enrollment_required 로 거절했을 때 부를 함수. 로그인한 사이에 2단계 인증 강제가 켜진 경우다.
+ * 앱이 하나를 등록해 내 정보를 다시 읽고 등록 화면으로 옮긴다. 이 파일은 화면 상태를 모르므로 함수만 부른다.
+ */
+let enrollmentRequired: (() => void) | undefined;
+export const onMfaEnrollmentRequired = (listener: (() => void) | undefined): void => { enrollmentRequired = listener; };
 
 let csrfRecovery: Promise<any> | undefined;
 
 /** extra.credentialCheck: 비밀번호·코드 재확인 요청이다(401 password_incorrect·mfa_code_invalid 를 실패 값으로 돌려준다). */
 export const adminRequest = async (path: string, options: RequestInit = {}, extra: {credentialCheck?: boolean} = {}): Promise<any> => {
     const url = new URL(path, window.location.href);
-    if(url.origin !== window.location.origin) return failure("Admin requests must use the same origin");
+    if(url.origin !== window.location.origin) return failure(t("request.crossOrigin"));
     const method = (options.method ?? "GET").toUpperCase();
     const headers = new Headers(options.headers);
     if(!["GET", "HEAD", "OPTIONS"].includes(method)) {
@@ -66,7 +75,7 @@ export const adminRequest = async (path: string, options: RequestInit = {}, extr
             const restored = await csrfRecovery;
             if(restored.success !== true) return restored;
             token = csrfCookie();
-            if(!token) return failure("CSRF token cookie was not restored");
+            if(!token) return failure(t("request.csrfNotRestored"));
         }
         headers.set("X-CSRF-Token", token);
     }

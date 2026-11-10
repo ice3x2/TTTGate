@@ -33,7 +33,8 @@ const button = (page: Page, name: string) => page.getByRole("button", {name, exa
 
 const openWithAuthenticator = async (url: string): Promise<{page: Page; cdp: CDPSession; errors: string[]}> => {
     browser ??= await chromium.launch();
-    const page = await browser.newPage();
+    // 이슈 349 FR-10: 시스템 언어와 무관하게 영어 화면을 본다.
+    const page = await (await browser.newContext({locale: "en-US"})).newPage();
     // 다른 관리 화면 테스트와 같은 좁은 화면. 로그아웃 메뉴가 서랍 안에 있다.
     await page.setViewportSize({width: 400, height: 800});
     const errors: string[] = [];
@@ -44,6 +45,11 @@ const openWithAuthenticator = async (url: string): Promise<{page: Page; cdp: CDP
         protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true,
         isUserVerified: true, automaticPresenceSimulation: true
     }});
+    // #345: 가상 인증기는 사람이 고르지 않아도 자동 완성(조건부 UI) 요청에 바로 답한다. 그러면 비밀번호 화면을 여는 순간
+    // 등록된 패스키로 로그인되어 다른 사용자로 비밀번호 로그인을 할 수 없다. 자동 완성 경로는 screen-passkeys 가 맡고 여기서는 끈다.
+    await page.addInitScript(() => {
+        Object.defineProperty(PublicKeyCredential, "isConditionalMediationAvailable", {configurable: true, value: () => Promise.resolve(false)});
+    });
     await page.goto(url);
     return {page, cdp, errors};
 };
@@ -92,6 +98,18 @@ test("가상 인증기로 등록하고, 패스키로 로그인하고, 지우고,
     await page.waitForFunction(() => !document.querySelector("#login-passkey") && document.querySelector("header h1")?.textContent === "Tunnels",
         undefined, {timeout: 15_000});
     expect(f.sink.events.filter((event) => event.type === "login_success").at(-1)?.detail).toMatchObject({method: "passkey"});
+
+    // #345: 로그아웃 직후의 로그인 화면은 패스키 창을 띄우지 않는다. 새로 고침하면 화면을 열자마자 패스키로 들어간다.
+    const passkeyLogins = () => f.sink.events.filter((event) => event.type === "login_success" && (event.detail as {method?: string})?.method === "passkey").length;
+    const before = passkeyLogins();
+    await signOut(page);
+    await page.waitForTimeout(1_000);
+    expect(await page.locator("#login-passkey").count()).toBe(1);
+    expect(passkeyLogins()).toBe(before);
+    await page.reload();
+    await page.waitForFunction(() => !document.querySelector("#login-passkey") && document.querySelector("header h1")?.textContent === "Tunnels",
+        undefined, {timeout: 15_000});
+    expect(passkeyLogins()).toBe(before + 1);
 
     // 3. 내 계정에서 지운다.
     await page.goto(url + "#/me");
