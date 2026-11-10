@@ -106,7 +106,8 @@ describe("PendingEnrollmentStore", () => {
         const c = clock();
         const store = new PendingEnrollmentStore(c.now);
         store.set("u_alice", entry());
-        expect(store.peek("u_alice")).toEqual({...entry(), expiresAt: c.now() + 300_000, attempts: 0});
+        // #346: replace(인증 앱 교체)는 주지 않으면 false 다.
+        expect(store.peek("u_alice")).toEqual({...entry(), replace: false, expiresAt: c.now() + 300_000, attempts: 0});
         c.advance(299_999);
         expect(store.peek("u_alice")).toBeDefined();
         c.advance(1);

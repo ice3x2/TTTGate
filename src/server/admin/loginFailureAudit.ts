@@ -29,7 +29,7 @@ export function loginFailureUsername(value: unknown): {username: string; usernam
  * 주소를 바꿔 가며 요청마다 감사를 남길 수 있다. 키 수가 상한을 넘으면 넘친 요청은 키 하나로 묶어 맵과 순회 비용을 묶는다.
  */
 export function createLoginFailureAuditor(options: {maxKeys?: number} = {}): (body: any, ip: string, gateKey: string, status: number, now: number,
-    reason?: 'concurrency_limit') => AuditEvent | undefined {
+    reason?: 'concurrency_limit' | 'passkey_required') => AuditEvent | undefined {
     const maxKeys = options.maxKeys ?? BLOCKED_AUDIT_MAX_KEYS;
     const blockedGate = new AuditRateGate(BLOCKED_AUDIT_INTERVAL_MS);
     let lastPrunedAt = Number.NEGATIVE_INFINITY;
@@ -51,7 +51,9 @@ export function createLoginFailureAuditor(options: {maxKeys?: number} = {}): (bo
         return {
             at: now, actor: {userId: 'system'}, ip,
             type: AUDIT_EVENT_TYPES.login_failure, outcome: 'failure',
-            summary: `login_failure ${name.username}`, detail: {...name, ...(blocked ? {blocked: true} : {}), ...(limited ? {reason} : {})}
+            // 이슈 346: 비밀번호는 맞았지만 패스키 로그인이 필요한 거절(403)도 사유를 남긴다.
+            summary: `login_failure ${name.username}`,
+            detail: {...name, ...(blocked ? {blocked: true} : {}), ...(limited || reason === 'passkey_required' ? {reason} : {})}
         };
     };
 }

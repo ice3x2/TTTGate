@@ -47,6 +47,8 @@ import {AuditQuery} from "../audit/AuditQuery";
 import {auditDirPath} from "../audit/FileAuditSink";
 import {Action, authorize} from "../rbac/AdminAuthorizer";
 import {LEGACY_PRINCIPAL, principalOf} from "../rbac/Principal";
+import {mfaPolicyOptions} from "./mfaPolicyOptions";
+import {mustEnrollMfa as mustEnrollMfaFor, requiresPasskeyLogin} from "../rbac/MfaPolicy";
 import {admitTunnelWrite, isTunnelEditable, isTunnelVisibleTo, ownerViewOf, resolveOwnerId} from "../rbac/TunnelOwnership";
 import {AuthorizationContext} from "../rbac/AuthorizationContext";
 import {AuditEvent, AuditSinkRegistry, recordAuditEvent} from "../audit/AuditSink";
@@ -337,7 +339,7 @@ class AdminServer {
                    return;
                }
                ctx.session = session;
-               const principal = principalOf(session, IdentityStore.instance);
+               const principal = principalOf(session, IdentityStore.instance, mfaPolicyOptions());
                if(!principal) {
                    // 사용자가 삭제되었거나 비활성화되었다 — 세션도 함께 끊는다.
                    await SessionStore.instance.removeSession(session.key);
@@ -1144,7 +1146,7 @@ class AdminServer {
             valid: true,
             user: {id: user.id, username: user.username, displayName: user.displayName, role: user.role},
             mustChangePassword: user.mustChangePassword,
-            mustEnrollMfa: session.mustEnrollMfa === true
+            mustEnrollMfa: ctx.principal?.mustEnrollMfa === true
         });
     }
 
@@ -1412,11 +1414,11 @@ class AdminServer {
     }
 
     private onLogin = async (ctx: RouteContext) => {
-        await this.performLogin(ctx);
+        const reason = await this.performLogin(ctx);
         // 성공은 completeLogin 이 남긴다(새 세션 해시를 그곳에서만 알 수 있다).
         if(ctx.res.statusCode === 200) return;
         // username 이 없으면 'admin' 으로 적지 않는다(별칭은 #102 에서 지웠다). 형식 처리는 loginFailureAudit 에 있다(#139).
-        const event = this._loginFailureAudit(ctx.body, ctx.ip, this.buildLoginAttemptKey(ctx.req), ctx.res.statusCode, this.now());
+        const event = this._loginFailureAudit(ctx.body, ctx.ip, this.buildLoginAttemptKey(ctx.req), ctx.res.statusCode, this.now(), reason);
         if(event) this.emitAudit(event);
     }
 
@@ -1546,6 +1548,13 @@ class AdminServer {
             return;
         }
         const user = verifyResult.user;
+        const userGroup = IdentityStore.instance.group(user.groupId);
+        if(requiresPasskeyLogin(user, userGroup?.attributes, mfaPolicyOptions())) {
+            // 이슈 346: 2단계 인증 강제 대상이 패스키만 가졌다. 비밀번호 하나로 세션을 주면 강제가 무의미해진다.
+            // 비밀번호는 맞았으므로 실패 횟수를 늘리지 않고, 성공도 아니므로 초기화하지도 않는다.
+            this.sendApiFailure(res, 403, {code: 'passkey_required', message: 'This account signs in with a passkey.'});
+            return 'passkey_required';
+        }
         if(user.mfa?.enabled === true) {
             // #127 (U4-08): 2단계가 끝나야 성공이다. 실패 카운터 초기화·login_success·쿠키는 /api/login/mfa 가 한다.
             const mfaTicket = this._mfa.tickets.issue(user.id, this.getClientAddress(req));
@@ -1566,12 +1575,13 @@ class AdminServer {
         this.resetLoginAttempts(req);
         const userAgent = req.headers['user-agent'];
         // #127 (U4-08): 슈퍼유저 MFA 강제는 로그인 시점에만 계산한다(이미 열린 세션은 소급하지 않는다).
-        const mustEnrollMfa = ServerOptionStore.instance.serverOption.mfaRequiredForSuperusers === true && user.role === 'superuser'
-            && userId !== 'legacy-admin' && IdentityStore.instance.user(userId)?.mfa?.enabled !== true;
+        // 이슈 346: 강제 판정은 MfaPolicy 하나로 한다. 세션에는 저장하지 않고 요청마다 다시 계산한다(principalOf).
+        const stored = IdentityStore.instance.user(userId);
+        const mustEnrollMfa = stored !== undefined
+            && mustEnrollMfaFor(stored, IdentityStore.instance.group(stored.groupId)?.attributes, mfaPolicyOptions());
         const sessionKey = await SessionStore.instance.newSession(userId, {
             ip: this.getClientAddress(req),
             userAgent: typeof userAgent == 'string' ? userAgent : undefined,
-            mustEnrollMfa,
             // #250: 세션 상한에 닿아 끝낸 세션을 감사 로그에 남긴다. 사용자 요청이 아니므로 행위자는 system 이고,
             // 원인이 된 로그인은 detail.triggeredBy 에 남긴다. ip 도 그 로그인의 주소다(끝난 세션의 주소가 아니다).
             onEvicted: (evicted, reason) => this.emitAudit({

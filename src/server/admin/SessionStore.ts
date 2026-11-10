@@ -15,8 +15,6 @@ export type Session = {
     timeout: number;
     ip: string;
     userAgent?: string;
-    /** #127 (U4-08) 로그인 시점에 계산한 슈퍼유저 MFA 등록 강제. 등록을 마치면 updateSession 으로 끈다. */
-    mustEnrollMfa: boolean;
 }
 
 const DEFAULT_TIMEOUT = 1000 * 60 * 60 * 12; // 12 hours
@@ -70,7 +68,7 @@ class SessionStore {
      * 새 세션을 만든다. 사용자당·전체 상한에 닿았으면 가장 오래 쓰지 않은 세션부터 끝내고 onEvicted 로 알린다(#250).
      * 전체 상한은 superuser 세션도 끝낼 수 있다. 활성 계정이 500 개를 넘어야 닿는 값이라 따로 보호하지 않는다.
      */
-    public async newSession(userId: string, meta: {ip: string; userAgent?: string; mustEnrollMfa?: boolean;
+    public async newSession(userId: string, meta: {ip: string; userAgent?: string;
         onEvicted?: (session: Session, reason: SessionEvictReason) => void}): Promise<string> {
         const now = this.now();
         // 상한을 셀 때 끝난 세션은 빼야 한다.
@@ -98,17 +96,9 @@ class SessionStore {
             lastSeenAt: now,
             timeout: now + DEFAULT_TIMEOUT,
             ip: meta.ip,
-            userAgent: meta.userAgent?.slice(0, MAX_USER_AGENT_LENGTH),
-            mustEnrollMfa: meta.mustEnrollMfa === true
+            userAgent: meta.userAgent?.slice(0, MAX_USER_AGENT_LENGTH)
         });
         return sessionKey;
-    }
-
-    /** 세션 항목을 새 객체로 바꾼다(불변 객체 + 참조 교체). 없는 키는 아무 일도 하지 않는다. */
-    public updateSession(key: string, patch: {mustEnrollMfa?: boolean}): void {
-        const session = this._sessions.get(key);
-        if(!session) return;
-        this._sessions.set(key, {...session, ...(patch.mustEnrollMfa !== undefined ? {mustEnrollMfa: patch.mustEnrollMfa} : {})});
     }
 
     /**

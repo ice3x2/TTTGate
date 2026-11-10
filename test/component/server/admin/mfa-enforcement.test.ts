@@ -32,12 +32,13 @@ describe("mfa-enforcement", () => {
         expect(disable.body.code).toBe("mfa_required");
     }, {mfaRequiredForSuperusers: true}));
 
-    it("옵션을 켜기 전에 만든 슈퍼유저 세션은 소급해서 잠기지 않는다", async () => withMfaServer(async (f) => {
+    // #346 FR-7: 강제는 요청마다 다시 판정한다. 옵션을 켜기 전에 만든 세션도 다음 요청부터 잠긴다.
+    it("옵션을 켜면 이미 열린 슈퍼유저 세션도 다음 요청부터 잠긴다", async () => withMfaServer(async (f) => {
         const before = await f.login("admin", ADMIN_PASSWORD);
         expect(before.body.mustEnrollMfa).toBe(false);
         const store = ServerOptionStore.instance;
         expect(store.updateServerOption({...store.serverOption, mfaRequiredForSuperusers: true})).toBeTruthy();
-        expect((await f.request("GET", "/api/users", {}, before.auth!)).status).toBe(200);
+        expect((await f.request("GET", "/api/users", {}, before.auth!)).status).toBe(403);
         // 새로 로그인한 세션은 잠긴다.
         const after = await f.login("admin", ADMIN_PASSWORD);
         expect(after.body.mustEnrollMfa).toBe(true);

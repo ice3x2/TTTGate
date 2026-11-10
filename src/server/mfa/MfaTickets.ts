@@ -64,7 +64,8 @@ export class MfaTicketStore {
     }
 }
 
-export type PendingEnrollment = {secret: Buffer; recoveryCodes: string[]; expiresAt: number; attempts: number};
+/** replace: 이슈 346 의 인증 앱 교체. 확인하는 순간 기존 TOTP 를 바꾼다. */
+export type PendingEnrollment = {secret: Buffer; recoveryCodes: string[]; replace?: boolean; expiresAt: number; attempts: number};
 
 export class PendingEnrollmentStore {
     public static readonly TTL_MS = 300_000;
@@ -84,7 +85,7 @@ export class PendingEnrollmentStore {
     /** 사용자의 대기 항목을 새로 둔다. 시도 횟수와 만료는 처음부터 다시 센다. */
     public set(userId: string, pending: Omit<PendingEnrollment, 'expiresAt' | 'attempts'>): void {
         this._pending.set(userId, Object.freeze({
-            secret: pending.secret, recoveryCodes: [...pending.recoveryCodes],
+            secret: pending.secret, recoveryCodes: [...pending.recoveryCodes], replace: pending.replace === true,
             expiresAt: this._now() + PendingEnrollmentStore.TTL_MS, attempts: 0
         }));
     }

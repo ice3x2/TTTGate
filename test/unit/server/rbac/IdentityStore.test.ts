@@ -400,7 +400,8 @@ describe("IdentityStore", () => {
         const superuserGroup = parsed.groups.find((g: {id: string}) => g.id === "system:superuser");
         const defaultGroup = parsed.groups.find((g: {id: string}) => g.id === "default");
         expect(superuserGroup.attributes).toEqual({});
-        expect(Object.keys(defaultGroup.attributes)).toHaveLength(11);
+        // #346 에서 mfa_required 가 더해져 12개다.
+        expect(Object.keys(defaultGroup.attributes)).toHaveLength(12);
 
         IdentityStore.resetForTest();
         IdentityStore.instance.load();
