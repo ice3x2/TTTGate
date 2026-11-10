@@ -8,6 +8,7 @@
     import Button from '../../ui/Button.svelte';
     import Field from '../../ui/Field.svelte';
     import Modal from '../../ui/Modal.svelte';
+    import {t} from '../../i18n';
 
     let {
         certInfo,
@@ -172,7 +173,7 @@
         const text = await readFileToString(file);
         const old = (data.name != '' && data.value != '') ? pemDataToDataTransfer(data) : null;
         if(!keyChecker(text)) {
-            alert(`Invalid ${type == 'private' ? 'private key' : 'certificate'}`);
+            alert(t(type == 'private' ? 'cert.invalidPrivateKey' : 'cert.invalidCertificate'));
             if(old) keyEl!.files = old.files;
             else element.value = '';
             return;
@@ -208,7 +209,7 @@
         if(validKeyPair(tempCertInfo.key.value, tempCertInfo.cert.value)) {
             return 'Success';
         }
-        alert('Invalid Key Pair');
+        alert(t('cert.invalidKeyPair'));
         return 'Fail';
     };
 
@@ -233,11 +234,11 @@
 </script>
 
 <div class="cert-files {className}">
-    <Field label="Key" for={`${uid}-key`}>
+    <Field label={t('cert.key')} for={`${uid}-key`}>
         <input class="input" type="file" id={`${uid}-key`} accept=".pem,.crt,.cer"
             oninput={(e) => onInputFile(e, 'private')} bind:this={keyEl}>
     </Field>
-    <Field label="Cert" for={`${uid}-cert`}>
+    <Field label={t('cert.cert')} for={`${uid}-cert`}>
         <input class="input" type="file" id={`${uid}-cert`} accept=".pem,.crt,.cer"
             oninput={(e) => onInputFile(e, 'cert')} bind:this={certEl}>
     </Field>
@@ -245,19 +246,19 @@
         <div class="cert-ca-row">
             <input class="input" type="file" id={`${uid}-ca`} accept=".pem,.crt,.cer"
                 oninput={(e) => onInputFile(e, 'ca')} bind:this={caEl}>
-            <Button size="sm" onclick={removeCa}>Remove CA</Button>
+            <Button size="sm" onclick={removeCa}>{t('cert.removeCa')}</Button>
         </div>
     </Field>
     {#if !hideMessage}
         <ul class="cert-notes">
-            <li>If you do not upload a cert, a random key will be used.</li>
-            <li>If an incorrect cert is uploaded, it will work with HTTP.</li>
+            <li>{t('cert.noUploadNote')}</li>
+            <li>{t('cert.incorrectNote')}</li>
         </ul>
     {/if}
-    <Modal bind:open={alertOpen} title="Certificate">
+    <Modal bind:open={alertOpen} title={t('cert.title')}>
         {alertMessage}
         {#snippet footer()}
-            <Button variant="primary" onclick={() => (alertOpen = false)}>OK</Button>
+            <Button variant="primary" onclick={() => (alertOpen = false)}>{t('common.ok')}</Button>
         {/snippet}
     </Modal>
 </div>

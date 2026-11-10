@@ -2,7 +2,7 @@
     import {WebAuthnAbortService, browserSupportsWebAuthnAutofill, startAuthentication, type AuthenticationResponseJSON} from '@simplewebauthn/browser';
     import LoginCtrl, {type LoginResult, type LoginUser} from '../controller/LoginCtrl';
     import {onDestroy, onMount, tick} from 'svelte';
-    import {PASSKEY_CONDITION, PASSKEY_UNSUPPORTED, consumeSignedOut, forgetPasskeyPreferred, isCertificateError, passkeyPreferred, passkeysAvailable, rememberPasskeyPreferred} from '../util/passkey';
+    import {consumeSignedOut, forgetPasskeyPreferred, isCertificateError, passkeyPreferred, passkeysAvailable, rememberPasskeyPreferred} from '../util/passkey';
     import Button from '../ui/Button.svelte';
     import Card from '../ui/Card.svelte';
     import Field from '../ui/Field.svelte';
@@ -48,7 +48,7 @@
         if(pending) return;
         const value = useRecovery ? recoveryCode.trim() : code;
         if(value === '') {
-            message = 'Enter the code.';
+            message = t('login.enterCode');
             return;
         }
         pending = true;
@@ -63,13 +63,13 @@
                 onsuccess({user: result.user, mustChangePassword: result.mustChangePassword === true});
                 return;
             }
-            if(result.code === 'mfa_ticket_invalid') startOver('The sign-in expired. Start again.');
-            else if(result.code === 'mfa_code_invalid') message = 'The code is incorrect.';
-            else if(result.status === 429) message = 'Too many attempts. Try again later.';
-            else if(result.status === 422) message = 'Enter the code.';
-            else message = result.message || 'Unable to connect to the server.';
+            // 코드별 문구는 errorMessageOf 가 고른다. 시도 횟수 제한(429)과 빈 코드(422)는 상태 코드로 본다.
+            if(result.code === 'mfa_ticket_invalid') startOver(errorMessageOf(result));
+            else if(result.status === 429) message = t('login.tooManyCodeAttempts');
+            else if(result.status === 422) message = t('login.enterCode');
+            else message = errorMessageOf(result) || t('common.unableToConnect');
         } catch {
-            message = 'Unable to connect to the server.';
+            message = t('common.unableToConnect');
         } finally {
             pending = false;
         }
@@ -149,13 +149,13 @@
             } catch(error) {
                 if(auto) return;
                 // 사용자가 브라우저 창을 닫으면 브라우저는 예외로 알린다. 인증서 오류를 취소보다 먼저 본다.
-                message = isCertificateError(error) ? PASSKEY_UNSUPPORTED : 'Sign-in was canceled.';
+                message = isCertificateError(error) ? t('serverError.passkey_origin_unsupported') : t('login.canceled');
                 showPassword = true;
                 return;
             }
             await completePasskey(response);
         } catch {
-            message = 'Unable to connect to the server.';
+            message = t('common.unableToConnect');
             showPassword = true;
         } finally {
             pending = false;
@@ -197,7 +197,7 @@
             pending = true;
             message = '';
             // 사용자가 직접 고른 패스키이므로 버튼 경로처럼 연결 오류를 알린다.
-            try { await completePasskey(response, true); } catch { message = 'Unable to connect to the server.'; } finally { pending = false; }
+            try { await completePasskey(response, true); } catch { message = t('common.unableToConnect'); } finally { pending = false; }
         } catch {
             // 옵션을 받지 못하면 자동 완성 제안만 빠진다. 비밀번호 로그인은 그대로 쓸 수 있다.
         } finally {
@@ -234,7 +234,7 @@
         e.preventDefault();
         if(pending) return;
         if(password == '') {
-            message = 'Please enter your password.';
+            message = t('login.enterPassword');
             return;
         }
         pending = true;
@@ -265,20 +265,20 @@
             }
             if(result.bootstrapRequired) bootstrapRequired = true;
             if(result.status === 429) {
-                message = 'Too many login attempts. Please try again later.';
+                message = t('login.tooManyAttempts');
             } else if(result.invalidUsername) {
-                message = 'Username must be 3-32 characters: a-z, 0-9, dot, underscore, hyphen.';
+                message = t('login.usernameInvalid');
             } else if(result.weakPassword) {
-                message = "The password must be 8 to 1024 characters long.";
+                message = t('login.passwordLength');
             } else if(result.invalidBootstrapToken && bootstrapToken) {
-                message = 'The bootstrap token is invalid. Check config/.bootstrap-token on the server.';
+                message = t('login.bootstrapInvalid');
             } else if(result.bootstrapRequired) {
-                message = bootstrapToken ? 'Unable to set the first password.' : 'Enter the bootstrap token to set the first password.';
+                message = t(bootstrapToken ? 'login.bootstrapFailed' : 'login.bootstrapRequired');
             } else {
-                message = result.message || 'The password is incorrect.';
+                message = errorMessageOf(result) || t('serverError.password_incorrect');
             }
         } catch {
-            message = 'Unable to connect to the server.';
+            message = t('common.unableToConnect');
         } finally {
             pending = false;
         }
@@ -287,72 +287,72 @@
 
 <main class="login">
     <Card class="login-card">
-        <h1 class="login-title">Sign in</h1>
+        <h1 class="login-title">{t('login.title')}</h1>
         {#if ticket === '' && passkeyRequired}
         <div class="login-passkey-first">
             {#if passkeySupported}
-                <p id="login-passkey-required" role="status" style="margin: 0;">This account signs in with a passkey.</p>
-                <span id="login-passkey"><Button variant="primary" disabled={pending} onclick={() => { void passkeySignIn(); }}>Sign in with a passkey</Button></span>
-                <p id="login-passkey-hint" class="login-hint">Use the passkey on this device, your phone, or a security key.</p>
-                <p id="login-passkey-lost" class="login-hint">Lost your passkey? Ask your administrator to reset your sign-in.</p>
+                <p id="login-passkey-required" role="status" style="margin: 0;">{t('serverError.passkey_required')}</p>
+                <span id="login-passkey"><Button variant="primary" disabled={pending} onclick={() => { void passkeySignIn(); }}>{t('login.withPasskey')}</Button></span>
+                <p id="login-passkey-hint" class="login-hint">{t('login.passkeyDevices')}</p>
+                <p id="login-passkey-lost" class="login-hint">{t('login.passkeyLost')}</p>
             {:else}
-                <p id="login-passkey-required" role="status" style="margin: 0;">This account signs in with a passkey, but passkeys aren't available at this address.</p>
-                <p id="login-passkey-hint" class="login-hint">{PASSKEY_CONDITION} Open TTTGate at an address like that and sign in with your passkey.</p>
-                <p id="login-passkey-lost" class="login-hint">If you can't, ask your administrator to reset your password and two-factor authentication.</p>
+                <p id="login-passkey-required" role="status" style="margin: 0;">{t('login.passkeyRequiredUnavailable')}</p>
+                <p id="login-passkey-hint" class="login-hint">{t('login.passkeyOpenElsewhere', {condition: t('passkey.condition')})}</p>
+                <p id="login-passkey-lost" class="login-hint">{t('login.passkeyCannot')}</p>
             {/if}
             <p id="login-message" role="alert" class="login-message">{message}</p>
-            <button type="button" id="login-start-over" class="login-link" disabled={pending} onclick={useDifferentAccount}>Use a different account</button>
+            <button type="button" id="login-start-over" class="login-link" disabled={pending} onclick={useDifferentAccount}>{t('login.differentAccount')}</button>
         </div>
         {:else if ticket === '' && !showPassword}
         <!-- 이슈 338: 패스키를 먼저 보이는 화면. 비밀번호 칸은 Use password 를 누르거나 패스키가 실패하면 편다. -->
         <div class="login-passkey-first">
-            <span id="login-passkey"><Button variant="primary" disabled={pending} onclick={() => { void passkeySignIn(); }}>Sign in with a passkey</Button></span>
-            <p id="login-passkey-hint" class="login-hint">{PASSKEY_CONDITION}</p>
+            <span id="login-passkey"><Button variant="primary" disabled={pending} onclick={() => { void passkeySignIn(); }}>{t('login.withPasskey')}</Button></span>
+            <p id="login-passkey-hint" class="login-hint">{t('passkey.condition')}</p>
             <p id="login-message" role="alert" class="login-message">{message}</p>
-            <button type="button" id="login-use-password" class="login-link" disabled={pending && !autoRunning} onclick={() => { void usePassword(); }}>Use password</button>
+            <button type="button" id="login-use-password" class="login-link" disabled={pending && !autoRunning} onclick={() => { void usePassword(); }}>{t('login.usePassword')}</button>
         </div>
         {:else if ticket === ''}
         <form onsubmit={submit} novalidate>
-            <Field label="Username" for="login-username" hint={bootstrapRequired ? 'Choose the first superuser name (default: admin)' : undefined}>
+            <Field label={t('user.username')} for="login-username" hint={bootstrapRequired ? t('login.firstSuperuserHint') : undefined}>
                 <TextInput id="login-username" autocomplete={autofillAvailable && !bootstrapRequired ? 'username webauthn' : 'username'} bind:value={username} />
             </Field>
-            <Field label="Password" for="login-password">
+            <Field label={t('login.password')} for="login-password">
                 <TextInput id="login-password" type="password" autocomplete="current-password" bind:value={password} />
             </Field>
             {#if bootstrapRequired}
-                <Field label="Bootstrap token" for="bootstrap-token" hint="Read the token from config/.bootstrap-token on the server.">
+                <Field label={t('login.bootstrapToken')} for="bootstrap-token" hint={t('login.bootstrapTokenHint')}>
                     <TextInput id="bootstrap-token" type="password" autocomplete="off" bind:value={bootstrapToken} />
                 </Field>
             {/if}
             <p id="login-message" role="alert" class="login-message">{message}</p>
-            <div class="login-actions"><Button type="submit" variant="primary" disabled={pending}>OK</Button></div>
+            <div class="login-actions"><Button type="submit" variant="primary" disabled={pending}>{t('common.ok')}</Button></div>
         </form>
         {#if passkeySupported && !bootstrapRequired}
             <div class="login-passkey">
-                <span id="login-passkey"><Button disabled={pending} onclick={() => { void passkeySignIn(); }}>Sign in with a passkey</Button></span>
-                <p id="login-passkey-hint" class="login-hint">{PASSKEY_CONDITION}</p>
+                <span id="login-passkey"><Button disabled={pending} onclick={() => { void passkeySignIn(); }}>{t('login.withPasskey')}</Button></span>
+                <p id="login-passkey-hint" class="login-hint">{t('passkey.condition')}</p>
             </div>
         {/if}
         {:else}
         <form onsubmit={verify} novalidate>
-            <p id="login-mfa-hint">{useRecovery ? 'Enter one of your recovery codes.' : 'Enter the 6-digit code from your authenticator app.'}</p>
+            <p id="login-mfa-hint">{t(useRecovery ? 'login.recoveryHint' : 'login.codeHint')}</p>
             {#if useRecovery}
-                <Field label="Recovery code" for="login-recovery-code">
+                <Field label={t('login.recoveryCode')} for="login-recovery-code">
                     <TextInput id="login-recovery-code" autocomplete="off" bind:value={recoveryCode} />
                 </Field>
-                <button type="button" id="login-use-code" disabled={pending} style="align-self: flex-start; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: var(--fs-sm); text-decoration: underline; cursor: pointer;" onclick={() => { useRecovery = false; recoveryCode = ''; message = ''; }}>Use the authenticator app instead</button>
+                <button type="button" id="login-use-code" disabled={pending} style="align-self: flex-start; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: var(--fs-sm); text-decoration: underline; cursor: pointer;" onclick={() => { useRecovery = false; recoveryCode = ''; message = ''; }}>{t('login.useAuthenticator')}</button>
             {:else}
-                <Field label="Code" for="login-mfa-code">
+                <Field label={t('login.code')} for="login-mfa-code">
                     <!-- 6자리 제한은 입력 때 자른다(TextInput 계약에 maxlength 가 없다). 앞자리 0 을 지키려고 text 를 쓴다. -->
                     <TextInput id="login-mfa-code" inputmode="numeric" autocomplete="one-time-code" bind:value={code}
                         oninput={(v) => (code = v.replace(/\D/g, '').slice(0, 6))} />
                 </Field>
-                <button type="button" id="login-use-recovery" disabled={pending} style="align-self: flex-start; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: var(--fs-sm); text-decoration: underline; cursor: pointer;" onclick={() => { useRecovery = true; code = ''; message = ''; }}>Use a recovery code instead</button>
+                <button type="button" id="login-use-recovery" disabled={pending} style="align-self: flex-start; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: var(--fs-sm); text-decoration: underline; cursor: pointer;" onclick={() => { useRecovery = true; code = ''; message = ''; }}>{t('login.useRecovery')}</button>
             {/if}
             <p id="login-message" role="alert" class="login-message">{message}</p>
             <div class="login-actions">
-                <button type="button" id="login-mfa-back" disabled={pending} style="align-self: flex-start; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: var(--fs-sm); text-decoration: underline; cursor: pointer;" onclick={() => startOver()}>Start over</button>
-                <span id="login-mfa-submit"><Button type="submit" variant="primary" disabled={pending}>Verify</Button></span>
+                <button type="button" id="login-mfa-back" disabled={pending} style="align-self: flex-start; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: var(--fs-sm); text-decoration: underline; cursor: pointer;" onclick={() => startOver()}>{t('login.startOver')}</button>
+                <span id="login-mfa-submit"><Button type="submit" variant="primary" disabled={pending}>{t('login.verify')}</Button></span>
             </div>
         </form>
         {/if}

@@ -4,7 +4,7 @@
     import GroupsCtrl from '../controller/GroupsCtrl';
     import SessionsCtrl from '../controller/SessionsCtrl';
     import UsersCtrl from '../controller/UsersCtrl';
-    import type {ApiFailure, Role, UserStatus, UserView} from '../controller/Types';
+    import type {Role, UserStatus, UserView} from '../controller/Types';
     import Button from '../ui/Button.svelte';
     import Card from '../ui/Card.svelte';
     import Checkbox from '../ui/Checkbox.svelte';
@@ -19,6 +19,8 @@
     import {defaultHash} from '../shell/nav';
     import {useSession} from '../shell/session';
     import TempPasswordModal from './parts/TempPasswordModal.svelte';
+    import {errorMessageOf} from '../i18n/serverError';
+    import {t, plural} from '../i18n';
 
     // U3-03: #/users/new 와 #/users/<id>. 역할이 superuser 면 서버가 그룹을 정하므로 groupId 를 보내지 않는다.
     let {param}: {param: string} = $props();
@@ -26,8 +28,8 @@
     const session = useSession();
     const isNew = $derived(param === 'new');
 
-    const ROLES = [{value: 'superuser', label: 'Superuser'}, {value: 'regular', label: 'Regular'}];
-    const STATUSES = [{value: 'active', label: 'Active'}, {value: 'disabled', label: 'Disabled'}];
+    const ROLES = [{value: 'superuser', label: t('user.roleSuperuser')}, {value: 'regular', label: t('user.roleRegular')}];
+    const STATUSES = [{value: 'active', label: t('user.statusActive')}, {value: 'disabled', label: t('user.statusDisabled')}];
     const USERNAME_PATTERN = /^[a-z0-9._-]{3,32}$/;
 
     let groups = $state<Array<{value: string; label: string}>>([]);
@@ -62,12 +64,12 @@
             const id = loaded.id;
             const result = await UsersCtrl.instance.resetMfa(id);
             if(!result.success) {
-                toast.push({tone: 'alarm', message: result.message});
+                toast.push({tone: 'alarm', message: errorMessageOf(result)});
                 return;
             }
             // 저장하지 않은 폼 편집을 덮지 않도록 MFA 상태만 바꾼다.
             if(loaded) loaded = {...loaded, mfaEnabled: result.user.mfaEnabled === true};
-            toast.push({tone: 'pulse', message: 'Two-factor authentication reset.'});
+            toast.push({tone: 'pulse', message: t('user.mfaResetDone')});
             await loadSessionCount(id);
         });
     };
@@ -84,12 +86,12 @@
             const id = loaded.id;
             const result = await UsersCtrl.instance.resetPasskeys(id);
             if(!result.success) {
-                toast.push({tone: 'alarm', message: result.message});
+                toast.push({tone: 'alarm', message: errorMessageOf(result)});
                 return;
             }
             // 저장하지 않은 폼 편집을 덮지 않도록 패스키 수만 바꾼다.
             if(loaded) loaded = {...loaded, passkeyCount: result.user.passkeyCount ?? 0};
-            toast.push({tone: 'pulse', message: 'Passkeys removed.'});
+            toast.push({tone: 'pulse', message: t('user.passkeysRemoved')});
             await loadSessionCount(id);
         });
     };
@@ -110,14 +112,14 @@
             const id = loaded.id;
             const result = await SessionsCtrl.instance.killAllForUser(id);
             if(!result.success) {
-                toast.push({tone: 'alarm', message: result.message});
+                toast.push({tone: 'alarm', message: errorMessageOf(result)});
                 return;
             }
             if(result.self) {
                 session.invalidate();
                 return;
             }
-            toast.push({tone: 'pulse', message: `Ended ${result.removed} session(s).`});
+            toast.push({tone: 'pulse', message: t('sessions.endedCount', {count: result.removed})});
             await loadSessionCount(id);
         });
     };
@@ -142,7 +144,7 @@
             await task();
         } catch(error) {
             if(error instanceof InvalidSession) session.invalidate();
-            else toast.push({tone: 'alarm', message: 'Unable to connect to the server.'});
+            else toast.push({tone: 'alarm', message: t('common.unableToConnect')});
         } finally {
             pending = false;
         }
@@ -159,16 +161,10 @@
         if(value === 'regular' && groupId === 'system:superuser') groupId = 'default';
     };
 
-    const failureMessage = (failure: ApiFailure): string => {
-        if(failure.code === 'username_taken') return 'That username is already in use.';
-        if(failure.code === 'last_superuser') return 'At least one active superuser must remain.';
-        return failure.message;
-    };
-
     const validate = (): {username?: string; tempPassword?: string} => {
         if(!isNew) return {};
-        if(!USERNAME_PATTERN.test(username)) return {username: 'Username must be 3–32 chars, lowercase letters, digits, . _ -'};
-        if(!tempAuto && tempPassword.length < 8) return {tempPassword: 'Use at least 8 characters.'};
+        if(!USERNAME_PATTERN.test(username)) return {username: t('user.usernameInvalid')};
+        if(!tempAuto && tempPassword.length < 8) return {tempPassword: t('password.tooShort')};
         return {};
     };
 
@@ -185,7 +181,7 @@
             groupId: role === 'regular' ? groupId : undefined, temporaryPassword: tempAuto ? undefined : tempPassword,
         });
         if(!result.success) {
-            formError = failureMessage(result);
+            formError = errorMessageOf(result);
             return;
         }
         tempPassword = '';
@@ -204,10 +200,10 @@
         if(role === 'regular' && (groupId !== before.groupId || before.role === 'superuser')) patch.groupId = groupId;
         const result = await UsersCtrl.instance.update(before.id, patch);
         if(!result.success) {
-            formError = failureMessage(result);
+            formError = errorMessageOf(result);
             return;
         }
-        toast.push({tone: 'pulse', message: 'User saved.'});
+        toast.push({tone: 'pulse', message: t('user.saved')});
         // 자기 자신을 바꿨으면 권한(sections)이 달라졌을 수 있다. me 를 다시 읽고, 사용자 관리 권한이 없어졌으면
         // 403 을 받는 재조회 대신 새 기본 화면으로 간다.
         if(before.id === $me?.user.id) {
@@ -237,7 +233,7 @@
             const cleared = resetsSecondFactors;
             const result = await UsersCtrl.instance.resetPassword(id, {resetSecondFactors: cleared});
             if(!result.success) {
-                toast.push({tone: 'alarm', message: result.message});
+                toast.push({tone: 'alarm', message: errorMessageOf(result)});
                 return;
             }
             tempSecondFactorsReset = cleared;
@@ -259,12 +255,10 @@
                 // 자기 계정을 지웠으면 세션도 끝났다. 로그인 화면으로 간다.
                 session.invalidate();
             } else if(result.success) {
-                toast.push({tone: 'pulse', message: 'User deleted.'});
+                toast.push({tone: 'pulse', message: t('user.deleted')});
                 navigate('#/users');
-            } else if(result.code === 'user_owns_tunnels') {
-                toast.push({tone: 'alarm', message: "Reassign this user's tunnels first."});
             } else {
-                toast.push({tone: 'alarm', message: result.message});
+                toast.push({tone: 'alarm', message: errorMessageOf(result)});
             }
         });
     };
@@ -275,7 +269,7 @@
             if(listed.success) {
                 groups = listed.groups.filter((group) => group.id !== 'system:superuser').map((group) => ({value: group.id, label: group.name}));
             } else {
-                toast.push({tone: 'alarm', message: listed.message});
+                toast.push({tone: 'alarm', message: errorMessageOf(listed)});
             }
             if(!isNew) {
                 await reload(param);
@@ -288,33 +282,33 @@
 <form id="user-form" onsubmit={submit} novalidate style="display: flex; flex-direction: column; gap: var(--s-4);">
     <Card>
         <div style="display: flex; flex-direction: column; gap: var(--s-4);">
-            <Field label="Username" hint="3–32 chars, lowercase letters, digits, . _ -" for="user-username" error={errors.username}>
+            <Field label={t('user.username')} hint={t('user.usernameHint')} for="user-username" error={errors.username}>
                 <TextInput id="user-username" autocomplete="off" disabled={!isNew} invalid={errors.username !== undefined} bind:value={username} />
             </Field>
-            <Field label="Display name" for="user-display-name">
+            <Field label={t('user.displayName')} for="user-display-name">
                 <TextInput id="user-display-name" bind:value={displayName} />
             </Field>
-            <Field label="Role" for="user-role">
+            <Field label={t('user.role')} for="user-role">
                 <Select id="user-role" options={ROLES} bind:value={() => role, (value) => (role = value as Role)} onchange={onRole} />
             </Field>
             {#if role === 'regular'}
-                <Field label="Group" for="user-group">
+                <Field label={t('user.group')} for="user-group">
                     <Select id="user-group" options={groups} bind:value={groupId} />
                 </Field>
             {/if}
             {#if !isNew}
-                <Field label="Status" for="user-status">
+                <Field label={t('user.status')} for="user-status">
                     <Select id="user-status" options={STATUSES} bind:value={() => status, (value) => (status = value as UserStatus)} />
                 </Field>
             {/if}
         </div>
     </Card>
     {#if isNew}
-        <Card label="Temporary password">
+        <Card label={t('user.tempPassword')}>
             <div style="display: flex; flex-direction: column; gap: var(--s-4);">
-                <Checkbox id="user-temp-auto" label="Generate automatically" bind:checked={tempAuto} />
+                <Checkbox id="user-temp-auto" label={t('user.generateAutomatically')} bind:checked={tempAuto} />
                 {#if !tempAuto}
-                    <Field label="Temporary password" hint="At least 8 characters." for="user-temp-password" error={errors.tempPassword}>
+                    <Field label={t('user.tempPassword')} hint={t('password.minHint')} for="user-temp-password" error={errors.tempPassword}>
                         <TextInput id="user-temp-password" type="password" autocomplete="new-password"
                             invalid={errors.tempPassword !== undefined} bind:value={tempPassword} />
                     </Field>
@@ -324,29 +318,29 @@
     {/if}
     {#if !isNew}
         <section id="user-mfa">
-            <Card label="Two-factor">
+            <Card label={t('user.twoFactor')}>
                 <div style="display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; justify-content: space-between;">
                     <div style="display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center;">
-                        <span id="user-mfa-status" style="font-size: var(--fs-md); color: {loaded?.mfaEnabled ? 'var(--pulse)' : 'var(--ink-2)'};">{loaded?.mfaEnabled ? 'Enabled' : 'Off'}</span>
-                        {#if loaded?.mfaRequired}<span id="user-mfa-required"><Chip tone="warn">Required</Chip></span>{/if}
+                        <span id="user-mfa-status" style="font-size: var(--fs-md); color: {loaded?.mfaEnabled ? 'var(--pulse)' : 'var(--ink-2)'};">{t(loaded?.mfaEnabled ? 'user.mfaEnabled' : 'user.mfaOff')}</span>
+                        {#if loaded?.mfaRequired}<span id="user-mfa-required"><Chip tone="warn">{t('user.mfaRequired')}</Chip></span>{/if}
                     </div>
-                    <span id="user-reset-mfa"><Button variant="danger" disabled={pending || loaded?.mfaEnabled !== true} onclick={() => (resetMfaOpen = true)}>Reset MFA</Button></span>
+                    <span id="user-reset-mfa"><Button variant="danger" disabled={pending || loaded?.mfaEnabled !== true} onclick={() => (resetMfaOpen = true)}>{t('user.resetMfa')}</Button></span>
                 </div>
             </Card>
         </section>
         <section id="user-passkeys">
-            <Card label="Passkeys">
+            <Card label={t('user.passkeys')}>
                 <div style="display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; justify-content: space-between;">
-                    <span id="user-passkey-count">{passkeyCount} {passkeyCount === 1 ? 'passkey' : 'passkeys'}</span>
-                    <span id="user-reset-passkeys"><Button variant="danger" disabled={pending || passkeyCount === 0} onclick={() => (resetPasskeysOpen = true)}>Remove passkeys</Button></span>
+                    <span id="user-passkey-count">{plural('user.passkeyCount', passkeyCount)}</span>
+                    <span id="user-reset-passkeys"><Button variant="danger" disabled={pending || passkeyCount === 0} onclick={() => (resetPasskeysOpen = true)}>{t('user.removePasskeys')}</Button></span>
                 </div>
             </Card>
         </section>
         <section id="user-sessions">
-            <Card label="Sessions">
+            <Card label={t('user.sessions')}>
                 <div style="display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; justify-content: space-between;">
-                    <span id="user-session-count">{sessionCount} active session(s)</span>
-                    <span id="user-end-sessions"><Button variant="danger" disabled={pending || sessionCount === 0} onclick={() => (endSessionsOpen = true)}>End all sessions</Button></span>
+                    <span id="user-session-count">{t('user.activeSessions', {count: sessionCount})}</span>
+                    <span id="user-end-sessions"><Button variant="danger" disabled={pending || sessionCount === 0} onclick={() => (endSessionsOpen = true)}>{t('user.endAllSessions')}</Button></span>
                 </div>
             </Card>
         </section>
@@ -358,65 +352,62 @@
     <div style="position: sticky; bottom: 0; z-index: 40; display: flex; flex-wrap: wrap; gap: var(--s-3); justify-content: flex-end;
         padding: var(--s-3) 0; margin-top: var(--s-4); background: var(--bg-1); border-top: 1px solid var(--line-0);">
         {#if isNew}
-            <Button variant="primary" type="submit" disabled={pending}>Create user</Button>
+            <Button variant="primary" type="submit" disabled={pending}>{t('user.create')}</Button>
         {:else}
-            <Button disabled={pending || !loaded} onclick={() => { resetSecondFactors = true; resetOpen = true; }}>Reset password</Button>
-            <Button variant="danger" disabled={pending || !loaded} onclick={() => (deleteOpen = true)}>Delete</Button>
-            <Button variant="primary" type="submit" disabled={pending || !dirty}>Save</Button>
+            <Button disabled={pending || !loaded} onclick={() => { resetSecondFactors = true; resetOpen = true; }}>{t('user.resetPassword')}</Button>
+            <Button variant="danger" disabled={pending || !loaded} onclick={() => (deleteOpen = true)}>{t('common.delete')}</Button>
+            <Button variant="primary" type="submit" disabled={pending || !dirty}>{t('common.save')}</Button>
         {/if}
     </div>
 </form>
 
-<Modal bind:open={resetOpen} title="Reset password" class="reset-password-modal">
+<Modal bind:open={resetOpen} title={t('user.resetPassword')} class="reset-password-modal">
     <div style="display: flex; flex-direction: column; gap: var(--s-3);">
-        <p style="margin: 0;">Issue a new temporary password for @{loaded?.username}? Their current sessions will be signed out.</p>
+        <p style="margin: 0;">{t('user.resetPasswordConfirm', {username: loaded?.username ?? ''})}</p>
         <!-- 이슈 346: 2단계 수단을 잃은 사용자를 복구할 때 함께 지운다. 지울 수단이 없으면 끈 채 막는다. -->
-        <Checkbox id="user-reset-second-factors" label="Also reset two-factor authentication and passkeys" disabled={!hasSecondFactor}
+        <Checkbox id="user-reset-second-factors" label={t('user.alsoResetSecondFactors')} disabled={!hasSecondFactor}
             bind:checked={() => resetsSecondFactors, (on) => (resetSecondFactors = on)} />
-        <p id="user-reset-second-factors-hint" style="margin: 0; color: var(--ink-2); font-size: var(--fs-sm);">{!hasSecondFactor
-            ? 'No two-factor methods to reset.'
+        <p id="user-reset-second-factors-hint" style="margin: 0; color: var(--ink-2); font-size: var(--fs-sm);">{t(!hasSecondFactor
+            ? 'user.resetHintNothing'
             : resetSecondFactors
-                ? (loaded?.mfaRequired ? "They'll set a new password, then set up two-factor authentication again."
-                    : 'They\'ll set a new password, then can set up two-factor authentication again in My account.')
-                : (loaded?.mfaRequired && loaded?.mfaEnabled !== true
-                    ? "They have only passkeys, so they'll need a passkey to sign in. The temporary password alone won't work."
-                    : "Their authenticator app and passkeys stay. They'll still need them to sign in.")}</p>
+                ? (loaded?.mfaRequired ? 'user.resetHintMfaRequired' : 'user.resetHintMfaOptional')
+                : (loaded?.mfaRequired && loaded?.mfaEnabled !== true ? 'user.resetHintPasskeyOnly' : 'user.resetHintKeep'))}</p>
     </div>
     {#snippet footer()}
-        <Button onclick={() => (resetOpen = false)}>Cancel</Button>
+        <Button onclick={() => (resetOpen = false)}>{t('common.cancel')}</Button>
         {#if resetsSecondFactors}
-            <Button variant="danger" onclick={resetPassword}>Reset and issue password</Button>
+            <Button variant="danger" onclick={resetPassword}>{t('user.resetAndIssue')}</Button>
         {:else}
-            <Button variant="primary" onclick={resetPassword}>Issue password</Button>
+            <Button variant="primary" onclick={resetPassword}>{t('user.issuePassword')}</Button>
         {/if}
     {/snippet}
 </Modal>
-<Modal bind:open={deleteOpen} title="Delete user">
-    Delete @{loaded?.username}? This cannot be undone.
+<Modal bind:open={deleteOpen} title={t('user.delete')}>
+    {t('user.deleteConfirm', {username: loaded?.username ?? ''})}
     {#snippet footer()}
-        <Button onclick={() => (deleteOpen = false)}>Cancel</Button>
-        <Button variant="danger" onclick={remove}>Delete user</Button>
+        <Button onclick={() => (deleteOpen = false)}>{t('common.cancel')}</Button>
+        <Button variant="danger" onclick={remove}>{t('user.delete')}</Button>
     {/snippet}
 </Modal>
-<Modal bind:open={resetMfaOpen} title="Reset two-factor" class="reset-mfa-modal">
-    Reset two-factor authentication for {loaded?.username}? Their sessions will end.
+<Modal bind:open={resetMfaOpen} title={t('user.resetTwoFactor')} class="reset-mfa-modal">
+    {t('user.resetMfaConfirm', {username: loaded?.username ?? ''})}
     {#snippet footer()}
-        <Button onclick={() => (resetMfaOpen = false)}>Cancel</Button>
-        <span id="confirm-reset-mfa"><Button variant="danger" onclick={resetMfa}>Reset</Button></span>
+        <Button onclick={() => (resetMfaOpen = false)}>{t('common.cancel')}</Button>
+        <span id="confirm-reset-mfa"><Button variant="danger" onclick={resetMfa}>{t('user.reset')}</Button></span>
     {/snippet}
 </Modal>
-<Modal bind:open={resetPasskeysOpen} title="Remove passkeys" class="reset-passkeys-modal">
-    Remove all passkeys of {loaded?.username}? Their sessions will end.
+<Modal bind:open={resetPasskeysOpen} title={t('user.removePasskeys')} class="reset-passkeys-modal">
+    {t('user.removePasskeysConfirm', {username: loaded?.username ?? ''})}
     {#snippet footer()}
-        <Button onclick={() => (resetPasskeysOpen = false)}>Cancel</Button>
-        <span id="confirm-reset-passkeys"><Button variant="danger" onclick={resetPasskeys}>Remove</Button></span>
+        <Button onclick={() => (resetPasskeysOpen = false)}>{t('common.cancel')}</Button>
+        <span id="confirm-reset-passkeys"><Button variant="danger" onclick={resetPasskeys}>{t('common.remove')}</Button></span>
     {/snippet}
 </Modal>
-<Modal bind:open={endSessionsOpen} title="End all sessions" class="end-all-modal">
-    End all sessions for {loaded?.username}?
+<Modal bind:open={endSessionsOpen} title={t('user.endAllSessions')} class="end-all-modal">
+    {t('user.endAllConfirm', {username: loaded?.username ?? ''})}
     {#snippet footer()}
-        <Button onclick={() => (endSessionsOpen = false)}>Cancel</Button>
-        <span id="confirm-end-all"><Button variant="danger" onclick={endSessions}>End all</Button></span>
+        <Button onclick={() => (endSessionsOpen = false)}>{t('common.cancel')}</Button>
+        <span id="confirm-end-all"><Button variant="danger" onclick={endSessions}>{t('sessions.endAll')}</Button></span>
     {/snippet}
 </Modal>
 <TempPasswordModal bind:open={tempOpen} username={tempUsername} password={tempValue} secondFactorsReset={tempSecondFactorsReset}

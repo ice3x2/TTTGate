@@ -3,6 +3,7 @@
     import Chip from '../ui/Chip.svelte';
     import ServerStatusCtrl from '../controller/ServerStatusCtrl';
     import {navigate} from '../router';
+    import {t} from '../i18n';
 
     const ARROW = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 10H4"/><path d="M9 5l-5 5 5 5"/></svg>';
     const BURGER = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M3 5h14"/><path d="M3 10h14"/><path d="M3 15h14"/></svg>';
@@ -41,9 +42,9 @@
         <!-- 버튼 없이 같은 크기의 자리만 남겨 제목 위치를 유지한다. -->
         <span class="hdr-btn" aria-hidden="true"></span>
     {:else if back}
-        <button type="button" class="hdr-btn" aria-label="Back" onclick={() => navigate(back)}>{@html ARROW}</button>
+        <button type="button" class="hdr-btn" aria-label={t('common.back')} onclick={() => navigate(back)}>{@html ARROW}</button>
     {:else if !menuPinned}
-        <button type="button" id="menu-button" class="hdr-btn" aria-label="Open menu" aria-expanded={menuOpen} aria-controls="nav-drawer" onclick={() => (menuOpen = true)}>{@html BURGER}</button>
+        <button type="button" id="menu-button" class="hdr-btn" aria-label={t('common.openMenu')} aria-expanded={menuOpen} aria-controls="nav-drawer" onclick={() => (menuOpen = true)}>{@html BURGER}</button>
     {/if}
     <h1 class="hdr-title">{title}</h1>
     {#if version}<Chip mono class="hdr-version">{version}</Chip>{/if}

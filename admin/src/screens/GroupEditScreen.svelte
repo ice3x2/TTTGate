@@ -14,6 +14,8 @@
     import {toast} from '../ui/toast';
     import {navigate} from '../router';
     import {useSession} from '../shell/session';
+    import {errorMessageOf} from '../i18n/serverError';
+    import {t} from '../i18n';
 
     // U3-04: #/groups/new 와 #/groups/<id>. 정합성 규칙은 서버(422)에 맡기고, HTTP rewrite 가 꺼지면 리라이트 권한을 끄는 것만 여기서 한다.
     let {param}: {param: string} = $props();
@@ -29,16 +31,16 @@
 
     const HOUR_MS = 3_600_000;
     // 이슈 347: toggle 은 자기에게 할당되었거나 공유된 터널을 켜고 끄기만 한다.
-    const CRUD = [{value: 'none', label: 'None'}, {value: 'read_only', label: 'Read only'}, {value: 'toggle', label: 'Toggle only'}, {value: 'full', label: 'Full'}];
+    const CRUD = [{value: 'none', label: t('group.crudNone')}, {value: 'read_only', label: t('group.crudReadOnly')}, {value: 'toggle', label: t('group.crudToggle')}, {value: 'full', label: t('group.crudFull')}];
     const PROTOCOLS: Array<{value: TunnelProtocolName; label: string}> = [
-        {value: 'TCP', label: 'TCP'}, {value: 'HTTP', label: 'HTTP'}, {value: 'HTTPS', label: 'HTTPS'}, {value: 'HTTP_REWRITE', label: 'HTTP rewrite'}];
+        {value: 'TCP', label: 'TCP'}, {value: 'HTTP', label: 'HTTP'}, {value: 'HTTPS', label: 'HTTPS'}, {value: 'HTTP_REWRITE', label: t('group.httpRewrite')}];
     const PERMISSIONS: Array<{value: Permission; label: string}> = [
-        {value: 'cors', label: 'CORS'}, {value: 'host', label: 'Host'}, {value: 'header', label: 'Headers'}, {value: 'body', label: 'Body'}];
-    const RATE_LIMITS = [{value: 'unlimited', label: 'Unlimited'}, {value: '1MB/s', label: '1 MB/s'},
+        {value: 'cors', label: 'CORS'}, {value: 'host', label: t('group.rewriteHost')}, {value: 'header', label: t('group.rewriteHeaders')}, {value: 'body', label: t('group.rewriteBody')}];
+    const RATE_LIMITS = [{value: 'unlimited', label: t('group.unlimited')}, {value: '1MB/s', label: '1 MB/s'},
         {value: '10MB/s', label: '10 MB/s'}, {value: '100MB/s', label: '100 MB/s'}];
     const SECTIONS: Array<{value: Section; label: string}> = [
-        {value: 'tunnels', label: 'Tunnels'}, {value: 'my_audit', label: 'My audit log'}, {value: 'my_profile', label: 'My profile'}, {value: 'my_sessions', label: 'My sessions'}];
-    const VISIBILITY = [{value: 'private', label: 'Private'}, {value: 'group_read', label: 'Readable by group'}];
+        {value: 'tunnels', label: t('nav.tunnels')}, {value: 'my_audit', label: t('group.myAuditLog')}, {value: 'my_profile', label: t('group.myProfile')}, {value: 'my_sessions', label: t('group.mySessions')}];
+    const VISIBILITY = [{value: 'private', label: t('group.private')}, {value: 'group_read', label: t('group.groupRead')}];
 
     const clone = (attrs: GroupAttributes): GroupAttributes => JSON.parse(JSON.stringify(attrs));
     const snapshot = (name: string, attrs: GroupAttributes): string => JSON.stringify({name, attrs});
@@ -99,9 +101,9 @@
 
     /** 한도 칸이 비었는지 본다. 빈칸은 저장하지 않는다 — 0 은 무제한이라 직접 넣어야 한다. */
     const emptyLimitErrors = (): {count?: string; duration?: string; concurrent?: string} => ({
-        ...(attrs.max_tunnel_count == null ? {count: 'Enter a number. 0 disables tunnel creation.'} : {}),
-        ...(durationHours == null ? {duration: 'Enter a number. 0 means unlimited.'} : {}),
-        ...(attrs.max_concurrent_connections == null ? {concurrent: 'Enter a number. 0 means unlimited.'} : {})
+        ...(attrs.max_tunnel_count == null ? {count: t('group.enterCountDisables')} : {}),
+        ...(durationHours == null ? {duration: t('group.enterNumberUnlimited')} : {}),
+        ...(attrs.max_concurrent_connections == null ? {concurrent: t('group.enterNumberUnlimited')} : {})
     });
 
     /** 포트 범위의 null 은 그대로 보내 서버 422 를 받는다. 기간은 setDuration 이 attrs 에 이미 반영한다. */
@@ -114,7 +116,7 @@
         } catch(error) {
             // adminRequest 는 네트워크 오류를 실패 값으로 돌려준다. 여기에는 InvalidSession 과 예상하지 못한 예외만 온다.
             if(error instanceof InvalidSession) session.invalidate();
-            else toast.push({tone: 'alarm', message: 'Unable to connect to the server.'});
+            else toast.push({tone: 'alarm', message: t('common.unableToConnect')});
         } finally {
             pending = false;
         }
@@ -134,7 +136,7 @@
         e.preventDefault();
         if(readOnly || pending) return;
         formError = '';
-        nameError = name.trim() === '' ? 'Enter a group name.' : '';
+        nameError = name.trim() === '' ? t('group.enterName') : '';
         limitErrors = emptyLimitErrors();
         if(nameError || Object.keys(limitErrors).length > 0) return;
         // 이슈 346: 2단계 인증 필수를 새로 켜고 2단계 수단이 없는 구성원이 있으면 저장 전에 알린다. 끌 때는 묻지 않는다.
@@ -152,7 +154,7 @@
             if(isNew) {
                 const result = await GroupsCtrl.instance.create({name, attributes});
                 if(result.success) navigate('#/groups/' + result.group.id);
-                else formError = result.message;
+                else formError = errorMessageOf(result);
                 return;
             }
             if(!group) return;
@@ -163,11 +165,10 @@
             if(!isDefaultGroup && name !== group.name) patch.name = name;
             const result = await GroupsCtrl.instance.update(id, patch);
             if(!result.success) {
-                formError = result.status === 409 && result.code === 'group_revision_conflict'
-                    ? 'Someone else changed this group. Reload to see the latest values.' : result.message;
+                formError = errorMessageOf(result);
                 return;
             }
-            toast.push({tone: 'pulse', message: 'Group saved.'});
+            toast.push({tone: 'pulse', message: t('group.saved')});
             await reload(id);
         });
     };
@@ -178,12 +179,10 @@
             if(!group) return;
             const result = await GroupsCtrl.instance.remove(group.id);
             if(result.success) {
-                toast.push({tone: 'pulse', message: 'Group deleted.'});
+                toast.push({tone: 'pulse', message: t('group.deleted')});
                 navigate('#/groups');
-            } else if(result.code === 'group_not_empty') {
-                toast.push({tone: 'alarm', message: 'Move the members to another group first.'});
             } else {
-                toast.push({tone: 'alarm', message: result.message});
+                toast.push({tone: 'alarm', message: errorMessageOf(result)});
             }
         });
     };
@@ -194,7 +193,7 @@
             if(loaded.success) {
                 trustedClients = loaded.trustedClients;
             } else {
-                toast.push({tone: 'alarm', message: 'Could not load trusted clients.'});
+                toast.push({tone: 'alarm', message: t('group.trustedClientsLoadFailed')});
                 trustedClients = [];
             }
             if(!isNew) await reload(param);
@@ -204,30 +203,30 @@
 
 <form onsubmit={submit} novalidate style="display: flex; flex-direction: column; gap: var(--s-4);">
     {#if readOnly}
-        <p id="group-readonly-note">Superusers are not limited by attributes.</p>
+        <p id="group-readonly-note">{t('groups.superuserUnlimited')}</p>
     {/if}
-    <Field label="Name" for="group-name" error={nameError || undefined}>
+    <Field label={t('group.name')} for="group-name" error={nameError || undefined}>
         <TextInput id="group-name" disabled={readOnly || isDefaultGroup} invalid={nameError !== ''} bind:value={name} />
     </Field>
 
-    <Card label="Tunnel permissions">
+    <Card label={t('group.tunnelPermissions')}>
         <div style="display: flex; flex-direction: column; gap: var(--s-4);">
             {#if formError}
                 <p id="group-form-error" role="alert">{formError}</p>
             {/if}
-            <Field label="Tunnel access" for="group-attr-tunnel_crud">
+            <Field label={t('group.tunnelAccess')} for="group-attr-tunnel_crud">
                 <Select id="group-attr-tunnel_crud" options={CRUD} disabled={readOnly}
                     bind:value={() => attrs.tunnel_crud, (value) => (attrs.tunnel_crud = value as GroupAttributes['tunnel_crud'])} />
             </Field>
-            <Field label="Max tunnels" hint="0 disables tunnel creation" for="group-attr-max_tunnel_count" error={limitErrors.count}>
+            <Field label={t('group.maxTunnels')} hint={t('group.maxTunnelsHint')} for="group-attr-max_tunnel_count" error={limitErrors.count}>
                 <NumberInput id="group-attr-max_tunnel_count" min={0} max={1000} step={1} disabled={readOnly}
                     bind:value={() => attrs.max_tunnel_count, (value) => (attrs.max_tunnel_count = value as number)} />
             </Field>
-            <Field label="Max tunnel duration (hours)" hint="0 = unlimited. Also applies to tunnels that are already on: a lower value shortens them now, and a higher value or 0 lets them run again until the time their owners asked for." for="group-attr-max_tunnel_duration_ms" error={limitErrors.duration}>
+            <Field label={t('group.maxDuration')} hint={t('group.maxDurationHint')} for="group-attr-max_tunnel_duration_ms" error={limitErrors.duration}>
                 <NumberInput id="group-attr-max_tunnel_duration_ms" min={0} max={8760} step={1} disabled={readOnly}
                     bind:value={() => durationHours, setDuration} />
             </Field>
-            <Field label="Allowed port ranges">
+            <Field label={t('group.allowedPortRanges')}>
                 <div style="display: flex; flex-direction: column; gap: var(--s-2);">
                     {#each attrs.allowed_port_range as range, i (i)}
                         <div data-range-index={i} style="display: flex; gap: var(--s-2); align-items: center;">
@@ -236,16 +235,16 @@
                             <NumberInput id={`group-attr-allowed_port_range-${i}-to`} min={1} max={65535} disabled={readOnly}
                                 bind:value={() => range.to, (value) => (range.to = value as number)} />
                             <Button size="sm" disabled={readOnly}
-                                onclick={() => (attrs.allowed_port_range = attrs.allowed_port_range.filter((_, index) => index !== i))}>Remove</Button>
+                                onclick={() => (attrs.allowed_port_range = attrs.allowed_port_range.filter((_, index) => index !== i))}>{t('common.remove')}</Button>
                         </div>
                     {:else}
-                        <p>No ports are allowed.</p>
+                        <p>{t('group.noPorts')}</p>
                     {/each}
                     <div><Button size="sm" disabled={readOnly}
-                        onclick={() => (attrs.allowed_port_range = [...attrs.allowed_port_range, {from: 1, to: 65535}])}>Add range</Button></div>
+                        onclick={() => (attrs.allowed_port_range = [...attrs.allowed_port_range, {from: 1, to: 65535}])}>{t('group.addRange')}</Button></div>
                 </div>
             </Field>
-            <Field label="Allowed protocols">
+            <Field label={t('group.allowedProtocols')}>
                 <div style="display: flex; flex-wrap: wrap; gap: var(--s-4);">
                     {#each PROTOCOLS as protocol (protocol.value)}
                         <Checkbox id={`group-attr-allowed_protocols-${protocol.value}`} label={protocol.label} disabled={readOnly}
@@ -254,7 +253,7 @@
                     {/each}
                 </div>
             </Field>
-            <Field label="HTTP rewrite permissions">
+            <Field label={t('group.rewritePermissions')}>
                 <div style="display: flex; flex-wrap: wrap; gap: var(--s-4);">
                     {#each PERMISSIONS as permission (permission.value)}
                         <Checkbox id={`group-attr-http_tunnel_rewrite_permissions-${permission.value}`} label={permission.label}
@@ -264,36 +263,36 @@
                     {/each}
                 </div>
             </Field>
-            <Field label="Allowed trusted clients">
+            <Field label={t('group.allowedTrustedClients')}>
                 <div style="display: flex; flex-wrap: wrap; gap: var(--s-4);">
                     {#each trustedClients as client (client.clientId)}
                         <Checkbox id={`group-attr-allowed_trusted_clients-${client.clientId}`} label={client.displayName ?? client.clientId} disabled={readOnly}
                             bind:checked={() => attrs.allowed_trusted_clients.includes(client.clientId),
                                 (on) => (attrs.allowed_trusted_clients = toggled(trustedClients.map((c) => c.clientId), attrs.allowed_trusted_clients, client.clientId, on))} />
                     {:else}
-                        <p>No trusted clients are registered.</p>
+                        <p>{t('group.noTrustedClients')}</p>
                     {/each}
                 </div>
             </Field>
         </div>
     </Card>
 
-    <Card label="Limits">
+    <Card label={t('group.limits')}>
         <div style="display: flex; flex-direction: column; gap: var(--s-4);">
-            <Field label="Max concurrent connections" hint="0 = unlimited" for="group-attr-max_concurrent_connections" error={limitErrors.concurrent}>
+            <Field label={t('group.maxConcurrent')} hint={t('group.zeroUnlimited')} for="group-attr-max_concurrent_connections" error={limitErrors.concurrent}>
                 <NumberInput id="group-attr-max_concurrent_connections" min={0} max={100000} step={1} disabled={readOnly}
                     bind:value={() => attrs.max_concurrent_connections, (value) => (attrs.max_concurrent_connections = value as number)} />
             </Field>
-            <Field label="Bandwidth" for="group-attr-rate_limit">
+            <Field label={t('group.bandwidth')} for="group-attr-rate_limit">
                 <Select id="group-attr-rate_limit" options={RATE_LIMITS} disabled={readOnly}
                     bind:value={() => attrs.rate_limit, (value) => (attrs.rate_limit = value as GroupAttributes['rate_limit'])} />
             </Field>
         </div>
     </Card>
 
-    <Card label="Visibility">
+    <Card label={t('group.visibility')}>
         <div style="display: flex; flex-direction: column; gap: var(--s-4);">
-            <Field label="Admin UI sections">
+            <Field label={t('group.adminSections')}>
                 <div style="display: flex; flex-wrap: wrap; gap: var(--s-4);">
                     {#each SECTIONS as section (section.value)}
                         <Checkbox id={`group-attr-admin_ui_section_access-${section.value}`} label={section.label} disabled={readOnly}
@@ -302,20 +301,20 @@
                     {/each}
                 </div>
             </Field>
-            <Field label="Tunnel visibility" for="group-attr-tunnel_visibility">
+            <Field label={t('group.tunnelVisibility')} for="group-attr-tunnel_visibility">
                 <Select id="group-attr-tunnel_visibility" options={VISIBILITY} disabled={readOnly}
                     bind:value={() => attrs.tunnel_visibility, (value) => (attrs.tunnel_visibility = value as GroupAttributes['tunnel_visibility'])} />
             </Field>
         </div>
     </Card>
 
-    <Card label="Sign-in">
+    <Card label={t('group.signIn')}>
         {#if isSuperuserGroup}
-            <p id="group-mfa-superuser-note" style="margin: 0; color: var(--ink-2);">Superusers follow the server setting “Require two-factor for superusers”.</p>
+            <p id="group-mfa-superuser-note" style="margin: 0; color: var(--ink-2);">{t('group.superuserMfaNote', {setting: t('server.requireMfaSuperusers')})}</p>
         {:else}
             <div style="display: flex; flex-direction: column; gap: var(--s-2);">
-                <Checkbox id="group-attr-mfa_required" label="Require two-factor authentication" disabled={readOnly} bind:checked={attrs.mfa_required} />
-                <p style="margin: 0; color: var(--ink-2); font-size: var(--fs-sm);">Members must use a passkey or an authenticator app. Members without one must set it up the next time they use the admin console.</p>
+                <Checkbox id="group-attr-mfa_required" label={t('group.requireMfa')} disabled={readOnly} bind:checked={attrs.mfa_required} />
+                <p style="margin: 0; color: var(--ink-2); font-size: var(--fs-sm);">{t('group.requireMfaHint')}</p>
             </div>
         {/if}
     </Card>
@@ -325,29 +324,29 @@
         <div style="position: sticky; bottom: 0; z-index: 40; display: flex; flex-wrap: wrap; gap: var(--s-3); justify-content: flex-end;
             padding: var(--s-3) 0; margin-top: var(--s-4); background: var(--bg-1); border-top: 1px solid var(--line-0);">
             {#if isNew}
-                <Button variant="primary" type="submit" disabled={pending}>Create group</Button>
+                <Button variant="primary" type="submit" disabled={pending}>{t('group.create')}</Button>
             {:else}
                 {#if group && !group.system}
-                    <Button variant="danger" disabled={pending} onclick={() => (deleteOpen = true)}>Delete</Button>
+                    <Button variant="danger" disabled={pending} onclick={() => (deleteOpen = true)}>{t('common.delete')}</Button>
                 {/if}
-                <Button variant="primary" type="submit" disabled={pending || !group || !dirty}>Save</Button>
+                <Button variant="primary" type="submit" disabled={pending || !group || !dirty}>{t('common.save')}</Button>
             {/if}
         </div>
     {/if}
 </form>
 
-<Modal bind:open={mfaConfirmOpen} title="Require two-factor authentication?" class="group-mfa-confirm-modal">
-    <p id="group-mfa-affected" style="margin: 0;">{withoutSecondFactor} of {activeMembers.length} members don't have two-factor authentication yet. They'll be asked to set it up before they can do anything else, including members who are signed in now.</p>
+<Modal bind:open={mfaConfirmOpen} title={t('group.requireMfaConfirmTitle')} class="group-mfa-confirm-modal">
+    <p id="group-mfa-affected" style="margin: 0;">{t('group.requireMfaAffected', {count: withoutSecondFactor, total: activeMembers.length})}</p>
     {#snippet footer()}
-        <Button onclick={() => (mfaConfirmOpen = false)}>Cancel</Button>
-        <Button variant="primary" onclick={save}>Require and save</Button>
+        <Button onclick={() => (mfaConfirmOpen = false)}>{t('common.cancel')}</Button>
+        <Button variant="primary" onclick={save}>{t('group.requireAndSave')}</Button>
     {/snippet}
 </Modal>
 
-<Modal bind:open={deleteOpen} title="Delete group">
-    Delete {group?.name}? This cannot be undone.
+<Modal bind:open={deleteOpen} title={t('group.delete')}>
+    {t('group.deleteConfirm', {name: group?.name ?? ''})}
     {#snippet footer()}
-        <Button onclick={() => (deleteOpen = false)}>Cancel</Button>
-        <Button variant="danger" onclick={remove}>Delete group</Button>
+        <Button onclick={() => (deleteOpen = false)}>{t('common.cancel')}</Button>
+        <Button variant="danger" onclick={remove}>{t('group.delete')}</Button>
     {/snippet}
 </Modal>

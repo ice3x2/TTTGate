@@ -1,7 +1,6 @@
 <script lang="ts">
     import {onMount} from 'svelte';
     import ServerOptionCtrl from '../controller/ServerOptionCtrl';
-    import {serverMessageOf} from '../controller/AdminRequest';
     import InvalidSession from '../controller/InvalidSession';
     import type {Options, TunnelingStatus} from '../controller/Options';
     import Button from '../ui/Button.svelte';
@@ -17,6 +16,8 @@
     import {tunnelRowView, tunnelTitle, undoTimeoutOf} from './parts/tunnelRow';
     import {ipLimitView, withIpResult, type IpLimitView} from './parts/ipLimit';
     import Clock from '../ui/Clock.svelte';
+    import {errorMessageOf} from '../i18n/serverError';
+    import {t, plural} from '../i18n';
 
     // 이슈 338: 로그인하면 먼저 보이는 화면이다. 터널마다 제목·상태 한 줄·스위치를 그리고 한 번 눌러 켜고 끈다.
     // 연결이 있는 터널을 끌 때만 묻고, 바꾼 뒤 5초 동안 Undo 를 보인다. 요청 중에는 그 행의 스위치만 잠근다.
@@ -43,7 +44,7 @@
 
     let alertOpen = $state(false);
     let alertMessage = $state('');
-    let alertButton = $state('OK');
+    let alertButton = $state(t('common.ok'));
     let alertClose = $state<() => void>(() => {});
 
     const policy = $derived($me ? tunnelPolicy($me) : undefined);
@@ -62,7 +63,7 @@
 
     const sessionOut = () => {
         poller.stop();
-        alert('Session is expired. Please login again.', 'OK', () => session.invalidate());
+        alert(t('common.sessionExpired'), t('common.ok'), () => session.invalidate());
     };
 
     // 상태는 화면이 열리면 바로 1초마다 읽는다(목록과 따로). 실패해도 이어 가고 401 만 멈춘다.
@@ -97,12 +98,12 @@
                 sessionOut();
                 return;
             }
-            alert('Unable to connect to the server.', 'Retry', () => load());
+            alert(t('common.unableToConnect'), t('common.retry'), () => load());
         }
     };
 
     const undoToast = (message: string, run?: () => void) => toast.push({
-        tone: 'pulse', message, timeoutMs: UNDO_MS, key: UNDO_KEY, ...(run ? {action: {label: 'Undo', run}} : {})
+        tone: 'pulse', message, timeoutMs: UNDO_MS, key: UNDO_KEY, ...(run ? {action: {label: t('tunnels.undo'), run}} : {})
     });
 
     /** 한 행의 활성 상태를 바꾼다. undo 는 되돌리기 요청이라 알림을 다시 띄우지 않는다. 그 행이 처리 중이면 무시한다. */
@@ -118,7 +119,7 @@
         try {
             const result = await ServerOptionCtrl.instance.activeExternalPortServer(active, port, timeout);
             if(!result.success) {
-                toast.push({tone: 'alarm', message: serverMessageOf(result) || `Unable to change ${title}.`});
+                toast.push({tone: 'alarm', message: errorMessageOf(result, t('tunnels.changeFailed', {title}))});
                 return;
             }
             if(before) statuses = {...statuses, [port]: {...before, active}};
@@ -126,18 +127,18 @@
             await poller.refresh();
             if(undo) return;
             if(active) {
-                undoToast(`${title} is on`, () => { void request(option, false, 0, true); });
+                undoToast(t('tunnels.turnedOn', {title}), () => { void request(option, false, 0, true); });
             } else {
                 // 끄기를 되돌리면 끈 순간에 남아 있던 시간으로 켠다. 기한이 지났거나 앞 상태를 모르면 되돌리지 않는다(0 은 무기한이다).
                 const restore = before ? undoTimeoutOf(before, readAt) : undefined;
-                undoToast(`${title} is off`, restore === undefined ? undefined : () => { void request(option, true, restore, true); });
+                undoToast(t('tunnels.turnedOff', {title}), restore === undefined ? undefined : () => { void request(option, true, restore, true); });
             }
         } catch(e) {
             if(e instanceof InvalidSession) {
                 sessionOut();
                 return;
             }
-            toast.push({tone: 'alarm', message: `Unable to change ${title}.`});
+            toast.push({tone: 'alarm', message: t('tunnels.changeFailed', {title})});
         } finally {
             const {[port]: _done, ...rest} = pending;
             pending = rest;
@@ -165,7 +166,7 @@
         try {
             const result = await send();
             if(!result.success) {
-                toast.push({tone: 'alarm', message: serverMessageOf(result) || failure});
+                toast.push({tone: 'alarm', message: errorMessageOf(result, failure)});
                 return;
             }
             ({options, statuses} = withIpResult({options, statuses}, port, patch(result)));
@@ -186,14 +187,14 @@
     const toggleIpLimit = (option: Options, view: IpLimitView) => {
         if(!view.pressable) return;
         const next = !view.on;
-        void ipRequest(option, `Unable to change the IP limit of ${tunnelTitle(option)}.`,
+        void ipRequest(option, t('tunnels.ipLimitFailed', {title: tunnelTitle(option)}),
             () => ServerOptionCtrl.instance.setActivatorIpOnly(option.forwardPort, next),
             (result) => ({activatorIpOnly: next, myAllowedIp: (result.myAllowedIp as string | null | undefined) ?? null}));
     };
 
     /** 내 허용 IP 를 지금 IP 로 바꾼다. 결과 IP 를 바로 보인다. */
     const refreshIp = (option: Options) => {
-        void ipRequest(option, `Unable to update your IP for ${tunnelTitle(option)}.`,
+        void ipRequest(option, t('tunnels.ipRefreshFailed', {title: tunnelTitle(option)}),
             () => ServerOptionCtrl.instance.refreshActivatorIp(option.forwardPort),
             (result) => ({myAllowedIp: result.allowedIp as string}));
     };
@@ -214,19 +215,19 @@
 <div class="tunnels">
     {#if policy?.canCreate(ownedCount) ?? true}
         <div class="tunnels-bar">
-            <Button variant="primary" onclick={() => navigate('#/tunnels/new')}>Add tunneling service</Button>
+            <Button variant="primary" onclick={() => navigate('#/tunnels/new')}>{t('tunnels.add')}</Button>
         </div>
     {/if}
     {#if policy?.limitReached(ownedCount)}
-        <p id="tunnel-limit-note" style="color: var(--ink-2)">Tunnel limit reached ({ownedCount}/{policy.maxTunnelCount}).</p>
+        <p id="tunnel-limit-note" style="color: var(--ink-2)">{t('tunnels.limitReached', {owned: ownedCount, max: policy.maxTunnelCount})}</p>
     {/if}
     {#if options.length > 0 && statusLoaded}
-        <p class="tunnel-summary"><span id="tunnel-summary">{onCount} of {options.length} on</span>{#if stale}<span id="tunnel-stale" class="stale">Couldn't update · retrying</span>{/if}</p>
+        <p class="tunnel-summary"><span id="tunnel-summary">{t('tunnels.summary', {on: onCount, total: options.length})}</span>{#if stale}<span id="tunnel-stale" class="stale">{t('tunnels.stale')}</span>{/if}</p>
     {/if}
     {#if options.length === 0}
-        <p class="empty">No tunnels yet.</p>
+        <p class="empty">{t('tunnels.empty')}</p>
         {#if listLoaded && policy && !policy.canCreate(ownedCount)}
-            <p id="tunnel-ask-admin" class="empty">Ask an administrator to add a tunnel for you.</p>
+            <p id="tunnel-ask-admin" class="empty">{t('tunnels.askAdmin')}</p>
         {/if}
     {/if}
     {#if options.length > 0}
@@ -235,7 +236,7 @@
                 {@const title = tunnelTitle(option)}
                 {@const view = tunnelRowView({option, status: statuses[option.forwardPort], loaded: statusLoaded, meId: $me?.user.id ?? '', serverTime})}
                 {@const busy = pending[option.forwardPort] !== undefined}
-                {@const parts = busy ? [{text: pending[option.forwardPort] ? 'Turning on…' : 'Turning off…', muted: true}] : view.parts}
+                {@const parts = busy ? [{text: t(pending[option.forwardPort] ? 'tunnels.turningOn' : 'tunnels.turningOff'), muted: true}] : view.parts}
                 {@const ipView = ipLimitView({option, status: statuses[option.forwardPort], requesterIp, busy: ipPending[option.forwardPort] === true})}
                 <li data-port={option.forwardPort}>
                     <!-- 이슈 347 FR-12: 고칠 수 없는 터널은 편집 화면으로 가지 않는다. 같은 모양을 지키려고 같은 클래스를 쓴다. -->
@@ -251,7 +252,7 @@
                         {/if}
                     </svelte:element>
                     {#if view.control === 'lock'}
-                        <span class="tunnel-lock" title="View only" aria-label="View only">
+                        <span class="tunnel-lock" title={t('tunnels.viewOnly')} aria-label={t('tunnels.viewOnly')}>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
                         </span>
                     {:else}
@@ -281,14 +282,14 @@
         </ul>
     {/if}
     {#if loading}<Loading overlay />{/if}
-    <Modal bind:open={confirmOpen} title={confirmTarget ? `Turn off ${tunnelTitle(confirmTarget.option)}?` : 'Turn off?'}>
-        {confirmTarget?.sessions} {confirmTarget?.sessions === 1 ? 'connection' : 'connections'} will be cut.
+    <Modal bind:open={confirmOpen} title={confirmTarget ? t('tunnels.turnOffConfirm', {title: tunnelTitle(confirmTarget.option)}) : t('tunnels.turnOffConfirmUntitled')}>
+        {plural('tunnels.connectionsCut', confirmTarget?.sessions ?? 0)}
         {#snippet footer()}
-            <Button onclick={() => (confirmOpen = false)}>Cancel</Button>
-            <Button variant="danger" onclick={confirmOff}>Turn Off</Button>
+            <Button onclick={() => (confirmOpen = false)}>{t('common.cancel')}</Button>
+            <Button variant="danger" onclick={confirmOff}>{t('tunnels.turnOff')}</Button>
         {/snippet}
     </Modal>
-    <Modal bind:open={alertOpen} title="Tunnels">
+    <Modal bind:open={alertOpen} title={t('nav.tunnels')}>
         {alertMessage}
         {#snippet footer()}
             <Button variant="primary" onclick={() => { alertOpen = false; alertClose(); }}>{alertButton}</Button>

@@ -1,6 +1,7 @@
 <script lang="ts">
     import QRCode from 'qrcode';
     import {toast} from '../../ui/toast';
+    import {t} from '../../i18n';
 
     // U4-09: otpauth URI 를 로컬 canvas 에 그린다(외부 이미지 서비스 금지, D6). qrcode 는 이 파일에서만 import 한다.
     let {value, size = 192}: {value: string; size?: number} = $props();
@@ -17,8 +18,8 @@
                 context.clearRect(0, 0, size, size);
                 context.drawImage(scratch, 0, 0, size, size);
             })
-            .catch(() => toast.push({tone: 'alarm', message: 'Could not draw the QR code.'}));
+            .catch(() => toast.push({tone: 'alarm', message: t('qr.drawFailed')}));
     });
 </script>
 
-<canvas bind:this={canvasEl} id="mfa-qr" width={size} height={size} aria-label="Scan with your authenticator app"></canvas>
+<canvas bind:this={canvasEl} id="mfa-qr" width={size} height={size} aria-label={t('qr.label')}></canvas>

@@ -1,7 +1,7 @@
-// 이슈 336 — 패스키 화면이 함께 쓰는 판정과 문구. 서버의 판정(src/server/passkey/Passkey.ts passkeyRpIdOf)과 같은 규칙이다.
+import {i18n, type Translator} from '../i18n';
 
-export const PASSKEY_CONDITION = 'Passkeys need a domain name with a trusted HTTPS certificate, or localhost.';
-export const PASSKEY_UNSUPPORTED = `${PASSKEY_CONDITION} This address can't use them.`;
+// 이슈 336 — 패스키 화면이 함께 쓰는 판정. 서버의 판정(src/server/passkey/Passkey.ts passkeyRpIdOf)과 같은 규칙이다.
+// 이슈 349: 패스키를 쓸 수 있는 조건의 문구는 리소스의 passkey.condition, 쓸 수 없다는 문구는 serverError.passkey_origin_unsupported 다.
 
 const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/;
 
@@ -60,8 +60,8 @@ export const consumeSignedOut = (): boolean => {
 
 export const errorNameOf = (error: unknown): string => error instanceof Error ? error.name : '';
 
-/** 등록 창의 이름 칸에 미리 넣을 기기 종류. */
-export const defaultPasskeyName = (): string => {
+/** 등록 창의 이름 칸에 미리 넣을 기기 종류. 알 수 없으면 정한 언어의 '패스키' 다. */
+export const defaultPasskeyName = (tr: Translator = i18n()): string => {
     const agent = navigator.userAgent;
     if(/iPhone/.test(agent)) return 'iPhone';
     if(/iPad/.test(agent)) return 'iPad';
@@ -69,5 +69,5 @@ export const defaultPasskeyName = (): string => {
     if(/Windows/.test(agent)) return 'Windows';
     if(/Macintosh|Mac OS X/.test(agent)) return 'Mac';
     if(/Linux/.test(agent)) return 'Linux';
-    return 'Passkey';
+    return tr.t('passkey.defaultName');
 };

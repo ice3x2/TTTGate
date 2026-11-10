@@ -29,6 +29,8 @@
   import {chrome, defaultHash, isDefaultHash, SECTION_OF_SCREEN} from "./shell/nav";
   import {navigate, route} from "./router";
   import {clearMe, loadMe, me} from "./me";
+  import {t} from "./i18n";
+  import {errorMessageOf} from "./i18n/serverError";
 
   type SessionState = 'Checking' | 'Valid' | 'Invalid' | 'Offline';
 
@@ -55,7 +57,7 @@
   let enrollmentRefresh: Promise<unknown> | undefined;
   onMfaEnrollmentRequired(() => {
     if(enrollmentRefresh || $me?.mustEnrollMfa) return;
-    toast.push({tone: 'warn', message: 'Your account now requires two-factor authentication.'});
+    toast.push({tone: 'warn', message: t('app.mfaNowRequired')});
     enrollmentRefresh = loadMe().catch((error) => { if(error instanceof InvalidSession) session.invalidate(); })
       .finally(() => { enrollmentRefresh = undefined; });
   });
@@ -110,18 +112,18 @@
   });
 
   // U4-06: chrome() 은 역할을 모른다. 일반 유저의 감사 화면 제목만 여기서 덮는다.
-  const current = $derived($route.screen === 'audit' && $me?.user.role === 'regular' ? {title: 'My activity'} : chrome($route));
+  const current = $derived($route.screen === 'audit' && $me?.user.role === 'regular' ? {title: t('nav.myActivity')} : chrome($route));
 
   // U3-02: 마이그레이션 안내 배너를 닫는다. 성공하면 me 를 다시 읽어 migrationBanner 가 false 가 된다.
   const dismissMigration = async (): Promise<void> => {
     try {
       const result = await MeCtrl.instance.acknowledgeMigration();
-      if(!result.success) toast.push({tone: 'alarm', message: result.message});
-      else if(!(await loadMe())) toast.push({tone: 'alarm', message: 'Unable to refresh the account. Reload the page.'});
+      if(!result.success) toast.push({tone: 'alarm', message: errorMessageOf(result)});
+      else if(!(await loadMe())) toast.push({tone: 'alarm', message: t('app.refreshFailed')});
     } catch(error) {
       // adminRequest 는 네트워크 오류를 실패 값으로 돌려준다. 여기에는 InvalidSession 과 예상하지 못한 예외만 온다.
       if(error instanceof InvalidSession) session.invalidate();
-      else toast.push({tone: 'alarm', message: 'Unable to connect to the server.'});
+      else toast.push({tone: 'alarm', message: t('common.unableToConnect')});
     }
   };
 </script>
@@ -129,7 +131,7 @@
 {#if state === 'Checking'}
   <Loading overlay />
 {:else if state === 'Offline'}
-  <p class="offline">Offline server...</p>
+  <p class="offline">{t('app.offline')}</p>
 {:else if state === 'Invalid'}
   <LoginScreen onsuccess={() => { void enterValid(); }} />
 {:else if !$me}
@@ -138,7 +140,7 @@
   <Shell title={current.title} back={forced ? undefined : current.back} hideMenu={forced || enrolling}>
     {#snippet banner()}
       {#if $me?.migrationBanner}
-        <Banner tone="trace" dismissible ondismiss={() => { void dismissMigration(); }}>Your account was promoted to superuser during the upgrade.</Banner>
+        <Banner tone="trace" dismissible ondismiss={() => { void dismissMigration(); }}>{t('app.migrationBanner')}</Banner>
       {/if}
     {/snippet}
     {#if !allowed}<Loading />
@@ -158,7 +160,7 @@
     {:else if $route.screen === 'security'}<SecurityScreen />
     {:else if $route.screen === 'clients'}<TrustedClientsScreen />
     {:else}
-      <p id="screen-placeholder">This screen is not available yet.</p>
+      <p id="screen-placeholder">{t('app.notAvailable')}</p>
     {/if}
   </Shell>
 {/if}

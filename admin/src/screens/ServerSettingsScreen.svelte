@@ -18,6 +18,8 @@
     import TextInput from '../ui/TextInput.svelte';
     import {useSession} from '../shell/session';
     import InputCertFile from './parts/InputCertFile.svelte';
+    import {errorMessageOf} from '../i18n/serverError';
+    import {t} from '../i18n';
 
     // U4-09: 서버가 값을 아직 저장하지 않았을 때 보이는 기본값(서버 src/types/TunnelingOption.ts 와 같다).
     const DEFAULT_AUDIT_RETENTION_DAYS = 90;
@@ -69,7 +71,7 @@
 
     let alertOpen = $state(false);
     let alertMessage = $state('');
-    let alertButton = $state('OK');
+    let alertButton = $state(t('common.ok'));
     let alertClose = $state<() => void>(() => {});
 
     const session = useSession();
@@ -77,14 +79,14 @@
     const isNewValue = $derived(!ObjectUtil.equalsDeep(serverOption, lastServerOption)
         || adminCert == null || lastAdminCert == null || !ObjectUtil.equalsDeep(adminCert, lastAdminCert));
 
-    const alert = (message: string, button = 'OK', onClose?: () => void) => {
+    const alert = (message: string, button = t('common.ok'), onClose?: () => void) => {
         alertMessage = message;
         alertButton = button;
         alertClose = onClose ?? (() => {});
         alertOpen = true;
     };
 
-    const sessionOut = () => alert('Session is expired. Please login again.', 'OK', () => session.invalidate());
+    const sessionOut = () => alert(t('common.sessionExpired'), t('common.ok'), () => session.invalidate());
 
     // 옛 _enforceMinMax 처럼 입력란의 원문 문자열에 parseInt 를 적용해 범위와 비교한다. 빈 값은 그대로 둔다.
     // NumberInput 은 숫자로 바꾼 값만 넘기는데, 그 숫자를 다시 문자열화하면 원문과 다른 문자열이 되어
@@ -127,7 +129,7 @@
                 sessionOut();
                 return;
             }
-            alert('Unable to connect to the server.', 'OK', () => {
+            alert(t('common.unableToConnect'), t('common.ok'), () => {
                 location.href = '/';
             });
         }
@@ -141,7 +143,7 @@
                 lastAdminCert = adminCert;
                 adminCert = newAdminCert;
             } else {
-                alert(result.message);
+                alert(errorMessageOf(result));
             }
             loading = false;
         } catch(e) {
@@ -150,7 +152,7 @@
                 loading = false;
                 sessionOut();
             } else {
-                alert('Unable to connect to the server.', 'Retry', async () => {
+                alert(t('common.unableToConnect'), t('common.retry'), async () => {
                     await updateAdminCert(newAdminCert);
                 });
             }
@@ -159,13 +161,13 @@
 
     const apply = async () => {
         auditErrors = {
-            ...(retentionInput == null ? {retention: 'Enter a number of days. 0 keeps logs forever.'} : {}),
-            ...(queueInput == null ? {queue: 'Enter a queue size.'} : {}),
-            ...(denialRetentionInput == null ? {denialRetention: 'Enter a number of days. 0 or less turns off the denial log.'} : {})
+            ...(retentionInput == null ? {retention: t('server.retentionRequired')} : {}),
+            ...(queueInput == null ? {queue: t('server.queueRequired')} : {}),
+            ...(denialRetentionInput == null ? {denialRetention: t('server.denialRetentionRequired')} : {})
         };
         closeErrors = {
-            ...(closeStallInput == null ? {stall: 'Enter a time in milliseconds (1000-600000).'} : {}),
-            ...(closeGraceInput == null ? {grace: 'Enter a time in milliseconds (1000-120000).'} : {})
+            ...(closeStallInput == null ? {stall: t('server.millisecondsRequired', {min: 1000, max: 600000})} : {}),
+            ...(closeGraceInput == null ? {grace: t('server.millisecondsRequired', {min: 1000, max: 120000})} : {})
         };
         if(Object.keys(auditErrors).length > 0 || Object.keys(closeErrors).length > 0) return;
         try {
@@ -175,7 +177,7 @@
             if(result.success) {
                 await checkServerRestart();
             } else {
-                alert(result.message);
+                alert(errorMessageOf(result));
             }
         } catch(e) {
             console.error(e);
@@ -183,7 +185,7 @@
             if(e instanceof InvalidSession) {
                 sessionOut();
             } else {
-                alert('Unable to connect to the server.', 'Retry', async () => {
+                alert(t('common.unableToConnect'), t('common.retry'), async () => {
                     await apply();
                 });
             }
@@ -197,21 +199,21 @@
         try {
             success = await ServerOptionCtrl.instance.checkChangeServerOption($state.snapshot(lastServerOption), $state.snapshot(serverOption));
         } catch(e) {
-            alert(`Error: Server status could not be determined.${serverOption.adminTls ? '(It could be a TSL certificate error.)' : ''}`, 'OK', () => {
+            alert(t(serverOption.adminTls ? 'server.statusUnknownTls' : 'server.statusUnknown'), t('common.ok'), () => {
                 location.href = adminAddress(previousAdminPort);
             });
             return;
         }
         loading = false;
         if(success) {
-            alert('Server settings have been changed. The server has been restarted.', 'OK', () => {
+            alert(t('server.restarted'), t('common.ok'), () => {
                 lastServerOption = _.cloneDeep($state.snapshot(serverOption));
                 lastAdminCert = _.cloneDeep($state.snapshot(adminCert));
                 originalAdminCert = _.cloneDeep($state.snapshot(adminCert));
                 location.href = adminAddress(previousAdminPort);
             });
         } else {
-            alert('New server options cannot be applied.', 'OK', () => {
+            alert(t('server.cannotApply'), t('common.ok'), () => {
                 serverOption = _.cloneDeep($state.snapshot(lastServerOption));
                 adminCert = _.cloneDeep($state.snapshot(originalAdminCert));
                 lastAdminCert = _.cloneDeep($state.snapshot(adminCert));
@@ -238,30 +240,30 @@
 <div class="server-settings">
     <Card>
         <div class="form-stack">
-            <Field label="Tunnel server-client authentication key" for="input-key">
+            <Field label={t('server.key')} for="input-key">
                 <TextInput id="input-key" bind:value={serverOption.key} />
             </Field>
-            <Field label="Admin service port number" for="input-admin-port">
+            <Field label={t('server.adminPort')} for="input-admin-port">
                 <NumberInput id="input-admin-port" min={0} max={65535} bind:value={serverOption.adminPort}
                     oninput={(v) => (serverOption.adminPort = enforceMinMax('input-admin-port', v, 0, 65535) as number)} />
             </Field>
-            <Checkbox id="input-admin-tls" label="Admin TLS" bind:checked={serverOption.adminTls} />
+            <Checkbox id="input-admin-tls" label={t('server.adminTls')} bind:checked={serverOption.adminTls} />
             {#if serverOption.adminTls}<InputCertFile certInfo={adminCert} onupdate={updateAdminCert} />{/if}
-            <Field label="Tunnel server port number" for="input-tunnel-port">
+            <Field label={t('server.tunnelPort')} for="input-tunnel-port">
                 <NumberInput id="input-tunnel-port" min={0} max={65535} bind:value={serverOption.port}
                     oninput={(v) => (serverOption.port = enforceMinMax('input-tunnel-port', v, 0, 65535) as number)} />
             </Field>
-            <Checkbox id="input-tunnel-tls" label="Tunnel TLS" bind:checked={serverOption.tls} />
-            <Field label="Memory cache limit (MiB)" for="input-mem-cache-limit">
+            <Checkbox id="input-tunnel-tls" label={t('server.tunnelTls')} bind:checked={serverOption.tls} />
+            <Field label={t('server.memCacheLimit')} for="input-mem-cache-limit">
                 <NumberInput id="input-mem-cache-limit" min={1} max={99999} bind:value={serverOption.globalMemCacheLimit}
                     oninput={(v) => (serverOption.globalMemCacheLimit = enforceMinMax('input-mem-cache-limit', v, 1, 99999) as number)} />
             </Field>
-            <Field label="Keep-Alive (ms)" for="input-keep-alive" hint="0 or less disables keep-alive.">
+            <Field label={t('server.keepAlive')} for="input-keep-alive" hint={t('server.keepAliveHint')}>
                 <!-- 문구대로 0 은 keep-alive 를 끈다(서버는 keepAlive > 0 일 때만 켠다). ms 단위라 정수로 자르고, 음수(-0.5 포함)는 0 으로 올린다. -->
                 <NumberInput id="input-keep-alive" min={0} max={99999} bind:value={serverOption.keepAlive}
                     oninput={(v) => (serverOption.keepAlive = keepAliveOf(enforceMinMax('input-keep-alive', v, 0, 99999)) as number)} />
             </Field>
-            <Field label="Log level" for="input-log-level" hint="Applies to all server logs right away. debug is verbose.">
+            <Field label={t('server.logLevel')} for="input-log-level" hint={t('server.logLevelHint')}>
                 <Select id="input-log-level" options={LOG_LEVEL_OPTIONS}
                     bind:value={() => serverOption.logLevel ?? 'info', setLogLevel} />
             </Field>
@@ -269,19 +271,19 @@
     </Card>
     <!-- U4-09: 슈퍼유저 MFA 강제와 감사 보존·큐. 기존 isNewValue·Apply·Reset 흐름을 그대로 탄다. -->
     <section id="server-security">
-        <Card label="Security">
+        <Card label={t('nav.security')}>
             <div class="form-stack">
-                <Checkbox id="input-mfa-required-superusers" label="Require two-factor for superusers"
+                <Checkbox id="input-mfa-required-superusers" label={t('server.requireMfaSuperusers')}
                     bind:checked={() => serverOption.mfaRequiredForSuperusers === true, (value) => (serverOption.mfaRequiredForSuperusers = value)} />
-                <Field label="Audit log retention (days)" hint="0 keeps logs forever." for="input-audit-retention-days" error={auditErrors.retention}>
+                <Field label={t('server.auditRetention')} hint={t('server.auditRetentionHint')} for="input-audit-retention-days" error={auditErrors.retention}>
                     <NumberInput id="input-audit-retention-days" min={0} max={3650} step={1}
                         bind:value={retentionInput} oninput={(value) => (serverOption.auditRetentionDays = value ?? undefined)} />
                 </Field>
-                <Field label="Denial log retention (days)" hint="0 or less turns off the denial log." for="input-denial-log-retention-days" error={auditErrors.denialRetention}>
+                <Field label={t('server.denialRetention')} hint={t('server.denialRetentionHint')} for="input-denial-log-retention-days" error={auditErrors.denialRetention}>
                     <NumberInput id="input-denial-log-retention-days" max={3650} step={1}
                         bind:value={denialRetentionInput} oninput={(value) => (serverOption.denialLogRetentionDays = value ?? undefined)} />
                 </Field>
-                <Field label="Audit queue size" for="input-audit-queue-size" error={auditErrors.queue}>
+                <Field label={t('server.auditQueueSize')} for="input-audit-queue-size" error={auditErrors.queue}>
                     <NumberInput id="input-audit-queue-size" min={100} max={100000} step={1}
                         bind:value={queueInput} oninput={(value) => (serverOption.auditQueueSize = value ?? undefined)} />
                 </Field>
@@ -290,15 +292,15 @@
     </section>
     <!-- 이슈 268: 닫기를 시작한 연결의 기한. 바꾸면 이후 닫는 연결부터 적용된다. -->
     <section id="server-connection-close">
-        <Card label="Connection close">
+        <Card label={t('server.connectionClose')}>
             <div class="form-stack">
-                <Field label="Close stall timeout (ms)" for="input-close-stall-ms" error={closeErrors.stall}
-                    hint="Time the remaining output can make no progress before the connection is closed. 1000-600000. Applies to connections that start to close after you apply.">
+                <Field label={t('server.closeStall')} for="input-close-stall-ms" error={closeErrors.stall}
+                    hint={t('server.closeStallHint')}>
                     <NumberInput id="input-close-stall-ms" min={1000} max={600000} step={1000}
                         bind:value={closeStallInput} oninput={(value) => (serverOption.closeStallMs = value ?? undefined)} />
                 </Field>
-                <Field label="Close grace timeout (ms)" for="input-close-grace-ms" error={closeErrors.grace}
-                    hint="Time to wait for the peer to close after FIN. 1000-120000. Applies to connections that send or receive FIN after you apply.">
+                <Field label={t('server.closeGrace')} for="input-close-grace-ms" error={closeErrors.grace}
+                    hint={t('server.closeGraceHint')}>
                     <NumberInput id="input-close-grace-ms" min={1000} max={120000} step={1000}
                         bind:value={closeGraceInput} oninput={(value) => (serverOption.closeGraceMs = value ?? undefined)} />
                 </Field>
@@ -306,11 +308,11 @@
         </Card>
     </section>
     <div class="actions">
-        <Button variant="primary" disabled={!isNewValue} onclick={apply}>Apply</Button>
-        <Button onclick={reset}>Reset</Button>
+        <Button variant="primary" disabled={!isNewValue} onclick={apply}>{t('server.apply')}</Button>
+        <Button onclick={reset}>{t('server.reset')}</Button>
     </div>
     {#if loading}<Loading overlay />{/if}
-    <Modal bind:open={alertOpen} title="Server settings">
+    <Modal bind:open={alertOpen} title={t('nav.serverSettings')}>
         {alertMessage}
         {#snippet footer()}
             <Button variant="primary" onclick={() => { alertOpen = false; alertClose(); }}>{alertButton}</Button>

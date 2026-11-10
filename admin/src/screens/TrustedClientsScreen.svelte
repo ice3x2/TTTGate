@@ -13,6 +13,8 @@
     import {toast} from '../ui/toast';
     import {useSession} from '../shell/session';
     import {formatLocal} from '../util/relativeTime';
+    import {errorMessageOf} from '../i18n/serverError';
+    import {t} from '../i18n';
 
     // 이슈 213: 해시 /clients. 신뢰 클라이언트를 만들고 지우며, 클라이언트 PC 에 붙여 넣을 등록 명령을 보여 준다.
     // 비밀값은 화면에 보이지 않는다. 클라이언트는 등록 코드(client join)로만 받아 간다.
@@ -77,8 +79,8 @@
 
     // 이슈 313: 등록 코드의 만료. 값은 분이고 never 는 만료 없음이다. 바꾸면 그 기한으로 새 코드를 받는다.
     const TTL_OPTIONS = [
-        {value: '15', label: '15 minutes'}, {value: '60', label: '1 hour'}, {value: '1440', label: '24 hours'},
-        {value: '10080', label: '7 days'}, {value: '43200', label: '30 days'}, {value: 'never', label: 'Never expires'}
+        {value: '15', label: t('clients.ttl15m')}, {value: '60', label: t('clients.ttl1h')}, {value: '1440', label: t('clients.ttl24h')},
+        {value: '10080', label: t('clients.ttl7d')}, {value: '43200', label: t('clients.ttl30d')}, {value: 'never', label: t('clients.neverExpires')}
     ];
     const DEFAULT_TTL = '15';
     let ttl = $state(DEFAULT_TTL);
@@ -108,7 +110,7 @@
 
     const failed = (error: unknown): void => {
         if(error instanceof InvalidSession) session.invalidate();
-        else toast.push({tone: 'alarm', message: 'Unable to connect to the server.'});
+        else toast.push({tone: 'alarm', message: t('common.unableToConnect')});
     };
 
     const run = async (task: () => Promise<void>): Promise<void> => {
@@ -128,7 +130,7 @@
             clients = result.trustedClients;
             loaded = true;
         } else {
-            toast.push({tone: 'alarm', message: result.message});
+            toast.push({tone: 'alarm', message: errorMessageOf(result)});
         }
     };
 
@@ -154,7 +156,7 @@
                 if(!result.success) {
                     ttl = issuedTtl;
                     invalidated = true;
-                    toast.push({tone: 'alarm', message: result.message});
+                    toast.push({tone: 'alarm', message: errorMessageOf(result)});
                     return;
                 }
                 // 창이 닫혔거나 화면을 떠났으면 확인하지 않는다. 임시 코드는 기본 15분 뒤 사라진다.
@@ -172,14 +174,14 @@
                     if(!confirmed.success && resultUnknown(confirmed.status)) {
                         invalidated = true;
                         replaceWithDefault = true;
-                        toast.push({tone: 'alarm', message: 'Could not confirm the expiry. A new 15-minute code replaces this one.'});
+                        toast.push({tone: 'alarm', message: t('clients.confirmFailed')});
                         return;
                     }
                     if(!confirmed.success) {
                         // 그 코드는 대체되었거나 무효다. 응답만 잃었다면 서버에서는 긴 기한일 수 있으니 다시 받게 한다.
                         ttl = issuedTtl;
                         invalidated = true;
-                        toast.push({tone: 'alarm', message: confirmed.message});
+                        toast.push({tone: 'alarm', message: errorMessageOf(confirmed)});
                         return;
                     }
                     enrollCode = {...enrollCode, expiresAt: confirmed.expiresAt};
@@ -215,12 +217,12 @@
         const clientId = newId.trim();
         const result = await TrustedClientsCtrl.instance.create(clientId, newName, await revision());
         if(!result.success) {
-            toast.push({tone: 'alarm', message: result.message});
+            toast.push({tone: 'alarm', message: errorMessageOf(result)});
             return;
         }
         newId = '';
         newName = '';
-        toast.push({tone: 'pulse', message: `Client ${clientId} created.`});
+        toast.push({tone: 'pulse', message: t('clients.created', {clientId})});
         await load();
         if(tls) {
             pending = false;
@@ -234,10 +236,10 @@
         void run(async () => {
             const result = await TrustedClientsCtrl.instance.remove(clientId, await revision());
             if(!result.success) {
-                toast.push({tone: 'alarm', message: result.message});
+                toast.push({tone: 'alarm', message: errorMessageOf(result)});
                 return;
             }
-            toast.push({tone: 'pulse', message: `Client ${clientId} deleted.`});
+            toast.push({tone: 'pulse', message: t('clients.deleted', {clientId})});
             await load();
         });
     };
@@ -248,10 +250,10 @@
         void run(async () => {
             const result = await TrustedClientsCtrl.instance.rotateSecret(clientId, await revision());
             if(!result.success) {
-                toast.push({tone: 'alarm', message: result.message});
+                toast.push({tone: 'alarm', message: errorMessageOf(result)});
                 return;
             }
-            toast.push({tone: 'pulse', message: `New secret for ${clientId}. Its connection was closed; enroll it again.`});
+            toast.push({tone: 'pulse', message: t('clients.rotated', {clientId})});
             if(tls) {
                 pending = false;
                 await openCode(clientId);
@@ -262,9 +264,9 @@
     const copy = async (): Promise<void> => {
         try {
             await navigator.clipboard.writeText(command);
-            toast.push({tone: 'pulse', message: 'Command copied.'});
+            toast.push({tone: 'pulse', message: t('clients.copied')});
         } catch {
-            toast.push({tone: 'alarm', message: 'Copy is not available here. Select the command and copy it.'});
+            toast.push({tone: 'alarm', message: t('clients.copyUnavailable')});
         }
     };
 
@@ -283,28 +285,28 @@
 <div style="display: flex; flex-direction: column; gap: var(--s-4);">
     <Card>
         <div style="display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: flex-end;">
-            <Field label="Client ID" for="client-new-id">
+            <Field label={t('clients.clientId')} for="client-new-id">
                 <TextInput id="client-new-id" bind:value={newId} placeholder="edge-1" />
             </Field>
-            <Field label="Display name (optional)" for="client-new-name">
+            <Field label={t('clients.displayNameOptional')} for="client-new-name">
                 <TextInput id="client-new-name" bind:value={newName} />
             </Field>
-            <span id="client-create"><Button variant="primary" disabled={pending || newId.trim() === ''} onclick={(e) => { rememberTrigger(e); void create(); }}>Add client</Button></span>
+            <span id="client-create"><Button variant="primary" disabled={pending || newId.trim() === ''} onclick={(e) => { rememberTrigger(e); void create(); }}>{t('clients.add')}</Button></span>
         </div>
     </Card>
 
     {#if loaded && !tls}
         <p id="clients-tls-notice" style="color: var(--ink-2); margin: 0;">
-            Turn on TLS for the control port in Server settings to use enrollment codes. Until then, set up clients by hand.
+            {t('clients.tlsNotice')}
         </p>
     {:else if loaded}
-        <Field label="Server address for the join command" for="clients-address">
+        <Field label={t('clients.serverAddress')} for="clients-address">
             <TextInput id="clients-address" bind:value={address} placeholder="gw.example.com" oninput={rememberAddress} />
         </Field>
     {/if}
 
     {#if loaded && clients.length === 0}
-        <p id="clients-empty">No trusted clients.</p>
+        <p id="clients-empty">{t('clients.empty')}</p>
     {/if}
     <ul id="clients-list" style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-3);">
         {#each clients as client (client.clientId)}
@@ -317,10 +319,10 @@
                         </div>
                         <div style="display: flex; flex-wrap: wrap; gap: var(--s-2);">
                             {#if tls}
-                                <Button size="sm" class="client-code" disabled={pending} onclick={(e) => { rememberTrigger(e); void openCode(client.clientId); }}>Enrollment code</Button>
+                                <Button size="sm" class="client-code" disabled={pending} onclick={(e) => { rememberTrigger(e); void openCode(client.clientId); }}>{t('clients.enrollmentCode')}</Button>
                             {/if}
-                            <Button size="sm" class="client-rotate" disabled={pending} onclick={(e) => { rememberTrigger(e); target = client.clientId; rotateOpen = true; }}>New secret</Button>
-                            <Button variant="danger" size="sm" class="client-delete" disabled={pending} onclick={() => { target = client.clientId; deleteOpen = true; }}>Delete</Button>
+                            <Button size="sm" class="client-rotate" disabled={pending} onclick={(e) => { rememberTrigger(e); target = client.clientId; rotateOpen = true; }}>{t('clients.newSecret')}</Button>
+                            <Button variant="danger" size="sm" class="client-delete" disabled={pending} onclick={() => { target = client.clientId; deleteOpen = true; }}>{t('common.delete')}</Button>
                         </div>
                     </div>
                 </Card>
@@ -329,47 +331,47 @@
     </ul>
 </div>
 
-<Modal bind:open={enrollOpen} title={`Enroll ${enrollFor}`} class="enroll-modal">
+<Modal bind:open={enrollOpen} title={t('clients.enrollTitle', {clientId: enrollFor})} class="enroll-modal">
     <div style="display: flex; flex-direction: column; gap: var(--s-3);">
-        <p style="margin: 0;">Run this on the client host. The code works once.</p>
+        <p style="margin: 0;">{t('clients.runOnHost')}</p>
         <code id="enroll-command" class:expired class="mono" style="overflow-wrap: anywhere; user-select: {expired || pending ? 'none' : 'all'}; opacity: {expired || pending ? 0.45 : 1};">{command}</code>
         <div aria-live="polite" style="display: contents;">
         {#if enrollCode}
             {#if invalidated}
-                <p style="margin: 0; color: var(--ink-2);">This code no longer works. Issue a new code.</p>
+                <p style="margin: 0; color: var(--ink-2);">{t('clients.codeInvalidated')}</p>
             {:else if enrollCode.expiresAt === null}
-                <p style="margin: 0; color: var(--ink-2);">Never expires</p>
-                <p id="enroll-never-warning" style="margin: 0;">This code stays valid until it is used, a new code is issued, the client gets a new secret, the client is deleted, the control port settings change, or the server restarts. Treat it like a password.</p>
+                <p style="margin: 0; color: var(--ink-2);">{t('clients.neverExpires')}</p>
+                <p id="enroll-never-warning" style="margin: 0;">{t('clients.neverWarning')}</p>
             {:else}
-                <p style="margin: 0; color: var(--ink-2);">{expired ? 'Expired' : 'Expires'} {formatLocal(enrollCode.expiresAt, false)}</p>
+                <p style="margin: 0; color: var(--ink-2);">{t(expired ? 'clients.expired' : 'clients.expires', {time: formatLocal(enrollCode.expiresAt, false)})}</p>
             {/if}
         {/if}
         </div>
-        <Field label="Code expires after" for="enroll-ttl">
+        <Field label={t('clients.expiresAfter')} for="enroll-ttl">
             <Select id="enroll-ttl" options={TTL_OPTIONS} bind:value={ttl} describedby={!invalidated && enrollCode?.expiresAt === null ? 'enroll-never-warning' : undefined}
                 onchange={() => { void issue(enrollFor); }} />
         </Field>
     </div>
     {#snippet footer()}
-        <Button onclick={() => (enrollOpen = false)}>Close</Button>
+        <Button onclick={() => (enrollOpen = false)}>{t('clients.close')}</Button>
         {#if expired}
-            <span id="enroll-reissue"><Button variant="primary" disabled={pending} onclick={() => { void issue(enrollFor); }}>Issue new code</Button></span>
+            <span id="enroll-reissue"><Button variant="primary" disabled={pending} onclick={() => { void issue(enrollFor); }}>{t('clients.issueNewCode')}</Button></span>
         {:else}
-            <span id="enroll-copy"><Button variant="primary" disabled={pending} onclick={() => { void copy(); }}>Copy command</Button></span>
+            <span id="enroll-copy"><Button variant="primary" disabled={pending} onclick={() => { void copy(); }}>{t('clients.copyCommand')}</Button></span>
         {/if}
     {/snippet}
 </Modal>
-<Modal bind:open={deleteOpen} title="Delete trusted client" class="delete-client-modal">
-    Delete {target}? Its connection closes and it can no longer authenticate.
+<Modal bind:open={deleteOpen} title={t('clients.deleteTitle')} class="delete-client-modal">
+    {t('clients.deleteConfirm', {clientId: target})}
     {#snippet footer()}
-        <Button onclick={() => (deleteOpen = false)}>Cancel</Button>
-        <Button variant="danger" id="confirm-delete-client" onclick={remove}>Delete</Button>
+        <Button onclick={() => (deleteOpen = false)}>{t('common.cancel')}</Button>
+        <Button variant="danger" id="confirm-delete-client" onclick={remove}>{t('common.delete')}</Button>
     {/snippet}
 </Modal>
-<Modal bind:open={rotateOpen} title="New secret" class="rotate-client-modal">
-    Make a new secret for {target}? Its connection closes until it enrolls again.
+<Modal bind:open={rotateOpen} title={t('clients.newSecret')} class="rotate-client-modal">
+    {t('clients.rotateConfirm', {clientId: target})}
     {#snippet footer()}
-        <Button onclick={() => (rotateOpen = false)}>Cancel</Button>
-        <span id="confirm-rotate-client"><Button variant="danger" onclick={rotate}>New secret</Button></span>
+        <Button onclick={() => (rotateOpen = false)}>{t('common.cancel')}</Button>
+        <span id="confirm-rotate-client"><Button variant="danger" onclick={rotate}>{t('clients.newSecret')}</Button></span>
     {/snippet}
 </Modal>
