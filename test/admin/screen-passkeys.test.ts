@@ -487,3 +487,49 @@ test("#345 부트스트랩이 필요하면 자동 완성 요청을 취소하고 
         await page.waitForFunction(() => (window as any).__passkeyCalls.every((call: {mediation: string; aborted: boolean}) => call.mediation !== "conditional" || call.aborted), undefined, {timeout: 10_000});
         expect(await page.locator("#login-username").getAttribute("autocomplete")).toBe("username");
     }));
+
+// ── #346 FR-10a: 2단계 인증 강제 대상이 패스키만 가졌으면 비밀번호 로그인은 403 passkey_required 다 ─────────────
+
+const passkeyRequired = (page: Page) => page.route("**/api/login", (route) =>
+    json(route, 403, {success: false, code: "passkey_required", message: "This account signs in with a passkey."}));
+const submitPassword = async (page: Page) => {
+    await page.locator("#login-password").waitFor({state: "visible", timeout: 30_000});
+    await page.locator("#login-username").fill("alice");
+    await page.locator("#login-password").fill("user-password-1234");
+    await page.getByRole("button", {name: "OK", exact: true}).click();
+};
+
+test("#346 passkey_required 를 받으면 비밀번호 칸을 접고 패스키 로그인으로 안내하며, 다른 계정으로 돌아갈 수 있다 (AC-3b)", () =>
+    withApp({fixture: "rbac", login: false}, async (app) => {
+        const {page} = app;
+        await stubCredentials(page, [{hang: true}]);
+        await passkeyRequired(page);
+        await page.route("**/api/login/passkey/options", (route) => json(route, 200, {success: true, options: LOGIN_OPTIONS}));
+        await page.goto(localUrl(app));
+        await submitPassword(page);
+        const notice = page.locator("#login-passkey-required");
+        await notice.waitFor({state: "visible", timeout: 10_000});
+        expect((await notice.textContent())?.trim()).toBe("This account signs in with a passkey.");
+        expect(await page.locator("#login-password").count()).toBe(0);
+        expect(await page.locator("#login-passkey button").isVisible()).toBe(true);
+        expect(await page.locator("#login-use-password").count()).toBe(0);
+        expect((await page.locator("#login-passkey-lost").textContent())?.trim()).toBe("Lost your passkey? Ask your administrator to reset your sign-in.");
+        await page.locator("#login-start-over").click();
+        await page.locator("#login-password").waitFor({state: "visible", timeout: 10_000});
+        expect(await page.locator("#login-passkey-required").count()).toBe(0);
+    }));
+
+test("#346 패스키를 쓸 수 없는 주소에서 passkey_required 를 받으면 쓸 수 있는 주소의 조건과 관리자 안내를 보인다", () =>
+    withApp({fixture: "rbac", login: false}, async (app) => {
+        const {page} = app;
+        await passkeyRequired(page);
+        await page.goto(app.url);
+        await submitPassword(page);
+        const notice = page.locator("#login-passkey-required");
+        await notice.waitFor({state: "visible", timeout: 10_000});
+        expect((await notice.textContent())?.trim()).toBe("This account signs in with a passkey, but passkeys aren't available at this address.");
+        expect(await page.locator("#login-passkey").count()).toBe(0);
+        expect((await page.locator("#login-passkey-hint").textContent())).toContain(CONDITION);
+        expect((await page.locator("#login-passkey-lost").textContent())?.trim())
+            .toBe("If you can't, ask your administrator to reset your password and two-factor authentication.");
+    }));
