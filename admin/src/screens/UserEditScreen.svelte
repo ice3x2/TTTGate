@@ -5,7 +5,6 @@
     import SessionsCtrl from '../controller/SessionsCtrl';
     import UsersCtrl from '../controller/UsersCtrl';
     import type {ApiFailure, Role, UserStatus, UserView} from '../controller/Types';
-    import Badge from '../ui/Badge.svelte';
     import Button from '../ui/Button.svelte';
     import Card from '../ui/Card.svelte';
     import Checkbox from '../ui/Checkbox.svelte';
@@ -315,9 +314,7 @@
         <section id="user-mfa">
             <Card label="Two-factor">
                 <div style="display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; justify-content: space-between;">
-                    <span id="user-mfa-status">
-                        {#if loaded?.mfaEnabled}<Badge tone="pulse">Enabled</Badge>{:else}<Badge tone="neutral">Off</Badge>{/if}
-                    </span>
+                    <span id="user-mfa-status" style="font-size: var(--fs-md); color: {loaded?.mfaEnabled ? 'var(--pulse)' : 'var(--ink-2)'};">{loaded?.mfaEnabled ? 'Enabled' : 'Off'}</span>
                     <span id="user-reset-mfa"><Button variant="danger" disabled={pending || loaded?.mfaEnabled !== true} onclick={() => (resetMfaOpen = true)}>Reset MFA</Button></span>
                 </div>
             </Card>

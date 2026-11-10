@@ -4,7 +4,6 @@
     import InvalidSession from '../controller/InvalidSession';
     import MeCtrl from '../controller/MeCtrl';
     import type {PasskeyView, SessionView} from '../controller/Types';
-    import Badge from '../ui/Badge.svelte';
     import Banner from '../ui/Banner.svelte';
     import Button from '../ui/Button.svelte';
     import Card from '../ui/Card.svelte';
@@ -319,14 +318,19 @@
 
         <section id="me-mfa">
             <Card label="Two-factor authentication">
-                <div style="display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center;">
+                <!-- 이슈 343: 왼쪽은 상태, 오른쪽은 동작 버튼이다. 폭이 모자라면 버튼 묶음이 다음 줄로 내려간다. -->
+                <div style="display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; justify-content: space-between;">
                     {#if mfaEnabled}
-                        <span id="mfa-status"><Badge tone="pulse">Enabled</Badge></span>
-                        <span id="mfa-recovery-remaining">{$me.mfa?.recoveryCodesRemaining ?? 0} recovery codes left</span>
-                        <span id="mfa-new-codes"><Button disabled={pending} onclick={() => { codesError = ''; newCodes = []; codesOpen = true; }}>New recovery codes</Button></span>
-                        <span id="mfa-disable"><Button variant="danger" disabled={pending} onclick={() => { disableError = ''; disablePassword = ''; disableOpen = true; }}>Disable</Button></span>
+                        <div style="display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center;">
+                            <span id="mfa-status" style="font-size: var(--fs-md); color: var(--pulse);">Enabled</span>
+                            <span id="mfa-recovery-remaining" style="font-size: var(--fs-sm); color: var(--ink-2);">{$me.mfa?.recoveryCodesRemaining ?? 0} recovery codes left</span>
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center;">
+                            <span id="mfa-new-codes"><Button disabled={pending} onclick={() => { codesError = ''; newCodes = []; codesOpen = true; }}>New recovery codes</Button></span>
+                            <span id="mfa-disable"><Button variant="danger" disabled={pending} onclick={() => { disableError = ''; disablePassword = ''; disableOpen = true; }}>Disable</Button></span>
+                        </div>
                     {:else}
-                        <span id="mfa-status"><Badge tone="neutral">Off</Badge></span>
+                        <span id="mfa-status" style="font-size: var(--fs-md); color: var(--ink-2);">Off</span>
                         <span id="mfa-setup"><Button variant="primary" disabled={pending} onclick={() => { void startEnroll(); }}>Set up</Button></span>
                     {/if}
                 </div>
