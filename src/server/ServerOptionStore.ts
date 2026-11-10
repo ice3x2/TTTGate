@@ -47,6 +47,12 @@ const hasRollbackSensitiveField = (option: unknown): boolean => {
         && ROLLBACK_SENSITIVE_TUNNEL_FIELDS.some((field) => tunnel[field] !== undefined));
 };
 
+/**
+ * keepRevision: 서버가 관리하는 실행 상태(이슈 348 의 허용 IP 목록)만 바꾸는 저장이다. 설정 리비전을 올리지 않아
+ * 그 사이에 열어 둔 편집 화면의 저장(expectedRevision)이 409 로 막히지 않는다. 사용자가 고치는 설정에는 쓰지 않는다.
+ */
+type CommitOptions = {markLastKnownGood?: boolean, pendingRestartScopes?: string[], keepRevision?: boolean};
+
 type ConfigLoadStatus = {ready: true; source: 'loaded' | 'created' | 'reset'} |
     {ready: false; reason: 'non-file' | 'read-error' | 'empty' | 'parse' | 'validation'};
 
@@ -164,7 +170,7 @@ class ServerOptionStore {
 
     public commitPreparedServerOption(
         serverOption: ServerOption,
-        options: {markLastKnownGood?: boolean, pendingRestartScopes?: string[]} = {}
+        options: CommitOptions = {}
     ): {success: boolean, message: string, revisionState?: RevisionState} {
         if(!this._loadStatus.ready) return {success: false, message: 'server configuration is not ready'};
         const result = this.prepareServerOptionCommit(serverOption, options);
@@ -174,8 +180,7 @@ class ServerOptionStore {
         return {success: true, message: "", revisionState: this.revisionState};
     }
 
-    public prepareServerOptionCommit(serverOption: ServerOption,
-        options: {markLastKnownGood?: boolean, pendingRestartScopes?: string[]} = {}) {
+    public prepareServerOptionCommit(serverOption: ServerOption, options: CommitOptions = {}) {
         if(!this._loadStatus.ready) return {success: false, message: 'server configuration is not ready'};
         const result = this.prepareServerOption(ObjectUtil.cloneDeep(serverOption));
         if(!result.success) {
@@ -184,6 +189,14 @@ class ServerOptionStore {
         const updatedValues = ObjectUtil.findUpdates(this._serverOption, result.serverOption!);
         logger.info(`commitPreparedServerOption - ${JSON.stringify(redactSecrets(updatedValues))}`);
         const revisionState = this.revisionState;
+        if(options.keepRevision === true) {
+            // 리비전 상태는 그대로이므로 .server.state.json 은 쓰지 않는다. 업그레이드 .bak 은 같은 배치로 남긴다.
+            const files: AtomicFileValue[] = [
+                ...this.rollbackBackupFiles(serverOption),
+                {file: this._configFile, data: YAML.stringify(result.serverOption), mode: 0o600},
+            ];
+            return {success: true, message: "", prepared: {serverOption: result.serverOption!, revisionState, files}};
+        }
         revisionState.currentRevision += 1;
         revisionState.lastCommittedAt = Date.now();
         revisionState.pendingRestartScopes = [...new Set([...revisionState.pendingRestartScopes, ...(options.pendingRestartScopes ?? [])])];

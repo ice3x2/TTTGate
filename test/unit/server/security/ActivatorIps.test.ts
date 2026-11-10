@@ -69,6 +69,15 @@ describe("ActivatorIps (이슈 348)", () => {
             expect(canonicalIp("2001:DB8::1")).toBe("2001:db8::1");
         });
 
+        it("IPv6 는 표기와 관계없이 RFC 5952 압축형으로 바꿔 소켓 주소와 같아진다", () => {
+            expect(canonicalIp("2001:DB8:0:0::1")).toBe("2001:db8::1");
+            expect(canonicalIp("2001:0db8:0000:0000:0000:0000:0000:0001")).toBe("2001:db8::1");
+            expect(canonicalIp("fe80::1%eth0")).toBe("fe80::1");
+            expect(canonicalIp("::ffff:c000:0201")).toBe("192.0.2.1");
+            expect(requesterIpOf("2001:DB8:0:0::1")).toBe("2001:db8::1");
+            expect(isActivatorIpAllowed(new Set([canonicalIp("2001:DB8:0:0::1")]), "2001:db8::1")).toBe(true);
+        });
+
         it("요청자 주소를 모르면(unknown·빈 값) 요청자 IP 가 없다", () => {
             expect(requesterIpOf("unknown")).toBeUndefined();
             expect(requesterIpOf("")).toBeUndefined();

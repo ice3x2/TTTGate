@@ -1,5 +1,5 @@
 import type {Options, TunnelingStatus} from "../../admin/src/controller/Options";
-import {ipLimitView} from "../../admin/src/screens/parts/ipLimit";
+import {ipLimitView, withIpResult} from "../../admin/src/screens/parts/ipLimit";
 
 // 이슈 348 FR-16·FR-17·FR-18 — 터널 목록 줄의 IP 제한 토글과 갱신 버튼(순수 함수). 화면은 이 결과를 그리기만 한다.
 
@@ -74,8 +74,17 @@ describe("ipLimitView", () => {
         }
     });
 
-    test("상태를 아직 못 읽었으면 목록 응답의 값을 쓴다", () => {
-        expect(ipLimitView({option: option({activatorIpOnly: true}), status: undefined, requesterIp: null})).toMatchObject({on: true, text: "My IP not set"});
+    test("상태를 아직 못 읽었으면 목록 응답의 값을 쓰고, 내 항목을 모르므로 경고하지 않는다", () => {
+        const view = ipLimitView({option: option({activatorIpOnly: true}), status: undefined, requesterIp: "203.0.113.5"})!;
+        expect(view).toMatchObject({on: true, text: "IP limit on", extra: undefined, warn: false, pressable: true, locked: false,
+            label: "IP limit, on", title: "IP limit, on"});
+        expect(view.refresh).toMatchObject({enabled: true, emphasized: false});
+        expect(ipLimitView({option: option({activatorIpOnly: false}), status: undefined, requesterIp: null})).toMatchObject({on: false, text: "IP limit off"});
+    });
+
+    test("상태가 없어도 켜기 권한만 있으면 켜진 토글은 잠긴 켜짐이다", () => {
+        const view = ipLimitView({option: option({activatorIpOnly: true, editable: false, toggleable: true}), status: undefined, requesterIp: null})!;
+        expect(view).toMatchObject({on: true, warn: false, pressable: false, locked: true, label: "IP limit, on, can't turn off"});
     });
 
     test("요청 중이면 토글과 갱신 버튼을 누를 수 없다", () => {
@@ -90,5 +99,29 @@ describe("ipLimitView", () => {
         expect(view.text).toBe(ip);
         expect(view.title).toContain(ip);
         expect(view.label).toContain(ip);
+    });
+});
+
+describe("withIpResult", () => {
+    test("상태 항목이 있으면 그 항목과 목록의 IP 제한을 함께 바꾼다", () => {
+        const options = [option({forwardPort: 2222}), option({forwardPort: 3333})];
+        const next = withIpResult({options, statuses: {2222: status()}}, 2222, {activatorIpOnly: true, myAllowedIp: "203.0.113.5"});
+        expect(next.statuses[2222]).toMatchObject({activatorIpOnly: true, myAllowedIp: "203.0.113.5"});
+        expect(next.options.map((o) => o.activatorIpOnly)).toEqual([true, false]);
+    });
+
+    test("상태 항목이 아직 없어도 목록의 IP 제한은 바꾸고, 상태 항목은 만들지 않는다", () => {
+        const options = [option({forwardPort: 2222})];
+        const next = withIpResult({options, statuses: {}}, 2222, {activatorIpOnly: true, myAllowedIp: "203.0.113.5"});
+        expect(next.options[0].activatorIpOnly).toBe(true);
+        expect(next.statuses).toEqual({});
+        expect(ipLimitView({option: next.options[0], status: next.statuses[2222], requesterIp: null})).toMatchObject({on: true, warn: false});
+    });
+
+    test("IP 제한을 바꾸지 않는 결과(내 IP 갱신)는 목록을 그대로 둔다", () => {
+        const options = [option({forwardPort: 2222, activatorIpOnly: true})];
+        const next = withIpResult({options, statuses: {2222: status(ON_MINE)}}, 2222, {myAllowedIp: "198.51.100.1"});
+        expect(next.options).toBe(options);
+        expect(next.statuses[2222].myAllowedIp).toBe("198.51.100.1");
     });
 });

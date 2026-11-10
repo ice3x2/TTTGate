@@ -8,16 +8,16 @@ import {activatorIpOnlyOf, activatorIpsOf, placeRequesterIp, requesterIpOf, Requ
 
 /**
  * 리스너를 다시 띄우지 않고 터널 설정 한 줄을 저장한다. 실패하면 응답을 보내고 false 다.
- * 호출자는 runConfigurationMutation 안에서 부른다.
+ * 호출자는 runConfigurationMutation 안에서 부른다. keepRevision 은 허용 IP 목록만 바꿀 때 쓴다(설정 리비전을 올리지 않는다).
  */
-export function commitTunnelOption(ctx: RouteContext, option: TunnelingOption): boolean {
+export function commitTunnelOption(ctx: RouteContext, option: TunnelingOption, keepRevision = false): boolean {
     const store = ServerOptionStore.instance;
     const composed = store.composeServerOptionWithTunnelingOption(option);
     if(!composed.success || !composed.serverOption) {
         ctx.fail(400, 'tunnel_update_failed', `Unable to update tunnel ${option.forwardPort}.`);
         return false;
     }
-    if(!store.commitPreparedServerOption(composed.serverOption).success) {
+    if(!store.commitPreparedServerOption(composed.serverOption, {keepRevision}).success) {
         store.recordRollback('tunnel allowed IP commit failed', ['tunneling-option']);
         ctx.fail(500, 'tunnel_commit_failed', `Unable to save tunnel ${option.forwardPort}.`);
         return false;
@@ -27,6 +27,8 @@ export function commitTunnelOption(ctx: RouteContext, option: TunnelingOption): 
 
 /**
  * 켜기(FR-3)·갱신(FR-4)·IP 제한 켜기(FR-12)가 요청자 항목을 정해 저장한다. 바뀐 것이 없으면 저장하지 않는다.
+ * 허용 IP 목록은 서버가 관리하는 실행 상태라 목록만 바뀌면 설정 리비전을 올리지 않는다. 열어 둔 편집 화면의 저장이
+ * 409 로 막히지 않고, 터널 저장은 본문의 목록을 버리고 저장된 목록을 지키므로 갱신을 잃지 않는다. patch 가 바꾸는 설정은 리비전을 올린다.
  * 저장에 실패하면 응답을 보내고 undefined 다.
  */
 export function recordRequesterIp(ctx: RouteContext, option: TunnelingOption, mode: 'replace' | 'add-if-missing',
@@ -34,7 +36,7 @@ export function recordRequesterIp(ctx: RouteContext, option: TunnelingOption, mo
     const placed = placeRequesterIp(activatorIpsOf(option), ctx.principal!.userId, requesterIpOf(ctx.ip), mode);
     const patched = Object.entries(patch).some(([key, value]) => (option as Record<string, unknown>)[key] !== value);
     if(!placed.changed && !patched) return placed;
-    return commitTunnelOption(ctx, withActivatorIps({...option, ...patch}, placed.ips)) ? placed : undefined;
+    return commitTunnelOption(ctx, withActivatorIps({...option, ...patch}, placed.ips), !patched) ? placed : undefined;
 }
 
 const portOf = (ctx: RouteContext): number | undefined => {

@@ -203,7 +203,7 @@ describe("README in English and Korean (#310)", () => {
         const slice = subsectionOf(section(), heading);
         expect(slice.length).toBeGreaterThan(0);
         for(const fact of ["`activatorIpOnly`", "`activator-ip`", "`-trustXForwardedFor`", "IPv6", "IPv4", "CDN", "`tunnel_ip_limit_updated`",
-            "`tunnel_ip_refreshed`", "`PUT /api/tunneling/<port>/activatorIpOnly`", "`POST /api/tunneling/<port>/activatorIp`"]) {
+            "`tunnel_ip_refreshed`", "`PUT /api/tunneling/<port>/activatorIpOnly`", "`POST /api/tunneling/<port>/activatorIp`", "`userland-proxy`"]) {
             expect({fact, found: slice.includes(fact)}).toEqual({fact, found: true});
         }
     });

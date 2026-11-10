@@ -92,9 +92,12 @@ test("켜기 권한만 있으면 꺼진 토글은 눌러 켜고, 켜진 토글�
     expect(await toggle.getAttribute("aria-label")).toBe("IP limit, on, allowed IP 127.0.0.1, and 1 more, can't turn off");
     expect(await toggle.locator(".tunnel-ip-lock").count()).toBe(1);
     expect(await toggle.evaluate((element) => getComputedStyle(element).opacity)).toBe("1");
-    await toggle.click();
+    // aria-disabled 버튼은 Playwright 가 누를 수 없는 요소로 보고 기다리므로, 사용자가 누르는 것과 같은 클릭을 강제로 보낸다.
+    await toggle.click({force: true});
     await page.waitForTimeout(500);
     expect(puts).toEqual([{enabled: true}]);
+    expect(await toggle.getAttribute("aria-disabled")).toBe("true");
+    await waitToggleText(page, 20001, "127.0.0.1 +1");
 
     const refreshed = page.waitForResponse((response) => isRequest("POST", "/api/tunneling/20001/activatorIp")(response.request()), {timeout: 10_000});
     await ipRefresh(page, 20001).click();

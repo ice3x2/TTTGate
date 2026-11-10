@@ -15,7 +15,7 @@
     import {tunnelPolicy} from './parts/tunnelPolicy';
     import {StatusPoller} from './parts/statusPoller';
     import {tunnelRowView, tunnelTitle, undoTimeoutOf} from './parts/tunnelRow';
-    import {ipLimitView, type IpLimitView} from './parts/ipLimit';
+    import {ipLimitView, withIpResult, type IpLimitView} from './parts/ipLimit';
     import Clock from '../ui/Clock.svelte';
 
     // 이슈 338: 로그인하면 먼저 보이는 화면이다. 터널마다 제목·상태 한 줄·스위치를 그리고 한 번 눌러 켜고 끈다.
@@ -168,8 +168,7 @@
                 toast.push({tone: 'alarm', message: serverMessageOf(result) || failure});
                 return;
             }
-            const before = statuses[port];
-            if(before) statuses = {...statuses, [port]: {...before, ...patch(result)}};
+            ({options, statuses} = withIpResult({options, statuses}, port, patch(result)));
             await poller.refresh();
         } catch(e) {
             if(e instanceof InvalidSession) {

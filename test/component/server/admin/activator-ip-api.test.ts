@@ -411,6 +411,55 @@ describe("activator-ip API (이슈 348)", () => {
         });
     });
 
+    describe("켜기·갱신은 설정 리비전을 올리지 않는다", () => {
+        beforeAll(async () => {
+            expect((await saveTunnel(alice.auth, 21080, {inactiveOnStartup: true, sharedUserIds: [tom.id]}, IP_ALICE)).status).toBe(200);
+        });
+        const editAt = (loaded: number, destinationPort: number) =>
+            saveTunnel(alice.auth, 21080, {inactiveOnStartup: true, sharedUserIds: [tom.id], destinationPort, expectedRevision: loaded}, IP_ALICE);
+
+        it("편집 화면을 연 뒤 다른 사용자가 켜서 IP 가 바뀌어도, 연 때의 리비전으로 저장된다", async () => {
+            const loaded = revision();
+            expect((await activate(tom.auth, 21080, IP_TOM)).status).toBe(200);
+            expect(await storedIps(21080)).toEqual({[alice.id]: IP_ALICE, [tom.id]: IP_TOM});
+            expect(revision()).toBe(loaded);
+            expect((await editAt(loaded, 12)).status).toBe(200);
+            expect(await storedIps(21080)).toEqual({[alice.id]: IP_ALICE, [tom.id]: IP_TOM});
+        });
+
+        it("편집 화면을 연 뒤 내 IP 를 갱신해도, 연 때의 리비전으로 저장된다", async () => {
+            const loaded = revision();
+            expect((await refresh(alice.auth, 21080, "203.0.113.80")).status).toBe(200);
+            expect(revision()).toBe(loaded);
+            expect((await editAt(loaded, 13)).status).toBe(200);
+            expect(await storedIps(21080)).toEqual({[alice.id]: "203.0.113.80", [tom.id]: IP_TOM});
+        });
+
+        it("IP 제한 켜기·끄기는 설정 변경이라 리비전을 올린다", async () => {
+            const loaded = revision();
+            expect((await setLimit(alice.auth, 21080, false, IP_ALICE)).status).toBe(200);
+            expect(revision()).toBe(loaded + 1);
+            expect((await editAt(loaded, 14)).status).toBe(409);
+        });
+    });
+
+    describe("서버 설정 저장 (POST /api/serverOption)", () => {
+        it("본문의 허용 IP 목록은 무시하고 저장된 목록을 지키며, 저장한 뒤 기존 연결 정리를 부른다", async () => {
+            expect((await saveTunnel(alice.auth, 21090, {inactiveOnStartup: true}, IP_ALICE)).status).toBe(200);
+            const {trustedClients: _masked, ...current} = ServerOptionStore.instance.serverOption;
+            const tunnelingOptions = current.tunnelingOptions.map((tunnel) => tunnel.forwardPort === 21090
+                ? {...tunnel, activatorIpOnly: false, activatorIps: {[alice.id]: "203.0.113.90", u_fake: "203.0.113.91"}} : tunnel);
+            runtime.enforceActivatorIps.mockClear();
+            // 픽스처는 관리 서버를 HTTP 로 띄운다. 서버 설정 저장은 이 배치를 명시적으로 허용해야 받는다.
+            AdminSecurityPolicyRegistry.configure({trustXForwardedFor: true, trustedProxyHops: 1, allowLegacyAdminHttp: true});
+            const saved = await request("POST", "/api/serverOption", {...current, tunnelingOptions, expectedRevision: revision()}, superuser, IP_ADMIN);
+            expect([saved.status, saved.body.message]).toEqual([200, ""]);
+            expect((await storedTunnel(21090)).activatorIpOnly).toBe(false);
+            expect(await storedIps(21090)).toEqual({[alice.id]: IP_ALICE});
+            expect(runtime.enforceActivatorIps).toHaveBeenCalled();
+        });
+    });
+
     describe("판정에 쓰지 않는 항목과 지우는 항목 (FR-5·AC-12)", () => {
         it("비활성 사용자와 켜기 권한을 잃은 사용자의 항목은 남아 있어도 판정에 쓰지 않는다", async () => {
             expect((await saveTunnel(alice.auth, 21050, {inactiveOnStartup: true, sharedUserIds: [tom.id, tim.id]}, IP_ALICE)).status).toBe(200);

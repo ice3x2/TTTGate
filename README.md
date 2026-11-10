@@ -432,6 +432,7 @@ Before you rely on it:
 - One PC can open the console over IPv6 and the tunnel over IPv4 (dual stack). The two addresses then differ and the connection is refused. Open the console and the tunnel the same way, for example both with an IPv4 address.
 - An address that other people also use, for example in a café or a hotel, stays allowed until you update your IP. Press **Update to my IP** when you use another network.
 - Do not use the limit for an HTTP or HTTPS tunnel behind a CDN or a reverse proxy. Every connection then comes from the proxy, so the server refuses all of them.
+- If console requests and tunnel connections reach the server from the same NAT or proxy address (for example the Docker `userland-proxy` or a reverse proxy on the same host), the server saves that shared address as your IP, so the limit lets every connection in.
 
 ### Client
 
@@ -1407,6 +1408,7 @@ RDP 처럼 오래 열어 두는 터널에는 비밀번호를 무작위로 넣어
 - 같은 PC 라도 관리 화면은 IPv6 로, 터널 연결은 IPv4 로 나갈 수 있다(듀얼 스택). 그러면 두 주소가 달라 연결이 거절된다. 관리 화면과 터널을 같은 방식으로 연다. 예를 들어 둘 다 IPv4 주소로 연다.
 - 카페나 호텔처럼 여러 사람이 함께 쓰는 주소는 내가 IP 를 갱신할 때까지 허용된다. 다른 네트워크로 옮기면 **Update to my IP** 를 누른다.
 - CDN 이나 역방향 프록시 뒤에 있는 HTTP·HTTPS 터널에는 IP 제한을 쓰지 않는다. 모든 연결이 프록시에서 오므로 서버가 모두 거절한다.
+- 관리 화면 요청과 터널 연결이 같은 NAT·프록시 주소로 서버에 들어오면(예: Docker `userland-proxy`, 같은 호스트의 역방향 프록시) 서버가 그 공유 주소를 내 IP 로 저장하므로, IP 제한이 모든 연결을 받아들인다.
 
 ### 클라이언트
 

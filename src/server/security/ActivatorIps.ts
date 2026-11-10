@@ -1,4 +1,6 @@
+import {isIP} from "net";
 import {normalizeRemoteAddress} from "./address";
+import {parseBlockedAddress} from "./IpBlocklist";
 
 // 이슈 348 — 터널을 켠 사람의 IP 에서만 연결을 받는다. 허용 IP 목록({userId → IP})의 읽기·갱신·판정 규칙이다.
 // 저장소를 모르는 순수 함수만 둔다. 저장소를 읽는 쪽은 rbac/TunnelActivatorIps.ts 다.
@@ -42,9 +44,15 @@ export function withActivatorIps<T extends {activatorIps?: Record<string, string
     return option;
 }
 
-/** 비교에 쓰는 IP 표기. 요청자 IP 와 연결 IP 가 이 함수 하나를 쓴다(FR-7). IPv6 는 대소문자를 맞춘다. */
+/**
+ * 비교에 쓰는 IP 표기. 요청자 IP 와 연결 IP 가 이 함수 하나를 쓴다(FR-7). IPv6 는 차단 목록과 같은 정규화로
+ * RFC 5952 압축형(IPv4-mapped 는 IPv4)으로 바꾼다. X-Forwarded-For 의 펼친 표기도 소켓 주소와 같아진다.
+ */
 export function canonicalIp(address: string): string {
-    return normalizeRemoteAddress(address).toLowerCase();
+    const host = normalizeRemoteAddress(address);
+    if(isIP(host) !== 6) return host.toLowerCase();
+    const parsed = parseBlockedAddress(host);
+    return parsed.ok ? parsed.address : host.toLowerCase();
 }
 
 /** 관리 요청의 요청자 IP. 주소를 모르면("unknown") 없다. */

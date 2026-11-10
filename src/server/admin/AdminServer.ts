@@ -707,6 +707,15 @@ class AdminServer {
                     .filter((port) => Number.isInteger(port) && !currentPorts.has(port) && this._tttServer?.externalServerStatus?.(port)?.online !== true);
                 droppedBlocks = ServerOptionStore.releasePortBlocks(requestedServerOption, newPorts);
             }
+            // 이슈 348: 허용 IP 목록은 서버만 바꾼다. 본문의 목록은 버리고 같은 포트의 저장된 목록을 지킨다(새 포트는 비운다).
+            if(Array.isArray(requestedServerOption.tunnelingOptions)) {
+                requestedServerOption.tunnelingOptions = requestedServerOption.tunnelingOptions.map((tunnel: unknown) => {
+                    if(typeof tunnel !== 'object' || tunnel === null || Array.isArray(tunnel)) return tunnel;
+                    const requested = tunnel as TunnelingOption;
+                    const stored = currentServerOption.tunnelingOptions.find((option) => option.forwardPort === requested.forwardPort);
+                    return withActivatorIps({...requested}, stored ? activatorIpsOf(stored) : {});
+                });
+            }
             let prepareResult = serverOptionStore.prepareServerOption(ObjectUtil.cloneDeep(requestedServerOption));
             if(!prepareResult.success || !prepareResult.serverOption) {
                 this.sendApiFailure(res, 400, {message: prepareResult.message || 'Invalid server option', updated: false});
@@ -833,6 +842,8 @@ class AdminServer {
                 return;
             }
             if(droppedBlocks.length > 0) ctx.auditDetail({droppedBlocks: auditBlocks(droppedBlocks)});
+            // 이슈 348: IP 제한이 바뀌었을 수 있으므로 허용 IP 가 아닌 기존 연결을 끊는다.
+            await ctx.enforceActivatorIps?.();
             this.sendApiSuccess(res, {
                 partial: runtimeResult.partial,
                 updated: true,
