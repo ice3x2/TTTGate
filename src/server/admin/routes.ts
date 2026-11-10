@@ -19,7 +19,16 @@ export type {Action, Target};
  * 이슈 349 FR-7: 실패 응답의 본문. 관리 화면은 code 로 문구를 고르고, 문구에 들어가는 값(포트 번호 등)은 별도 필드에서 받는다.
  * message 는 번역 맵에 없는 code 를 받은 화면(서버와 화면의 버전이 다른 경우)이 그대로 보이는 영어 문구다.
  */
-export type ApiFailure = {code: string; message?: string; [field: string]: unknown};
+export type ApiFailure = {code: string; message?: string; values?: Record<string, unknown>; [field: string]: unknown};
+
+/**
+ * 실패 응답에서 값 필드가 아닌 필드(봉투·상태·구조 정보). sendApiFailure 는 이 필드를 그대로 싣고, 나머지 필드와 values 는
+ * 값 필드로 보아 failureValues 로 거른다. values 안의 이 이름은 응답 필드를 덮지 못하게 버린다(이슈 349 FR-7).
+ */
+export const FAILURE_RESPONSE_FIELDS: ReadonlySet<string> = new Set([
+    'success', 'code', 'message', 'partial', 'failedScopes', 'warnings', 'status', 'valid', 'url',
+    'updated', 'updates', 'revisionState', 'certificateRevisionState', 'restartRequiredScopes', 'references',
+]);
 
 export type RouteContext = {
     /** 활성 터널의 수명 상한을 다시 계산한다(#137). 소유자·사용자 그룹·그룹 속성이 바뀐 뒤 부른다. */

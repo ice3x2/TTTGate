@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import ts from "typescript";
+import {FAILURE_RESPONSE_FIELDS} from "../../../../src/server/admin/routes";
 
 // 이슈 349 FR-7·AC-4a — 관리 화면이 부르는 API 의 실패 응답(4xx·5xx)은 모두 code 를 가진다.
 // 화면은 code 로 문구를 고르고, 문구에 들어가는 값(포트 번호 등)은 응답의 별도 필드에서 받는다.
@@ -9,10 +10,11 @@ import ts from "typescript";
 //   2. sendApiFailure·sendFailure·fail(res, status, payload) 의 payload 에 code 가 있다.
 //      payload 가 변수면 그 변수는 ApiFailure 로 형을 적은 매개변수나 상수여야 한다(형 검사가 호출하는 쪽의 code 를 강제한다).
 //   3. 문구가 값을 끼워 넣는 템플릿이면 끼운 값마다 같은 이름(또는 같은 식)의 필드를 함께 보낸다.
-//   4. 다른 모듈이 만든 실패의 문구(X.message)를 넘기면 그 실패의 values(...X.values)도 넘긴다. 문구가 리터럴·상수도
-//      X.message 도 아닌 식이면 code·message 밖의 값 필드를 함께 보낸다.
+//   4. 다른 모듈이 만든 실패의 문구(X.message)를 넘기면 그 실패의 values(values: X.values)도 넘긴다. 문구가 리터럴·상수도
+//      X.message 도 아닌 식이면 값 필드(FAILURE_RESPONSE_FIELDS 가 아닌 필드)를 함께 보낸다.
 //   5. sendApiEnvelope 는 sendApiSuccess·sendApiFailure 안에서만 부른다(성공 여부를 값으로 고르는 응답이 code 를 빠뜨리지 않게).
 //   6. values 의 키로 응답 봉투 필드(success·partial·failedScopes·warnings·code·message)를 쓰지 않는다.
+//      실패 응답 payload 에 ...X.values 를 펼치지 않고 values: X.values 로 넘긴다(sendApiFailure 가 응답 필드 이름의 값 키를 버린다).
 //   7. res.writeHead(4xx·5xx) 로 실패 응답을 직접 쓰지 않는다. sendApiSuccess·ctx.ok 로 4xx·5xx 를 보내지 않는다.
 // 정적 파일(비 API)의 404 텍스트 응답(writeHead(404) 바로 뒤 end('Not Found'))은 관리 화면이 오류 문구로 쓰지 않으므로 대상이 아니다.
 // 또 src/server/rbac·src/server/security 와 설정 검증(ServerOptionStore·TunnelingOption)에서 실패를 만드는 곳을 읽어,
@@ -28,6 +30,7 @@ const VALUES_MISSING = "문구에 끼운 값을 별도 필드로 보내지 않�
 const FORWARDED_VALUES_MISSING = "전달한 실패의 값을 보내지 않는다";
 const RESERVED_VALUE_KEY = "values 의 키가 응답 봉투 필드를 덮는다";
 const VALUE_KEYS_DIFFER = "같은 code 의 값 키가 곳마다 다르다";
+const SPREAD_VALUES = "values 를 payload 에 펼친다(values: X.values 로 넘겨야 응답 필드를 덮지 못한다)";
 const ENVELOPE_OWNERS = new Set(["sendApiSuccess", "sendApiFailure"]);
 
 type Finding = {file: string; line: number; text: string; problem: string};
@@ -160,6 +163,10 @@ const isStaticNotFound = (call: ts.CallExpression): boolean => {
         && (end.arguments[0] as ts.StringLiteral).text === NOT_FOUND_TEXT;
 };
 
+/** 값 필드가 아닌 응답 필드(updated·failedScopes 등)인가. 펼치기는 무엇이 들어올지 모르므로 값 필드로 본다. */
+const isResponseField = (property: ts.ObjectLiteralElementLike): boolean =>
+    property.name !== undefined && ts.isIdentifier(property.name) && FAILURE_RESPONSE_FIELDS.has(property.name.text);
+
 const payloadProblem = (source: ts.SourceFile, payload: ts.Expression | undefined): string | undefined => {
     if(payload === undefined) return "payload 가 없다";
     if(ts.isIdentifier(payload)) return isTypedApiFailure(source, payload) ? undefined : "payload 변수가 ApiFailure 매개변수나 상수가 아니다";
@@ -169,6 +176,8 @@ const payloadProblem = (source: ts.SourceFile, payload: ts.Expression | undefine
         && constObjectOf(source, property.expression.text) !== undefined && propertyNamed(constObjectOf(source, property.expression.text)!, "code") !== undefined);
     if(!code && !spreadCode) return "code 가 없다";
     if(code && ts.isPropertyAssignment(code) && isEmptyString(code.initializer)) return "code 가 빈 문자열이다";
+    if(payload.properties.some((property) => ts.isSpreadAssignment(property) && ts.isPropertyAccessExpression(property.expression)
+        && property.expression.name.text === "values")) return SPREAD_VALUES;
     const message = propertyNamed(payload, "message");
     if(message && ts.isPropertyAssignment(message) && ts.isTemplateExpression(message.initializer)) {
         const others = payload.properties.filter((property) => property !== code && property !== message);
@@ -177,7 +186,7 @@ const payloadProblem = (source: ts.SourceFile, payload: ts.Expression | undefine
     if(message && ts.isPropertyAssignment(message) && !isStaticText(source, message.initializer)) {
         const from = forwardedFrom(message.initializer);
         if(from !== undefined ? !spreadsValuesOf(payload, from)
-            : !payload.properties.some((property) => property !== code && property !== message)) return FORWARDED_VALUES_MISSING;
+            : !payload.properties.some((property) => property !== code && property !== message && !isResponseField(property))) return FORWARDED_VALUES_MISSING;
     }
     return undefined;
 };
@@ -287,13 +296,16 @@ const keysOf = (node: ts.Expression | undefined, skip: ReadonlySet<string> = new
 };
 
 /**
- * payload 가운데 문구에 끼운 값을 담은 필드의 키. payload 에는 값이 아닌 응답 필드(updated·failedScopes 등)도 섞이므로
- * 템플릿 문구에 끼운 값을 담은 필드만 값 키로 본다. 문구가 템플릿이 아니거나 펼치기가 있으면 undefined 다.
+ * payload 가운데 값 필드의 키. payload 에는 값이 아닌 응답 필드(updated·failedScopes 등)도 섞인다.
+ * 문구가 템플릿이면 끼운 값을 담은 필드만, 문구가 리터럴이면 code·message·응답 필드(FAILURE_RESPONSE_FIELDS)를 뺀 필드를 값 키로 본다.
+ * 문구가 그 밖의 식이거나 펼치기·values 필드가 있으면 undefined 다.
  */
 const templateKeysOf = (payload: ts.ObjectLiteralExpression): string[] | undefined => {
     const message = propertyNamed(payload, "message");
-    if(!message || !ts.isPropertyAssignment(message) || !ts.isTemplateExpression(message.initializer)) return undefined;
-    if(payload.properties.some((property) => ts.isSpreadAssignment(property))) return undefined;
+    if(!message || !ts.isPropertyAssignment(message)) return undefined;
+    if(payload.properties.some((property) => ts.isSpreadAssignment(property)) || propertyNamed(payload, "values")) return undefined;
+    if(isLiteralText(message.initializer)) return keysOf(payload, FAILURE_RESPONSE_FIELDS);
+    if(!ts.isTemplateExpression(message.initializer)) return undefined;
     const names = message.initializer.templateSpans.map((span) => valueNameOf(span.expression));
     return payload.properties.filter((property) => property !== message && (
         ts.isShorthandPropertyAssignment(property) ? names.includes(property.name.text)
@@ -418,7 +430,7 @@ describe("이슈 349 AC-4a — 관리 API 의 실패 응답은 code 를 가진�
             "ctx.fail(result.status, result.code, result.message);",
             "ctx.fail(result.status, result.code, result.message, result.values);",
             "this.sendApiFailure(res, admission.status, {code: admission.code, message: admission.message});",
-            "this.sendApiFailure(res, admission.status, {code: admission.code, message: admission.message, ...admission.values});",
+            "this.sendApiFailure(res, admission.status, {code: admission.code, message: admission.message, values: admission.values});",
             "const ORIGIN = {code: 'passkey_origin_unsupported', message: 'Passkeys need a domain name.'};",
             "ctx.fail(422, ORIGIN.code, ORIGIN.message);",
             "this.sendApiFailure(res, decision.status, {code: decision.code, message: decision.status === 403 ? 'Forbidden' : 'Not Found'});",
@@ -479,10 +491,10 @@ describe("이슈 349 AC-4a — 관리 API 의 실패 응답은 code 를 가진�
     test("검사는 넘겨받은 실패의 문구만 보내고 그 값을 빠뜨린 응답을 잡는다(M-1)", () => {
         const lines = [
             "this.sendApiFailure(res, 400, {code: 'trusted_clients_invalid', message: prepared.message || 'Invalid trusted clients'});",
-            "this.sendApiFailure(res, 400, {code: 'trusted_clients_invalid', message: prepared.message || 'Invalid trusted clients', ...prepared.values});",
+            "this.sendApiFailure(res, 400, {code: 'trusted_clients_invalid', message: prepared.message || 'Invalid trusted clients', values: prepared.values});",
             "this.sendApiFailure(res, 400, {code: 'server_option_invalid', message: result.message, updated: false});",
-            "this.sendApiFailure(res, 400, {code: 'server_option_invalid', message: result.message, ...other.values});",
-            "deps.fail(res, 422, {...result.values, code: result.code, message: result.message});",
+            "this.sendApiFailure(res, 400, {code: 'server_option_invalid', message: result.message, values: other.values});",
+            "deps.fail(res, 422, {values: result.values, code: result.code, message: result.message});",
             "this.sendApiFailure(res, 422, {code: 'geo_invalid', message: describe(input)});",
             "this.sendApiFailure(res, 422, {code: 'geo_invalid', message: describe(input), country});",
             "ctx.fail(422, 'x_y', result.message, {});",
@@ -539,8 +551,51 @@ describe("이슈 349 AC-4a — 관리 API 의 실패 응답은 code 를 가진�
             [2, VALUE_KEYS_DIFFER],
             [7, VALUE_KEYS_DIFFER],
             [8, VALUE_KEYS_DIFFER],
+            [11, VALUE_KEYS_DIFFER],
+            [12, VALUE_KEYS_DIFFER],
             [13, VALUE_KEYS_DIFFER],
             [14, VALUE_KEYS_DIFFER],
+        ]);
+    });
+
+    test("검사는 리터럴 문구로 보내는 곳의 값 키도 같은 code 의 다른 곳과 견준다(L-4)", () => {
+        const lines = [
+            "this.sendApiFailure(res, 400, {code: 'port_unusable', message: 'Unusable port.', forwardPort});",
+            "ctx.fail(400, 'port_unusable', `Port ${port} is unusable.`, {port});",
+            "this.sendApiFailure(res, 400, {code: 'a_b', message: 'Literal.', forwardPort, port: forwardPort, updated: false});",
+            "ctx.fail(400, 'a_b', `Port ${port}.`, {port});",
+            "this.sendApiFailure(res, 500, {code: 'c_d', message: 'Literal.', failedScopes: [], partial: true});",
+            "ctx.fail(500, 'c_d', `Port ${port}.`, {port});",
+        ];
+        expect(withSample(lines, (file) => valueKeyFindings([file])).map((finding) => [finding.line, finding.problem])).toEqual([
+            [1, VALUE_KEYS_DIFFER],
+            [2, VALUE_KEYS_DIFFER],
+        ]);
+    });
+
+    test("검사는 값 필드 대신 응답 필드만 함께 보내는 계산된 문구를 잡는다(L-5)", () => {
+        const lines = [
+            "this.sendApiFailure(res, 400, {code: 'x_y', message: describe(input), updated: false});",
+            "this.sendApiFailure(res, 500, {code: 'x_y', message: describe(input), failedScopes: [], partial: true, revisionState});",
+            "this.sendApiFailure(res, 400, {code: 'x_y', message: describe(input), updated: false, legacyFlagsRequired: flags});",
+            "this.sendApiFailure(res, 400, {code: 'x_y', message: describe(input), country});",
+        ];
+        expect(withSample(lines, scan).map((finding) => [finding.line, finding.problem])).toEqual([
+            [1, FORWARDED_VALUES_MISSING],
+            [2, FORWARDED_VALUES_MISSING],
+        ]);
+    });
+
+    test("검사는 실패 응답 payload 에 X.values 를 펼치는 곳을 잡는다(L-1)", () => {
+        const lines = [
+            "this.sendApiFailure(res, 400, {...prepared.values, code: 'x_y', message: prepared.message});",
+            "deps.fail(res, 422, {code: result.code, message: result.message, ...result.values});",
+            "this.sendApiFailure(res, 400, {code: 'x_y', message: prepared.message, values: prepared.values});",
+            "ctx.fail(422, 'x_y', result.message, {...result.values, port});",
+        ];
+        expect(withSample(lines, scan).map((finding) => [finding.line, finding.problem])).toEqual([
+            [1, SPREAD_VALUES],
+            [2, SPREAD_VALUES],
         ]);
     });
 });

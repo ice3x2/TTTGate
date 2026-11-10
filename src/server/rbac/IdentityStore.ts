@@ -18,6 +18,7 @@ import {
     DEFAULT_GROUP_ATTRIBUTES,
     DEFAULT_GROUP_ID,
     Failure,
+    failure,
     Group,
     GroupAttributes,
     IdentityFile,
@@ -107,12 +108,12 @@ function groupNameOf(value: unknown): string | undefined {
 }
 
 function passkeyNotFound(): Failure<404> {
-    return {success: false, status: 404, code: 'passkey_not_found', message: 'Passkey not found.'};
+    return failure(404, 'passkey_not_found', 'Passkey not found.');
 }
 
 /** 저장 실패를 관리 API 의 실패로 바꾼다. 문구에 끼운 오류 코드(values)도 넘긴다(이슈 349 FR-7). */
 function saveFailedResult(failed: FileFailure): Failure<422> {
-    return {success: false, status: 422, code: 'identity_save_failed', message: failed.message, values: failed.values};
+    return failure(422, 'identity_save_failed', failed.message, failed.values);
 }
 
 /** 이슈 346: 옛 파일에는 mfa_required 가 없다(false). 불리언이 아닌 값은 강제가 꺼지므로 경고를 남긴다. */
@@ -474,8 +475,7 @@ class IdentityStore {
             return {success: false, status: 409, code: 'passkey_already_registered', message: 'This passkey is already registered.'};
         }
         return this.replacePasskeys(id, (current) => current.length >= PASSKEY_LIMIT
-            ? {success: false, status: 409, code: 'passkey_limit', message: `You can register up to ${PASSKEY_LIMIT} passkeys.`,
-                values: {limit: PASSKEY_LIMIT}}
+            ? failure(409, 'passkey_limit', `You can register up to ${PASSKEY_LIMIT} passkeys.`, {limit: PASSKEY_LIMIT})
             : {success: true, value: {next: [...current, clonePasskey(passkey)], result: undefined}});
     }
 

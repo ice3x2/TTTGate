@@ -85,7 +85,7 @@ export function auditRouteHandlers(query: AuditQuery, fail: Fail): RouteHandlers
             const params = new URL(ctx.req.url ?? '/', 'http://localhost').searchParams;
             const parsed = parseAuditQuery(params, ctx);
             if('message' in parsed) {
-                fail(ctx.res, 422, {...parsed.values, code: 'audit_query_invalid', status: 422, message: parsed.message});
+                fail(ctx.res, 422, {code: 'audit_query_invalid', status: 422, message: parsed.message, values: parsed.values});
                 return;
             }
             const page = await query.query(parsed.filter);

@@ -80,7 +80,8 @@ export function addBlocklistEntry(entries: readonly BlocklistEntry[], request: A
             const widened: BlocklistEntry = {...existing, port: null};
             return {ok: true, entry: widened, entries: entries.map((candidate) => candidate === existing ? widened : candidate), widenedFrom: existing.port};
         }
-        // 적용 범위 문구(all tunnels·port N)는 영어이므로 값으로 보내지 않는다. 화면은 port(모든 터널이면 null)로 문구를 고른다.
+        // 적용 범위 문구(all tunnels·port N)는 영어이므로 값으로 보내지 않고 port 를 보낸다(모든 터널이면 null).
+        // 화면은 null 값을 문구에 끼우지 않으므로(serverError.ts 의 valuesOf) 지금은 이 code 의 번역 없이 서버 문구를 그대로 보인다.
         return {ok: false, code: 'duplicate', message: `${address.address} is already blocked on ${scopeOf(existing.port)}`, values: {address: address.address, port: existing.port}};
     }
     if(entries.length >= MAX_BLOCKLIST_ENTRIES) {
