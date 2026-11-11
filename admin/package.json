@@ -24,7 +24,7 @@
     "@simplewebauthn/browser": "14.0.0",
     "@types/lodash": "^4.14.200",
     "lodash": "^4.17.21",
-    "node-forge": "^1.4.2",
+    "node-forge": "^1.4.3",
     "qrcode": "1.5.4"
   },
   "engines": {
