@@ -1,5 +1,5 @@
 import type {Options, TunnelingStatus} from "../../admin/src/controller/Options";
-import {clockOf, formatEnds, formatRemaining, isTunnelOn, tunnelRowView, tunnelTitle, undoTimeoutOf} from "../../admin/src/screens/parts/tunnelRow";
+import {clockOf, formatClockTime, formatEnds, formatRemaining, isTunnelOn, tunnelRowView, tunnelTitle, undoTimeoutOf} from "../../admin/src/screens/parts/tunnelRow";
 import {translator} from "../../admin/src/i18n";
 
 // #338 REQ-5·REQ-8·REQ-15 — 터널 목록 한 줄의 제목·상태 줄·스위치(순수 함수).
@@ -56,6 +56,17 @@ describe("#344 formatRemaining — 남은 시간", () => {
     });
 });
 
+describe("formatClockTime — 시각만 (검토 H-1)", () => {
+    const ko = translator("ko");
+    const en = translator("en");
+    test("오늘이면 시:분, 다른 날이면 월·일을 붙이고, '종료'·'ends' 는 붙이지 않는다", () => {
+        expect(formatClockTime(NOW + 90 * 60_000, NOW, ko)).toBe("18:30");
+        expect(formatClockTime(NOW + 7 * 3600_000, NOW, ko)).toBe("1월 16일 00:00");
+        expect(formatClockTime(NOW + 90 * 60_000, NOW, en)).toBe("18:30");
+        expect(formatClockTime(NOW + 26 * 3600_000, NOW, en)).toBe("1/16 19:00");
+    });
+});
+
 describe("#344 formatEnds — 종료 시각", () => {
     test("오늘이면 시:분만 보인다", () => {
         expect(formatEnds(NOW + 90 * 60_000, NOW)).toBe("ends 18:30");
@@ -76,7 +87,7 @@ describe("#344 clockOf — 켜진 터널의 시계", () => {
         expect(clockOf(status({online: false}), NOW)).toBeUndefined();
     });
     test("무제한이면 숫자 없이 도는 시계다", () => {
-        expect(clockOf(status({activeTimeout: 0}), NOW)).toEqual({kind: "unlimited", label: "No time limit"});
+        expect(clockOf(status({activeTimeout: 0}), NOW)).toEqual({kind: "unlimited", label: "Stays on"});
     });
     test("제한이 있으면 남은 비율·남은 시간·종료 시각을 준다 (AC-1)", () => {
         const clock = clockOf(status({activeStart: NOW - 600_000, activeTimeout: 3600}), NOW);
@@ -122,7 +133,7 @@ describe("이슈 349 한국어 시계", () => {
     });
 
     test("시계 이름", () => {
-        expect(clockOf(status({activeTimeout: 0}), NOW, ko)).toEqual({kind: "unlimited", label: "시간 제한 없음"});
+        expect(clockOf(status({activeTimeout: 0}), NOW, ko)).toEqual({kind: "unlimited", label: "자동으로 끄지 않음"});
         expect(clockOf(status({activeStart: NOW - 600_000, activeTimeout: 3600}), NOW, ko)).toMatchObject({
             left: "50분 00초 남음", ends: "17:50에 꺼짐", label: "50분 00초 남음, 17:50에 꺼짐"});
         expect(clockOf(status({activeStart: NOW, activeTimeout: 9 * 60}), NOW, ko)).toMatchObject({label: "곧 꺼짐, 9분 00초 남음, 17:09에 꺼짐"});
@@ -132,7 +143,7 @@ describe("이슈 349 한국어 시계", () => {
         const en = translator("en");
         expect(formatRemaining(3000, en)).toBe("50m 00s left");
         expect(formatEnds(NOW + 26 * 3600_000, NOW, en)).toBe("ends 1/16 19:00");
-        expect(clockOf(status({activeTimeout: 0}), NOW, en)).toEqual({kind: "unlimited", label: "No time limit"});
+        expect(clockOf(status({activeTimeout: 0}), NOW, en)).toEqual({kind: "unlimited", label: "Stays on"});
     });
 });
 

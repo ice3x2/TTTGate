@@ -42,14 +42,18 @@ export function formatRemaining(seconds: number, tr: Translator = i18n()): strin
     return tr.t('clock.leftDays', {days: wholeNumber(left / 86_400, tr), hours: wholeNumber((left % 86_400) / 3600, tr)});
 }
 
-/** #344 종료 시각. 브라우저 시간대로 보이고, now(서버 시각)와 날짜가 다르면 월·일을 붙인다. 시:분은 Intl 의 24시간 표기다. */
-export function formatEnds(endsAt: number, now: number, tr: Translator = i18n()): string {
-    const end = new Date(endsAt);
+/** 꺼지는 시각(시:분). 브라우저 시간대로 보이고, now(서버 시각)와 날짜가 다르면 월·일을 붙인다. 시:분은 Intl 의 24시간 표기다. */
+export function formatClockTime(at: number, now: number, tr: Translator = i18n()): string {
+    const end = new Date(at);
     const today = new Date(now);
     const time = tr.dateTime(ENDS_TIME).format(end);
     const sameDay = end.getFullYear() === today.getFullYear() && end.getMonth() === today.getMonth() && end.getDate() === today.getDate();
-    return sameDay ? tr.t('clock.endsToday', {time})
-        : tr.t('clock.endsOtherDay', {month: tr.number(end.getMonth() + 1, 0), day: tr.number(end.getDate(), 0), time});
+    return sameDay ? time : tr.t('clock.dateTime', {month: tr.number(end.getMonth() + 1, 0), day: tr.number(end.getDate(), 0), time});
+}
+
+/** #344 종료 시각("18:30 종료" / "ends 1/16 19:00"). 시각 글자는 formatClockTime 과 같다. */
+export function formatEnds(endsAt: number, now: number, tr: Translator = i18n()): string {
+    return tr.t('clock.ends', {time: formatClockTime(endsAt, now, tr)});
 }
 
 /** #344 켜진 터널의 시계. 꺼졌거나 열리지 않았으면 없다. 시각은 서버 시각(serverTime)만 쓴다. */

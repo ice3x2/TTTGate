@@ -94,8 +94,6 @@ const EXPECTED: Readonly<Record<string, string>> = {
     "serverError.admin_port_conflict": "관리 화면 포트와 터널 서버 포트는 같을 수 없습니다.",
     "server.keepAlive": "Keep-Alive 간격(ms)",
     "server.keepAliveHint": "0 이하면 Keep-Alive를 끕니다.",
-    "clock.endsToday": "{time}에 꺼짐",
-    "clock.endsOtherDay": "{month}월 {day}일 {time}에 꺼짐",
     "clock.labelEndingSoon": "곧 꺼짐, {left}, {ends}",
     "auditEvent.tunnel_ip_refreshed": "허용 IP 갱신",
     "tunnels.ipRefreshFailed": "{title} 터널의 허용 IP를 내 IP로 바꾸지 못했습니다.",
@@ -174,6 +172,8 @@ const KEPT: Readonly<Record<string, string>> = {
 const OWNED_BY_OTHER_ISSUES: ReadonlySet<string> = new Set([
     "tunnelStatus.stats", "tunnelEdit.bufferLimit", "group.maxDurationHint", "timer.title", "tunnelStatus.timeLimit",
     "tunnelStatus.timeLimitFailed", "clock.noLimit", "group.maxDuration", "serverError.timeout_invalid", "auditEvent.tunnel_autoexpire",
+    // 이슈 368 이 clock.ends·clock.dateTime 으로 나눴다. "{time}에 꺼짐" 은 tunnelRow.test.ts 가 확인한다.
+    "clock.endsToday", "clock.endsOtherDay",
 ]);
 
 /** 최종 권장 칸이 코드 변경을 함께 설명하는 줄. 값은 아래 따로 확인한다. */

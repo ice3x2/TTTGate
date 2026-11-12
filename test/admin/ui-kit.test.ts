@@ -285,7 +285,8 @@ test("Loading 이 오버레이 없이 보인다", async () => {
     }
 }, ADMIN_BROWSER_TEST_TIMEOUT_MS);
 
-test("Timer 가 남은 시간을 보여주고, 설정 다이얼로그로 새 제한 시간을 확정하면 echo 되며, 값을 바꾸지 않으면 onchange 가 호출되지 않는다", async () => {
+// 이슈 368: 켜 둘 시간 창은 슬라이더와 −/+ 버튼으로 고르고, 값을 바꾸지 않고 확인해도 보낸다(FR-13, "지금부터 다시 센다").
+test("Timer 가 남은 시간을 보여주고, 켜 둘 시간 창에서 + 로 고른 값을 확정하면 echo 되며, 값을 바꾸지 않아도 보낸다", async () => {
     const app = await startAdminBrowser();
     try {
         await app.page.setViewportSize({width: 400, height: 800});
@@ -293,20 +294,21 @@ test("Timer 가 남은 시간을 보여주고, 설정 다이얼로그로 새 제
 
         expect(await app.page.locator(".timer-text").textContent()).toBe("1m 0s");
         await app.page.locator(".timer-text").click();
-        const dialog = app.page.getByRole("dialog", {name: "Tunneling activity restriction time"});
+        const dialog = app.page.getByRole("dialog", {name: "Keep it on for"});
         await dialog.waitFor({state: "visible"});
-        await app.page.getByLabel("Days", {exact: true}).fill("0");
-        await app.page.getByLabel("Hours", {exact: true}).fill("0");
-        await app.page.getByLabel("Minutes", {exact: true}).fill("5");
-        await app.page.getByRole("button", {name: "OK"}).click();
+        // 남은 시간 1분으로 열린다. + 를 네 번 누르면 5분이다.
+        expect((await dialog.locator(".value").textContent())?.trim()).toBe("1 min");
+        for(let i = 0; i < 4; i++) await dialog.getByRole("button", {name: "1 min longer", exact: true}).click();
+        expect((await dialog.locator(".value").textContent())?.trim()).toBe("5 min");
+        await dialog.getByRole("button", {name: "OK"}).click();
         await dialog.waitFor({state: "hidden"});
         expect(await app.page.locator("#timer-echo").textContent()).toBe("300");
 
         await app.page.locator(".timer-text").click();
         await dialog.waitFor({state: "visible"});
-        await app.page.getByRole("button", {name: "OK"}).click();
+        await dialog.getByRole("button", {name: "OK"}).click();
         await dialog.waitFor({state: "hidden"});
-        expect(await app.page.locator("#timer-echo").textContent()).toBe("300");
+        expect(await app.page.locator("#timer-echo").textContent()).toBe("60");
 
         expect(app.errors).toEqual([]);
     } finally {

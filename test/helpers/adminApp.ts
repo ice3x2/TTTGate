@@ -187,7 +187,8 @@ export const startAdminApp = async (options: {fixture?: AdminFixture; login?: bo
         return {
             page, url: ownedBrowser.url, origin, rootDir: root.rootDir, errors: ownedBrowser.errors, calls, token, sessions, seedAudit, seedBan, mfaSecret, mfaRecoveryCodes, advanceClock, serverOption, enrollmentDelays, confirmOutcomes, tunnelState,
             async close(): Promise<void> {
-                try { await ownedBrowser.close(); }
+                // 닫는 도중 끝나지 않은 page.route 처리기가 "Response has been disposed" 로 테스트를 실패시키지 않게 먼저 걷어 낸다.
+                try { await page.unrouteAll({behavior: "ignoreErrors"}); await ownedBrowser.close(); }
                 finally {
                     try { await closeBackend(); }
                     finally { await cleanupTestRoot(root); }

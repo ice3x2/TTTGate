@@ -57,6 +57,7 @@ import {AUDIT_EVENT_TYPES} from "../audit/AuditEventTypes";
 import {activatorIpOnlyOf, activatorIpsOf, requesterIpOf, withActivatorIps} from "../security/ActivatorIps";
 import {activatorIpStatusOf, withoutFormerOwnerIp} from "../rbac/TunnelActivatorIps";
 import {activatorIpRouteHandlers, recordRequesterIp} from "./activatorIpRoutes";
+import {maxActiveSeconds} from "../security/TunnelLifetimePolicy";
 
 const logger = LoggerFactory.getLogger('server', 'AdminServer');
 const MFA_NOW = (): number => ClockRngProvider.current().now();
@@ -1889,8 +1890,10 @@ class AdminServer {
         const viewer = {userId: principal.userId, superuser: principal.role === 'superuser'};
         const store = ServerOptionStore.instance;
         // 이슈 348 FR-14: 항목마다 IP 제한·내 허용 IP·판정에 쓰이는 항목 수를, 최상위에 지금 요청자 IP 를 싣는다.
+        // 이슈 368 FR-1: 요청자를 켠 사람으로 놓고 계산한 적용 상한(초). 화면이 슬라이더 범위를 서버와 같게 정한다. 없으면 null.
         const visible = statuses.filter((status) => isTunnelVisibleTo(principal, status.port))
-            .map((status) => ({...status, ...activatorIpStatusOf(store.getTunnelingOption(status.port), viewer)}));
+            .map((status) => ({...status, ...activatorIpStatusOf(store.getTunnelingOption(status.port), viewer),
+                timeoutCapSeconds: maxActiveSeconds(status.port, AuthorizationContext, principal.userId) ?? null}));
         this.sendApiSuccess(res, {serverTime: Date.now(), requesterIp: requesterIpOf(ctx.ip) ?? null, statuses: visible});
     }
 

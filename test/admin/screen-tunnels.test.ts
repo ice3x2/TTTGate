@@ -121,7 +121,7 @@ test("#344 제한 터널은 줄어드는 시계와 남은 시간·종료 시각�
         await waitStatus(page, 20001, /^On/);
         await page.locator('li[data-port="20001"] .tunnel-clock.unlimited').waitFor({state: "visible", timeout: 10_000});
         expect(await row(page, 20001).locator(".tunnel-time").count()).toBe(0);
-        expect(await clock.getAttribute("aria-label")).toBe("No time limit");
+        expect(await clock.getAttribute("aria-label")).toBe("Stays on");
         const spinning = () => page.evaluate(() => getComputedStyle(document.querySelector('li[data-port="20001"] .tunnel-clock .hand')!).animationName);
         expect(await spinning()).not.toBe("none");
         // 움직임 줄이기를 켜면 멈춘다(FR-8).
@@ -526,11 +526,20 @@ test("편집 화면의 Timer 에서 10분을 고르면 active=true·timeout=600 
         const timer = app.page.locator("#tunnel-status-area .timer-text");
         await timer.waitFor({state: "visible", timeout: 10_000});
         await timer.click();
-        const dialog = app.page.getByRole("dialog", {name: "Tunneling activity restriction time"});
+        const dialog = app.page.getByRole("dialog", {name: "Keep it on for"});
         await dialog.waitFor({state: "visible", timeout: 10_000});
-        await dialog.getByLabel("Days", {exact: true}).fill("0");
-        await dialog.getByLabel("Hours", {exact: true}).fill("0");
-        await dialog.getByLabel("Minutes", {exact: true}).fill("10");
+        // 이슈 368: 숫자 칸 대신 슬라이더다. 단위는 시간으로 두고, Home 으로 1분에 놓은 뒤 화살표 9번이면 10분이다.
+        expect(await dialog.locator("input[type=number]").count()).toBe(0);
+        // 슈퍼유저라 상한이 없으므로 "자동으로 끄지 않기"가 보인다. 켜져 있으면 끄고 고른다.
+        const noAuto = dialog.getByRole("switch", {name: "Don't turn off automatically", exact: true});
+        expect(await noAuto.isVisible()).toBe(true);
+        if(await noAuto.getAttribute("aria-checked") === "true") await noAuto.click();
+        await dialog.getByRole("radio", {name: "Hours", exact: true}).click();
+        const slider = dialog.getByRole("slider", {name: "Keep it on for"});
+        await slider.focus();
+        await slider.press("Home");
+        for(let i = 0; i < 9; i++) await slider.press("ArrowRight");
+        expect((await dialog.locator(".value").textContent())?.trim()).toBe("10 min");
         const posted = app.page.waitForResponse(isPath("POST", "/api/tunneling/active/20002"), {timeout: 10_000});
         await dialog.getByRole("button", {name: "OK", exact: true}).click();
         expect((await posted).request().postDataJSON()).toEqual({active: true, timeout: 600});
