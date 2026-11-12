@@ -253,6 +253,73 @@ test("M-3 새 서버가 연결 목록에 404 를 주면 더 볼 수 없다고 �
     }
 });
 
+test("M-B 이미 읽은 창에서 연결 목록이 403(볼 수만 있음)이 되면 알리고 창을 닫는다", async () => {
+    const app = await startAdminApp({fixture: "with-tunnels"});
+    try {
+        await stubStatus(app.page);
+        let call = 0;
+        await app.page.route(`**/api/tunneling/${PORT}/connections`, (route) => call++ === 0
+            ? route.fulfill({json: {success: true, serverTime: Date.now(), countryLookup: false, truncated: false, total: 1, connections: [conn(2, "203.0.113.7", 60_000)]}})
+            : route.fulfill({status: 403, json: {success: false, code: "read_only", message: "read only"}}));
+        await openList(app.page, app.url);
+        const dialog = await openDialog(app.page);
+        await dialog.locator('li[data-connection="2"]').waitFor({state: "visible", timeout: 10_000});
+        await app.page.getByText("You can now only view this tunnel, so its connection list was closed.", {exact: true})
+            .waitFor({state: "visible", timeout: 10_000});
+        await dialog.waitFor({state: "hidden", timeout: 5_000});
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+});
+
+test("M-B 이미 읽은 뒤 다시 읽기가 실패하면 옛 목록을 두고 새로 고치지 못했다고 알리며, 다음 읽기가 되면 그 안내가 사라진다", async () => {
+    const app = await startAdminApp({fixture: "with-tunnels"});
+    try {
+        await stubStatus(app.page);
+        let call = 0;
+        const ok = {success: true, serverTime: Date.now(), countryLookup: false, truncated: false, total: 1, connections: [conn(2, "203.0.113.7", 60_000)]};
+        await app.page.route(`**/api/tunneling/${PORT}/connections`, (route) => call++ === 1
+            ? route.fulfill({status: 500, json: {success: false, code: "internal", message: "boom"}})
+            : route.fulfill({json: ok}));
+        await openList(app.page, app.url);
+        const dialog = await openDialog(app.page);
+        const note = dialog.getByText("Unable to refresh the connection list. Trying again.", {exact: true});
+        await note.waitFor({state: "visible", timeout: 10_000});
+        expect(await dialog.locator('li[data-connection="2"]').isVisible()).toBe(true);
+        await note.waitFor({state: "hidden", timeout: 10_000});
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+});
+
+test("L-2 이미 이 터널에 걸린 차단(409 duplicate)이면 알리고 그 주소의 줄을 '차단됨'으로 바꾼다", async () => {
+    const app = await startAdminApp({fixture: "with-tunnels"});
+    try {
+        await stubStatus(app.page);
+        await stubConnections(app.page, [[conn(2, "203.0.113.7", 60_000), conn(1, MY_IP, 3_600_000)]]);
+        await app.page.route("**/api/security/blocklist", async (route) => {
+            if(route.request().method() !== "POST") return route.fallback();
+            await route.fulfill({status: 409, json: {success: false, code: "duplicate", message: "203.0.113.7 is already blocked on all tunnels",
+                address: "203.0.113.7", port: null, closedConnections: 1}});
+        });
+        await openList(app.page, app.url);
+        const dialog = await openDialog(app.page);
+        await dialog.getByRole("button", {name: "Block 203.0.113.7", exact: true}).click();
+        const confirm = app.page.getByRole("dialog", {name: "Block 203.0.113.7?"});
+        await confirm.waitFor({state: "visible", timeout: 10_000});
+        await confirm.getByRole("button", {name: "Block", exact: true}).click();
+        await confirm.waitFor({state: "hidden", timeout: 10_000});
+        await app.page.getByText("This address is already blocked.", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+        expect(await dialog.locator('li[data-connection="2"] .tag').first().textContent()).toBe("Blocked");
+        expect(await dialog.locator('li[data-connection="1"] .tag').count()).toBe(0);
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+});
+
 test("AC-7·AC-8·AC-12 차단은 확인 창을 먼저 띄우고, Esc 는 확인 창만 닫으며, 내 IP 면 경고하고, '이 터널만'이 기본이다", async () => {
     const app = await startAdminApp({fixture: "with-tunnels"});
     try {

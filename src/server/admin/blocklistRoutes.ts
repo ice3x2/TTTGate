@@ -61,8 +61,8 @@ const parseFromBan = (value: unknown): {port: number; ip: string} | undefined | 
 };
 
 export function blocklistRouteHandlers(deps: {applyConnectionSecurity: ApplyConnectionSecurity; fail: Fail;
-    /** 이슈 369 FR-12: 차단 목록에 걸리는 기존 연결을 끊고 끊은 수를 돌려준다. 런타임이 없으면(테스트·기동 전) 0 이다. */
-    closeBlockedConnections?: () => Promise<number>}): RouteHandlers {
+    /** 이슈 369 FR-12: 그 차단 항목에 걸리는 기존 연결을 끊고 끊은 수를 돌려준다(L-1: 목록 전체가 아니다). 런타임이 없으면(테스트·기동 전) 0 이다. */
+    closeBlockedConnections?: (entry: BlocklistEntry) => Promise<number>}): RouteHandlers {
     const notReady = (res: ServerResponse) => deps.fail(res, 503, {code: 'configuration_not_ready', message: 'server configuration is not ready'});
     const commitFailed = (res: ServerResponse) => deps.fail(res, 500, {code: 'server_option_commit_failed', message: 'Unable to commit server option.'});
 
@@ -106,7 +106,7 @@ export function blocklistRouteHandlers(deps: {applyConnectionSecurity: ApplyConn
             const unbanned = result.code === 'duplicate' && fromBan ? AdmissionController.instance.rateLimiter.unban(fromBan.port, fromBan.ip) : undefined;
             if(unbanned !== undefined) ctx.auditDetail({fromBan, unbanned});
             // 이슈 369 FR-12: 이미 막힌 주소라도 그 차단에 걸리는 연결이 남아 있을 수 있다(차단 전에 들어온 연결 등). 같이 끊는다.
-            const closedConnections = result.code === 'duplicate' ? await deps.closeBlockedConnections?.() ?? 0 : undefined;
+            const closedConnections = result.code === 'duplicate' ? await deps.closeBlockedConnections?.(result.existing) ?? 0 : undefined;
             if(closedConnections !== undefined && closedConnections > 0) ctx.auditDetail({closedConnections});
             deps.fail(res, result.code === 'invalid' ? 422 : 409, {code: result.code, message: result.message, values: result.values,
                 ...(unbanned === undefined ? {} : {unbanned}), ...(closedConnections === undefined ? {} : {closedConnections})});
@@ -120,7 +120,7 @@ export function blocklistRouteHandlers(deps: {applyConnectionSecurity: ApplyConn
         const unbanned = fromBan ? AdmissionController.instance.rateLimiter.unban(fromBan.port, fromBan.ip) : false;
         const {address, port, note} = result.entry;
         // 이슈 369 FR-12: 차단했는데 지금 연결이 남아 있으면 차단이 안 된 것으로 읽힌다. 적용한 뒤 걸리는 기존 연결을 끊는다.
-        const closedConnections = await deps.closeBlockedConnections?.() ?? 0;
+        const closedConnections = await deps.closeBlockedConnections?.(result.entry) ?? 0;
         ctx.auditDetail({address, port, note, closedConnections, ...(result.widenedFrom === undefined ? {} : {widenedFrom: result.widenedFrom}),
             ...(fromBan ? {fromBan, unbanned} : {})});
         ctx.ok({entry: result.entry, unbanned, closedConnections}, 201);

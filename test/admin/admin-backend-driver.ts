@@ -190,8 +190,8 @@ const stub = {
         record("closeTunnelConnection", [port, id]);
         return {result: "gone" as const};
     },
-    async closeBlockedConnections(): Promise<number> {
-        record("closeBlockedConnections", []);
+    async closeBlockedConnections(entry: {address: string; port: number | null}): Promise<number> {
+        record("closeBlockedConnections", [entry]);
         return 0;
     },
     clientStatus(...args: unknown[]): Array<ClientStatus> {

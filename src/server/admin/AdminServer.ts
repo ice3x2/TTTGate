@@ -234,7 +234,7 @@ class AdminServer {
             // #286: 관리자 차단 목록. 핸들러는 blocklistRoutes.ts 가 갖는다.
             ...blocklistRouteHandlers({
                 applyConnectionSecurity: (next) => this._tttServer?.applyConnectionSecurity(next),
-                closeBlockedConnections: () => this._tttServer?.closeBlockedConnections() ?? Promise.resolve(0),
+                closeBlockedConnections: (entry) => this._tttServer?.closeBlockedConnections(entry) ?? Promise.resolve(0),
                 fail: (res, status, payload: ApiFailure) => this.sendApiFailure(res, status, payload)
             }),
             // U2-06 / #98: 사용자·그룹 핸들러는 rbacRoutes.ts 가 갖는다(AdminServer.ts 를 2,000줄 아래로 유지).

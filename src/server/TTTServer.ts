@@ -1,7 +1,7 @@
 import {ExternalPortServerPool, ExternalPortServerStatus } from "./ExternalPortServerPool";
 import {TunnelServer, ClientStatus} from "./TunnelServer";
 import {EnrollmentRegistry} from "./EnrollmentRegistry";
-import {ConnectionSecurityOption, DEFAULT_AUDIT_QUEUE_SIZE, DEFAULT_AUDIT_RETENTION_DAYS, DEFAULT_DENIAL_LOG_RETENTION_DAYS, DEFAULT_GEO_CONFIG, DEFAULT_LOG_LEVEL, DEFAULT_CLOSE_STALL_MS, DEFAULT_CLOSE_GRACE_MS, ServerOption, TunnelingOption, resolveSessionTtlMs} from "../types/TunnelingOption";
+import {BlocklistEntry, ConnectionSecurityOption, DEFAULT_AUDIT_QUEUE_SIZE, DEFAULT_AUDIT_RETENTION_DAYS, DEFAULT_DENIAL_LOG_RETENTION_DAYS, DEFAULT_GEO_CONFIG, DEFAULT_LOG_LEVEL, DEFAULT_CLOSE_STALL_MS, DEFAULT_CLOSE_GRACE_MS, ServerOption, TunnelingOption, resolveSessionTtlMs} from "../types/TunnelingOption";
 import SocketState from "../util/SocketState";
 import {CertInfo, CertificationStore} from "./CertificationStore";
 import ServerOptionStore from "./ServerOptionStore";
@@ -11,6 +11,7 @@ import AppCompositionRoot from "../bootstrap/AppCompositionRoot";
 import ObjectUtil from "../util/ObjectUtil";
 import {SocketHandler} from "../util/SocketHandler";
 import {AdmissionController} from "./security/AdmissionController";
+import {blockedBy} from "./security/IpBlocklist";
 import Environment from "../Environment";
 import {AuditSinkRegistry, recordAuditEvent} from "./audit/AuditSink";
 import {AUDIT_EVENT_TYPES} from "./audit/AuditEventTypes";
@@ -306,9 +307,12 @@ class TTTServer {
         return this._externalPortServerPool.closeConnection(port, id);
     }
 
-    /** 이슈 369 FR-12: 지금 차단 목록에 걸리는 기존 연결을 끊고 끊은 수를 돌려준다. 차단을 더한 뒤 부른다. */
-    public closeBlockedConnections(): Promise<number> {
-        return this._externalPortServerPool.closeBlockedSessions((port, ip) => AdmissionController.instance.blocklist.isBlocked(port, ip));
+    /**
+     * 이슈 369 FR-12: 그 차단 항목에 걸리는 기존 연결을 끊고 끊은 수를 돌려준다. 차단을 더한 뒤 부른다.
+     * 목록 전체가 아니라 그 항목만 본다(L-1). 다른 항목에 걸리는 연결까지 세면 "연결 N개를 끊었습니다"의 수가 부푼다.
+     */
+    public closeBlockedConnections(entry: BlocklistEntry): Promise<number> {
+        return this._externalPortServerPool.closeBlockedSessions(blockedBy(entry));
     }
 
     /** 이슈 369 FR-6: 그 신뢰 클라이언트가 지금 연결되어 있는가. */

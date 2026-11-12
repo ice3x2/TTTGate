@@ -69,9 +69,10 @@ export const MAX_KEPT_ENDED = 100;
  * 빈 목록으로 연 창에 연결이 들어오는 경우를 "새"로 알리려면 호출자가 first 를 넘긴다.
  * options.truncated 면 서버가 최근 연결만 잘라 준 목록이다(연결 시각, id 가 큰 것부터). 받은 목록의 가장 오래된 연결보다
  * 새로운데 목록에 없는 줄은 끝난 것이다. 그보다 오래된 줄은 살아 있는지 알 수 없으므로 숨긴다. 그래야 살아 있는 줄이 끝없이 늘지 않는다.
+ * options.seen 은 창이 열린 동안 받은 모든 id 다(숨긴 줄 포함). 숨겼던 줄이 다시 목록에 들어오면 새 연결이 아니므로 "새" 없이 맨 아래에 붙는다.
  */
 export function mergeConnections(prev: readonly ConnectionRow[], fetched: readonly FetchedConnection[],
-    options: {truncated?: boolean; first?: boolean} = {}): ConnectionRow[] {
+    options: {truncated?: boolean; first?: boolean; seen?: ReadonlySet<number>} = {}): ConnectionRow[] {
     if(options.first ?? prev.length === 0) return fetched.map((connection) => ({...connection, state: 'live', isNew: false}));
     const byId = new Map(fetched.map((connection) => [connection.id, connection]));
     const oldest = options.truncated === true ? fetched[fetched.length - 1] : undefined;
@@ -82,8 +83,9 @@ export function mergeConnections(prev: readonly ConnectionRow[], fetched: readon
         if(oldest !== undefined && !isNewer(row, oldest)) return [];
         return [{...row, state: 'ended'}];
     });
-    const known = new Set(prev.map((row) => row.id));
-    const added = fetched.filter((connection) => !known.has(connection.id)).map((connection): ConnectionRow => ({...connection, state: 'live', isNew: true}));
+    const shown = new Set(prev.map((row) => row.id));
+    const added = fetched.filter((connection) => !shown.has(connection.id))
+        .map((connection): ConnectionRow => ({...connection, state: 'live', isNew: options.seen?.has(connection.id) !== true}));
     return withoutOldEnded([...kept, ...added]);
 }
 
@@ -126,6 +128,24 @@ export function announcement(previous: string, text: string): string {
  */
 export function connectionsSupported(status: TunnelingStatus | undefined): boolean {
     return status?.allowedClients !== undefined;
+}
+
+/**
+ * 연결 목록 읽기 실패 가운데 창을 닫아야 하는 것의 알림 문구. 404 는 이 터널을 더 볼 수 없다(권한이 바뀌었거나 지운 터널).
+ * 403 은 볼 수만 있게 되었다(read_only). 둘 다 다시 읽어도 나아지지 않는다. 그 밖의 실패는 창을 닫지 않는다(undefined).
+ */
+export function closingFailureText(status: number, tr: Translator = i18n()): string | undefined {
+    if(status === 404) return tr.t('connections.notVisible');
+    if(status === 403) return tr.t('connections.notAllowed');
+    return undefined;
+}
+
+/**
+ * 409 duplicate 의 이미 있는 차단이 이 터널의 연결에 걸리는가. 서버는 그 차단의 포트(모든 터널이면 null)를 port 로 준다.
+ * 걸리면 서버가 그 연결을 끊었으므로 줄을 "차단됨"으로 바꾼다. port 가 없으면 알 수 없으므로 거짓이다.
+ */
+export function duplicateCoversTunnel(failure: Readonly<Record<string, unknown>>, port: number): boolean {
+    return failure.port === null || failure.port === port;
 }
 
 /**
