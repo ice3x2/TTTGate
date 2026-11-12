@@ -757,19 +757,19 @@ test("포트와 클라이언트 버퍼는 범위 안으로 잘리고, 서버 버
     }
 }, ADMIN_APP_TEST_TIMEOUT_MS);
 
-describe("U5-06 레이트 리밋 카드와 Blocked 표시", () => {
+describe("U5-06 레이트 리밋 카드와 Rejected 표시", () => {
     const openEdit = async (app: Awaited<ReturnType<typeof startAdminApp>>, port: number | "new") => {
         await app.page.goto(`${app.url}#/tunnels/${port}`);
         await app.page.locator("#input-rate-window").waitFor({state: "visible", timeout: 10_000});
     };
     const values = (page: Page) => Promise.all(["#input-rate-window", "#input-rate-max", "#input-rate-ban"].map((id) => page.locator(id).inputValue()));
 
-    test("편집 화면의 Status 영역은 가동 정보와, 거절이 있을 때만 Blocked 합계를 보인다(#338 REQ-18)", async () => {
+    test("편집 화면의 Status 영역은 가동 정보와, 거절이 있을 때만 Rejected 합계를 보인다(#338 REQ-18, 이슈 370 tunnelStatus.blocked)", async () => {
         const app = await startAdminApp({fixture: "with-tunnels"});
         try {
             await app.page.goto(`${app.url}#/tunnels/20002`);
             await app.page.locator("#tunnel-status-area [data-blocked]").waitFor({state: "visible", timeout: 10_000});
-            expect(await app.page.locator("#tunnel-status-area [data-blocked]").textContent()).toBe("Blocked 7");
+            expect(await app.page.locator("#tunnel-status-area [data-blocked]").textContent()).toBe("Rejected 7");
             expect(await app.page.locator("#tunnel-status-area .tunnel-stats").textContent())
                 .toMatch(/^Uptime (\d+s|\d+m|\d+h, \d+m|\d+d, \d+h) · Sessions 0 · RX 0B · TX 0B$/);
             await app.page.goto(`${app.url}#/tunnels/20001`);

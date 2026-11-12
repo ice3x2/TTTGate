@@ -58,7 +58,7 @@
 
 {#if status?.online}
     <section id="tunnel-status-area">
-        <Card label={t('nav.status')}>
+        <Card label={t('tunnelStatus.title')}>
             <div class="status-stack">
                 <div>
                     <span class="mono tunnel-stats">{t('tunnelStatus.stats', {uptime: startupTime(status.uptime), sessions: status.sessions, rx: toSize(status.rx), tx: toSize(status.tx)})}</span>{#if blocked > 0}<span class="mono stats-extra" aria-hidden="true"> · </span><span class="mono stats-extra" data-blocked>{t('tunnelStatus.blocked', {count: blocked})}</span>{/if}

@@ -164,7 +164,7 @@ describe("errorMessageOf 의 기본 fallback", () => {
     });
 
     test("알려진 code 는 생략해도 번역한다", () => {
-        expect(errorMessageOf({code: "login_blocked", message: "Too many login attempts"}, undefined, ko)).toBe("로그인 시도가 너무 많습니다.");
+        expect(errorMessageOf({code: "login_blocked", message: "Too many login attempts"}, undefined, ko)).toBe("로그인 시도가 너무 많습니다. 잠시 뒤에 다시 시도하세요.");
         expect(errorMessageOf({code: "login_blocked", message: "Too many login attempts"}, undefined, en)).toBe("Too many login attempts");
     });
 });
@@ -178,8 +178,8 @@ describe("이슈 349 2단계 서버 오류 code", () => {
 
     test.each([
         [{code: "invalid_session"}, "Invalid session", "세션이 유효하지 않습니다."],
-        [{code: "login_blocked"}, "Too many login attempts", "로그인 시도가 너무 많습니다."],
-        [{code: "login_concurrency_limit"}, "Too many login attempts", "로그인 시도가 너무 많습니다."],
+        [{code: "login_blocked"}, "Too many login attempts", "로그인 시도가 너무 많습니다. 잠시 뒤에 다시 시도하세요."],
+        [{code: "login_concurrency_limit"}, "Too many login attempts", "로그인 시도가 너무 많습니다. 잠시 뒤에 다시 시도하세요."],
         [{code: "csrf_token_missing"}, "Missing CSRF token", "CSRF 토큰이 없습니다."],
         [{code: "csrf_token_mismatch"}, "CSRF token mismatch", "CSRF 토큰이 맞지 않습니다."],
         [{code: "forbidden_origin"}, "Forbidden origin", "허용되지 않은 출처입니다."],
@@ -187,9 +187,9 @@ describe("이슈 349 2단계 서버 오류 code", () => {
         [{code: "certificate_changed"}, "Certificate changed. Reload before saving.", "인증서가 바뀌었습니다. 저장하기 전에 다시 불러오세요."],
         [{code: "port_in_use", ports: [8080]}, "Port number 8080 is already in use", "이미 사용 중인 포트입니다: 8080"],
         [{code: "port_unusable", forwardPort: 70000}, "70000 is an unusable port number.", "쓸 수 없는 포트 번호입니다: 70000"],
-        [{code: "listener_stop_failed", forwardPort: 8080}, "Unable to stop external port(8080) listener.", "외부 포트 8080의 리스너를 멈추지 못했습니다."],
+        [{code: "listener_stop_failed", forwardPort: 8080}, "Unable to stop external port(8080) listener.", "8080 포트를 닫지 못했습니다."],
         [{code: "username_taken", username: "alice"}, "That username is already in use.", "이미 사용 중인 사용자 이름입니다."],
-        [{code: "last_superuser"}, "At least one active superuser must remain.", "활성 슈퍼유저가 적어도 한 명은 있어야 합니다."],
+        [{code: "last_superuser"}, "At least one active superuser must remain.", "사용 중인 슈퍼유저가 적어도 한 명은 있어야 합니다."],
         [{code: "user_owns_tunnels", ports: [8080]}, "Reassign this user's tunnels first.", "먼저 이 사용자의 터널을 다른 사용자에게 넘기세요."],
         [{code: "group_not_empty", groupId: "g_1"}, "Move the members to another group first.", "먼저 구성원을 다른 그룹으로 옮기세요."],
         [{code: "group_revision_conflict"}, "Someone else changed this group. Reload to see the latest values.", "다른 사람이 이 그룹을 바꿨습니다. 다시 불러와 최신 값을 확인하세요."],

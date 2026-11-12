@@ -23,8 +23,8 @@ describe("auditEventName", () => {
         expect(auditEventName("session_killed", ko)).toBe("세션 종료");
         expect(auditEventName("trusted_client_secret_rotated", ko)).toBe("신뢰 클라이언트 비밀값 재발급");
         // 검토 L-6: 2단계 인증 수단을 더하고 빼는 일은 등록·해제다. 켜짐·꺼짐은 터널의 상태에 쓴다.
-        expect(auditEventName("mfa_enrolled", ko)).toBe("2단계 인증 등록");
-        expect(auditEventName("mfa_disabled", ko)).toBe("2단계 인증 해제");
+        expect(auditEventName("mfa_enrolled", ko)).toBe("2단계 인증 켜짐");
+        expect(auditEventName("mfa_disabled", ko)).toBe("2단계 인증 꺼짐");
         expect(AUDIT_EVENT_TYPE_LIST.filter((code) => /(켬|끔|냄|듦)$/.test(auditEventName(code, ko) ?? ""))).toEqual([]);
     });
 

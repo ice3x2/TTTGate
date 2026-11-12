@@ -30,6 +30,7 @@
     import type {SharedUser} from './parts/shareUsers';
     import {PROTOCOLS, tunnelPolicy} from './parts/tunnelPolicy';
     import PortRangeChips from './parts/PortRangeChips.svelte';
+    import {RATE_RANGES, rateRangeError} from './parts/rateLimitRange';
     import {t} from '../i18n';
     import {errorMessageOf} from '../i18n/serverError';
 
@@ -135,8 +136,7 @@
         return value;
     };
 
-    // U5-06: 레이트 리밋 입력은 초·분 단위로 보이고 저장할 때 밀리초로 바꾼다. 범위 밖이면 저장을 막는다.
-    const RATE_RANGES = {window: [1, 3600], max: [1, 100000], ban: [1, 1440]} as const;
+    // U5-06: 레이트 리밋 입력은 초·분 단위로 보이고 저장할 때 밀리초로 바꾼다. 범위 밖이면 저장을 막는다(범위는 rateLimitRange.ts).
     const inRange = (value: number | null, [low, high]: readonly [number, number]): boolean =>
         typeof value === 'number' && Number.isInteger(value) && value >= low && value <= high;
     let rateWindow = $state<number | null>(60);
@@ -518,7 +518,7 @@
                     oninput={(v) => (option!.destinationPort = clampPort(v) as number)} />
             </Field>
             {#if restricted}
-                <Field label={t('nav.trustedClients')} error={trustedError || undefined}>
+                <Field label={t('tunnelEdit.trustedClientIds')} error={trustedError || undefined}>
                     <div style="display: flex; flex-wrap: wrap; gap: var(--s-4);">
                         {#each restrictedClientIds as clientId (clientId)}
                             <Checkbox id={`tunnel-trusted-${clientId}`}
@@ -593,15 +593,15 @@
                         <!-- 스위치도 사용자가 고친 값이다(D9). 끈 뒤 프로토콜을 바꿔도 기본값으로 되돌리지 않는다. -->
                         <Switch ariaLabel={t('tunnelEdit.rateLimitEnabled')} disabled={readOnly} bind:on={option.rateLimit.enabled}
                             onchange={() => { if(option?.rateLimit) option.rateLimit.customized = true; }} />
-                        <Field label={t('tunnelEdit.window')} for="input-rate-window" error={!rateTouched.window || inRange(rateWindow, RATE_RANGES.window) ? undefined : '1..3600'}>
+                        <Field label={t('tunnelEdit.window')} for="input-rate-window" error={!rateTouched.window || inRange(rateWindow, RATE_RANGES.window) ? undefined : rateRangeError(RATE_RANGES.window)}>
                             <NumberInput id="input-rate-window" min={1} max={3600} invalid={rateTouched.window && !inRange(rateWindow, RATE_RANGES.window)}
                                 bind:value={rateWindow} oninput={() => onRateInput('window')} />
                         </Field>
-                        <Field label={t('tunnelEdit.maxPerIp')} for="input-rate-max" error={!rateTouched.max || inRange(rateMax, RATE_RANGES.max) ? undefined : '1..100000'}>
+                        <Field label={t('tunnelEdit.maxPerIp')} for="input-rate-max" error={!rateTouched.max || inRange(rateMax, RATE_RANGES.max) ? undefined : rateRangeError(RATE_RANGES.max)}>
                             <NumberInput id="input-rate-max" min={1} max={100000} invalid={rateTouched.max && !inRange(rateMax, RATE_RANGES.max)}
                                 bind:value={rateMax} oninput={() => onRateInput('max')} />
                         </Field>
-                        <Field label={t('tunnelEdit.banDuration')} for="input-rate-ban" error={!rateTouched.ban || inRange(rateBan, RATE_RANGES.ban) ? undefined : '1..1440'}>
+                        <Field label={t('tunnelEdit.banDuration')} for="input-rate-ban" error={!rateTouched.ban || inRange(rateBan, RATE_RANGES.ban) ? undefined : rateRangeError(RATE_RANGES.ban)}>
                             <NumberInput id="input-rate-ban" min={1} max={1440} invalid={rateTouched.ban && !inRange(rateBan, RATE_RANGES.ban)}
                                 bind:value={rateBan} oninput={() => onRateInput('ban')} />
                         </Field>

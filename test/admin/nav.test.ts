@@ -75,7 +75,7 @@ describe("이슈 349 한국어 제목", () => {
 
     test("드로어 항목", () => {
         expect(visibleNav(SUPERUSER_SECTIONS, ko).map((item) => item.title))
-            .toEqual(["터널", "상태", "서버 설정", "신뢰 클라이언트", "사용자", "그룹", "보안", "감사 로그", "세션", "내 계정"]);
+            .toEqual(["터널", "서버 상태", "서버 설정", "신뢰 클라이언트", "사용자", "그룹", "보안", "감사 로그", "세션", "내 계정"]);
     });
 
     test("화면 제목", () => {
@@ -89,6 +89,6 @@ describe("이슈 349 한국어 제목", () => {
         expect(chrome({screen: "denied"}, ko)).toEqual({title: "접근 권한 없음"});
         expect(chrome({screen: "audit"}, ko)).toEqual({title: "감사 로그"});
         expect(chrome({screen: "clients"}, ko)).toEqual({title: "신뢰 클라이언트"});
-        expect(chrome({screen: "status"}, ko)).toEqual({title: "상태"});
+        expect(chrome({screen: "status"}, ko)).toEqual({title: "서버 상태"});
     });
 });

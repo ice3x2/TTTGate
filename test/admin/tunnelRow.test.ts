@@ -117,15 +117,15 @@ describe("이슈 349 한국어 시계", () => {
     });
 
     test("종료 시각은 같은 날이면 시:분, 다른 날이면 월·일을 붙인다", () => {
-        expect(formatEnds(NOW + 90 * 60_000, NOW, ko)).toBe("18:30 종료");
-        expect(formatEnds(NOW + 7 * 3600_000, NOW, ko)).toBe("1월 16일 00:00 종료");
+        expect(formatEnds(NOW + 90 * 60_000, NOW, ko)).toBe("18:30에 꺼짐");
+        expect(formatEnds(NOW + 7 * 3600_000, NOW, ko)).toBe("1월 16일 00:00에 꺼짐");
     });
 
     test("시계 이름", () => {
         expect(clockOf(status({activeTimeout: 0}), NOW, ko)).toEqual({kind: "unlimited", label: "시간 제한 없음"});
         expect(clockOf(status({activeStart: NOW - 600_000, activeTimeout: 3600}), NOW, ko)).toMatchObject({
-            left: "50분 00초 남음", ends: "17:50 종료", label: "50분 00초 남음, 17:50 종료"});
-        expect(clockOf(status({activeStart: NOW, activeTimeout: 9 * 60}), NOW, ko)).toMatchObject({label: "곧 종료, 9분 00초 남음, 17:09 종료"});
+            left: "50분 00초 남음", ends: "17:50에 꺼짐", label: "50분 00초 남음, 17:50에 꺼짐"});
+        expect(clockOf(status({activeStart: NOW, activeTimeout: 9 * 60}), NOW, ko)).toMatchObject({label: "곧 꺼짐, 9분 00초 남음, 17:09에 꺼짐"});
     });
 
     test("영어를 넘겨도 지금과 같다", () => {

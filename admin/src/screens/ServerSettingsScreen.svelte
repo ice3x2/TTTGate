@@ -2,7 +2,7 @@
     import {onMount} from 'svelte';
     import _ from 'lodash';
     import ServerOptionCtrl from '../controller/ServerOptionCtrl';
-    import {adminBaseUrl} from '../controller/adminAddress';
+    import {adminAddressAfterSave} from '../controller/adminAddress';
     import CertificationCtrl from '../controller/CertificationCtrl';
     import ObjectUtil from '../controller/ObjectUtil';
     import InvalidSession from '../controller/InvalidSession';
@@ -18,6 +18,7 @@
     import TextInput from '../ui/TextInput.svelte';
     import {useSession} from '../shell/session';
     import InputCertFile from './parts/InputCertFile.svelte';
+    import {groupedNumber} from './parts/units';
     import {errorMessageOf} from '../i18n/serverError';
     import {t} from '../i18n';
 
@@ -107,9 +108,6 @@
 
     const keepAliveOf = (value: number | null): number | null => value === null ? null : Math.max(0, Math.trunc(value));
 
-    // 이슈 303: 프록시를 거쳐 연 화면은 프록시 주소에 머문다(adminBaseUrl). previousAdminPort 는 이 화면을 연 때의 관리 포트다.
-    const adminAddress = (previousAdminPort: number | undefined) => adminBaseUrl(location, serverOption, previousAdminPort);
-
     const load = async () => {
         try {
             loading = true;
@@ -166,8 +164,8 @@
             ...(denialRetentionInput == null ? {denialRetention: t('server.denialRetentionRequired')} : {})
         };
         closeErrors = {
-            ...(closeStallInput == null ? {stall: t('server.millisecondsRequired', {min: 1000, max: 600000})} : {}),
-            ...(closeGraceInput == null ? {grace: t('server.millisecondsRequired', {min: 1000, max: 120000})} : {})
+            ...(closeStallInput == null ? {stall: t('server.millisecondsRequired', {min: groupedNumber(1000), max: groupedNumber(600000)})} : {}),
+            ...(closeGraceInput == null ? {grace: t('server.millisecondsRequired', {min: groupedNumber(1000), max: groupedNumber(120000)})} : {})
         };
         if(Object.keys(auditErrors).length > 0 || Object.keys(closeErrors).length > 0) return;
         try {
@@ -194,23 +192,30 @@
 
     const checkServerRestart = async () => {
         const previousAdminPort = lastServerOption.adminPort;
+        // 이슈 303: 프록시를 거쳐 연 화면은 프록시 주소에 머문다. previousAdminPort 는 이 화면을 연 때의 관리 포트다.
+        // 이슈 370 C-1: 관리 화면 포트·TLS 는 서버 프로그램을 다시 시작해야 바뀐다. 아직 열리지 않은 새 주소로 옮기지 않고
+        // 지금 주소(stay)에 머물며, 바뀌었으면 다시 시작해야 한다고 알린다. 새 주소(restartTo)가 따로 있으면 그 주소도 알린다.
+        // 프록시로 연 화면은 새 주소가 없다. 다시 시작한 뒤 프록시가 넘기는 포트를 바꿔야 하므로 주소 없이 안내한다.
+        const address = adminAddressAfterSave(location, $state.snapshot(lastServerOption), $state.snapshot(serverOption), previousAdminPort);
         loading = true;
         let success = false;
         try {
             success = await ServerOptionCtrl.instance.checkChangeServerOption($state.snapshot(lastServerOption), $state.snapshot(serverOption));
         } catch(e) {
             alert(t(serverOption.adminTls ? 'server.statusUnknownTls' : 'server.statusUnknown'), t('common.ok'), () => {
-                location.href = adminAddress(previousAdminPort);
+                location.href = address.stay;
             });
             return;
         }
         loading = false;
         if(success) {
-            alert(t('server.restarted'), t('common.ok'), () => {
+            const message = address.restartTo ? t('server.restartToOpen', {address: address.restartTo})
+                : address.restartRequired ? t('server.restartRequired') : t('server.restarted');
+            alert(message, t('common.ok'), () => {
                 lastServerOption = _.cloneDeep($state.snapshot(serverOption));
                 lastAdminCert = _.cloneDeep($state.snapshot(adminCert));
                 originalAdminCert = _.cloneDeep($state.snapshot(adminCert));
-                location.href = adminAddress(previousAdminPort);
+                location.href = address.stay;
             });
         } else {
             alert(t('server.cannotApply'), t('common.ok'), () => {
@@ -271,7 +276,7 @@
     </Card>
     <!-- U4-09: 슈퍼유저 MFA 강제와 감사 보존·큐. 기존 isNewValue·Apply·Reset 흐름을 그대로 탄다. -->
     <section id="server-security">
-        <Card label={t('nav.security')}>
+        <Card label={t('server.securityCard')}>
             <div class="form-stack">
                 <Checkbox id="input-mfa-required-superusers" label={t('server.requireMfaSuperusers')}
                     bind:checked={() => serverOption.mfaRequiredForSuperusers === true, (value) => (serverOption.mfaRequiredForSuperusers = value)} />
