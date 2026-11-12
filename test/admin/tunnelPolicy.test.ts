@@ -1,6 +1,5 @@
 import {DEFAULT_GROUP_ATTRIBUTES, type GroupAttributes, type MeResponse, type Role} from "../../admin/src/controller/Types";
-import {tunnelPolicy} from "../../admin/src/screens/parts/tunnelPolicy";
-import {translator} from "../../admin/src/i18n";
+import {suggestPort, tunnelPolicy} from "../../admin/src/screens/parts/tunnelPolicy";
 import {RBAC_IDENTITY_FIXTURE} from "../helpers/rbacFixture";
 
 // U3-06 / #108 — 터널 화면의 그룹 속성 정책(순수 함수). tunnelPolicy 는 user.role 과 group.attributes 만 읽는다.
@@ -20,7 +19,7 @@ describe("tunnelPolicy", () => {
     test("alice(Field team)는 그룹 범위·프로토콜·리라이트·신뢰 클라이언트·개수 한도를 따른다", () => {
         const policy = tunnelPolicy(meOf("regular", FIELD_TEAM));
         expect(policy.restricted).toBe(true);
-        expect(policy.portHint()).toBe("Allowed ranges: 20000–20099");
+        expect(policy.portRanges).toEqual([{from: 20000, to: 20099}]);
         expect(policy.initialPort()).toBe(20000);
         expect(policy.isPortAllowed(20050)).toBe(true);
         expect(policy.isPortAllowed(30000)).toBe(false);
@@ -52,7 +51,7 @@ describe("tunnelPolicy", () => {
 
     test("carol(Default)은 포트·프로토콜이 없어 힌트·초기 포트·HTTP 옵션이 비어 있다", () => {
         const policy = tunnelPolicy(meOf("regular", DEFAULT_GROUP_ATTRIBUTES));
-        expect(policy.portHint()).toBe("No ports are allowed for your group.");
+        expect(policy.portRanges).toEqual([]);
         expect(policy.initialPort()).toBeNull();
         expect(policy.isPortAllowed(25000)).toBe(false);
         expect(values(policy.protocolOptions("tcp"))).toEqual(["tcp"]);
@@ -76,7 +75,7 @@ describe("tunnelPolicy", () => {
     test("슈퍼유저는 제한이 없고 httpOption 을 바꾸지 않는다", () => {
         const policy = tunnelPolicy(meOf("superuser", DEFAULT_GROUP_ATTRIBUTES));
         expect(policy.restricted).toBe(false);
-        expect(policy.portHint()).toBe("");
+        expect(policy.portRanges).toEqual([]);
         expect(policy.initialPort()).toBeNull();
         expect(policy.isPortAllowed(1)).toBe(true);
         expect(policy.protocolOptions("tcp")).toHaveLength(3);
@@ -90,11 +89,24 @@ describe("tunnelPolicy", () => {
     // 오류 코드의 문구는 이슈 349 의 errorMessageOf(test/admin/serverError.test.ts)가 맡는다.
 });
 
-// 이슈 349 FR-8 — 포트 안내도 정한 언어로 만든다. 언어는 portHint 의 인자로 넘긴다.
-describe("이슈 349 한국어 포트 안내", () => {
-    const ko = translator("ko");
-    test("허용 범위와 허용 포트 없음", () => {
-        expect(tunnelPolicy(meOf("regular", FIELD_TEAM)).portHint(ko)).toBe("허용 범위: 20000–20099");
-        expect(tunnelPolicy(meOf("regular", DEFAULT_GROUP_ATTRIBUTES)).portHint(ko)).toBe("그룹에 허용된 포트가 없습니다.");
+// 이슈 365 FR-6(설계 반영) — 허용 범위 칩. 칩을 누르면 목록의 터널이 쓰지 않는 그 범위의 가장 작은 포트를 넣는다.
+describe("이슈 365 허용 범위 칩", () => {
+    test("일반 사용자 정책은 그룹의 허용 범위를 그대로 주고, 슈퍼유저 정책은 빈 목록이다", () => {
+        expect(tunnelPolicy(meOf("regular", FIELD_TEAM)).portRanges).toEqual([{from: 20000, to: 20099}]);
+        expect(tunnelPolicy(meOf("superuser", FIELD_TEAM)).portRanges).toEqual([]);
+    });
+
+    test("suggestPort 는 쓰지 않은 가장 작은 포트를 고르고, 다 쓰였으면 null 이다", () => {
+        expect(suggestPort({from: 30000, to: 30010}, [])).toBe(30000);
+        expect(suggestPort({from: 30000, to: 30010}, [30000, 30001, 20000])).toBe(30002);
+        expect(suggestPort({from: 30000, to: 30001}, [30001, 30000])).toBeNull();
+        expect(suggestPort({from: 30005, to: 30005}, [30004])).toBe(30005);
+    });
+
+    test("새 터널의 처음 포트도 쓰지 않은 가장 작은 허용 포트다", () => {
+        const policy = tunnelPolicy(meOf("regular", {...FIELD_TEAM, allowed_port_range: [{from: 20000, to: 20001}, {from: 30000, to: 30010}]}));
+        expect(policy.initialPort([20000])).toBe(20001);
+        expect(policy.initialPort([20000, 20001])).toBe(30000);
+        expect(policy.initialPort()).toBe(20000);
     });
 });

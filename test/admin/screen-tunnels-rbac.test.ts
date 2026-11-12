@@ -68,7 +68,8 @@ test("alice 의 편집 화면은 인증서를 읽지 않고 그룹 범위·프�
     await openTunnel(page, 20001);
     expect(certs).toEqual([]);
     expect(await page.getByText("Unable to connect to the server.").count()).toBe(0);
-    await page.getByText("Allowed ranges: 20000–20099", {exact: true}).waitFor({state: "visible"});
+    // 이슈 365 FR-6: 허용 범위는 안내 글자가 아니라 누를 수 있는 칩이다.
+    await page.locator("#tunnel-port-ranges").getByRole("button", {name: "Use a free port in 20000–20099", exact: true}).waitFor({state: "visible"});
     expect(await optionValues(page, "#select-protocol")).toEqual(["tcp", "http"]);
     expect(await page.locator("#input-allow-client-names").count()).toBe(0);
     expect(await page.locator("#tunnel-trusted-client-a").count()).toBe(1);
@@ -328,4 +329,21 @@ test("bob 은 그룹 밖 id 가 들어간 자기 터널에서 그 id 를 보고 
     expect((await saved).postDataJSON().allowedClientIds).toEqual(["client-a"]);
     await page.getByText("Success to apply tunneling option", {exact: true}).waitFor({state: "visible", timeout: 10_000});
     await hashIs(page, "#/tunnels");
+}, 2));
+
+// 이슈 365 FR-6·AC-4(설계 반영) — 칩을 누르면 목록의 터널이 쓰지 않는 그 범위의 가장 작은 포트가 외부 포트 칸에 들어간다.
+test("alice 가 허용 범위 칩을 누르면 쓰지 않은 가장 작은 포트가 들어가고, 칩 안내가 보인다", () => withTunnels("alice", async ({page}) => {
+    await button(page, "Add tunneling service").click();
+    await hashIs(page, "#/tunnels/new");
+    const chip = page.locator("#tunnel-port-ranges").getByRole("button", {name: "Use a free port in 20000–20099", exact: true});
+    await chip.waitFor({state: "visible", timeout: 10_000});
+    expect((await chip.textContent())?.trim()).toBe("20000–20099");
+    expect(await page.getByText("Tap a range to use its first free port.", {exact: true}).count()).toBe(1);
+    // alice 의 목록에는 20001(자기)·20002(bob, 그룹 공유)가 있다. 새 터널의 처음 값은 쓰지 않은 20000 이다.
+    expect(await page.locator("#input-external-port").inputValue()).toBe("20000");
+    await page.locator("#input-external-port").fill("20050");
+    await chip.click();
+    expect(await page.locator("#input-external-port").inputValue()).toBe("20000");
+    const box = await chip.boundingBox();
+    expect(box!.height).toBeGreaterThanOrEqual(44);
 }, 2));

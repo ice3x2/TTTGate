@@ -319,3 +319,31 @@ test("시간 단위로 나누어떨어지지 않는 기간은 다른 필드만 �
         RBAC_GROUP_FIELD_ID);
     expect(stored).toBe(5_400_000);
 }));
+
+// 이슈 365 FR-2·FR-3·FR-9·AC-1·AC-2·AC-6(설계 반영) — "범위 추가"는 테두리가 보이는 44px 버튼, 줄 삭제는 이름이 있는 44px 아이콘 버튼이다.
+test("포트 범위 추가·삭제 버튼은 버튼답게 보이고, 초점이 새 줄과 추가 버튼으로 옮겨 가며, 360px 에서 넘치지 않는다", () => withGroups(async ({page}) => {
+    await page.setViewportSize({width: 360, height: 800});
+    await newGroup(page);
+    const add = button(page, "Add range");
+    const style = await add.evaluate((element) => {
+        const css = getComputedStyle(element);
+        return {width: css.borderTopWidth, color: css.borderTopColor, height: element.getBoundingClientRect().height};
+    });
+    expect(style.height).toBeGreaterThanOrEqual(44);
+    expect(parseFloat(style.width)).toBeGreaterThanOrEqual(1);
+    expect(style.color).not.toBe("rgba(0, 0, 0, 0)");
+
+    await add.click();
+    await page.waitForFunction(() => document.activeElement?.id === "group-attr-allowed_port_range-0-from", undefined, {timeout: 10_000});
+    expect(await attr(page, "allowed_port_range-0-from").getAttribute("aria-label")).toBe("Start port");
+    expect(await attr(page, "allowed_port_range-0-to").getAttribute("aria-label")).toBe("End port");
+    const remove = button(page, "Delete range 1–65535");
+    const box = await remove.boundingBox();
+    expect(box!.width).toBeGreaterThanOrEqual(44);
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+
+    await remove.click();
+    expect(await attr(page, "allowed_port_range-0-from").count()).toBe(0);
+    await page.waitForFunction(() => (document.activeElement?.textContent ?? "").trim().endsWith("Add range"), undefined, {timeout: 10_000});
+}));

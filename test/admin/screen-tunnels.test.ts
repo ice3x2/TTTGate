@@ -575,6 +575,12 @@ test("http 터널은 HTTP 옵션 절을 펼쳐 보이고 tcp 로 바꾸면 그 �
 
         const requestHeaders = app.page.locator(".field").filter({hasText: "Inject request header"});
         expect(await requestHeaders.locator(".rule").count()).toBe(1);
+        // 이슈 365 FR-5: 헤더 추가·삭제는 글자 "+"·"-" 대신 이름이 있는 44px 버튼이다.
+        const addHeader = requestHeaders.getByRole("button", {name: "Add header", exact: true});
+        expect(await addHeader.count()).toBe(1);
+        const box = await addHeader.boundingBox();
+        expect(box!.height).toBeGreaterThanOrEqual(44);
+        expect(box!.width).toBeGreaterThanOrEqual(44);
         const bodyRules = app.page.locator(".field").filter({hasText: "Replace text in body"});
         expect(await bodyRules.getByRole("button", {name: "Add", exact: true}).count()).toBe(1);
 
