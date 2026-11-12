@@ -1,5 +1,5 @@
 import type {Options, TunnelingStatus} from "../../admin/src/controller/Options";
-import {clockOf, formatEnds, formatRemaining, tunnelRowView, tunnelTitle, undoTimeoutOf} from "../../admin/src/screens/parts/tunnelRow";
+import {clockOf, formatEnds, formatRemaining, isTunnelOn, tunnelRowView, tunnelTitle, undoTimeoutOf} from "../../admin/src/screens/parts/tunnelRow";
 import {translator} from "../../admin/src/i18n";
 
 // #338 REQ-5·REQ-8·REQ-15 — 터널 목록 한 줄의 제목·상태 줄·스위치(순수 함수).
@@ -257,5 +257,29 @@ describe("이슈 349 한국어 상태 줄", () => {
 
     test("켜진 터널의 시계도 같은 언어다", () => {
         expect(koView(option(), status({activeStart: NOW, activeTimeout: 3000})).clock).toMatchObject({left: "50분 00초 남음"});
+    });
+});
+
+// 이슈 367 FR-5 — 소유자별로 묶어 보일 때는 머리글이 소유자를 보이므로 줄의 @소유자를 빼고, 묶지 않을 때는 지금처럼 붙인다.
+describe("이슈 367 묶어 보일 때의 소유자 표시", () => {
+    test("grouped 면 소유자를 붙이지 않는다", () => {
+        const alice = option({owner: {id: "u_alice", username: "alice"}});
+        expect(tunnelRowView({option: alice, status: status(), loaded: true, meId: ME, serverTime: NOW, grouped: true}).parts.map((part) => part.text))
+            .toEqual(["On"]);
+        expect(text(alice, status())).toBe("On · @alice");
+    });
+});
+
+// 이슈 367 리뷰 M-1: 위 요약과 묶음 머리글이 같은 기준으로 켜진 수를 센다.
+describe("isTunnelOn", () => {
+    test("포트가 열려 있고(online) 활성이면 켜짐이다", () => {
+        expect(isTunnelOn(status())).toBe(true);
+    });
+    test("활성이어도 포트를 열지 못했으면 켜짐이 아니다", () => {
+        expect(isTunnelOn(status({online: false}))).toBe(false);
+    });
+    test("꺼져 있거나 상태를 아직 모르면 켜짐이 아니다", () => {
+        expect(isTunnelOn(status({active: false}))).toBe(false);
+        expect(isTunnelOn(undefined)).toBe(false);
     });
 });

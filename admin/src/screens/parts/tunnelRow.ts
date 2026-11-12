@@ -1,6 +1,7 @@
 import type {Options, TunnelingStatus} from '../../controller/Options';
 import {i18n, type Translator} from '../../i18n';
 import {wholeNumber} from './units';
+import {MIGRATED_OWNER_ID} from './ownerGroups';
 
 // 이슈 338 — 터널 목록 한 줄(REQ-5·REQ-8)과 끄기를 되돌릴 때의 timeout(REQ-15). 화면은 이 결과를 그리기만 한다.
 
@@ -15,7 +16,10 @@ export type ClockView =
 export type RowView = {parts: RowPart[]; control: RowControl; checked: boolean; clock?: ClockView; link: boolean};
 type BaseView = Omit<RowView, 'link'>;
 
-const MIGRATED_OWNER_ID = 'system:migrated';
+/** 이슈 367: 켜진 터널의 기준. 포트를 열었고(online) 활성이다. 위 요약과 묶음 머리글이 같은 기준으로 센다. */
+export function isTunnelOn(status: TunnelingStatus | undefined): boolean {
+    return status?.online === true && status.active;
+}
 
 export function tunnelTitle(option: Options): string {
     if(option.name) return option.name;
@@ -102,11 +106,13 @@ const baseOf = (input: {option: Options; status?: TunnelingStatus; loaded: boole
     return {parts: statePartsOf(status, tr), control: 'switch', checked: status.active, clock: clockOf(status, serverTime, tr)};
 };
 
-export function tunnelRowView(input: {option: Options; status?: TunnelingStatus; loaded: boolean; meId: string; serverTime: number}, tr: Translator = i18n()): RowView {
+/** 이슈 367 FR-5: grouped 면 소유자별 머리글이 소유자를 보이므로 줄에 @소유자를 붙이지 않는다. */
+export function tunnelRowView(input: {option: Options; status?: TunnelingStatus; loaded: boolean; meId: string; serverTime: number; grouped?: boolean},
+    tr: Translator = i18n()): RowView {
     const base = {...baseOf(input, tr), link: input.option.editable !== false};
     if(!input.loaded) return base;
     const extra: RowPart[] = [];
-    const owner = ownerPart(input.option, input.meId, tr);
+    const owner = input.grouped ? undefined : ownerPart(input.option, input.meId, tr);
     if(owner) extra.push(owner);
     if(input.option.tls === true && input.option.allowSelfSignedDestinationCert === true) {
         extra.push({text: tr.t('tunnel.certNotVerified'), warn: true, title: tr.t('tunnel.certNotVerifiedTitle')});

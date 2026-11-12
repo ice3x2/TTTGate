@@ -78,7 +78,8 @@ type Options = {
     bufferLimitOnClient?: number
     keepAlive?: number
     /** U3-06: GET 응답의 소유자. system:migrated 에는 username 이 없다. */
-    owner?: {id: string; username?: string};
+    /** 이슈 367: 표시 이름(displayName)은 소유자별 묶음의 머리글에 쓴다. 옛 서버 응답에는 없다. */
+    owner?: {id: string; username?: string; displayName?: string};
     /** 서버에 저장된 소유자 id. 목록 응답에만 실리고 저장 본문에서는 뺀다(ServerOptionCtrl.updateTunnelingOption). */
     ownerId?: string;
     /** U3-06: GET 응답. false 면 고칠 수 없다(그룹 공유·공유받은 터널·켜기 전용 그룹). */

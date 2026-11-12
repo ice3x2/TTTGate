@@ -17,6 +17,7 @@ jest.setTimeout(60_000);
 const ADMIN_PASSWORD = "ownership-admin-password";
 const TRUSTED_CLIENT = "tc1";
 const MIGRATED_PORT = 20001;
+const ALICE_DISPLAY_NAME = "앨리스 김";
 
 type ApiResponse = {status: number; headers: any; body: any};
 type Auth = {Cookie: string; "X-CSRF-Token": string};
@@ -145,8 +146,8 @@ describe("rbac-tunnel-ownership", () => {
         groupOne = one.body.group.id;
         groupTwo = two.body.group.id;
 
-        const addUser = async (username: string, groupId: string): Promise<{auth: Auth; id: string}> => {
-            const created = await request("POST", "/api/users", {username, role: "regular", groupId}, superuser);
+        const addUser = async (username: string, groupId: string, displayName?: string): Promise<{auth: Auth; id: string}> => {
+            const created = await request("POST", "/api/users", {username, role: "regular", groupId, ...(displayName ? {displayName} : {})}, superuser);
             expect(created.status).toBe(201);
             const first = await request("POST", "/api/login", {username, password: created.body.temporaryPassword});
             expect(first.status).toBe(200);
@@ -156,7 +157,8 @@ describe("rbac-tunnel-ownership", () => {
             expect(changed.status).toBe(200);
             return {auth, id: created.body.user.id};
         };
-        alice = await addUser("alice", groupOne);
+        // 이슈 367 AC-6: alice 는 표시 이름이 아이디와 달라야 응답이 아이디를 베껴 넣는 실수를 잡는다.
+        alice = await addUser("alice", groupOne, ALICE_DISPLAY_NAME);
         bob = await addUser("bob", groupOne);
         carol = await addUser("carol", groupTwo);
 
@@ -300,11 +302,12 @@ describe("rbac-tunnel-ownership", () => {
         expect({status: withCert.status, code: withCert.body.code}).toEqual({status: 403, code: "forbidden"});
     });
 
+    // 이슈 367 FR-1·AC-6: 목록 응답의 owner 에 사용자의 표시 이름(displayName)이 있다(아이디와 다른 값).
     it("목록은 소유와 가시성으로 걸러지고 owner·editable 이 붙는다", async () => {
         const forAlice = await listTunnels(alice.auth);
         expect(forAlice.map((option: any) => option.forwardPort).sort()).toEqual([20010, 20011]);
         for(const option of forAlice) {
-            expect(option.owner).toEqual({id: alice.id, username: "alice"});
+            expect(option.owner).toEqual({id: alice.id, username: "alice", displayName: ALICE_DISPLAY_NAME});
             expect(option.editable).toBe(true);
             // 저장된 ownerId 도 응답에 그대로 남아야 한다. owner 는 그것을 풀어 보인 것이지 대체가 아니다.
             expect(option.ownerId).toBe(alice.id);
@@ -447,7 +450,7 @@ describe("rbac-tunnel-ownership", () => {
         const reassigned = await request("PUT", "/api/tunnelingOption/20011/owner",
             {ownerId: carol.id, expectedRevision: ServerOptionStore.instance.revisionState.currentRevision}, superuser);
         expect(reassigned.status).toBe(200);
-        expect(reassigned.body.owner).toEqual({id: carol.id, username: "carol"});
+        expect(reassigned.body.owner).toEqual({id: carol.id, username: "carol", displayName: "carol"});
 
         expect((await listTunnels(alice.auth)).map((option: any) => option.forwardPort)).toEqual([20020]);
         expect((await listTunnels(carol.auth)).map((option: any) => option.forwardPort)).toEqual([20011]);
@@ -523,7 +526,7 @@ describe("rbac-tunnel-ownership", () => {
     it("목록이 실어 준 owner·editable 을 그대로 되돌려 보내도 설정 파일에 남지 않는다", async () => {
         // 관리자 UI 는 받은 행을 그대로 PUT 한다. 응답 전용 필드가 server.yaml 에 섞여 들어가면 안 된다.
         const row = (await listTunnels(alice.auth)).find((option: any) => option.forwardPort === 20020);
-        expect(row.owner).toEqual({id: alice.id, username: "alice"});
+        expect(row.owner).toEqual({id: alice.id, username: "alice", displayName: ALICE_DISPLAY_NAME});
         expect(row.editable).toBe(true);
 
         const echoed = await request("POST", "/api/tunnelingOption",
