@@ -1,5 +1,5 @@
 import type {Options, TunnelingStatus} from "../../admin/src/controller/Options";
-import {clockOf, formatEnds, formatRemaining, isTunnelOn, tunnelRowView, tunnelTitle, undoTimeoutOf} from "../../admin/src/screens/parts/tunnelRow";
+import {clockOf, formatClockTime, formatEnds, formatRemaining, isTunnelOn, tunnelRowView, tunnelTitle, undoTimeoutOf} from "../../admin/src/screens/parts/tunnelRow";
 import {translator} from "../../admin/src/i18n";
 
 // #338 REQ-5·REQ-8·REQ-15 — 터널 목록 한 줄의 제목·상태 줄·스위치(순수 함수).
@@ -53,6 +53,17 @@ describe("#344 formatRemaining — 남은 시간", () => {
         [3600, "1h 0m left"], [2 * 3600 + 13 * 60 + 59, "2h 13m left"], [86_399, "23h 59m left"], [26 * 3600, "1d 2h left"], [2 * 86_400 + 3 * 3600 + 59, "2d 3h left"],
     ])("%i 초 → %s", (seconds, expected) => {
         expect(formatRemaining(seconds)).toBe(expected);
+    });
+});
+
+describe("formatClockTime — 시각만 (검토 H-1)", () => {
+    const ko = translator("ko");
+    const en = translator("en");
+    test("오늘이면 시:분, 다른 날이면 월·일을 붙이고, '종료'·'ends' 는 붙이지 않는다", () => {
+        expect(formatClockTime(NOW + 90 * 60_000, NOW, ko)).toBe("18:30");
+        expect(formatClockTime(NOW + 7 * 3600_000, NOW, ko)).toBe("1월 16일 00:00");
+        expect(formatClockTime(NOW + 90 * 60_000, NOW, en)).toBe("18:30");
+        expect(formatClockTime(NOW + 26 * 3600_000, NOW, en)).toBe("1/16 19:00");
     });
 });
 

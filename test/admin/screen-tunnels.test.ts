@@ -534,7 +534,7 @@ test("편집 화면의 Timer 에서 10분을 고르면 active=true·timeout=600 
         const noAuto = dialog.getByRole("switch", {name: "Don't turn off automatically", exact: true});
         expect(await noAuto.isVisible()).toBe(true);
         if(await noAuto.getAttribute("aria-checked") === "true") await noAuto.click();
-        await dialog.getByRole("button", {name: "Hours", exact: true}).click();
+        await dialog.getByRole("radio", {name: "Hours", exact: true}).click();
         const slider = dialog.getByRole("slider", {name: "Keep it on for"});
         await slider.focus();
         await slider.press("Home");

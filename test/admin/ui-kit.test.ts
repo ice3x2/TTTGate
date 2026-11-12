@@ -298,7 +298,7 @@ test("Timer 가 남은 시간을 보여주고, 켜 둘 시간 창에서 + 로 �
         await dialog.waitFor({state: "visible"});
         // 남은 시간 1분으로 열린다. + 를 네 번 누르면 5분이다.
         expect((await dialog.locator(".value").textContent())?.trim()).toBe("1 min");
-        for(let i = 0; i < 4; i++) await dialog.getByRole("button", {name: "Longer", exact: true}).click();
+        for(let i = 0; i < 4; i++) await dialog.getByRole("button", {name: "1 min longer", exact: true}).click();
         expect((await dialog.locator(".value").textContent())?.trim()).toBe("5 min");
         await dialog.getByRole("button", {name: "OK"}).click();
         await dialog.waitFor({state: "hidden"});

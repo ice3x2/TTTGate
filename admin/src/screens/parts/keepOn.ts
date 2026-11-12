@@ -1,4 +1,5 @@
 import {i18n, type Translator} from '../../i18n';
+import {formatClockTime} from './tunnelRow';
 
 // 이슈 368: "켜 둘 시간" 창의 범위·값 문구·처음 값·단위 바꾸기·보낼 값(순수 함수). 화면은 그리기만 한다.
 
@@ -52,6 +53,40 @@ export function formatSpan(minutes: number, tr: Translator = i18n()): string {
 /** FR-9: "n일" / "1 day", "n days". */
 export function formatDays(days: number, tr: Translator = i18n()): string {
     return tr.plural('timer.spanDays', days);
+}
+
+/** FR-21: 상한 안내의 시간. 일과 나머지 시간·분으로 적고("1일 12시간"), 1분 미만은 초다. 남는 초는 버린다. */
+export function formatCap(capSeconds: number, tr: Translator = i18n()): string {
+    if(capSeconds < MINUTE) return tr.t('timer.spanSeconds', {s: tr.number(capSeconds, 0)});
+    const minutes = Math.floor(capSeconds / MINUTE);
+    const days = Math.floor(minutes / DAY_MINUTES);
+    const rest = minutes % DAY_MINUTES;
+    if(days === 0) return formatSpan(rest, tr);
+    return rest === 0 ? formatDays(days, tr) : `${formatDays(days, tr)} ${formatSpan(rest, tr)}`;
+}
+
+/** FR-20: "지금부터 {duration} 뒤, {time}에 꺼집니다." 시각은 시:분만, 오늘이 아니면 월·일을 붙인다. */
+export function endsAtSentence(duration: string, endsAt: number, now: number, tr: Translator = i18n()): string {
+    return tr.t('timer.endsAt', {duration, time: formatClockTime(endsAt, now, tr)});
+}
+
+/** FR-19: 고를 수 있는 값이 하나뿐이면 그 이유. 상한이 1분 미만이거나, 일 단위에서 최대가 1일일 때다. 여럿이면 undefined. */
+export function fixedReasonOf(state: KeepOnState, limits: KeepOnLimits, tr: Translator = i18n()): string | undefined {
+    if(limits.fixedSeconds !== undefined) return tr.t('timer.underMinute');
+    if(state.unit === 'd' && limits.dayMax <= 1) return tr.t('timer.onlyOneDay');
+    return undefined;
+}
+
+/** 슬라이더 양 끝 글자. 시간 단위는 1분~시간 최댓값, 일 단위는 1일~일 최댓값이다. */
+export function scaleOf(unit: KeepOnUnit, limits: KeepOnLimits, tr: Translator = i18n()): {min: string; max: string} {
+    return unit === 'd' ? {min: formatDays(1, tr), max: formatDays(Math.max(1, limits.dayMax), tr)}
+        : {min: formatSpan(1, tr), max: formatSpan(Math.max(1, limits.hourMaxMinutes), tr)};
+}
+
+/** FR-18: −/+ 버튼 이름. 한 번에 바뀌는 양(1분·1일)을 넣는다. */
+export function stepNames(unit: KeepOnUnit, tr: Translator = i18n()): {less: string; more: string} {
+    const step = unit === 'd' ? formatDays(1, tr) : formatSpan(1, tr);
+    return {less: tr.t('timer.less', {step}), more: tr.t('timer.more', {step})};
 }
 
 const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));

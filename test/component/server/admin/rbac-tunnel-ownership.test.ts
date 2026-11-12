@@ -279,6 +279,29 @@ describe("rbac-tunnel-ownership", () => {
         }
     });
 
+    // 이슈 368 AC-7 — 켜는 사람(요청자) 그룹 상한이 소유자 그룹 상한보다 짧으면 요청자 쪽 값이 적용 상한이다.
+    it("이슈 368 공유받은 사용자의 그룹 상한이 더 짧으면 그 사용자의 timeoutCapSeconds 는 그 상한이다", async () => {
+        await setGroupAttributes(groupTwo, {...groupAttributes("private"), max_tunnel_duration_ms: 6 * 3_600_000});
+        await setGroupAttributes(groupOne, {...groupAttributes("group_read"), max_tunnel_duration_ms: 2 * 3_600_000});
+        try {
+            const created = await request("POST", "/api/tunnelingOption", tunnelBody(20071, {sharedUserIds: [alice.id]}), carol.auth);
+            expect(created.status).toBe(200);
+            const capOf = async (auth: Auth) => {
+                const response = await request("GET", "/api/externalServerStatuses", {}, auth);
+                expect(response.status).toBe(200);
+                return response.body.statuses.find((status: any) => status.port === 20071)?.timeoutCapSeconds;
+            };
+            // 소유자 6시간, 요청자 2시간 → 2시간. 소유자 자신은 6시간이다.
+            expect(await capOf(alice.auth)).toBe(7_200);
+            expect(await capOf(carol.auth)).toBe(21_600);
+        } finally {
+            await setGroupAttributes(groupOne, groupAttributes("group_read"));
+            await setGroupAttributes(groupTwo, groupAttributes("private"));
+            await request("DELETE", "/api/tunnelingOption", {forwardPort: 20071,
+                expectedRevision: ServerOptionStore.instance.revisionState.currentRevision}, superuser);
+        }
+    });
+
     // #170 — 본문 포트가 문자열이면 설정 행은 == 비교로 지워지지만 런타임 리스너는 키가 달라 남는다.
     it("#170 본문 forwardPort 는 1–65535 의 정수만 받는다", async () => {
         for(const forwardPort of [`${MIGRATED_PORT}.0`, String(MIGRATED_PORT), "0x4E21", 1.5, 0, 65536]) {

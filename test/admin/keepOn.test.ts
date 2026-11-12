@@ -1,5 +1,5 @@
-import {capSecondsOf, formatDays, formatSpan, initialKeepOn, keepOnLimits, keepOnSeconds, stepKeepOn, switchUnit, type KeepOnState}
-    from "../../admin/src/screens/parts/keepOn";
+import {capSecondsOf, endsAtSentence, fixedReasonOf, formatCap, formatDays, formatSpan, initialKeepOn, keepOnLimits, keepOnSeconds, scaleOf,
+    stepNames, stepKeepOn, switchUnit, type KeepOnState} from "../../admin/src/screens/parts/keepOn";
 import {translator} from "../../admin/src/i18n";
 
 // 이슈 368 — 켜 둘 시간 창의 범위·문구·처음 값·단위 바꾸기·보낼 값(순수 함수).
@@ -103,4 +103,60 @@ test("AC-8 창 제목은 한국어 '켜 둘 시간', 영어 'Keep it on for' 이
     expect(en.t("timer.title")).toBe("Keep it on for");
     expect(ko.t("tunnelStatus.timeLimit")).toBe("자동 꺼짐까지");
     expect(en.t("tunnelStatus.timeLimit")).toBe("Turns off in");
+});
+
+describe("endsAtSentence — 꺼지는 시각 안내 문장 (FR-20·검토 H-1)", () => {
+    // 시각은 실행 환경의 시간대로 보인다. 기준 시각을 그 시간대의 2027-01-15 17:00 으로 만들어 어느 시간대에서도 같은 결과를 얻는다.
+    const NOW = new Date(2027, 0, 15, 17, 0, 0).getTime();
+    test("오늘이면 시:분만, 다른 날이면 월·일을 붙인다. '종료'·'ends' 를 붙이지 않는다", () => {
+        expect(endsAtSentence("1시간", NOW + HOUR * 1000, NOW, ko)).toBe("지금부터 1시간 뒤, 18:00에 꺼집니다.");
+        expect(endsAtSentence("1일", NOW + DAY * 1000, NOW, ko)).toBe("지금부터 1일 뒤, 1월 16일 17:00에 꺼집니다.");
+        expect(endsAtSentence("1 h", NOW + HOUR * 1000, NOW, en)).toBe("Turns off at 18:00 (1 h from now).");
+        expect(endsAtSentence("1 day", NOW + DAY * 1000, NOW, en)).toBe("Turns off at 1/16 17:00 (1 day from now).");
+    });
+});
+
+describe("fixedReasonOf — 값이 하나뿐인 이유 (FR-19·검토 M-1)", () => {
+    const hours: KeepOnState = {unit: "h", minutes: 60, days: 1, noAuto: false};
+    const days: KeepOnState = {...hours, unit: "d"};
+    test("일 단위 최대가 1일이면 일 단위에서만 '1일만' 이유를 보인다", () => {
+        expect(fixedReasonOf(days, keepOnLimits(DAY + 12 * HOUR), ko)).toBe("일 단위로는 1일만 고를 수 있습니다.");
+        expect(fixedReasonOf(days, keepOnLimits(DAY + 12 * HOUR), en)).toBe("In days, only 1 day is possible.");
+        expect(fixedReasonOf(hours, keepOnLimits(DAY + 12 * HOUR), ko)).toBeUndefined();
+    });
+    test("상한이 1분보다 짧으면 상한 이유를 보인다", () => {
+        expect(fixedReasonOf(hours, keepOnLimits(59), ko)).toBe("켜 둘 수 있는 최대 시간이 1분보다 짧아 이 값으로만 켤 수 있습니다.");
+        expect(fixedReasonOf(hours, keepOnLimits(59), en)).toBe("The longest allowed time is under 1 minute, so only this value is available.");
+    });
+    test("고를 값이 여럿이면 이유가 없다", () => {
+        expect(fixedReasonOf(days, keepOnLimits(3 * DAY), ko)).toBeUndefined();
+        expect(fixedReasonOf(days, keepOnLimits(null), ko)).toBeUndefined();
+        expect(fixedReasonOf(hours, keepOnLimits(2 * HOUR), ko)).toBeUndefined();
+    });
+});
+
+describe("formatCap — 상한 안내의 시간 (FR-21)", () => {
+    test("일과 나머지 시간·분으로 적는다. 1분 미만은 초다", () => {
+        expect([DAY + 12 * HOUR, 12 * HOUR, 3 * DAY, 2 * HOUR, DAY + HOUR + 61, 59].map((cap) => formatCap(cap, ko)))
+            .toEqual(["1일 12시간", "12시간", "3일", "2시간", "1일 1시간 1분", "59초"]);
+        expect([DAY + 12 * HOUR, 3 * DAY, 12 * HOUR].map((cap) => formatCap(cap, en))).toEqual(["1 day 12 h", "3 days", "12 h"]);
+    });
+});
+
+describe("scaleOf — 슬라이더 양 끝 글자", () => {
+    test("시간 단위는 1분과 시간 최댓값, 일 단위는 1일과 일 최댓값이다", () => {
+        expect(scaleOf("h", keepOnLimits(null), ko)).toEqual({min: "1분", max: "24시간"});
+        expect(scaleOf("h", keepOnLimits(12 * HOUR), ko)).toEqual({min: "1분", max: "12시간"});
+        expect(scaleOf("d", keepOnLimits(3 * DAY), ko)).toEqual({min: "1일", max: "3일"});
+        expect(scaleOf("d", keepOnLimits(3 * DAY), en)).toEqual({min: "1 day", max: "3 days"});
+    });
+});
+
+describe("stepNames — −/+ 버튼 이름에 단위를 넣는다", () => {
+    test("시간 단위는 1분, 일 단위는 1일", () => {
+        expect(stepNames("h", ko)).toEqual({less: "1분 줄이기", more: "1분 늘리기"});
+        expect(stepNames("d", ko)).toEqual({less: "1일 줄이기", more: "1일 늘리기"});
+        expect(stepNames("h", en)).toEqual({less: "1 min shorter", more: "1 min longer"});
+        expect(stepNames("d", en)).toEqual({less: "1 day shorter", more: "1 day longer"});
+    });
 });
