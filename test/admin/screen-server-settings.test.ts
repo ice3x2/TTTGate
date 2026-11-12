@@ -201,11 +201,12 @@ test("Apply 는 화면의 모든 설정 필드를 저장 요청에 담고 서버
     }
 }, ADMIN_APP_TEST_TIMEOUT_MS);
 
-// 이슈 370 C-1·AC-4: 관리 화면 포트는 서버 프로그램을 다시 시작해야 바뀐다. 확인을 눌러도 아직 열리지 않은 새 주소로 옮기지 않고,
-// 지금 주소에 머문 채 다시 시작한 뒤 열 새 주소를 알린다.
+// 이슈 370 C-1·AC-4: 관리 화면 포트는 서버 프로그램을 다시 시작해야 바뀐다. 확인을 눌러도 아직 열리지 않은 새 주소로 옮기지 않고
+// 지금 주소에 머문다.
 // 이 하네스의 화면은 Vite 개발 서버가 /api 를 백엔드로 넘기는 역방향 프록시 구성이다. 페이지 포트가 관리 포트와 다르므로
-// #303 규칙대로 새 주소도 프록시 출처다. 관리 포트로 바로 연 화면의 새 주소(host:새 포트)는 admin-address-proxy.test.ts 가 지킨다.
-test("관리 화면 포트를 바꾸고 확인을 누르면 새 주소로 옮기지 않고 다시 시작하라고 안내한다", async () => {
+// #303 규칙대로 새 주소도 프록시 주소라 알려 줄 주소가 없다. 그래서 주소 없이 다시 시작하고 프록시 포트도 바꾸라고 안내한다(PR 373 리뷰 M-1).
+// 관리 포트로 바로 연 화면의 새 주소(host:새 포트)는 admin-address-proxy.test.ts 가 지킨다.
+test("프록시로 연 화면에서 관리 화면 포트를 바꾸고 확인을 누르면 주소 없이 다시 시작하라고 안내하고 지금 주소에 머문다", async () => {
     const app = await startAdminApp();
     try {
         const {serverOption} = await openServerSettings(app.page);
@@ -223,8 +224,7 @@ test("관리 화면 포트를 바꾸고 확인을 누르면 새 주소로 옮기
         expect((await (await saved).json()).success).toBe(true);
 
         const dialog = app.page.getByRole("dialog", {name: "Server settings"});
-        const next = `${before.origin}/`;
-        await dialog.getByText(`Server settings applied. The new admin address opens only after you restart TTTGate. Restart it, then open: ${next}`, {exact: true})
+        await dialog.getByText("Admin port and TLS changes take effect after you restart TTTGate. If you use a proxy, also change the port it forwards to.", {exact: true})
             .waitFor({state: "visible", timeout: 20_000});
         await dialog.getByRole("button", {name: "OK", exact: true}).click();
         await app.page.waitForLoadState("load");

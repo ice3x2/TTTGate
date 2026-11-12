@@ -31,16 +31,17 @@ test("a page served through a proxy stays on the proxy origin", () => {
 });
 
 // 이슈 370 C-1·AC-4 — 관리 화면 포트·TLS 는 서버 프로그램을 다시 시작해야 바뀐다. 저장 뒤에는 지금 주소에 머물고,
-// 바뀌었으면 다시 시작한 뒤 열 새 주소를 알린다.
+// 바뀌었으면 다시 시작해야 한다고(restartRequired) 알린다. 새 주소(restartTo)는 지금 주소와 다를 때만 준다.
+// 프록시로 연 화면은 새 주소도 프록시 주소라 알려 줄 주소가 없다. 다시 시작한 뒤에는 프록시가 넘기는 포트를 바꿔야 한다(PR 373 리뷰 M-1).
 describe("adminAddressAfterSave", () => {
     test("관리 포트를 바꾸면 지금 주소에 머물고, 다시 시작한 뒤 열 새 주소를 돌려준다", () => {
         expect(adminAddressAfterSave(direct, {adminTls: true, adminPort: 9300}, {adminTls: true, adminPort: 9400}, 9300))
-            .toEqual({stay: "https://127.0.0.1:9300/", restartTo: "https://127.0.0.1:9400/"});
+            .toEqual({stay: "https://127.0.0.1:9300/", restartRequired: true, restartTo: "https://127.0.0.1:9400/"});
     });
 
     test("관리 화면 TLS 만 바꿔도 지금 주소에 머문다", () => {
         expect(adminAddressAfterSave(direct, {adminTls: true, adminPort: 9300}, {adminTls: false, adminPort: 9300}, 9300))
-            .toEqual({stay: "https://127.0.0.1:9300/", restartTo: "http://127.0.0.1:9300/"});
+            .toEqual({stay: "https://127.0.0.1:9300/", restartRequired: true, restartTo: "http://127.0.0.1:9300/"});
     });
 
     test("관리 화면 설정을 바꾸지 않았으면 새 주소가 없다", () => {
@@ -48,9 +49,18 @@ describe("adminAddressAfterSave", () => {
             .toEqual({stay: "https://127.0.0.1:9300/"});
     });
 
-    test("프록시로 연 화면은 두 주소 모두 프록시 출처다", () => {
+    test("프록시로 연 화면은 프록시 주소에 머물고, 다시 시작해야 한다고만 알린다(새 주소가 없다)", () => {
         expect(adminAddressAfterSave(proxied, {adminTls: true, adminPort: 9300}, {adminTls: true, adminPort: 9400}, 9300))
-            .toEqual({stay: "https://admin.example.com/", restartTo: "https://admin.example.com/"});
+            .toEqual({stay: "https://admin.example.com/", restartRequired: true});
+        expect(adminAddressAfterSave(proxied, {adminTls: true, adminPort: 9300}, {adminTls: false, adminPort: 9300}, 9300))
+            .toEqual({stay: "https://admin.example.com/", restartRequired: true});
+    });
+
+    test("주소 없는 안내는 다시 시작하고 프록시가 넘기는 포트도 바꾸라고 말한다", () => {
+        expect(translator("ko").t("server.restartRequired"))
+            .toBe("관리 화면 포트·TLS 변경은 TTTGate 서버를 다시 시작해야 반영됩니다. 프록시를 쓰면 프록시가 넘기는 포트도 바꾸세요.");
+        expect(translator("en").t("server.restartRequired"))
+            .toBe("Admin port and TLS changes take effect after you restart TTTGate. If you use a proxy, also change the port it forwards to.");
     });
 
     test("새 주소 안내는 다시 시작한 뒤 그 주소로 접속하라고 말한다", () => {

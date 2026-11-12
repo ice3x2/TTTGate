@@ -76,7 +76,8 @@ const EXPECTED: Readonly<Record<string, string>> = {
     "server.adminTls": "관리 화면에 TLS(HTTPS) 사용",
     "server.tunnelTls": "터널 서버 포트에 TLS 사용",
     "tunnelStatus.blocked": "거절 {count}",
-    "server.restarted": "서버 설정을 적용했습니다. 관리 화면 포트나 TLS를 바꿨다면 TTTGate 서버를 다시 시작해야 반영됩니다.",
+    // 최종 목록 값과 다르다. 아래 CHANGED_AFTER_LIST 를 보라.
+    "server.restarted": "서버 설정을 적용했습니다.",
     // 2.3 LOW
     "serverError.passkey_counter_stale": "패스키를 확인하지 못했습니다. 다시 시도하세요.",
     "me.passkeyAddedSetUpApp": "패스키를 추가했습니다. IP 주소로 접속하면 패스키를 쓸 수 없으니 인증 앱도 설정하세요.",
@@ -147,6 +148,17 @@ const EXPECTED: Readonly<Record<string, string>> = {
     "auditEvent.group_attributes_changed": "그룹 설정 변경",
 };
 
+/**
+ * 최종 목록 뒤 PR 373 리뷰에서 바꾼 키. listed 는 목록의 "최종 권장" 이고, 지금 값은 EXPECTED 에 있다.
+ * 요구 문서(최종 목록)는 고치지 않고, 목록 대조는 listed 로 한다.
+ */
+const CHANGED_AFTER_LIST: Readonly<Record<string, {listed: string; reason: string}>> = {
+    "server.restarted": {
+        listed: "서버 설정을 적용했습니다. 관리 화면 포트나 TLS를 바꿨다면 TTTGate 서버를 다시 시작해야 반영됩니다.",
+        reason: "리뷰 L-2: C-1 수정 뒤 이 창은 관리 화면 포트·TLS 를 바꾸지 않았을 때만 뜬다. 바꿨을 때는 server.restartToOpen · server.restartRequired 가 뜨므로 조건문이 틀렸다.",
+    },
+};
+
 /** "유지"(보류) 판정. 지금 문구를 그대로 둔다. */
 const KEPT: Readonly<Record<string, string>> = {
     "tunnelEdit.injectRequestHeader": "요청 헤더 넣기",
@@ -202,7 +214,7 @@ describe("AC-2 최종 목록과 ko.ts", () => {
         const mismatched = rows
             .filter((row) => row.keys.length > 0 && row.keys.every((key) => key in EXPECTED))
             .filter((row) => {
-                const values = row.keys.map((key) => EXPECTED[key]);
+                const values = row.keys.map((key) => CHANGED_AFTER_LIST[key]?.listed ?? EXPECTED[key]);
                 // 말줄임표로 줄인 칸은 앞부분만 같으면 된다(server.statusUnknown / statusUnknownTls 의 "오류: " 빼기).
                 if(row.final.endsWith(" …")) return !values.every((value) => value.startsWith(row.final.slice(0, -2)));
                 return [...new Set(values)].join(" / ") !== row.final;
@@ -270,7 +282,8 @@ describe("FR-2 최종 목록 4.3 의 en.ts 수정", () => {
     test.each([
         ["tunnelEdit.secureTunneling", "Use TLS (external port and destination)"],
         ["tunnelStatus.blocked", "Rejected {count}"],
-        ["server.restarted", "Server settings applied. If you changed the admin port or TLS, restart TTTGate to apply them."],
+        // 최종 목록 4.3 과 다르다. CHANGED_AFTER_LIST 의 리뷰 L-2 를 보라.
+        ["server.restarted", "Server settings applied."],
         ["clients.neverWarning", "This code stays valid until it is used, a new code is issued, the client gets a new secret, the client is deleted, the tunnel server settings (port, TLS, key, etc.) change, or the server restarts. Treat it like a password."],
         ["auditEvent.group_attributes_changed", "Group settings changed"],
     ] as Array<[keyof typeof en, string]>)("%s", (key, value) => {
@@ -290,6 +303,11 @@ describe("AC-1·FR-3·FR-4 '속도 제한' 대신 '연결 횟수 제한'", () =>
     test("README 한국어 절은 '터널별 연결 횟수 제한' 이라고 부른다", () => {
         expect(readme).toContain("터널별 연결 횟수 제한");
         expect(readme).not.toContain("레이트 리미트");
+    });
+
+    test("README 한국어 메모리 표는 HTTP 본문을 '다시 쓰기' 가 아니라 '바꾸기' 라고 부른다(리뷰 L-4)", () => {
+        expect(readme).toContain("| HTTP 본문 바꾸기(`rewriteHostInTextBody`) |");
+        expect(readme).not.toContain("본문 다시 쓰기");
     });
 
     test("README 는 바뀐 화면 이름을 쓴다", () => {
