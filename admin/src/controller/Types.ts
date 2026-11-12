@@ -133,6 +133,8 @@ export type GroupAttributes = {
     rate_limit: 'unlimited' | '1MB/s' | '10MB/s' | '100MB/s';
     /** 이슈 346: 이 그룹 사용자는 2단계 인증(TOTP 또는 패스키)을 갖춰야 한다. */
     mfa_required: boolean;
+    /** 이슈 366: 연결당 버퍼(서버·클라이언트) 최댓값(MiB). 0 이면 그룹 상한이 없다. 옛 서버 응답에는 없다. */
+    max_session_buffer_mib?: number;
 };
 export type Group = {id: string; name: string; system: boolean; attributes: GroupAttributes; revision?: number};
 /** U3-04: 단위 2 §3 기본값. 새 그룹 폼의 초기값이자 system:superuser 의 표시용 값이다. */
@@ -149,6 +151,7 @@ export const DEFAULT_GROUP_ATTRIBUTES: GroupAttributes = {
     tunnel_visibility: 'private',
     rate_limit: 'unlimited',
     mfa_required: false,
+    max_session_buffer_mib: 0,
 };
 export type MeResponse = {user: UserView; group: {id: string; name: string; attributes: GroupAttributes};
     sections: string[]; migrationBanner: boolean;

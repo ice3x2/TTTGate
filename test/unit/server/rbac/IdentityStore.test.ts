@@ -213,6 +213,21 @@ describe("IdentityStore", () => {
         expect(IdentityStore.instance.group(created.value.id)!.name).toBe("5");
     });
 
+    it("이슈 366 AC-1: max_session_buffer_mib 가 없거나 정수가 아닌 옛 그룹은 0(그룹 상한 없음)으로 읽는다", () => {
+        IdentityStore.instance.load();
+        const missing = IdentityStore.instance.createGroup({name: "Legacy"});
+        const broken = IdentityStore.instance.createGroup({name: "Broken"});
+        if(!missing.success || !broken.success) throw new Error("group create failed");
+        const parsed = YAML.parse(fs.readFileSync(identityYamlPath(), "utf8"));
+        delete parsed.groups.find((group: any) => group.id === missing.value.id).attributes.max_session_buffer_mib;
+        parsed.groups.find((group: any) => group.id === broken.value.id).attributes.max_session_buffer_mib = "64";
+        fs.writeFileSync(identityYamlPath(), YAML.stringify(parsed));
+        IdentityStore.resetForTest();
+        expect(IdentityStore.instance.load()).toMatchObject({success: true, source: "file"});
+        expect(IdentityStore.instance.group(missing.value.id)!.attributes.max_session_buffer_mib).toBe(0);
+        expect(IdentityStore.instance.group(broken.value.id)!.attributes.max_session_buffer_mib).toBe(0);
+    });
+
     it("#172 rejects duplicate group names on create and rename", () => {
         IdentityStore.instance.load();
         expect(IdentityStore.instance.createGroup({name: "Field"}).success).toBe(true);
@@ -400,8 +415,8 @@ describe("IdentityStore", () => {
         const superuserGroup = parsed.groups.find((g: {id: string}) => g.id === "system:superuser");
         const defaultGroup = parsed.groups.find((g: {id: string}) => g.id === "default");
         expect(superuserGroup.attributes).toEqual({});
-        // #346 에서 mfa_required 가 더해져 12개다.
-        expect(Object.keys(defaultGroup.attributes)).toHaveLength(12);
+        // #346 에서 mfa_required, #366 에서 max_session_buffer_mib 가 더해져 13개다.
+        expect(Object.keys(defaultGroup.attributes)).toHaveLength(13);
 
         IdentityStore.resetForTest();
         IdentityStore.instance.load();

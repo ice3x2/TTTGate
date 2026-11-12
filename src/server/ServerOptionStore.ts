@@ -434,7 +434,7 @@ class ServerOptionStore {
             this._loadStatus = {ready: false, reason: 'validation'}; return;
         }
         this.preserveLegacyDefaults(candidate);
-        if(!this.verificationServerOption(candidate).success ||
+        if(!this.verificationServerOption(candidate, 'legacy-load').success ||
             candidate.tunnelingOptions.some(option => !this.verificationTunnelingOption(option, 'legacy-load').success)) {
             this._loadStatus = {ready: false, reason: 'validation'}; return;
         }
@@ -493,7 +493,8 @@ class ServerOptionStore {
         }
     }
 
-    public verificationServerOption(option: ServerOption) : {success: boolean, message: string, values?: FailureValues, serverOption?: ServerOption} {
+    public verificationServerOption(option: ServerOption, normalizationMode: TunnelingOptionNormalizationMode = "new-config")
+        : {success: boolean, message: string, values?: FailureValues, serverOption?: ServerOption} {
         if(Array.isArray(option.tunnelingOptions)) {
             const normalizedTunnels = option.tunnelingOptions.map(tunnel =>
                 tunnel && typeof tunnel === 'object' && !Array.isArray(tunnel) ? {...tunnel} : tunnel);
@@ -501,6 +502,8 @@ class ServerOptionStore {
                 if(tunnel && typeof tunnel === 'object' && !Array.isArray(tunnel)) {
                     const buffer = this.normalizeServerBufferLimit(tunnel);
                     if(!buffer.success) return buffer;
+                    const clientBuffer = this.normalizeClientBufferLimit(tunnel, normalizationMode);
+                    if(!clientBuffer.success) return clientBuffer;
                     const rateLimit = normalizeRateLimit(tunnel.protocol, tunnel.rateLimit);
                     if(!rateLimit.success) return rateLimit;
                     tunnel.rateLimit = rateLimit.rateLimit;
@@ -600,6 +603,23 @@ class ServerOptionStore {
         return {success: true, message: ''};
     }
 
+    /**
+     * 이슈 366 검토 H-1: 클라이언트 버퍼는 유한한 숫자만 받는다(1 미만은 제한 없음). undefined·null 은 기본값 8 이다.
+     * 숫자가 아닌 값을 그대로 두면 세션을 열 때 강제 변환되어 제한 없음·거대값·NaN 이 된다. server.yaml 에서 읽을 때는
+     * 거절하지 않고 기본값으로 바꾸고 경고한다(서버 기동을 막지 않는다).
+     */
+    private normalizeClientBufferLimit(option: TunnelingOption, normalizationMode: TunnelingOptionNormalizationMode): {success: boolean; message: string} {
+        const value: unknown = option.bufferLimitOnClient;
+        if(value === undefined || value === null) {
+            option.bufferLimitOnClient = 8;
+        } else if(typeof value !== 'number' || !Number.isFinite(value) || !Number.isFinite(value * 1024 * 1024)) {
+            if(normalizationMode !== "legacy-load") return {success: false, message: 'Client buffer must be a finite number.'};
+            logger.warn(`forwardPort ${option.forwardPort}: client buffer ${JSON.stringify(value)} in server.yaml is not a finite number. Using the default 8 MiB.`);
+            option.bufferLimitOnClient = 8;
+        }
+        return {success: true, message: ''};
+    }
+
     public verificationTunnelingOption(
         option: TunnelingOption,
         normalizationMode: TunnelingOptionNormalizationMode = "new-config"
@@ -632,9 +652,8 @@ class ServerOptionStore {
         const rateLimit = normalizeRateLimit(option.protocol, option.rateLimit);
         if(!rateLimit.success) return {success: false, forwardPort: option.forwardPort, message: rateLimit.message, values: rateLimit.values};
         option.rateLimit = rateLimit.rateLimit;
-        if(option.bufferLimitOnClient == undefined) {
-            option.bufferLimitOnClient = 8;
-        }
+        const clientBuffer = this.normalizeClientBufferLimit(option, normalizationMode);
+        if(!clientBuffer.success) return {...clientBuffer, forwardPort: option.forwardPort};
         // noinspection SuspiciousTypeOfGuard
         if(option.keepAlive == undefined || typeof option.keepAlive !== 'number' || option.keepAlive < 0) {
             option.keepAlive = -1;

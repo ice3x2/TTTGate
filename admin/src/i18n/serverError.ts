@@ -7,11 +7,18 @@ type FailureLike = {code?: unknown; message?: string; generated?: boolean; [fiel
 
 const isTextValue = (value: unknown): value is string | number => typeof value === 'string' || typeof value === 'number';
 
+/** 이슈 366: 값이 설정 필드 이름인 값 필드. 문구에는 필드 이름 대신 그 언어의 칸 이름을 끼운다. */
+const FIELD_LABELS: Readonly<Record<string, MessageKey>> = {
+    bufferLimitOnServer: 'tunnelEdit.serverBufferName',
+    bufferLimitOnClient: 'tunnelEdit.clientBufferName',
+};
+
 /** 응답의 값 필드 가운데 문구에 끼울 수 있는 것. 문자열·숫자는 그대로, 비어 있지 않은 문자열·숫자의 배열은 그 언어의 목록 표기로 잇는다. */
 const valuesOf = (result: FailureLike, tr: Translator): Record<string, string | number> => {
     const values: Record<string, string | number> = {};
     for(const [name, value] of Object.entries(result)) {
-        if(isTextValue(value)) values[name] = value;
+        if(name === 'field' && typeof value === 'string' && Object.hasOwn(FIELD_LABELS, value)) values[name] = tr.t(FIELD_LABELS[value]);
+        else if(isTextValue(value)) values[name] = value;
         else if(Array.isArray(value) && value.length > 0 && value.every(isTextValue)) values[name] = tr.list(value);
     }
     return values;

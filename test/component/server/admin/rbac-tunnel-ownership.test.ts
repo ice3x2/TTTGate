@@ -196,6 +196,64 @@ describe("rbac-tunnel-ownership", () => {
         expect(off.status).toBe(200);
     });
 
+    // 이슈 366 AC-2·AC-4·AC-5 — 그룹 연결당 버퍼 최댓값은 관리 API 가 막고, 값을 바꾸지 않는 저장은 받으며, 슈퍼유저는 받지 않는다.
+    it("이슈 366 그룹 버퍼 최댓값을 넘는 저장은 422 group_buffer_limit_exceeded 이고 값을 바꾸지 않으면 받는다", async () => {
+        await setGroupAttributes(groupTwo, {...groupAttributes("private"), max_session_buffer_mib: 64});
+        try {
+            const over = await request("POST", "/api/tunnelingOption", tunnelBody(20060, {bufferLimitOnServer: 65, bufferLimitOnClient: 8}), carol.auth);
+            expect(over.status).toBe(422);
+            expect(over.body).toMatchObject({code: "group_buffer_limit_exceeded", field: "bufferLimitOnServer", max: 64});
+            expect(await storedTunnel(20060)).toBeUndefined();
+            const unlimitedClient = await request("POST", "/api/tunnelingOption", tunnelBody(20060, {bufferLimitOnServer: 8, bufferLimitOnClient: -1}), carol.auth);
+            expect(unlimitedClient.body).toMatchObject({code: "group_buffer_limit_exceeded", field: "bufferLimitOnClient", max: 64});
+            // AC-3 클라이언트 버퍼 0 도 제한 없음이라 거부하고 저장하지 않는다.
+            const zeroClient = await request("POST", "/api/tunnelingOption", tunnelBody(20060, {bufferLimitOnServer: 8, bufferLimitOnClient: 0}), carol.auth);
+            expect(zeroClient.status).toBe(422);
+            expect(zeroClient.body).toMatchObject({code: "group_buffer_limit_exceeded", field: "bufferLimitOnClient", max: 64});
+            expect(await storedTunnel(20060)).toBeUndefined();
+            const ok = await request("POST", "/api/tunnelingOption", tunnelBody(20060, {bufferLimitOnServer: 64, bufferLimitOnClient: 64}), carol.auth);
+            expect(ok.status).toBe(200);
+
+            // 상한을 32 로 낮춘 뒤: 버퍼를 그대로 두는 이름 변경은 받고, 48 로 바꾸면 거부한다.
+            await setGroupAttributes(groupTwo, {...groupAttributes("private"), max_session_buffer_mib: 32});
+            const renamed = await request("PUT", "/api/tunnelingOption",
+                tunnelBody(20060, {bufferLimitOnServer: 64, bufferLimitOnClient: 64, name: "kept"}), carol.auth);
+            expect(renamed.status).toBe(200);
+            const changed = await request("PUT", "/api/tunnelingOption", tunnelBody(20060, {bufferLimitOnServer: 48, bufferLimitOnClient: 64}), carol.auth);
+            expect(changed.body).toMatchObject({code: "group_buffer_limit_exceeded", field: "bufferLimitOnServer", max: 32});
+
+            // 슈퍼유저는 그룹 상한을 받지 않는다(전역 캐시 한도 128 안에서).
+            const bySuper = await request("PUT", "/api/tunnelingOption", tunnelBody(20060, {bufferLimitOnServer: 100, bufferLimitOnClient: -1}), superuser);
+            expect(bySuper.status).toBe(200);
+            expect((await storedTunnel(20060)).bufferLimitOnServer).toBe(100);
+        } finally {
+            await setGroupAttributes(groupTwo, groupAttributes("private"));
+            await request("DELETE", "/api/tunnelingOption", {forwardPort: 20060,
+                expectedRevision: ServerOptionStore.instance.revisionState.currentRevision}, superuser);
+        }
+    });
+
+    // 이슈 366 검토 H-1 — 숫자가 아닌 버퍼 값은 기본값으로 보지 않는다. 일반 유저는 422, 슈퍼유저도 저장소 검사에 걸려 저장되지 않는다.
+    it("이슈 366 숫자가 아닌 버퍼 값은 그룹 상한을 우회하지 못하고 누구의 저장으로도 남지 않는다", async () => {
+        await setGroupAttributes(groupTwo, {...groupAttributes("private"), max_session_buffer_mib: 64});
+        try {
+            for(const field of ["bufferLimitOnServer", "bufferLimitOnClient"]) {
+                for(const garbage of ["0", "100000", false, [0], {}]) {
+                    const body = tunnelBody(20061, {bufferLimitOnServer: 8, bufferLimitOnClient: 8, [field]: garbage});
+                    const byRegular = await request("POST", "/api/tunnelingOption", body, carol.auth);
+                    expect(byRegular.status).toBe(422);
+                    expect(byRegular.body).toMatchObject({code: "group_buffer_limit_exceeded", field, max: 64});
+                    expect(await storedTunnel(20061)).toBeUndefined();
+                    const bySuper = await request("POST", "/api/tunnelingOption", tunnelBody(20061, {bufferLimitOnServer: 8, bufferLimitOnClient: 8, [field]: garbage}), superuser);
+                    expect(bySuper.status).toBe(400);
+                    expect(await storedTunnel(20061)).toBeUndefined();
+                }
+            }
+        } finally {
+            await setGroupAttributes(groupTwo, groupAttributes("private"));
+        }
+    });
+
     // #170 — 본문 포트가 문자열이면 설정 행은 == 비교로 지워지지만 런타임 리스너는 키가 달라 남는다.
     it("#170 본문 forwardPort 는 1–65535 의 정수만 받는다", async () => {
         for(const forwardPort of [`${MIGRATED_PORT}.0`, String(MIGRATED_PORT), "0x4E21", 1.5, 0, 65536]) {

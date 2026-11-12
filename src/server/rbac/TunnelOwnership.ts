@@ -178,7 +178,8 @@ function admitOwner(principal: Principal, next: TunnelingOption, certInfo: unkno
     const result = enforce(principal, {...next, ownerId: principal.userId}, mode,
         {ownedCount: AuthorizationContext.ownedCount(principal.userId), trustedClientIds: trustedClientIdsOf(),
             maxServerBufferMiB: ServerOptionStore.instance.serverOption.globalMemCacheLimit,
-            currentServerBufferMiB: previousOption?.bufferLimitOnServer});
+            currentServerBufferMiB: previousOption?.bufferLimitOnServer,
+            currentClientBufferMiB: previousOption?.bufferLimitOnClient});
     if(!result.success) {
         return result;
     }

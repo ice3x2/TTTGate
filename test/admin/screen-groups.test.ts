@@ -254,14 +254,17 @@ test("한도 칸이 비면 요청 없이 칸마다 오류를 보이고, 0 을 �
     await attr(page, "max_tunnel_count").fill("");
     await attr(page, "max_tunnel_duration_ms").fill("");
     await attr(page, "max_concurrent_connections").fill("");
+    // 이슈 366 검토 L: 연결당 버퍼 최대 칸도 비우면 보내지 않고 칸에 오류를 보인다(빈칸이 null 로 가 422 가 되지 않게).
+    await attr(page, "max_session_buffer_mib").fill("");
     await button(page, "Create group").click();
     await page.getByText("Enter a number. 0 disables tunnel creation.", {exact: true}).waitFor({state: "visible"});
-    expect(await page.getByText("Enter a number. 0 means unlimited.", {exact: true}).count()).toBe(2);
+    expect(await page.getByText("Enter a number. 0 means unlimited.", {exact: true}).count()).toBe(3);
     expect(posts).toBe(0);
 
     await attr(page, "max_tunnel_count").fill("0");
     await attr(page, "max_tunnel_duration_ms").fill("0");
     await attr(page, "max_concurrent_connections").fill("0");
+    await attr(page, "max_session_buffer_mib").fill("0");
     const created = page.waitForRequest((request) => new URL(request.url()).pathname === "/api/groups" && request.method() === "POST");
     await button(page, "Create group").click();
     const attributes = (await created).postDataJSON().attributes;
@@ -375,4 +378,18 @@ test("가운데 범위 줄을 지우면 초점이 다음 줄의 삭제 버튼으
     await button(page, "Delete range 20000–20100").click();
     expect(await page.locator("[data-range-index]").count()).toBe(2);
     await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "Delete range 30000–30010", undefined, {timeout: 10_000});
+}));
+
+// 이슈 366 FR-9 — 그룹 편집의 "한도" 카드에 연결당 버퍼 최대 칸이 있고, 저장한 값이 다시 읽어도 그대로다.
+test("이슈 366 그룹의 연결당 버퍼 최대를 저장하면 다시 열어도 그 값이다", () => withGroups(async ({page}) => {
+    await openGroup(page, "default");
+    const field = attr(page, "max_session_buffer_mib");
+    expect(await field.inputValue()).toBe("0");
+    expect(await page.getByText("Max buffer per connection (MiB)", {exact: true}).count()).toBe(1);
+    await field.fill("64");
+    await button(page, "Save").click();
+    await page.locator(".toast").first().waitFor({state: "visible", timeout: 10_000});
+    await page.reload();
+    await page.waitForFunction(() => (document.querySelector("#group-attr-max_session_buffer_mib") as HTMLInputElement | null)?.value === "64",
+        undefined, {timeout: 10_000});
 }));

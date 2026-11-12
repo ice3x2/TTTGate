@@ -53,7 +53,7 @@
     let loadedSnapshot = $state(snapshot('', DEFAULT_GROUP_ATTRIBUTES));
     let nameError = $state('');
     // 빈 한도 칸 오류. 빈칸을 0(무제한)으로 저장하면 운영자 모르게 제한이 풀린다(U3 그룹 한도).
-    let limitErrors = $state<{count?: string; duration?: string; concurrent?: string}>({});
+    let limitErrors = $state<{count?: string; duration?: string; concurrent?: string; sessionBuffer?: string}>({});
     let formError = $state('');
     let pending = $state(false);
     let deleteOpen = $state(false);
@@ -113,10 +113,12 @@
     };
 
     /** 한도 칸이 비었는지 본다. 빈칸은 저장하지 않는다 — 0 은 무제한이라 직접 넣어야 한다. */
-    const emptyLimitErrors = (): {count?: string; duration?: string; concurrent?: string} => ({
+    const emptyLimitErrors = (): {count?: string; duration?: string; concurrent?: string; sessionBuffer?: string} => ({
         ...(attrs.max_tunnel_count == null ? {count: t('group.enterCountDisables')} : {}),
         ...(durationHours == null ? {duration: t('group.enterNumberUnlimited')} : {}),
-        ...(attrs.max_concurrent_connections == null ? {concurrent: t('group.enterNumberUnlimited')} : {})
+        ...(attrs.max_concurrent_connections == null ? {concurrent: t('group.enterNumberUnlimited')} : {}),
+        // 이슈 366: 빈칸은 null 로 가서 서버가 422 로 거부한다. 보내기 전에 칸에 알린다.
+        ...(attrs.max_session_buffer_mib == null ? {sessionBuffer: t('group.enterNumberUnlimited')} : {})
     });
 
     /** 포트 범위의 null 은 그대로 보내 서버 422 를 받는다. 기간은 setDuration 이 attrs 에 이미 반영한다. */
@@ -308,6 +310,11 @@
             <Field label={t('group.maxConcurrent')} hint={t('group.zeroUnlimited')} for="group-attr-max_concurrent_connections" error={limitErrors.concurrent}>
                 <NumberInput id="group-attr-max_concurrent_connections" min={0} max={100000} step={1} disabled={readOnly}
                     bind:value={() => attrs.max_concurrent_connections, (value) => (attrs.max_concurrent_connections = value as number)} />
+            </Field>
+            <!-- 이슈 366 FR-9: 그룹 연결당 버퍼 최댓값. 0 이면 그룹 최대가 없다. -->
+            <Field label={t('group.maxSessionBuffer')} hint={t('group.maxSessionBufferHint')} for="group-attr-max_session_buffer_mib" error={limitErrors.sessionBuffer}>
+                <NumberInput id="group-attr-max_session_buffer_mib" min={0} max={1048576} step={1} disabled={readOnly}
+                    bind:value={() => attrs.max_session_buffer_mib ?? null, (value) => (attrs.max_session_buffer_mib = value as number)} />
             </Field>
             <Field label={t('group.bandwidth')} for="group-attr-rate_limit">
                 <Select id="group-attr-rate_limit" options={RATE_LIMITS} disabled={readOnly}
