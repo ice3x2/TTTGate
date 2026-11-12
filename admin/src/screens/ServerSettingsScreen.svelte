@@ -194,7 +194,8 @@
         const previousAdminPort = lastServerOption.adminPort;
         // 이슈 303: 프록시를 거쳐 연 화면은 프록시 주소에 머문다. previousAdminPort 는 이 화면을 연 때의 관리 포트다.
         // 이슈 370 C-1: 관리 화면 포트·TLS 는 서버 프로그램을 다시 시작해야 바뀐다. 아직 열리지 않은 새 주소로 옮기지 않고
-        // 지금 주소(stay)에 머물며, 바뀌었으면 다시 시작한 뒤 열 새 주소(restartTo)를 알린다.
+        // 지금 주소(stay)에 머물며, 바뀌었으면 다시 시작해야 한다고 알린다. 새 주소(restartTo)가 따로 있으면 그 주소도 알린다.
+        // 프록시로 연 화면은 새 주소가 없다. 다시 시작한 뒤 프록시가 넘기는 포트를 바꿔야 하므로 주소 없이 안내한다.
         const address = adminAddressAfterSave(location, $state.snapshot(lastServerOption), $state.snapshot(serverOption), previousAdminPort);
         loading = true;
         let success = false;
@@ -208,7 +209,8 @@
         }
         loading = false;
         if(success) {
-            const message = address.restartTo ? t('server.restartToOpen', {address: address.restartTo}) : t('server.restarted');
+            const message = address.restartTo ? t('server.restartToOpen', {address: address.restartTo})
+                : address.restartRequired ? t('server.restartRequired') : t('server.restarted');
             alert(message, t('common.ok'), () => {
                 lastServerOption = _.cloneDeep($state.snapshot(serverOption));
                 lastAdminCert = _.cloneDeep($state.snapshot(adminCert));
