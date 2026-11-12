@@ -1,4 +1,4 @@
-import {byteToUnit, startupTime, timeToDMH, toSize} from "../../admin/src/screens/parts/units";
+import {byteToUnit, groupedNumber, startupTime, timeToDMH, toSize} from "../../admin/src/screens/parts/units";
 import {translator} from "../../admin/src/i18n";
 
 // screens/parts/units.ts 는 옛 layout/ServerStatusLayout.svelte 와 layout/SysinfoPopup.svelte 에
@@ -185,5 +185,14 @@ describe("toSize", () => {
         [NaN, "NaNB"],
     ] as ReadonlyArray<readonly [number, string]>)("%s 바이트를 %s 로 적는다", (bytes, expected) => {
         expect(toSize(bytes)).toBe(expected);
+    });
+});
+
+// 이슈 370 최종 목록 2.3 server.millisecondsRequired: 범위 숫자는 자릿점을 붙여 보인다(안내 문구의 "1,000~600,000ms" 와 같다).
+describe("groupedNumber", () => {
+    test("그 언어의 자릿점을 붙인다", () => {
+        expect(groupedNumber(600000, translator("ko"))).toBe("600,000");
+        expect(groupedNumber(1000, translator("en"))).toBe("1,000");
+        expect(groupedNumber(999, translator("en"))).toBe("999");
     });
 });

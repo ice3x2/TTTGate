@@ -27,7 +27,7 @@ describe("summarizeAttributes", () => {
 // 이슈 349 FR-8 — 요약의 낱말도 정한 언어로 만든다. 코드 값(crud=full, 프로토콜 이름)은 옮기지 않는다.
 describe("이슈 349 한국어 요약", () => {
     test("범위와 프로토콜이 있을 때와 없을 때", () => {
-        expect(summarizeAttributes(FIELD_TEAM, translator("ko"))).toBe("crud=full · 터널≤2 · 포트 20000-20099 · TCP,HTTP,HTTP_REWRITE");
-        expect(summarizeAttributes(DEFAULT_GROUP_ATTRIBUTES, translator("ko"))).toBe("crud=full · 터널≤10 · 포트 없음 · 프로토콜 없음");
+        expect(summarizeAttributes(FIELD_TEAM, translator("ko"))).toBe("crud=full · 터널 최대 2개 · 포트 20000-20099 · TCP,HTTP,HTTP_REWRITE");
+        expect(summarizeAttributes(DEFAULT_GROUP_ATTRIBUTES, translator("ko"))).toBe("crud=full · 터널 최대 10개 · 포트 없음 · 프로토콜 없음");
     });
 });

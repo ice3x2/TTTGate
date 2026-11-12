@@ -146,7 +146,7 @@ describe("시스템 정보를 열지 못할 때의 안내(ko-KR)", () => {
     };
 
     const alertText = async (page: Page): Promise<string> => {
-        const dialog = page.getByRole("dialog", {name: "상태"});
+        const dialog = page.getByRole("dialog", {name: "서버 상태"});
         await dialog.waitFor({state: "visible", timeout: 10_000});
         return (await dialog.locator(".modal-body").textContent()) ?? "";
     };

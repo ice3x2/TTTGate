@@ -8,6 +8,9 @@ import {i18n, type Translator} from '../../i18n';
 /** 소수를 버린 정수를 그 언어로 적는다. */
 export const wholeNumber = (value: number, tr: Translator = i18n()): string => tr.number(Math.floor(value), 0);
 
+/** 이슈 370: 그 언어의 자릿점을 붙인 정수(예: 600,000). tr.number 는 자릿점을 붙이지 않는다. */
+export const groupedNumber = (value: number, tr: Translator = i18n()): string => value.toLocaleString(tr.intl);
+
 export const byteToUnit = (length: number, hideUnit = false, tr: Translator = i18n()): string => {
     const tib = 1024 * 1024 * 1024 * 1024;
     const gib = 1024 * 1024 * 1024;

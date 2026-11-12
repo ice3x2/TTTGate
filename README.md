@@ -357,7 +357,7 @@ After you sign in, the console opens the **Tunnels** list. This is the same for 
 - **Status line:** `On`, `Off`, `client offline` (no connected client may serve this tunnel), `N connections`, the time left, `Can't open port <port>`, the owner of a tunnel that is not yours, and `cert not verified`. A tunnel that you can only view shows a lock instead of a switch.
 - **Name:** give a tunnel a name in its edit screen (**Name**, optional, up to 40 characters). Without a name, the row shows the port and the destination. Saving only a new name does not restart the tunnel, so open connections stay.
 - **IP limit:** the button below the status line shows whether the tunnel accepts only the IPs of the people who turned it on, and the refresh button next to it updates your IP. See [Limit a Tunnel to the IPs That Turned It On](#limit-a-tunnel-to-the-ips-that-turned-it-on).
-- **Details:** tap a row to open its edit screen. Its **Status** area shows uptime, sessions, traffic, blocked connections and the **Time limit** timer. Only tunnels that you can change open an edit screen.
+- **Details:** tap a row to open its edit screen. Its **Status** area shows uptime, sessions, traffic, rejected connections and the **Time limit** timer. Only tunnels that you can change open an edit screen.
 
 #### Sign In with a Passkey
 
@@ -447,7 +447,7 @@ Before you rely on it:
 This is the recommended way. The control port must use TLS (`tls: true` in `config/server.yaml`), and `controlProtocolMode` must not be `mtls-strict`. Otherwise the server does not issue a code.
 
 1. In the admin console, open **Trusted clients**, add the client, and copy the command that it shows. You can also press **Enrollment code** on an existing client. The code works once and, by default, expires after 15 minutes. To change this, choose another value in **Code expires after** in the same window: 15 minutes, 1 hour, 24 hours, 7 days, 30 days or **Never expires**. The console issues a new code with that expiry, and the old code stops working.
-   - A code with **Never expires** stays valid until it is used, a new code is issued for the client, the client gets a new secret (**New secret**), the client is deleted, the control port settings change, or the server restarts. Codes are kept only in memory. Treat such a code like a password.
+   - A code with **Never expires** stays valid until it is used, a new code is issued for the client, the client gets a new secret (**New secret**), the client is deleted, the tunnel server settings (port, TLS, key, etc.) change, or the server restarts. Codes are kept only in memory. Treat such a code like a password.
    - The console gets each code in two steps. First it gets a code that is valid for 15 minutes. When the window shows the code, the console applies the expiry that you chose. If the window closes or the response is lost before the code is shown, the longer expiry does not apply, and the code expires after 15 minutes.
 2. On the client host, run the command:
 
@@ -936,7 +936,7 @@ Read this before you replace a running server with this version.
 2. **Existing clients.** Clients of earlier versions (1.0.10 and older) authenticate with the shared key only. This version turns that off by default, so every tunnel disconnects until you do one of these:
    - Start the server with `-allowLegacyControlAuth` (or set `allowLegacyControlAuth: true`) for the rollout window. Then upgrade the clients with `clientId` and `clientSecret` (see [Mixed-Version Rollout Policy](#mixed-version-rollout-policy)). The flag saves `allowLegacyControlAuth: true` to `server.yaml`. When the window ends, start once with `-allowLegacyControlAuth false` or set the value to `false`.
    - Upgrade the clients first. Do not do this when you have the tunnels in step 3.
-3. **Tunnels to a destination with an untrusted certificate.** A client of this version verifies the certificate of the destination server. Clients of earlier versions (1.0.10 and older) did not. This applies to tunnels with **Secure tunneling Server/Client** checked (`tls: true`) and to every HTTPS tunnel. After you upgrade a client, such a tunnel fails when its destination has a self-signed (or otherwise untrusted) certificate. The error is a certificate error, for example `self-signed certificate`. If you have such tunnels, do one of these:
+3. **Tunnels to a destination with an untrusted certificate.** A client of this version verifies the certificate of the destination server. Clients of earlier versions (1.0.10 and older) did not. This applies to tunnels with **Use TLS (external port and destination)** checked (`tls: true`) and to every HTTPS tunnel. After you upgrade a client, such a tunnel fails when its destination has a self-signed (or otherwise untrusted) certificate. The error is a certificate error, for example `self-signed certificate`. If you have such tunnels, do one of these:
    - Upgrade the server first, with `-allowLegacyControlAuth` as in step 2, so that 1.0.10 clients stay connected. In the admin console, open each such tunnel and check **Skip certificate verification (allow self-signed)** (`allowSelfSignedDestinationCert: true`). Then upgrade the clients with `clientId` and `clientSecret` as in step 2. A server of an earlier version cannot send this option, so do not upgrade the clients first.
    - Give the destination a certificate from a public CA that Node.js trusts, and that matches the destination host of the tunnel. The client's `-ca` option applies only to the control connection, not to destinations. A certificate for a DNS name fails when the tunnel uses an IP address, and the other way round.
 
@@ -1339,7 +1339,7 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 - **상태 줄:** `On`, `Off`, `client offline`(이 터널을 맡을 수 있는 클라이언트가 연결되어 있지 않음), `N connections`, 남은 시간, `Can't open port <포트>`, 내 것이 아닌 터널의 소유자, `cert not verified` 를 보인다. 보기만 허락된 터널은 스위치 대신 자물쇠를 보인다.
 - **이름:** 터널 편집 화면의 **Name**(선택, 40자까지)에 이름을 넣는다. 이름이 없으면 포트와 목적지를 보인다. 이름만 바꿔 저장하면 터널을 다시 시작하지 않으므로 진행 중인 연결이 남는다.
 - **IP 제한:** 상태 줄 아래 버튼은 그 터널이 켠 사람의 IP 에서만 연결을 받는지 보이고, 옆의 갱신 버튼은 내 IP 를 지금 주소로 바꾼다. [켠 사람의 IP 에서만 연결 받기](#켠-사람의-ip-에서만-연결-받기)를 읽는다.
-- **자세히:** 줄을 누르면 편집 화면이 열린다. **Status** 영역에 가동 시간, 세션, 트래픽, 차단 수, **Time limit** 타이머가 있다. 편집 화면은 고칠 수 있는 터널에서만 열린다.
+- **자세히:** 줄을 누르면 편집 화면이 열린다. **Status** 영역에 가동 시간, 세션, 트래픽, 거절 수, **Time limit** 타이머가 있다. 편집 화면은 고칠 수 있는 터널에서만 열린다.
 
 #### 패스키로 로그인
 
@@ -1429,7 +1429,7 @@ RDP 처럼 오래 열어 두는 터널에는 비밀번호를 무작위로 넣어
 권장하는 방법이다. 제어 포트가 TLS 를 써야 하고(`config/server.yaml` 의 `tls: true`), `controlProtocolMode` 가 `mtls-strict` 가 아니어야 한다. 그렇지 않으면 서버가 코드를 발급하지 않는다.
 
 1. 관리 화면에서 **Trusted clients** 를 열고 클라이언트를 추가한 뒤, 화면에 나온 명령을 복사한다. 이미 있는 클라이언트라면 **Enrollment code** 를 눌러도 된다. 코드는 한 번만 쓸 수 있고 기본으로 15분 뒤에 만료된다. 기한을 바꾸려면 같은 창의 **Code expires after** 에서 15분, 1시간, 24시간, 7일, 30일, **Never expires**(만료 없음) 가운데 하나를 고른다. 그러면 그 기한으로 새 코드를 발급하고, 이전 코드는 더 이상 쓸 수 없다.
-   - **Never expires** 코드는 쓰이거나, 그 클라이언트에 새 코드를 발급하거나, 비밀값을 바꾸거나(**New secret**), 클라이언트를 지우거나, 제어 포트 설정이 바뀌거나, 서버를 다시 시작할 때까지 유효하다. 코드는 메모리에만 있다. 이런 코드는 비밀번호처럼 다룬다.
+   - **Never expires** 코드는 쓰이거나, 그 클라이언트에 새 코드를 발급하거나, 비밀값을 바꾸거나(**New secret**), 클라이언트를 지우거나, 터널 서버 설정(포트·TLS·인증 키 등)이 바뀌거나, 서버를 다시 시작할 때까지 유효하다. 코드는 메모리에만 있다. 이런 코드는 비밀번호처럼 다룬다.
    - 관리 화면은 코드를 두 단계로 받는다. 먼저 15분 동안 유효한 코드를 받고, 창에 코드를 보여 줄 때 고른 기한을 적용한다. 코드를 보여 주기 전에 창이 닫히거나 응답이 사라지면 긴 기한은 적용되지 않고, 코드는 15분 뒤 만료된다.
 2. 클라이언트 호스트에서 그 명령을 실행한다.
 
@@ -1802,7 +1802,7 @@ TTTGate 가 돌고 있는지 문장과 JSON 으로 확인한다.
 | `geo-deny` | Country blocked | 국가 필터가 그 주소를 막았다. |
 | `ip-blocklist` | Blocklist | 관리자 차단 목록에 있는 주소다. |
 | `rate-limit-ban` | Temporarily banned | 연결이 너무 많아 일정 시간 동안 차단된 주소다. |
-| `rate-limit-exceeded` | Rate limit exceeded | 레이트 리미트 창 안에서 연결이 너무 많았다. |
+| `rate-limit-exceeded` | Rate limit exceeded | 연결 횟수 제한의 측정 구간 안에서 연결이 너무 많았다. |
 | `concurrency-limit` | Connection limit | 터널 소유자 그룹의 동시 연결 한도에 닿았다. |
 | `activator-ip` | IP limit | 터널을 켠 사람의 IP 만 받는 터널인데, 그 주소가 아니다. [켠 사람의 IP 에서만 연결 받기](#켠-사람의-ip-에서만-연결-받기)를 읽는다. |
 
@@ -1918,7 +1918,7 @@ TTTGate 가 돌고 있는지 문장과 JSON 으로 확인한다.
 2. **기존 클라이언트.** 이전 버전(1.0.10 이하)의 클라이언트는 공유 키로만 인증한다. 이 버전은 그 방식을 기본으로 꺼 두므로, 다음 가운데 하나를 할 때까지 모든 터널이 끊긴다.
    - 배포 기간에는 서버를 `-allowLegacyControlAuth` 로 시작한다(또는 `allowLegacyControlAuth: true` 로 정한다). 그다음 클라이언트를 `clientId` 와 `clientSecret` 을 쓰도록 업그레이드한다([버전 혼합 배포 정책](#버전-혼합-배포-정책) 참고). 이 플래그는 `allowLegacyControlAuth: true` 를 `server.yaml` 에 저장한다. 배포 기간이 끝나면 `-allowLegacyControlAuth false` 로 한 번 시작하거나 값을 `false` 로 바꾼다.
    - 클라이언트를 먼저 업그레이드한다. 3단계의 터널이 있으면 이 방법을 쓰지 않는다.
-3. **신뢰할 수 없는 인증서를 쓰는 대상으로 가는 터널.** 이 버전의 클라이언트는 대상 서버의 인증서를 검증한다. 이전 버전(1.0.10 이하)의 클라이언트는 검증하지 않았다. **Secure tunneling Server/Client** 를 켠 터널(`tls: true`)과 모든 HTTPS 터널이 해당한다. 클라이언트를 업그레이드하면, 자체 서명 인증서(또는 그 밖의 신뢰할 수 없는 인증서)를 쓰는 대상으로 가는 터널은 `self-signed certificate` 같은 인증서 오류로 실패한다. 그런 터널이 있으면 다음 가운데 하나를 한다.
+3. **신뢰할 수 없는 인증서를 쓰는 대상으로 가는 터널.** 이 버전의 클라이언트는 대상 서버의 인증서를 검증한다. 이전 버전(1.0.10 이하)의 클라이언트는 검증하지 않았다. **Use TLS (external port and destination)** 를 켠 터널(`tls: true`)과 모든 HTTPS 터널이 해당한다. 클라이언트를 업그레이드하면, 자체 서명 인증서(또는 그 밖의 신뢰할 수 없는 인증서)를 쓰는 대상으로 가는 터널은 `self-signed certificate` 같은 인증서 오류로 실패한다. 그런 터널이 있으면 다음 가운데 하나를 한다.
    - 2단계처럼 `-allowLegacyControlAuth` 로 서버를 먼저 업그레이드해서 1.0.10 클라이언트의 연결을 유지한다. 관리 화면에서 그런 터널을 하나씩 열어 **Skip certificate verification (allow self-signed)**(`allowSelfSignedDestinationCert: true`)를 켠다. 그다음 2단계처럼 클라이언트를 `clientId` 와 `clientSecret` 을 쓰도록 업그레이드한다. 이전 버전의 서버는 이 옵션을 보낼 수 없으므로 클라이언트를 먼저 업그레이드하지 않는다.
    - 대상에 Node.js 가 신뢰하는 공인 CA 의 인증서를 두고, 그 인증서가 터널의 대상 호스트와 맞게 한다. 클라이언트의 `-ca` 옵션은 제어 연결에만 적용되고 대상에는 적용되지 않는다. DNS 이름용 인증서는 터널이 IP 주소를 쓰면 실패하고, 그 반대도 마찬가지다.
 
@@ -1928,7 +1928,7 @@ TTTGate 가 돌고 있는지 문장과 JSON 으로 확인한다.
 
 서버는 시작할 때 다음 값을 조정하면 값마다 경고를 남긴다.
 
-- **터널별 속도 제한**은 `rateLimit` 필드 없이 저장된 터널에서는 꺼진 채로 남는다. 프로토콜 기본값(TCP: 60초에 연결 30개, HTTP/HTTPS: 300개, 넘으면 10분 차단)이 함께 저장되므로, 관리 화면에서 터널마다 켜기만 하면 된다. 새 터널은 켜진 상태로 시작한다.
+- **터널별 연결 횟수 제한**은 `rateLimit` 필드 없이 저장된 터널에서는 꺼진 채로 남는다. 프로토콜 기본값(TCP: 60초에 연결 30개, HTTP/HTTPS: 300개, 넘으면 10분 차단)이 함께 저장되므로, 관리 화면에서 터널마다 켜기만 하면 된다. 새 터널은 켜진 상태로 시작한다.
 - **세션 유휴 TTL** 은 파일에 `sessionTtlMs` 가 없으면 꺼진 채로 남는다(`sessionTtlMs: 0`). 새로 설치하면 트래픽이 한 시간 없을 때 세션을 닫는다. 켜려면 `sessionTtlMs`(1000–3600000 ms)를 정한다. 켜면 keepalive 없이 오래 쉬는 SSH 나 데이터베이스 연결이 닫힌다. `sessionTtlMs` 를 빼고 `PUT /api/serverOption` 을 호출하면 값이 한 시간으로 돌아간다. 관리 화면은 언제나 현재 값을 보낸다.
 - **서버 버퍼** 값 `-1` 이나 `0`(이전 버전의 "제한 없음")은 기본값 8 MiB 로 바뀐다. 제한 없는 버퍼는 작은 서버의 메모리를 다 쓸 수 있다. 세션이 열린 뒤에는 배압(backpressure)을 걸며 데이터가 계속 흐른다.
 
