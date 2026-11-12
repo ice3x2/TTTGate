@@ -65,7 +65,11 @@ export const en = {
     'tunnel.certNotVerified': 'cert not verified',
     'tunnel.certNotVerifiedTitle': 'The client does not verify the destination server certificate.',
     'tunnel.noPortsAllowed': 'No ports are allowed for your group.',
-    'tunnel.allowedRanges': 'Allowed ranges: {ranges}',
+    'tunnel.allowedRangesLabel': 'Allowed ranges',
+    'tunnel.useFreePort': 'Use a free port in {range}',
+    'tunnel.rangeChipsLabel': 'Choose a port from an allowed range',
+    'tunnel.rangeChipsNote': "Choose a range to fill in the first port your tunnels don't use.",
+    'tunnel.rangeFull': 'Every port in this range is already in use.',
 
     'ipLimit.off': 'IP limit off',
     'ipLimit.on': 'IP limit on',
@@ -542,6 +546,8 @@ export const en = {
     'header.name': 'Name',
     'header.value': 'Value',
     'header.replace': 'Replace header',
+    'header.add': 'Add header',
+    'header.remove': 'Remove header',
 
     // ShareUsersField.svelte
     'share.sharedUsers': 'Shared users',
@@ -588,6 +594,10 @@ export const en = {
     'group.allowedPortRanges': 'Allowed port ranges',
     'group.noPorts': 'No ports are allowed.',
     'group.addRange': 'Add range',
+    'group.rangeStart': 'Start port',
+    'group.rangeEnd': 'End port',
+    'group.deleteRange': 'Delete range {from}–{to}',
+    'group.deleteRangeTitle': 'Delete range',
     'group.allowedProtocols': 'Allowed protocols',
     'group.rewritePermissions': 'HTTP rewrite permissions',
     'group.allowedTrustedClients': 'Allowed trusted clients',

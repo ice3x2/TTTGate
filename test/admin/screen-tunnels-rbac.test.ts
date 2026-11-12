@@ -68,7 +68,8 @@ test("alice 의 편집 화면은 인증서를 읽지 않고 그룹 범위·프�
     await openTunnel(page, 20001);
     expect(certs).toEqual([]);
     expect(await page.getByText("Unable to connect to the server.").count()).toBe(0);
-    await page.getByText("Allowed ranges: 20000–20099", {exact: true}).waitFor({state: "visible"});
+    // 이슈 365 FR-6: 허용 범위는 안내 글자가 아니라 누를 수 있는 칩이다.
+    await page.locator("#tunnel-port-ranges").getByRole("button", {name: "Use a free port in 20000–20099", exact: true}).waitFor({state: "visible"});
     expect(await optionValues(page, "#select-protocol")).toEqual(["tcp", "http"]);
     expect(await page.locator("#input-allow-client-names").count()).toBe(0);
     expect(await page.locator("#tunnel-trusted-client-a").count()).toBe(1);
@@ -328,4 +329,99 @@ test("bob 은 그룹 밖 id 가 들어간 자기 터널에서 그 id 를 보고 
     expect((await saved).postDataJSON().allowedClientIds).toEqual(["client-a"]);
     await page.getByText("Success to apply tunneling option", {exact: true}).waitFor({state: "visible", timeout: 10_000});
     await hashIs(page, "#/tunnels");
+}, 2));
+
+// 이슈 365 FR-6·AC-4(설계 반영) — 칩을 누르면 목록의 터널이 쓰지 않는 그 범위의 가장 작은 포트가 외부 포트 칸에 들어간다.
+test("alice 가 허용 범위 칩을 누르면 쓰지 않은 가장 작은 포트가 들어가고, 칩 안내가 보인다", () => withTunnels("alice", async ({page}) => {
+    await button(page, "Add tunneling service").click();
+    await hashIs(page, "#/tunnels/new");
+    const chip = page.locator("#tunnel-port-ranges").getByRole("button", {name: "Use a free port in 20000–20099", exact: true});
+    await chip.waitFor({state: "visible", timeout: 10_000});
+    expect((await chip.textContent())?.trim()).toBe("20000–20099");
+    const group = page.getByRole("group", {name: "Choose a port from an allowed range", exact: true});
+    expect(await group.count()).toBe(1);
+    expect(await group.getByText("Allowed ranges", {exact: true}).count()).toBe(1);
+    const note = page.getByText("Choose a range to fill in the first port your tunnels don't use.", {exact: true});
+    expect(await note.count()).toBe(1);
+    expect(await group.getAttribute("aria-describedby")).toBe(await note.getAttribute("id"));
+    // alice 의 목록에는 20001(자기)·20002(bob, 그룹 공유)가 있다. 새 터널의 처음 값은 쓰지 않은 20000 이다.
+    expect(await page.locator("#input-external-port").inputValue()).toBe("20000");
+    await page.locator("#input-external-port").fill("20050");
+    await chip.click();
+    expect(await page.locator("#input-external-port").inputValue()).toBe("20000");
+    // 설계 ②: 칩은 보이는 높이 36px, 누르는 영역은 위아래로 넓혀 44px 이다.
+    const box = await chip.boundingBox();
+    expect(Math.round(box!.height)).toBe(36);
+    // 누름 영역은 ::before 가 위아래로 4px 씩 넓힌다(36 + 8 = 44px). 칩은 위에 쌓여 아래 글자에 덮이지 않는다.
+    const area = await chip.evaluate((element) => {
+        const before = getComputedStyle(element, "::before");
+        return {position: before.position, top: before.top, bottom: before.bottom, zIndex: getComputedStyle(element).zIndex};
+    });
+    expect(area).toEqual({position: "absolute", top: "-4px", bottom: "-4px", zIndex: "1"});
+    // 허용 범위 밖 포트를 넣으면 포트 오류가 안내 글자를 대신하고, 칩은 그대로 남는다.
+    await page.locator("#input-external-port").fill("30000");
+    await page.getByText("Port is outside the allowed ranges.", {exact: true}).waitFor({state: "visible"});
+    expect(await note.count()).toBe(0);
+    expect(await chip.count()).toBe(1);
+}, 2));
+
+type Range = {from: number; to: number};
+
+/** alice 의 그룹 범위를 ranges 로 바꾸고, 편집 화면이 읽는 터널 목록에 bob 의 터널을 extraPorts 포트로 더해 새 터널 화면을 연다. */
+const openNewWithRanges = async (page: Page, ranges: Range[], extraPorts: number[]) => {
+    await page.route("**/api/me", async (route) => {
+        const response = await route.fetch();
+        const body = await response.json();
+        await route.fulfill({response, json: {...body, group: {...body.group, attributes: {...body.group.attributes, allowed_port_range: ranges}}}});
+    });
+    await page.reload();
+    await hashIs(page, "#/tunnels");
+    await card(page, 20001).waitFor({state: "visible", timeout: 10_000});
+    await page.route("**/api/tunnelingOption", async (route) => {
+        if(route.request().method() !== "GET") return route.continue();
+        const response = await route.fetch();
+        const body = await response.json();
+        const bob = body.tunnelingOptions.find((row: {forwardPort: number}) => row.forwardPort === 20002);
+        const extra = extraPorts.map((forwardPort) => ({...bob, forwardPort}));
+        await route.fulfill({response, json: {...body, tunnelingOptions: [...body.tunnelingOptions, ...extra]}});
+    });
+    await button(page, "Add tunneling service").click();
+    await hashIs(page, "#/tunnels/new");
+    await page.locator("#tunnel-port-ranges").waitFor({state: "visible", timeout: 10_000});
+};
+
+const chipsOf = (page: Page) => page.locator("#tunnel-port-ranges .port-chip");
+
+// 이슈 365 AC-4(설계 반영) — 허용 범위 20000–20100, 30000–30010 이고 30000 을 이미 쓰면 두 번째 칩은 30001 을 넣는다.
+test("AC-4: 두 범위 가운데 두 번째 칩을 누르면 쓰지 않은 30001 이 들어간다", () => withTunnels("alice", async ({page}) => {
+    await openNewWithRanges(page, [{from: 20000, to: 20100}, {from: 30000, to: 30010}], [30000]);
+    expect(await chipsOf(page).allTextContents()).toEqual(["20000–20100", "30000–30010"]);
+    await button(page, "Use a free port in 30000–30010").click();
+    expect(await page.locator("#input-external-port").inputValue()).toBe("30001");
+}, 2));
+
+// 이슈 365 FR-6·리뷰 L-3 — 모두 쓴 범위의 칩은 aria-disabled 로 잠그고 이유를 title 에 둔다. 초점은 받고 눌러도 값이 바뀌지 않는다.
+test("모두 쓴 범위의 칩은 잠기고 이유를 보이며, 초점은 받지만 눌러도 포트가 바뀌지 않는다", () => withTunnels("alice", async ({page}) => {
+    await openNewWithRanges(page, [{from: 20001, to: 20002}, {from: 20010, to: 20020}], []);
+    const full = button(page, "Use a free port in 20001–20002");
+    expect(await full.getAttribute("aria-disabled")).toBe("true");
+    expect(await full.getAttribute("title")).toBe("Every port in this range is already in use.");
+    // aria-disabled 는 Playwright 의 isDisabled 가 참으로 보므로, 실제 disabled 속성이 없어 초점을 받는지만 본다.
+    expect(await full.evaluate((element) => element.hasAttribute("disabled"))).toBe(false);
+    const port = page.locator("#input-external-port");
+    expect(await port.inputValue()).toBe("20010");
+    await full.focus();
+    expect(await full.evaluate((element) => element === document.activeElement)).toBe(true);
+    // aria-disabled 버튼은 Playwright 가 누를 수 없다고 본다. 사용자가 눌러도 아무 일이 없는지 강제로 눌러 본다.
+    await full.click({force: true});
+    await page.keyboard.press("Enter");
+    expect(await port.inputValue()).toBe("20010");
+    expect(await button(page, "Use a free port in 20010–20020").getAttribute("aria-disabled")).toBeNull();
+}, 2));
+
+// 이슈 365 리뷰 H-1 — 서버는 같은 범위를 두 번 저장할 수 있다. 칩 목록이 키 중복으로 깨지지 않고 칩 하나만 보인다.
+test("같은 허용 범위가 두 번 있어도 편집 화면이 그려지고 칩은 하나다", () => withTunnels("alice", async ({page}) => {
+    await openNewWithRanges(page, [{from: 1, to: 65535}, {from: 1, to: 65535}], []);
+    expect(await chipsOf(page).allTextContents()).toEqual(["1–65535"]);
+    await page.locator("#input-destination-host").waitFor({state: "visible", timeout: 10_000});
 }, 2));

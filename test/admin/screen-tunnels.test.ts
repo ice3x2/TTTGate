@@ -575,8 +575,43 @@ test("http 터널은 HTTP 옵션 절을 펼쳐 보이고 tcp 로 바꾸면 그 �
 
         const requestHeaders = app.page.locator(".field").filter({hasText: "Inject request header"});
         expect(await requestHeaders.locator(".rule").count()).toBe(1);
+        // 이슈 365 FR-5: 헤더 추가·삭제는 글자 "+"·"-" 대신 이름이 있는 44px 버튼이다.
+        const addHeader = requestHeaders.getByRole("button", {name: "Add header", exact: true});
+        expect(await addHeader.count()).toBe(1);
+        const box = await addHeader.boundingBox();
+        expect(box!.height).toBeGreaterThanOrEqual(44);
+        expect(box!.width).toBeGreaterThanOrEqual(44);
+        // 이슈 365 AC-2: 헤더 줄의 입력 칸은 44px 버튼과 높이가 같다.
+        const nameInput = requestHeaders.locator(".rule input").first();
+        expect(Math.round((await nameInput.boundingBox())!.height)).toBe(Math.round(box!.height));
+        // 줄이 둘이면 앞 줄 버튼은 이름이 "Remove header" 인 삭제 버튼이다(title 은 이름과 겹치지 않게 두지 않는다).
+        await addHeader.click();
+        expect(await requestHeaders.locator(".rule").count()).toBe(2);
+        const removeHeader = requestHeaders.getByRole("button", {name: "Remove header", exact: true});
+        expect(await removeHeader.count()).toBe(1);
+        expect(await removeHeader.getAttribute("title")).toBeNull();
+        await removeHeader.click();
+        expect(await requestHeaders.locator(".rule").count()).toBe(1);
+
+        // 이슈 365 FR-5: 본문 바꾸기 규칙의 추가·삭제도 테두리가 보이는 44px secondary 버튼이다.
         const bodyRules = app.page.locator(".field").filter({hasText: "Replace text in body"});
-        expect(await bodyRules.getByRole("button", {name: "Add", exact: true}).count()).toBe(1);
+        const addRule = bodyRules.getByRole("button", {name: "Add", exact: true});
+        expect(await addRule.count()).toBe(1);
+        const secondaryOf = (locator: typeof addRule) => locator.evaluate((element) => ({
+            secondary: element.classList.contains("secondary"),
+            border: parseFloat(getComputedStyle(element).borderTopWidth),
+            height: element.getBoundingClientRect().height,
+        }));
+        expect(await secondaryOf(addRule)).toEqual(expect.objectContaining({secondary: true}));
+        expect((await secondaryOf(addRule)).border).toBeGreaterThanOrEqual(1);
+        expect((await secondaryOf(addRule)).height).toBeGreaterThanOrEqual(44);
+        await addRule.click();
+        const removeRule = bodyRules.getByRole("button", {name: "Remove", exact: true});
+        expect(await removeRule.count()).toBe(1);
+        expect((await secondaryOf(removeRule)).secondary).toBe(true);
+        expect((await secondaryOf(removeRule)).height).toBeGreaterThanOrEqual(44);
+        await removeRule.click();
+        expect(await bodyRules.getByRole("button", {name: "Remove", exact: true}).count()).toBe(0);
 
         expect(await app.page.locator("#input-tls").isDisabled()).toBe(true);
         await app.page.locator("#select-protocol").selectOption("tcp");

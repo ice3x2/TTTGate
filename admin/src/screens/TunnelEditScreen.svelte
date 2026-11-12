@@ -29,6 +29,7 @@
     import ShareUsersField from './parts/ShareUsersField.svelte';
     import type {SharedUser} from './parts/shareUsers';
     import {PROTOCOLS, tunnelPolicy} from './parts/tunnelPolicy';
+    import PortRangeChips from './parts/PortRangeChips.svelte';
     import {t} from '../i18n';
     import {errorMessageOf} from '../i18n/serverError';
 
@@ -41,6 +42,7 @@
     const ENABLED = [{value: 'true', label: t('tunnelEdit.enabled')}, {value: 'false', label: t('tunnelEdit.disabled')}];
 
     let option = $state<TunnelingOptionEx | undefined>();
+    let usedPorts = $state<number[]>([]);
     let snapshotRevision = 0;
 
     // U3-06: 일반 유저는 그룹 속성 안에서만 입력한다. 서버가 최종 판정하므로 여기서는 표시·기본값·요청 모양만 맞춘다.
@@ -193,12 +195,14 @@
             loading = true;
             const snapshot = await ServerOptionCtrl.instance.getTunnelingOption();
             snapshotRevision = snapshot.revision;
+            // 이슈 365: 칩이 건너뛸 포트. 목록에 보이는 다른 터널의 포트다(이 터널 자신은 뺀다).
+            usedPorts = snapshot.value.map((row) => row.forwardPort).filter((port) => String(port) !== param);
             if(param === 'new') {
                 const fresh = emptyOption();
                 if(policy?.restricted) {
                     policy.normalizeHttpOption(fresh);
-                    // 난수 포트를 그대로 두면 Field 가 힌트 대신 오류를 그려 허용 범위 안내가 보이지 않는다.
-                    fresh.forwardPort = policy.initialPort() as number;
+                    // 난수 포트는 대개 허용 범위 밖이라 처음부터 포트 오류가 보인다. 목록의 터널이 쓰지 않는 첫 허용 포트로 시작한다.
+                    fresh.forwardPort = policy.initialPort(usedPorts) as number;
                     // 서버는 일반 유저의 빈 allowedClientIds 를 거부한다(빈 목록은 모든 클라이언트 허용과 같다).
                     // 그룹이 허용한 신뢰 클라이언트를 모두 고른 상태로 시작한다.
                     fresh.allowedClientIds = [...policy.trustedClients];
@@ -482,9 +486,12 @@
             <Field label={t('tunnelEdit.name')} for="input-name" hint={t('tunnelEdit.optional')} error={nameError || undefined}>
                 <TextInput id="input-name" autocomplete="off" bind:value={nameInput} />
             </Field>
-            <Field label={t('tunnelEdit.externalPort')} for="input-external-port" hint={restricted ? policy!.portHint() : undefined} error={portError}>
+            <Field label={t('tunnelEdit.externalPort')} for="input-external-port" error={portError}>
                 <NumberInput id="input-external-port" min={1} max={65535} bind:value={option.forwardPort}
                     oninput={(v) => (option!.forwardPort = clampPort(v) as number)} />
+                {#if restricted}
+                    <PortRangeChips ranges={policy!.portRanges} {usedPorts} hideNotes={!!portError} onpick={(port) => (option!.forwardPort = port)} />
+                {/if}
             </Field>
             <Checkbox id="input-tls" label={t('tunnelEdit.secureTunneling')} bind:checked={option.tls}
                 disabled={option.protocol !== 'tcp'} onchange={() => onChangeSecureTunneling(option!.forwardPort)} />
