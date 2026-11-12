@@ -14,6 +14,7 @@
     import {tunnelPolicy} from './parts/tunnelPolicy';
     import {StatusPoller} from './parts/statusPoller';
     import {tunnelRowView, tunnelTitle, undoTimeoutOf} from './parts/tunnelRow';
+    import {ownerGroups} from './parts/ownerGroups';
     import {ipLimitView, withIpResult, type IpLimitView} from './parts/ipLimit';
     import Clock from '../ui/Clock.svelte';
     import {errorMessageOf} from '../i18n/serverError';
@@ -26,6 +27,9 @@
     const UNDO_KEY = 'tunnel-undo';
 
     let options = $state<Options[]>([]);
+    // 이슈 367: 소유자가 둘 이상이면 소유자별로 묶어 보인다.
+    const ownerView = $derived(ownerGroups(options, $me?.user.id ?? ''));
+    const grouped = $derived(ownerView.grouped);
     let listLoaded = $state(false);
     let statuses = $state<Record<number, TunnelingStatus>>({});
     let statusLoaded = $state(false);
@@ -212,6 +216,56 @@
     });
 </script>
 
+{#snippet tunnelRow(option: Options, ownerName: string | undefined)}
+        {@const title = tunnelTitle(option)}
+        {@const view = tunnelRowView({option, status: statuses[option.forwardPort], loaded: statusLoaded, meId: $me?.user.id ?? '', serverTime, grouped})}
+        {@const busy = pending[option.forwardPort] !== undefined}
+        <!-- 이슈 367(설계 반영): 묶어 볼 때 다른 사람 터널의 스위치 이름에 소유자를 붙인다. -->
+        {@const switchLabel = grouped && ownerName ? t('tunnels.switchWithOwner', {title, owner: ownerName}) : title}
+        {@const parts = busy ? [{text: t(pending[option.forwardPort] ? 'tunnels.turningOn' : 'tunnels.turningOff'), muted: true}] : view.parts}
+        {@const ipView = ipLimitView({option, status: statuses[option.forwardPort], requesterIp, busy: ipPending[option.forwardPort] === true})}
+        <li data-port={option.forwardPort}>
+            <!-- 이슈 347 FR-12: 고칠 수 없는 터널은 편집 화면으로 가지 않는다. 같은 모양을 지키려고 같은 클래스를 쓴다. -->
+            <svelte:element this={view.link ? 'a' : 'div'} class="tunnel-link" href={view.link ? `#/tunnels/${option.forwardPort}` : undefined}>
+                <span class="tunnel-title">{title}</span>
+                <span class="tunnel-status">{#each parts as part, index}{#if index > 0}<span class="sep">{' · '}</span>{/if}<span class:warn={part.warn} class:muted={part.muted} title={part.title}>{part.text}</span>{/each}</span>
+                {#if !busy && view.clock}
+                    <span class="tunnel-time-row">
+                        <Clock class="tunnel-clock" label={view.clock.label} fraction={view.clock.kind === 'limited' ? view.clock.fraction : undefined}
+                            warn={view.clock.kind === 'limited' && view.clock.warn} />
+                        {#if view.clock.kind === 'limited'}<span class="tunnel-time" class:warn={view.clock.warn} aria-hidden="true">{view.clock.left} · {view.clock.ends}</span>{/if}
+                    </span>
+                {/if}
+            </svelte:element>
+            {#if view.control === 'lock'}
+                <span class="tunnel-lock" title={t('tunnels.viewOnly')} aria-label={t('tunnels.viewOnly')}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+                </span>
+            {:else}
+                <span class="tunnel-switch">
+                    <Switch size="lg" ariaLabel={switchLabel} on={busy ? pending[option.forwardPort] : view.checked} {busy}
+                        disabled={view.control === 'disabled'} onrequest={(next) => toggle(option, next)} />
+                </span>
+            {/if}
+            {#if ipView}
+                <!-- 이슈 348: 줄 링크 밖에 둔다(누르면 편집 화면으로 가지 않는다). 터널이 꺼져도 같은 규칙으로 보인다. -->
+                <div class="tunnel-ip-row">
+                    <button type="button" class="tunnel-ip-toggle" class:on={ipView.on} class:locked={ipView.locked}
+                        aria-label={ipView.label} title={ipView.title} aria-disabled={ipView.pressable ? undefined : 'true'}
+                        onclick={() => toggleIpLimit(option, ipView)}>
+                        {#if ipView.locked}<svg class="tunnel-ip-lock" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>{/if}
+                        <span class="ip-text" class:warn={ipView.warn}>{ipView.text}</span>{#if ipView.extra}{' '}<span class="ip-extra">{ipView.extra}</span>{/if}
+                    </button>
+                    <button type="button" class="tunnel-ip-refresh" class:emphasized={ipView.refresh.emphasized}
+                        aria-label={ipView.refresh.label} title={ipView.refresh.label} disabled={!ipView.refresh.enabled}
+                        onclick={() => refreshIp(option)}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+                    </button>
+                </div>
+            {/if}
+        </li>
+{/snippet}
+
 <div class="tunnels">
     {#if policy?.canCreate(ownedCount) ?? true}
         <div class="tunnels-bar">
@@ -231,55 +285,31 @@
         {/if}
     {/if}
     {#if options.length > 0}
-        <ul class="tunnel-list">
-            {#each options as option (option.forwardPort)}
-                {@const title = tunnelTitle(option)}
-                {@const view = tunnelRowView({option, status: statuses[option.forwardPort], loaded: statusLoaded, meId: $me?.user.id ?? '', serverTime})}
-                {@const busy = pending[option.forwardPort] !== undefined}
-                {@const parts = busy ? [{text: t(pending[option.forwardPort] ? 'tunnels.turningOn' : 'tunnels.turningOff'), muted: true}] : view.parts}
-                {@const ipView = ipLimitView({option, status: statuses[option.forwardPort], requesterIp, busy: ipPending[option.forwardPort] === true})}
-                <li data-port={option.forwardPort}>
-                    <!-- 이슈 347 FR-12: 고칠 수 없는 터널은 편집 화면으로 가지 않는다. 같은 모양을 지키려고 같은 클래스를 쓴다. -->
-                    <svelte:element this={view.link ? 'a' : 'div'} class="tunnel-link" href={view.link ? `#/tunnels/${option.forwardPort}` : undefined}>
-                        <span class="tunnel-title">{title}</span>
-                        <span class="tunnel-status">{#each parts as part, index}{#if index > 0}<span class="sep">{' · '}</span>{/if}<span class:warn={part.warn} class:muted={part.muted} title={part.title}>{part.text}</span>{/each}</span>
-                        {#if !busy && view.clock}
-                            <span class="tunnel-time-row">
-                                <Clock class="tunnel-clock" label={view.clock.label} fraction={view.clock.kind === 'limited' ? view.clock.fraction : undefined}
-                                    warn={view.clock.kind === 'limited' && view.clock.warn} />
-                                {#if view.clock.kind === 'limited'}<span class="tunnel-time" class:warn={view.clock.warn} aria-hidden="true">{view.clock.left} · {view.clock.ends}</span>{/if}
-                            </span>
-                        {/if}
-                    </svelte:element>
-                    {#if view.control === 'lock'}
-                        <span class="tunnel-lock" title={t('tunnels.viewOnly')} aria-label={t('tunnels.viewOnly')}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
-                        </span>
-                    {:else}
-                        <span class="tunnel-switch">
-                            <Switch size="lg" ariaLabel={title} on={busy ? pending[option.forwardPort] : view.checked} {busy}
-                                disabled={view.control === 'disabled'} onrequest={(next) => toggle(option, next)} />
-                        </span>
-                    {/if}
-                    {#if ipView}
-                        <!-- 이슈 348: 줄 링크 밖에 둔다(누르면 편집 화면으로 가지 않는다). 터널이 꺼져도 같은 규칙으로 보인다. -->
-                        <div class="tunnel-ip-row">
-                            <button type="button" class="tunnel-ip-toggle" class:on={ipView.on} class:locked={ipView.locked}
-                                aria-label={ipView.label} title={ipView.title} aria-disabled={ipView.pressable ? undefined : 'true'}
-                                onclick={() => toggleIpLimit(option, ipView)}>
-                                {#if ipView.locked}<svg class="tunnel-ip-lock" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>{/if}
-                                <span class="ip-text" class:warn={ipView.warn}>{ipView.text}</span>{#if ipView.extra}{' '}<span class="ip-extra">{ipView.extra}</span>{/if}
-                            </button>
-                            <button type="button" class="tunnel-ip-refresh" class:emphasized={ipView.refresh.emphasized}
-                                aria-label={ipView.refresh.label} title={ipView.refresh.label} disabled={!ipView.refresh.enabled}
-                                onclick={() => refreshIp(option)}>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
-                            </button>
-                        </div>
-                    {/if}
-                </li>
+        {#if grouped}
+            <!-- 이슈 367: 소유자가 둘 이상이면 소유자별 묶음으로 보인다. 각 목록은 머리글로 이름을 붙인다. -->
+            {#each ownerView.groups as group, index (group.key)}
+                {@const onInGroup = group.options.filter((option) => statuses[option.forwardPort]?.active === true).length}
+                <section class="owner-group">
+                    <header class="owner-head">
+                        <h2 class="owner-title" id={`owner-group-${index}`} title={group.title}>{group.title}</h2>
+                        {#if group.kind === 'me'}<span class="owner-me">{t('tunnels.groupMe')}</span>{/if}
+                        {#if statusLoaded}<span class="owner-count">{t('tunnels.summary', {on: onInGroup, total: group.options.length})}</span>{/if}
+                    </header>
+                    <ul class="tunnel-list" aria-labelledby={`owner-group-${index}`}>
+                        {#each group.options as option (option.forwardPort)}
+                            {@render tunnelRow(option, group.kind === 'user' ? group.options[0].owner?.username : undefined)}
+                        {/each}
+                    </ul>
+                    {#if group.kind === 'unknown'}<p class="owner-hint">{t('tunnels.groupNoOwnerHint')}</p>{/if}
+                </section>
             {/each}
-        </ul>
+        {:else}
+            <ul class="tunnel-list">
+                {#each options as option (option.forwardPort)}
+                    {@render tunnelRow(option, undefined)}
+                {/each}
+            </ul>
+        {/if}
     {/if}
     {#if loading}<Loading overlay />{/if}
     <Modal bind:open={confirmOpen} title={confirmTarget ? t('tunnels.turnOffConfirm', {title: tunnelTitle(confirmTarget.option)}) : t('tunnels.turnOffConfirmUntitled')}>
@@ -298,6 +328,13 @@
 </div>
 
 <style>
+    /* 이슈 367: 소유자별 묶음. 긴 이름은 머리글 안에서 줄임표로 줄이고, "나" 표시와 켜진 수는 따로 둔다. */
+    .owner-group { display: flex; flex-direction: column; gap: var(--s-2); margin-top: var(--s-4); }
+    .owner-head { display: flex; align-items: baseline; gap: var(--s-2); min-width: 0; }
+    .owner-title { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-md); font-weight: 600; color: var(--ink-0); }
+    .owner-me { flex: none; padding: 0 6px; border: 1px solid var(--line-1); border-radius: 999px; font-size: var(--fs-xs); color: var(--ink-1); }
+    .owner-count { flex: none; margin-left: auto; font-size: var(--fs-xs); color: var(--ink-2); white-space: nowrap; }
+    .owner-hint { margin: 0; font-size: var(--fs-xs); color: var(--ink-2); }
     .tunnels-bar { margin-bottom: var(--s-4); }
     .tunnel-summary { margin: 0 0 var(--s-3); font-size: var(--fs-sm); color: var(--ink-2); display: flex; flex-wrap: wrap; gap: var(--s-3); }
     .stale { color: var(--warn); }
