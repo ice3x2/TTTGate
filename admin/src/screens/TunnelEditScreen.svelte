@@ -31,7 +31,7 @@
     import {PROTOCOLS, tunnelPolicy} from './parts/tunnelPolicy';
     import PortRangeChips from './parts/PortRangeChips.svelte';
     import {RATE_RANGES, rateRangeError} from './parts/rateLimitRange';
-    import {bufferIssue, defaultBuffer, groupBufferCap} from './parts/bufferPolicy';
+    import {bufferIssue, defaultBuffer, groupBufferCap, type BufferIssue} from './parts/bufferPolicy';
     import {t} from '../i18n';
     import {errorMessageOf} from '../i18n/serverError';
 
@@ -50,6 +50,16 @@
     let storedBuffers = $state<{server?: number; client?: number}>({});
     const serverBufferIssue = $derived(option ? bufferIssue('server', option.bufferLimitOnServer, storedBuffers.server, bufferCap) : undefined);
     const clientBufferIssue = $derived(option ? bufferIssue('client', option.bufferLimitOnClient, storedBuffers.client, bufferCap) : undefined);
+    // 이슈 366: 저장된 값을 그대로 두는 칸에는 max 를 걸지 않는다(브라우저가 그 값을 틀렸다고 보이지 않게).
+    const bufferMaxAttr = (issue: BufferIssue | undefined): number | undefined => bufferCap !== null && issue !== 'stored-over' ? bufferCap : undefined;
+    // 이슈 366 FR-12: 상한을 넘은 저장값은 칸마다 이름과 값을 넣어 한 줄씩 경고한다.
+    const storedOverLines = $derived(!option ? [] : [
+        ...(serverBufferIssue === 'stored-over' ? [{id: 'server', text: t('tunnelEdit.bufferStoredOver',
+            {field: t('tunnelEdit.server'), value: option.bufferLimitOnServer ?? 0, max: bufferCap ?? 0})}] : []),
+        ...(clientBufferIssue === 'stored-over' ? [{id: 'client', text: (option.bufferLimitOnClient ?? 0) < 1
+            ? t('tunnelEdit.bufferStoredUnlimited', {max: bufferCap ?? 0})
+            : t('tunnelEdit.bufferStoredOver', {field: t('tunnelEdit.client'), value: option.bufferLimitOnClient ?? 0, max: bufferCap ?? 0})}] : []),
+    ]);
     let snapshotRevision = 0;
 
     // U3-06: 일반 유저는 그룹 속성 안에서만 입력한다. 서버가 최종 판정하므로 여기서는 표시·기본값·요청 모양만 맞춘다.
@@ -171,7 +181,7 @@
     };
 
     const updatable = $derived(option ? ServerOptionCtrl.checkValidTunnelingOption(option) && validServerBuffer(option.bufferLimitOnServer) && rateValid
-        && serverBufferIssue !== 'over' && clientBufferIssue !== 'over' : false);
+        && serverBufferIssue !== 'over' && clientBufferIssue !== 'over' && clientBufferIssue !== 'unlimited' : false);
 
     // 옛 _loadCertInfo(134~156행) 그대로다. 옛 코드는 포트로 행을 찾아 없으면 그대로 돌아갔다.
     const loadCertInfo = async (port: number) => {
@@ -585,18 +595,24 @@
             <Field label={t('tunnelEdit.server')} for="input-buffer-limit-server"
                 error={!validServerBuffer(option.bufferLimitOnServer) ? t('tunnelEdit.serverBufferInvalid')
                     : serverBufferIssue === 'over' ? t('tunnelEdit.bufferOverGroup', {max: bufferCap ?? 0}) : undefined}>
-                <NumberInput id="input-buffer-limit-server" min={1} step="any"
+                <NumberInput id="input-buffer-limit-server" min={1} max={bufferMaxAttr(serverBufferIssue)} step="any"
                     invalid={!validServerBuffer(option.bufferLimitOnServer) || serverBufferIssue === 'over'} bind:value={option.bufferLimitOnServer} />
             </Field>
             <Field label={t('tunnelEdit.client')} for="input-buffer-limit-client"
-                error={clientBufferIssue === 'over' ? t('tunnelEdit.bufferOverGroup', {max: bufferCap ?? 0}) : undefined}>
-                <NumberInput id="input-buffer-limit-client" bind:value={option.bufferLimitOnClient} invalid={clientBufferIssue === 'over'}
+                error={clientBufferIssue === 'over' ? t('tunnelEdit.bufferOverGroup', {max: bufferCap ?? 0})
+                    : clientBufferIssue === 'unlimited' ? t('tunnelEdit.bufferUnlimitedUnderGroup', {max: bufferCap ?? 0}) : undefined}>
+                <NumberInput id="input-buffer-limit-client" max={bufferMaxAttr(clientBufferIssue)} bind:value={option.bufferLimitOnClient}
+                    invalid={clientBufferIssue === 'over' || clientBufferIssue === 'unlimited'}
                     oninput={(v) => (option!.bufferLimitOnClient = clampClientBuffer(v) as number)} />
             </Field>
         </div>
-        {#if serverBufferIssue === 'stored-over' || clientBufferIssue === 'stored-over'}
-            <!-- 이슈 366 FR-12: 이미 상한을 넘은 기존 값은 그대로 저장할 수 있다. 경고만 한다. -->
-            <p id="tunnel-buffer-stored-over" class="buffer-warn" role="status">{t('tunnelEdit.bufferStoredOver', {max: bufferCap ?? 0})}</p>
+        {#if storedOverLines.length > 0}
+            <!-- 이슈 366 FR-12: 이미 상한을 넘은 기존 값은 그대로 저장할 수 있다. 칸마다 한 줄씩 경고만 한다. -->
+            <div id="tunnel-buffer-stored-over" class="buffer-warn" role="status">
+                {#each storedOverLines as line (line.id)}
+                    <p id="tunnel-buffer-stored-over-{line.id}">{line.text}</p>
+                {/each}
+            </div>
         {/if}
         <ul class="notes">
             <li>{t('tunnelEdit.serverBufferNote')}</li>
@@ -719,6 +735,7 @@
     .notes { margin: var(--s-3) 0 0; padding-left: var(--s-4); font-size: var(--fs-xs); color: var(--ink-2); }
     .buffer-cap { margin: 0 0 var(--s-3); font-family: var(--ff-mono); font-size: var(--fs-xs); color: var(--ink-1); }
     .buffer-warn { margin: var(--s-3) 0 0; font-size: var(--fs-xs); color: var(--warn); }
+    .buffer-warn p { margin: 0; }
     .section-title { font-family: var(--ff-display); font-size: var(--fs-lg); margin: var(--s-2) 0 0; }
     .edit-bar {
         position: sticky;
