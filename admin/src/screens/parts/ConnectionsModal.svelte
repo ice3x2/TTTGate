@@ -11,8 +11,8 @@
     import SecurityCtrl from '../../controller/SecurityCtrl';
     import InvalidSession from '../../controller/InvalidSession';
     import {StatusPoller} from './statusPoller';
-    import {addedConnections, announcement, blockBodyText, blockedDoneText, mergeConnections, summaryCount, type ConnectionRow, type FetchedConnection}
-        from './connections';
+    import {addedConnections, announcement, blockBodyText, blockedDoneText, closingFailureText, duplicateCoversTunnel, mergeConnections, summaryCount,
+        type ConnectionRow, type FetchedConnection} from './connections';
     import {byteToUnit} from './units';
     import {relativeTime} from '../../util/relativeTime';
     import {errorMessageOf} from '../../i18n/serverError';
@@ -40,6 +40,10 @@
     let serverTime = $state(Date.now());
     let loaded = $state(false);
     let failed = $state(false);
+    // 이미 읽은 뒤 다시 읽기가 실패했다. 옛 목록을 그대로 두고 새로 고치지 못했다고 알린다. 다음 읽기가 되면 사라진다.
+    let stale = $state(false);
+    // 창이 열린 동안 받은 모든 id(숨긴 줄 포함). 숨겼던 오래된 연결이 다시 보여도 "새"로 붙이지 않는다. 화면에 그리지 않으므로 $state 가 아니다.
+    let seen = new Set<number>();
     let truncated = $state(false);
     // 서버가 준 전체 연결 수. 잘린 목록이어도 요약은 이 수로 센다. 옛 서버는 주지 않는다.
     let total = $state<number | undefined>();
@@ -69,6 +73,8 @@
         rows = [];
         loaded = false;
         failed = false;
+        stale = false;
+        seen = new Set<number>();
         truncated = false;
         total = undefined;
         announce = '';
@@ -76,23 +82,29 @@
             intervalMs: 2000,
             load: async () => {
                 const result = await ServerOptionCtrl.instance.tunnelConnections(port);
-                if(!result.success && result.status === 404) {
-                    // 옛 서버는 목록이 버튼을 보이지 않으므로(connectionsSupported) 여기의 404 는 이 터널을 더 볼 수 없다는 뜻이다
-                    // (권한이 바뀌었거나 지운 터널). 알리고 이 창만 닫는다. 다른 터널의 연결 버튼은 그대로다.
+                // 옛 서버는 목록이 버튼을 보이지 않으므로(connectionsSupported) 여기의 404 는 이 터널을 더 볼 수 없다는 뜻이다
+                // (권한이 바뀌었거나 지운 터널). 403 은 볼 수만 있게 된 것이다. 다시 읽어도 나아지지 않으므로 알리고 이 창만 닫는다.
+                // 다른 터널의 연결 버튼은 그대로다.
+                const closing = result.success ? undefined : closingFailureText(result.status);
+                if(closing !== undefined) {
                     stop();
                     open = false;
-                    toast.push({tone: 'warn', message: t('connections.notVisible')});
+                    toast.push({tone: 'warn', message: closing});
                 }
                 if(!result.success) throw new Error('connections');
                 return {serverTime: result.serverTime, truncated: result.truncated === true, total: result.total, connections: result.connections};
             },
             isSessionOut: (error) => error instanceof InvalidSession,
             onSessionOut: () => { open = false; onsessionout(); },
-            onFailure: () => { failed = !loaded; },
+            onFailure: () => {
+                failed = !loaded;
+                stale = loaded;
+            },
             onSnapshot: (snapshot) => {
                 serverTime = snapshot.serverTime;
                 // 처음 읽기는 줄 수가 아니라 이미 읽었는지로 판단한다. 빈 목록으로 연 창에 들어온 연결도 "새"로 알린다.
-                const next = mergeConnections(rows, snapshot.connections, {truncated: snapshot.truncated, first: !loaded});
+                const next = mergeConnections(rows, snapshot.connections, {truncated: snapshot.truncated, first: !loaded, seen});
+                for(const connection of snapshot.connections) seen.add(connection.id);
                 const added = addedConnections(rows, next);
                 if(added > 0) announce = announcement(announce, plural('connections.newAnnounce', added));
                 rows = next;
@@ -100,6 +112,7 @@
                 total = snapshot.total;
                 loaded = true;
                 failed = false;
+                stale = false;
             },
         });
         poller.start();
@@ -160,6 +173,8 @@
                 toast.push({tone: 'pulse', message: blockedDoneText(target.remoteAddress, result.closedConnections ?? 0)});
                 blockOpen = false;
             } else if(result.code === 'duplicate') {
+                // 이미 있는 차단이 이 터널에 걸리면 서버가 그 연결을 끊었다. 줄도 "차단됨"으로 바꾼다.
+                if(duplicateCoversTunnel(result, port)) mark((row) => row.remoteAddress === target.remoteAddress && row.state === 'live', 'blocked');
                 toast.push({tone: 'warn', message: t('connections.alreadyBlocked')});
                 blockOpen = false;
             } else {
@@ -183,6 +198,7 @@
         <p class="conn-note" role="alert">{t('connections.failed')}</p>
     {:else if loaded}
         <p class="conn-summary">{plural('connections.summary', connectionCount)}</p>
+        {#if stale}<p class="conn-note" role="status">{t('connections.refreshFailed')}</p>{/if}
         {#if rows.length === 0}<p class="conn-note">{t('connections.empty')}</p>{/if}
     {/if}
     <ul class="conn-list" id={`connections-${port}`}>
