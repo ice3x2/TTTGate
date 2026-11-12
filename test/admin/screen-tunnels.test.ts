@@ -60,6 +60,10 @@ const waitStatus = (page: Page, port: number, pattern: RegExp) => page.waitForFu
 const waitChecked = (page: Page, port: number, checked: boolean) => page.waitForFunction(([target, value]) =>
     document.querySelector(`li[data-port="${target}"] [role="switch"]`)?.getAttribute("aria-checked") === String(value),
     [port, checked] as const, {timeout: 10_000});
+// #369 FR-1: 켜진 터널의 연결 수는 상태 글자가 아니라 줄 링크 밖의 가동 정보 줄(연결 버튼, 볼 수 없으면 글자)에 있다.
+const waitConnections = (page: Page, port: number, count: number) => page.waitForFunction(([target, value]) =>
+    document.querySelector(`li[data-port="${target}"] .tunnel-meta-row :is(.tunnel-conn, .tunnel-conn-text)`)?.textContent?.startsWith(`Connections ${value}`) === true,
+    [port, count] as const, {timeout: 10_000});
 const undoToast = (page: Page, text: string) => page.locator(".toast").filter({hasText: text});
 
 test("목록은 터널마다 제목·상태 한 줄·스위치를 그리고, 켜진 수를 위에 보인다", async () => {
@@ -87,7 +91,9 @@ test("목록은 터널마다 제목·상태 한 줄·스위치를 그리고, 켜
         await waitStatus(app.page, 20001, /^Can't open port 20001/);
         expect(await switchOf(app.page, 20001).isDisabled()).toBe(true);
         await app.tunnelState(20001, {online: true, clientConnected: false, sessions: 2});
-        await waitStatus(app.page, 20001, /^On · client offline · 2 connections · migrated$/);
+        // 클라이언트 오프라인 경고는 상태 글자에 남고, 연결 수는 가동 정보 줄로 옮겼다(#369 FR-1, 같은 값을 두 번 보이지 않는다).
+        await waitConnections(app.page, 20001, 2);
+        await waitStatus(app.page, 20001, /^On · client offline · migrated$/);
         expect(await statusText(app.page, 20001).locator(".warn").first().textContent()).toBe("client offline");
         expect(app.errors).toEqual([]);
     } finally {
@@ -193,7 +199,7 @@ test("연결이 있으면 끄기 전에 묻고, 실패하면 되돌리며, 처�
     try {
         await openTunnels(app.page);
         await app.tunnelState(20001, {sessions: 2});
-        await waitStatus(app.page, 20001, /2 connections/);
+        await waitConnections(app.page, 20001, 2);
 
         await switchOf(app.page, 20001).click();
         const dialog = app.page.getByRole("dialog", {name: "Turn off :20001 → 127.0.0.1:9?"});

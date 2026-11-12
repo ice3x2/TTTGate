@@ -42,9 +42,12 @@ const focused = (page: Page) => page.evaluate(() => ({label: document.activeElem
 const conn = (id: number, remoteAddress: string, agoMs: number): Connection =>
     ({id, remoteAddress, remotePort: 50_000 + id, connectedAt: Date.now() - agoMs, rx: 1200, tx: 3400});
 
+// 로그인하면 이미 #/tunnels 에 있어 같은 해시로는 화면을 다시 읽지 않는다(#338). 가로채기 전의 상태 응답으로 그린 줄이
+// 먼저 보이므로, 줄이 보이는 것만으로는 부족하다. 가로챈 상태 응답(RX 59,535 바이트)이 그려질 때까지 기다린다.
 const openList = async (page: Page, url: string) => {
     await page.goto(`${url}#/tunnels`);
-    await row(page, PORT).locator(".tunnel-meta-row").waitFor({state: "visible", timeout: 10_000});
+    await page.waitForFunction((port) => document.querySelector(`li[data-port="${port}"] .tunnel-stats-line`)?.textContent?.includes("RX 58.1KiB") === true,
+        PORT, {timeout: 10_000});
 };
 
 const openDialog = async (page: Page) => {
