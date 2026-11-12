@@ -203,20 +203,27 @@ test("Apply 는 화면의 모든 설정 필드를 저장 요청에 담고 서버
 
 // 이슈 370 C-1·AC-4: 관리 화면 포트는 서버 프로그램을 다시 시작해야 바뀐다. 확인을 눌러도 아직 열리지 않은 새 주소로 옮기지 않고,
 // 지금 주소에 머문 채 다시 시작한 뒤 열 새 주소를 알린다.
+// 이 하네스의 화면은 Vite 개발 서버가 /api 를 백엔드로 넘기는 역방향 프록시 구성이다. 페이지 포트가 관리 포트와 다르므로
+// #303 규칙대로 새 주소도 프록시 출처다. 관리 포트로 바로 연 화면의 새 주소(host:새 포트)는 admin-address-proxy.test.ts 가 지킨다.
 test("관리 화면 포트를 바꾸고 확인을 누르면 새 주소로 옮기지 않고 다시 시작하라고 안내한다", async () => {
     const app = await startAdminApp();
     try {
-        await openServerSettings(app.page);
+        const {serverOption} = await openServerSettings(app.page);
         await waitForApply(app.page, true);
         const before = new URL(app.page.url());
+        // 전제: 프록시 구성이다. 페이지 포트가 관리 포트와 같으면 기대 주소가 달라지므로 여기서 멈춘다.
+        expect(before.port).not.toBe(String(serverOption.adminPort));
         let adminPort = await getFreePort();
-        while(String(adminPort) === before.port) adminPort = await getFreePort();
+        while(adminPort === serverOption.adminPort) adminPort = await getFreePort();
         await app.page.locator("#input-admin-port").fill(String(adminPort));
         await waitForApply(app.page, false);
+        const saved = app.page.waitForResponse((response) => response.request().method() === "POST"
+            && new URL(response.url()).pathname === "/api/serverOption", {timeout: 10_000});
         await app.page.getByRole("button", {name: "Apply", exact: true}).click();
+        expect((await (await saved).json()).success).toBe(true);
 
         const dialog = app.page.getByRole("dialog", {name: "Server settings"});
-        const next = `${before.protocol}//${before.hostname}:${adminPort}/`;
+        const next = `${before.origin}/`;
         await dialog.getByText(`Server settings applied. The new admin address opens only after you restart TTTGate. Restart it, then open: ${next}`, {exact: true})
             .waitFor({state: "visible", timeout: 20_000});
         await dialog.getByRole("button", {name: "OK", exact: true}).click();

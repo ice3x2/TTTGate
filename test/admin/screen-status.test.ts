@@ -171,7 +171,7 @@ describe("시스템 정보를 열지 못할 때의 안내(ko-KR)", () => {
         const app = await startKoreanStatus();
         try {
             await app.page.route("**/api/sysInfo", (route) => route.abort());
-            await app.page.getByRole("button", {name: "정보", exact: true}).click();
+            await app.page.getByRole("button", {name: "시스템 정보", exact: true}).click();
 
             const text = await alertText(app.page);
             expect(text).toContain("서버에 연결하지 못했습니다.");
