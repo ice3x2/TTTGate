@@ -15,6 +15,8 @@
     import {StatusPoller} from './parts/statusPoller';
     import {isTunnelOn, tunnelRowView, tunnelTitle, undoTimeoutOf} from './parts/tunnelRow';
     import {ownerGroups} from './parts/ownerGroups';
+    import {clientsView, statsView} from './parts/connections';
+    import ConnectionsModal from './parts/ConnectionsModal.svelte';
     import {ipLimitView, withIpResult, type IpLimitView} from './parts/ipLimit';
     import Clock from '../ui/Clock.svelte';
     import {errorMessageOf} from '../i18n/serverError';
@@ -30,6 +32,14 @@
     // 이슈 367: 소유자가 둘 이상이면 소유자별로 묶어 보인다.
     const ownerView = $derived(ownerGroups(options, $me?.user.id ?? ''));
     const grouped = $derived(ownerView.grouped);
+    // 이슈 369: 연결 창은 하나만 두고 연 터널을 바꿔 쓴다. 차단은 보안 관리 권한(슈퍼유저)만 한다.
+    let connectionsFor = $state<{port: number; title: string} | undefined>();
+    let connectionsOpen = $state(false);
+    const canBlock = $derived($me?.user.role === 'superuser');
+    const openConnections = (option: Options) => {
+        connectionsFor = {port: option.forwardPort, title: tunnelTitle(option)};
+        connectionsOpen = true;
+    };
     let listLoaded = $state(false);
     let statuses = $state<Record<number, TunnelingStatus>>({});
     let statusLoaded = $state(false);
@@ -218,7 +228,10 @@
 
 {#snippet tunnelRow(option: Options, ownerName: string | undefined)}
         {@const title = tunnelTitle(option)}
-        {@const view = tunnelRowView({option, status: statuses[option.forwardPort], loaded: statusLoaded, meId: $me?.user.id ?? '', serverTime, grouped})}
+        {@const stats = statsView(statuses[option.forwardPort], serverTime)}
+        {@const clients = clientsView({allowedClients: statuses[option.forwardPort]?.allowedClients, allowedClientNames: option.allowedClientNames})}
+        {@const view = tunnelRowView({option, status: statuses[option.forwardPort], loaded: statusLoaded, meId: $me?.user.id ?? '', serverTime, grouped,
+            withStats: stats !== undefined})}
         {@const busy = pending[option.forwardPort] !== undefined}
         <!-- 이슈 367(설계 반영): 묶어 볼 때 내 묶음이 아니면 스위치 이름에 소유자(또는 묶음 이름)를 붙인다. -->
         {@const switchLabel = ownerName ? t('tunnels.switchWithOwner', {title, owner: ownerName}) : title}
@@ -246,6 +259,34 @@
                     <Switch size="lg" ariaLabel={switchLabel} on={busy ? pending[option.forwardPort] : view.checked} {busy}
                         disabled={view.control === 'disabled'} onrequest={(next) => toggle(option, next)} />
                 </span>
+            {/if}
+            {#if stats || clients}
+                <!-- 이슈 369 FR-1~FR-4: 가동 정보와 허용 클라이언트. 줄 링크 밖에 둔다(누르면 편집 화면으로 가지 않는다).
+                     연결 수는 고칠 수 있는 사람에게 연결 창을 여는 버튼이고, 그 밖에는 글자다. 허용 클라이언트는 터널이 꺼져도 보인다. -->
+                <div class="tunnel-meta-row">
+                    {#if stats}
+                        <span class="tunnel-stats">
+                            {#if option.editable !== false}
+                                <button type="button" class="tunnel-conn" aria-label={t('tunnel.connectionsOpen', {count: stats.sessions, title})}
+                                    onclick={() => openConnections(option)}>{t('tunnel.connectionsButton', {count: stats.sessions})}<span aria-hidden="true">›</span></button>
+                            {:else}
+                                <span class="tunnel-conn-text">{t('tunnel.connectionsButton', {count: stats.sessions})}</span>
+                            {/if}
+                            <span class="tunnel-stats-line">{stats.line}</span>
+                        </span>
+                    {/if}
+                    {#if clients}
+                        <!-- 보이는 이름 목록은 줄여 보이므로 보조 기술에는 숨기고, 전체 목록(연결 여부 포함)은 sr-only 로 읽힌다. -->
+                        <span class="tunnel-clients" title={clients.title}>
+                            <span class="clients-label" aria-hidden="true">{clients.label}:</span>
+                            {#each clients.items as item, index (index)}
+                                <span aria-hidden="true" class="client" class:offline={item.connected === false}>{#if item.connected !== undefined}<span class="dot" aria-hidden="true">{item.connected ? '●' : '○'}</span>{/if}{item.name}</span>
+                            {/each}
+                            {#if clients.more}<span class="client more" aria-hidden="true">{clients.more}</span>{/if}
+                            <span class="sr-only">{clients.label}: {clients.title}</span>
+                        </span>
+                    {/if}
+                </div>
             {/if}
             {#if ipView}
                 <!-- 이슈 348: 줄 링크 밖에 둔다(누르면 편집 화면으로 가지 않는다). 터널이 꺼져도 같은 규칙으로 보인다. -->
@@ -314,6 +355,10 @@
         {/if}
     {/if}
     {#if loading}<Loading overlay />{/if}
+    {#if connectionsFor}
+        <ConnectionsModal bind:open={connectionsOpen} port={connectionsFor.port} title={connectionsFor.title} {canBlock} {requesterIp}
+            onsessionout={sessionOut} />
+    {/if}
     <Modal bind:open={confirmOpen} title={confirmTarget ? t('tunnels.turnOffConfirm', {title: tunnelTitle(confirmTarget.option)}) : t('tunnels.turnOffConfirmUntitled')}>
         {plural('tunnels.connectionsCut', confirmTarget?.sessions ?? 0)}
         {#snippet footer()}
@@ -330,6 +375,21 @@
 </div>
 
 <style>
+    /* 이슈 369: 가동 정보·연결 버튼·허용 클라이언트 줄. 좁은 화면에서는 줄을 바꾼다. */
+    .tunnel-meta-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); min-width: 0; font-size: var(--fs-xs); color: var(--ink-2); }
+    .tunnel-stats { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); min-width: 0; }
+    .tunnel-conn { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 var(--s-3); border: 1px solid var(--line-2);
+        border-radius: 999px; background: var(--bg-2); color: var(--ink-0); font: inherit; font-weight: 600; cursor: pointer; }
+    .tunnel-conn:hover { background: var(--bg-3); }
+    .tunnel-conn:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+    .tunnel-conn-text { font-weight: 600; color: var(--ink-1); }
+    .tunnel-stats-line { font-family: var(--ff-mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+    .tunnel-clients { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px var(--s-2); min-width: 0; }
+    .tunnel-clients .client { overflow-wrap: anywhere; }
+    .tunnel-clients .client.offline { opacity: .6; }
+    .tunnel-clients .dot { margin-right: 2px; color: var(--pulse); }
+    .tunnel-clients .client.offline .dot { color: var(--ink-2); }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
     /* 이슈 367: 소유자별 묶음. 긴 이름은 머리글 안에서 줄임표로 줄이고, "나" 표시와 켜진 수는 따로 둔다. */
     /* 설계 문서 ⑤의 묶음 모양: 머리글 13px, 표시 이름은 보통 굵기, "나"는 초록 표시, 묶음 사이 24px, 카드에 가는 테두리. */
     .owner-group + .owner-group { margin-top: var(--s-6); }
