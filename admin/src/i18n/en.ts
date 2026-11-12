@@ -499,7 +499,6 @@ export const en = {
     'connections.newAnnounce_one': '{count} new connection',
     'connections.newAnnounce_other': '{count} new connections',
     'connections.capped': 'Showing the latest 500.',
-    'connections.unsupported': 'This server does not support the connection list. Update the server to see it.',
     'connections.alreadyBlocked': 'This address is already blocked.',
     'connections.notVisible': 'You can no longer see the connections to this tunnel.',
     'tunnelStatus.stats': '{since} · Connections {sessions} · RX {rx} · TX {tx}',

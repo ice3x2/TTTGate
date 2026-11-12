@@ -550,7 +550,6 @@ export const ko: Messages = {
     'connections.newAnnounce_one': '새 연결 {count}개',
     'connections.newAnnounce_other': '새 연결 {count}개',
     'connections.capped': '최근 연결 500개만 보입니다.',
-    'connections.unsupported': '이 서버는 연결 목록을 지원하지 않습니다. 서버를 업데이트하면 볼 수 있습니다.',
     'connections.alreadyBlocked': '이미 차단된 주소입니다.',
     'connections.notVisible': '이 터널의 연결을 더 볼 수 없습니다.',
     'tunnelStatus.stats': '{since} · 연결 {sessions} · RX {rx} · TX {tx}',

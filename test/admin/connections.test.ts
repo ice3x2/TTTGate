@@ -175,7 +175,6 @@ describe("연결 창 문구 (설계 문서 문구 표)", () => {
         expect(en.plural("connections.newAnnounce", 2)).toBe("2 new connections");
         expect(ko.t("connections.capped")).toBe("최근 연결 500개만 보입니다.");
         expect(en.t("connections.capped")).toBe("Showing the latest 500.");
-        expect(ko.t("connections.unsupported")).toBe("이 서버는 연결 목록을 지원하지 않습니다. 서버를 업데이트하면 볼 수 있습니다.");
     });
     test("설계 문구를 따른다: 연결 시각, 외 N, 내 IP 경고", () => {
         expect(en.t("connections.connectedAgo", {ago: "3m ago"})).toBe("Connected 3m ago");

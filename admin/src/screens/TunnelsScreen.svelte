@@ -15,7 +15,7 @@
     import {StatusPoller} from './parts/statusPoller';
     import {isTunnelOn, tunnelRowView, tunnelTitle, undoTimeoutOf} from './parts/tunnelRow';
     import {ownerGroups} from './parts/ownerGroups';
-    import {clientsView, statsView} from './parts/connections';
+    import {clientsView, connectionsSupported, statsView} from './parts/connections';
     import ConnectionsModal from './parts/ConnectionsModal.svelte';
     import {ipLimitView, withIpResult, type IpLimitView} from './parts/ipLimit';
     import Clock from '../ui/Clock.svelte';
@@ -35,8 +35,6 @@
     // 이슈 369: 연결 창은 하나만 두고 연 터널을 바꿔 쓴다. 차단은 보안 관리 권한(슈퍼유저)만 한다.
     let connectionsFor = $state<{port: number; title: string} | undefined>();
     let connectionsOpen = $state(false);
-    // 옛 서버라 연결 목록 API 가 없으면(404) 연결 수를 버튼이 아니라 글자로 둔다(스펙 §8).
-    let connectionsUnsupported = $state(false);
     const canBlock = $derived($me?.user.role === 'superuser');
     const openConnections = (option: Options) => {
         connectionsFor = {port: option.forwardPort, title: tunnelTitle(option)};
@@ -268,7 +266,8 @@
                 <div class="tunnel-meta-row">
                     {#if stats}
                         <span class="tunnel-stats">
-                            {#if option.editable !== false && !connectionsUnsupported}
+                            <!-- 옛 서버(상태 응답에 allowedClients 없음)는 연결 목록 API 가 없으므로 연결 수를 글자로 둔다(스펙 §8). -->
+                            {#if option.editable !== false && connectionsSupported(statuses[option.forwardPort])}
                                 <button type="button" class="tunnel-conn" aria-label={t('tunnel.connectionsOpen', {count: stats.sessions, title})}
                                     onclick={() => openConnections(option)}>{t('tunnel.connectionsButton', {count: stats.sessions})}<span aria-hidden="true">›</span></button>
                             {:else}
@@ -359,7 +358,7 @@
     {#if loading}<Loading overlay />{/if}
     {#if connectionsFor}
         <ConnectionsModal bind:open={connectionsOpen} port={connectionsFor.port} title={connectionsFor.title} {canBlock} {requesterIp}
-            onsessionout={sessionOut} onunsupported={() => (connectionsUnsupported = true)} />
+            onsessionout={sessionOut} />
     {/if}
     <Modal bind:open={confirmOpen} title={confirmTarget ? t('tunnels.turnOffConfirm', {title: tunnelTitle(confirmTarget.option)}) : t('tunnels.turnOffConfirmUntitled')}>
         {plural('tunnels.connectionsCut', confirmTarget?.sessions ?? 0)}

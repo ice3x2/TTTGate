@@ -11,7 +11,8 @@
     import SecurityCtrl from '../../controller/SecurityCtrl';
     import InvalidSession from '../../controller/InvalidSession';
     import {StatusPoller} from './statusPoller';
-    import {addedConnections, blockBodyText, blockedDoneText, mergeConnections, type ConnectionRow, type FetchedConnection} from './connections';
+    import {addedConnections, announcement, blockBodyText, blockedDoneText, mergeConnections, summaryCount, type ConnectionRow, type FetchedConnection}
+        from './connections';
     import {byteToUnit} from './units';
     import {relativeTime} from '../../util/relativeTime';
     import {errorMessageOf} from '../../i18n/serverError';
@@ -24,7 +25,6 @@
         canBlock,
         requesterIp,
         onsessionout,
-        onunsupported,
     }: {
         open?: boolean;
         port: number;
@@ -34,16 +34,15 @@
         /** 지금 이 관리 화면에 접속한 주소. 그 주소를 차단하려 하면 확인 창에 경고한다. */
         requesterIp: string | null;
         onsessionout: () => void;
-        /** 옛 서버라 연결 목록 API 가 없을 때(404) 부른다. 목록은 연결 수를 글자로 바꾼다. */
-        onunsupported?: () => void;
     } = $props();
 
     let rows = $state<ConnectionRow[]>([]);
     let serverTime = $state(Date.now());
     let loaded = $state(false);
     let failed = $state(false);
-    let unsupported = $state(false);
     let truncated = $state(false);
+    // 서버가 준 전체 연결 수. 잘린 목록이어도 요약은 이 수로 센다. 옛 서버는 주지 않는다.
+    let total = $state<number | undefined>();
     // 2초마다 다시 읽은 결과는 알리지 않는다. 새 연결이 붙을 때만 화면 낭독기에 조용히 알린다(설계 반영).
     let announce = $state('');
     let busy = $state<Record<number, boolean>>({});
@@ -53,7 +52,7 @@
     let blockNote = $state('');
     let blocking = $state(false);
 
-    type Snapshot = {serverTime: number; truncated: boolean; connections: FetchedConnection[]};
+    type Snapshot = {serverTime: number; truncated: boolean; total: number | undefined; connections: FetchedConnection[]};
 
     let poller: StatusPoller<Snapshot> | undefined;
 
@@ -70,32 +69,35 @@
         rows = [];
         loaded = false;
         failed = false;
-        unsupported = false;
         truncated = false;
+        total = undefined;
         announce = '';
         poller = new StatusPoller<Snapshot>({
             intervalMs: 2000,
             load: async () => {
                 const result = await ServerOptionCtrl.instance.tunnelConnections(port);
                 if(!result.success && result.status === 404) {
-                    // 옛 서버(이 API 가 없음): 오류 대신 안내하고 다시 읽지 않는다.
-                    unsupported = true;
+                    // 옛 서버는 목록이 버튼을 보이지 않으므로(connectionsSupported) 여기의 404 는 이 터널을 더 볼 수 없다는 뜻이다
+                    // (권한이 바뀌었거나 지운 터널). 알리고 이 창만 닫는다. 다른 터널의 연결 버튼은 그대로다.
                     stop();
-                    onunsupported?.();
+                    open = false;
+                    toast.push({tone: 'warn', message: t('connections.notVisible')});
                 }
                 if(!result.success) throw new Error('connections');
-                return {serverTime: result.serverTime, truncated: result.truncated === true, connections: result.connections};
+                return {serverTime: result.serverTime, truncated: result.truncated === true, total: result.total, connections: result.connections};
             },
             isSessionOut: (error) => error instanceof InvalidSession,
             onSessionOut: () => { open = false; onsessionout(); },
             onFailure: () => { failed = !loaded; },
             onSnapshot: (snapshot) => {
                 serverTime = snapshot.serverTime;
-                const next = mergeConnections(rows, snapshot.connections, {truncated: snapshot.truncated});
+                // 처음 읽기는 줄 수가 아니라 이미 읽었는지로 판단한다. 빈 목록으로 연 창에 들어온 연결도 "새"로 알린다.
+                const next = mergeConnections(rows, snapshot.connections, {truncated: snapshot.truncated, first: !loaded});
                 const added = addedConnections(rows, next);
-                if(added > 0) announce = plural('connections.newAnnounce', added);
+                if(added > 0) announce = announcement(announce, plural('connections.newAnnounce', added));
                 rows = next;
                 truncated = snapshot.truncated;
+                total = snapshot.total;
                 loaded = true;
                 failed = false;
             },
@@ -136,7 +138,7 @@
 
     const liveFrom = (address: string | undefined) => rows.filter((row) => row.state === 'live' && row.remoteAddress === address).length;
 
-    const liveCount = $derived(rows.filter((row) => row.state === 'live').length);
+    const connectionCount = $derived(summaryCount(rows, total));
 
     const askBlock = (row: ConnectionRow) => {
         if(inactive(row)) return;
@@ -177,12 +179,10 @@
 
 <Modal bind:open title={t('connections.title', {title})} class="connections-modal">
     <p class="sr-only" aria-live="polite">{announce}</p>
-    {#if unsupported}
-        <p class="conn-note">{t('connections.unsupported')}</p>
-    {:else if failed}
+    {#if failed}
         <p class="conn-note" role="alert">{t('connections.failed')}</p>
     {:else if loaded}
-        <p class="conn-summary">{plural('connections.summary', liveCount)}</p>
+        <p class="conn-summary">{plural('connections.summary', connectionCount)}</p>
         {#if rows.length === 0}<p class="conn-note">{t('connections.empty')}</p>{/if}
     {/if}
     <ul class="conn-list" id={`connections-${port}`}>
