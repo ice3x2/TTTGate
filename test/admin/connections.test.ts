@@ -1,5 +1,6 @@
 import type {TunnelingStatus} from "../../admin/src/controller/Options";
-import {addedConnections, announcement, blockBodyText, blockedDoneText, clientsView, closingFailureText, connectionsSupported, duplicateCoversTunnel,
+import {addedConnections, announcement, blockBodyText, blockedDoneText, clientsView, closingFailure, closingFailureText, connectionsSupported, duplicateBlockText,
+    duplicateCoversTunnel,
     mergeConnections, MAX_KEPT_ENDED, statsView, summaryCount, type ConnectionRow, type FetchedConnection} from "../../admin/src/screens/parts/connections";
 import {isTopModal, closeModal, openModal} from "../../admin/src/ui/modalStack";
 import {translator} from "../../admin/src/i18n";
@@ -178,6 +179,14 @@ describe("M-B 연결 목록 읽기 실패", () => {
         expect(ko.t("connections.refreshFailed")).toBe("연결 목록을 새로 고치지 못했습니다. 다시 시도하는 중입니다.");
         expect(en.t("connections.refreshFailed")).toBe("Unable to refresh the connection list. Trying again.");
     });
+    test("LOW-4: 403 mfa_enrollment_required 는 등록 화면으로 옮겨 가므로 알림 없이 창만 닫는다", () => {
+        expect(closingFailure({status: 403, code: "mfa_enrollment_required"}, ko)).toEqual({notice: undefined});
+        expect(closingFailure({status: 403, code: "forbidden"}, ko)).toEqual({notice: "이제 이 터널을 볼 수만 있어 연결 목록을 닫았습니다."});
+        expect(closingFailure({status: 403}, en)).toEqual({notice: "You can now only view this tunnel, so its connection list was closed."});
+        expect(closingFailure({status: 404, code: "not_found"}, ko)).toEqual({notice: "이 터널의 연결을 더 볼 수 없습니다."});
+        expect(closingFailure({status: 500}, en)).toBeUndefined();
+        expect(closingFailure({status: 0}, en)).toBeUndefined();
+    });
 });
 
 describe("L-2 이미 차단된 주소(409 duplicate)", () => {
@@ -187,6 +196,21 @@ describe("L-2 이미 차단된 주소(409 duplicate)", () => {
         expect(duplicateCoversTunnel({code: "duplicate", port: 3333}, 2222)).toBe(false);
         // 포트를 주지 않는 응답은 알 수 없으므로 바꾸지 않는다.
         expect(duplicateCoversTunnel({code: "duplicate"}, 2222)).toBe(false);
+    });
+    test("M-1: 이미 있는 차단이 요청한 범위를 덮으면 이미 차단된 주소라고 알린다", () => {
+        expect(duplicateBlockText({code: "duplicate", port: null}, {port: 2222, scope: "tunnel"}, ko)).toBe("이미 차단된 주소입니다.");
+        expect(duplicateBlockText({code: "duplicate", port: null}, {port: 2222, scope: "all"}, en)).toBe("This address is already blocked.");
+        expect(duplicateBlockText({code: "duplicate", port: 2222}, {port: 2222, scope: "tunnel"}, ko)).toBe("이미 차단된 주소입니다.");
+        // 포트를 주지 않는 응답은 범위를 알 수 없으므로 지금 문구를 쓴다.
+        expect(duplicateBlockText({code: "duplicate"}, {port: 2222, scope: "tunnel"}, en)).toBe("This address is already blocked.");
+    });
+    test("M-1: 이미 있는 차단이 다른 포트 하나에만 걸리거나 '모든 터널' 요청을 덮지 못하면 그 범위를 밝힌다", () => {
+        expect(duplicateBlockText({code: "duplicate", port: 3333}, {port: 2222, scope: "tunnel"}, ko))
+            .toBe("이 주소는 이미 포트 3333에만 차단되어 있습니다. 보안 화면의 '차단한 주소'에서 범위를 바꾸세요.");
+        expect(duplicateBlockText({code: "duplicate", port: 3333}, {port: 2222, scope: "all"}, en))
+            .toBe("This address is already blocked on port 3333 only. Change its scope under Blocked addresses on the Security screen.");
+        expect(duplicateBlockText({code: "duplicate", port: 2222}, {port: 2222, scope: "all"}, ko))
+            .toBe("이 주소는 이미 포트 2222에만 차단되어 있습니다. 보안 화면의 '차단한 주소'에서 범위를 바꾸세요.");
     });
 });
 
@@ -198,10 +222,11 @@ describe("차단 확인 문장과 차단 뒤 알림 (L5·설계 문구)", () => 
         expect(blockBodyText({count: 0, scope: "tunnel"}, en)).toBe("New connections from this address to this tunnel will be refused.");
     });
     test("모든 터널: 다른 터널의 연결도 끊긴다는 것을 말한다", () => {
-        expect(blockBodyText({count: 2, scope: "all"}, ko)).toBe("이 터널에 있는 이 주소의 연결 2개와 다른 터널에 있는 이 주소의 연결을 바로 끊고, 앞으로 모든 터널에서 이 주소의 연결을 받지 않습니다.");
-        expect(blockBodyText({count: 2, scope: "all"}, en)).toBe("Its 2 connections to this tunnel and its connections to other tunnels end now, and new ones to every tunnel will be refused.");
-        expect(blockBodyText({count: 1, scope: "all"}, ko)).toBe("이 터널에 있는 이 주소의 연결 1개와 다른 터널에 있는 이 주소의 연결을 바로 끊고, 앞으로 모든 터널에서 이 주소의 연결을 받지 않습니다.");
-        expect(blockBodyText({count: 1, scope: "all"}, en)).toBe("Its 1 connection to this tunnel and its connections to other tunnels end now, and new ones to every tunnel will be refused.");
+        // LOW-1: 다른 터널에 이 주소의 연결이 없을 수도 있으므로 "있으면" 끊는다고 말한다.
+        expect(blockBodyText({count: 2, scope: "all"}, ko)).toBe("이 터널에 있는 이 주소의 연결 2개를 바로 끊고, 다른 터널에 이 주소의 연결이 있으면 그것도 끊습니다. 앞으로 모든 터널에서 이 주소의 연결을 받지 않습니다.");
+        expect(blockBodyText({count: 2, scope: "all"}, en)).toBe("Its 2 connections to this tunnel end now, as do its connections to other tunnels, if any, and new ones to every tunnel will be refused.");
+        expect(blockBodyText({count: 1, scope: "all"}, ko)).toBe("이 터널에 있는 이 주소의 연결 1개를 바로 끊고, 다른 터널에 이 주소의 연결이 있으면 그것도 끊습니다. 앞으로 모든 터널에서 이 주소의 연결을 받지 않습니다.");
+        expect(blockBodyText({count: 1, scope: "all"}, en)).toBe("Its 1 connection to this tunnel ends now, as do its connections to other tunnels, if any, and new ones to every tunnel will be refused.");
         // L-4: 다른 터널에 연결이 없을 수도 있으므로 "있으면" 끊는다고 말한다.
         expect(blockBodyText({count: 0, scope: "all"}, ko)).toBe("다른 터널에 이 주소의 연결이 있으면 바로 끊고, 앞으로 모든 터널에서 이 주소의 연결을 받지 않습니다.");
         expect(blockBodyText({count: 0, scope: "all"}, en)).toBe("Connections from this address to other tunnels, if any, end now, and new ones to every tunnel will be refused.");

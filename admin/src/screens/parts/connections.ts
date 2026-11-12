@@ -140,12 +140,38 @@ export function closingFailureText(status: number, tr: Translator = i18n()): str
     return undefined;
 }
 
+/** 창을 닫을 실패의 알림. notice 가 없으면 알림 없이 닫기만 한다. */
+export type ClosingFailure = {notice: string | undefined};
+
+/**
+ * 연결 목록 읽기 실패로 창을 닫아야 하는가(닫지 않으면 undefined). 403 mfa_enrollment_required 는 요청 함수(adminRequest)가
+ * 2단계 인증 등록 화면으로 옮기므로 "볼 수만 있다"고 알리지 않고 창만 닫는다. 그 밖에는 closingFailureText 를 따른다.
+ */
+export function closingFailure(failure: {status: number; code?: unknown}, tr: Translator = i18n()): ClosingFailure | undefined {
+    if(failure.status === 403 && failure.code === 'mfa_enrollment_required') return {notice: undefined};
+    const notice = closingFailureText(failure.status, tr);
+    return notice === undefined ? undefined : {notice};
+}
+
 /**
  * 409 duplicate 의 이미 있는 차단이 이 터널의 연결에 걸리는가. 서버는 그 차단의 포트(모든 터널이면 null)를 port 로 준다.
  * 걸리면 서버가 그 연결을 끊었으므로 줄을 "차단됨"으로 바꾼다. port 가 없으면 알 수 없으므로 거짓이다.
  */
 export function duplicateCoversTunnel(failure: Readonly<Record<string, unknown>>, port: number): boolean {
     return failure.port === null || failure.port === port;
+}
+
+/**
+ * 409 duplicate 의 알림 문구. 서버는 주소마다 차단을 하나만 두므로 범위가 달라도 duplicate 로 거절한다.
+ * 이미 있는 차단이 요청한 범위를 덮으면(모든 터널이거나, 이 터널만 요청했는데 같은 포트) "이미 차단된 주소"라고 알린다.
+ * 덮지 못하면 이미 걸린 포트를 밝히고 보안 화면에서 범위를 바꾸라고 알린다. 포트를 주지 않는 응답은 알 수 없으므로 앞의 문구다.
+ */
+export function duplicateBlockText(failure: Readonly<Record<string, unknown>>, request: {port: number; scope: 'tunnel' | 'all'},
+    tr: Translator = i18n()): string {
+    const existing = failure.port;
+    if(typeof existing !== 'number') return tr.t('connections.alreadyBlocked');
+    if(request.scope === 'tunnel' && existing === request.port) return tr.t('connections.alreadyBlocked');
+    return tr.t('connections.alreadyBlockedOnPort', {port: existing});
 }
 
 /**

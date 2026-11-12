@@ -320,6 +320,33 @@ test("L-2 이미 이 터널에 걸린 차단(409 duplicate)이면 알리고 그 
     }
 });
 
+test("M-1 이미 있는 차단이 다른 포트 하나에만 걸리면(409 duplicate) 그 포트를 밝혀 알리고 줄은 바꾸지 않는다", async () => {
+    const app = await startAdminApp({fixture: "with-tunnels"});
+    try {
+        await stubStatus(app.page);
+        await stubConnections(app.page, [[conn(2, "203.0.113.7", 60_000), conn(1, MY_IP, 3_600_000)]]);
+        await app.page.route("**/api/security/blocklist", async (route) => {
+            if(route.request().method() !== "POST") return route.fallback();
+            await route.fulfill({status: 409, json: {success: false, code: "duplicate", message: "203.0.113.7 is already blocked on port 3333",
+                address: "203.0.113.7", port: 3333, closedConnections: 0}});
+        });
+        await openList(app.page, app.url);
+        const dialog = await openDialog(app.page);
+        await dialog.getByRole("button", {name: "Block 203.0.113.7", exact: true}).click();
+        const confirm = app.page.getByRole("dialog", {name: "Block 203.0.113.7?"});
+        await confirm.waitFor({state: "visible", timeout: 10_000});
+        await confirm.getByRole("button", {name: "Block", exact: true}).click();
+        await confirm.waitFor({state: "hidden", timeout: 10_000});
+        await app.page.getByText("This address is already blocked on port 3333 only. Change its scope under Blocked addresses on the Security screen.", {exact: true})
+            .waitFor({state: "visible", timeout: 10_000});
+        expect(await app.page.getByText("This address is already blocked.", {exact: true}).count()).toBe(0);
+        expect(await dialog.locator('li[data-connection="2"] .tag').count()).toBe(0);
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+});
+
 test("AC-7·AC-8·AC-12 차단은 확인 창을 먼저 띄우고, Esc 는 확인 창만 닫으며, 내 IP 면 경고하고, '이 터널만'이 기본이다", async () => {
     const app = await startAdminApp({fixture: "with-tunnels"});
     try {
