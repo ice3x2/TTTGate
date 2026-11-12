@@ -9,6 +9,8 @@
     import {toast} from '../../ui/toast';
     import {StatusPoller} from './statusPoller';
     import {remainingMsOf} from './tunnelRow';
+    import {capSecondsOf} from './keepOn';
+    import {me} from '../../me';
     import {startupTime, toSize} from './units';
     import {t} from '../../i18n';
 
@@ -66,7 +68,8 @@
                 {#if status.active && editable}
                     <div class="status-timer">
                         <span class="status-label">{t('tunnelStatus.timeLimit')}</span>
-                        <Timer seconds={remaining} total={status.activeTimeout} onchange={(seconds) => { void changeTimeout(seconds); }} />
+                        <Timer seconds={remaining} total={status.activeTimeout} capSeconds={capSecondsOf(status, $me)} now={serverTime}
+                            onchange={(seconds) => { void changeTimeout(seconds); }} />
                     </div>
                 {/if}
             </div>
