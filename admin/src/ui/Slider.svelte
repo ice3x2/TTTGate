@@ -9,6 +9,7 @@
         pageStep,
         valueText,
         ariaLabel,
+        describedBy,
         id,
         disabled = false,
         oninput,
@@ -20,6 +21,8 @@
         pageStep?: number;
         valueText: string;
         ariaLabel: string;
+        /** 값의 뜻을 풀어 주는 요소의 id(aria-describedby). 예: 꺼지는 시각 문장. */
+        describedBy?: string;
         id?: string;
         disabled?: boolean;
         oninput?: (value: number) => void;
@@ -37,7 +40,7 @@
     };
 </script>
 
-<input type="range" class="slider" {id} {min} {max} {step} {disabled} aria-label={ariaLabel} aria-valuetext={valueText}
+<input type="range" class="slider" {id} {min} {max} {step} {disabled} aria-label={ariaLabel} aria-describedby={describedBy} aria-valuetext={valueText}
     bind:value oninput={() => oninput?.(value)} {onkeydown}>
 
 <style>
