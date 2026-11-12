@@ -241,8 +241,12 @@
             </Field>
             <Field label={t('group.allowedPortRanges')}>
                 <div style="display: flex; flex-direction: column; gap: var(--s-2);">
+                    {#snippet addRangeButton()}
+                        <Button variant="secondary" disabled={readOnly} id="group-add-range"
+                            onclick={addRange}><span aria-hidden="true">＋</span>{t('group.addRange')}</Button>
+                    {/snippet}
                     {#each attrs.allowed_port_range as range, i (i)}
-                        <div data-range-index={i} style="display: flex; gap: var(--s-2); align-items: center;">
+                        <div data-range-index={i} class="range-row">
                             <NumberInput id={`group-attr-allowed_port_range-${i}-from`} min={1} max={65535} disabled={readOnly}
                                 ariaLabel={t('group.rangeStart')}
                                 bind:value={() => range.from, (value) => (range.from = value as number)} />
@@ -251,14 +255,19 @@
                                 ariaLabel={t('group.rangeEnd')}
                                 bind:value={() => range.to, (value) => (range.to = value as number)} />
                             <Button variant="secondary" icon disabled={readOnly} class="range-delete"
-                                ariaLabel={t('group.deleteRange', {from: range.from, to: range.to})} title={t('common.remove')}
+                                ariaLabel={t('group.deleteRange', {from: range.from, to: range.to})} title={t('group.deleteRangeTitle')}
                                 onclick={() => removeRange(i)}><span aria-hidden="true">×</span></Button>
                         </div>
                     {:else}
-                        <p>{t('group.noPorts')}</p>
+                        <!-- 설계 ②: 범위가 없으면 점선 상자 안에 안내와 "범위 추가"를 나란히 둔다. -->
+                        <div id="group-range-empty" class="range-empty">
+                            <span>{t('group.noPorts')}</span>
+                            {@render addRangeButton()}
+                        </div>
                     {/each}
-                    <div><Button variant="secondary" disabled={readOnly} id="group-add-range"
-                        onclick={addRange}><span aria-hidden="true">＋</span>{t('group.addRange')}</Button></div>
+                    {#if attrs.allowed_port_range.length > 0}
+                        <div>{@render addRangeButton()}</div>
+                    {/if}
                 </div>
             </Field>
             <Field label={t('group.allowedProtocols')}>
@@ -367,3 +376,14 @@
         <Button variant="danger" onclick={remove}>{t('group.delete')}</Button>
     {/snippet}
 </Modal>
+
+<style>
+    /* 이슈 365 AC-2(설계 ②): 범위 줄의 입력 두 칸을 44px 삭제 버튼과 같은 높이로 맞춘다. */
+    .range-row { display: flex; gap: var(--s-2); align-items: center; }
+    /* 360px 에서도 넘치지 않게 입력 칸이 남는 폭을 나눠 갖고 줄어들 수 있게 한다. */
+    .range-row :global(.input) { flex: 1; min-width: 0; min-height: 44px; }
+    .range-empty {
+        display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3);
+        padding: var(--s-4); border: 1px dashed var(--line-1); border-radius: var(--r-2); font-size: 13px; color: var(--ink-2);
+    }
+</style>

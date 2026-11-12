@@ -30,9 +30,9 @@
             <span class="colon">:</span>
             <TextInput placeholder={t('header.value')} bind:value={option.value} />
             {#if index === options.length - 1}
-                <Button variant="secondary" icon ariaLabel={t('header.add')} title={t('header.add')} onclick={add}><span aria-hidden="true">＋</span></Button>
+                <Button variant="secondary" icon ariaLabel={t('header.add')} onclick={add}><span aria-hidden="true">＋</span></Button>
             {:else}
-                <Button variant="secondary" icon ariaLabel={t('header.remove')} title={t('header.remove')} onclick={() => remove(index)}><span aria-hidden="true">×</span></Button>
+                <Button variant="secondary" icon ariaLabel={t('header.remove')} onclick={() => remove(index)}><span aria-hidden="true">×</span></Button>
             {/if}
             <Checkbox class="check" id={`${uid}-replace-${index}`} label={t('header.replace')} bind:checked={option.replace} />
         </div>
@@ -51,6 +51,8 @@
         background: var(--bg-3);
         margin-bottom: var(--s-2);
     }
+    /* 이슈 365 AC-2: 입력 칸을 44px 추가·삭제 버튼과 같은 높이로 맞춘다. */
+    .rule :global(.input) { min-width: 0; min-height: 44px; }
     .rule .colon { font-family: var(--ff-mono); color: var(--ink-2); text-align: center; }
     .rule :global(.check) { grid-column: 1 / -1; }
 </style>

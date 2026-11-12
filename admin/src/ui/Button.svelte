@@ -72,7 +72,7 @@
     /* 이슈 365: 테두리가 보이는 보조 버튼. 목록에 줄을 더하는 버튼처럼 글자만으로는 버튼으로 읽히지 않는 곳에 쓴다. */
     .btn.secondary{ min-height: 44px; background: var(--bg-2); color: var(--ink-0); border-color: var(--line-2); }
     .btn.secondary:hover{ background: var(--bg-3); border-color: var(--ink-2); }
-    .btn.icon{ width: 44px; min-height: 44px; padding: 0; justify-content: center; }
+    .btn.icon{ flex: none; width: 44px; min-height: 44px; padding: 0; justify-content: center; }
     .btn.ghost{ border-color: transparent; color: var(--ink-1); }
     .btn.ghost:hover{ color: var(--ink-0); background: rgba(255,255,255,.03); }
     .btn.danger{

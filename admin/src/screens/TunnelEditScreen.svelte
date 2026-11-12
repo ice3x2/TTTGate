@@ -201,7 +201,7 @@
                 const fresh = emptyOption();
                 if(policy?.restricted) {
                     policy.normalizeHttpOption(fresh);
-                    // 난수 포트를 그대로 두면 Field 가 힌트 대신 오류를 그려 허용 범위 안내가 보이지 않는다.
+                    // 난수 포트는 대개 허용 범위 밖이라 처음부터 포트 오류가 보인다. 목록의 터널이 쓰지 않는 첫 허용 포트로 시작한다.
                     fresh.forwardPort = policy.initialPort(usedPorts) as number;
                     // 서버는 일반 유저의 빈 allowedClientIds 를 거부한다(빈 목록은 모든 클라이언트 허용과 같다).
                     // 그룹이 허용한 신뢰 클라이언트를 모두 고른 상태로 시작한다.
@@ -490,7 +490,7 @@
                 <NumberInput id="input-external-port" min={1} max={65535} bind:value={option.forwardPort}
                     oninput={(v) => (option!.forwardPort = clampPort(v) as number)} />
                 {#if restricted}
-                    <PortRangeChips ranges={policy!.portRanges} {usedPorts} onpick={(port) => (option!.forwardPort = port)} />
+                    <PortRangeChips ranges={policy!.portRanges} {usedPorts} hideNotes={!!portError} onpick={(port) => (option!.forwardPort = port)} />
                 {/if}
             </Field>
             <Checkbox id="input-tls" label={t('tunnelEdit.secureTunneling')} bind:checked={option.tls}
