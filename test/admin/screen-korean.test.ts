@@ -175,7 +175,7 @@ test("AC-1 ko-KR 에서 로그인부터 모든 화면의 제목과 버튼이 한
     // 이슈 370 AC-1·AC-5: 카드 이름은 "연결 횟수 제한"이고, 범위 밖 값의 오류는 번역한 범위 문구다.
     expect(await page.locator(".card-label", {hasText: /^연결 횟수 제한$/}).count()).toBe(1);
     await page.locator("#input-rate-window").fill("0");
-    await page.getByText("1~3600 사이로 입력하세요.", {exact: true}).waitFor({state: "visible", timeout: UI_WAIT_MS});
+    await page.getByText("1~3,600 사이로 입력하세요.", {exact: true}).waitFor({state: "visible", timeout: UI_WAIT_MS});
 
     // 내 계정·비밀번호 변경·세션·감사
     await open(page, "#/me", "내 계정");
