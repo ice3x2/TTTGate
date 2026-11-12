@@ -207,7 +207,9 @@ class TTTServer {
         this._externalPortServerPool.setActiveTimeout(port, requested);
         if(lastServerStatus.active) {
             // 이슈 347: 켠 사람도 이어받는다. 설정을 저장했다고 켠 사람의 더 짧은 상한이 풀리면 안 된다.
-            await this._externalPortServerPool.active(port, requested, {startedAt: lastServerStatus.activeStart, activatedBy: lastServerStatus.activatedBy});
+            // 이슈 369: 켜진 시각도 이어받는다. 설정을 저장했다고 "켜진 지"가 0 으로 돌아가면 안 된다.
+            await this._externalPortServerPool.active(port, requested, {startedAt: lastServerStatus.activeStart, activatedBy: lastServerStatus.activatedBy,
+                activatedAt: lastServerStatus.activatedAt});
             return;
         }
         if(!lastServerStatus.active) {
@@ -452,7 +454,7 @@ class TTTServer {
                         ? beforeStatus.activeStart + beforeStatus.activeTimeout * 1000 - Date.now() : 1;
                     if(beforeStatus.active && remaining > 0) {
                         await this._externalPortServerPool.active(port, beforeStatus.requestedTimeout ?? beforeStatus.activeTimeout,
-                            {startedAt: beforeStatus.activeStart, activatedBy: beforeStatus.activatedBy});
+                            {startedAt: beforeStatus.activeStart, activatedBy: beforeStatus.activatedBy, activatedAt: beforeStatus.activatedAt});
                     } else await this._externalPortServerPool.inactive(port);
                 }
                 this._allowClientNamesMap.delete(port);

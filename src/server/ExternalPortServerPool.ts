@@ -203,9 +203,12 @@ class ExternalPortServerPool {
             portServer.setOnHandlerEvent(this.onHandlerEvent);
             portServer.setBundle(OPTION_BUNDLE_KEY, option);
             if(!option.inactiveOnStartup) option.inactiveOnStartup = false;
+            const startedAt = Date.now();
             this._statusMap.set(option.forwardPort, {port: option.forwardPort, online: false, sessions: 0, rx: 0, tx: 0, uptime: 0,
                 // 켜진 채 기동한 터널도 시작 시각을 둔다. 0 이면 상한을 다시 계산할 때 마감이 과거가 되어 바로 만료된다(#137).
-                active: !option.inactiveOnStartup, activeTimeout: 0, activeStart: Date.now(),
+                active: !option.inactiveOnStartup, activeTimeout: 0, activeStart: startedAt,
+                // 이슈 369: 켜진 채 띄우면 그때가 켜진 시각이다. 상태를 이어받는 경로는 active() 에 이전 값을 넘겨 덮는다.
+                ...(option.inactiveOnStartup ? {} : {activatedAt: startedAt}),
                 rejected: {geo: 0, rateLimit: 0}, bannedIps: 0});
             portServer.start((err?: Error) => {
                 if(err) {
@@ -729,9 +732,12 @@ class ExternalPortServerPool {
         return ids.length;
     }
 
-    /** 이슈 369 FR-8: 그 포트의 연결 목록. 최근 연결부터 최대 500개다. 원격 주소는 IPv4-mapped 를 IPv4 로 바꾼다. */
-    public connections(port: number) : TunnelConnection[] {
-        return Array.from(this._handlerMap.values())
+    /**
+     * 이슈 369 FR-8: 그 포트의 연결 목록. 최근 연결부터 최대 limit(기본 500)개다. 원격 주소는 IPv4-mapped 를 IPv4 로 바꾼다.
+     * 더 있어서 잘랐으면 truncated 다. 화면은 잘린 목록에서 빠진 연결을 끝난 것으로 보지 않는다.
+     */
+    public connections(port: number, limit: number = MAX_LISTED_CONNECTIONS) : {connections: TunnelConnection[]; truncated: boolean} {
+        const all = Array.from(this._handlerMap.values())
             .filter((handler) => handler.getBundle(PORT_BUNDLE_KEY) === port)
             .map((handler) => {
                 const counters = handler.getBundle(CONNECTION_BUNDLE_KEY) as ConnectionCounters | undefined;
@@ -739,18 +745,19 @@ class ExternalPortServerPool {
                 return {id: handler.getBundle(SESSION_ID_BUNDLE_KEY) as number, remoteAddress: address === undefined ? undefined : normalizeRemoteAddress(address),
                     remotePort: counters?.remotePort, connectedAt: counters?.connectedAt ?? 0, rx: counters?.rx ?? 0, tx: counters?.tx ?? 0};
             })
-            .sort((a, b) => b.connectedAt - a.connectedAt || b.id - a.id)
-            .slice(0, MAX_LISTED_CONNECTIONS);
+            .sort((a, b) => b.connectedAt - a.connectedAt || b.id - a.id);
+        return {connections: all.slice(0, limit), truncated: all.length > limit};
     }
 
     /**
-     * 이슈 369 FR-10: 그 포트의 연결 하나를 끊는다. 이미 끝났으면 gone, 다른 포트의 연결이면 other-port 다.
+     * 이슈 369 FR-10: 그 포트의 연결 하나를 끊는다. 이미 끝났거나 닫히는 중이면 gone, 다른 포트의 연결이면 other-port 다.
      * 목록을 읽은 뒤 끊기 전에 끝날 수 있으므로 gone 은 실패가 아니다.
      */
     public async closeConnection(port: number, id: number) : Promise<{result: 'closed'; remoteAddress: string | undefined} | {result: 'gone' | 'other-port'}> {
         const handler = this._handlerMap.get(id);
         if(!handler) return {result: 'gone'};
         if(handler.getBundle(PORT_BUNDLE_KEY) !== port) return {result: 'other-port'};
+        if(handler.closeInitiated) return {result: 'gone'};
         const address = handler.getBundle(REMOTE_ADDRESS_BUNDLE_KEY) as string | undefined;
         const remoteAddress = address === undefined ? undefined : normalizeRemoteAddress(address);
         await this.destroyHandlers([id]);
@@ -759,11 +766,12 @@ class ExternalPortServerPool {
 
     /**
      * 이슈 369 FR-12: 차단 판정(isBlocked)에 걸리는 기존 연결을 모든 포트에서 끊고, 끊은 수를 돌려준다. 원격 주소는 정규화해 넘긴다.
-     * 새 연결은 수락 판정이 막으므로, 차단을 더한 뒤 이미 들어와 있는 연결에만 같은 판정을 적용한다.
+     * 새 연결은 수락 판정이 막으므로, 차단을 더한 뒤 이미 들어와 있는 연결에만 같은 판정을 적용한다. 이미 닫히는 중인 연결은 세지 않는다.
      */
     public async closeBlockedSessions(isBlocked: (port: number, ip: string) => boolean) : Promise<number> {
         const ids = Array.from(this._handlerMap.values())
             .filter((handler) => {
+                if(handler.closeInitiated) return false;
                 const address = handler.getBundle(REMOTE_ADDRESS_BUNDLE_KEY) as string | undefined;
                 return address !== undefined && isBlocked(handler.getBundle(PORT_BUNDLE_KEY) as number, normalizeRemoteAddress(address));
             })
@@ -809,8 +817,9 @@ class ExternalPortServerPool {
     /**
      * options.activatedBy 는 이 활성을 켠 사람이다(이슈 347). 넘기지 않으면 켠 사람이 없는 활성으로 바뀐다.
      * 재적용·재시작처럼 상태를 이어받는 호출은 이전 상태의 activatedBy 를 그대로 넘긴다.
+     * options.activatedAt 은 켜진 시각이다(이슈 369). 리스너를 다시 띄워 상태를 이어받을 때 이전 값을 넘긴다.
      */
-    public async active(port: number, timeout?: number, options: {startedAt?: number; activatedBy?: string} = {}) : Promise<boolean> {
+    public async active(port: number, timeout?: number, options: {startedAt?: number; activatedBy?: string; activatedAt?: number} = {}) : Promise<boolean> {
         let status = this._statusMap.get(port);
         if(!status) {
             return false;
@@ -826,7 +835,9 @@ class ExternalPortServerPool {
         const effectiveTimeout = timeout;
         this.clearActiveTimeout(port);
         // 이슈 369: 꺼짐에서 켜짐으로 바뀔 때만 켜진 시각을 잡는다. 켜 둘 시간을 바꾸거나 상한을 다시 걸면 그대로 둔다.
-        if(!status.active || status.activatedAt === undefined) status.activatedAt = Date.now();
+        // 리스너를 다시 띄워 상태를 이어받는 경로(저장·롤백)는 이전 켜진 시각을 넘긴다.
+        if(options.activatedAt !== undefined) status.activatedAt = options.activatedAt;
+        else if(!status.active || status.activatedAt === undefined) status.activatedAt = Date.now();
         status.active = true;
         status.activeTimeout = timeout;
         status.requestedTimeout = requested;

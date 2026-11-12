@@ -177,6 +177,23 @@ const stub = {
         return {port, online: false, sessions: 0, rx: 0, tx: 0, uptime: 0, active: false, activeStart: 0, activeTimeout: 0,
             rejected: {geo: 0, rateLimit: 0}, bannedIps: 0};
     },
+    // 이슈 369: 상태 API 의 허용 클라이언트 연결 여부, 연결 목록·끊기, 차단 시 기존 연결 끊기. 화면 테스트는 연결 목록 응답을 가로채 정한다.
+    isClientConnected(clientId: string): boolean {
+        record("isClientConnected", [clientId]);
+        return true;
+    },
+    tunnelConnections(port: number) {
+        record("tunnelConnections", [port]);
+        return {connections: [], truncated: false};
+    },
+    async closeTunnelConnection(port: number, id: number) {
+        record("closeTunnelConnection", [port, id]);
+        return {result: "gone" as const};
+    },
+    async closeBlockedConnections(): Promise<number> {
+        record("closeBlockedConnections", []);
+        return 0;
+    },
     clientStatus(...args: unknown[]): Array<ClientStatus> {
         record("clientStatus", args);
         return [{

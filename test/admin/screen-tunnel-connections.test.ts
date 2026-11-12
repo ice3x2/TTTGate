@@ -24,16 +24,20 @@ const stubStatus = async (page: Page) => {
     });
 };
 
-const stubConnections = async (page: Page, sets: Connection[][]) => {
+const stubConnections = async (page: Page, sets: Connection[][], truncated = false) => {
     let call = 0;
     const requests: Request[] = [];
     await page.route(`**/api/tunneling/${PORT}/connections`, async (route) => {
         requests.push(route.request());
         const connections = sets[Math.min(call++, sets.length - 1)];
-        await route.fulfill({json: {success: true, serverTime: Date.now(), connections}});
+        await route.fulfill({json: {success: true, serverTime: Date.now(), countryLookup: false, truncated, connections}});
     });
     return requests;
 };
+
+/** 지금 초점이 있는 요소의 보조 기술용 이름과 aria-disabled. */
+const focused = (page: Page) => page.evaluate(() => ({label: document.activeElement?.getAttribute("aria-label") ?? null,
+    disabled: document.activeElement?.getAttribute("aria-disabled") ?? null}));
 
 const conn = (id: number, remoteAddress: string, agoMs: number): Connection =>
     ({id, remoteAddress, remotePort: 50_000 + id, connectedAt: Date.now() - agoMs, rx: 1200, tx: 3400});
@@ -85,6 +89,8 @@ test("AC-5·AC-10·AC-13 연결 창은 주소·RX·TX 와 32px 아이콘 버튼�
         const dialog = await openDialog(app.page);
         await dialog.locator("li.conn").first().waitFor({state: "visible", timeout: 10_000});
         expect(await dialog.locator(".conn-addr").allTextContents()).toEqual(["203.0.113.7", `${MY_IP}Your IP`]);
+        // M6: 맨 위 요약과, 데스크톱에서 640px 로 넓힌 창.
+        expect(await dialog.locator(".conn-summary").textContent()).toBe("2 connections · Refreshes every 2 seconds");
         const close = dialog.getByRole("button", {name: "Disconnect 203.0.113.7", exact: true});
         const box = await close.boundingBox();
         expect([Math.round(box!.width), Math.round(box!.height)]).toEqual([32, 32]);
@@ -94,11 +100,30 @@ test("AC-5·AC-10·AC-13 연결 창은 주소·RX·TX 와 32px 아이콘 버튼�
         await app.page.waitForFunction(() => document.querySelectorAll("[role=dialog] li.conn").length === 3, undefined, {timeout: 5_000});
         expect(await dialog.locator(".conn-addr").first().textContent()).toBe("203.0.113.7");
         expect(await dialog.locator("li.conn").last().locator(".new-tag").textContent()).toBe("New");
+        expect(await dialog.locator(".conn-summary").textContent()).toBe("3 connections · Refreshes every 2 seconds");
+        // M6: 새 연결은 화면 낭독기에 조용히(polite) 알린다.
+        expect(await dialog.locator("[aria-live=polite]").textContent()).toBe("1 new connection");
         await dialog.getByRole("button", {name: "Dismiss", exact: true}).click();
         await dialog.waitFor({state: "hidden"});
         const count = requests.length;
         await app.page.waitForTimeout(4_500);
         expect(requests.length).toBe(count);
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+});
+
+test("M6 데스크톱에서는 연결 창 폭이 640px 이다", async () => {
+    const app = await startAdminApp({fixture: "with-tunnels"});
+    try {
+        await app.page.setViewportSize({width: 1280, height: 900});
+        await stubStatus(app.page);
+        await stubConnections(app.page, [[conn(2, "203.0.113.7", 60_000)]]);
+        await openList(app.page, app.url);
+        const dialog = await openDialog(app.page);
+        await dialog.locator("li.conn").first().waitFor({state: "visible", timeout: 10_000});
+        expect(Math.round((await dialog.boundingBox())!.width)).toBe(640);
         expect(app.errors).toEqual([]);
     } finally {
         await app.close();
@@ -122,6 +147,67 @@ test("AC-6(화면) 끊기는 묻지 않고 DELETE 를 보내며, 그 줄을 '끊
         expect(deletes).toEqual([`/api/tunneling/${PORT}/connections/2`]);
         expect(await dialog.locator('li[data-connection="2"] .tag').first().textContent()).toBe("Disconnected");
         expect(await app.page.getByRole("dialog").count()).toBe(1);
+        await app.page.getByText("Disconnected.", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+        // M5: 버튼은 사라지지 않고 aria-disabled 로 남아 키보드 초점이 그 버튼에 머문다.
+        expect(await focused(app.page)).toEqual({label: "Disconnect 203.0.113.7", disabled: "true"});
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+});
+
+test("M3 이미 끝난 연결(closed:false)을 끊으면 줄을 '끝남'으로 바꾸고 알림을 띄우지 않는다", async () => {
+    const app = await startAdminApp({fixture: "with-tunnels"});
+    try {
+        await stubStatus(app.page);
+        await stubConnections(app.page, [[conn(2, "203.0.113.7", 60_000), conn(1, MY_IP, 3_600_000)]]);
+        await app.page.route(`**/api/tunneling/${PORT}/connections/*`, (route) => route.fulfill({json: {success: true, closed: false}}));
+        await openList(app.page, app.url);
+        const dialog = await openDialog(app.page);
+        await dialog.getByRole("button", {name: "Disconnect 203.0.113.7", exact: true}).click();
+        await dialog.locator('li[data-connection="2"].ended').waitFor({state: "visible", timeout: 10_000});
+        expect(await dialog.locator('li[data-connection="2"] .tag').first().textContent()).toBe("Ended");
+        await app.page.waitForTimeout(500);
+        expect(await app.page.getByText("Disconnected.", {exact: true}).count()).toBe(0);
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+});
+
+test("M4 잘린 응답이면 '최근 500개' 안내를 보이고, 빠진 연결을 끝남으로 바꾸지 않는다", async () => {
+    const app = await startAdminApp({fixture: "with-tunnels"});
+    try {
+        await stubStatus(app.page);
+        const requests = await stubConnections(app.page, [[conn(2, "203.0.113.7", 60_000), conn(1, MY_IP, 3_600_000)],
+            [conn(3, "192.0.2.44", 1_000), conn(2, "203.0.113.7", 60_000)]], true);
+        await openList(app.page, app.url);
+        const dialog = await openDialog(app.page);
+        await dialog.getByText("Showing the latest 500.", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+        await app.page.waitForFunction(() => document.querySelectorAll("[role=dialog] li.conn").length === 3, undefined, {timeout: 5_000});
+        expect(requests.length).toBeGreaterThanOrEqual(2);
+        expect(await dialog.locator('li[data-connection="1"].ended').count()).toBe(0);
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+});
+
+test("L4 옛 서버(연결 목록 API 404)면 오류 대신 안내하고, 연결 수를 글자로 바꾼다", async () => {
+    const app = await startAdminApp({fixture: "with-tunnels"});
+    try {
+        await stubStatus(app.page);
+        await app.page.route(`**/api/tunneling/${PORT}/connections`, (route) =>
+            route.fulfill({status: 404, json: {success: false, code: "not_found", message: "Not Found"}}));
+        await openList(app.page, app.url);
+        const dialog = await openDialog(app.page);
+        await dialog.getByText("This server does not support the connection list. Update the server to see it.", {exact: true})
+            .waitFor({state: "visible", timeout: 10_000});
+        expect(await dialog.getByRole("alert").count()).toBe(0);
+        await dialog.getByRole("button", {name: "Dismiss", exact: true}).click();
+        await dialog.waitFor({state: "hidden"});
+        expect(await row(app.page, PORT).locator(".tunnel-conn").count()).toBe(0);
+        expect((await row(app.page, PORT).locator(".tunnel-conn-text").textContent())?.trim()).toBe("Connections 2");
         expect(app.errors).toEqual([]);
     } finally {
         await app.close();
@@ -146,7 +232,8 @@ test("AC-7·AC-8·AC-12 차단은 확인 창을 먼저 띄우고, Esc 는 확인
         await dialog.getByRole("button", {name: `Block ${MY_IP}`, exact: true}).click();
         const confirm = app.page.getByRole("dialog", {name: `Block ${MY_IP}?`});
         await confirm.waitFor({state: "visible", timeout: 10_000});
-        expect(await confirm.getByRole("alert").textContent()).toContain("This is the address you are using for this console.");
+        expect(await confirm.getByRole("alert").textContent()).toBe("This is the address you're using now. Tunnels won't be reachable from it; the admin screen is not affected.");
+        expect(await confirm.locator(".block-body").textContent()).toBe("Its 1 connection ends now, and new ones will be refused.");
         await app.page.keyboard.press("Escape");
         await confirm.waitFor({state: "hidden", timeout: 5_000});
         expect(await dialog.isVisible()).toBe(true);
@@ -158,6 +245,10 @@ test("AC-7·AC-8·AC-12 차단은 확인 창을 먼저 띄우고, Esc 는 확인
         await other.waitFor({state: "visible", timeout: 10_000});
         expect(await other.getByRole("alert").count()).toBe(0);
         expect(await other.getByRole("radio", {name: "This tunnel only"}).isChecked()).toBe(true);
+        // L5: "모든 터널"을 고르면 다른 터널의 연결도 끊긴다는 문장으로 바뀐다.
+        await other.getByRole("radio", {name: "All tunnels"}).check();
+        expect(await other.locator(".block-body").textContent())
+            .toBe("Its 1 connection to this tunnel and any to other tunnels end now, and new ones to every tunnel will be refused.");
         await other.getByRole("button", {name: "Cancel", exact: true}).click();
         await other.waitFor({state: "hidden"});
         expect(posted).toEqual([]);
@@ -170,6 +261,8 @@ test("AC-7·AC-8·AC-12 차단은 확인 창을 먼저 띄우고, Esc 는 확인
         expect(String(posted[0].note)).toMatch(/^Blocked from the connection list of /);
         await app.page.getByText("Blocked 203.0.113.7 and ended 1 connection.", {exact: true}).waitFor({state: "visible", timeout: 10_000});
         expect(await dialog.locator('li[data-connection="2"] .tag').first().textContent()).toBe("Blocked");
+        // M5: 확인 창이 닫히면 초점은 그 창을 연 차단 버튼으로 돌아가고, 그 버튼은 aria-disabled 로 남는다.
+        expect(await focused(app.page)).toEqual({label: "Block 203.0.113.7", disabled: "true"});
         expect(app.errors).toEqual([]);
     } finally {
         await app.close();

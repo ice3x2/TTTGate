@@ -1912,14 +1912,22 @@ class AdminServer {
         return ids.map((clientId) => ({clientId, name: names.get(clientId) ?? clientId, connected: this._tttServer?.isClientConnected(clientId) ?? false}));
     }
 
-    /** 이슈 369 FR-8: GET /api/tunneling/:port/connections. 권한(tunnel:update)은 라우트 표가 본다. */
+    /**
+     * 이슈 369 FR-8: GET /api/tunneling/:port/connections. 권한(tunnel:update)은 라우트 표가 본다.
+     * 국가는 /api/security/denials 와 같은 규칙으로 싣는다(국가 필터가 국가를 보일 때만 값, 아니면 null).
+     * 최근 연결부터 잘라 줬으면 truncated 다.
+     */
     private onGetTunnelConnections = async (ctx: RouteContext) => {
         const port = parsePathPort(ctx.params.port);
         if(port === undefined) {
             ctx.fail(400, 'invalid_port', 'invalid port');
             return;
         }
-        ctx.ok({serverTime: Date.now(), connections: this._tttServer?.tunnelConnections(port) ?? []});
+        const geo = AdmissionController.instance.geo;
+        const listed = this._tttServer?.tunnelConnections(port) ?? {connections: [], truncated: false};
+        const connections = listed.connections.map((connection) => ({...connection,
+            country: connection.remoteAddress === undefined ? null : geo.displayCountry(connection.remoteAddress) ?? null}));
+        ctx.ok({serverTime: Date.now(), countryLookup: geo.countriesShown, truncated: listed.truncated, connections});
     }
 
     /** 이슈 369 FR-10: DELETE /api/tunneling/:port/connections/:id. 이미 끝난 연결은 closed:false 다(실패가 아니다). */
@@ -1935,7 +1943,8 @@ class AdminServer {
             ctx.fail(404, 'connection_not_found', `Connection ${id} is not on port ${port}.`, {id, port});
             return;
         }
-        if(outcome.result === 'closed') ctx.auditDetail({port, remoteAddress: outcome.remoteAddress});
+        // M3: 이미 끝난 연결(gone)도 요청은 성공이지만 끊은 것은 아니다. detail 의 closed 로 구분한다. 끝난 연결은 주소를 알 수 없다.
+        ctx.auditDetail(outcome.result === 'closed' ? {port, id, closed: true, remoteAddress: outcome.remoteAddress} : {port, id, closed: false});
         ctx.ok({closed: outcome.result === 'closed'});
     }
 

@@ -26,7 +26,7 @@ export const AUDIT_EVENT_TYPES = {
     tunnel_cert_updated: 'tunnel_cert_updated', tunnel_cert_deleted: 'tunnel_cert_deleted',
     // 이슈 348: 켠 사람의 IP 만 받는 설정을 바꿨다(detail.enabled), 요청자가 자기 허용 IP 를 갱신했다(detail 에 이전·새 IP).
     tunnel_ip_limit_updated: 'tunnel_ip_limit_updated', tunnel_ip_refreshed: 'tunnel_ip_refreshed',
-    // 이슈 369: 터널 목록에서 연결 하나를 끊었다(detail 에 port·remoteAddress).
+    // 이슈 369: 터널 목록에서 연결 하나를 끊었다(detail 에 port·id·closed, 끊었으면 remoteAddress). 이미 끝난 연결이면 closed 가 false 다.
     tunnel_connection_closed: 'tunnel_connection_closed',
     // 서버
     server_option_updated: 'server_option_updated', admin_cert_updated: 'admin_cert_updated',
