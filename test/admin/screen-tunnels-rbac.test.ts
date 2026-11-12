@@ -451,8 +451,13 @@ test("이슈 366 상한 8 인 alice 의 새 터널은 버퍼 기본값이 8 이�
     await page.getByText("Set 8 MiB or less (group maximum).", {exact: true}).waitFor({state: "visible", timeout: 10_000});
     expect(await button(page, "Start").isDisabled()).toBe(true);
     await page.locator("#input-buffer-limit-server").fill("8");
+    // 검토 L: 상한이 있으면 두 칸 모두 max 속성으로 상한을 건다.
+    expect(await page.locator("#input-buffer-limit-server").getAttribute("max")).toBe("8");
+    expect(await page.locator("#input-buffer-limit-client").getAttribute("max")).toBe("8");
+    // 검토 M-1: 클라이언트 버퍼 0(제한 없음)은 상한 초과와 다른 안내를 보인다.
     await page.locator("#input-buffer-limit-client").fill("0");
-    await page.getByText("Set 8 MiB or less (group maximum).", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+    await page.getByText("Set 1 to 8 MiB. Unlimited is not allowed while your group has a maximum.", {exact: true})
+        .waitFor({state: "visible", timeout: 10_000});
     expect(await button(page, "Start").isDisabled()).toBe(true);
 }, 2));
 
@@ -460,7 +465,12 @@ test("이슈 366 상한보다 큰 값이 저장된 기존 터널은 경고만 �
     await withBufferCap(page, 4);
     await openTunnel(page, 20001);
     await page.locator("#tunnel-buffer-stored-over").waitFor({state: "visible", timeout: 10_000});
-    expect((await page.locator("#tunnel-buffer-stored-over").textContent())?.trim())
-        .toBe("This value is larger than the group maximum (4 MiB). You can keep it, but a new value must be 4 MiB or less.");
+    // 검토 L: 넘는 칸마다 이름과 값을 넣어 한 줄씩 알린다(fixture 의 20001 은 서버·클라이언트 모두 기본값 8 MiB 다).
+    expect((await page.locator("#tunnel-buffer-stored-over-server").textContent())?.trim())
+        .toBe("Server buffer 8 MiB is larger than the group maximum (4 MiB). You can keep it, but a new value must be 4 MiB or less.");
+    expect((await page.locator("#tunnel-buffer-stored-over-client").textContent())?.trim())
+        .toBe("Client buffer 8 MiB is larger than the group maximum (4 MiB). You can keep it, but a new value must be 4 MiB or less.");
+    // 저장된 값을 그대로 두는 칸에는 max 를 걸지 않는다.
+    expect(await page.locator("#input-buffer-limit-server").getAttribute("max")).toBeNull();
     expect(await button(page, "Apply and Restart").isEnabled()).toBe(true);
 }, 2));

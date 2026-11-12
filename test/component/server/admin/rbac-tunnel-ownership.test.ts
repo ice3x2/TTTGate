@@ -206,6 +206,11 @@ describe("rbac-tunnel-ownership", () => {
             expect(await storedTunnel(20060)).toBeUndefined();
             const unlimitedClient = await request("POST", "/api/tunnelingOption", tunnelBody(20060, {bufferLimitOnServer: 8, bufferLimitOnClient: -1}), carol.auth);
             expect(unlimitedClient.body).toMatchObject({code: "group_buffer_limit_exceeded", field: "bufferLimitOnClient", max: 64});
+            // AC-3 클라이언트 버퍼 0 도 제한 없음이라 거부하고 저장하지 않는다.
+            const zeroClient = await request("POST", "/api/tunnelingOption", tunnelBody(20060, {bufferLimitOnServer: 8, bufferLimitOnClient: 0}), carol.auth);
+            expect(zeroClient.status).toBe(422);
+            expect(zeroClient.body).toMatchObject({code: "group_buffer_limit_exceeded", field: "bufferLimitOnClient", max: 64});
+            expect(await storedTunnel(20060)).toBeUndefined();
             const ok = await request("POST", "/api/tunnelingOption", tunnelBody(20060, {bufferLimitOnServer: 64, bufferLimitOnClient: 64}), carol.auth);
             expect(ok.status).toBe(200);
 
@@ -225,6 +230,27 @@ describe("rbac-tunnel-ownership", () => {
             await setGroupAttributes(groupTwo, groupAttributes("private"));
             await request("DELETE", "/api/tunnelingOption", {forwardPort: 20060,
                 expectedRevision: ServerOptionStore.instance.revisionState.currentRevision}, superuser);
+        }
+    });
+
+    // 이슈 366 검토 H-1 — 숫자가 아닌 버퍼 값은 기본값으로 보지 않는다. 일반 유저는 422, 슈퍼유저도 저장소 검사에 걸려 저장되지 않는다.
+    it("이슈 366 숫자가 아닌 버퍼 값은 그룹 상한을 우회하지 못하고 누구의 저장으로도 남지 않는다", async () => {
+        await setGroupAttributes(groupTwo, {...groupAttributes("private"), max_session_buffer_mib: 64});
+        try {
+            for(const field of ["bufferLimitOnServer", "bufferLimitOnClient"]) {
+                for(const garbage of ["0", "100000", false, [0], {}]) {
+                    const body = tunnelBody(20061, {bufferLimitOnServer: 8, bufferLimitOnClient: 8, [field]: garbage});
+                    const byRegular = await request("POST", "/api/tunnelingOption", body, carol.auth);
+                    expect(byRegular.status).toBe(422);
+                    expect(byRegular.body).toMatchObject({code: "group_buffer_limit_exceeded", field, max: 64});
+                    expect(await storedTunnel(20061)).toBeUndefined();
+                    const bySuper = await request("POST", "/api/tunnelingOption", tunnelBody(20061, {bufferLimitOnServer: 8, bufferLimitOnClient: 8, [field]: garbage}), superuser);
+                    expect(bySuper.status).toBe(400);
+                    expect(await storedTunnel(20061)).toBeUndefined();
+                }
+            }
+        } finally {
+            await setGroupAttributes(groupTwo, groupAttributes("private"));
         }
     });
 

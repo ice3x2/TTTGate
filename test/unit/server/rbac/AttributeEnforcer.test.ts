@@ -461,6 +461,16 @@ describe("enforce: 그룹 연결당 버퍼 최댓값(max_session_buffer_mib)", (
             .toEqual({success: true});
     });
 
+    it("H-1 숫자가 아닌 버퍼 값은 기본값으로 보지 않고 거부한다(null 만 기본값 8)", () => {
+        for(const field of ["bufferLimitOnServer", "bufferLimitOnClient"]) {
+            for(const garbage of ["0", "100000", false, [0], {}, NaN, Infinity]) {
+                const result = failureOf(enforce(principalWith(CAP), tunnel({bufferLimitOnServer: 8, bufferLimitOnClient: 8, [field]: garbage}), "create", CONTEXT));
+                expect(result).toMatchObject({success: false, status: 422, code: "group_buffer_limit_exceeded", values: {field, max: 64}});
+            }
+        }
+        expect(enforce(principalWith(CAP), tunnel({bufferLimitOnServer: null, bufferLimitOnClient: null}), "create", CONTEXT)).toEqual({success: true});
+    });
+
     it("AC-6 그룹 상한은 지키지만 전역 캐시 한도를 넘으면 지금처럼 buffer_limit_exceeded 다", () => {
         const result = failureOf(enforce(principalWith({...BASE, max_session_buffer_mib: 512}), tunnel({bufferLimitOnServer: 256, bufferLimitOnClient: 8}), "create",
             {...CONTEXT, maxServerBufferMiB: 128}));

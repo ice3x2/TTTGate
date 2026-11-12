@@ -116,10 +116,17 @@ function saveFailedResult(failed: FileFailure): Failure<422> {
     return failure(422, 'identity_save_failed', failed.message, failed.values);
 }
 
-/** 이슈 366: 옛 파일에는 max_session_buffer_mib 가 없다. 0 이상의 정수가 아니면 0(그룹 상한 없음)으로 읽는다. */
+/**
+ * 이슈 366: 옛 파일에는 max_session_buffer_mib 가 없다. 0 이상의 정수가 아니면 0(그룹 상한 없음)으로 읽는다.
+ * 값이 있는데 틀렸으면 상한이 풀리므로 경고를 남긴다.
+ */
 function sessionBufferCapOnLoad(group: Group): number {
     const value = (group.attributes as Partial<GroupAttributes> | undefined)?.max_session_buffer_mib;
-    return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : 0;
+    if(typeof value === 'number' && Number.isInteger(value) && value >= 0) return value;
+    if(value !== undefined) {
+        logger.warn(`identity.yaml: group ${group.id} has an invalid max_session_buffer_mib (${String(value)}). The group buffer maximum is off for this group.`);
+    }
+    return 0;
 }
 
 /** 이슈 346: 옛 파일에는 mfa_required 가 없다(false). 불리언이 아닌 값은 강제가 꺼지므로 경고를 남긴다. */

@@ -17,14 +17,18 @@ export function defaultBuffer(cap: number | null): number {
     return cap === null ? DEFAULT_BUFFER_MIB : Math.min(DEFAULT_BUFFER_MIB, cap);
 }
 
+/** 버퍼 칸의 상태. 'over'·'unlimited' 는 저장을 막고, 'stored-over' 는 경고만 한다. */
+export type BufferIssue = 'over' | 'unlimited' | 'stored-over';
+
 /**
- * 버퍼 칸의 상태. 상한을 넘는 새 값은 'over'(저장을 막는다), 상한을 넘지만 저장된 값을 그대로 두면 'stored-over'(경고만),
- * 그 밖은 undefined 다. 클라이언트 버퍼 1 미만은 제한 없음이라 상한보다 크다. 비어 있는 칸은 다른 검사가 맡는다.
+ * 버퍼 칸의 상태. 상한을 넘는 새 값은 'over', 새로 넣은 클라이언트 버퍼 1 미만(제한 없음)은 'unlimited' 다(둘 다 저장을 막는다).
+ * 상한을 넘지만 저장된 값을 그대로 두면 'stored-over'(경고만), 그 밖은 undefined 다. 비어 있는 칸은 다른 검사가 맡는다.
  */
 export function bufferIssue(kind: 'server' | 'client', value: number | null | undefined, stored: number | undefined,
-    cap: number | null): 'over' | 'stored-over' | undefined {
+    cap: number | null): BufferIssue | undefined {
     if(cap === null || typeof value !== 'number') return undefined;
-    const exceeds = value > cap || (kind === 'client' && value < 1);
-    if(!exceeds) return undefined;
-    return stored !== undefined && value === stored ? 'stored-over' : 'over';
+    const unlimited = kind === 'client' && value < 1;
+    if(!unlimited && value <= cap) return undefined;
+    if(stored !== undefined && value === stored) return 'stored-over';
+    return unlimited ? 'unlimited' : 'over';
 }

@@ -27,8 +27,11 @@ describe("이슈 366 버퍼 최댓값", () => {
     test("상한을 넘는 새 값은 over, 저장된 값을 그대로 두면 stored-over 경고, 그 밖은 없음", () => {
         expect(bufferIssue("server", 65, undefined, 64)).toBe("over");
         expect(bufferIssue("server", 64, undefined, 64)).toBeUndefined();
-        expect(bufferIssue("client", 0, undefined, 64)).toBe("over");
-        expect(bufferIssue("client", -1, undefined, 64)).toBe("over");
+        // 검토 M-1: 클라이언트 버퍼 1 미만(제한 없음)은 상한 초과와 다른 안내를 보이도록 'unlimited' 로 나눈다.
+        expect(bufferIssue("client", 0, undefined, 64)).toBe("unlimited");
+        expect(bufferIssue("client", -1, undefined, 64)).toBe("unlimited");
+        expect(bufferIssue("client", 0, -1, 64)).toBe("unlimited");
+        expect(bufferIssue("client", 65, undefined, 64)).toBe("over");
         expect(bufferIssue("client", -1, -1, 64)).toBe("stored-over");
         expect(bufferIssue("server", 128, 128, 64)).toBe("stored-over");
         expect(bufferIssue("server", 96, 128, 64)).toBe("over");

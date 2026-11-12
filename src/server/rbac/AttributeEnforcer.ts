@@ -146,7 +146,8 @@ const DEFAULT_BUFFER_MIB = 8;
 
 /**
  * 이슈 366: 그룹 연결당 버퍼 최댓값(max_session_buffer_mib, 0 이면 없음). 서버·클라이언트 버퍼 모두에 적용한다.
- * 클라이언트 버퍼 1 미만은 제한 없음이라 어떤 상한보다 크다. 저장된 값을 그대로 두는 필드는 받는다. 서버 버퍼를 먼저 본다.
+ * 클라이언트 버퍼 1 미만은 제한 없음이라 어떤 상한보다 크다. 유한한 숫자가 아닌 값도 거부한다(undefined·null 만 기본값 8).
+ * 저장된 값을 그대로 두는 필드는 받는다. 서버 버퍼를 먼저 본다.
  */
 function groupBufferFailure(attributes: Record<string, unknown>, next: TunnelingOption, context: EnforceContext): EnforceResult | undefined {
     const cap = attributes.max_session_buffer_mib;
@@ -156,10 +157,11 @@ function groupBufferFailure(attributes: Record<string, unknown>, next: Tunneling
         {field: 'bufferLimitOnClient', current: context.currentClientBufferMiB, unlimitedBelowOne: true},
     ];
     for(const {field, current, unlimitedBelowOne} of fields) {
-        const raw = next[field];
-        const value = typeof raw === 'number' ? raw : DEFAULT_BUFFER_MIB;
+        const raw: unknown = next[field];
+        // 없는 값만 서버가 기본값으로 채운다. 그 밖의 숫자가 아닌 값을 기본값으로 보면 상한을 우회해 그대로 저장된다.
+        const value = raw === undefined || raw === null ? DEFAULT_BUFFER_MIB : raw;
         if(current !== undefined && value === current) continue;
-        if(value > cap || (unlimitedBelowOne && value < 1)) {
+        if(typeof value !== 'number' || !Number.isFinite(value) || value > cap || (unlimitedBelowOne && value < 1)) {
             return failure(422, 'group_buffer_limit_exceeded', `${field} must be at most ${cap} MiB for this group`, {field, max: cap});
         }
     }
