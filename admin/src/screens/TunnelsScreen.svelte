@@ -13,7 +13,7 @@
     import {useSession} from '../shell/session';
     import {tunnelPolicy} from './parts/tunnelPolicy';
     import {StatusPoller} from './parts/statusPoller';
-    import {tunnelRowView, tunnelTitle, undoTimeoutOf} from './parts/tunnelRow';
+    import {isTunnelOn, tunnelRowView, tunnelTitle, undoTimeoutOf} from './parts/tunnelRow';
     import {ownerGroups} from './parts/ownerGroups';
     import {ipLimitView, withIpResult, type IpLimitView} from './parts/ipLimit';
     import Clock from '../ui/Clock.svelte';
@@ -53,7 +53,7 @@
 
     const policy = $derived($me ? tunnelPolicy($me) : undefined);
     const ownedCount = $derived(options.filter((option) => option.owner?.id === $me?.user.id).length);
-    const onCount = $derived(options.filter((option) => statuses[option.forwardPort]?.online && statuses[option.forwardPort]?.active).length);
+    const onCount = $derived(options.filter((option) => isTunnelOn(statuses[option.forwardPort])).length);
     const stale = $derived(statusLoaded && now - lastReadAt > STALE_MS);
 
     const session = useSession();
@@ -220,8 +220,8 @@
         {@const title = tunnelTitle(option)}
         {@const view = tunnelRowView({option, status: statuses[option.forwardPort], loaded: statusLoaded, meId: $me?.user.id ?? '', serverTime, grouped})}
         {@const busy = pending[option.forwardPort] !== undefined}
-        <!-- 이슈 367(설계 반영): 묶어 볼 때 다른 사람 터널의 스위치 이름에 소유자를 붙인다. -->
-        {@const switchLabel = grouped && ownerName ? t('tunnels.switchWithOwner', {title, owner: ownerName}) : title}
+        <!-- 이슈 367(설계 반영): 묶어 볼 때 내 묶음이 아니면 스위치 이름에 소유자(또는 묶음 이름)를 붙인다. -->
+        {@const switchLabel = ownerName ? t('tunnels.switchWithOwner', {title, owner: ownerName}) : title}
         {@const parts = busy ? [{text: t(pending[option.forwardPort] ? 'tunnels.turningOn' : 'tunnels.turningOff'), muted: true}] : view.parts}
         {@const ipView = ipLimitView({option, status: statuses[option.forwardPort], requesterIp, busy: ipPending[option.forwardPort] === true})}
         <li data-port={option.forwardPort}>
@@ -288,19 +288,21 @@
         {#if grouped}
             <!-- 이슈 367: 소유자가 둘 이상이면 소유자별 묶음으로 보인다. 각 목록은 머리글로 이름을 붙인다. -->
             {#each ownerView.groups as group, index (group.key)}
-                {@const onInGroup = group.options.filter((option) => statuses[option.forwardPort]?.active === true).length}
-                <section class="owner-group">
+                {@const onInGroup = group.options.filter((option) => isTunnelOn(statuses[option.forwardPort])).length}
+                {@const headingId = `owner-group-${index}`}
+                <section class="owner-group" aria-labelledby={headingId}>
                     <header class="owner-head">
-                        <h2 class="owner-title" id={`owner-group-${index}`} title={group.title}>{group.title}</h2>
+                        <h2 class="owner-title" id={headingId} title={group.title}>{group.name}{#if group.displayName}{' '}<span class="owner-dn">({group.displayName})</span>{/if}</h2>
                         {#if group.kind === 'me'}<span class="owner-me">{t('tunnels.groupMe')}</span>{/if}
                         {#if statusLoaded}<span class="owner-count">{t('tunnels.summary', {on: onInGroup, total: group.options.length})}</span>{/if}
                     </header>
-                    <ul class="tunnel-list" aria-labelledby={`owner-group-${index}`}>
+                    <ul class="tunnel-list" aria-labelledby={headingId}>
                         {#each group.options as option (option.forwardPort)}
-                            {@render tunnelRow(option, group.kind === 'user' ? group.options[0].owner?.username : undefined)}
+                            {@render tunnelRow(option, group.switchOwner)}
                         {/each}
                     </ul>
-                    {#if group.kind === 'unknown'}<p class="owner-hint">{t('tunnels.groupNoOwnerHint')}</p>{/if}
+                    <!-- 소유자를 바꿀 수 있는 사람(슈퍼유저)에게만 정리 방법을 안내한다. -->
+                    {#if group.kind === 'unknown' && $me?.user.role === 'superuser'}<p class="owner-hint">{t('tunnels.groupNoOwnerHint')}</p>{/if}
                 </section>
             {/each}
         {:else}
@@ -329,12 +331,15 @@
 
 <style>
     /* 이슈 367: 소유자별 묶음. 긴 이름은 머리글 안에서 줄임표로 줄이고, "나" 표시와 켜진 수는 따로 둔다. */
-    .owner-group { display: flex; flex-direction: column; gap: var(--s-2); margin-top: var(--s-4); }
-    .owner-head { display: flex; align-items: baseline; gap: var(--s-2); min-width: 0; }
-    .owner-title { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-md); font-weight: 600; color: var(--ink-0); }
-    .owner-me { flex: none; padding: 0 6px; border: 1px solid var(--line-1); border-radius: 999px; font-size: var(--fs-xs); color: var(--ink-1); }
-    .owner-count { flex: none; margin-left: auto; font-size: var(--fs-xs); color: var(--ink-2); white-space: nowrap; }
-    .owner-hint { margin: 0; font-size: var(--fs-xs); color: var(--ink-2); }
+    /* 설계 문서 ⑤의 묶음 모양: 머리글 13px, 표시 이름은 보통 굵기, "나"는 초록 표시, 묶음 사이 24px, 카드에 가는 테두리. */
+    .owner-group + .owner-group { margin-top: var(--s-6); }
+    .owner-head { display: flex; align-items: baseline; gap: var(--s-2); margin: 0 0 var(--s-2) var(--s-1); min-width: 0; }
+    .owner-title { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 1.4; font-weight: 600; color: var(--ink-1); }
+    .owner-dn { font-weight: 400; color: var(--ink-2); }
+    .owner-me { flex: none; padding: 0 7px; border-radius: 999px; font-size: var(--fs-xs); font-weight: 600; color: var(--pulse); background: var(--pulse-glow); }
+    .owner-count { flex: none; margin-left: auto; font-size: var(--fs-sm); color: var(--ink-2); white-space: nowrap; }
+    .owner-group .tunnel-list { border: 1px solid var(--line-0); }
+    .owner-hint { margin: var(--s-2) var(--s-1) 0; font-size: var(--fs-sm); color: var(--ink-2); }
     .tunnels-bar { margin-bottom: var(--s-4); }
     .tunnel-summary { margin: 0 0 var(--s-3); font-size: var(--fs-sm); color: var(--ink-2); display: flex; flex-wrap: wrap; gap: var(--s-3); }
     .stale { color: var(--warn); }
