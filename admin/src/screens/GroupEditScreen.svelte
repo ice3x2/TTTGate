@@ -309,6 +309,11 @@
                 <NumberInput id="group-attr-max_concurrent_connections" min={0} max={100000} step={1} disabled={readOnly}
                     bind:value={() => attrs.max_concurrent_connections, (value) => (attrs.max_concurrent_connections = value as number)} />
             </Field>
+            <!-- 이슈 366 FR-9: 그룹 연결당 버퍼 최댓값. 0 이면 그룹 최대가 없다. -->
+            <Field label={t('group.maxSessionBuffer')} hint={t('group.maxSessionBufferHint')} for="group-attr-max_session_buffer_mib">
+                <NumberInput id="group-attr-max_session_buffer_mib" min={0} max={1048576} step={1} disabled={readOnly}
+                    bind:value={() => attrs.max_session_buffer_mib ?? 0, (value) => (attrs.max_session_buffer_mib = value as number)} />
+            </Field>
             <Field label={t('group.bandwidth')} for="group-attr-rate_limit">
                 <Select id="group-attr-rate_limit" options={RATE_LIMITS} disabled={readOnly}
                     bind:value={() => attrs.rate_limit, (value) => (attrs.rate_limit = value as GroupAttributes['rate_limit'])} />

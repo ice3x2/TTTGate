@@ -31,6 +31,7 @@
     import {PROTOCOLS, tunnelPolicy} from './parts/tunnelPolicy';
     import PortRangeChips from './parts/PortRangeChips.svelte';
     import {RATE_RANGES, rateRangeError} from './parts/rateLimitRange';
+    import {bufferIssue, defaultBuffer, groupBufferCap} from './parts/bufferPolicy';
     import {t} from '../i18n';
     import {errorMessageOf} from '../i18n/serverError';
 
@@ -44,6 +45,11 @@
 
     let option = $state<TunnelingOptionEx | undefined>();
     let usedPorts = $state<number[]>([]);
+    // 이슈 366: 그룹 연결당 버퍼 최댓값과 불러온 값. 저장된 값을 그대로 두면 상한을 넘어도 경고만 한다.
+    const bufferCap = $derived($me ? groupBufferCap($me) : null);
+    let storedBuffers = $state<{server?: number; client?: number}>({});
+    const serverBufferIssue = $derived(option ? bufferIssue('server', option.bufferLimitOnServer, storedBuffers.server, bufferCap) : undefined);
+    const clientBufferIssue = $derived(option ? bufferIssue('client', option.bufferLimitOnClient, storedBuffers.client, bufferCap) : undefined);
     let snapshotRevision = 0;
 
     // U3-06: 일반 유저는 그룹 속성 안에서만 입력한다. 서버가 최종 판정하므로 여기서는 표시·기본값·요청 모양만 맞춘다.
@@ -164,7 +170,8 @@
         if(field === 'ban' && inRange(rateBan, RATE_RANGES.ban)) option.rateLimit.banMs = rateBan! * 60000;
     };
 
-    const updatable = $derived(option ? ServerOptionCtrl.checkValidTunnelingOption(option) && validServerBuffer(option.bufferLimitOnServer) && rateValid : false);
+    const updatable = $derived(option ? ServerOptionCtrl.checkValidTunnelingOption(option) && validServerBuffer(option.bufferLimitOnServer) && rateValid
+        && serverBufferIssue !== 'over' && clientBufferIssue !== 'over' : false);
 
     // 옛 _loadCertInfo(134~156행) 그대로다. 옛 코드는 포트로 행을 찾아 없으면 그대로 돌아갔다.
     const loadCertInfo = async (port: number) => {
@@ -199,6 +206,10 @@
             usedPorts = snapshot.value.map((row) => row.forwardPort).filter((port) => String(port) !== param);
             if(param === 'new') {
                 const fresh = emptyOption();
+                // 이슈 366 FR-11: 새 터널의 버퍼 기본값은 min(10, 그룹 상한)이다.
+                fresh.bufferLimitOnServer = defaultBuffer(bufferCap);
+                fresh.bufferLimitOnClient = defaultBuffer(bufferCap);
+                storedBuffers = {};
                 if(policy?.restricted) {
                     policy.normalizeHttpOption(fresh);
                     // 난수 포트는 대개 허용 범위 밖이라 처음부터 포트 오류가 보인다. 목록의 터널이 쓰지 않는 첫 허용 포트로 시작한다.
@@ -222,6 +233,7 @@
             }
             found.isSync = true;
             found.originalForwardPort = found.forwardPort;
+            storedBuffers = {server: found.bufferLimitOnServer, client: found.bufferLimitOnClient};
             found.allowedClientNamesQuery = found.allowedClientNames?.join('; ');
             if(!found.allowedClientNamesQuery) found.allowedClientNamesQuery = '';
             else found.allowedClientNamesQuery += ';';
@@ -565,20 +577,30 @@
         </div>
     </Card>
     <Card label={t('tunnelEdit.bufferLimit')}>
+        {#if bufferCap !== null}
+            <!-- 이슈 366 FR-10: 상한은 입력하기 전부터 보인다. -->
+            <p id="tunnel-buffer-cap" class="buffer-cap">{t('tunnelEdit.groupBufferMax', {max: bufferCap})}</p>
+        {/if}
         <div class="two-col">
             <Field label={t('tunnelEdit.server')} for="input-buffer-limit-server"
-                error={validServerBuffer(option.bufferLimitOnServer) ? undefined : t('tunnelEdit.serverBufferInvalid')}>
+                error={!validServerBuffer(option.bufferLimitOnServer) ? t('tunnelEdit.serverBufferInvalid')
+                    : serverBufferIssue === 'over' ? t('tunnelEdit.bufferOverGroup', {max: bufferCap ?? 0}) : undefined}>
                 <NumberInput id="input-buffer-limit-server" min={1} step="any"
-                    invalid={!validServerBuffer(option.bufferLimitOnServer)} bind:value={option.bufferLimitOnServer} />
+                    invalid={!validServerBuffer(option.bufferLimitOnServer) || serverBufferIssue === 'over'} bind:value={option.bufferLimitOnServer} />
             </Field>
-            <Field label={t('tunnelEdit.client')} for="input-buffer-limit-client">
-                <NumberInput id="input-buffer-limit-client" bind:value={option.bufferLimitOnClient}
+            <Field label={t('tunnelEdit.client')} for="input-buffer-limit-client"
+                error={clientBufferIssue === 'over' ? t('tunnelEdit.bufferOverGroup', {max: bufferCap ?? 0}) : undefined}>
+                <NumberInput id="input-buffer-limit-client" bind:value={option.bufferLimitOnClient} invalid={clientBufferIssue === 'over'}
                     oninput={(v) => (option!.bufferLimitOnClient = clampClientBuffer(v) as number)} />
             </Field>
         </div>
+        {#if serverBufferIssue === 'stored-over' || clientBufferIssue === 'stored-over'}
+            <!-- 이슈 366 FR-12: 이미 상한을 넘은 기존 값은 그대로 저장할 수 있다. 경고만 한다. -->
+            <p id="tunnel-buffer-stored-over" class="buffer-warn" role="status">{t('tunnelEdit.bufferStoredOver', {max: bufferCap ?? 0})}</p>
+        {/if}
         <ul class="notes">
             <li>{t('tunnelEdit.serverBufferNote')}</li>
-            <li>{t('tunnelEdit.clientBufferNote')}</li>
+            <li>{bufferCap !== null ? t('tunnelEdit.clientBufferCapNote', {max: bufferCap}) : t('tunnelEdit.clientBufferNote')}</li>
             <li>{t('tunnelEdit.spillNote')}</li>
         </ul>
     </Card>
@@ -695,6 +717,8 @@
     .form-stack { display: flex; flex-direction: column; gap: var(--s-4); }
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); }
     .notes { margin: var(--s-3) 0 0; padding-left: var(--s-4); font-size: var(--fs-xs); color: var(--ink-2); }
+    .buffer-cap { margin: 0 0 var(--s-3); font-family: var(--ff-mono); font-size: var(--fs-xs); color: var(--ink-1); }
+    .buffer-warn { margin: var(--s-3) 0 0; font-size: var(--fs-xs); color: var(--warn); }
     .section-title { font-family: var(--ff-display); font-size: var(--fs-lg); margin: var(--s-2) 0 0; }
     .edit-bar {
         position: sticky;
