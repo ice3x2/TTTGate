@@ -129,7 +129,7 @@ describe("rbac-tunnel-ownership", () => {
             applyExternalServerCert: jest.fn(async () => true),
             captureRuntimeState: jest.fn(() => ({external: {}})),
             // 이슈 369: 연결 목록·끊기·허용 클라이언트 연결 여부.
-            tunnelConnections: jest.fn(() => ({connections: [], truncated: false})),
+            tunnelConnections: jest.fn(() => ({connections: [], truncated: false, total: 0})),
             closeTunnelConnection: jest.fn(async () => ({result: "gone"})),
             isClientConnected: jest.fn(() => false),
             reapplyActiveCaps: jest.fn()
@@ -314,7 +314,7 @@ describe("rbac-tunnel-ownership", () => {
         expect(created.status).toBe(200);
         try {
             const connection = {id: 7, remoteAddress: "203.0.113.7", remotePort: 51000, connectedAt: Date.now() - 1000, rx: 10, tx: 20};
-            runtime.tunnelConnections.mockReturnValue({connections: [connection], truncated: false});
+            runtime.tunnelConnections.mockReturnValue({connections: [connection], truncated: false, total: 1});
             const listed = await request("GET", `/api/tunneling/${port}/connections`, {}, alice.auth);
             expect(listed.status).toBe(200);
             expect(typeof listed.body.serverTime).toBe("number");
@@ -325,9 +325,10 @@ describe("rbac-tunnel-ownership", () => {
 
             // FR-8: 국가 필터가 켜져 있으면 연결마다 국가를 싣는다. 서버가 잘라 준 목록이면 truncated 를 그대로 알린다(M4).
             AdmissionController.instance.configureGeo({mode: "deny", countries: ["US"], applyToAdmin: false, unknownPolicy: "allow"});
-            runtime.tunnelConnections.mockReturnValue({connections: [{...connection, remoteAddress: "8.8.8.8"}], truncated: true});
+            runtime.tunnelConnections.mockReturnValue({connections: [{...connection, remoteAddress: "8.8.8.8"}], truncated: true, total: 812});
             const shown = await request("GET", `/api/tunneling/${port}/connections`, {}, alice.auth);
-            expect(shown.body).toMatchObject({countryLookup: true, truncated: true});
+            // M-1: 화면 요약은 잘라 준 목록이 아니라 서버의 전체 연결 수로 센다.
+            expect(shown.body).toMatchObject({countryLookup: true, truncated: true, total: 812});
             expect(shown.body.connections).toEqual([{...connection, remoteAddress: "8.8.8.8", country: "US"}]);
             AdmissionController.instance.configureGeo({mode: "off", countries: [], applyToAdmin: false, unknownPolicy: "allow"});
 
@@ -355,7 +356,7 @@ describe("rbac-tunnel-ownership", () => {
                 .toMatchObject({status: 404, body: {code: "connection_not_found"}});
             expect((await request("DELETE", `/api/tunneling/${port}/connections/abc`, {}, alice.auth)).status).toBe(400);
         } finally {
-            runtime.tunnelConnections.mockReturnValue({connections: [], truncated: false});
+            runtime.tunnelConnections.mockReturnValue({connections: [], truncated: false, total: 0});
             AdmissionController.instance.configureGeo({mode: "off", countries: [], applyToAdmin: false, unknownPolicy: "allow"});
             await request("DELETE", "/api/tunnelingOption", {forwardPort: port,
                 expectedRevision: ServerOptionStore.instance.revisionState.currentRevision}, superuser);

@@ -62,7 +62,8 @@ const waitChecked = (page: Page, port: number, checked: boolean) => page.waitFor
     [port, checked] as const, {timeout: 10_000});
 // #369 FR-1: 켜진 터널의 연결 수는 상태 글자가 아니라 줄 링크 밖의 가동 정보 줄(연결 버튼, 볼 수 없으면 글자)에 있다.
 const waitConnections = (page: Page, port: number, count: number) => page.waitForFunction(([target, value]) =>
-    document.querySelector(`li[data-port="${target}"] .tunnel-meta-row :is(.tunnel-conn, .tunnel-conn-text)`)?.textContent?.startsWith(`Connections ${value}`) === true,
+    [`Connections ${value}`, `Connections ${value}›`].includes(
+        document.querySelector(`li[data-port="${target}"] .tunnel-meta-row :is(.tunnel-conn, .tunnel-conn-text)`)?.textContent?.trim() ?? ""),
     [port, count] as const, {timeout: 10_000});
 const undoToast = (page: Page, text: string) => page.locator(".toast").filter({hasText: text});
 

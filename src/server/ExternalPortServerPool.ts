@@ -735,10 +735,11 @@ class ExternalPortServerPool {
     /**
      * 이슈 369 FR-8: 그 포트의 연결 목록. 최근 연결부터 최대 limit(기본 500)개다. 원격 주소는 IPv4-mapped 를 IPv4 로 바꾼다.
      * 더 있어서 잘랐으면 truncated 다. 화면은 잘린 목록에서 빠진 연결을 끝난 것으로 보지 않는다.
+     * total 은 자르기 전의 전체 연결 수다. 화면 요약은 이 수로 센다. 이미 닫히는 중인 연결은 목록과 수에서 뺀다.
      */
-    public connections(port: number, limit: number = MAX_LISTED_CONNECTIONS) : {connections: TunnelConnection[]; truncated: boolean} {
+    public connections(port: number, limit: number = MAX_LISTED_CONNECTIONS) : {connections: TunnelConnection[]; truncated: boolean; total: number} {
         const all = Array.from(this._handlerMap.values())
-            .filter((handler) => handler.getBundle(PORT_BUNDLE_KEY) === port)
+            .filter((handler) => handler.getBundle(PORT_BUNDLE_KEY) === port && !handler.closeInitiated)
             .map((handler) => {
                 const counters = handler.getBundle(CONNECTION_BUNDLE_KEY) as ConnectionCounters | undefined;
                 const address = handler.getBundle(REMOTE_ADDRESS_BUNDLE_KEY) as string | undefined;
@@ -746,7 +747,7 @@ class ExternalPortServerPool {
                     remotePort: counters?.remotePort, connectedAt: counters?.connectedAt ?? 0, rx: counters?.rx ?? 0, tx: counters?.tx ?? 0};
             })
             .sort((a, b) => b.connectedAt - a.connectedAt || b.id - a.id);
-        return {connections: all.slice(0, limit), truncated: all.length > limit};
+        return {connections: all.slice(0, limit), truncated: all.length > limit, total: all.length};
     }
 
     /**

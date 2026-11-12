@@ -220,6 +220,8 @@ describe("security-blocklist", () => {
         expect(response.status).toBe(409);
         expect(response.body).toMatchObject({success: false, code: "duplicate", message: "203.0.113.7 is already blocked on port 18080"});
         expect(await addresses()).toEqual(["203.0.113.7"]);
+        // L-3: 이미 막힌 주소라도 그 차단에 걸리는 연결이 남아 있으면 끊는다(차단을 더하기 전에 들어온 연결 등).
+        expect(response.body.closedConnections).toBe(2);
     });
 
     it("상한에 이르면 409 full 이다 (REQ-4 AC-3)", async () => {

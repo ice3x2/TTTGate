@@ -213,7 +213,7 @@ class ServerOptionCtrl {
      * 이슈 369 FR-8: 그 터널의 연결 목록(최근 연결부터). 고치기 권한이 없으면 403 read_only 다.
      * 국가는 국가 필터가 국가를 보일 때만 값이다(아니면 null). 최근 500개로 잘렸으면 truncated 다. 옛 서버면 이 API 가 없다(404).
      */
-    public tunnelConnections(port: number) : Promise<ApiResult<{serverTime: number; countryLookup?: boolean; truncated?: boolean;
+    public tunnelConnections(port: number) : Promise<ApiResult<{serverTime: number; countryLookup?: boolean; truncated?: boolean; total?: number;
         connections: Array<{id: number; remoteAddress: string | undefined;
         remotePort: number | undefined; connectedAt: number; rx: number; tx: number; country?: string | null}>}>> {
         return adminRequest(`/api/tunneling/${port}/connections`);

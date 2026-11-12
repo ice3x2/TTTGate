@@ -68,7 +68,8 @@ describe("tunnel connections 실제 소켓 (이슈 369)", () => {
             expect(connection.tx).toBe(0);
         }
         expect(listed.connections[0].rx).toBe(5);
-        expect(pool.connections(otherPort)).toEqual({connections: [], truncated: false});
+        expect(listed.total).toBe(2);
+        expect(pool.connections(otherPort)).toEqual({connections: [], truncated: false, total: 0});
     });
 
     it("FR-10·AC-6 연결 하나를 끊으면 그 소켓만 닫히고, 끝난 id 는 gone, 다른 포트의 id 는 other-port 다", async () => {
@@ -134,6 +135,8 @@ describe("tunnel connections 실제 소켓 (이슈 369)", () => {
         const capped = pool.connections(forwardPort, 1);
         expect(capped.truncated).toBe(true);
         expect(capped.connections.map((connection) => connection.remoteAddress)).toEqual([IP_B]);
+        // M-1: 잘라 줘도 화면이 요약에 쓸 전체 연결 수를 알린다.
+        expect(capped.total).toBe(2);
         expect(pool.connections(forwardPort, 2).truncated).toBe(false);
     });
 
@@ -146,6 +149,9 @@ describe("tunnel connections 실제 소켓 (이슈 369)", () => {
         // 닫기를 시작했지만 소켓이 아직 남은 상태(closeIfSatisfiedLength 가 end_ 를 부른 직후)를 만든다.
         (pool as any)._handlerMap.get(closing.id).closeInitiated = true;
         await expect(pool.closeConnection(forwardPort, closing.id)).resolves.toEqual({result: "gone"});
+        // L-4: 닫히는 중인 연결은 목록과 전체 수에도 넣지 않는다.
+        expect(list(forwardPort).map((connection) => connection.id)).not.toContain(closing.id);
+        expect(pool.connections(forwardPort).total).toBe(1);
         expect(await pool.closeBlockedSessions(() => true)).toBe(1);
     });
 

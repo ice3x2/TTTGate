@@ -1,6 +1,6 @@
 import type {TunnelingStatus} from "../../admin/src/controller/Options";
-import {addedConnections, blockBodyText, blockedDoneText, clientsView, mergeConnections, MAX_KEPT_ENDED, statsView, type ConnectionRow}
-    from "../../admin/src/screens/parts/connections";
+import {addedConnections, announcement, blockBodyText, blockedDoneText, clientsView, connectionsSupported, mergeConnections, MAX_KEPT_ENDED,
+    statsView, summaryCount, type ConnectionRow} from "../../admin/src/screens/parts/connections";
 import {isTopModal, closeModal, openModal} from "../../admin/src/ui/modalStack";
 import {translator} from "../../admin/src/i18n";
 
@@ -63,11 +63,42 @@ describe("mergeConnections (설계 반영: 창이 열린 동안 줄 순서 고�
         const next = mergeConnections([row(1, {state: "closed"}), row(2, {state: "blocked"})], []);
         expect(next.map((r) => r.state)).toEqual(["closed", "blocked"]);
     });
-    test("잘린 응답(truncated)에서 빠진 연결은 끝남으로 바꾸지 않는다. 서버가 최근 500개만 주므로 오래된 연결은 살아 있어도 빠진다", () => {
-        const next = mergeConnections([row(1), row(2)], [row(2), row(3)], {truncated: true});
-        expect(next.map((r) => [r.id, r.state])).toEqual([[1, "live"], [2, "live"], [3, "live"]]);
+    test("잘린 응답(truncated)에서 받은 목록의 가장 오래된 연결보다 오래된 줄은 살아 있을 수 있어 끝남으로 바꾸지 않고 숨긴다", () => {
+        // 서버는 (connectedAt, id) 가 큰 것부터 준다. row(n) 은 n 이 클수록 오래되었다. 받은 목록의 가장 오래된 연결은 row(2) 다.
+        const next = mergeConnections([row(1), row(2), row(3)], [row(0), row(2)], {truncated: true});
+        expect(next.map((r) => [r.id, r.state])).toEqual([[1, "ended"], [2, "live"], [0, "live"]]);
         // 잘리지 않은 응답이면 지금처럼 끝남이다.
         expect(mergeConnections([row(1), row(2)], [row(2)], {truncated: false}).map((r) => r.state)).toEqual(["ended", "live"]);
+    });
+    test("M-1 잘린 응답이 이어져도 살아 있는 줄은 서버가 준 수를 넘지 않는다", () => {
+        // 500개 상한을 3개로 줄여 본다. 새 연결이 들어올 때마다 가장 오래된 연결이 목록 밖으로 밀려난다.
+        let rows = mergeConnections([], [row(3), row(4), row(5)], {truncated: true, first: true});
+        for(const newest of [2, 1, 0]) {
+            rows = mergeConnections(rows, [row(newest), row(newest + 1), row(newest + 2)], {truncated: true});
+            expect(rows.filter((r) => r.state === "live").map((r) => r.id).sort()).toEqual([newest, newest + 1, newest + 2]);
+        }
+        // 연결 시각이 같으면 id 가 큰 쪽이 더 최근이다(서버 정렬과 같다).
+        const same = (id: number) => row(id, {connectedAt: NOW});
+        const tied = mergeConnections([same(5), same(4), same(3)], [same(5), same(4)], {truncated: true});
+        expect(tied.map((r) => [r.id, r.state])).toEqual([[5, "live"], [4, "live"]]);
+        const gone = mergeConnections([same(5), same(4), same(3)], [same(5), same(3)], {truncated: true});
+        expect(gone.map((r) => [r.id, r.state])).toEqual([[5, "live"], [4, "ended"], [3, "live"]]);
+    });
+    test("M-1 요약 연결 수는 서버가 준 전체 수이고, 옛 서버(전체 수 없음)는 살아 있는 줄 수다", () => {
+        const rows = [row(1), row(2, {state: "ended"}), row(3)];
+        expect(summaryCount(rows, 812)).toBe(812);
+        expect(summaryCount(rows, undefined)).toBe(2);
+    });
+    test("M-2 빈 목록으로 연 창에 새 연결이 들어오면 '새'로 붙고 새로 붙은 수로 센다", () => {
+        const first = mergeConnections([], [], {first: true});
+        expect(first).toEqual([]);
+        const next = mergeConnections(first, [row(1)], {first: false});
+        expect(next.map((r) => [r.id, r.state, r.isNew])).toEqual([[1, "live", true]]);
+        expect(addedConnections(first, next)).toBe(1);
+        // 처음 읽기는 연결이 있어도 새 표시가 없고 알리지 않는다.
+        const opened = mergeConnections([], [row(1), row(2)], {first: true});
+        expect(opened.map((r) => r.isNew)).toEqual([false, false]);
+        expect(addedConnections([], opened)).toBe(0);
     });
     test("끝난 줄은 상한까지만 남기고, 넘으면 오래된 끝난 줄부터 버린다. 살아 있는 줄은 버리지 않는다", () => {
         const prev = [row(0), ...Array.from({length: MAX_KEPT_ENDED}, (_, i) => row(i + 1, {state: "ended"}))];
@@ -89,6 +120,30 @@ describe("mergeConnections (설계 반영: 창이 열린 동안 줄 순서 고�
     });
 });
 
+describe("L-2 낭독 알림", () => {
+    test("같은 문장이 연달아 나와도 글자가 바뀌어 다시 읽힌다", () => {
+        const first = announcement("", "1 new connection");
+        expect(first).toBe("1 new connection");
+        const second = announcement(first, "1 new connection");
+        expect(second).not.toBe(first);
+        expect(second.replace(/\u200B/g, "")).toBe("1 new connection");
+        expect(announcement(second, "1 new connection")).toBe(first);
+        expect(announcement(second, "2 new connections")).toBe("2 new connections");
+    });
+});
+
+describe("M-3 옛 서버 판단", () => {
+    test("상태 응답에 allowedClients 가 있으면 새 서버라 연결 목록을 볼 수 있고, 없으면 옛 서버다", () => {
+        expect(connectionsSupported(status({allowedClients: []}))).toBe(true);
+        expect(connectionsSupported(status())).toBe(false);
+        expect(connectionsSupported(undefined)).toBe(false);
+    });
+    test("새 서버가 404 를 주면 이 터널을 더 볼 수 없다고 알린다", () => {
+        expect(en.t("connections.notVisible")).toBe("You can no longer see the connections to this tunnel.");
+        expect(ko.t("connections.notVisible")).toBe("이 터널의 연결을 더 볼 수 없습니다.");
+    });
+});
+
 describe("차단 확인 문장과 차단 뒤 알림 (L5·설계 문구)", () => {
     test("이 터널만: 연결 수가 있으면 그 수를, 없으면 앞으로 받지 않는다는 것만 말한다", () => {
         expect(blockBodyText({count: 2, scope: "tunnel"}, ko)).toBe("이 주소의 연결 2개를 바로 끊고, 앞으로 들어오는 연결도 받지 않습니다.");
@@ -97,8 +152,10 @@ describe("차단 확인 문장과 차단 뒤 알림 (L5·설계 문구)", () => 
         expect(blockBodyText({count: 0, scope: "tunnel"}, en)).toBe("New connections from this address to this tunnel will be refused.");
     });
     test("모든 터널: 다른 터널의 연결도 끊긴다는 것을 말한다", () => {
-        expect(blockBodyText({count: 2, scope: "all"}, ko)).toBe("이 터널에 있는 이 주소의 연결 2개와 다른 터널의 연결을 바로 끊고, 앞으로 모든 터널에서 이 주소의 연결을 받지 않습니다.");
-        expect(blockBodyText({count: 2, scope: "all"}, en)).toBe("Its 2 connections to this tunnel and any to other tunnels end now, and new ones to every tunnel will be refused.");
+        expect(blockBodyText({count: 2, scope: "all"}, ko)).toBe("이 터널에 있는 이 주소의 연결 2개와 다른 터널에 있는 이 주소의 연결을 바로 끊고, 앞으로 모든 터널에서 이 주소의 연결을 받지 않습니다.");
+        expect(blockBodyText({count: 2, scope: "all"}, en)).toBe("Its 2 connections to this tunnel and its connections to other tunnels end now, and new ones to every tunnel will be refused.");
+        expect(blockBodyText({count: 1, scope: "all"}, ko)).toBe("이 터널에 있는 이 주소의 연결 1개와 다른 터널에 있는 이 주소의 연결을 바로 끊고, 앞으로 모든 터널에서 이 주소의 연결을 받지 않습니다.");
+        expect(blockBodyText({count: 1, scope: "all"}, en)).toBe("Its 1 connection to this tunnel and its connections to other tunnels end now, and new ones to every tunnel will be refused.");
         expect(blockBodyText({count: 0, scope: "all"}, ko)).toBe("다른 터널에 있는 이 주소의 연결을 바로 끊고, 앞으로 모든 터널에서 이 주소의 연결을 받지 않습니다.");
         expect(blockBodyText({count: 0, scope: "all"}, en)).toBe("Any connections from this address to other tunnels end now, and new ones to every tunnel will be refused.");
     });

@@ -184,7 +184,7 @@ const stub = {
     },
     tunnelConnections(port: number) {
         record("tunnelConnections", [port]);
-        return {connections: [], truncated: false};
+        return {connections: [], truncated: false, total: 0};
     },
     async closeTunnelConnection(port: number, id: number) {
         record("closeTunnelConnection", [port, id]);

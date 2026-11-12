@@ -105,7 +105,11 @@ export function blocklistRouteHandlers(deps: {applyConnectionSecurity: ApplyConn
             // 이미 All tunnels 로 막힌 주소(widen 으로도 넓힐 것이 없는 중복)의 일시 차단은 더 의미가 없으므로 푼다(REQ-5 AC-3).
             const unbanned = result.code === 'duplicate' && fromBan ? AdmissionController.instance.rateLimiter.unban(fromBan.port, fromBan.ip) : undefined;
             if(unbanned !== undefined) ctx.auditDetail({fromBan, unbanned});
-            deps.fail(res, result.code === 'invalid' ? 422 : 409, {code: result.code, message: result.message, values: result.values, ...(unbanned === undefined ? {} : {unbanned})});
+            // 이슈 369 FR-12: 이미 막힌 주소라도 그 차단에 걸리는 연결이 남아 있을 수 있다(차단 전에 들어온 연결 등). 같이 끊는다.
+            const closedConnections = result.code === 'duplicate' ? await deps.closeBlockedConnections?.() ?? 0 : undefined;
+            if(closedConnections !== undefined && closedConnections > 0) ctx.auditDetail({closedConnections});
+            deps.fail(res, result.code === 'invalid' ? 422 : 409, {code: result.code, message: result.message, values: result.values,
+                ...(unbanned === undefined ? {} : {unbanned}), ...(closedConnections === undefined ? {} : {closedConnections})});
             return;
         }
         if(update === 'commit-failed') {

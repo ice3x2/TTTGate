@@ -1915,7 +1915,7 @@ class AdminServer {
     /**
      * 이슈 369 FR-8: GET /api/tunneling/:port/connections. 권한(tunnel:update)은 라우트 표가 본다.
      * 국가는 /api/security/denials 와 같은 규칙으로 싣는다(국가 필터가 국가를 보일 때만 값, 아니면 null).
-     * 최근 연결부터 잘라 줬으면 truncated 다.
+     * 최근 연결부터 잘라 줬으면 truncated 다. total 은 자르기 전의 전체 연결 수다.
      */
     private onGetTunnelConnections = async (ctx: RouteContext) => {
         const port = parsePathPort(ctx.params.port);
@@ -1924,10 +1924,10 @@ class AdminServer {
             return;
         }
         const geo = AdmissionController.instance.geo;
-        const listed = this._tttServer?.tunnelConnections(port) ?? {connections: [], truncated: false};
+        const listed = this._tttServer?.tunnelConnections(port) ?? {connections: [], truncated: false, total: 0};
         const connections = listed.connections.map((connection) => ({...connection,
             country: connection.remoteAddress === undefined ? null : geo.displayCountry(connection.remoteAddress) ?? null}));
-        ctx.ok({serverTime: Date.now(), countryLookup: geo.countriesShown, truncated: listed.truncated, connections});
+        ctx.ok({serverTime: Date.now(), countryLookup: geo.countriesShown, truncated: listed.truncated, total: listed.total, connections});
     }
 
     /** 이슈 369 FR-10: DELETE /api/tunneling/:port/connections/:id. 이미 끝난 연결은 closed:false 다(실패가 아니다). */

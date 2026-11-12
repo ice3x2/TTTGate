@@ -64,23 +64,32 @@ export const MAX_KEPT_ENDED = 100;
 
 /**
  * 설계 반영: 창이 열린 동안 줄 순서를 지킨다. 누르려던 버튼이 손가락 밑에서 움직이지 않게 한다.
- * 기존 줄은 자리와 표시를 지키며 값만 고치고, 서버 목록에서 사라진 줄은 "끝남"으로 남긴다. 새 연결은 맨 아래에 "새"로 붙는다.
- * 처음 읽을 때(prev 가 비었을 때)는 서버 순서 그대로이고 새 표시가 없다.
- * options.truncated 면 서버가 최근 연결만 잘라 준 목록이다. 빠진 연결은 살아 있을 수 있으므로 끝남으로 바꾸지 않는다.
+ * 기존 줄은 순서와 표시를 지키며 값만 고치고, 서버 목록에서 사라진 줄은 "끝남"으로 남긴다. 새 연결은 맨 아래에 "새"로 붙는다.
+ * options.first 면 창을 연 뒤 처음 읽은 것이다. 서버 순서 그대로이고 새 표시가 없다. 주지 않으면 prev 가 비었는지로 판단한다.
+ * 빈 목록으로 연 창에 연결이 들어오는 경우를 "새"로 알리려면 호출자가 first 를 넘긴다.
+ * options.truncated 면 서버가 최근 연결만 잘라 준 목록이다(연결 시각, id 가 큰 것부터). 받은 목록의 가장 오래된 연결보다
+ * 새로운데 목록에 없는 줄은 끝난 것이다. 그보다 오래된 줄은 살아 있는지 알 수 없으므로 숨긴다. 그래야 살아 있는 줄이 끝없이 늘지 않는다.
  */
 export function mergeConnections(prev: readonly ConnectionRow[], fetched: readonly FetchedConnection[],
-    options: {truncated?: boolean} = {}): ConnectionRow[] {
-    if(prev.length === 0) return fetched.map((connection) => ({...connection, state: 'live', isNew: false}));
+    options: {truncated?: boolean; first?: boolean} = {}): ConnectionRow[] {
+    if(options.first ?? prev.length === 0) return fetched.map((connection) => ({...connection, state: 'live', isNew: false}));
     const byId = new Map(fetched.map((connection) => [connection.id, connection]));
-    const kept = prev.map((row): ConnectionRow => {
+    const oldest = options.truncated === true ? fetched[fetched.length - 1] : undefined;
+    const kept = prev.flatMap((row): ConnectionRow[] => {
         const next = byId.get(row.id);
-        if(row.state === 'closed' || row.state === 'blocked') return row;
-        if(next) return {...row, ...next, state: 'live'};
-        return options.truncated === true ? row : {...row, state: 'ended'};
+        if(row.state !== 'live') return [row];
+        if(next) return [{...row, ...next, state: 'live'}];
+        if(oldest !== undefined && !isNewer(row, oldest)) return [];
+        return [{...row, state: 'ended'}];
     });
     const known = new Set(prev.map((row) => row.id));
     const added = fetched.filter((connection) => !known.has(connection.id)).map((connection): ConnectionRow => ({...connection, state: 'live', isNew: true}));
     return withoutOldEnded([...kept, ...added]);
+}
+
+/** 서버 정렬(연결 시각, 같으면 id 가 큰 것이 먼저)에서 a 가 b 보다 앞(더 최근)인가. */
+function isNewer(a: {connectedAt: number; id: number}, b: {connectedAt: number; id: number}): boolean {
+    return a.connectedAt !== b.connectedAt ? a.connectedAt > b.connectedAt : a.id > b.id;
 }
 
 /** 끝난 줄이 MAX_KEPT_ENDED 를 넘으면 위에서부터(오래된 것부터) 넘는 만큼 버린다. */
@@ -94,11 +103,29 @@ function withoutOldEnded(rows: ConnectionRow[]): ConnectionRow[] {
     });
 }
 
-/** 설계 반영: 이번 읽기로 새로 붙은 줄 수. 새 연결이 붙을 때만 화면 낭독기에 조용히 알린다. 처음 읽기는 0 이다. */
+/** 설계 반영: 이번 읽기로 새로 붙은 줄 수. 새 연결이 붙을 때만 화면 낭독기에 조용히 알린다. 처음 읽기는 새 표시가 없으므로 0 이다. */
 export function addedConnections(prev: readonly ConnectionRow[], next: readonly ConnectionRow[]): number {
-    if(prev.length === 0) return 0;
     const known = new Set(prev.map((row) => row.id));
-    return next.filter((row) => !known.has(row.id)).length;
+    return next.filter((row) => row.isNew && !known.has(row.id)).length;
+}
+
+/** 창 맨 위 요약의 연결 수. 서버가 준 전체 수(total)로 센다. 잘린 목록의 줄 수로 세면 틀린다. 옛 서버(total 없음)는 살아 있는 줄 수다. */
+export function summaryCount(rows: readonly ConnectionRow[], total: number | undefined): number {
+    return total ?? rows.filter((row) => row.state === 'live').length;
+}
+
+/** 낭독 알림 글자가 그대로면 화면 낭독기가 다시 읽지 않는다. 같은 문장이 연달아 나오면 보이지 않는 글자를 붙였다 떼어 바뀌게 한다. */
+const REPEAT_MARK = '\u200B';
+export function announcement(previous: string, text: string): string {
+    return previous === text ? text + REPEAT_MARK : text;
+}
+
+/**
+ * 이슈 369(스펙 §8): 이 서버가 연결 목록을 주는가. 옛 서버는 상태 응답에 allowedClients 가 없다.
+ * 연결 목록의 404 로 판단하지 않는다. 새 서버도 볼 수 없게 된 터널이나 지운 터널에 404 를 준다.
+ */
+export function connectionsSupported(status: TunnelingStatus | undefined): boolean {
+    return status?.allowedClients !== undefined;
 }
 
 /**
