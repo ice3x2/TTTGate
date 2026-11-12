@@ -30,9 +30,9 @@
             <span class="colon">:</span>
             <TextInput placeholder={t('header.value')} bind:value={option.value} />
             {#if index === options.length - 1}
-                <Button size="sm" onclick={add}>+</Button>
+                <Button variant="secondary" icon ariaLabel={t('header.add')} title={t('header.add')} onclick={add}><span aria-hidden="true">＋</span></Button>
             {:else}
-                <Button size="sm" onclick={() => remove(index)}>-</Button>
+                <Button variant="secondary" icon ariaLabel={t('header.remove')} title={t('header.remove')} onclick={() => remove(index)}><span aria-hidden="true">×</span></Button>
             {/if}
             <Checkbox class="check" id={`${uid}-replace-${index}`} label={t('header.replace')} bind:checked={option.replace} />
         </div>

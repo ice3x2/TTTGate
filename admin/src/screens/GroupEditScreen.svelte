@@ -1,5 +1,5 @@
 <script lang="ts">
-    import {onMount} from 'svelte';
+    import {onMount, tick} from 'svelte';
     import GroupsCtrl from '../controller/GroupsCtrl';
     import InvalidSession from '../controller/InvalidSession';
     import {DEFAULT_GROUP_ATTRIBUTES, type Group, type GroupAttributes, type TunnelProtocolName, type UserView} from '../controller/Types';
@@ -93,6 +93,19 @@
     /** 표 순서를 지키며 값을 넣거나 뺀다. 표에 없는 기존 값(예: 등록이 지워진 신뢰 클라이언트)은 뒤에 그대로 둔다. */
     const toggled = <T,>(order: ReadonlyArray<T>, current: ReadonlyArray<T>, value: T, on: boolean): T[] =>
         [...order.filter((item) => item === value ? on : current.includes(item)), ...current.filter((item) => !order.includes(item))];
+
+    // 이슈 365 FR-9: 범위를 더하면 새 줄의 시작 포트 칸으로, 지우면 같은 자리의 다음 줄 삭제 버튼(없으면 "범위 추가")으로 초점을 옮긴다.
+    const addRange = async () => {
+        attrs.allowed_port_range = [...attrs.allowed_port_range, {from: 1, to: 65535}];
+        await tick();
+        document.getElementById(`group-attr-allowed_port_range-${attrs.allowed_port_range.length - 1}-from`)?.focus();
+    };
+    const removeRange = async (index: number) => {
+        attrs.allowed_port_range = attrs.allowed_port_range.filter((_, i) => i !== index);
+        await tick();
+        const next = document.querySelectorAll<HTMLButtonElement>('.range-delete')[index];
+        (next ?? document.getElementById('group-add-range'))?.focus();
+    };
 
     const setDuration = (value: number | null) => {
         durationHours = value;
@@ -231,17 +244,21 @@
                     {#each attrs.allowed_port_range as range, i (i)}
                         <div data-range-index={i} style="display: flex; gap: var(--s-2); align-items: center;">
                             <NumberInput id={`group-attr-allowed_port_range-${i}-from`} min={1} max={65535} disabled={readOnly}
+                                ariaLabel={t('group.rangeStart')}
                                 bind:value={() => range.from, (value) => (range.from = value as number)} />
+                            <span aria-hidden="true">–</span>
                             <NumberInput id={`group-attr-allowed_port_range-${i}-to`} min={1} max={65535} disabled={readOnly}
+                                ariaLabel={t('group.rangeEnd')}
                                 bind:value={() => range.to, (value) => (range.to = value as number)} />
-                            <Button size="sm" disabled={readOnly}
-                                onclick={() => (attrs.allowed_port_range = attrs.allowed_port_range.filter((_, index) => index !== i))}>{t('common.remove')}</Button>
+                            <Button variant="secondary" icon disabled={readOnly} class="range-delete"
+                                ariaLabel={t('group.deleteRange', {from: range.from, to: range.to})} title={t('common.remove')}
+                                onclick={() => removeRange(i)}><span aria-hidden="true">×</span></Button>
                         </div>
                     {:else}
                         <p>{t('group.noPorts')}</p>
                     {/each}
-                    <div><Button size="sm" disabled={readOnly}
-                        onclick={() => (attrs.allowed_port_range = [...attrs.allowed_port_range, {from: 1, to: 65535}])}>{t('group.addRange')}</Button></div>
+                    <div><Button variant="secondary" disabled={readOnly} id="group-add-range"
+                        onclick={addRange}><span aria-hidden="true">＋</span>{t('group.addRange')}</Button></div>
                 </div>
             </Field>
             <Field label={t('group.allowedProtocols')}>

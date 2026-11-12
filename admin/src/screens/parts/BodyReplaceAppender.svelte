@@ -34,9 +34,9 @@
             </Field>
             <div class="rule-actions">
                 {#if index === options.length - 1}
-                    <Button size="sm" onclick={add}>{t('common.add')}</Button>
+                    <Button variant="secondary" onclick={add}>{t('common.add')}</Button>
                 {:else}
-                    <Button size="sm" onclick={() => remove(index)}>{t('common.remove')}</Button>
+                    <Button variant="secondary" onclick={() => remove(index)}>{t('common.remove')}</Button>
                 {/if}
             </div>
         </div>
