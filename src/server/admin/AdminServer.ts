@@ -217,6 +217,8 @@ class AdminServer {
             onActiveTunneling: this.onActiveTunneling,
             onReassignTunnelOwner: this.onReassignTunnelOwner,
             onGetExternalServerStatuses: this.onGetExternalServerStatuses,
+            onGetTunnelConnections: this.onGetTunnelConnections,
+            onCloseTunnelConnection: this.onCloseTunnelConnection,
             onGetExternalServerCert: this.onGetExternalServerCert,
             onUpdateExternalServerCert: this.onUpdateExternalServerCert,
             onDeleteExternalServerCert: this.onDeleteExternalServerCert,
@@ -232,6 +234,7 @@ class AdminServer {
             // #286: 관리자 차단 목록. 핸들러는 blocklistRoutes.ts 가 갖는다.
             ...blocklistRouteHandlers({
                 applyConnectionSecurity: (next) => this._tttServer?.applyConnectionSecurity(next),
+                closeBlockedConnections: () => this._tttServer?.closeBlockedConnections() ?? Promise.resolve(0),
                 fail: (res, status, payload: ApiFailure) => this.sendApiFailure(res, status, payload)
             }),
             // U2-06 / #98: 사용자·그룹 핸들러는 rbacRoutes.ts 가 갖는다(AdminServer.ts 를 2,000줄 아래로 유지).
@@ -1893,8 +1896,47 @@ class AdminServer {
         // 이슈 368 FR-1: 요청자를 켠 사람으로 놓고 계산한 적용 상한(초). 화면이 슬라이더 범위를 서버와 같게 정한다. 없으면 null.
         const visible = statuses.filter((status) => isTunnelVisibleTo(principal, status.port))
             .map((status) => ({...status, ...activatorIpStatusOf(store.getTunnelingOption(status.port), viewer),
-                timeoutCapSeconds: maxActiveSeconds(status.port, AuthorizationContext, principal.userId) ?? null}));
+                timeoutCapSeconds: maxActiveSeconds(status.port, AuthorizationContext, principal.userId) ?? null,
+                allowedClients: this.allowedClientsOf(status.port)}));
         this.sendApiSuccess(res, {serverTime: Date.now(), requesterIp: requesterIpOf(ctx.ip) ?? null, statuses: visible});
+    }
+
+    /**
+     * 이슈 369 FR-6: 그 터널에 걸린 신뢰 클라이언트만 표시 이름(없으면 id)과 지금 연결 여부로 준다.
+     * 서버의 다른 신뢰 클라이언트는 드러나지 않는다. 고른 클라이언트가 없으면(모든 클라이언트) 빈 목록이다.
+     */
+    private allowedClientsOf(port: number): Array<{clientId: string; name: string; connected: boolean}> {
+        const store = ServerOptionStore.instance;
+        const ids = store.getTunnelingOption(port)?.allowedClientIds ?? [];
+        const names = new Map((store.serverOption.trustedClients ?? []).map((client) => [client.clientId, client.displayName?.trim() || client.clientId]));
+        return ids.map((clientId) => ({clientId, name: names.get(clientId) ?? clientId, connected: this._tttServer?.isClientConnected(clientId) ?? false}));
+    }
+
+    /** 이슈 369 FR-8: GET /api/tunneling/:port/connections. 권한(tunnel:update)은 라우트 표가 본다. */
+    private onGetTunnelConnections = async (ctx: RouteContext) => {
+        const port = parsePathPort(ctx.params.port);
+        if(port === undefined) {
+            ctx.fail(400, 'invalid_port', 'invalid port');
+            return;
+        }
+        ctx.ok({serverTime: Date.now(), connections: this._tttServer?.tunnelConnections(port) ?? []});
+    }
+
+    /** 이슈 369 FR-10: DELETE /api/tunneling/:port/connections/:id. 이미 끝난 연결은 closed:false 다(실패가 아니다). */
+    private onCloseTunnelConnection = async (ctx: RouteContext) => {
+        const port = parsePathPort(ctx.params.port);
+        const id = parsePathId(ctx.params.id);
+        if(port === undefined || id === undefined) {
+            ctx.fail(400, 'invalid_connection', 'invalid port or connection id');
+            return;
+        }
+        const outcome = await this._tttServer?.closeTunnelConnection(port, id) ?? {result: 'gone' as const};
+        if(outcome.result === 'other-port') {
+            ctx.fail(404, 'connection_not_found', `Connection ${id} is not on port ${port}.`, {id, port});
+            return;
+        }
+        if(outcome.result === 'closed') ctx.auditDetail({port, remoteAddress: outcome.remoteAddress});
+        ctx.ok({closed: outcome.result === 'closed'});
     }
 
     // U5-02 / #117 — 차단 목록 조회·해제 API. 권한은 라우트 표의 security:manage 가 본다.

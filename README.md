@@ -357,7 +357,8 @@ After you sign in, the console opens the **Tunnels** list. This is the same for 
 - **Status line:** `On`, `Off`, `client offline` (no connected client may serve this tunnel), `N connections`, the time left, `Can't open port <port>`, the owner of a tunnel that is not yours, and `cert not verified`. A tunnel that you can only view shows a lock instead of a switch.
 - **Name:** give a tunnel a name in its edit screen (**Name**, optional, up to 40 characters). Without a name, the row shows the port and the destination. Saving only a new name does not restart the tunnel, so open connections stay.
 - **IP limit:** the button below the status line shows whether the tunnel accepts only the IPs of the people who turned it on, and the refresh button next to it updates your IP. See [Limit a Tunnel to the IPs That Turned It On](#limit-a-tunnel-to-the-ips-that-turned-it-on).
-- **Details:** tap a row to open its edit screen. Its **Status** area shows uptime, sessions, traffic, rejected connections and the **Time limit** timer. Only tunnels that you can change open an edit screen.
+- **Connections:** a tunnel that is on shows how long it has been on and its traffic (`On for 2h, 5m · RX 58.1KiB · TX 59.5KiB`, sizes in bytes). If you can change the tunnel, the **Connections N** button opens the list of open connections with their addresses; the × button disconnects one (**Disconnect**, no question asked), and a superuser can **Block** an address after a confirmation (this tunnel only, or all tunnels). The row also shows which clients may serve the tunnel (`Clients: Office PC`; ● connected, ○ not connected; `Any` when no client is chosen). A new block also ends the connections that are already open from that address, here and in **Security**.
+- **Details:** tap a row to open its edit screen. Its **Status** area shows how long the tunnel has been on, its connections, traffic, rejected connections and the **Time limit** timer. Only tunnels that you can change open an edit screen.
 
 #### Sign In with a Passkey
 
@@ -1339,7 +1340,8 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 - **상태 줄:** `On`, `Off`, `client offline`(이 터널을 맡을 수 있는 클라이언트가 연결되어 있지 않음), `N connections`, 남은 시간, `Can't open port <포트>`, 내 것이 아닌 터널의 소유자, `cert not verified` 를 보인다. 보기만 허락된 터널은 스위치 대신 자물쇠를 보인다.
 - **이름:** 터널 편집 화면의 **Name**(선택, 40자까지)에 이름을 넣는다. 이름이 없으면 포트와 목적지를 보인다. 이름만 바꿔 저장하면 터널을 다시 시작하지 않으므로 진행 중인 연결이 남는다.
 - **IP 제한:** 상태 줄 아래 버튼은 그 터널이 켠 사람의 IP 에서만 연결을 받는지 보이고, 옆의 갱신 버튼은 내 IP 를 지금 주소로 바꾼다. [켠 사람의 IP 에서만 연결 받기](#켠-사람의-ip-에서만-연결-받기)를 읽는다.
-- **자세히:** 줄을 누르면 편집 화면이 열린다. **Status** 영역에 가동 시간, 세션, 트래픽, 거절 수, **Time limit** 타이머가 있다. 편집 화면은 고칠 수 있는 터널에서만 열린다.
+- **연결:** 켜진 터널은 켜진 지 얼마인지와 주고받은 양을 보인다(`켜진 지 2시간 5분 · RX 58.1KiB · TX 59.5KiB`, 크기는 바이트 단위). 고칠 수 있는 터널이면 **연결 N** 버튼이 열린 연결의 주소 목록을 연다. × 버튼은 그 연결을 바로 끊고(**연결 끊기**, 묻지 않음), 슈퍼유저는 확인 창을 거쳐 그 주소를 **차단**한다(이 터널만, 또는 모든 터널). 줄에는 이 터널을 맡을 수 있는 클라이언트도 보인다(`클라이언트: 사무실 PC`, ● 연결됨, ○ 연결 안 됨, 고른 클라이언트가 없으면 `모두`). 차단을 더하면 이미 들어와 있는 연결도 끊는다. **Security** 화면에서 더한 차단도 같다.
+- **자세히:** 줄을 누르면 편집 화면이 열린다. **Status** 영역에 켜진 지 얼마인지, 연결 수, 트래픽, 거절 수, **Time limit** 타이머가 있다. 편집 화면은 고칠 수 있는 터널에서만 열린다.
 
 #### 패스키로 로그인
 

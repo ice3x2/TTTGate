@@ -67,6 +67,9 @@ const EXPECTED_ROUTES: ReadonlyArray<ExpectedRoute> = [
     // 이슈 348: IP 제한 켜기는 켜기 권한, 끄기는 고치기 권한이다. 내 IP 갱신은 켜기 권한이다.
     {method: "PUT", pattern: "^/api/tunneling/(?<port>[^/]*)/activatorIpOnly$", action: "activatorIpOnlyAction", hasTarget: true},
     {method: "POST", pattern: "^/api/tunneling/(?<port>[^/]*)/activatorIp$", action: "tunnel:activate", hasTarget: true},
+    // 이슈 369: 연결 목록과 연결 하나 끊기. 고치기 권한이 필요하다(원격 IP 는 개인정보다).
+    {method: "GET", pattern: "^/api/tunneling/(?<port>[^/]*)/connections$", action: "tunnel:update", hasTarget: true},
+    {method: "DELETE", pattern: "^/api/tunneling/(?<port>[^/]*)/connections/(?<id>[^/]*)$", action: "tunnel:update", hasTarget: true},
     {method: "GET", pattern: "^/api/externalServerStatuses$", action: "tunnel:list", hasTarget: true},
     {method: "GET", pattern: "^/api/externalCert/(?<port>[^/]*)$", action: "tunnel:cert", hasTarget: true},
     {method: "POST", pattern: "^/api/externalCert/(?<port>[^/]*)$", action: "tunnel:cert", hasTarget: true},

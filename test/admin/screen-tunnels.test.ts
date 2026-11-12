@@ -780,7 +780,8 @@ describe("U5-06 레이트 리밋 카드와 Rejected 표시", () => {
             await app.page.locator("#tunnel-status-area [data-blocked]").waitFor({state: "visible", timeout: 10_000});
             expect(await app.page.locator("#tunnel-status-area [data-blocked]").textContent()).toBe("Rejected 7");
             expect(await app.page.locator("#tunnel-status-area .tunnel-stats").textContent())
-                .toMatch(/^Uptime (\d+s|\d+m|\d+h, \d+m|\d+d, \d+h) · Sessions 0 · RX 0B · TX 0B$/);
+                // 이슈 369: "세션" 대신 "연결", 켜진 터널은 "On for"(켠 시각), 서버 기동 때 켜진 터널은 가동 시간이다.
+                .toMatch(/^(Uptime|On for) (\d+s|\d+m|\d+h, \d+m|\d+d, \d+h) · Connections 0 · RX 0B · TX 0B$/);
             await app.page.goto(`${app.url}#/tunnels/20001`);
             await app.page.locator("#tunnel-status-area .tunnel-stats").waitFor({state: "visible", timeout: 10_000});
             expect(await app.page.locator("#tunnel-status-area [data-blocked]").count()).toBe(0);

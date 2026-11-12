@@ -88,7 +88,8 @@ describe("security-blocklist", () => {
         applyTestRoot(testRoot.rootDir);
         await CertificationStore.instance.load();
 
-        const runtime = {applyConnectionSecurity: jest.fn((next: unknown) => { applied.push(next); })};
+        // 이슈 369 FR-12: 차단을 더하면 걸리는 기존 연결을 끊고 끊은 수를 돌려준다.
+        const runtime = {applyConnectionSecurity: jest.fn((next: unknown) => { applied.push(next); }), closeBlockedConnections: jest.fn(async () => 2)};
         api = new AdminServer(runtime as any, false);
         const port = await api.listen(0, "127.0.0.1");
         request = async (method, target, body = {}, auth = {}) => {
@@ -175,13 +176,15 @@ describe("security-blocklist", () => {
         expect(applied).toHaveLength(1);
         expect(applied[0].blocklist).toEqual([entry]);
         expect(applied[0].geo).toEqual({mode: "off", countries: [], applyToAdmin: true, unknownPolicy: "allow"});
+        // 이슈 369 FR-12·AC-9: 차단에 걸리는 기존 연결을 끊은 수가 응답과 감사에 있다.
+        expect(response.body.closedConnections).toBe(2);
 
         const events = eventsOf("security_block_added");
         expect(events[events.length - 1]).toMatchObject({
             outcome: "success",
             // 대상 id 는 정규화한 주소다. 풀 때와 같은 id 로 이어서 찾을 수 있다.
             target: {kind: "security", id: "198.51.100.0/24"},
-            detail: {address: "198.51.100.0/24", port: 18080, note: "scanner"}
+            detail: {address: "198.51.100.0/24", port: 18080, note: "scanner", closedConnections: 2}
         });
         expect((await request("GET", "/api/security/blocklist", {}, su)).body.entries).toEqual([entry]);
     });

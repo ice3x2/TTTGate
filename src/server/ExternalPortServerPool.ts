@@ -12,6 +12,7 @@ import {AdmissionController} from "./security/AdmissionController";
 import {BandwidthLimiter} from "./security/BandwidthLimiter";
 import {computeWatermarkBytes, ResourcePolicyRegistry} from "../util/ResourcePolicy";
 import {rateLimitBucketOf} from "./security/ConnectionRateLimiter";
+import {normalizeRemoteAddress} from "./security/address";
 
 // #124 (U5-09) 클라이언트→외부 대역폭 큐. 상한(limit)을 넘으면 세션을 닫고, 상단 워터마크에서 터널 소스를 멈춘다.
 type SendQueue = {chunks: Buffer[]; bytes: number; limit: number; timer: NodeJS.Timeout | null; reliefListeners: Array<() => void>};
@@ -50,6 +51,15 @@ const PORT_BUNDLE_KEY : string = "portNumber";
 const SESSION_ID_BUNDLE_KEY : string = "ID";
 // 이슈 348: 세션의 원격 주소. 허용 IP 가 바뀌면 이 값으로 끊을 세션을 고른다(HttpHandler 는 감싼 소켓이 닫힌 뒤에도 읽어야 한다).
 const REMOTE_ADDRESS_BUNDLE_KEY : string = "remoteAddress";
+// 이슈 369 FR-9: 연결마다의 연결 시각·원격 포트·송수신 바이트. 핸들러와 함께 사라지므로 따로 지우지 않는다.
+const CONNECTION_BUNDLE_KEY : string = "connection";
+/** 이슈 369 FR-8: 연결 목록이 한 번에 주는 최대 수(최근 연결부터). */
+const MAX_LISTED_CONNECTIONS = 500;
+
+type ConnectionCounters = {connectedAt: number; remotePort: number | undefined; rx: number; tx: number};
+
+/** 이슈 369: 터널 외부 포트로 들어온 연결 하나. id 는 서버의 세션 id 다. */
+export type TunnelConnection = {id: number; remoteAddress: string | undefined; remotePort: number | undefined; connectedAt: number; rx: number; tx: number};
 
 type ExternalPortServerStatus = {
     port: number,
@@ -58,6 +68,8 @@ type ExternalPortServerStatus = {
     uptime: number,
     active: boolean,
     activeStart: number,
+    /** 이슈 369: 꺼짐에서 켜짐으로 바뀐 시각(ms). 켜 둘 시간을 바꿔도 다시 잡지 않는다. 한 번도 켜지지 않았으면 없다. */
+    activatedAt?: number,
     /** 실제로 걸린 시간(초). 그룹 상한으로 잘렸으면 상한이다. */
     activeTimeout: number,
     /** 사용자가 요청한 시간(초, 0=무기한). 재적용·롤백·상한 변경 때 이 값과 현재 상한으로 다시 계산한다(#137). */
@@ -407,6 +419,8 @@ class ExternalPortServerPool {
         if(status) {
             status.tx += data.length;
         }
+        const counters = handler.getBundle(CONNECTION_BUNDLE_KEY) as ConnectionCounters | undefined;
+        if(counters) counters.tx += data.length;
     }
 
     /** 큐 상한을 넘으면 데이터를 버리고 계속 가지 않고 세션을 닫는다. */
@@ -534,6 +548,8 @@ class ExternalPortServerPool {
                 if (status) {
                     status.rx += data.length;
                 }
+                const counters = handler.getBundle(CONNECTION_BUNDLE_KEY) as ConnectionCounters | undefined;
+                if(counters) counters.rx += data.length;
 
 
                 this._onHandlerEventCallback?.(sessionID, state, {data: data, receiveLength: handler.receiveLength});
@@ -611,6 +627,7 @@ class ExternalPortServerPool {
             handler.setBundle(OPTION_BUNDLE_KEY, option);
             handler.setBundle(PORT_BUNDLE_KEY, server.port);
             handler.setBundle(REMOTE_ADDRESS_BUNDLE_KEY, handler.socket?.remoteAddress);
+            handler.setBundle(CONNECTION_BUNDLE_KEY, {connectedAt: Date.now(), remotePort: handler.socket?.remotePort, rx: 0, tx: 0} satisfies ConnectionCounters);
 
             if(option.protocol == "http" || option.protocol == "https") {
                 logger.info(`Bound HttpHandler - id:${sessionID}, port:${server.port}, remote:(${handler.socket.remoteAddress})${handler.socket.remotePort}`);
@@ -712,6 +729,49 @@ class ExternalPortServerPool {
         return ids.length;
     }
 
+    /** 이슈 369 FR-8: 그 포트의 연결 목록. 최근 연결부터 최대 500개다. 원격 주소는 IPv4-mapped 를 IPv4 로 바꾼다. */
+    public connections(port: number) : TunnelConnection[] {
+        return Array.from(this._handlerMap.values())
+            .filter((handler) => handler.getBundle(PORT_BUNDLE_KEY) === port)
+            .map((handler) => {
+                const counters = handler.getBundle(CONNECTION_BUNDLE_KEY) as ConnectionCounters | undefined;
+                const address = handler.getBundle(REMOTE_ADDRESS_BUNDLE_KEY) as string | undefined;
+                return {id: handler.getBundle(SESSION_ID_BUNDLE_KEY) as number, remoteAddress: address === undefined ? undefined : normalizeRemoteAddress(address),
+                    remotePort: counters?.remotePort, connectedAt: counters?.connectedAt ?? 0, rx: counters?.rx ?? 0, tx: counters?.tx ?? 0};
+            })
+            .sort((a, b) => b.connectedAt - a.connectedAt || b.id - a.id)
+            .slice(0, MAX_LISTED_CONNECTIONS);
+    }
+
+    /**
+     * 이슈 369 FR-10: 그 포트의 연결 하나를 끊는다. 이미 끝났으면 gone, 다른 포트의 연결이면 other-port 다.
+     * 목록을 읽은 뒤 끊기 전에 끝날 수 있으므로 gone 은 실패가 아니다.
+     */
+    public async closeConnection(port: number, id: number) : Promise<{result: 'closed'; remoteAddress: string | undefined} | {result: 'gone' | 'other-port'}> {
+        const handler = this._handlerMap.get(id);
+        if(!handler) return {result: 'gone'};
+        if(handler.getBundle(PORT_BUNDLE_KEY) !== port) return {result: 'other-port'};
+        const address = handler.getBundle(REMOTE_ADDRESS_BUNDLE_KEY) as string | undefined;
+        const remoteAddress = address === undefined ? undefined : normalizeRemoteAddress(address);
+        await this.destroyHandlers([id]);
+        return {result: 'closed', remoteAddress};
+    }
+
+    /**
+     * 이슈 369 FR-12: 차단 판정(isBlocked)에 걸리는 기존 연결을 모든 포트에서 끊고, 끊은 수를 돌려준다. 원격 주소는 정규화해 넘긴다.
+     * 새 연결은 수락 판정이 막으므로, 차단을 더한 뒤 이미 들어와 있는 연결에만 같은 판정을 적용한다.
+     */
+    public async closeBlockedSessions(isBlocked: (port: number, ip: string) => boolean) : Promise<number> {
+        const ids = Array.from(this._handlerMap.values())
+            .filter((handler) => {
+                const address = handler.getBundle(REMOTE_ADDRESS_BUNDLE_KEY) as string | undefined;
+                return address !== undefined && isBlocked(handler.getBundle(PORT_BUNDLE_KEY) as number, normalizeRemoteAddress(address));
+            })
+            .map((handler) => handler.getBundle(SESSION_ID_BUNDLE_KEY) as number);
+        await this.destroyHandlers(ids);
+        return ids.length;
+    }
+
     public async inactive(port: number) : Promise<boolean> {
         let status = this._statusMap.get(port);
         if(!status) {
@@ -765,6 +825,8 @@ class ExternalPortServerPool {
         if(cappedByGroup) timeout = cap!;
         const effectiveTimeout = timeout;
         this.clearActiveTimeout(port);
+        // 이슈 369: 꺼짐에서 켜짐으로 바뀔 때만 켜진 시각을 잡는다. 켜 둘 시간을 바꾸거나 상한을 다시 걸면 그대로 둔다.
+        if(!status.active || status.activatedAt === undefined) status.activatedAt = Date.now();
         status.active = true;
         status.activeTimeout = timeout;
         status.requestedTimeout = requested;

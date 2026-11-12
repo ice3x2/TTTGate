@@ -294,6 +294,26 @@ class TTTServer {
         return rest;
     }
 
+    /** 이슈 369 FR-8: 그 터널의 연결 목록(최근 연결부터). */
+    public tunnelConnections(port: number) {
+        return this._externalPortServerPool.connections(port);
+    }
+
+    /** 이슈 369 FR-10: 그 터널의 연결 하나를 끊는다. */
+    public closeTunnelConnection(port: number, id: number) {
+        return this._externalPortServerPool.closeConnection(port, id);
+    }
+
+    /** 이슈 369 FR-12: 지금 차단 목록에 걸리는 기존 연결을 끊고 끊은 수를 돌려준다. 차단을 더한 뒤 부른다. */
+    public closeBlockedConnections(): Promise<number> {
+        return this._externalPortServerPool.closeBlockedSessions((port, ip) => AdmissionController.instance.blocklist.isBlocked(port, ip));
+    }
+
+    /** 이슈 369 FR-6: 그 신뢰 클라이언트가 지금 연결되어 있는가. */
+    public isClientConnected(clientId: string): boolean {
+        return this._tunnelServer.hasEligibleClient(undefined, [clientId]);
+    }
+
     public externalServerStatus(port: number) : ExternalPortServerStatus {
         return this._externalPortServerPool.getServerStatus(port);
     }

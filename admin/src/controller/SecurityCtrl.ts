@@ -51,7 +51,7 @@ class SecurityCtrl {
 
     /** fromBan 을 주면 그 일시 차단을 함께 푼다. */
     public block(request: {address: string; port?: number | null; note?: string; fromBan?: {port: number; ip: string}}):
-        Promise<ApiResult<{entry: BlocklistEntry; unbanned: boolean}>> {
+        Promise<ApiResult<{entry: BlocklistEntry; unbanned: boolean; closedConnections?: number}>> {
         return adminRequest("/api/security/blocklist", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(request)});
     }
 

@@ -88,16 +88,16 @@ const ownerPart = (option: Options, meId: string, tr: Translator): RowPart | und
     return {text: owner.username !== undefined ? `@${owner.username}` : owner.id};
 };
 
-const statePartsOf = (status: TunnelingStatus, tr: Translator): RowPart[] => {
+const statePartsOf = (status: TunnelingStatus, tr: Translator, withStats = false): RowPart[] => {
     const offline = status.clientConnected === false;
     if(!status.active) return offline ? [{text: tr.t('tunnel.off')}, {text: tr.t('tunnel.clientOffline')}] : [{text: tr.t('tunnel.off')}];
     const parts: RowPart[] = [{text: tr.t('tunnel.on')}];
     if(offline) parts.push({text: tr.t('tunnel.clientOffline'), warn: true});
-    if(status.sessions > 0) parts.push({text: tr.plural('tunnel.connections', status.sessions)});
+    if(status.sessions > 0 && !withStats) parts.push({text: tr.plural('tunnel.connections', status.sessions)});
     return parts;
 };
 
-const baseOf = (input: {option: Options; status?: TunnelingStatus; loaded: boolean; serverTime: number}, tr: Translator): BaseView => {
+const baseOf = (input: {option: Options; status?: TunnelingStatus; loaded: boolean; serverTime: number; withStats?: boolean}, tr: Translator): BaseView => {
     const {option, status, loaded, serverTime} = input;
     if(!loaded) return {parts: [{text: tr.t('tunnel.checking'), muted: true}], control: 'disabled', checked: false};
     // 이슈 347: 스위치는 켜기 권한(toggleable)으로 정한다. 옛 서버 응답에는 없으므로 editable 을 따른다.
@@ -107,11 +107,13 @@ const baseOf = (input: {option: Options; status?: TunnelingStatus; loaded: boole
     }
     if(!status) return {parts: [{text: tr.t('tunnel.notRunning'), warn: true}], control: 'disabled', checked: false};
     if(!status.online) return {parts: [{text: tr.t('tunnel.cannotOpenPort', {port: option.forwardPort}), warn: true}], control: 'disabled', checked: false};
-    return {parts: statePartsOf(status, tr), control: 'switch', checked: status.active, clock: clockOf(status, serverTime, tr)};
+    return {parts: statePartsOf(status, tr, input.withStats === true), control: 'switch', checked: status.active, clock: clockOf(status, serverTime, tr)};
 };
 
 /** 이슈 367 FR-5: grouped 면 소유자별 머리글이 소유자를 보이므로 줄에 @소유자를 붙이지 않는다. */
-export function tunnelRowView(input: {option: Options; status?: TunnelingStatus; loaded: boolean; meId: string; serverTime: number; grouped?: boolean},
+/** 이슈 369 FR-1: withStats 면 가동 정보 줄이 연결 수를 보이므로 상태 글자에 "연결 N개"를 붙이지 않는다. */
+export function tunnelRowView(input: {option: Options; status?: TunnelingStatus; loaded: boolean; meId: string; serverTime: number; grouped?: boolean;
+    withStats?: boolean},
     tr: Translator = i18n()): RowView {
     const base = {...baseOf(input, tr), link: input.option.editable !== false};
     if(!input.loaded) return base;
