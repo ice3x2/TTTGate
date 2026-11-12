@@ -303,7 +303,8 @@ test("admin 이 소유자를 바꾼 뒤 같은 화면에서 저장해도 revisio
     await button(page, "Apply and Restart").click();
     await page.getByText("Success to apply tunneling option", {exact: true}).waitFor({state: "visible", timeout: 10_000});
     await hashIs(page, "#/tunnels");
-    await waitStatus(page, 20003, /· @bob$/);
+    // 이슈 367: 소유자는 줄 끝의 @소유자가 아니라 소유자별 묶음의 머리글로 보인다.
+    expect(await ownerHeadingOf(page, 20003)).toBe("bob (Bob)");
 }, 3));
 
 // #178 — 슈퍼유저가 소유자 그룹이 허용하지 않은 id 를 넣으면 소유자는 자기 터널을 저장하지 못한다.
