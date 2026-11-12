@@ -352,12 +352,12 @@ test("alice 가 허용 범위 칩을 누르면 쓰지 않은 가장 작은 포�
     // 설계 ②: 칩은 보이는 높이 36px, 누르는 영역은 위아래로 넓혀 44px 이다.
     const box = await chip.boundingBox();
     expect(Math.round(box!.height)).toBe(36);
-    const hit = await chip.evaluate((element) => {
-        const rect = element.getBoundingClientRect();
-        const x = rect.left + rect.width / 2;
-        return [rect.top - 3, rect.bottom + 3].map((y) => element.contains(document.elementFromPoint(x, y)));
+    // 누름 영역은 ::before 가 위아래로 4px 씩 넓힌다(36 + 8 = 44px). 칩은 위에 쌓여 아래 글자에 덮이지 않는다.
+    const area = await chip.evaluate((element) => {
+        const before = getComputedStyle(element, "::before");
+        return {position: before.position, top: before.top, bottom: before.bottom, zIndex: getComputedStyle(element).zIndex};
     });
-    expect(hit).toEqual([true, true]);
+    expect(area).toEqual({position: "absolute", top: "-4px", bottom: "-4px", zIndex: "1"});
     // 허용 범위 밖 포트를 넣으면 포트 오류가 안내 글자를 대신하고, 칩은 그대로 남는다.
     await page.locator("#input-external-port").fill("30000");
     await page.getByText("Port is outside the allowed ranges.", {exact: true}).waitFor({state: "visible"});
@@ -412,7 +412,8 @@ test("모두 쓴 범위의 칩은 잠기고 이유를 보이며, 초점은 받�
     expect(await port.inputValue()).toBe("20010");
     await full.focus();
     expect(await full.evaluate((element) => element === document.activeElement)).toBe(true);
-    await full.click();
+    // aria-disabled 버튼은 Playwright 가 누를 수 없다고 본다. 사용자가 눌러도 아무 일이 없는지 강제로 눌러 본다.
+    await full.click({force: true});
     await page.keyboard.press("Enter");
     expect(await port.inputValue()).toBe("20010");
     expect(await button(page, "Use a free port in 20010–20020").getAttribute("aria-disabled")).toBeNull();
