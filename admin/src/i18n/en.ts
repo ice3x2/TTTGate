@@ -67,7 +67,8 @@ export const en = {
     'tunnel.noPortsAllowed': 'No ports are allowed for your group.',
     'tunnel.allowedRangesLabel': 'Allowed ranges',
     'tunnel.useFreePort': 'Use a free port in {range}',
-    'tunnel.rangeChipsNote': 'Tap a range to use its first free port.',
+    'tunnel.rangeChipsLabel': 'Choose a port from an allowed range',
+    'tunnel.rangeChipsNote': "Choose a range to fill in the first port your tunnels don't use.",
     'tunnel.rangeFull': 'Every port in this range is already in use.',
 
     'ipLimit.off': 'IP limit off',
@@ -596,6 +597,7 @@ export const en = {
     'group.rangeStart': 'Start port',
     'group.rangeEnd': 'End port',
     'group.deleteRange': 'Delete range {from}–{to}',
+    'group.deleteRangeTitle': 'Delete range',
     'group.allowedProtocols': 'Allowed protocols',
     'group.rewritePermissions': 'HTTP rewrite permissions',
     'group.allowedTrustedClients': 'Allowed trusted clients',

@@ -28,15 +28,32 @@ export function suggestPort(range: PortRange, usedPorts: readonly number[]): num
     return null;
 }
 
+/** 이슈 365: 칩 하나의 글자와 누르면 넣을 포트. port 가 null 이면 범위를 모두 써서 잠근 칩이다. */
+export type RangeChip = {label: string; port: number | null};
+
+export function rangeChips(ranges: ReadonlyArray<PortRange>, usedPorts: readonly number[]): RangeChip[] {
+    return ranges.map((range) => ({label: `${range.from}–${range.to}`, port: suggestPort(range, usedPorts)}));
+}
+
+/** 같은 범위가 두 번 저장된 그룹도 있다(서버가 막지 않는다). 처음 나온 순서로 한 번씩만 남긴다. */
+const distinctRanges = (ranges: ReadonlyArray<PortRange>): PortRange[] => {
+    const seen = new Set<string>();
+    return ranges.filter((range) => {
+        const key = `${range.from}-${range.to}`;
+        if(seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    }).map((range) => ({from: range.from, to: range.to}));
+};
+
 export type TunnelPolicy = {
     restricted: boolean;
     canCreate(ownedCount: number): boolean;
     limitReached(ownedCount: number): boolean;
     maxTunnelCount: number;
-    /** 포트 칸의 안내. tr 을 생략하면 앱의 언어다. */
     /** 이슈 365: 새 터널의 처음 포트. 목록의 터널이 쓰는 포트(usedPorts)는 건너뛴다. 모두 쓰였으면 첫 범위의 첫 포트다. */
     initialPort(usedPorts?: readonly number[]): number | null;
-    /** 이슈 365 FR-6: 칩으로 보일 그룹의 허용 범위. 제한이 없으면 빈 목록이다. */
+    /** 이슈 365 FR-6: 칩으로 보일 그룹의 허용 범위. 같은 범위는 한 번만 담는다. 제한이 없으면 빈 목록이다. */
     portRanges: ReadonlyArray<PortRange>;
     isPortAllowed(port: number): boolean;
     protocolOptions(current: 'tcp' | 'http' | 'https'): Array<{value: string; label: string}>;
@@ -79,7 +96,7 @@ function restrictedPolicy(attributes: GroupAttributes): TunnelPolicy {
             }
             return ranges[0].from;
         },
-        portRanges: ranges.map((range) => ({from: range.from, to: range.to})),
+        portRanges: distinctRanges(ranges),
         isPortAllowed: (port) => ranges.some((range) => port >= range.from && port <= range.to),
         protocolOptions: (current) => {
             const allowed = PROTOCOLS.filter((protocol) => attributes.allowed_protocols.includes(PROTOCOL_NAME[protocol.value]));

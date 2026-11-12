@@ -177,3 +177,22 @@ describe("이슈 349 FR-7 Translator.list — 값 목록을 그 언어의 목록
         expect(translator("en").list([])).toBe("");
     });
 });
+
+// 이슈 365 — 포트 범위 버튼과 허용 범위 칩의 문구.
+describe("이슈 365 문구", () => {
+    test("허용 범위 칩의 묶음 이름·안내·잠금 이유", () => {
+        expect([ko["tunnel.rangeChipsLabel"], en["tunnel.rangeChipsLabel"]]).toEqual(["허용 범위에서 포트 고르기", "Choose a port from an allowed range"]);
+        expect([ko["tunnel.rangeChipsNote"], en["tunnel.rangeChipsNote"]])
+            .toEqual(["범위를 누르면 내 터널이 쓰지 않는 첫 포트를 넣습니다.", "Choose a range to fill in the first port your tunnels don't use."]);
+        expect(translator("ko").t("tunnel.useFreePort", {range: "20000–20100"})).toBe("20000–20100 범위의 빈 포트 넣기");
+        expect(ko["tunnel.rangeFull"]).toBe("이 범위의 포트를 모두 쓰고 있습니다.");
+    });
+
+    test("범위 줄과 헤더 줄의 버튼 이름", () => {
+        expect([ko["group.rangeStart"], ko["group.rangeEnd"], ko["group.addRange"]]).toEqual(["시작 포트", "끝 포트", "범위 추가"]);
+        expect(translator("ko").t("group.deleteRange", {from: 20000, to: 20100})).toBe("20000–20100 범위 삭제");
+        expect([ko["group.deleteRangeTitle"], en["group.deleteRangeTitle"]]).toEqual(["범위 삭제", "Delete range"]);
+        expect([ko["header.add"], ko["header.remove"], en["header.remove"]]).toEqual(["헤더 추가", "헤더 삭제", "Remove header"]);
+    });
+});
+

@@ -1,5 +1,5 @@
 import {DEFAULT_GROUP_ATTRIBUTES, type GroupAttributes, type MeResponse, type Role} from "../../admin/src/controller/Types";
-import {suggestPort, tunnelPolicy} from "../../admin/src/screens/parts/tunnelPolicy";
+import {rangeChips, suggestPort, tunnelPolicy} from "../../admin/src/screens/parts/tunnelPolicy";
 import {RBAC_IDENTITY_FIXTURE} from "../helpers/rbacFixture";
 
 // U3-06 / #108 — 터널 화면의 그룹 속성 정책(순수 함수). tunnelPolicy 는 user.role 과 group.attributes 만 읽는다.
@@ -108,5 +108,27 @@ describe("이슈 365 허용 범위 칩", () => {
         expect(policy.initialPort([20000])).toBe(20001);
         expect(policy.initialPort([20000, 20001])).toBe(30000);
         expect(policy.initialPort()).toBe(20000);
+    });
+});
+
+// 이슈 365 리뷰 H-1·M-3(a)(b) — 같은 범위가 두 번 저장된 그룹도 칩은 하나다. 칩마다 넣을 포트를 미리 정한다.
+describe("이슈 365 칩 목록", () => {
+    test("같은 범위가 두 번 있으면 portRanges 는 한 번만 준다(순서는 처음 나온 순서)", () => {
+        const twice = {...FIELD_TEAM, allowed_port_range: [{from: 20000, to: 20099}, {from: 1, to: 65535}, {from: 20000, to: 20099}, {from: 1, to: 65535}]};
+        expect(tunnelPolicy(meOf("regular", twice)).portRanges).toEqual([{from: 20000, to: 20099}, {from: 1, to: 65535}]);
+    });
+
+    test("AC-4: 20000–20100, 30000–30010 에서 30000 을 쓰면 두 번째 칩은 30001 을 넣는다", () => {
+        expect(rangeChips([{from: 20000, to: 20100}, {from: 30000, to: 30010}], [30000])).toEqual([
+            {label: "20000–20100", port: 20000},
+            {label: "30000–30010", port: 30001},
+        ]);
+    });
+
+    test("범위의 포트를 모두 쓰면 그 칩의 포트는 null 이다(잠근 칩)", () => {
+        expect(rangeChips([{from: 30000, to: 30001}, {from: 30005, to: 30005}], [30000, 30001])).toEqual([
+            {label: "30000–30001", port: null},
+            {label: "30005–30005", port: 30005},
+        ]);
     });
 });

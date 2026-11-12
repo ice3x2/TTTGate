@@ -116,7 +116,8 @@ export const ko: Messages = {
     'tunnel.noPortsAllowed': '그룹에 허용된 포트가 없습니다.',
     'tunnel.allowedRangesLabel': '허용 범위',
     'tunnel.useFreePort': '{range} 범위의 빈 포트 넣기',
-    'tunnel.rangeChipsNote': '범위를 누르면 비어 있는 첫 포트를 넣습니다.',
+    'tunnel.rangeChipsLabel': '허용 범위에서 포트 고르기',
+    'tunnel.rangeChipsNote': '범위를 누르면 내 터널이 쓰지 않는 첫 포트를 넣습니다.',
     'tunnel.rangeFull': '이 범위의 포트를 모두 쓰고 있습니다.',
 
     'ipLimit.off': 'IP 제한 꺼짐',
@@ -645,6 +646,7 @@ export const ko: Messages = {
     'group.rangeStart': '시작 포트',
     'group.rangeEnd': '끝 포트',
     'group.deleteRange': '{from}–{to} 범위 삭제',
+    'group.deleteRangeTitle': '범위 삭제',
     'group.allowedProtocols': '허용 프로토콜',
     'group.rewritePermissions': 'HTTP 다시 쓰기 권한',
     'group.allowedTrustedClients': '허용 신뢰 클라이언트',

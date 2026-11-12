@@ -28,3 +28,9 @@ test("아이콘만 있는 버튼(icon)은 가로·세로 44px 이고, 보조 기
     expect(source).toMatch(/ariaLabel\?:\s*string/);
     expect(source).toMatch(/aria-label=\{ariaLabel\}/);
 });
+
+// CI 360px 실패: 줄이 좁으면 flex 가 아이콘 버튼을 17px 까지 줄였다. 아이콘 버튼은 줄어들지 않는다.
+test("아이콘 버튼은 flex 줄에서 줄어들지 않는다(flex: none)", () => {
+    expect(ruleOf(".btn.icon")).toMatch(/flex:\s*none/);
+});
+
