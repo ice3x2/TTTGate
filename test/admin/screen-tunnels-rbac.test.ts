@@ -435,6 +435,7 @@ test("같은 허용 범위가 두 번 있어도 편집 화면이 그려지고 �
     await openNewWithRanges(page, [{from: 1, to: 65535}, {from: 1, to: 65535}], []);
     expect(await chipsOf(page).allTextContents()).toEqual(["1–65535"]);
     await page.locator("#input-destination-host").waitFor({state: "visible", timeout: 10_000});
+}, 2));
 
 // 이슈 367 AC-1·AC-2·AC-8·FR-10 — 슈퍼유저 목록은 소유자별 묶음이고, 순서는 다른 사용자(아이디 순) → 업그레이드 전 터널이며,
 // 각 목록은 머리글 이름을 가지고, 줄에는 @소유자가 없으며, 360px 에서 넘치지 않는다.
