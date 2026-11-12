@@ -45,7 +45,8 @@
     .label { font-family: var(--ff-mono); font-size: 11px; color: var(--ink-2); margin-right: 2px; }
     /* 설계 ②: 보이는 높이는 36px, 누르는 영역은 ::before 로 위아래 4px 씩 넓혀 44px 다. */
     .port-chip {
-        position: relative; min-height: 36px; display: inline-flex; align-items: center;
+        /* z-index: 넓힌 누름 영역(::before)이 아래 안내 글자에 덮이지 않게 칩을 위에 쌓는다. */
+        position: relative; z-index: 1; min-height: 36px; display: inline-flex; align-items: center;
         padding: 0 var(--s-3); border: 1px solid var(--line-2); border-radius: 999px;
         background: var(--bg-2); color: var(--ink-0); font-family: var(--ff-mono); font-size: 12.5px;
         font-variant-numeric: tabular-nums; cursor: pointer;

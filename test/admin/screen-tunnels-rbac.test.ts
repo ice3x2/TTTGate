@@ -406,7 +406,8 @@ test("모두 쓴 범위의 칩은 잠기고 이유를 보이며, 초점은 받�
     const full = button(page, "Use a free port in 20001–20002");
     expect(await full.getAttribute("aria-disabled")).toBe("true");
     expect(await full.getAttribute("title")).toBe("Every port in this range is already in use.");
-    expect(await full.isDisabled()).toBe(false);
+    // aria-disabled 는 Playwright 의 isDisabled 가 참으로 보므로, 실제 disabled 속성이 없어 초점을 받는지만 본다.
+    expect(await full.evaluate((element) => element.hasAttribute("disabled"))).toBe(false);
     const port = page.locator("#input-external-port");
     expect(await port.inputValue()).toBe("20010");
     await full.focus();
