@@ -61,6 +61,11 @@ describe("release documentation and sample config alignment", () => {
         expect(downgrade).toMatch(/^### Downgrading after the activator IP limit/);
         expect(downgrade).toMatch(/fails? open/);
         expect(downgrade).toMatch(/`activatorIps`/);
+        // 이슈 366 §7: 그룹 버퍼 최댓값 속성은 되돌리면 동작하지 않고(허용 쪽), 옛 서버 API 는 422 로 거부한다.
+        const bufferCap = migration.slice(migration.indexOf("### Downgrading after group buffer limits"));
+        expect(bufferCap).toMatch(/^### Downgrading after group buffer limits \(2\.4\.0\)/);
+        expect(bufferCap).toMatch(/`max_session_buffer_mib`/);
+        expect(bufferCap).toMatch(/`attributes_unknown_key`/);
         expect(readme).toContain("clientId");
         expect(readme).toContain("clientSecret");
     });

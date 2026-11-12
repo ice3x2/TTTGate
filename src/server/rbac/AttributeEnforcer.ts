@@ -9,7 +9,9 @@ export type EnforceMode = 'create' | 'update';
  * maxServerBufferMiB: 일반 유저가 정할 수 있는 bufferLimitOnServer 상한(MiB). 서버 전역 메모리 캐시 한도를 넘으면 그 터널의
  * 읽기 배압이 사실상 꺼져 다른 사용자의 터널까지 끊을 수 있다(#147). 0 이하이거나 없으면 검사하지 않는다.
  */
-export type EnforceContext = {ownedCount: number; trustedClientIds: string[]; maxServerBufferMiB?: number; currentServerBufferMiB?: number};
+export type EnforceContext = {ownedCount: number; trustedClientIds: string[]; maxServerBufferMiB?: number; currentServerBufferMiB?: number;
+    /** 이슈 366: 수정 전 클라이언트 버퍼. 값을 바꾸지 않는 수정은 그룹 상한을 넘어도 받는다. */
+    currentClientBufferMiB?: number};
 
 export type EnforceResult = {success: true} | Failure<403 | 409 | 422>;
 
@@ -139,6 +141,31 @@ function assertUsage(next: unknown, mode: unknown, context: unknown): void {
     }
 }
 
+/** 이슈 366: 버퍼 필드가 없으면 서버가 채우는 값(ServerOptionStore 의 normalize 와 같다). */
+const DEFAULT_BUFFER_MIB = 8;
+
+/**
+ * 이슈 366: 그룹 연결당 버퍼 최댓값(max_session_buffer_mib, 0 이면 없음). 서버·클라이언트 버퍼 모두에 적용한다.
+ * 클라이언트 버퍼 1 미만은 제한 없음이라 어떤 상한보다 크다. 저장된 값을 그대로 두는 필드는 받는다. 서버 버퍼를 먼저 본다.
+ */
+function groupBufferFailure(attributes: Record<string, unknown>, next: TunnelingOption, context: EnforceContext): EnforceResult | undefined {
+    const cap = attributes.max_session_buffer_mib;
+    if(typeof cap !== 'number' || cap <= 0) return undefined;
+    const fields: Array<{field: 'bufferLimitOnServer' | 'bufferLimitOnClient'; current: number | undefined; unlimitedBelowOne: boolean}> = [
+        {field: 'bufferLimitOnServer', current: context.currentServerBufferMiB, unlimitedBelowOne: false},
+        {field: 'bufferLimitOnClient', current: context.currentClientBufferMiB, unlimitedBelowOne: true},
+    ];
+    for(const {field, current, unlimitedBelowOne} of fields) {
+        const raw = next[field];
+        const value = typeof raw === 'number' ? raw : DEFAULT_BUFFER_MIB;
+        if(current !== undefined && value === current) continue;
+        if(value > cap || (unlimitedBelowOne && value < 1)) {
+            return failure(422, 'group_buffer_limit_exceeded', `${field} must be at most ${cap} MiB for this group`, {field, max: cap});
+        }
+    }
+    return undefined;
+}
+
 /**
  * 일반 유저의 터널 입력을 그룹 속성으로 검사한다. update 때도 next 전체를 검사하므로, 그룹 속성이 나중에 좁아져
  * 이미 범위 밖이 된 터널은 일반 유저가 고칠 수 없다. 첫 실패에서 멈춘다.
@@ -166,6 +193,8 @@ export function enforce(principal: Principal, next: TunnelingOption, mode: Enfor
     if(missingProtocol !== undefined) {
         return failure(422, 'protocol_not_allowed', `protocol ${missingProtocol} is not in allowed_protocols`, {protocol: missingProtocol});
     }
+    const groupBuffer = groupBufferFailure(attributes, next, context);
+    if(groupBuffer !== undefined) return groupBuffer;
     const maxBuffer = context.maxServerBufferMiB;
     // 이미 저장된 값을 바꾸지 않는 수정은 받는다. 상한을 낮춘 뒤에도 기존 터널의 다른 항목은 고칠 수 있어야 한다.
     const unchangedBuffer = context.currentServerBufferMiB !== undefined && next.bufferLimitOnServer === context.currentServerBufferMiB;

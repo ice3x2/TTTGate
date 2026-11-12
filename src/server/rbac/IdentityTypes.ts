@@ -26,6 +26,8 @@ export type GroupAttributes = {
     rate_limit: RateLimitPreset;
     /** 이슈 346: 이 그룹 사용자는 2단계 인증(TOTP 또는 패스키)을 갖춰야 한다. 없는 옛 파일은 false 로 읽는다. */
     mfa_required: boolean;
+    /** 이슈 366: 이 그룹 사용자가 터널에 정할 수 있는 연결당 버퍼(서버·클라이언트) 최댓값(MiB). 0 이면 그룹 상한이 없다. */
+    max_session_buffer_mib: number;
 };
 
 export type User = {
@@ -79,10 +81,13 @@ const ADMIN_UI_SECTIONS: readonly AdminUiSection[] = ['tunnels', 'my_audit', 'my
 const TUNNEL_CRUD_VALUES: readonly TunnelCrud[] = ['none', 'read_only', 'toggle', 'full'];
 const TUNNEL_VISIBILITY_VALUES: readonly TunnelVisibility[] = ['private', 'group_read'];
 const RATE_LIMIT_VALUES: readonly RateLimitPreset[] = ['unlimited', '1MB/s', '10MB/s', '100MB/s'];
+/** 이슈 366: 그룹 연결당 버퍼 최댓값의 상한(MiB). 화면의 클라이언트 버퍼 칸 상한과 같다. */
+export const MAX_SESSION_BUFFER_MIB = 1_048_576;
 const GROUP_ATTRIBUTE_KEYS: readonly string[] = [
     'tunnel_crud', 'max_tunnel_count', 'max_tunnel_duration_ms', 'allowed_port_range',
     'allowed_protocols', 'max_concurrent_connections', 'allowed_trusted_clients',
-    'http_tunnel_rewrite_permissions', 'admin_ui_section_access', 'tunnel_visibility', 'rate_limit', 'mfa_required'
+    'http_tunnel_rewrite_permissions', 'admin_ui_section_access', 'tunnel_visibility', 'rate_limit', 'mfa_required',
+    'max_session_buffer_mib'
 ];
 
 export const DEFAULT_GROUP_ATTRIBUTES: Readonly<GroupAttributes> = {
@@ -97,7 +102,8 @@ export const DEFAULT_GROUP_ATTRIBUTES: Readonly<GroupAttributes> = {
     admin_ui_section_access: [...ADMIN_UI_SECTIONS],
     tunnel_visibility: 'private',
     rate_limit: 'unlimited',
-    mfa_required: false
+    mfa_required: false,
+    max_session_buffer_mib: 0
 };
 
 /**
@@ -227,6 +233,8 @@ export function validateGroupAttributes(patch: unknown, base: GroupAttributes): 
     // 이슈 346 이전 파일의 그룹에는 mfa_required 가 없다. 없으면 false 로 본다.
     const merged: Record<string, unknown> = {...base, ...patchObject};
     if(merged.mfa_required === undefined) merged.mfa_required = false;
+    // 이슈 366 이전 파일의 그룹에는 max_session_buffer_mib 가 없다. 없으면 0(그룹 상한 없음)으로 본다.
+    if(merged.max_session_buffer_mib === undefined) merged.max_session_buffer_mib = 0;
 
     if(!TUNNEL_CRUD_VALUES.includes(merged.tunnel_crud as TunnelCrud)) {
         return invalid('attribute_enum_invalid', `invalid tunnel_crud: ${merged.tunnel_crud}`, {attribute: 'tunnel_crud', value: merged.tunnel_crud});
@@ -244,6 +252,10 @@ export function validateGroupAttributes(patch: unknown, base: GroupAttributes): 
     }
     if(!Array.isArray(merged.allowed_protocols) || !merged.allowed_protocols.every((protocol) => ALLOWED_PROTOCOLS.includes(protocol as AllowedProtocol))) {
         return invalid('attribute_enum_invalid', 'invalid allowed_protocols');
+    }
+    if(!isNonNegativeInt(merged.max_session_buffer_mib) || merged.max_session_buffer_mib > MAX_SESSION_BUFFER_MIB) {
+        return invalid('attribute_int_invalid', `invalid max_session_buffer_mib: ${merged.max_session_buffer_mib}`,
+            {attribute: 'max_session_buffer_mib', value: merged.max_session_buffer_mib});
     }
     if(!isNonNegativeInt(merged.max_concurrent_connections)) {
         return invalid('attribute_int_invalid', `invalid max_concurrent_connections: ${merged.max_concurrent_connections}`,
@@ -294,7 +306,8 @@ export function validateGroupAttributes(patch: unknown, base: GroupAttributes): 
             admin_ui_section_access: [...(merged.admin_ui_section_access as AdminUiSection[])],
             tunnel_visibility: merged.tunnel_visibility as TunnelVisibility,
             rate_limit: merged.rate_limit as RateLimitPreset,
-            mfa_required: merged.mfa_required
+            mfa_required: merged.mfa_required,
+            max_session_buffer_mib: merged.max_session_buffer_mib as number
         }
     };
 }

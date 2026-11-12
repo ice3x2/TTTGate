@@ -376,3 +376,17 @@ test("가운데 범위 줄을 지우면 초점이 다음 줄의 삭제 버튼으
     expect(await page.locator("[data-range-index]").count()).toBe(2);
     await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "Delete range 30000–30010", undefined, {timeout: 10_000});
 }));
+
+// 이슈 366 FR-9 — 그룹 편집의 "한도" 카드에 연결당 버퍼 최대 칸이 있고, 저장한 값이 다시 읽어도 그대로다.
+test("이슈 366 그룹의 연결당 버퍼 최대를 저장하면 다시 열어도 그 값이다", () => withGroups(async ({page}) => {
+    await openGroup(page, "default");
+    const field = attr(page, "max_session_buffer_mib");
+    expect(await field.inputValue()).toBe("0");
+    expect(await page.getByText("Buffer limit per connection (MiB)", {exact: true}).count()).toBe(1);
+    await field.fill("64");
+    await button(page, "Save").click();
+    await page.locator(".toast").first().waitFor({state: "visible", timeout: 10_000});
+    await page.reload();
+    await page.waitForFunction(() => (document.querySelector("#group-attr-max_session_buffer_mib") as HTMLInputElement | null)?.value === "64",
+        undefined, {timeout: 10_000});
+}));

@@ -425,3 +425,42 @@ test("같은 허용 범위가 두 번 있어도 편집 화면이 그려지고 �
     expect(await chipsOf(page).allTextContents()).toEqual(["1–65535"]);
     await page.locator("#input-destination-host").waitFor({state: "visible", timeout: 10_000});
 }, 2));
+
+// 이슈 366 FR-10~FR-12·AC-9 — 그룹 연결당 버퍼 최댓값. 화면은 상한을 미리 보이고, 넘는 새 값은 그 칸에 오류를 보이며 저장을 잠근다.
+// 그룹 속성은 /api/me 응답을 바꿔 준다(서버 판정은 관리 API 테스트가 맡는다).
+const withBufferCap = async (page: Page, cap: number) => {
+    await page.route("**/api/me", async (route) => {
+        const response = await route.fetch();
+        const body = await response.json();
+        await route.fulfill({response, json: {...body, group: {...body.group, attributes: {...body.group.attributes, max_session_buffer_mib: cap}}}});
+    });
+    await page.reload();
+    await hashIs(page, "#/tunnels");
+};
+
+test("이슈 366 상한 8 인 alice 의 새 터널은 버퍼 기본값이 8 이고, 9 를 넣으면 그 칸에 오류가 나며 저장이 잠긴다", () => withTunnels("alice", async ({page}) => {
+    await withBufferCap(page, 8);
+    await button(page, "Add tunneling service").click();
+    await hashIs(page, "#/tunnels/new");
+    await page.locator("#tunnel-buffer-cap").waitFor({state: "visible", timeout: 10_000});
+    expect((await page.locator("#tunnel-buffer-cap").textContent())?.trim()).toBe("Group maximum 8 MiB");
+    expect(await page.locator("#input-buffer-limit-server").inputValue()).toBe("8");
+    expect(await page.locator("#input-buffer-limit-client").inputValue()).toBe("8");
+    expect(await page.getByText("Client buffer: 1 to 8 MiB.", {exact: true}).count()).toBe(1);
+    await page.locator("#input-buffer-limit-server").fill("9");
+    await page.getByText("Set 8 MiB or less (group maximum).", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+    expect(await button(page, "Start").isDisabled()).toBe(true);
+    await page.locator("#input-buffer-limit-server").fill("8");
+    await page.locator("#input-buffer-limit-client").fill("0");
+    await page.getByText("Set 8 MiB or less (group maximum).", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+    expect(await button(page, "Start").isDisabled()).toBe(true);
+}, 2));
+
+test("이슈 366 상한보다 큰 값이 저장된 기존 터널은 경고만 보이고, 값을 그대로 두면 저장할 수 있다", () => withTunnels("alice", async ({page}) => {
+    await withBufferCap(page, 4);
+    await openTunnel(page, 20001);
+    await page.locator("#tunnel-buffer-stored-over").waitFor({state: "visible", timeout: 10_000});
+    expect((await page.locator("#tunnel-buffer-stored-over").textContent())?.trim())
+        .toBe("This value is larger than the group maximum (4 MiB). You can keep it, but a new value must be 4 MiB or less.");
+    expect(await button(page, "Apply and Restart").isEnabled()).toBe(true);
+}, 2));

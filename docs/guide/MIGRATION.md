@@ -133,6 +133,15 @@ curl -sk https://127.0.0.1:9300/api/version
 The server must start and answer `/api/version` with 200. If it instead logs a configuration validation
 failure, do not downgrade without restoring the `.bak` files first.
 
+### Downgrading after group buffer limits (2.4.0)
+
+2.4.0 adds the group attribute `max_session_buffer_mib` to `config/identity.yaml`. It caps the server and client
+buffer per connection that members can set on a tunnel; `0` means no group cap. Groups without it read as `0`, so
+an upgrade changes nothing. Older versions ignore the attribute when they read the file, so the cap stops working
+after a downgrade (members can save larger buffers again). When an older console saves such a group, the attribute
+is dropped from the file. An API call to an older server that sends `max_session_buffer_mib` is rejected with 422
+`attributes_unknown_key`. Tunnels saved under the cap keep their values in every version.
+
 ### Downgrading after group two-factor enforcement (2.3.0)
 
 2.3.0 adds the group attribute `mfa_required` to `config/identity.yaml`. Older versions ignore it when they read

@@ -256,3 +256,15 @@ describe("errorMessageOf — 한국어 문구", () => {
         expect(errorMessageOf({...result, message: "server text"}, "fallback", ko)).toBe(korean);
     });
 });
+
+// 이슈 366 FR-13(설계 반영) — 그룹 버퍼 최댓값 실패는 어느 칸인지(field)를 그 언어의 칸 이름으로 끼운다.
+describe("errorMessageOf — 그룹 버퍼 최댓값", () => {
+    test("field 값(bufferLimitOnServer/Client)을 칸 이름으로 바꿔 끼운다", () => {
+        const server = {success: false, code: "group_buffer_limit_exceeded", message: "x", field: "bufferLimitOnServer", max: 64};
+        const client = {...server, field: "bufferLimitOnClient"};
+        expect(errorMessageOf(server, undefined, translator("en"))).toBe("Server buffer can be at most 64 MiB for your group.");
+        expect(errorMessageOf(client, undefined, translator("en"))).toBe("Client buffer can be at most 64 MiB for your group.");
+        expect(errorMessageOf(server, undefined, translator("ko"))).toBe("서버 버퍼는 그룹 최대인 64 MiB 이하여야 합니다.");
+        expect(errorMessageOf(client, undefined, translator("ko"))).toBe("클라이언트 버퍼는 그룹 최대인 64 MiB 이하여야 합니다.");
+    });
+});
