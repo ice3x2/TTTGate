@@ -256,6 +256,29 @@ describe("rbac-tunnel-ownership", () => {
         }
     });
 
+    // 이슈 368 FR-1·AC-7 — 상태 API 의 timeoutCapSeconds 는 요청자를 켠 사람으로 놓고 계산한 적용 상한(초)이다. 없으면 null.
+    it("이슈 368 상태 API 는 항목마다 요청자 기준 적용 상한 timeoutCapSeconds 를 싣는다", async () => {
+        await setGroupAttributes(groupTwo, {...groupAttributes("private"), max_tunnel_duration_ms: 6 * 3_600_000});
+        try {
+            const created = await request("POST", "/api/tunnelingOption", tunnelBody(20070), carol.auth);
+            expect(created.status).toBe(200);
+            const capOf = async (auth: Auth, port: number) => {
+                const response = await request("GET", "/api/externalServerStatuses", {}, auth);
+                expect(response.status).toBe(200);
+                return response.body.statuses.find((status: any) => status.port === port)?.timeoutCapSeconds;
+            };
+            expect(await capOf(carol.auth, 20070)).toBe(21_600);
+            // 슈퍼유저가 켜도 소유자 그룹 상한이 걸린다.
+            expect(await capOf(superuser, 20070)).toBe(21_600);
+            // 소유자가 없는 옛 터널을 슈퍼유저가 보면 상한이 없다.
+            expect(await capOf(superuser, MIGRATED_PORT)).toBeNull();
+        } finally {
+            await setGroupAttributes(groupTwo, groupAttributes("private"));
+            await request("DELETE", "/api/tunnelingOption", {forwardPort: 20070,
+                expectedRevision: ServerOptionStore.instance.revisionState.currentRevision}, superuser);
+        }
+    });
+
     // #170 — 본문 포트가 문자열이면 설정 행은 == 비교로 지워지지만 런타임 리스너는 키가 달라 남는다.
     it("#170 본문 forwardPort 는 1–65535 의 정수만 받는다", async () => {
         for(const forwardPort of [`${MIGRATED_PORT}.0`, String(MIGRATED_PORT), "0x4E21", 1.5, 0, 65536]) {
