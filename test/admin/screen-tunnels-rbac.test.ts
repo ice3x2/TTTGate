@@ -520,3 +520,121 @@ test("이슈 366 상한보다 큰 값이 저장된 기존 터널은 경고만 �
     expect(await page.locator("#input-buffer-limit-server").getAttribute("max")).toBeNull();
     expect(await button(page, "Apply and Restart").isEnabled()).toBe(true);
 }, 2));
+
+// 이슈 367 AC-7 — 묶음 안에서도 한 번 눌러 끄고, Undo 로 되돌리며, 묶음 머리글의 켜진 수가 위 요약과 같은 기준으로 바뀐다.
+test("이슈 367 admin 은 alice 묶음 안의 터널을 끄고 Undo 로 다시 켠다", () => withTunnels("admin", async ({page}) => {
+    const switchOf = card(page, 20001).getByRole("switch");
+    const countOf = page.locator(".owner-group").filter({has: card(page, 20001)}).locator(".owner-count");
+    const checked = (value: boolean) => page.waitForFunction((expected) =>
+        document.querySelector('li[data-port="20001"] [role="switch"]')?.getAttribute("aria-checked") === String(expected), value, {timeout: 10_000});
+    const activeRequest = () => page.waitForRequest((request) => request.method() === "POST"
+        && new URL(request.url()).pathname === "/api/tunneling/active/20001", {timeout: 10_000});
+    await waitStatus(page, 20001, /^On/);
+    expect(await countOf.textContent()).toBe("1 of 1 on");
+    const onBefore = Number(/^(\d+) of 3 on$/.exec((await page.locator("#tunnel-summary").textContent()) ?? "")?.[1]);
+    expect(onBefore).toBeGreaterThanOrEqual(1);
+    // 다른 사람 묶음의 스위치 이름에는 소유자를 붙인다.
+    expect(await switchOf.getAttribute("aria-label")).toBe(":20001 → 127.0.0.1:8081, alice");
+
+    const off = activeRequest();
+    await switchOf.click();
+    expect((await off).postDataJSON()).toEqual({active: false, timeout: 0});
+    await checked(false);
+    await waitStatus(page, 20001, /^Off/);
+    // 위 요약과 묶음 머리글은 같은 기준(isTunnelOn)으로 센다.
+    await page.locator("#tunnel-summary").filter({hasText: `${onBefore - 1} of 3 on`}).waitFor({state: "visible", timeout: 10_000});
+    await countOf.filter({hasText: "0 of 1 on"}).waitFor({state: "visible", timeout: 10_000});
+
+    const undo = activeRequest();
+    await page.locator(".toast").filter({hasText: ":20001 → 127.0.0.1:8081 is off"}).getByRole("button", {name: "Undo", exact: true}).click();
+    expect((await undo).postDataJSON()).toMatchObject({active: true});
+    await checked(true);
+    await waitStatus(page, 20001, /^On/);
+    await countOf.filter({hasText: "1 of 1 on"}).waitFor({state: "visible", timeout: 10_000});
+}, 3));
+
+// 이슈 367 설계 반영 — 업그레이드 전 터널 묶음의 스위치 이름에는 묶음 이름을 붙인다.
+test("이슈 367 업그레이드 전 터널의 스위치 이름에는 묶음 이름이 붙는다", () => withTunnels("admin", async ({page}) => {
+    await page.locator(".owner-group").first().waitFor({state: "visible", timeout: 10_000});
+    expect(await card(page, 20003).getByRole("switch").getAttribute("aria-label")).toBe(":20003 → 127.0.0.1:8083, Tunnels from before the upgrade");
+}, 3));
+
+const LONG_DISPLAY_NAME = "Administrator of the platform infrastructure team for the long running project";
+
+/** 목록 응답의 소유자를 바꿔 내 묶음(긴 표시 이름)과 소유자 없음 묶음을 만든다. 상태 API 는 그대로다. */
+const stubOwners = (page: Page, owners: Record<number, {id: string; username?: string; displayName?: string}>) =>
+    page.route((url) => url.pathname === "/api/tunnelingOption", async (route) => {
+        if(route.request().method() !== "GET") return route.fallback();
+        const response = await route.fetch();
+        const json = await response.json();
+        json.tunnelingOptions = json.tunnelingOptions.map((option: {forwardPort: number}) =>
+            owners[option.forwardPort] ? {...option, owner: owners[option.forwardPort], ownerId: owners[option.forwardPort].id} : option);
+        await route.fulfill({response, json});
+    });
+
+const openStubbed = async (name: Name, owners: Record<number, {id: string; username?: string; displayName?: string}>,
+                           check: (page: Page) => Promise<void>): Promise<void> => {
+    const app = await startAdminApp({fixture: "rbac", ...(name === "admin" ? {} : {login: {username: name, password: RBAC_PASSWORDS[name]}})});
+    try {
+        await stubOwners(app.page, owners);
+        // 로그인 직후 이미 #/tunnels 일 수 있다. 다른 화면을 거쳐 다시 열어 바꾼 응답으로 목록을 읽게 한다.
+        await app.page.goto(`${app.url}#/me`);
+        await hashIs(app.page, "#/me");
+        await app.page.goto(`${app.url}#/tunnels`);
+        await hashIs(app.page, "#/tunnels");
+        await app.page.locator(".owner-group").first().waitFor({state: "visible", timeout: 10_000});
+        await check(app.page);
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+};
+
+// 이슈 367 FR-3·FR-10·설계 반영 — 슈퍼유저 자신의 묶음이 맨 위에 "You" 표시와 함께 오고, 360px 에서 긴 이름은 줄임표로 줄며
+// 전체는 title 에 있고, 내 묶음의 스위치 이름에는 소유자가 없다. 소유자 없음 묶음 아래에는 슈퍼유저에게 정리 방법을 안내한다.
+test("이슈 367 admin 의 묶음: 내 묶음이 먼저, 긴 이름 줄임표, 소유자 없음 안내", () => openStubbed("admin", {
+    20003: {id: RBAC_USER_IDS.admin, username: "admin", displayName: LONG_DISPLAY_NAME},
+    20002: {id: "u_deleted_one"},
+}, async (page) => {
+    await page.setViewportSize({width: 360, height: 800});
+    const groups = await page.locator(".owner-group").evaluateAll((sections) => sections.map((section) => {
+        const title = section.querySelector(".owner-title") as HTMLElement;
+        return {
+            title: title.textContent?.trim(),
+            labelled: section.getAttribute("aria-labelledby") === title.id,
+            ports: [...section.querySelectorAll("li[data-port]")].map((li) => Number(li.getAttribute("data-port"))),
+            hint: section.querySelector(".owner-hint")?.textContent?.trim() ?? null,
+        };
+    }));
+    expect(groups).toEqual([
+        {title: `admin (${LONG_DISPLAY_NAME})`, labelled: true, ports: [20003], hint: null},
+        {title: "alice (Alice)", labelled: true, ports: [20001], hint: null},
+        {title: "No owner", labelled: true, ports: [20002], hint: "Use 'Change owner' in the tunnel edit screen to assign a new owner."},
+    ]);
+
+    const mine = page.locator(".owner-group").first();
+    const heading = mine.locator(".owner-title");
+    expect(await heading.getAttribute("title")).toBe(`admin (${LONG_DISPLAY_NAME})`);
+    // 긴 이름은 머리글 안에서 줄임표로 줄어든다(글자가 상자보다 넓고, 넘치는 부분을 감춘다).
+    expect(await heading.evaluate((element) => element.scrollWidth > element.clientWidth
+        && getComputedStyle(element).textOverflow === "ellipsis")).toBe(true);
+    // "You" 표시와 켜진 수는 줄지 않고 화면 안에 보인다.
+    const badge = mine.locator(".owner-me");
+    expect((await badge.textContent())?.trim()).toBe("You");
+    const box = await badge.boundingBox();
+    expect(box !== null && box.width > 0 && box.x + box.width <= 360).toBe(true);
+    expect(await mine.locator(".owner-count").isVisible()).toBe(true);
+    // 내 묶음의 스위치 이름은 터널 이름뿐이다. 소유자 없음 묶음은 묶음 이름을 붙인다.
+    expect(await card(page, 20003).getByRole("switch").getAttribute("aria-label")).toBe(":20003 → 127.0.0.1:8083");
+    expect(await card(page, 20002).getByRole("switch").getAttribute("aria-label")).toBe(":20002 → 127.0.0.1:8082, No owner");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+}));
+
+// 이슈 367 설계 반영 — 소유자를 바꿀 수 없는 일반 사용자에게는 소유자 없음 안내를 보이지 않는다.
+test("이슈 367 alice 에게는 소유자 없음 묶음은 보여도 정리 안내는 없다", () => openStubbed("alice", {
+    20002: {id: "u_deleted_one"},
+}, async (page) => {
+    const titles = (await page.locator(".owner-title").allTextContents()).map((title) => title.trim());
+    expect(titles).toEqual(["alice (Alice)", "No owner"]);
+    expect(await page.locator(".owner-hint").count()).toBe(0);
+}));

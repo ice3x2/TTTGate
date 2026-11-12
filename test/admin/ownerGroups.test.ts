@@ -54,4 +54,31 @@ describe("ownerGroups", () => {
         const result = ownerGroups([tunnel(1, migrated), tunnel(2, gone), tunnel(3, root)], ME, ko);
         expect(result.groups.map((group) => group.title)).toEqual(["root (관리자)", "업그레이드 전 터널", "소유자 없음"]);
     });
+
+    test("소유자가 지워진 터널은 지워진 사용자가 여럿이어도 '소유자 없음' 묶음 하나로 모인다", () => {
+        const result = ownerGroups([tunnel(1, gone), tunnel(2, root), tunnel(3, {id: "u_gone2"}), tunnel(4, gone)], ME, en);
+        expect(result.groups.map((group) => [group.kind, group.title, group.options.map((option) => option.forwardPort)])).toEqual([
+            ["me", "root (관리자)", [2]],
+            ["unknown", "No owner", [1, 3, 4]],
+        ]);
+    });
+
+    test("설계 반영: 스위치 이름에 붙일 소유자는 내 묶음엔 없고, 사용자는 아이디, 나머지는 묶음 이름이다", () => {
+        const result = ownerGroups([tunnel(1, root), tunnel(2, alice), tunnel(3, migrated), tunnel(4, gone)], ME, en);
+        expect(result.groups.map((group) => [group.kind, group.switchOwner])).toEqual([
+            ["me", undefined],
+            ["user", "alice"],
+            ["migrated", "Tunnels from before the upgrade"],
+            ["unknown", "No owner"],
+        ]);
+    });
+
+    test("설계 반영: 머리글은 아이디와 표시 이름을 따로 그릴 수 있게 나눠 준다", () => {
+        const result = ownerGroups([tunnel(1, root), tunnel(2, bob), tunnel(3, migrated)], ME, en);
+        expect(result.groups.map((group) => [group.name, group.displayName])).toEqual([
+            ["root", "관리자"],
+            ["bob", undefined],
+            ["Tunnels from before the upgrade", undefined],
+        ]);
+    });
 });

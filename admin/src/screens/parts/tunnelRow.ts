@@ -1,6 +1,7 @@
 import type {Options, TunnelingStatus} from '../../controller/Options';
 import {i18n, type Translator} from '../../i18n';
 import {wholeNumber} from './units';
+import {MIGRATED_OWNER_ID} from './ownerGroups';
 
 // 이슈 338 — 터널 목록 한 줄(REQ-5·REQ-8)과 끄기를 되돌릴 때의 timeout(REQ-15). 화면은 이 결과를 그리기만 한다.
 
@@ -15,7 +16,10 @@ export type ClockView =
 export type RowView = {parts: RowPart[]; control: RowControl; checked: boolean; clock?: ClockView; link: boolean};
 type BaseView = Omit<RowView, 'link'>;
 
-const MIGRATED_OWNER_ID = 'system:migrated';
+/** 이슈 367: 켜진 터널의 기준. 포트를 열었고(online) 활성이다. 위 요약과 묶음 머리글이 같은 기준으로 센다. */
+export function isTunnelOn(status: TunnelingStatus | undefined): boolean {
+    return status?.online === true && status.active;
+}
 
 export function tunnelTitle(option: Options): string {
     if(option.name) return option.name;

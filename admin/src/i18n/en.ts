@@ -455,7 +455,7 @@ export const en = {
     'tunnels.groupMigrated': 'Tunnels from before the upgrade',
     'tunnels.groupUnknownOwner': 'No owner',
     'tunnels.groupMe': 'You',
-    'tunnels.groupNoOwnerHint': 'Open a tunnel to assign a new owner.',
+    'tunnels.groupNoOwnerHint': "Use 'Change owner' in the tunnel edit screen to assign a new owner.",
     'tunnels.switchWithOwner': '{title}, {owner}',
     'tunnels.stale': 'Couldn\'t update · retrying',
     'tunnels.empty': 'No tunnels yet.',
