@@ -300,11 +300,12 @@ describe("rbac-tunnel-ownership", () => {
         expect({status: withCert.status, code: withCert.body.code}).toEqual({status: 403, code: "forbidden"});
     });
 
+    // 이슈 367 FR-1·AC-6: 목록 응답의 owner 에 표시 이름(displayName)이 있다. 표시 이름을 정하지 않은 사용자는 아이디와 같다.
     it("목록은 소유와 가시성으로 걸러지고 owner·editable 이 붙는다", async () => {
         const forAlice = await listTunnels(alice.auth);
         expect(forAlice.map((option: any) => option.forwardPort).sort()).toEqual([20010, 20011]);
         for(const option of forAlice) {
-            expect(option.owner).toEqual({id: alice.id, username: "alice"});
+            expect(option.owner).toEqual({id: alice.id, username: "alice", displayName: "alice"});
             expect(option.editable).toBe(true);
             // 저장된 ownerId 도 응답에 그대로 남아야 한다. owner 는 그것을 풀어 보인 것이지 대체가 아니다.
             expect(option.ownerId).toBe(alice.id);
@@ -447,7 +448,7 @@ describe("rbac-tunnel-ownership", () => {
         const reassigned = await request("PUT", "/api/tunnelingOption/20011/owner",
             {ownerId: carol.id, expectedRevision: ServerOptionStore.instance.revisionState.currentRevision}, superuser);
         expect(reassigned.status).toBe(200);
-        expect(reassigned.body.owner).toEqual({id: carol.id, username: "carol"});
+        expect(reassigned.body.owner).toEqual({id: carol.id, username: "carol", displayName: "carol"});
 
         expect((await listTunnels(alice.auth)).map((option: any) => option.forwardPort)).toEqual([20020]);
         expect((await listTunnels(carol.auth)).map((option: any) => option.forwardPort)).toEqual([20011]);
@@ -523,7 +524,7 @@ describe("rbac-tunnel-ownership", () => {
     it("목록이 실어 준 owner·editable 을 그대로 되돌려 보내도 설정 파일에 남지 않는다", async () => {
         // 관리자 UI 는 받은 행을 그대로 PUT 한다. 응답 전용 필드가 server.yaml 에 섞여 들어가면 안 된다.
         const row = (await listTunnels(alice.auth)).find((option: any) => option.forwardPort === 20020);
-        expect(row.owner).toEqual({id: alice.id, username: "alice"});
+        expect(row.owner).toEqual({id: alice.id, username: "alice", displayName: "alice"});
         expect(row.editable).toBe(true);
 
         const echoed = await request("POST", "/api/tunnelingOption",

@@ -102,11 +102,13 @@ const baseOf = (input: {option: Options; status?: TunnelingStatus; loaded: boole
     return {parts: statePartsOf(status, tr), control: 'switch', checked: status.active, clock: clockOf(status, serverTime, tr)};
 };
 
-export function tunnelRowView(input: {option: Options; status?: TunnelingStatus; loaded: boolean; meId: string; serverTime: number}, tr: Translator = i18n()): RowView {
+/** 이슈 367 FR-5: grouped 면 소유자별 머리글이 소유자를 보이므로 줄에 @소유자를 붙이지 않는다. */
+export function tunnelRowView(input: {option: Options; status?: TunnelingStatus; loaded: boolean; meId: string; serverTime: number; grouped?: boolean},
+    tr: Translator = i18n()): RowView {
     const base = {...baseOf(input, tr), link: input.option.editable !== false};
     if(!input.loaded) return base;
     const extra: RowPart[] = [];
-    const owner = ownerPart(input.option, input.meId, tr);
+    const owner = input.grouped ? undefined : ownerPart(input.option, input.meId, tr);
     if(owner) extra.push(owner);
     if(input.option.tls === true && input.option.allowSelfSignedDestinationCert === true) {
         extra.push({text: tr.t('tunnel.certNotVerified'), warn: true, title: tr.t('tunnel.certNotVerifiedTitle')});

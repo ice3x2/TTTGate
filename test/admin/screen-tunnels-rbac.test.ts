@@ -50,13 +50,21 @@ const waitStatus = (page: Page, port: number, pattern: RegExp) => page.waitForFu
     new RegExp(source as string).test(document.querySelector(`li[data-port="${target}"] .tunnel-status`)?.textContent ?? ""),
     [port, pattern.source] as const, {timeout: 10_000});
 
+// 이슈 367: 소유자가 둘 이상이면 목록을 소유자별로 묶는다. 줄의 @소유자 대신 묶음 머리글이 소유자를 보인다.
+const ownerHeadingOf = (page: Page, port: number) => page.waitForFunction((target) => {
+    const title = document.querySelector(`li[data-port="${target}"]`)?.closest(".owner-group")?.querySelector(".owner-title");
+    return title?.textContent?.trim() ?? false;
+}, port, {timeout: 10_000}).then((handle) => handle.jsonValue() as Promise<string>);
+
 test("alice 는 자기·그룹 공유 터널만 보고, 공유 터널은 view only 와 자물쇠이며 스위치가 없다", () => withTunnels("alice", async ({page}) => {
     expect(await card(page, 20003).count()).toBe(0);
     await waitStatus(page, 20001, /^On/);
     expect(await statusOf(page, 20001).textContent()).not.toContain("@alice");
     expect(await statusOf(page, 20001).textContent()).not.toContain("view only");
     expect(await card(page, 20001).getByRole("switch").count()).toBe(1);
-    await waitStatus(page, 20002, /^On · view only · @bob$/);
+    await waitStatus(page, 20002, /^On · view only$/);
+    expect(await ownerHeadingOf(page, 20002)).toBe("bob (Bob)");
+    expect(await ownerHeadingOf(page, 20001)).toBe("alice (Alice)");
     expect(await card(page, 20002).locator(".tunnel-lock").getAttribute("title")).toBe("View only");
     expect(await card(page, 20002).getByRole("switch").count()).toBe(0);
     expect(await button(page, "Add tunneling service").count()).toBe(1);
@@ -164,8 +172,8 @@ test("carol 은 추가할 수 있어 요청 안내가 없고, 읽기 전용 그�
 }));
 
 test("admin 은 모든 터널과 소유자를 보고 읽기 전용 표시가 없다", () => withTunnels("admin", async ({page}) => {
-    await waitStatus(page, 20003, /· migrated$/);
-    await waitStatus(page, 20001, /· @alice$/);
+    expect(await ownerHeadingOf(page, 20003)).toBe("Tunnels from before the upgrade");
+    expect(await ownerHeadingOf(page, 20001)).toBe("alice (Alice)");
     expect(await page.locator(".tunnel-lock").count()).toBe(0);
     expect(await page.locator(".tunnel-status").filter({hasText: "view only"}).count()).toBe(0);
 }, 3));
@@ -189,7 +197,8 @@ test("admin 이 20003 의 소유자를 alice 로 바꾸면 alice 는 그 터널�
     await page.getByText("Owner changed.", {exact: true}).waitFor({state: "visible", timeout: 10_000});
     await page.goto(`${page.url().split("#")[0]}#/tunnels`);
     await hashIs(page, "#/tunnels");
-    await waitStatus(page, 20003, /· @alice$/);
+    await page.waitForFunction(() => document.querySelector('li[data-port="20003"]')?.closest(".owner-group")?.querySelector(".owner-title")
+        ?.textContent?.trim() === "alice (Alice)", undefined, {timeout: 10_000});
 
     // 같은 서버 상태에서 alice 로 다시 들어온다.
     await page.locator('[aria-label="Open menu"]').click();
@@ -259,7 +268,8 @@ test("admin 이 소유자가 있는 터널의 소유자를 바꾼 뒤 같은 화
     expect("editable" in body).toBe(false);
     await page.getByText("Success to apply tunneling option", {exact: true}).waitFor({state: "visible", timeout: 10_000});
     await hashIs(page, "#/tunnels");
-    await waitStatus(page, 20001, /· @bob$/);
+    await page.waitForFunction(() => document.querySelector('li[data-port="20001"]')?.closest(".owner-group")?.querySelector(".owner-title")
+        ?.textContent?.trim() === "bob (Bob)", undefined, {timeout: 10_000});
 }, 3));
 
 // #150 — 서버는 allowedClientIds 가 있으면 이름 목록을 보지 않는다. 슈퍼유저 화면도 id 를 보이고 고칠 수 있어야 한다.
@@ -424,6 +434,41 @@ test("같은 허용 범위가 두 번 있어도 편집 화면이 그려지고 �
     await openNewWithRanges(page, [{from: 1, to: 65535}, {from: 1, to: 65535}], []);
     expect(await chipsOf(page).allTextContents()).toEqual(["1–65535"]);
     await page.locator("#input-destination-host").waitFor({state: "visible", timeout: 10_000});
+
+// 이슈 367 AC-1·AC-2·AC-8·FR-10 — 슈퍼유저 목록은 소유자별 묶음이고, 순서는 다른 사용자(아이디 순) → 업그레이드 전 터널이며,
+// 각 목록은 머리글 이름을 가지고, 줄에는 @소유자가 없으며, 360px 에서 넘치지 않는다.
+test("이슈 367 admin 의 목록은 소유자별 묶음과 머리글을 보이고, 각 목록이 머리글 이름을 가진다", () => withTunnels("admin", async ({page}) => {
+    await page.setViewportSize({width: 360, height: 800});
+    await page.locator(".owner-group").first().waitFor({state: "visible", timeout: 10_000});
+    const groups = await page.locator(".owner-group").evaluateAll((sections) => sections.map((section) => {
+        const title = section.querySelector(".owner-title") as HTMLElement;
+        const list = section.querySelector("ul") as HTMLElement;
+        return {
+            title: title.textContent?.trim(),
+            heading: title.tagName,
+            labelled: list.getAttribute("aria-labelledby") === title.id,
+            ports: [...section.querySelectorAll("li[data-port]")].map((li) => Number(li.getAttribute("data-port"))),
+        };
+    }));
+    expect(groups).toEqual([
+        {title: "alice (Alice)", heading: "H2", labelled: true, ports: [20001]},
+        {title: "bob (Bob)", heading: "H2", labelled: true, ports: [20002]},
+        {title: "Tunnels from before the upgrade", heading: "H2", labelled: true, ports: [20003]},
+    ]);
+    expect(await page.locator(".tunnel-status").filter({hasText: "@"}).count()).toBe(0);
+    expect(await page.locator(".owner-me").count()).toBe(0);
+    // 다른 사람 터널의 스위치 이름에는 소유자를 붙인다(설계 반영).
+    expect(await card(page, 20001).getByRole("switch").getAttribute("aria-label")).toMatch(/, alice$/);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+}, 3));
+
+// 이슈 367 AC-4·FR-4 — 공유를 받은 일반 사용자도 소유자가 둘이면 묶고, 내 묶음이 맨 위에 "나" 표시와 함께 온다.
+test("이슈 367 alice 는 내 묶음이 맨 위에 '나' 표시와 함께 보이고 bob 묶음이 그 아래다", () => withTunnels("alice", async ({page}) => {
+    await page.locator(".owner-group").first().waitFor({state: "visible", timeout: 10_000});
+    const titles = await page.locator(".owner-title").allTextContents();
+    expect(titles.map((title) => title.trim())).toEqual(["alice (Alice)", "bob (Bob)"]);
+    expect((await page.locator(".owner-group").first().locator(".owner-me").textContent())?.trim()).toBe("You");
+    expect(await page.locator(".owner-group").nth(1).locator(".owner-me").count()).toBe(0);
 }, 2));
 
 // 이슈 366 FR-10~FR-12·AC-9 — 그룹 연결당 버퍼 최댓값. 화면은 상한을 미리 보이고, 넘는 새 값은 그 칸에 오류를 보이며 저장을 잠근다.

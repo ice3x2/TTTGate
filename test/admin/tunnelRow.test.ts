@@ -259,3 +259,13 @@ describe("이슈 349 한국어 상태 줄", () => {
         expect(koView(option(), status({activeStart: NOW, activeTimeout: 3000})).clock).toMatchObject({left: "50분 00초 남음"});
     });
 });
+
+// 이슈 367 FR-5 — 소유자별로 묶어 보일 때는 머리글이 소유자를 보이므로 줄의 @소유자를 빼고, 묶지 않을 때는 지금처럼 붙인다.
+describe("이슈 367 묶어 보일 때의 소유자 표시", () => {
+    test("grouped 면 소유자를 붙이지 않는다", () => {
+        const alice = option({owner: {id: "u_alice", username: "alice"}});
+        expect(tunnelRowView({option: alice, status: status(), loaded: true, meId: ME, serverTime: NOW, grouped: true}).parts.map((part) => part.text))
+            .toEqual(["On"]);
+        expect(text(alice, status())).toBe("On · @alice");
+    });
+});
