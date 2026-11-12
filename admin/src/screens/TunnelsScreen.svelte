@@ -35,6 +35,8 @@
     // 이슈 369: 연결 창은 하나만 두고 연 터널을 바꿔 쓴다. 차단은 보안 관리 권한(슈퍼유저)만 한다.
     let connectionsFor = $state<{port: number; title: string} | undefined>();
     let connectionsOpen = $state(false);
+    // 옛 서버라 연결 목록 API 가 없으면(404) 연결 수를 버튼이 아니라 글자로 둔다(스펙 §8).
+    let connectionsUnsupported = $state(false);
     const canBlock = $derived($me?.user.role === 'superuser');
     const openConnections = (option: Options) => {
         connectionsFor = {port: option.forwardPort, title: tunnelTitle(option)};
@@ -266,7 +268,7 @@
                 <div class="tunnel-meta-row">
                     {#if stats}
                         <span class="tunnel-stats">
-                            {#if option.editable !== false}
+                            {#if option.editable !== false && !connectionsUnsupported}
                                 <button type="button" class="tunnel-conn" aria-label={t('tunnel.connectionsOpen', {count: stats.sessions, title})}
                                     onclick={() => openConnections(option)}>{t('tunnel.connectionsButton', {count: stats.sessions})}<span aria-hidden="true">›</span></button>
                             {:else}
@@ -357,7 +359,7 @@
     {#if loading}<Loading overlay />{/if}
     {#if connectionsFor}
         <ConnectionsModal bind:open={connectionsOpen} port={connectionsFor.port} title={connectionsFor.title} {canBlock} {requesterIp}
-            onsessionout={sessionOut} />
+            onsessionout={sessionOut} onunsupported={() => (connectionsUnsupported = true)} />
     {/if}
     <Modal bind:open={confirmOpen} title={confirmTarget ? t('tunnels.turnOffConfirm', {title: tunnelTitle(confirmTarget.option)}) : t('tunnels.turnOffConfirmUntitled')}>
         {plural('tunnels.connectionsCut', confirmTarget?.sessions ?? 0)}
