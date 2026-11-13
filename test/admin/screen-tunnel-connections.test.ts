@@ -68,7 +68,8 @@ test("AC-1·AC-2·AC-3·AC-14 켜진 줄은 '켜진 지'·KiB 가동 정보와 �
         expect(await row(app.page, PORT).locator(".tunnel-status").textContent()).not.toContain("connection");
         expect(await row(app.page, PORT).locator(".tunnel-status").textContent()).not.toContain("Uptime");
         const clients = meta.locator(".tunnel-clients");
-        expect(await clients.locator(".client").allTextContents()).toEqual(["●Office PC", "○Lab"]);
+        // 설계 "● NAS, ○ 집 PC 외 1": 이름 사이를 쉼표로 나눈다.
+        expect(await clients.locator(".client").allTextContents()).toEqual(["●Office PC,", "○Lab"]);
         expect(await clients.locator(".client.offline").count()).toBe(1);
         expect(await clients.getAttribute("title")).toBe("Office PC, Lab (not connected)");
         // 꺼진 터널에는 가동 정보가 없고, 허용 클라이언트("Any")는 보인다.
@@ -378,6 +379,10 @@ test("AC-7·AC-8·AC-12 차단은 확인 창을 먼저 띄우고, Esc 는 확인
         await other.waitFor({state: "visible", timeout: 10_000});
         expect(await other.getByRole("alert").count()).toBe(0);
         expect(await other.getByRole("radio", {name: "This tunnel only"}).isChecked()).toBe(true);
+        // 설계 목업 "이 터널만 <small>ssh-office</small>": 고르는 범위가 어느 터널인지 이름을 곁에 보인다.
+        const tunnelName = (await row(app.page, PORT).locator(".tunnel-title").textContent())?.trim() ?? "";
+        expect(tunnelName.length).toBeGreaterThan(0);
+        expect((await other.locator("label:has(input[value=tunnel]) small").textContent())?.trim()).toBe(tunnelName);
         // L5: "모든 터널"을 고르면 다른 터널의 연결도 끊긴다는 문장으로 바뀐다.
         await other.getByRole("radio", {name: "All tunnels"}).check();
         expect(await other.locator(".block-body").textContent())
@@ -414,6 +419,59 @@ test("AC-11 폭 360px 에서 목록 줄과 연결 창에 가로 스크롤이 없
         await dialog.locator("li.conn").first().waitFor({state: "visible", timeout: 10_000});
         expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
         expect(await app.page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+});
+
+// 설계 ④ .tmeta { flex:1 0 100%; padding-left:var(--s-4) }: 가동 정보·클라이언트 줄은 스위치 오른쪽에 붙지 않고 그 아래 자기 줄을 쓰며,
+// 글자 왼쪽이 터널 이름과 맞는다. 켜진 터널(가동 정보+클라이언트)과 꺼진 터널(클라이언트만) 모두 같다.
+test.each([[1280, 900], [360, 800]])("설계 ④ 폭 %ipx 에서 가동 정보 줄은 스위치 아래 줄에 있고 왼쪽이 터널 이름과 맞는다", async (width, height) => {
+    const app = await startAdminApp({fixture: "with-tunnels"});
+    try {
+        await app.page.setViewportSize({width, height});
+        await stubStatus(app.page);
+        await openList(app.page, app.url);
+        for(const port of [PORT, 20002]) {
+            const line = row(app.page, port);
+            const meta = (await line.locator(".tunnel-meta-row").boundingBox())!;
+            const control = (await line.locator(".tunnel-switch, .tunnel-lock").first().boundingBox())!;
+            expect({port, below: Math.round(meta.y) >= Math.round(control.y + control.height)}).toEqual({port, below: true});
+            const title = (await line.locator(".tunnel-title").boundingBox())!;
+            const first = (await line.locator(".tunnel-meta-row > :first-child").boundingBox())!;
+            expect({port, left: Math.round(first.x)}).toEqual({port, left: Math.round(title.x)});
+        }
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+});
+
+// 설계 ④ .pill: 연결 버튼은 IP 제한 토글과 같은 모양으로 보이는 높이 32px, 글자 fs-sm 이고, 누르는 영역은 44px 이다.
+// 누름 영역은 ::before 로 넓히면 아래쪽이 감싼 요소에 잡혀(CI 에서 확인) 버튼 자체를 44px 로 두고 안의 알약만 32px 로 보인다.
+test("설계 ④ 연결 버튼은 보이는 높이 32px·글자 fs-sm 이고, 누르는 영역은 44px 이다", async () => {
+    const app = await startAdminApp({fixture: "with-tunnels"});
+    try {
+        await stubStatus(app.page);
+        await openList(app.page, app.url);
+        const button = row(app.page, PORT).locator(".tunnel-conn");
+        const pill = button.locator(".pill");
+        expect(Math.round((await pill.boundingBox())!.height)).toBe(32);
+        expect(Math.round((await button.boundingBox())!.height)).toBe(44);
+        expect(await pill.evaluate((element) => getComputedStyle(element).fontSize
+            === getComputedStyle(document.documentElement).getPropertyValue("--fs-sm").trim())).toBe(true);
+        // 보이는 알약보다 5px 위·아래를 눌러도 이 버튼이 받는다. 받지 않으면 그 지점을 받은 요소를 적는다.
+        const hits = await pill.evaluate((element) => {
+            const rect = element.getBoundingClientRect();
+            const x = rect.left + rect.width / 2;
+            const target = element.closest("button")!;
+            return [rect.top - 5, rect.bottom + 5].map((y) => {
+                const hit = document.elementFromPoint(x, y);
+                return target.contains(hit) ? "button" : `${hit ? `${hit.tagName}.${hit.className}` : "none"} at y=${Math.round(y)}`;
+            });
+        });
+        expect(hits).toEqual(["button", "button"]);
         expect(app.errors).toEqual([]);
     } finally {
         await app.close();

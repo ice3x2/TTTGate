@@ -267,3 +267,4 @@ describe("modalStack (설계 반영: 겹친 창의 Esc)", () => {
         expect(isTopModal(lower)).toBe(false);
     });
 });
+

@@ -27,6 +27,7 @@ const valuesOf = (result: FailureLike, tr: Translator): Record<string, string | 
 /** 다른 키의 문구를 그대로 쓰는 code. 같은 문구를 두 키에 두면 한쪽만 고쳐질 수 있다(검토 L-3). */
 const SHARED_KEYS: Readonly<Record<string, MessageKey>> = {
     login_failed: 'serverError.password_incorrect',
+    full: 'security.blocklistFull',
 };
 
 /** code 의 문구 키. 다른 키의 문구를 쓰는 code 면 그 키, 아니면 serverError.<code> 다. 문구가 없는 code 면 undefined 다. */

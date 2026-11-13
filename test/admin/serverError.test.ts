@@ -198,7 +198,8 @@ describe("이슈 349 2단계 서버 오류 code", () => {
         [{code: "mfa_ticket_invalid"}, "The sign-in expired. Start again.", "로그인 시간이 지났습니다. 처음부터 다시 하세요."],
         [{code: "session_not_found"}, "Session not found", "세션을 찾을 수 없습니다."],
         [{code: "mfa_enrollment_required"}, "Enable two-factor authentication first.", "먼저 2단계 인증을 켜세요."],
-        [{code: "full", max: 1000}, "the blocklist already has 1000 entries", "차단 목록이 가득 찼습니다(최대 1000개)."],
+        // 차단 목록이 가득 찬 응답은 보안 화면과 연결 창이 같은 안내(security.blocklistFull)를 보인다(PR 379 검토 M-1).
+        [{code: "full", max: 1000}, "The blocklist is full. Unblock an address to add another.", "차단 목록이 가득 찼습니다. 주소를 더하려면 다른 주소의 차단을 푸세요."],
     ] as Array<[Record<string, unknown>, string, string]>)("%j", (result, english, korean) => {
         expect(errorMessageOf({...result, message: "server text"}, "fallback", en)).toBe(english);
         expect(errorMessageOf({...result, message: "server text"}, "fallback", ko)).toBe(korean);

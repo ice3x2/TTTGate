@@ -182,6 +182,7 @@
                 toast.push({tone: 'warn', message: duplicateBlockText(result, {port, scope})});
                 blockOpen = false;
             } else {
+                // 차단 목록이 가득 차면 보안 화면과 같은 안내를 보인다. 창은 연 채로 두어 다른 범위를 고르거나 취소할 수 있다.
                 toast.push({tone: 'alarm', message: errorMessageOf(result)});
             }
         } catch(e) {
@@ -240,7 +241,7 @@
         <p class="warnbox" role="alert">{t('connections.selfWarning')}</p>
     {/if}
     <div class="scope" role="radiogroup" aria-label={t('connections.scope')}>
-        <label><input type="radio" name={`block-scope-${port}`} value="tunnel" bind:group={blockScope} />{t('connections.scopeTunnel')}</label>
+        <label><input type="radio" name={`block-scope-${port}`} value="tunnel" bind:group={blockScope} />{t('connections.scopeTunnel')}{' '}<small>{title}</small></label>
         <label><input type="radio" name={`block-scope-${port}`} value="all" bind:group={blockScope} />{t('connections.scopeAll')}</label>
     </div>
     <label class="note-label" for={`block-note-${port}`}>{t('connections.note')}</label>
@@ -286,6 +287,7 @@
     .scope label { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 var(--s-3); border: 1px solid var(--line-1);
         border-radius: var(--r-3); background: var(--bg-2); cursor: pointer; font-size: 14px; color: var(--ink-0); }
     .scope label:has(input:checked) { border-color: var(--signal); background: var(--signal-glow); }
+    .scope small { min-width: 0; overflow-wrap: anywhere; color: var(--ink-2); font-size: var(--fs-sm); }
     .scope input { accent-color: var(--signal); width: 18px; height: 18px; margin: 0; }
     .note-label { display: block; margin-bottom: var(--s-2); font-size: var(--fs-sm); color: var(--ink-1); }
 </style>
