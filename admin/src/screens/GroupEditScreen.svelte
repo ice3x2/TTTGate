@@ -1,5 +1,5 @@
 <script lang="ts">
-    import {onMount} from 'svelte';
+    import {onMount, tick} from 'svelte';
     import GroupsCtrl from '../controller/GroupsCtrl';
     import InvalidSession from '../controller/InvalidSession';
     import {DEFAULT_GROUP_ATTRIBUTES, type Group, type GroupAttributes, type TunnelProtocolName, type UserView} from '../controller/Types';
@@ -53,7 +53,7 @@
     let loadedSnapshot = $state(snapshot('', DEFAULT_GROUP_ATTRIBUTES));
     let nameError = $state('');
     // 빈 한도 칸 오류. 빈칸을 0(무제한)으로 저장하면 운영자 모르게 제한이 풀린다(U3 그룹 한도).
-    let limitErrors = $state<{count?: string; duration?: string; concurrent?: string}>({});
+    let limitErrors = $state<{count?: string; duration?: string; concurrent?: string; sessionBuffer?: string}>({});
     let formError = $state('');
     let pending = $state(false);
     let deleteOpen = $state(false);
@@ -94,16 +94,31 @@
     const toggled = <T,>(order: ReadonlyArray<T>, current: ReadonlyArray<T>, value: T, on: boolean): T[] =>
         [...order.filter((item) => item === value ? on : current.includes(item)), ...current.filter((item) => !order.includes(item))];
 
+    // 이슈 365 FR-9: 범위를 더하면 새 줄의 시작 포트 칸으로, 지우면 같은 자리의 다음 줄 삭제 버튼(없으면 "범위 추가")으로 초점을 옮긴다.
+    const addRange = async () => {
+        attrs.allowed_port_range = [...attrs.allowed_port_range, {from: 1, to: 65535}];
+        await tick();
+        document.getElementById(`group-attr-allowed_port_range-${attrs.allowed_port_range.length - 1}-from`)?.focus();
+    };
+    const removeRange = async (index: number) => {
+        attrs.allowed_port_range = attrs.allowed_port_range.filter((_, i) => i !== index);
+        await tick();
+        const next = document.querySelectorAll<HTMLButtonElement>('.range-delete')[index];
+        (next ?? document.getElementById('group-add-range'))?.focus();
+    };
+
     const setDuration = (value: number | null) => {
         durationHours = value;
         if(value !== null) attrs.max_tunnel_duration_ms = value * HOUR_MS;
     };
 
     /** 한도 칸이 비었는지 본다. 빈칸은 저장하지 않는다 — 0 은 무제한이라 직접 넣어야 한다. */
-    const emptyLimitErrors = (): {count?: string; duration?: string; concurrent?: string} => ({
+    const emptyLimitErrors = (): {count?: string; duration?: string; concurrent?: string; sessionBuffer?: string} => ({
         ...(attrs.max_tunnel_count == null ? {count: t('group.enterCountDisables')} : {}),
         ...(durationHours == null ? {duration: t('group.enterNumberUnlimited')} : {}),
-        ...(attrs.max_concurrent_connections == null ? {concurrent: t('group.enterNumberUnlimited')} : {})
+        ...(attrs.max_concurrent_connections == null ? {concurrent: t('group.enterNumberUnlimited')} : {}),
+        // 이슈 366: 빈칸은 null 로 가서 서버가 422 로 거부한다. 보내기 전에 칸에 알린다.
+        ...(attrs.max_session_buffer_mib == null ? {sessionBuffer: t('group.enterNumberUnlimited')} : {})
     });
 
     /** 포트 범위의 null 은 그대로 보내 서버 422 를 받는다. 기간은 setDuration 이 attrs 에 이미 반영한다. */
@@ -228,20 +243,33 @@
             </Field>
             <Field label={t('group.allowedPortRanges')}>
                 <div style="display: flex; flex-direction: column; gap: var(--s-2);">
+                    {#snippet addRangeButton()}
+                        <Button variant="secondary" disabled={readOnly} id="group-add-range"
+                            onclick={addRange}><span aria-hidden="true">＋</span>{t('group.addRange')}</Button>
+                    {/snippet}
                     {#each attrs.allowed_port_range as range, i (i)}
-                        <div data-range-index={i} style="display: flex; gap: var(--s-2); align-items: center;">
+                        <div data-range-index={i} class="range-row">
                             <NumberInput id={`group-attr-allowed_port_range-${i}-from`} min={1} max={65535} disabled={readOnly}
+                                ariaLabel={t('group.rangeStart')}
                                 bind:value={() => range.from, (value) => (range.from = value as number)} />
+                            <span aria-hidden="true">–</span>
                             <NumberInput id={`group-attr-allowed_port_range-${i}-to`} min={1} max={65535} disabled={readOnly}
+                                ariaLabel={t('group.rangeEnd')}
                                 bind:value={() => range.to, (value) => (range.to = value as number)} />
-                            <Button size="sm" disabled={readOnly}
-                                onclick={() => (attrs.allowed_port_range = attrs.allowed_port_range.filter((_, index) => index !== i))}>{t('common.remove')}</Button>
+                            <Button variant="secondary" icon disabled={readOnly} class="range-delete"
+                                ariaLabel={t('group.deleteRange', {from: range.from, to: range.to})} title={t('group.deleteRangeTitle')}
+                                onclick={() => removeRange(i)}><span aria-hidden="true">×</span></Button>
                         </div>
                     {:else}
-                        <p>{t('group.noPorts')}</p>
+                        <!-- 설계 ②: 범위가 없으면 점선 상자 안에 안내와 "범위 추가"를 나란히 둔다. -->
+                        <div id="group-range-empty" class="range-empty">
+                            <span>{t('group.noPorts')}</span>
+                            {@render addRangeButton()}
+                        </div>
                     {/each}
-                    <div><Button size="sm" disabled={readOnly}
-                        onclick={() => (attrs.allowed_port_range = [...attrs.allowed_port_range, {from: 1, to: 65535}])}>{t('group.addRange')}</Button></div>
+                    {#if attrs.allowed_port_range.length > 0}
+                        <div>{@render addRangeButton()}</div>
+                    {/if}
                 </div>
             </Field>
             <Field label={t('group.allowedProtocols')}>
@@ -282,6 +310,11 @@
             <Field label={t('group.maxConcurrent')} hint={t('group.zeroUnlimited')} for="group-attr-max_concurrent_connections" error={limitErrors.concurrent}>
                 <NumberInput id="group-attr-max_concurrent_connections" min={0} max={100000} step={1} disabled={readOnly}
                     bind:value={() => attrs.max_concurrent_connections, (value) => (attrs.max_concurrent_connections = value as number)} />
+            </Field>
+            <!-- 이슈 366 FR-9: 그룹 연결당 버퍼 최댓값. 0 이면 그룹 최대가 없다. -->
+            <Field label={t('group.maxSessionBuffer')} hint={t('group.maxSessionBufferHint')} for="group-attr-max_session_buffer_mib" error={limitErrors.sessionBuffer}>
+                <NumberInput id="group-attr-max_session_buffer_mib" min={0} max={1048576} step={1} disabled={readOnly}
+                    bind:value={() => attrs.max_session_buffer_mib ?? null, (value) => (attrs.max_session_buffer_mib = value as number)} />
             </Field>
             <Field label={t('group.bandwidth')} for="group-attr-rate_limit">
                 <Select id="group-attr-rate_limit" options={RATE_LIMITS} disabled={readOnly}
@@ -350,3 +383,14 @@
         <Button variant="danger" onclick={remove}>{t('group.delete')}</Button>
     {/snippet}
 </Modal>
+
+<style>
+    /* 이슈 365 AC-2(설계 ②): 범위 줄의 입력 두 칸을 44px 삭제 버튼과 같은 높이로 맞춘다. */
+    .range-row { display: flex; gap: var(--s-2); align-items: center; }
+    /* 360px 에서도 넘치지 않게 입력 칸이 남는 폭을 나눠 갖고 줄어들 수 있게 한다. */
+    .range-row :global(.input) { flex: 1; min-width: 0; min-height: 44px; }
+    .range-empty {
+        display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3);
+        padding: var(--s-4); border: 1px dashed var(--line-1); border-radius: var(--r-2); font-size: 13px; color: var(--ink-2);
+    }
+</style>

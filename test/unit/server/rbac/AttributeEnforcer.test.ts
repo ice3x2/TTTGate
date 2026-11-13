@@ -416,3 +416,64 @@ describe("enforce: 서버 버퍼 상한", () => {
         expect(enforce(principalWith(BASE, "superuser"), tunnel({bufferLimitOnServer: 1_000_000}), "create", capped)).toEqual({success: true});
     });
 });
+
+// 이슈 366 — 그룹마다 연결당 버퍼 최댓값(max_session_buffer_mib). 서버·클라이언트 버퍼 모두에 적용한다.
+describe("enforce: 그룹 연결당 버퍼 최댓값(max_session_buffer_mib)", () => {
+    const CAP = {...BASE, max_session_buffer_mib: 64};
+    const failureOf = (result: EnforceResult) => result as {success: false; status: number; code: string; values?: Record<string, unknown>};
+
+    it("AC-2 서버 버퍼가 상한을 넘으면 group_buffer_limit_exceeded(field, max)이고, 상한과 같으면 받는다", () => {
+        const result = failureOf(enforce(principalWith(CAP), tunnel({bufferLimitOnServer: 65, bufferLimitOnClient: 8}), "create", CONTEXT));
+        expect(result).toMatchObject({success: false, status: 422, code: "group_buffer_limit_exceeded", values: {field: "bufferLimitOnServer", max: 64}});
+        expect(enforce(principalWith(CAP), tunnel({bufferLimitOnServer: 64, bufferLimitOnClient: 64}), "create", CONTEXT)).toEqual({success: true});
+    });
+
+    it("AC-3 클라이언트 버퍼가 상한을 넘거나 1 미만(제한 없음)이면 거부한다", () => {
+        for(const client of [65, 0, -1, 0.5]) {
+            const result = failureOf(enforce(principalWith(CAP), tunnel({bufferLimitOnServer: 8, bufferLimitOnClient: client}), "create", CONTEXT));
+            expect(result).toMatchObject({code: "group_buffer_limit_exceeded", values: {field: "bufferLimitOnClient", max: 64}});
+        }
+    });
+
+    it("둘 다 넘으면 서버 버퍼를 먼저 알린다", () => {
+        const result = failureOf(enforce(principalWith(CAP), tunnel({bufferLimitOnServer: 100, bufferLimitOnClient: 100}), "create", CONTEXT));
+        expect(result.values).toEqual({field: "bufferLimitOnServer", max: 64});
+    });
+
+    it("필드가 없으면 서버가 채우는 기본값 8 MiB 로 보고 검사한다", () => {
+        expect(enforce(principalWith(CAP), tunnel({}), "create", CONTEXT)).toEqual({success: true});
+        const small = failureOf(enforce(principalWith({...BASE, max_session_buffer_mib: 4}), tunnel({}), "create", CONTEXT));
+        expect(small.values).toEqual({field: "bufferLimitOnServer", max: 4});
+    });
+
+    it("AC-4 저장된 값을 바꾸지 않는 수정은 필드마다 받는다", () => {
+        const kept = {...CONTEXT, currentServerBufferMiB: 128, currentClientBufferMiB: -1};
+        expect(enforce(principalWith(CAP), tunnel({bufferLimitOnServer: 128, bufferLimitOnClient: -1}), "update", kept)).toEqual({success: true});
+        expect(failureOf(enforce(principalWith(CAP), tunnel({bufferLimitOnServer: 96, bufferLimitOnClient: -1}), "update", kept)).values)
+            .toEqual({field: "bufferLimitOnServer", max: 64});
+        expect(failureOf(enforce(principalWith(CAP), tunnel({bufferLimitOnServer: 128, bufferLimitOnClient: 96}), "update", kept)).values)
+            .toEqual({field: "bufferLimitOnClient", max: 64});
+    });
+
+    it("AC-5 슈퍼유저는 검사를 받지 않고, 상한 0 은 그룹 상한 없음이다", () => {
+        expect(enforce(principalWith(CAP, "superuser"), tunnel({bufferLimitOnServer: 128, bufferLimitOnClient: -1}), "create", CONTEXT)).toEqual({success: true});
+        expect(enforce(principalWith({...BASE, max_session_buffer_mib: 0}), tunnel({bufferLimitOnServer: 128, bufferLimitOnClient: -1}), "create", CONTEXT))
+            .toEqual({success: true});
+    });
+
+    it("H-1 숫자가 아닌 버퍼 값은 기본값으로 보지 않고 거부한다(null 만 기본값 8)", () => {
+        for(const field of ["bufferLimitOnServer", "bufferLimitOnClient"]) {
+            for(const garbage of ["0", "100000", false, [0], {}, NaN, Infinity]) {
+                const result = failureOf(enforce(principalWith(CAP), tunnel({bufferLimitOnServer: 8, bufferLimitOnClient: 8, [field]: garbage}), "create", CONTEXT));
+                expect(result).toMatchObject({success: false, status: 422, code: "group_buffer_limit_exceeded", values: {field, max: 64}});
+            }
+        }
+        expect(enforce(principalWith(CAP), tunnel({bufferLimitOnServer: null, bufferLimitOnClient: null}), "create", CONTEXT)).toEqual({success: true});
+    });
+
+    it("AC-6 그룹 상한은 지키지만 전역 캐시 한도를 넘으면 지금처럼 buffer_limit_exceeded 다", () => {
+        const result = failureOf(enforce(principalWith({...BASE, max_session_buffer_mib: 512}), tunnel({bufferLimitOnServer: 256, bufferLimitOnClient: 8}), "create",
+            {...CONTEXT, maxServerBufferMiB: 128}));
+        expect(result.code).toBe("buffer_limit_exceeded");
+    });
+});

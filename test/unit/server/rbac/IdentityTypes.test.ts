@@ -60,6 +60,19 @@ describe("IdentityTypes.validateGroupAttributes", () => {
             .toMatchObject({success: false, code: "attribute_int_invalid"});
     });
 
+    it("이슈 366 AC-1·AC-7: max_session_buffer_mib 는 0~1,048,576 정수이고, 없는 옛 그룹은 0 으로 읽는다", () => {
+        expect(DEFAULT_GROUP_ATTRIBUTES.max_session_buffer_mib).toBe(0);
+        const legacy: Record<string, unknown> = {...DEFAULT_GROUP_ATTRIBUTES};
+        delete legacy.max_session_buffer_mib;
+        expect(validateGroupAttributes({}, legacy as never)).toMatchObject({success: true, value: {max_session_buffer_mib: 0}});
+        expect(validateGroupAttributes({max_session_buffer_mib: 64}, DEFAULT_GROUP_ATTRIBUTES)).toMatchObject({success: true, value: {max_session_buffer_mib: 64}});
+        expect(validateGroupAttributes({max_session_buffer_mib: 1_048_576}, DEFAULT_GROUP_ATTRIBUTES).success).toBe(true);
+        for(const bad of [-1, 1.5, "64", 1_048_577]) {
+            expect(validateGroupAttributes({max_session_buffer_mib: bad}, DEFAULT_GROUP_ATTRIBUTES))
+                .toMatchObject({success: false, code: "attribute_int_invalid", values: {attribute: "max_session_buffer_mib"}});
+        }
+    });
+
     it("이슈 347: tunnel_crud 에 toggle 을 받는다", () => {
         const result = validateGroupAttributes({tunnel_crud: "toggle"}, DEFAULT_GROUP_ATTRIBUTES);
         expect(result).toMatchObject({success: true, value: {tunnel_crud: "toggle"}});

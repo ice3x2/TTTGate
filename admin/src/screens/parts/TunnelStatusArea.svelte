@@ -9,12 +9,17 @@
     import {toast} from '../../ui/toast';
     import {StatusPoller} from './statusPoller';
     import {remainingMsOf} from './tunnelRow';
-    import {startupTime, toSize} from './units';
+    import {capSecondsOf} from './keepOn';
+    import {me} from '../../me';
+    import {byteToUnit} from './units';
+    import {sinceText} from './connections';
     import {t} from '../../i18n';
 
     // 이슈 338 REQ-18: 편집 화면의 Status 영역. 목록에서 뺀 가동 정보·거절 수·사용 시간 Timer 를 여기서 보인다.
     // 열려 있는 동안 1초마다 상태를 읽는다. 앞의 읽기가 끝나지 않았으면 건너뛰고, 실패하면 영역을 숨긴 채 다시 읽는다.
-    let {port, editable, onsessionout}: {port: number; editable: boolean; onsessionout: () => void} = $props();
+    // onstatus: 읽은 이 터널의 상태를 편집 화면에 넘긴다(신뢰 클라이언트 이름). 상태를 두 번 읽지 않으려고 여기서 받은 것을 나눈다.
+    let {port, editable, onsessionout, onstatus}: {port: number; editable: boolean; onsessionout: () => void;
+        onstatus?: (status: TunnelingStatus | undefined) => void} = $props();
 
     let status = $state<TunnelingStatus | undefined>(undefined);
     let serverTime = $state(0);
@@ -27,6 +32,7 @@
         onSnapshot: (result) => {
             serverTime = result.serverTime;
             status = result.statuses.find((entry) => entry.port === port);
+            onstatus?.(status);
         }
     });
 
@@ -58,15 +64,16 @@
 
 {#if status?.online}
     <section id="tunnel-status-area">
-        <Card label={t('nav.status')}>
+        <Card label={t('tunnelStatus.title')}>
             <div class="status-stack">
                 <div>
-                    <span class="mono tunnel-stats">{t('tunnelStatus.stats', {uptime: startupTime(status.uptime), sessions: status.sessions, rx: toSize(status.rx), tx: toSize(status.tx)})}</span>{#if blocked > 0}<span class="mono stats-extra" aria-hidden="true"> · </span><span class="mono stats-extra" data-blocked>{t('tunnelStatus.blocked', {count: blocked})}</span>{/if}
+                    <span class="mono tunnel-stats">{t('tunnelStatus.stats', {since: sinceText(status, serverTime), sessions: status.sessions, rx: byteToUnit(status.rx), tx: byteToUnit(status.tx)})}</span>{#if blocked > 0}<span class="mono stats-extra" aria-hidden="true"> · </span><span class="mono stats-extra" data-blocked>{t('tunnelStatus.blocked', {count: blocked})}</span>{/if}
                 </div>
                 {#if status.active && editable}
                     <div class="status-timer">
                         <span class="status-label">{t('tunnelStatus.timeLimit')}</span>
-                        <Timer seconds={remaining} total={status.activeTimeout} onchange={(seconds) => { void changeTimeout(seconds); }} />
+                        <Timer seconds={remaining} total={status.activeTimeout} capSeconds={capSecondsOf(status, $me)} now={serverTime}
+                            onchange={(seconds) => { void changeTimeout(seconds); }} />
                     </div>
                 {/if}
             </div>

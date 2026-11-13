@@ -109,6 +109,8 @@ describe("rbac-tunnel-share (이슈 347)", () => {
             applyServerOption: jest.fn(async () => ok()),
             applyTunnelingOption: jest.fn(async () => ok()),
             externalServerStatus: jest.fn(() => ({online: true, sessions: 0})),
+            // 이슈 369: 상태 응답의 허용 클라이언트 연결 여부.
+            isClientConnected: jest.fn(() => false),
             externalServerStatuses: jest.fn(() => ServerOptionStore.instance.serverOption.tunnelingOptions
                 .map((option) => ({port: option.forwardPort, online: true, sessions: 0}))),
             stopExternalPortServer: jest.fn(async () => true),

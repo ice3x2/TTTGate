@@ -354,10 +354,11 @@ After you sign in, the console opens the **Tunnels** list. This is the same for 
 - **Turn on:** tap the switch. The console turns the tunnel on at once with no time limit. If your group has a time limit, the server applies it.
 - **Turn off:** tap the switch. If the tunnel has open connections, the console asks first, because turning off cuts them at once (`2 connections will be cut.`). Without open connections, it turns the tunnel off at once.
 - **Undo:** after each change, a message with **Undo** stays for 5 seconds. Undo of a turn-off turns the tunnel on again with the time that was left. It does not bring back cut connections.
-- **Status line:** `On`, `Off`, `client offline` (no connected client may serve this tunnel), `N connections`, the time left, `Can't open port <port>`, the owner of a tunnel that is not yours, and `cert not verified`. A tunnel that you can only view shows a lock instead of a switch.
+- **Status line:** `On`, `Off`, `client offline` (no connected client may serve this tunnel), the time left, `Can't open port <port>`, the owner of a tunnel that is not yours, and `cert not verified`. A tunnel that you can only view shows a lock instead of a switch.
 - **Name:** give a tunnel a name in its edit screen (**Name**, optional, up to 40 characters). Without a name, the row shows the port and the destination. Saving only a new name does not restart the tunnel, so open connections stay.
 - **IP limit:** the button below the status line shows whether the tunnel accepts only the IPs of the people who turned it on, and the refresh button next to it updates your IP. See [Limit a Tunnel to the IPs That Turned It On](#limit-a-tunnel-to-the-ips-that-turned-it-on).
-- **Details:** tap a row to open its edit screen. Its **Status** area shows uptime, sessions, traffic, blocked connections and the **Time limit** timer. Only tunnels that you can change open an edit screen.
+- **Connections:** below the status line, a tunnel that is on shows its connection count, how long it has been on and its traffic (`On for 2h, 5m · RX 58.1KiB · TX 59.5KiB`, sizes in bytes). If you can change the tunnel, the **Connections N** button opens the list of open connections with their addresses; the × button disconnects one (**Disconnect**, no question asked), and a superuser can **Block** an address after a confirmation (this tunnel only, or all tunnels). The row also shows which clients may serve the tunnel (`Clients: Office PC`; ● connected, ○ not connected; `Any` when no client is chosen). A new block also ends the connections that are already open from that address, here and in **Security**.
+- **Details:** tap a row to open its edit screen. Its **Status** area shows how long the tunnel has been on, its connections, traffic, rejected connections and the **Turns off in** timer. Only tunnels that you can change open an edit screen.
 
 #### Sign In with a Passkey
 
@@ -414,7 +415,7 @@ Share a tunnel with other users:
 - Only users who can change the tunnel see its share list.
 - Saving only a new share list does not restart the tunnel, so open connections stay.
 - When you delete a user, the server removes the user from every share list.
-- Time limit: when someone turns on a tunnel, the server uses the shorter limit of the owner's group and of that person's group. A superuser, a group with no limit and a `system:migrated` owner add no limit. The limit stays when the owner saves the tunnel later. When another user turns the tunnel on again, for example with the **Time limit** timer, the limit of that user applies.
+- Time limit: when someone turns on a tunnel, the server uses the shorter limit of the owner's group and of that person's group. A superuser, a group with no limit and a `system:migrated` owner add no limit. The limit stays when the owner saves the tunnel later. When another user turns the tunnel on again, for example with the **Turns off in** timer, the limit of that user applies.
 - The audit log records the owner as `ownerId` for `tunnel_activated` and `tunnel_deactivated`. For a changed share list, `tunnel_updated` records `sharedUsersAdded` and `sharedUsersRemoved`.
 
 #### Limit a Tunnel to the IPs That Turned It On
@@ -422,7 +423,7 @@ Share a tunnel with other users:
 Tunnels that stay open for a long time, such as RDP, get many password-guessing attempts. With the IP limit on, a tunnel accepts connections only from the IP address of each person who turned it on. The server closes connections from other addresses before it reads any data.
 
 - **Setting:** each tunnel has the setting `activatorIpOnly`. In the edit screen, it is **Allowed IP** → **Only from the IP of whoever turned it on**. New tunnels have it on. Tunnels that you saved with an earlier version have it off, so an upgrade does not cut connections that are open. Turn it on for each tunnel.
-- **Allowed IPs:** the server keeps one IP address for each user of a tunnel (`activatorIps` in `config/server.yaml`). When you turn a tunnel on in the console, the server sets your entry to the address of your browser. The entries of other users stay. This also applies when you turn on a tunnel that is already on, for example with the **Time limit** timer. Turning a tunnel off, the end of its time limit and a server restart do not clear the list.
+- **Allowed IPs:** the server keeps one IP address for each user of a tunnel (`activatorIps` in `config/server.yaml`). When you turn a tunnel on in the console, the server sets your entry to the address of your browser. The entries of other users stay. This also applies when you turn on a tunnel that is already on, for example with the **Turns off in** timer. Turning a tunnel off, the end of its time limit and a server restart do not clear the list.
 - **In the tunnel list:** each row that you can turn on shows the IP limit button below the status line. Gray **IP limit off** means the limit is off. Green shows your allowed IP, with `+N` when other users have entries. An orange `My IP not set` means that the list has no entry for you. The refresh button next to it (**Update to my IP**) sets your entry to your current address. It works while the tunnel is off. The console highlights it when your current address is not your allowed IP. The buttons stay available when the tunnel is off.
 - **Who can change it:** everyone who can turn the tunnel on can turn the limit on and update their own IP. Only users who can change the tunnel can turn the limit off. A shared user sees a limit that is on with a small lock and cannot turn it off. One shared user cannot remove the protection for all users.
 - **Refused connections:** on a TLS tunnel, the server closes the connection before the TLS handshake. The denial shows as `activator-ip` (**IP limit**) in [Denied Connections](#denied-connections). The server uses the address of the TCP connection. It does not use `X-Forwarded-For` or other request headers, because the client sets them.
@@ -447,7 +448,7 @@ Before you rely on it:
 This is the recommended way. The control port must use TLS (`tls: true` in `config/server.yaml`), and `controlProtocolMode` must not be `mtls-strict`. Otherwise the server does not issue a code.
 
 1. In the admin console, open **Trusted clients**, add the client, and copy the command that it shows. You can also press **Enrollment code** on an existing client. The code works once and, by default, expires after 15 minutes. To change this, choose another value in **Code expires after** in the same window: 15 minutes, 1 hour, 24 hours, 7 days, 30 days or **Never expires**. The console issues a new code with that expiry, and the old code stops working.
-   - A code with **Never expires** stays valid until it is used, a new code is issued for the client, the client gets a new secret (**New secret**), the client is deleted, the control port settings change, or the server restarts. Codes are kept only in memory. Treat such a code like a password.
+   - A code with **Never expires** stays valid until it is used, a new code is issued for the client, the client gets a new secret (**New secret**), the client is deleted, the tunnel server settings (port, TLS, key, etc.) change, or the server restarts. Codes are kept only in memory. Treat such a code like a password.
    - The console gets each code in two steps. First it gets a code that is valid for 15 minutes. When the window shows the code, the console applies the expiry that you chose. If the window closes or the response is lost before the code is shown, the longer expiry does not apply, and the code expires after 15 minutes.
 2. On the client host, run the command:
 
@@ -936,7 +937,7 @@ Read this before you replace a running server with this version.
 2. **Existing clients.** Clients of earlier versions (1.0.10 and older) authenticate with the shared key only. This version turns that off by default, so every tunnel disconnects until you do one of these:
    - Start the server with `-allowLegacyControlAuth` (or set `allowLegacyControlAuth: true`) for the rollout window. Then upgrade the clients with `clientId` and `clientSecret` (see [Mixed-Version Rollout Policy](#mixed-version-rollout-policy)). The flag saves `allowLegacyControlAuth: true` to `server.yaml`. When the window ends, start once with `-allowLegacyControlAuth false` or set the value to `false`.
    - Upgrade the clients first. Do not do this when you have the tunnels in step 3.
-3. **Tunnels to a destination with an untrusted certificate.** A client of this version verifies the certificate of the destination server. Clients of earlier versions (1.0.10 and older) did not. This applies to tunnels with **Secure tunneling Server/Client** checked (`tls: true`) and to every HTTPS tunnel. After you upgrade a client, such a tunnel fails when its destination has a self-signed (or otherwise untrusted) certificate. The error is a certificate error, for example `self-signed certificate`. If you have such tunnels, do one of these:
+3. **Tunnels to a destination with an untrusted certificate.** A client of this version verifies the certificate of the destination server. Clients of earlier versions (1.0.10 and older) did not. This applies to tunnels with **Use TLS (external port and destination)** checked (`tls: true`) and to every HTTPS tunnel. After you upgrade a client, such a tunnel fails when its destination has a self-signed (or otherwise untrusted) certificate. The error is a certificate error, for example `self-signed certificate`. If you have such tunnels, do one of these:
    - Upgrade the server first, with `-allowLegacyControlAuth` as in step 2, so that 1.0.10 clients stay connected. In the admin console, open each such tunnel and check **Skip certificate verification (allow self-signed)** (`allowSelfSignedDestinationCert: true`). Then upgrade the clients with `clientId` and `clientSecret` as in step 2. A server of an earlier version cannot send this option, so do not upgrade the clients first.
    - Give the destination a certificate from a public CA that Node.js trusts, and that matches the destination host of the tunnel. The client's `-ca` option applies only to the control connection, not to destinations. A certificate for a DNS name fails when the tunnel uses an IP address, and the other way round.
 
@@ -1054,7 +1055,7 @@ TTTGate 는 서버와 클라이언트가 짝을 이뤄 내부망의 TCP/HTTP 서
 | 소켓 메모리 버퍼(`globalMemCacheLimit`) | 128 MiB | 넘치는 데이터는 디스크의 파일 캐시로 옮겨 간다 |
 | 아직 열리는 중인 세션의 대기열 | 모든 클라이언트 합쳐 64 MiB, 클라이언트마다 32 MiB | 75 % 에서 보내는 쪽을 멈추고, 한도를 넘길 세션은 닫는다 |
 | 대역폭 제한 대기열(`rate_limit` 프리셋이 있는 그룹) | 모든 세션 합쳐 64 MiB | 대기열이 있는 세션은 75 % 에서 보내는 쪽을 멈추고 50 % 에서 다시 보낸다 |
-| HTTP 본문 다시 쓰기(`rewriteHostInTextBody`) | 한 번에 32 MiB 예약 | 진행 중인 다시 쓰기가 끝날 때까지 다른 응답은 다시 쓰지 않고 그대로 넘긴다 |
+| HTTP 본문 바꾸기(`rewriteHostInTextBody`) | 한 번에 32 MiB 예약 | 진행 중인 본문 바꾸기가 끝날 때까지 다른 응답은 바꾸지 않고 그대로 넘긴다 |
 
 - Node.js 런타임 자체가 약 60–100 MB 를 쓴다.
 - 본문을 다시 쓰는 동안에는 압축을 푼 본문과 그 사본을 함께 들고 있다. 그래서 최대 사용량은 예약량의 약 세 배다.
@@ -1336,10 +1337,11 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 - **켜기:** 스위치를 누른다. 시간 제한 없이 바로 켠다. 그룹에 사용 시간 상한이 있으면 서버가 적용한다.
 - **끄기:** 스위치를 누른다. 끄면 진행 중인 연결이 바로 끊기므로, 연결이 있으면 먼저 묻는다(`2 connections will be cut.`). 연결이 없으면 바로 끈다.
 - **되돌리기:** 바꿀 때마다 **Undo** 가 붙은 알림이 5초 동안 보인다. 끄기를 되돌리면 끈 순간에 남아 있던 시간으로 다시 켠다. 끊긴 연결은 돌아오지 않는다.
-- **상태 줄:** `On`, `Off`, `client offline`(이 터널을 맡을 수 있는 클라이언트가 연결되어 있지 않음), `N connections`, 남은 시간, `Can't open port <포트>`, 내 것이 아닌 터널의 소유자, `cert not verified` 를 보인다. 보기만 허락된 터널은 스위치 대신 자물쇠를 보인다.
+- **상태 줄:** `On`, `Off`, `client offline`(이 터널을 맡을 수 있는 클라이언트가 연결되어 있지 않음), 남은 시간, `Can't open port <포트>`, 내 것이 아닌 터널의 소유자, `cert not verified` 를 보인다. 보기만 허락된 터널은 스위치 대신 자물쇠를 보인다.
 - **이름:** 터널 편집 화면의 **Name**(선택, 40자까지)에 이름을 넣는다. 이름이 없으면 포트와 목적지를 보인다. 이름만 바꿔 저장하면 터널을 다시 시작하지 않으므로 진행 중인 연결이 남는다.
 - **IP 제한:** 상태 줄 아래 버튼은 그 터널이 켠 사람의 IP 에서만 연결을 받는지 보이고, 옆의 갱신 버튼은 내 IP 를 지금 주소로 바꾼다. [켠 사람의 IP 에서만 연결 받기](#켠-사람의-ip-에서만-연결-받기)를 읽는다.
-- **자세히:** 줄을 누르면 편집 화면이 열린다. **Status** 영역에 가동 시간, 세션, 트래픽, 차단 수, **Time limit** 타이머가 있다. 편집 화면은 고칠 수 있는 터널에서만 열린다.
+- **연결:** 켜진 터널은 상태 줄 아래에 연결 수, 켜진 지 얼마인지, 주고받은 양을 보인다(`켜진 지 2시간 5분 · RX 58.1KiB · TX 59.5KiB`, 크기는 바이트 단위). 고칠 수 있는 터널이면 **연결 N** 버튼이 열린 연결의 주소 목록을 연다. × 버튼은 그 연결을 바로 끊고(**연결 끊기**, 묻지 않음), 슈퍼유저는 확인 창을 거쳐 그 주소를 **차단**한다(이 터널만, 또는 모든 터널). 줄에는 이 터널을 맡을 수 있는 클라이언트도 보인다(`클라이언트: 사무실 PC`, ● 연결됨, ○ 연결 안 됨, 고른 클라이언트가 없으면 `모두`). 차단을 더하면 이미 들어와 있는 연결도 끊는다. **Security** 화면에서 더한 차단도 같다.
+- **자세히:** 줄을 누르면 편집 화면이 열린다. **Status** 영역에 켜진 지 얼마인지, 연결 수, 트래픽, 거절 수, **자동 꺼짐까지** 타이머가 있다. 편집 화면은 고칠 수 있는 터널에서만 열린다.
 
 #### 패스키로 로그인
 
@@ -1396,7 +1398,7 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 - 공유 목록은 그 터널을 고칠 수 있는 사용자에게만 보인다.
 - 공유 목록만 바꿔 저장하면 터널을 다시 시작하지 않으므로 진행 중인 연결이 남는다.
 - 사용자를 지우면 서버가 모든 공유 목록에서 그 사용자를 뺀다.
-- 사용 시간 상한: 터널을 켜면 소유자 그룹 상한과 켠 사람 그룹 상한 가운데 짧은 값을 쓴다. 슈퍼유저, 상한이 없는 그룹, `system:migrated` 소유자는 비교에서 빠진다. 나중에 소유자가 터널을 저장해도 이 상한은 그대로다. 다른 사용자가 다시 켜면(예: **Time limit** 타이머) 그 사용자의 상한을 쓴다.
+- 사용 시간 상한: 터널을 켜면 소유자 그룹 상한과 켠 사람 그룹 상한 가운데 짧은 값을 쓴다. 슈퍼유저, 상한이 없는 그룹, `system:migrated` 소유자는 비교에서 빠진다. 나중에 소유자가 터널을 저장해도 이 상한은 그대로다. 다른 사용자가 다시 켜면(예: **자동 꺼짐까지** 타이머) 그 사용자의 상한을 쓴다.
 - 감사 로그의 `tunnel_activated`·`tunnel_deactivated` 에는 소유자가 `ownerId` 로 남는다. 공유 목록이 바뀌면 `tunnel_updated` 에 `sharedUsersAdded`·`sharedUsersRemoved` 가 남는다.
 
 #### 켠 사람의 IP 에서만 연결 받기
@@ -1404,7 +1406,7 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 RDP 처럼 오래 열어 두는 터널에는 비밀번호를 무작위로 넣어 보는 공격이 계속 들어온다. IP 제한을 켜면 터널을 켠 사람의 IP 주소에서 오는 연결만 받는다. 다른 주소의 연결은 데이터를 읽기 전에 닫는다.
 
 - **설정:** 터널마다 `activatorIpOnly` 설정이 있다. 편집 화면에서는 **Allowed IP** → **Only from the IP of whoever turned it on** 이다. 새 터널은 켜진 채 만들어진다. 이전 버전에서 저장한 터널은 꺼져 있으므로, 업그레이드해도 열려 있는 연결이 끊기지 않는다. 터널마다 직접 켠다.
-- **허용 IP:** 서버는 터널마다 사용자별로 IP 주소를 하나씩 둔다(`config/server.yaml` 의 `activatorIps`). 관리 화면에서 터널을 켜면 내 항목이 지금 브라우저의 주소로 바뀐다. 다른 사용자의 항목은 그대로다. 이미 켜진 터널을 다시 켤 때(예: **Time limit** 타이머)도 같다. 터널을 끄거나, 사용 시간이 끝나거나, 서버를 다시 시작해도 목록은 지워지지 않는다.
+- **허용 IP:** 서버는 터널마다 사용자별로 IP 주소를 하나씩 둔다(`config/server.yaml` 의 `activatorIps`). 관리 화면에서 터널을 켜면 내 항목이 지금 브라우저의 주소로 바뀐다. 다른 사용자의 항목은 그대로다. 이미 켜진 터널을 다시 켤 때(예: **자동 꺼짐까지** 타이머)도 같다. 터널을 끄거나, 사용 시간이 끝나거나, 서버를 다시 시작해도 목록은 지워지지 않는다.
 - **터널 목록:** 켤 수 있는 터널의 줄에는 상태 줄 아래에 IP 제한 버튼이 있다. 회색 **IP limit off** 는 꺼진 상태다. 초록색은 내 허용 IP 를 보이고, 다른 사용자의 항목이 있으면 `+N` 을 붙인다. 주황색 `My IP not set` 은 목록에 내 항목이 없다는 뜻이다. 옆의 갱신 버튼(**Update to my IP**)을 누르면 내 항목이 지금 주소로 바뀐다. 터널이 꺼져 있어도 된다. 지금 주소가 내 허용 IP 와 다르면 갱신 버튼이 강조된다. 터널이 꺼져도 두 버튼은 그대로 쓸 수 있다.
 - **바꿀 수 있는 사람:** 터널을 켤 수 있는 사람은 누구나 IP 제한을 켜고 자기 IP 를 갱신할 수 있다. IP 제한을 끄는 것은 터널을 고칠 수 있는 사람만 할 수 있다. 공유받은 사용자에게는 켜진 IP 제한이 작은 자물쇠와 함께 보이고, 끌 수 없다. 공유받은 사용자 한 명이 모두의 보호를 풀지 못하게 하기 위해서다.
 - **거절된 연결:** TLS 터널에서는 TLS 핸드셰이크 전에 연결을 닫는다. 거절은 [거절된 연결](#거절된-연결)에 `activator-ip`(**IP limit**)로 남는다. 서버는 TCP 연결의 주소를 쓴다. `X-Forwarded-For` 같은 요청 헤더는 접속하는 쪽이 마음대로 정할 수 있으므로 쓰지 않는다.
@@ -1429,7 +1431,7 @@ RDP 처럼 오래 열어 두는 터널에는 비밀번호를 무작위로 넣어
 권장하는 방법이다. 제어 포트가 TLS 를 써야 하고(`config/server.yaml` 의 `tls: true`), `controlProtocolMode` 가 `mtls-strict` 가 아니어야 한다. 그렇지 않으면 서버가 코드를 발급하지 않는다.
 
 1. 관리 화면에서 **Trusted clients** 를 열고 클라이언트를 추가한 뒤, 화면에 나온 명령을 복사한다. 이미 있는 클라이언트라면 **Enrollment code** 를 눌러도 된다. 코드는 한 번만 쓸 수 있고 기본으로 15분 뒤에 만료된다. 기한을 바꾸려면 같은 창의 **Code expires after** 에서 15분, 1시간, 24시간, 7일, 30일, **Never expires**(만료 없음) 가운데 하나를 고른다. 그러면 그 기한으로 새 코드를 발급하고, 이전 코드는 더 이상 쓸 수 없다.
-   - **Never expires** 코드는 쓰이거나, 그 클라이언트에 새 코드를 발급하거나, 비밀값을 바꾸거나(**New secret**), 클라이언트를 지우거나, 제어 포트 설정이 바뀌거나, 서버를 다시 시작할 때까지 유효하다. 코드는 메모리에만 있다. 이런 코드는 비밀번호처럼 다룬다.
+   - **Never expires** 코드는 쓰이거나, 그 클라이언트에 새 코드를 발급하거나, 비밀값을 바꾸거나(**New secret**), 클라이언트를 지우거나, 터널 서버 설정(포트·TLS·인증 키 등)이 바뀌거나, 서버를 다시 시작할 때까지 유효하다. 코드는 메모리에만 있다. 이런 코드는 비밀번호처럼 다룬다.
    - 관리 화면은 코드를 두 단계로 받는다. 먼저 15분 동안 유효한 코드를 받고, 창에 코드를 보여 줄 때 고른 기한을 적용한다. 코드를 보여 주기 전에 창이 닫히거나 응답이 사라지면 긴 기한은 적용되지 않고, 코드는 15분 뒤 만료된다.
 2. 클라이언트 호스트에서 그 명령을 실행한다.
 
@@ -1802,7 +1804,7 @@ TTTGate 가 돌고 있는지 문장과 JSON 으로 확인한다.
 | `geo-deny` | Country blocked | 국가 필터가 그 주소를 막았다. |
 | `ip-blocklist` | Blocklist | 관리자 차단 목록에 있는 주소다. |
 | `rate-limit-ban` | Temporarily banned | 연결이 너무 많아 일정 시간 동안 차단된 주소다. |
-| `rate-limit-exceeded` | Rate limit exceeded | 레이트 리미트 창 안에서 연결이 너무 많았다. |
+| `rate-limit-exceeded` | Rate limit exceeded | 연결 횟수 제한의 측정 구간 안에서 연결이 너무 많았다. |
 | `concurrency-limit` | Connection limit | 터널 소유자 그룹의 동시 연결 한도에 닿았다. |
 | `activator-ip` | IP limit | 터널을 켠 사람의 IP 만 받는 터널인데, 그 주소가 아니다. [켠 사람의 IP 에서만 연결 받기](#켠-사람의-ip-에서만-연결-받기)를 읽는다. |
 
@@ -1918,7 +1920,7 @@ TTTGate 가 돌고 있는지 문장과 JSON 으로 확인한다.
 2. **기존 클라이언트.** 이전 버전(1.0.10 이하)의 클라이언트는 공유 키로만 인증한다. 이 버전은 그 방식을 기본으로 꺼 두므로, 다음 가운데 하나를 할 때까지 모든 터널이 끊긴다.
    - 배포 기간에는 서버를 `-allowLegacyControlAuth` 로 시작한다(또는 `allowLegacyControlAuth: true` 로 정한다). 그다음 클라이언트를 `clientId` 와 `clientSecret` 을 쓰도록 업그레이드한다([버전 혼합 배포 정책](#버전-혼합-배포-정책) 참고). 이 플래그는 `allowLegacyControlAuth: true` 를 `server.yaml` 에 저장한다. 배포 기간이 끝나면 `-allowLegacyControlAuth false` 로 한 번 시작하거나 값을 `false` 로 바꾼다.
    - 클라이언트를 먼저 업그레이드한다. 3단계의 터널이 있으면 이 방법을 쓰지 않는다.
-3. **신뢰할 수 없는 인증서를 쓰는 대상으로 가는 터널.** 이 버전의 클라이언트는 대상 서버의 인증서를 검증한다. 이전 버전(1.0.10 이하)의 클라이언트는 검증하지 않았다. **Secure tunneling Server/Client** 를 켠 터널(`tls: true`)과 모든 HTTPS 터널이 해당한다. 클라이언트를 업그레이드하면, 자체 서명 인증서(또는 그 밖의 신뢰할 수 없는 인증서)를 쓰는 대상으로 가는 터널은 `self-signed certificate` 같은 인증서 오류로 실패한다. 그런 터널이 있으면 다음 가운데 하나를 한다.
+3. **신뢰할 수 없는 인증서를 쓰는 대상으로 가는 터널.** 이 버전의 클라이언트는 대상 서버의 인증서를 검증한다. 이전 버전(1.0.10 이하)의 클라이언트는 검증하지 않았다. **Use TLS (external port and destination)** 를 켠 터널(`tls: true`)과 모든 HTTPS 터널이 해당한다. 클라이언트를 업그레이드하면, 자체 서명 인증서(또는 그 밖의 신뢰할 수 없는 인증서)를 쓰는 대상으로 가는 터널은 `self-signed certificate` 같은 인증서 오류로 실패한다. 그런 터널이 있으면 다음 가운데 하나를 한다.
    - 2단계처럼 `-allowLegacyControlAuth` 로 서버를 먼저 업그레이드해서 1.0.10 클라이언트의 연결을 유지한다. 관리 화면에서 그런 터널을 하나씩 열어 **Skip certificate verification (allow self-signed)**(`allowSelfSignedDestinationCert: true`)를 켠다. 그다음 2단계처럼 클라이언트를 `clientId` 와 `clientSecret` 을 쓰도록 업그레이드한다. 이전 버전의 서버는 이 옵션을 보낼 수 없으므로 클라이언트를 먼저 업그레이드하지 않는다.
    - 대상에 Node.js 가 신뢰하는 공인 CA 의 인증서를 두고, 그 인증서가 터널의 대상 호스트와 맞게 한다. 클라이언트의 `-ca` 옵션은 제어 연결에만 적용되고 대상에는 적용되지 않는다. DNS 이름용 인증서는 터널이 IP 주소를 쓰면 실패하고, 그 반대도 마찬가지다.
 
@@ -1928,7 +1930,7 @@ TTTGate 가 돌고 있는지 문장과 JSON 으로 확인한다.
 
 서버는 시작할 때 다음 값을 조정하면 값마다 경고를 남긴다.
 
-- **터널별 속도 제한**은 `rateLimit` 필드 없이 저장된 터널에서는 꺼진 채로 남는다. 프로토콜 기본값(TCP: 60초에 연결 30개, HTTP/HTTPS: 300개, 넘으면 10분 차단)이 함께 저장되므로, 관리 화면에서 터널마다 켜기만 하면 된다. 새 터널은 켜진 상태로 시작한다.
+- **터널별 연결 횟수 제한**은 `rateLimit` 필드 없이 저장된 터널에서는 꺼진 채로 남는다. 프로토콜 기본값(TCP: 60초에 연결 30개, HTTP/HTTPS: 300개, 넘으면 10분 차단)이 함께 저장되므로, 관리 화면에서 터널마다 켜기만 하면 된다. 새 터널은 켜진 상태로 시작한다.
 - **세션 유휴 TTL** 은 파일에 `sessionTtlMs` 가 없으면 꺼진 채로 남는다(`sessionTtlMs: 0`). 새로 설치하면 트래픽이 한 시간 없을 때 세션을 닫는다. 켜려면 `sessionTtlMs`(1000–3600000 ms)를 정한다. 켜면 keepalive 없이 오래 쉬는 SSH 나 데이터베이스 연결이 닫힌다. `sessionTtlMs` 를 빼고 `PUT /api/serverOption` 을 호출하면 값이 한 시간으로 돌아간다. 관리 화면은 언제나 현재 값을 보낸다.
 - **서버 버퍼** 값 `-1` 이나 `0`(이전 버전의 "제한 없음")은 기본값 8 MiB 로 바뀐다. 제한 없는 버퍼는 작은 서버의 메모리를 다 쓸 수 있다. 세션이 열린 뒤에는 배압(backpressure)을 걸며 데이터가 계속 흐른다.
 

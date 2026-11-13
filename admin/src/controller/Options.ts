@@ -39,6 +39,12 @@ type TunnelingStatus = {
     /** U5-06: 거절 건수와 차단된 IP 수. */
     rejected?: {geo: number; rateLimit: number},
     bannedIps?: number,
+    /** 이슈 368: 요청자를 켠 사람으로 놓고 서버가 계산한 켜 둘 시간 상한(초). 없으면 null. 옛 서버 응답에는 없다. */
+    timeoutCapSeconds?: number | null,
+    /** 이슈 369: 꺼짐에서 켜짐으로 바뀐 시각(ms). 옛 서버 응답에는 없다(가동 시간 uptime 을 쓴다). */
+    activatedAt?: number,
+    /** 이슈 369: 이 터널의 연결을 맡을 수 있는 신뢰 클라이언트(표시 이름·연결 여부). 비면 모든 클라이언트다. 옛 서버 응답에는 없다. */
+    allowedClients?: Array<{clientId: string; name: string; connected: boolean}>,
     /** 이슈 338: 이 터널을 맡을 수 있는 클라이언트가 연결되어 있는가. 옛 서버 응답에는 없다(연결된 것으로 본다). */
     clientConnected?: boolean,
     /** 이슈 348: 켠 사람의 IP 에서만 연결을 받는가. 옛 서버 응답에는 없다(목록 응답의 값을 쓴다). */
@@ -78,7 +84,8 @@ type Options = {
     bufferLimitOnClient?: number
     keepAlive?: number
     /** U3-06: GET 응답의 소유자. system:migrated 에는 username 이 없다. */
-    owner?: {id: string; username?: string};
+    /** 이슈 367: 표시 이름(displayName)은 소유자별 묶음의 머리글에 쓴다. 옛 서버 응답에는 없다. */
+    owner?: {id: string; username?: string; displayName?: string};
     /** 서버에 저장된 소유자 id. 목록 응답에만 실리고 저장 본문에서는 뺀다(ServerOptionCtrl.updateTunnelingOption). */
     ownerId?: string;
     /** U3-06: GET 응답. false 면 고칠 수 없다(그룹 공유·공유받은 터널·켜기 전용 그룹). */

@@ -14,7 +14,8 @@ import LoggerFactory from "../../util/logger/LoggerFactory";
 const logger = LoggerFactory.getLogger('server', 'TunnelOwnership');
 
 /** 목록 응답이 싣는 소유자 표현. 소유자를 해석할 수 없으면 system:migrated 로 보인다. */
-export type OwnerView = {id: string; username?: string};
+/** 이슈 367 FR-1: 목록을 소유자별로 묶을 때 머리글에 쓰는 표시 이름(displayName)도 준다. username 을 받는 범위와 같다. */
+export type OwnerView = {id: string; username?: string; displayName?: string};
 
 /** 이슈 347: 공유 목록 칩에 그리는 사용자 표현. */
 export type SharedUserView = {id: string; username: string; displayName: string};
@@ -71,7 +72,8 @@ export function ownerViewOf(port: number): OwnerView {
     if(!owner) {
         return {id: MIGRATED_OWNER_ID};
     }
-    return {id: owner.userId, username: IdentityStore.instance.user(owner.userId)?.username};
+    const user = IdentityStore.instance.user(owner.userId);
+    return {id: owner.userId, username: user?.username, displayName: user?.displayName};
 }
 
 /** 재할당이 받는 ownerId. 사용자 id 이거나 system:migrated 여야 한다. */
@@ -178,7 +180,8 @@ function admitOwner(principal: Principal, next: TunnelingOption, certInfo: unkno
     const result = enforce(principal, {...next, ownerId: principal.userId}, mode,
         {ownedCount: AuthorizationContext.ownedCount(principal.userId), trustedClientIds: trustedClientIdsOf(),
             maxServerBufferMiB: ServerOptionStore.instance.serverOption.globalMemCacheLimit,
-            currentServerBufferMiB: previousOption?.bufferLimitOnServer});
+            currentServerBufferMiB: previousOption?.bufferLimitOnServer,
+            currentClientBufferMiB: previousOption?.bufferLimitOnClient});
     if(!result.success) {
         return result;
     }

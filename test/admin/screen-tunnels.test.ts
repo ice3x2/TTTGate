@@ -60,6 +60,11 @@ const waitStatus = (page: Page, port: number, pattern: RegExp) => page.waitForFu
 const waitChecked = (page: Page, port: number, checked: boolean) => page.waitForFunction(([target, value]) =>
     document.querySelector(`li[data-port="${target}"] [role="switch"]`)?.getAttribute("aria-checked") === String(value),
     [port, checked] as const, {timeout: 10_000});
+// #369 FR-1: 켜진 터널의 연결 수는 상태 글자가 아니라 줄 링크 밖의 가동 정보 줄(연결 버튼, 볼 수 없으면 글자)에 있다.
+const waitConnections = (page: Page, port: number, count: number) => page.waitForFunction(([target, value]) =>
+    [`Connections ${value}`, `Connections ${value}›`].includes(
+        document.querySelector(`li[data-port="${target}"] .tunnel-meta-row :is(.tunnel-conn, .tunnel-conn-text)`)?.textContent?.trim() ?? ""),
+    [port, count] as const, {timeout: 10_000});
 const undoToast = (page: Page, text: string) => page.locator(".toast").filter({hasText: text});
 
 test("목록은 터널마다 제목·상태 한 줄·스위치를 그리고, 켜진 수를 위에 보인다", async () => {
@@ -87,7 +92,9 @@ test("목록은 터널마다 제목·상태 한 줄·스위치를 그리고, 켜
         await waitStatus(app.page, 20001, /^Can't open port 20001/);
         expect(await switchOf(app.page, 20001).isDisabled()).toBe(true);
         await app.tunnelState(20001, {online: true, clientConnected: false, sessions: 2});
-        await waitStatus(app.page, 20001, /^On · client offline · 2 connections · migrated$/);
+        // 클라이언트 오프라인 경고는 상태 글자에 남고, 연결 수는 가동 정보 줄로 옮겼다(#369 FR-1, 같은 값을 두 번 보이지 않는다).
+        await waitConnections(app.page, 20001, 2);
+        await waitStatus(app.page, 20001, /^On · client offline · migrated$/);
         expect(await statusText(app.page, 20001).locator(".warn").first().textContent()).toBe("client offline");
         expect(app.errors).toEqual([]);
     } finally {
@@ -121,7 +128,7 @@ test("#344 제한 터널은 줄어드는 시계와 남은 시간·종료 시각�
         await waitStatus(page, 20001, /^On/);
         await page.locator('li[data-port="20001"] .tunnel-clock.unlimited').waitFor({state: "visible", timeout: 10_000});
         expect(await row(page, 20001).locator(".tunnel-time").count()).toBe(0);
-        expect(await clock.getAttribute("aria-label")).toBe("No time limit");
+        expect(await clock.getAttribute("aria-label")).toBe("Stays on");
         const spinning = () => page.evaluate(() => getComputedStyle(document.querySelector('li[data-port="20001"] .tunnel-clock .hand')!).animationName);
         expect(await spinning()).not.toBe("none");
         // 움직임 줄이기를 켜면 멈춘다(FR-8).
@@ -193,7 +200,7 @@ test("연결이 있으면 끄기 전에 묻고, 실패하면 되돌리며, 처�
     try {
         await openTunnels(app.page);
         await app.tunnelState(20001, {sessions: 2});
-        await waitStatus(app.page, 20001, /2 connections/);
+        await waitConnections(app.page, 20001, 2);
 
         await switchOf(app.page, 20001).click();
         const dialog = app.page.getByRole("dialog", {name: "Turn off :20001 → 127.0.0.1:9?"});
@@ -526,11 +533,20 @@ test("편집 화면의 Timer 에서 10분을 고르면 active=true·timeout=600 
         const timer = app.page.locator("#tunnel-status-area .timer-text");
         await timer.waitFor({state: "visible", timeout: 10_000});
         await timer.click();
-        const dialog = app.page.getByRole("dialog", {name: "Tunneling activity restriction time"});
+        const dialog = app.page.getByRole("dialog", {name: "Keep it on for"});
         await dialog.waitFor({state: "visible", timeout: 10_000});
-        await dialog.getByLabel("Days", {exact: true}).fill("0");
-        await dialog.getByLabel("Hours", {exact: true}).fill("0");
-        await dialog.getByLabel("Minutes", {exact: true}).fill("10");
+        // 이슈 368: 숫자 칸 대신 슬라이더다. 단위는 시간으로 두고, Home 으로 1분에 놓은 뒤 화살표 9번이면 10분이다.
+        expect(await dialog.locator("input[type=number]").count()).toBe(0);
+        // 슈퍼유저라 상한이 없으므로 "자동으로 끄지 않기"가 보인다. 켜져 있으면 끄고 고른다.
+        const noAuto = dialog.getByRole("switch", {name: "Don't turn off automatically", exact: true});
+        expect(await noAuto.isVisible()).toBe(true);
+        if(await noAuto.getAttribute("aria-checked") === "true") await noAuto.click();
+        await dialog.getByRole("radio", {name: "Hours", exact: true}).click();
+        const slider = dialog.getByRole("slider", {name: "Keep it on for"});
+        await slider.focus();
+        await slider.press("Home");
+        for(let i = 0; i < 9; i++) await slider.press("ArrowRight");
+        expect((await dialog.locator(".value").textContent())?.trim()).toBe("10 min");
         const posted = app.page.waitForResponse(isPath("POST", "/api/tunneling/active/20002"), {timeout: 10_000});
         await dialog.getByRole("button", {name: "OK", exact: true}).click();
         expect((await posted).request().postDataJSON()).toEqual({active: true, timeout: 600});
@@ -575,8 +591,43 @@ test("http 터널은 HTTP 옵션 절을 펼쳐 보이고 tcp 로 바꾸면 그 �
 
         const requestHeaders = app.page.locator(".field").filter({hasText: "Inject request header"});
         expect(await requestHeaders.locator(".rule").count()).toBe(1);
+        // 이슈 365 FR-5: 헤더 추가·삭제는 글자 "+"·"-" 대신 이름이 있는 44px 버튼이다.
+        const addHeader = requestHeaders.getByRole("button", {name: "Add header", exact: true});
+        expect(await addHeader.count()).toBe(1);
+        const box = await addHeader.boundingBox();
+        expect(box!.height).toBeGreaterThanOrEqual(44);
+        expect(box!.width).toBeGreaterThanOrEqual(44);
+        // 이슈 365 AC-2: 헤더 줄의 입력 칸은 44px 버튼과 높이가 같다.
+        const nameInput = requestHeaders.locator(".rule input").first();
+        expect(Math.round((await nameInput.boundingBox())!.height)).toBe(Math.round(box!.height));
+        // 줄이 둘이면 앞 줄 버튼은 이름이 "Remove header" 인 삭제 버튼이다(title 은 이름과 겹치지 않게 두지 않는다).
+        await addHeader.click();
+        expect(await requestHeaders.locator(".rule").count()).toBe(2);
+        const removeHeader = requestHeaders.getByRole("button", {name: "Remove header", exact: true});
+        expect(await removeHeader.count()).toBe(1);
+        expect(await removeHeader.getAttribute("title")).toBeNull();
+        await removeHeader.click();
+        expect(await requestHeaders.locator(".rule").count()).toBe(1);
+
+        // 이슈 365 FR-5: 본문 바꾸기 규칙의 추가·삭제도 테두리가 보이는 44px secondary 버튼이다.
         const bodyRules = app.page.locator(".field").filter({hasText: "Replace text in body"});
-        expect(await bodyRules.getByRole("button", {name: "Add", exact: true}).count()).toBe(1);
+        const addRule = bodyRules.getByRole("button", {name: "Add", exact: true});
+        expect(await addRule.count()).toBe(1);
+        const secondaryOf = (locator: typeof addRule) => locator.evaluate((element) => ({
+            secondary: element.classList.contains("secondary"),
+            border: parseFloat(getComputedStyle(element).borderTopWidth),
+            height: element.getBoundingClientRect().height,
+        }));
+        expect(await secondaryOf(addRule)).toEqual(expect.objectContaining({secondary: true}));
+        expect((await secondaryOf(addRule)).border).toBeGreaterThanOrEqual(1);
+        expect((await secondaryOf(addRule)).height).toBeGreaterThanOrEqual(44);
+        await addRule.click();
+        const removeRule = bodyRules.getByRole("button", {name: "Remove", exact: true});
+        expect(await removeRule.count()).toBe(1);
+        expect((await secondaryOf(removeRule)).secondary).toBe(true);
+        expect((await secondaryOf(removeRule)).height).toBeGreaterThanOrEqual(44);
+        await removeRule.click();
+        expect(await bodyRules.getByRole("button", {name: "Remove", exact: true}).count()).toBe(0);
 
         expect(await app.page.locator("#input-tls").isDisabled()).toBe(true);
         await app.page.locator("#select-protocol").selectOption("tcp");
@@ -722,21 +773,22 @@ test("포트와 클라이언트 버퍼는 범위 안으로 잘리고, 서버 버
     }
 }, ADMIN_APP_TEST_TIMEOUT_MS);
 
-describe("U5-06 레이트 리밋 카드와 Blocked 표시", () => {
+describe("U5-06 레이트 리밋 카드와 Rejected 표시", () => {
     const openEdit = async (app: Awaited<ReturnType<typeof startAdminApp>>, port: number | "new") => {
         await app.page.goto(`${app.url}#/tunnels/${port}`);
         await app.page.locator("#input-rate-window").waitFor({state: "visible", timeout: 10_000});
     };
     const values = (page: Page) => Promise.all(["#input-rate-window", "#input-rate-max", "#input-rate-ban"].map((id) => page.locator(id).inputValue()));
 
-    test("편집 화면의 Status 영역은 가동 정보와, 거절이 있을 때만 Blocked 합계를 보인다(#338 REQ-18)", async () => {
+    test("편집 화면의 Status 영역은 가동 정보와, 거절이 있을 때만 Rejected 합계를 보인다(#338 REQ-18, 이슈 370 tunnelStatus.blocked)", async () => {
         const app = await startAdminApp({fixture: "with-tunnels"});
         try {
             await app.page.goto(`${app.url}#/tunnels/20002`);
             await app.page.locator("#tunnel-status-area [data-blocked]").waitFor({state: "visible", timeout: 10_000});
-            expect(await app.page.locator("#tunnel-status-area [data-blocked]").textContent()).toBe("Blocked 7");
+            expect(await app.page.locator("#tunnel-status-area [data-blocked]").textContent()).toBe("Rejected 7");
             expect(await app.page.locator("#tunnel-status-area .tunnel-stats").textContent())
-                .toMatch(/^Uptime (\d+s|\d+m|\d+h, \d+m|\d+d, \d+h) · Sessions 0 · RX 0B · TX 0B$/);
+                // 이슈 369: "세션" 대신 "연결", 켜진 터널은 "On for"(켠 시각), 서버 기동 때 켜진 터널은 가동 시간이다.
+                .toMatch(/^(Uptime|On for) (\d+s|\d+m|\d+h, \d+m|\d+d, \d+h) · Connections 0 · RX 0B · TX 0B$/);
             await app.page.goto(`${app.url}#/tunnels/20001`);
             await app.page.locator("#tunnel-status-area .tunnel-stats").waitFor({state: "visible", timeout: 10_000});
             expect(await app.page.locator("#tunnel-status-area [data-blocked]").count()).toBe(0);

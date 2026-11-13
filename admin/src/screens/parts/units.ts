@@ -8,6 +8,9 @@ import {i18n, type Translator} from '../../i18n';
 /** 소수를 버린 정수를 그 언어로 적는다. */
 export const wholeNumber = (value: number, tr: Translator = i18n()): string => tr.number(Math.floor(value), 0);
 
+/** 이슈 370: 그 언어의 자릿점을 붙인 정수(예: 600,000). tr.number 는 자릿점을 붙이지 않는다. */
+export const groupedNumber = (value: number, tr: Translator = i18n()): string => value.toLocaleString(tr.intl);
+
 export const byteToUnit = (length: number, hideUnit = false, tr: Translator = i18n()): string => {
     const tib = 1024 * 1024 * 1024 * 1024;
     const gib = 1024 * 1024 * 1024;
@@ -38,11 +41,12 @@ export const timeToDMH = (ms: number, tr: Translator = i18n()): string => {
 // 옛 TunnelOptionSetLayout 의 _startupTime 을 옮겼다. 시작 시각에서 지금까지 흐른 시간을 가장 큰 두 단위로 적는다.
 // 경과 시간의 0 하한만 원본과 다르다. uptime 은 서버 시각인데 빼는 쪽은 클라이언트 시계라서,
 // 클라이언트 시계가 서버보다 늦으면 원본은 "-5s" 같은 음수를 찍었다.
-export const startupTime = (uptime: number, tr: Translator = i18n()): string => {
+/** 그 시각부터 now 까지의 시간. 이슈 369: now 로 서버 시각을 넘길 수 있다(기본값은 이 브라우저의 지금 시각). */
+export const startupTime = (uptime: number, tr: Translator = i18n(), now: number = Date.now()): string => {
     if(!uptime) {
         return tr.t('time.uptimeSeconds', {seconds: wholeNumber(0, tr)});
     }
-    const time = Math.max(0, Date.now() - uptime);
+    const time = Math.max(0, now - uptime);
     if(time > 1000 * 60 * 60 * 24) {
         return tr.t('time.uptimeDays', {days: wholeNumber(time / (1000 * 60 * 60 * 24), tr), hours: wholeNumber((time % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60), tr)});
     } else if(time > 1000 * 60 * 60) {
@@ -54,15 +58,3 @@ export const startupTime = (uptime: number, tr: Translator = i18n()): string => 
     }
 };
 
-// 옛 TunnelOptionSetLayout 의 _toSize·_floorPoint 그대로. 소수 둘째 자리까지 내림한다.
-export const toSize = (bytes: number, tr: Translator = i18n()): string => {
-    if(bytes > 1024 * 1024 * 1024) {
-        return tr.number(ExMath.floor(bytes / (1024 * 1024 * 1024), 2), 2) + 'Gb';
-    } else if(bytes > 1024 * 1024) {
-        return tr.number(ExMath.floor(bytes / (1024 * 1024), 2), 2) + 'Mb';
-    } else if(bytes > 1024) {
-        return tr.number(ExMath.floor(bytes / 1024, 2), 2) + 'Kb';
-    } else {
-        return tr.number(bytes, 2) + 'B';
-    }
-};

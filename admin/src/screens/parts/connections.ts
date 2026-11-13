@@ -1,0 +1,198 @@
+import type {TunnelingStatus} from '../../controller/Options';
+import {i18n, type Translator} from '../../i18n';
+import {byteToUnit, startupTime} from './units';
+
+// 이슈 369: 터널 목록 줄의 가동 정보·허용 클라이언트와 연결 창의 줄 순서(순수 함수). 화면은 그리기만 한다.
+
+export type StatsView = {sessions: number; line: string};
+
+/** 이슈 369(설계 반영): 켜진 터널은 "켜진 지 …", 옛 서버이거나 꺼진 터널은 리스너가 열린 뒤의 "가동 시간 …"이다. 편집 화면과 목록이 함께 쓴다. */
+export function sinceText(status: TunnelingStatus, serverTime: number, tr: Translator = i18n()): string {
+    return status.active && status.activatedAt !== undefined
+        ? tr.t('tunnel.onFor', {duration: startupTime(status.activatedAt, tr, serverTime)})
+        : tr.t('tunnel.uptimeFor', {duration: startupTime(status.uptime, tr, serverTime)});
+}
+
+/**
+ * FR-1·FR-7: 켜진 터널의 가동 정보 줄. 켜진 시각(activatedAt)이 있으면 "켜진 지 …", 옛 서버면 지금처럼 "가동 시간 …"이다.
+ * 크기는 바이트 단위 기호(KiB·MiB)로 적는다. 꺼졌거나 열리지 않은 터널은 없다(undefined).
+ */
+export function statsView(status: TunnelingStatus | undefined, serverTime: number, tr: Translator = i18n()): StatsView | undefined {
+    if(!status || !status.online || !status.active) return undefined;
+    const since = sinceText(status, serverTime, tr);
+    // RX·TX 는 어느 언어든 같은 약어라 문구가 아니라 값으로 끼운다.
+    return {sessions: status.sessions, line: tr.t('tunnel.statsLine', {since, rxLabel: 'RX', rx: byteToUnit(status.rx, false, tr), txLabel: 'TX',
+        tx: byteToUnit(status.tx, false, tr)})};
+}
+
+export type AllowedClient = {clientId: string; name: string; connected: boolean};
+export type ClientsView = {label: string; items: Array<{name: string; connected: boolean | undefined}>; more: string | undefined; title: string};
+
+/** 줄에 이름을 보이는 클라이언트 수. 넘으면 "외 N" 으로 줄이고 전체는 title 에 둔다. */
+const SHOWN_CLIENTS = 2;
+
+/**
+ * FR-3: 이 터널의 연결을 맡을 수 있는 클라이언트. 고른 클라이언트가 없으면 "모두", 옛 이름 규칙만 있으면 그 규칙이다.
+ * 옛 서버 응답(allowedClients 없음)에는 보이지 않는다(undefined).
+ */
+export function clientsView(input: {allowedClients?: AllowedClient[]; allowedClientNames?: string[]}, tr: Translator = i18n()): ClientsView | undefined {
+    if(input.allowedClients === undefined) return undefined;
+    const label = tr.t('tunnel.clients');
+    if(input.allowedClients.length === 0) {
+        const rules = (input.allowedClientNames ?? []).filter((rule) => rule.trim() !== '');
+        const text = rules.length > 0 ? tr.t('tunnel.clientsNameRule', {rule: rules.join(', ')}) : tr.t('tunnel.clientsAll');
+        return {label, items: [{name: text, connected: undefined}], more: undefined, title: text};
+    }
+    const describe = (client: AllowedClient) => client.connected ? client.name
+        : tr.t('tunnel.clientWithState', {name: client.name, state: tr.t('tunnel.clientNotConnected')});
+    const rest = input.allowedClients.length - SHOWN_CLIENTS;
+    return {
+        label,
+        items: input.allowedClients.slice(0, SHOWN_CLIENTS).map((client) => ({name: client.name, connected: client.connected})),
+        more: rest > 0 ? tr.t('tunnel.clientsMore', {count: rest}) : undefined,
+        title: input.allowedClients.map(describe).join(', '),
+    };
+}
+
+/**
+ * 이슈 370 C-3: 편집 화면 신뢰 클라이언트 칸에 보일 글자. 상태 응답의 allowedClients 에 표시 이름이 있으면 그 이름, 아니면 id 다.
+ * allowedClients 는 그 터널에 걸린 클라이언트만 담으므로 고르지 않은 클라이언트와 옛 서버는 id 로 남는다.
+ */
+export function trustedClientLabel(clientId: string, allowedClients: readonly AllowedClient[] | undefined): string {
+    const name = allowedClients?.find((client) => client.clientId === clientId)?.name;
+    return name ? name : clientId;
+}
+
+export type ConnectionState = 'live' | 'ended' | 'closed' | 'blocked';
+export type ConnectionRow = {id: number; remoteAddress: string | undefined; remotePort: number | undefined; connectedAt: number;
+    rx: number; tx: number; country?: string | null; state: ConnectionState; isNew: boolean};
+export type FetchedConnection = Omit<ConnectionRow, 'state' | 'isNew'>;
+
+/** 창에 남겨 두는 끝난 줄(끝남·끊음·차단됨)의 최대 수. 넘으면 오래된(위쪽) 끝난 줄부터 버린다. 창이 오래 열려 있어도 목록이 끝없이 늘지 않는다. */
+export const MAX_KEPT_ENDED = 100;
+
+/**
+ * 설계 반영: 창이 열린 동안 줄 순서를 지킨다. 누르려던 버튼이 손가락 밑에서 움직이지 않게 한다.
+ * 기존 줄은 순서와 표시를 지키며 값만 고치고, 서버 목록에서 사라진 줄은 "끝남"으로 남긴다. 새 연결은 맨 아래에 "새"로 붙는다.
+ * options.first 면 창을 연 뒤 처음 읽은 것이다. 서버 순서 그대로이고 새 표시가 없다. 주지 않으면 prev 가 비었는지로 판단한다.
+ * 빈 목록으로 연 창에 연결이 들어오는 경우를 "새"로 알리려면 호출자가 first 를 넘긴다.
+ * options.truncated 면 서버가 최근 연결만 잘라 준 목록이다(연결 시각, id 가 큰 것부터). 받은 목록의 가장 오래된 연결보다
+ * 새로운데 목록에 없는 줄은 끝난 것이다. 그보다 오래된 줄은 살아 있는지 알 수 없으므로 숨긴다. 그래야 살아 있는 줄이 끝없이 늘지 않는다.
+ * options.seen 은 창이 열린 동안 받은 모든 id 다(숨긴 줄 포함). 숨겼던 줄이 다시 목록에 들어오면 새 연결이 아니므로 "새" 없이 맨 아래에 붙는다.
+ */
+export function mergeConnections(prev: readonly ConnectionRow[], fetched: readonly FetchedConnection[],
+    options: {truncated?: boolean; first?: boolean; seen?: ReadonlySet<number>} = {}): ConnectionRow[] {
+    if(options.first ?? prev.length === 0) return fetched.map((connection) => ({...connection, state: 'live', isNew: false}));
+    const byId = new Map(fetched.map((connection) => [connection.id, connection]));
+    const oldest = options.truncated === true ? fetched[fetched.length - 1] : undefined;
+    const kept = prev.flatMap((row): ConnectionRow[] => {
+        const next = byId.get(row.id);
+        if(row.state !== 'live') return [row];
+        if(next) return [{...row, ...next, state: 'live'}];
+        if(oldest !== undefined && !isNewer(row, oldest)) return [];
+        return [{...row, state: 'ended'}];
+    });
+    const shown = new Set(prev.map((row) => row.id));
+    const added = fetched.filter((connection) => !shown.has(connection.id))
+        .map((connection): ConnectionRow => ({...connection, state: 'live', isNew: options.seen?.has(connection.id) !== true}));
+    return withoutOldEnded([...kept, ...added]);
+}
+
+/** 서버 정렬(연결 시각, 같으면 id 가 큰 것이 먼저)에서 a 가 b 보다 앞(더 최근)인가. */
+function isNewer(a: {connectedAt: number; id: number}, b: {connectedAt: number; id: number}): boolean {
+    return a.connectedAt !== b.connectedAt ? a.connectedAt > b.connectedAt : a.id > b.id;
+}
+
+/** 끝난 줄이 MAX_KEPT_ENDED 를 넘으면 위에서부터(오래된 것부터) 넘는 만큼 버린다. */
+function withoutOldEnded(rows: ConnectionRow[]): ConnectionRow[] {
+    let excess = rows.filter((row) => row.state !== 'live').length - MAX_KEPT_ENDED;
+    if(excess <= 0) return rows;
+    return rows.filter((row) => {
+        if(row.state === 'live' || excess <= 0) return true;
+        excess--;
+        return false;
+    });
+}
+
+/** 설계 반영: 이번 읽기로 새로 붙은 줄 수. 새 연결이 붙을 때만 화면 낭독기에 조용히 알린다. 처음 읽기는 새 표시가 없으므로 0 이다. */
+export function addedConnections(prev: readonly ConnectionRow[], next: readonly ConnectionRow[]): number {
+    const known = new Set(prev.map((row) => row.id));
+    return next.filter((row) => row.isNew && !known.has(row.id)).length;
+}
+
+/** 창 맨 위 요약의 연결 수. 서버가 준 전체 수(total)로 센다. 잘린 목록의 줄 수로 세면 틀린다. 옛 서버(total 없음)는 살아 있는 줄 수다. */
+export function summaryCount(rows: readonly ConnectionRow[], total: number | undefined): number {
+    return total ?? rows.filter((row) => row.state === 'live').length;
+}
+
+/** 낭독 알림 글자가 그대로면 화면 낭독기가 다시 읽지 않는다. 같은 문장이 연달아 나오면 보이지 않는 글자를 붙였다 떼어 바뀌게 한다. */
+const REPEAT_MARK = '\u200B';
+export function announcement(previous: string, text: string): string {
+    return previous === text ? text + REPEAT_MARK : text;
+}
+
+/**
+ * 이슈 369(스펙 §8): 이 서버가 연결 목록을 주는가. 옛 서버는 상태 응답에 allowedClients 가 없다.
+ * 연결 목록의 404 로 판단하지 않는다. 새 서버도 볼 수 없게 된 터널이나 지운 터널에 404 를 준다.
+ */
+export function connectionsSupported(status: TunnelingStatus | undefined): boolean {
+    return status?.allowedClients !== undefined;
+}
+
+/**
+ * 연결 목록 읽기 실패 가운데 창을 닫아야 하는 것의 알림 문구. 404 는 이 터널을 더 볼 수 없다(권한이 바뀌었거나 지운 터널).
+ * 403 은 볼 수만 있게 되었다(read_only). 둘 다 다시 읽어도 나아지지 않는다. 그 밖의 실패는 창을 닫지 않는다(undefined).
+ */
+export function closingFailureText(status: number, tr: Translator = i18n()): string | undefined {
+    if(status === 404) return tr.t('connections.notVisible');
+    if(status === 403) return tr.t('connections.notAllowed');
+    return undefined;
+}
+
+/** 창을 닫을 실패의 알림. notice 가 없으면 알림 없이 닫기만 한다. */
+export type ClosingFailure = {notice: string | undefined};
+
+/**
+ * 연결 목록 읽기 실패로 창을 닫아야 하는가(닫지 않으면 undefined). 403 mfa_enrollment_required 는 요청 함수(adminRequest)가
+ * 2단계 인증 등록 화면으로 옮기므로 "볼 수만 있다"고 알리지 않고 창만 닫는다. 그 밖에는 closingFailureText 를 따른다.
+ */
+export function closingFailure(failure: {status: number; code?: unknown}, tr: Translator = i18n()): ClosingFailure | undefined {
+    if(failure.status === 403 && failure.code === 'mfa_enrollment_required') return {notice: undefined};
+    const notice = closingFailureText(failure.status, tr);
+    return notice === undefined ? undefined : {notice};
+}
+
+/**
+ * 409 duplicate 의 이미 있는 차단이 이 터널의 연결에 걸리는가. 서버는 그 차단의 포트(모든 터널이면 null)를 port 로 준다.
+ * 걸리면 서버가 그 연결을 끊었으므로 줄을 "차단됨"으로 바꾼다. port 가 없으면 알 수 없으므로 거짓이다.
+ */
+export function duplicateCoversTunnel(failure: Readonly<Record<string, unknown>>, port: number): boolean {
+    return failure.port === null || failure.port === port;
+}
+
+/**
+ * 409 duplicate 의 알림 문구. 서버는 주소마다 차단을 하나만 두므로 범위가 달라도 duplicate 로 거절한다.
+ * 이미 있는 차단이 요청한 범위를 덮으면(모든 터널이거나, 이 터널만 요청했는데 같은 포트) "이미 차단된 주소"라고 알린다.
+ * 덮지 못하면 이미 걸린 포트를 밝히고 보안 화면에서 범위를 바꾸라고 알린다. 포트를 주지 않는 응답은 알 수 없으므로 앞의 문구다.
+ */
+export function duplicateBlockText(failure: Readonly<Record<string, unknown>>, request: {port: number; scope: 'tunnel' | 'all'},
+    tr: Translator = i18n()): string {
+    const existing = failure.port;
+    if(typeof existing !== 'number') return tr.t('connections.alreadyBlocked');
+    if(request.scope === 'tunnel' && existing === request.port) return tr.t('connections.alreadyBlocked');
+    return tr.t('connections.alreadyBlockedOnPort', {port: existing});
+}
+
+/**
+ * 차단 확인 창의 본문. count 는 이 터널에 있는 그 주소의 연결 수다. 0 이면 끊을 연결을 말하지 않고,
+ * "모든 터널"이면 다른 터널의 연결도 끊긴다는 것을 말한다.
+ */
+export function blockBodyText(input: {count: number; scope: 'tunnel' | 'all'}, tr: Translator = i18n()): string {
+    if(input.scope === 'all') return input.count > 0 ? tr.plural('connections.blockBodyAll', input.count) : tr.t('connections.blockBodyAllNone');
+    return input.count > 0 ? tr.plural('connections.blockBody', input.count) : tr.t('connections.blockBodyNone');
+}
+
+/** 차단 뒤 알림. 끊은 연결이 없으면 수를 말하지 않는다. */
+export function blockedDoneText(address: string, closed: number, tr: Translator = i18n()): string {
+    return closed > 0 ? tr.plural('connections.blockedDone', closed, {address}) : tr.t('connections.blockedDoneNone', {address});
+}

@@ -209,6 +209,21 @@ class ServerOptionCtrl {
         });
     }
 
+    /**
+     * 이슈 369 FR-8: 그 터널의 연결 목록(최근 연결부터). 고치기 권한이 없으면 403 read_only 다.
+     * 국가는 국가 필터가 국가를 보일 때만 값이다(아니면 null). 최근 500개로 잘렸으면 truncated 다. 옛 서버면 이 API 가 없다(404).
+     */
+    public tunnelConnections(port: number) : Promise<ApiResult<{serverTime: number; countryLookup?: boolean; truncated?: boolean; total?: number;
+        connections: Array<{id: number; remoteAddress: string | undefined;
+        remotePort: number | undefined; connectedAt: number; rx: number; tx: number; country?: string | null}>}>> {
+        return adminRequest(`/api/tunneling/${port}/connections`);
+    }
+
+    /** 이슈 369 FR-10: 연결 하나를 끊는다. 이미 끝났으면 closed 가 false 다. */
+    public closeTunnelConnection(port: number, id: number) : Promise<ApiResult<{closed: boolean}>> {
+        return adminRequest(`/api/tunneling/${port}/connections/${id}`, {method: 'DELETE'});
+    }
+
     /** 실패하면 status 가 HTTP 상태다. 네트워크 실패는 0 이다(adminRequest 의 실패 값). */
     public async activeExternalPortServer(active: boolean, port: number, timeout?: number) : Promise<{success: boolean, message: string, status?: number, generated?: boolean}> {
 

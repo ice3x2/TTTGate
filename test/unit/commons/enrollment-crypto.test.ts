@@ -48,7 +48,11 @@ describe("enrollment crypto", () => {
         expect(openEnrollmentPayload(keys, sealed)).toEqual({clientId: "edge", clientSecret: "s"});
         expect(openEnrollmentPayload(other, sealed)).toBeUndefined();
         expect(openEnrollmentPayload({...keys, lookup: other.lookup}, sealed)).toBeUndefined();
-        const tampered = {...sealed, ciphertext: Buffer.from("x" + sealed.ciphertext.slice(1), "utf-8").toString()};
+        // 첫 바이트를 비트로 뒤집어 반드시 바꾼다. 첫 글자를 "x" 로 바꾸면 원래 "x" 일 때(약 1/64) 아무것도 바뀌지 않았다.
+        const flipped = Buffer.from(sealed.ciphertext, "base64");
+        flipped[0] ^= 0x01;
+        const tampered = {...sealed, ciphertext: flipped.toString("base64")};
+        expect(tampered.ciphertext).not.toBe(sealed.ciphertext);
         expect(openEnrollmentPayload(keys, tampered)).toBeUndefined();
     });
 });

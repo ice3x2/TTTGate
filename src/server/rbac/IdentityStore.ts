@@ -116,6 +116,19 @@ function saveFailedResult(failed: FileFailure): Failure<422> {
     return failure(422, 'identity_save_failed', failed.message, failed.values);
 }
 
+/**
+ * 이슈 366: 옛 파일에는 max_session_buffer_mib 가 없다. 0 이상의 정수가 아니면 0(그룹 상한 없음)으로 읽는다.
+ * 값이 있는데 틀렸으면 상한이 풀리므로 경고를 남긴다.
+ */
+function sessionBufferCapOnLoad(group: Group): number {
+    const value = (group.attributes as Partial<GroupAttributes> | undefined)?.max_session_buffer_mib;
+    if(typeof value === 'number' && Number.isInteger(value) && value >= 0) return value;
+    if(value !== undefined) {
+        logger.warn(`identity.yaml: group ${group.id} has an invalid max_session_buffer_mib (${String(value)}). The group buffer maximum is off for this group.`);
+    }
+    return 0;
+}
+
 /** 이슈 346: 옛 파일에는 mfa_required 가 없다(false). 불리언이 아닌 값은 강제가 꺼지므로 경고를 남긴다. */
 function mfaRequiredOnLoad(group: Group): boolean {
     const value = (group.attributes as Partial<GroupAttributes> | undefined)?.mfa_required;
@@ -214,7 +227,7 @@ class IdentityStore {
         // 이슈 346 이전 파일의 그룹에는 mfa_required 가 없다. 불리언이 아니면 false(강제 없음)로 읽는다.
         const normalizedGroups = groups.map((group) => group.id === SYSTEM_SUPERUSER_GROUP_ID
             ? {...group, attributes: cloneGroupAttributes(DEFAULT_GROUP_ATTRIBUTES as GroupAttributes)}
-            : {...group, attributes: {...group.attributes, mfa_required: mfaRequiredOnLoad(group)}});
+            : {...group, attributes: {...group.attributes, mfa_required: mfaRequiredOnLoad(group), max_session_buffer_mib: sessionBufferCapOnLoad(group)}});
         const groupIds = new Set(normalizedGroups.map((group) => group.id));
 
         const users = withUniquePasskeyIds((raw.users as User[]).map((user) => withValidPasskeys({...user})));

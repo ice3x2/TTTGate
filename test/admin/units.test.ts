@@ -1,4 +1,4 @@
-import {byteToUnit, startupTime, timeToDMH, toSize} from "../../admin/src/screens/parts/units";
+import {byteToUnit, groupedNumber, startupTime, timeToDMH} from "../../admin/src/screens/parts/units";
 import {translator} from "../../admin/src/i18n";
 
 // screens/parts/units.ts 는 옛 layout/ServerStatusLayout.svelte 와 layout/SysinfoPopup.svelte 에
@@ -74,7 +74,7 @@ describe("timeToDMH", () => {
     });
 });
 
-// startupTime·toSize 는 옛 layout/TunnelOptionSetLayout.svelte 의 _startupTime·_floorPoint·_toSize(353~387행)를 옮긴 것이다.
+// startupTime 은 옛 layout/TunnelOptionSetLayout.svelte 의 _startupTime·_floorPoint·_toSize(353~387행)를 옮긴 것이다.
 // 기대값은 7664c12 시점의 원본을 Date.now 를 고정한 채 그대로 실행해 얻었다.
 //
 // 아래 기대값은 보기에 어색해도 원본 동작을 그대로 고정한 것이다. 이유 없이 '고치지' 말 것:
@@ -147,43 +147,25 @@ describe("한국어 표기", () => {
     test("크기 단위는 한국어에서도 같은 기호다", () => {
         expect(byteToUnit(1536, false, ko)).toBe("1.5KiB");
         expect(byteToUnit(1536, true, ko)).toBe("1.5");
-        expect(toSize(1177, ko)).toBe("1.14Kb");
-        expect(toSize(1e21, ko)).toBe("931322574615.47Gb");
     });
 
     test("영어를 넘겨도 지금과 같다", () => {
         const en = translator("en");
         expect(timeToDMH(93784000, en)).toBe("1d 2h 3m 4s");
         expect(byteToUnit(TIB + 1, false, en)).toBe("1TiB");
-        expect(toSize(NaN, en)).toBe("NaNB");
     });
 });
 
-describe("toSize", () => {
-    test.each([
-        [0, "0B"],
-        [-1, "-1B"],
-        [0.5, "0.5B"],
-        [1, "1B"],
-        [1023, "1023B"],
-        [KIB, "1024B"],
-        [KIB + 1, "1Kb"],
-        [1536, "1.5Kb"],
-        [1177, "1.14Kb"],
-        [1177.6, "1.14Kb"],
-        [2047, "1.99Kb"],
-        [MIB - 1, "1023.99Kb"],
-        [MIB, "1024Kb"],
-        [MIB + 1, "1Mb"],
-        [1.5 * MIB, "1.5Mb"],
-        [GIB - 1, "1023.99Mb"],
-        [GIB, "1024Mb"],
-        [GIB + 1, "1Gb"],
-        [5.5 * GIB, "5.5Gb"],
-        [2048 * GIB, "2048Gb"],
-        [1e21, "931322574615.47Gb"],
-        [NaN, "NaNB"],
-    ] as ReadonlyArray<readonly [number, string]>)("%s 바이트를 %s 로 적는다", (bytes, expected) => {
-        expect(toSize(bytes)).toBe(expected);
+// 이슈 369 FR-7: toSize 는 바이트를 "Kb·Mb·Gb"(비트로 읽힌다)로 적었다. 같은 일을 하는 byteToUnit 으로 합치고 지웠다.
+test("이슈 369 startupTime 은 기준 시각(now)을 받아 서버 시각으로 셀 수 있다", () => {
+    expect(startupTime(1_000_000, translator("en"), 1_000_000 + 7_500_000)).toBe("2h, 5m");
+});
+
+// 이슈 370 최종 목록 2.3 server.millisecondsRequired: 범위 숫자는 자릿점을 붙여 보인다(안내 문구의 "1,000~600,000ms" 와 같다).
+describe("groupedNumber", () => {
+    test("그 언어의 자릿점을 붙인다", () => {
+        expect(groupedNumber(600000, translator("ko"))).toBe("600,000");
+        expect(groupedNumber(1000, translator("en"))).toBe("1,000");
+        expect(groupedNumber(999, translator("en"))).toBe("999");
     });
 });

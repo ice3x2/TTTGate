@@ -29,6 +29,10 @@
     import ShareUsersField from './parts/ShareUsersField.svelte';
     import type {SharedUser} from './parts/shareUsers';
     import {PROTOCOLS, tunnelPolicy} from './parts/tunnelPolicy';
+    import {trustedClientLabel, type AllowedClient} from './parts/connections';
+    import PortRangeChips from './parts/PortRangeChips.svelte';
+    import {RATE_RANGES, rateRangeError} from './parts/rateLimitRange';
+    import {bufferIssue, defaultBuffer, groupBufferCap, type BufferIssue} from './parts/bufferPolicy';
     import {t} from '../i18n';
     import {errorMessageOf} from '../i18n/serverError';
 
@@ -41,6 +45,22 @@
     const ENABLED = [{value: 'true', label: t('tunnelEdit.enabled')}, {value: 'false', label: t('tunnelEdit.disabled')}];
 
     let option = $state<TunnelingOptionEx | undefined>();
+    let usedPorts = $state<number[]>([]);
+    // 이슈 366: 그룹 연결당 버퍼 최댓값과 불러온 값. 저장된 값을 그대로 두면 상한을 넘어도 경고만 한다.
+    const bufferCap = $derived($me ? groupBufferCap($me) : null);
+    let storedBuffers = $state<{server?: number; client?: number}>({});
+    const serverBufferIssue = $derived(option ? bufferIssue('server', option.bufferLimitOnServer, storedBuffers.server, bufferCap) : undefined);
+    const clientBufferIssue = $derived(option ? bufferIssue('client', option.bufferLimitOnClient, storedBuffers.client, bufferCap) : undefined);
+    // 이슈 366: 저장된 값을 그대로 두는 칸에는 max 를 걸지 않는다(브라우저가 그 값을 틀렸다고 보이지 않게).
+    const bufferMaxAttr = (issue: BufferIssue | undefined): number | undefined => bufferCap !== null && issue !== 'stored-over' ? bufferCap : undefined;
+    // 이슈 366 FR-12: 상한을 넘은 저장값은 칸마다 이름과 값을 넣어 한 줄씩 경고한다.
+    const storedOverLines = $derived(!option ? [] : [
+        ...(serverBufferIssue === 'stored-over' ? [{id: 'server', text: t('tunnelEdit.bufferStoredOver',
+            {field: t('tunnelEdit.server'), value: option.bufferLimitOnServer ?? 0, max: bufferCap ?? 0})}] : []),
+        ...(clientBufferIssue === 'stored-over' ? [{id: 'client', text: (option.bufferLimitOnClient ?? 0) < 1
+            ? t('tunnelEdit.bufferStoredUnlimited', {max: bufferCap ?? 0})
+            : t('tunnelEdit.bufferStoredOver', {field: t('tunnelEdit.client'), value: option.bufferLimitOnClient ?? 0, max: bufferCap ?? 0})}] : []),
+    ]);
     let snapshotRevision = 0;
 
     // U3-06: 일반 유저는 그룹 속성 안에서만 입력한다. 서버가 최종 판정하므로 여기서는 표시·기본값·요청 모양만 맞춘다.
@@ -133,8 +153,7 @@
         return value;
     };
 
-    // U5-06: 레이트 리밋 입력은 초·분 단위로 보이고 저장할 때 밀리초로 바꾼다. 범위 밖이면 저장을 막는다.
-    const RATE_RANGES = {window: [1, 3600], max: [1, 100000], ban: [1, 1440]} as const;
+    // U5-06: 레이트 리밋 입력은 초·분 단위로 보이고 저장할 때 밀리초로 바꾼다. 범위 밖이면 저장을 막는다(범위는 rateLimitRange.ts).
     const inRange = (value: number | null, [low, high]: readonly [number, number]): boolean =>
         typeof value === 'number' && Number.isInteger(value) && value >= low && value <= high;
     let rateWindow = $state<number | null>(60);
@@ -162,7 +181,8 @@
         if(field === 'ban' && inRange(rateBan, RATE_RANGES.ban)) option.rateLimit.banMs = rateBan! * 60000;
     };
 
-    const updatable = $derived(option ? ServerOptionCtrl.checkValidTunnelingOption(option) && validServerBuffer(option.bufferLimitOnServer) && rateValid : false);
+    const updatable = $derived(option ? ServerOptionCtrl.checkValidTunnelingOption(option) && validServerBuffer(option.bufferLimitOnServer) && rateValid
+        && serverBufferIssue !== 'over' && clientBufferIssue !== 'over' && clientBufferIssue !== 'unlimited' : false);
 
     // 옛 _loadCertInfo(134~156행) 그대로다. 옛 코드는 포트로 행을 찾아 없으면 그대로 돌아갔다.
     const loadCertInfo = async (port: number) => {
@@ -193,12 +213,18 @@
             loading = true;
             const snapshot = await ServerOptionCtrl.instance.getTunnelingOption();
             snapshotRevision = snapshot.revision;
+            // 이슈 365: 칩이 건너뛸 포트. 목록에 보이는 다른 터널의 포트다(이 터널 자신은 뺀다).
+            usedPorts = snapshot.value.map((row) => row.forwardPort).filter((port) => String(port) !== param);
             if(param === 'new') {
                 const fresh = emptyOption();
+                // 이슈 366 FR-11: 새 터널의 버퍼 기본값은 min(10, 그룹 상한)이다.
+                fresh.bufferLimitOnServer = defaultBuffer(bufferCap);
+                fresh.bufferLimitOnClient = defaultBuffer(bufferCap);
+                storedBuffers = {};
                 if(policy?.restricted) {
                     policy.normalizeHttpOption(fresh);
-                    // 난수 포트를 그대로 두면 Field 가 힌트 대신 오류를 그려 허용 범위 안내가 보이지 않는다.
-                    fresh.forwardPort = policy.initialPort() as number;
+                    // 난수 포트는 대개 허용 범위 밖이라 처음부터 포트 오류가 보인다. 목록의 터널이 쓰지 않는 첫 허용 포트로 시작한다.
+                    fresh.forwardPort = policy.initialPort(usedPorts) as number;
                     // 서버는 일반 유저의 빈 allowedClientIds 를 거부한다(빈 목록은 모든 클라이언트 허용과 같다).
                     // 그룹이 허용한 신뢰 클라이언트를 모두 고른 상태로 시작한다.
                     fresh.allowedClientIds = [...policy.trustedClients];
@@ -218,6 +244,7 @@
             }
             found.isSync = true;
             found.originalForwardPort = found.forwardPort;
+            storedBuffers = {server: found.bufferLimitOnServer, client: found.bufferLimitOnClient};
             found.allowedClientNamesQuery = found.allowedClientNames?.join('; ');
             if(!found.allowedClientNamesQuery) found.allowedClientNamesQuery = '';
             else found.allowedClientNamesQuery += ';';
@@ -313,6 +340,8 @@
     let loadedOutsideIds = $state<string[]>([]);
     const outsideGroupClientIds = $derived((option?.allowedClientIds ?? []).filter((id) => !(policy?.trustedClients ?? []).includes(id)));
     const restrictedClientIds = $derived([...(policy?.trustedClients ?? []), ...loadedOutsideIds]);
+    // 상태 영역이 읽은 이 터널의 allowedClients. 표시 이름을 보이는 데만 쓴다. 옛 서버와 새 터널은 없다(id 를 보인다).
+    let statusClients = $state<AllowedClient[] | undefined>(undefined);
     const trusted = (clientId: string): boolean => option?.allowedClientIds?.includes(clientId) === true;
     const setTrusted = (clientId: string, on: boolean) => {
         if(!option || !policy) return;
@@ -447,7 +476,8 @@
 
 {#if option}
 {#if !isNew}
-    <TunnelStatusArea port={option.originalForwardPort ?? option.forwardPort} editable={toggleable} onsessionout={sessionOut} />
+    <TunnelStatusArea port={option.originalForwardPort ?? option.forwardPort} editable={toggleable} onsessionout={sessionOut}
+        onstatus={(status) => { if(status?.allowedClients) statusClients = status.allowedClients; }} />
 {/if}
 {#if readOnly}
     <!-- 이슈 347: 켤 수는 있지만 고칠 수 없는 사용자(toggle 소유자·공유받은 사용자)에게는 켜고 끌 수 있다고 알린다. -->
@@ -482,9 +512,12 @@
             <Field label={t('tunnelEdit.name')} for="input-name" hint={t('tunnelEdit.optional')} error={nameError || undefined}>
                 <TextInput id="input-name" autocomplete="off" bind:value={nameInput} />
             </Field>
-            <Field label={t('tunnelEdit.externalPort')} for="input-external-port" hint={restricted ? policy!.portHint() : undefined} error={portError}>
+            <Field label={t('tunnelEdit.externalPort')} for="input-external-port" error={portError}>
                 <NumberInput id="input-external-port" min={1} max={65535} bind:value={option.forwardPort}
                     oninput={(v) => (option!.forwardPort = clampPort(v) as number)} />
+                {#if restricted}
+                    <PortRangeChips ranges={policy!.portRanges} {usedPorts} hideNotes={!!portError} onpick={(port) => (option!.forwardPort = port)} />
+                {/if}
             </Field>
             <Checkbox id="input-tls" label={t('tunnelEdit.secureTunneling')} bind:checked={option.tls}
                 disabled={option.protocol !== 'tcp'} onchange={() => onChangeSecureTunneling(option!.forwardPort)} />
@@ -511,11 +544,12 @@
                     oninput={(v) => (option!.destinationPort = clampPort(v) as number)} />
             </Field>
             {#if restricted}
-                <Field label={t('nav.trustedClients')} error={trustedError || undefined}>
+                <Field label={t('tunnelEdit.trustedClientIds')} error={trustedError || undefined}>
                     <div style="display: flex; flex-wrap: wrap; gap: var(--s-4);">
                         {#each restrictedClientIds as clientId (clientId)}
+                            {@const name = trustedClientLabel(clientId, statusClients)}
                             <Checkbox id={`tunnel-trusted-${clientId}`}
-                                label={loadedOutsideIds.includes(clientId) ? t('tunnelEdit.clientNotAllowed', {clientId}) : clientId}
+                                label={loadedOutsideIds.includes(clientId) ? t('tunnelEdit.clientNotAllowed', {clientId: name}) : name}
                                 bind:checked={() => trusted(clientId), (on) => setTrusted(clientId, on)} />
                         {:else}
                             <p>{t('tunnelEdit.noTrustedClientsForGroup')}</p>
@@ -558,20 +592,36 @@
         </div>
     </Card>
     <Card label={t('tunnelEdit.bufferLimit')}>
+        {#if bufferCap !== null}
+            <!-- 이슈 366 FR-10: 상한은 입력하기 전부터 보인다. -->
+            <p id="tunnel-buffer-cap" class="buffer-cap">{t('tunnelEdit.groupBufferMax', {max: bufferCap})}</p>
+        {/if}
         <div class="two-col">
             <Field label={t('tunnelEdit.server')} for="input-buffer-limit-server"
-                error={validServerBuffer(option.bufferLimitOnServer) ? undefined : t('tunnelEdit.serverBufferInvalid')}>
-                <NumberInput id="input-buffer-limit-server" min={1} step="any"
-                    invalid={!validServerBuffer(option.bufferLimitOnServer)} bind:value={option.bufferLimitOnServer} />
+                error={!validServerBuffer(option.bufferLimitOnServer) ? t('tunnelEdit.serverBufferInvalid')
+                    : serverBufferIssue === 'over' ? t('tunnelEdit.bufferOverGroup', {max: bufferCap ?? 0}) : undefined}>
+                <NumberInput id="input-buffer-limit-server" min={1} max={bufferMaxAttr(serverBufferIssue)} step="any"
+                    invalid={!validServerBuffer(option.bufferLimitOnServer) || serverBufferIssue === 'over'} bind:value={option.bufferLimitOnServer} />
             </Field>
-            <Field label={t('tunnelEdit.client')} for="input-buffer-limit-client">
-                <NumberInput id="input-buffer-limit-client" bind:value={option.bufferLimitOnClient}
+            <Field label={t('tunnelEdit.client')} for="input-buffer-limit-client"
+                error={clientBufferIssue === 'over' ? t('tunnelEdit.bufferOverGroup', {max: bufferCap ?? 0})
+                    : clientBufferIssue === 'unlimited' ? t('tunnelEdit.bufferUnlimitedUnderGroup', {max: bufferCap ?? 0}) : undefined}>
+                <NumberInput id="input-buffer-limit-client" max={bufferMaxAttr(clientBufferIssue)} bind:value={option.bufferLimitOnClient}
+                    invalid={clientBufferIssue === 'over' || clientBufferIssue === 'unlimited'}
                     oninput={(v) => (option!.bufferLimitOnClient = clampClientBuffer(v) as number)} />
             </Field>
         </div>
+        {#if storedOverLines.length > 0}
+            <!-- 이슈 366 FR-12: 이미 상한을 넘은 기존 값은 그대로 저장할 수 있다. 칸마다 한 줄씩 경고만 한다. -->
+            <div id="tunnel-buffer-stored-over" class="buffer-warn" role="status">
+                {#each storedOverLines as line (line.id)}
+                    <p id="tunnel-buffer-stored-over-{line.id}">{line.text}</p>
+                {/each}
+            </div>
+        {/if}
         <ul class="notes">
             <li>{t('tunnelEdit.serverBufferNote')}</li>
-            <li>{t('tunnelEdit.clientBufferNote')}</li>
+            <li>{bufferCap !== null ? t('tunnelEdit.clientBufferCapNote', {max: bufferCap}) : t('tunnelEdit.clientBufferNote')}</li>
             <li>{t('tunnelEdit.spillNote')}</li>
         </ul>
     </Card>
@@ -586,15 +636,15 @@
                         <!-- 스위치도 사용자가 고친 값이다(D9). 끈 뒤 프로토콜을 바꿔도 기본값으로 되돌리지 않는다. -->
                         <Switch ariaLabel={t('tunnelEdit.rateLimitEnabled')} disabled={readOnly} bind:on={option.rateLimit.enabled}
                             onchange={() => { if(option?.rateLimit) option.rateLimit.customized = true; }} />
-                        <Field label={t('tunnelEdit.window')} for="input-rate-window" error={!rateTouched.window || inRange(rateWindow, RATE_RANGES.window) ? undefined : '1..3600'}>
+                        <Field label={t('tunnelEdit.window')} for="input-rate-window" error={!rateTouched.window || inRange(rateWindow, RATE_RANGES.window) ? undefined : rateRangeError(RATE_RANGES.window)}>
                             <NumberInput id="input-rate-window" min={1} max={3600} invalid={rateTouched.window && !inRange(rateWindow, RATE_RANGES.window)}
                                 bind:value={rateWindow} oninput={() => onRateInput('window')} />
                         </Field>
-                        <Field label={t('tunnelEdit.maxPerIp')} for="input-rate-max" error={!rateTouched.max || inRange(rateMax, RATE_RANGES.max) ? undefined : '1..100000'}>
+                        <Field label={t('tunnelEdit.maxPerIp')} for="input-rate-max" error={!rateTouched.max || inRange(rateMax, RATE_RANGES.max) ? undefined : rateRangeError(RATE_RANGES.max)}>
                             <NumberInput id="input-rate-max" min={1} max={100000} invalid={rateTouched.max && !inRange(rateMax, RATE_RANGES.max)}
                                 bind:value={rateMax} oninput={() => onRateInput('max')} />
                         </Field>
-                        <Field label={t('tunnelEdit.banDuration')} for="input-rate-ban" error={!rateTouched.ban || inRange(rateBan, RATE_RANGES.ban) ? undefined : '1..1440'}>
+                        <Field label={t('tunnelEdit.banDuration')} for="input-rate-ban" error={!rateTouched.ban || inRange(rateBan, RATE_RANGES.ban) ? undefined : rateRangeError(RATE_RANGES.ban)}>
                             <NumberInput id="input-rate-ban" min={1} max={1440} invalid={rateTouched.ban && !inRange(rateBan, RATE_RANGES.ban)}
                                 bind:value={rateBan} oninput={() => onRateInput('ban')} />
                         </Field>
@@ -688,6 +738,9 @@
     .form-stack { display: flex; flex-direction: column; gap: var(--s-4); }
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); }
     .notes { margin: var(--s-3) 0 0; padding-left: var(--s-4); font-size: var(--fs-xs); color: var(--ink-2); }
+    .buffer-cap { margin: 0 0 var(--s-3); font-family: var(--ff-mono); font-size: var(--fs-xs); color: var(--ink-1); }
+    .buffer-warn { margin: var(--s-3) 0 0; font-size: var(--fs-xs); color: var(--warn); }
+    .buffer-warn p { margin: 0; }
     .section-title { font-family: var(--ff-display); font-size: var(--fs-lg); margin: var(--s-2) 0 0; }
     .edit-bar {
         position: sticky;

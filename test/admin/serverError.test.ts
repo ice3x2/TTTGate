@@ -164,7 +164,7 @@ describe("errorMessageOf 의 기본 fallback", () => {
     });
 
     test("알려진 code 는 생략해도 번역한다", () => {
-        expect(errorMessageOf({code: "login_blocked", message: "Too many login attempts"}, undefined, ko)).toBe("로그인 시도가 너무 많습니다.");
+        expect(errorMessageOf({code: "login_blocked", message: "Too many login attempts"}, undefined, ko)).toBe("로그인 시도가 너무 많습니다. 잠시 뒤에 다시 시도하세요.");
         expect(errorMessageOf({code: "login_blocked", message: "Too many login attempts"}, undefined, en)).toBe("Too many login attempts");
     });
 });
@@ -178,8 +178,8 @@ describe("이슈 349 2단계 서버 오류 code", () => {
 
     test.each([
         [{code: "invalid_session"}, "Invalid session", "세션이 유효하지 않습니다."],
-        [{code: "login_blocked"}, "Too many login attempts", "로그인 시도가 너무 많습니다."],
-        [{code: "login_concurrency_limit"}, "Too many login attempts", "로그인 시도가 너무 많습니다."],
+        [{code: "login_blocked"}, "Too many login attempts", "로그인 시도가 너무 많습니다. 잠시 뒤에 다시 시도하세요."],
+        [{code: "login_concurrency_limit"}, "Too many login attempts", "로그인 시도가 너무 많습니다. 잠시 뒤에 다시 시도하세요."],
         [{code: "csrf_token_missing"}, "Missing CSRF token", "CSRF 토큰이 없습니다."],
         [{code: "csrf_token_mismatch"}, "CSRF token mismatch", "CSRF 토큰이 맞지 않습니다."],
         [{code: "forbidden_origin"}, "Forbidden origin", "허용되지 않은 출처입니다."],
@@ -187,9 +187,9 @@ describe("이슈 349 2단계 서버 오류 code", () => {
         [{code: "certificate_changed"}, "Certificate changed. Reload before saving.", "인증서가 바뀌었습니다. 저장하기 전에 다시 불러오세요."],
         [{code: "port_in_use", ports: [8080]}, "Port number 8080 is already in use", "이미 사용 중인 포트입니다: 8080"],
         [{code: "port_unusable", forwardPort: 70000}, "70000 is an unusable port number.", "쓸 수 없는 포트 번호입니다: 70000"],
-        [{code: "listener_stop_failed", forwardPort: 8080}, "Unable to stop external port(8080) listener.", "외부 포트 8080의 리스너를 멈추지 못했습니다."],
+        [{code: "listener_stop_failed", forwardPort: 8080}, "Unable to stop external port(8080) listener.", "8080 포트를 닫지 못했습니다."],
         [{code: "username_taken", username: "alice"}, "That username is already in use.", "이미 사용 중인 사용자 이름입니다."],
-        [{code: "last_superuser"}, "At least one active superuser must remain.", "활성 슈퍼유저가 적어도 한 명은 있어야 합니다."],
+        [{code: "last_superuser"}, "At least one active superuser must remain.", "사용 중인 슈퍼유저가 적어도 한 명은 있어야 합니다."],
         [{code: "user_owns_tunnels", ports: [8080]}, "Reassign this user's tunnels first.", "먼저 이 사용자의 터널을 다른 사용자에게 넘기세요."],
         [{code: "group_not_empty", groupId: "g_1"}, "Move the members to another group first.", "먼저 구성원을 다른 그룹으로 옮기세요."],
         [{code: "group_revision_conflict"}, "Someone else changed this group. Reload to see the latest values.", "다른 사람이 이 그룹을 바꿨습니다. 다시 불러와 최신 값을 확인하세요."],
@@ -198,7 +198,8 @@ describe("이슈 349 2단계 서버 오류 code", () => {
         [{code: "mfa_ticket_invalid"}, "The sign-in expired. Start again.", "로그인 시간이 지났습니다. 처음부터 다시 하세요."],
         [{code: "session_not_found"}, "Session not found", "세션을 찾을 수 없습니다."],
         [{code: "mfa_enrollment_required"}, "Enable two-factor authentication first.", "먼저 2단계 인증을 켜세요."],
-        [{code: "full", max: 1000}, "the blocklist already has 1000 entries", "차단 목록이 가득 찼습니다(최대 1000개)."],
+        // 차단 목록이 가득 찬 응답은 보안 화면과 연결 창이 같은 안내(security.blocklistFull)를 보인다(PR 379 검토 M-1).
+        [{code: "full", max: 1000}, "The blocklist is full. Unblock an address to add another.", "차단 목록이 가득 찼습니다. 주소를 더하려면 다른 주소의 차단을 푸세요."],
     ] as Array<[Record<string, unknown>, string, string]>)("%j", (result, english, korean) => {
         expect(errorMessageOf({...result, message: "server text"}, "fallback", en)).toBe(english);
         expect(errorMessageOf({...result, message: "server text"}, "fallback", ko)).toBe(korean);
@@ -254,5 +255,17 @@ describe("errorMessageOf — 한국어 문구", () => {
         [{code: "request_timeout"}, "요청이 제한 시간 안에 끝나지 않았습니다."],
     ] as Array<[Record<string, unknown>, string]>)("%j", (result, korean) => {
         expect(errorMessageOf({...result, message: "server text"}, "fallback", ko)).toBe(korean);
+    });
+});
+
+// 이슈 366 FR-13(설계 반영) — 그룹 버퍼 최댓값 실패는 어느 칸인지(field)를 그 언어의 칸 이름으로 끼운다.
+describe("errorMessageOf — 그룹 버퍼 최댓값", () => {
+    test("field 값(bufferLimitOnServer/Client)을 칸 이름으로 바꿔 끼운다", () => {
+        const server = {success: false, code: "group_buffer_limit_exceeded", message: "x", field: "bufferLimitOnServer", max: 64};
+        const client = {...server, field: "bufferLimitOnClient"};
+        expect(errorMessageOf(server, undefined, translator("en"))).toBe("Server buffer can be at most 64 MiB for your group.");
+        expect(errorMessageOf(client, undefined, translator("en"))).toBe("Client buffer can be at most 64 MiB for your group.");
+        expect(errorMessageOf(server, undefined, translator("ko"))).toBe("서버 버퍼는 그룹 최대인 64 MiB 이하여야 합니다.");
+        expect(errorMessageOf(client, undefined, translator("ko"))).toBe("클라이언트 버퍼는 그룹 최대인 64 MiB 이하여야 합니다.");
     });
 });

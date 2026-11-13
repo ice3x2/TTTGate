@@ -7,6 +7,7 @@ import {CertificationStore} from "../../../../src/server/CertificationStore";
 import {BOOTSTRAP_TOKEN_FILE_NAME, IdentityMigration} from "../../../../src/server/rbac/IdentityMigration";
 import {IdentityStore} from "../../../../src/server/rbac/IdentityStore";
 import {AuditEvent, AuditSink, AuditSinkRegistry} from "../../../../src/server/audit/AuditSink";
+import {AdmissionController} from "../../../../src/server/security/AdmissionController";
 import UsablePortChecker from "../../../../src/util/UsablePortChecker";
 import {getFreePort} from "../../../helpers/network";
 import {httpRequest} from "../../../helpers/http";
@@ -17,6 +18,7 @@ jest.setTimeout(60_000);
 const ADMIN_PASSWORD = "ownership-admin-password";
 const TRUSTED_CLIENT = "tc1";
 const MIGRATED_PORT = 20001;
+const ALICE_DISPLAY_NAME = "앨리스 김";
 
 type ApiResponse = {status: number; headers: any; body: any};
 type Auth = {Cookie: string; "X-CSRF-Token": string};
@@ -126,6 +128,10 @@ describe("rbac-tunnel-ownership", () => {
             inactiveExternalPortServer: jest.fn(async () => true),
             applyExternalServerCert: jest.fn(async () => true),
             captureRuntimeState: jest.fn(() => ({external: {}})),
+            // 이슈 369: 연결 목록·끊기·허용 클라이언트 연결 여부.
+            tunnelConnections: jest.fn(() => ({connections: [], truncated: false, total: 0})),
+            closeTunnelConnection: jest.fn(async () => ({result: "gone"})),
+            isClientConnected: jest.fn(() => false),
             reapplyActiveCaps: jest.fn()
         };
         api = new AdminServer(runtime as any, false);
@@ -145,8 +151,8 @@ describe("rbac-tunnel-ownership", () => {
         groupOne = one.body.group.id;
         groupTwo = two.body.group.id;
 
-        const addUser = async (username: string, groupId: string): Promise<{auth: Auth; id: string}> => {
-            const created = await request("POST", "/api/users", {username, role: "regular", groupId}, superuser);
+        const addUser = async (username: string, groupId: string, displayName?: string): Promise<{auth: Auth; id: string}> => {
+            const created = await request("POST", "/api/users", {username, role: "regular", groupId, ...(displayName ? {displayName} : {})}, superuser);
             expect(created.status).toBe(201);
             const first = await request("POST", "/api/login", {username, password: created.body.temporaryPassword});
             expect(first.status).toBe(200);
@@ -156,7 +162,8 @@ describe("rbac-tunnel-ownership", () => {
             expect(changed.status).toBe(200);
             return {auth, id: created.body.user.id};
         };
-        alice = await addUser("alice", groupOne);
+        // 이슈 367 AC-6: alice 는 표시 이름이 아이디와 달라야 응답이 아이디를 베껴 넣는 실수를 잡는다.
+        alice = await addUser("alice", groupOne, ALICE_DISPLAY_NAME);
         bob = await addUser("bob", groupOne);
         carol = await addUser("carol", groupTwo);
 
@@ -194,6 +201,186 @@ describe("rbac-tunnel-ownership", () => {
             .toEqual([[MIGRATED_PORT, 30], [MIGRATED_PORT, 0], [MIGRATED_PORT, 1.5]]);
         const off = await request("POST", `/api/tunneling/active/${MIGRATED_PORT}`, {active: false, timeout: "garbage"}, superuser);
         expect(off.status).toBe(200);
+    });
+
+    // 이슈 366 AC-2·AC-4·AC-5 — 그룹 연결당 버퍼 최댓값은 관리 API 가 막고, 값을 바꾸지 않는 저장은 받으며, 슈퍼유저는 받지 않는다.
+    it("이슈 366 그룹 버퍼 최댓값을 넘는 저장은 422 group_buffer_limit_exceeded 이고 값을 바꾸지 않으면 받는다", async () => {
+        await setGroupAttributes(groupTwo, {...groupAttributes("private"), max_session_buffer_mib: 64});
+        try {
+            const over = await request("POST", "/api/tunnelingOption", tunnelBody(20060, {bufferLimitOnServer: 65, bufferLimitOnClient: 8}), carol.auth);
+            expect(over.status).toBe(422);
+            expect(over.body).toMatchObject({code: "group_buffer_limit_exceeded", field: "bufferLimitOnServer", max: 64});
+            expect(await storedTunnel(20060)).toBeUndefined();
+            const unlimitedClient = await request("POST", "/api/tunnelingOption", tunnelBody(20060, {bufferLimitOnServer: 8, bufferLimitOnClient: -1}), carol.auth);
+            expect(unlimitedClient.body).toMatchObject({code: "group_buffer_limit_exceeded", field: "bufferLimitOnClient", max: 64});
+            // AC-3 클라이언트 버퍼 0 도 제한 없음이라 거부하고 저장하지 않는다.
+            const zeroClient = await request("POST", "/api/tunnelingOption", tunnelBody(20060, {bufferLimitOnServer: 8, bufferLimitOnClient: 0}), carol.auth);
+            expect(zeroClient.status).toBe(422);
+            expect(zeroClient.body).toMatchObject({code: "group_buffer_limit_exceeded", field: "bufferLimitOnClient", max: 64});
+            expect(await storedTunnel(20060)).toBeUndefined();
+            const ok = await request("POST", "/api/tunnelingOption", tunnelBody(20060, {bufferLimitOnServer: 64, bufferLimitOnClient: 64}), carol.auth);
+            expect(ok.status).toBe(200);
+
+            // 상한을 32 로 낮춘 뒤: 버퍼를 그대로 두는 이름 변경은 받고, 48 로 바꾸면 거부한다.
+            await setGroupAttributes(groupTwo, {...groupAttributes("private"), max_session_buffer_mib: 32});
+            const renamed = await request("PUT", "/api/tunnelingOption",
+                tunnelBody(20060, {bufferLimitOnServer: 64, bufferLimitOnClient: 64, name: "kept"}), carol.auth);
+            expect(renamed.status).toBe(200);
+            const changed = await request("PUT", "/api/tunnelingOption", tunnelBody(20060, {bufferLimitOnServer: 48, bufferLimitOnClient: 64}), carol.auth);
+            expect(changed.body).toMatchObject({code: "group_buffer_limit_exceeded", field: "bufferLimitOnServer", max: 32});
+
+            // 슈퍼유저는 그룹 상한을 받지 않는다(전역 캐시 한도 128 안에서).
+            const bySuper = await request("PUT", "/api/tunnelingOption", tunnelBody(20060, {bufferLimitOnServer: 100, bufferLimitOnClient: -1}), superuser);
+            expect(bySuper.status).toBe(200);
+            expect((await storedTunnel(20060)).bufferLimitOnServer).toBe(100);
+        } finally {
+            await setGroupAttributes(groupTwo, groupAttributes("private"));
+            await request("DELETE", "/api/tunnelingOption", {forwardPort: 20060,
+                expectedRevision: ServerOptionStore.instance.revisionState.currentRevision}, superuser);
+        }
+    });
+
+    // 이슈 366 검토 H-1 — 숫자가 아닌 버퍼 값은 기본값으로 보지 않는다. 일반 유저는 422, 슈퍼유저도 저장소 검사에 걸려 저장되지 않는다.
+    it("이슈 366 숫자가 아닌 버퍼 값은 그룹 상한을 우회하지 못하고 누구의 저장으로도 남지 않는다", async () => {
+        await setGroupAttributes(groupTwo, {...groupAttributes("private"), max_session_buffer_mib: 64});
+        try {
+            for(const field of ["bufferLimitOnServer", "bufferLimitOnClient"]) {
+                for(const garbage of ["0", "100000", false, [0], {}]) {
+                    const body = tunnelBody(20061, {bufferLimitOnServer: 8, bufferLimitOnClient: 8, [field]: garbage});
+                    const byRegular = await request("POST", "/api/tunnelingOption", body, carol.auth);
+                    expect(byRegular.status).toBe(422);
+                    expect(byRegular.body).toMatchObject({code: "group_buffer_limit_exceeded", field, max: 64});
+                    expect(await storedTunnel(20061)).toBeUndefined();
+                    const bySuper = await request("POST", "/api/tunnelingOption", tunnelBody(20061, {bufferLimitOnServer: 8, bufferLimitOnClient: 8, [field]: garbage}), superuser);
+                    expect(bySuper.status).toBe(400);
+                    expect(await storedTunnel(20061)).toBeUndefined();
+                }
+            }
+        } finally {
+            await setGroupAttributes(groupTwo, groupAttributes("private"));
+        }
+    });
+
+    // 이슈 368 FR-1·AC-7 — 상태 API 의 timeoutCapSeconds 는 요청자를 켠 사람으로 놓고 계산한 적용 상한(초)이다. 없으면 null.
+    it("이슈 368 상태 API 는 항목마다 요청자 기준 적용 상한 timeoutCapSeconds 를 싣는다", async () => {
+        await setGroupAttributes(groupTwo, {...groupAttributes("private"), max_tunnel_duration_ms: 6 * 3_600_000});
+        try {
+            const created = await request("POST", "/api/tunnelingOption", tunnelBody(20070), carol.auth);
+            expect(created.status).toBe(200);
+            const capOf = async (auth: Auth, port: number) => {
+                const response = await request("GET", "/api/externalServerStatuses", {}, auth);
+                expect(response.status).toBe(200);
+                return response.body.statuses.find((status: any) => status.port === port)?.timeoutCapSeconds;
+            };
+            expect(await capOf(carol.auth, 20070)).toBe(21_600);
+            // 슈퍼유저가 켜도 소유자 그룹 상한이 걸린다.
+            expect(await capOf(superuser, 20070)).toBe(21_600);
+            // 소유자가 없는 옛 터널을 슈퍼유저가 보면 상한이 없다.
+            expect(await capOf(superuser, MIGRATED_PORT)).toBeNull();
+        } finally {
+            await setGroupAttributes(groupTwo, groupAttributes("private"));
+            await request("DELETE", "/api/tunnelingOption", {forwardPort: 20070,
+                expectedRevision: ServerOptionStore.instance.revisionState.currentRevision}, superuser);
+        }
+    });
+
+    // 이슈 368 AC-7 — 켜는 사람(요청자) 그룹 상한이 소유자 그룹 상한보다 짧으면 요청자 쪽 값이 적용 상한이다.
+    it("이슈 368 공유받은 사용자의 그룹 상한이 더 짧으면 그 사용자의 timeoutCapSeconds 는 그 상한이다", async () => {
+        await setGroupAttributes(groupTwo, {...groupAttributes("private"), max_tunnel_duration_ms: 6 * 3_600_000});
+        await setGroupAttributes(groupOne, {...groupAttributes("group_read"), max_tunnel_duration_ms: 2 * 3_600_000});
+        try {
+            const created = await request("POST", "/api/tunnelingOption", tunnelBody(20071, {sharedUserIds: [alice.id]}), carol.auth);
+            expect(created.status).toBe(200);
+            const capOf = async (auth: Auth) => {
+                const response = await request("GET", "/api/externalServerStatuses", {}, auth);
+                expect(response.status).toBe(200);
+                return response.body.statuses.find((status: any) => status.port === 20071)?.timeoutCapSeconds;
+            };
+            // 소유자 6시간, 요청자 2시간 → 2시간. 소유자 자신은 6시간이다.
+            expect(await capOf(alice.auth)).toBe(7_200);
+            expect(await capOf(carol.auth)).toBe(21_600);
+        } finally {
+            await setGroupAttributes(groupOne, groupAttributes("group_read"));
+            await setGroupAttributes(groupTwo, groupAttributes("private"));
+            await request("DELETE", "/api/tunnelingOption", {forwardPort: 20071,
+                expectedRevision: ServerOptionStore.instance.revisionState.currentRevision}, superuser);
+        }
+    });
+
+    // 이슈 369 FR-8·FR-10·AC-5·AC-6 — 연결 목록과 끊기는 고치기 권한(tunnel:update)이다. 볼 수만 있으면 403 read_only, 볼 수 없으면 404.
+    it("이슈 369 연결 목록·끊기는 소유자만 쓰고, 끊은 연결은 감사에 남으며, 끝난 연결은 closed:false, 다른 포트 연결은 404 다", async () => {
+        const port = 20080;
+        const created = await request("POST", "/api/tunnelingOption", tunnelBody(port), alice.auth);
+        expect(created.status).toBe(200);
+        try {
+            const connection = {id: 7, remoteAddress: "203.0.113.7", remotePort: 51000, connectedAt: Date.now() - 1000, rx: 10, tx: 20};
+            runtime.tunnelConnections.mockReturnValue({connections: [connection], truncated: false, total: 1});
+            const listed = await request("GET", `/api/tunneling/${port}/connections`, {}, alice.auth);
+            expect(listed.status).toBe(200);
+            expect(typeof listed.body.serverTime).toBe("number");
+            // FR-8: 국가 필터가 꺼져 있으면 국가를 보이지 않는다(/api/security/denials 와 같은 규칙).
+            expect(listed.body).toMatchObject({countryLookup: false, truncated: false});
+            expect(listed.body.connections).toEqual([{...connection, country: null}]);
+            expect(runtime.tunnelConnections).toHaveBeenCalledWith(port);
+
+            // FR-8: 국가 필터가 켜져 있으면 연결마다 국가를 싣는다. 서버가 잘라 준 목록이면 truncated 를 그대로 알린다(M4).
+            AdmissionController.instance.configureGeo({mode: "deny", countries: ["US"], applyToAdmin: false, unknownPolicy: "allow"});
+            runtime.tunnelConnections.mockReturnValue({connections: [{...connection, remoteAddress: "8.8.8.8"}], truncated: true, total: 812});
+            const shown = await request("GET", `/api/tunneling/${port}/connections`, {}, alice.auth);
+            // M-1: 화면 요약은 잘라 준 목록이 아니라 서버의 전체 연결 수로 센다.
+            expect(shown.body).toMatchObject({countryLookup: true, truncated: true, total: 812});
+            expect(shown.body.connections).toEqual([{...connection, remoteAddress: "8.8.8.8", country: "US"}]);
+            AdmissionController.instance.configureGeo({mode: "off", countries: [], applyToAdmin: false, unknownPolicy: "allow"});
+
+            // bob 은 같은 그룹 공유(group_read)로 볼 수만 있다. carol 은 볼 수 없다.
+            expect((await request("GET", `/api/tunneling/${port}/connections`, {}, bob.auth))).toMatchObject({status: 403, body: {code: "read_only"}});
+            expect((await request("GET", `/api/tunneling/${port}/connections`, {}, carol.auth)).status).toBe(404);
+            expect((await request("DELETE", `/api/tunneling/${port}/connections/7`, {}, bob.auth)).status).toBe(403);
+
+            sink.events.length = 0;
+            runtime.closeTunnelConnection.mockResolvedValueOnce({result: "closed", remoteAddress: "203.0.113.7"});
+            const closed = await request("DELETE", `/api/tunneling/${port}/connections/7`, {}, alice.auth);
+            expect(closed).toMatchObject({status: 200, body: {closed: true}});
+            expect(runtime.closeTunnelConnection).toHaveBeenLastCalledWith(port, 7);
+            const audit = sink.events.find((event: any) => event.type === "tunnel_connection_closed");
+            expect(audit).toMatchObject({detail: {port, id: 7, closed: true, remoteAddress: "203.0.113.7"}});
+
+            // M3: 이미 끝난 연결은 끊은 것이 아니다. 감사 detail 의 closed:false 로 구분한다.
+            sink.events.length = 0;
+            runtime.closeTunnelConnection.mockResolvedValueOnce({result: "gone"});
+            expect(await request("DELETE", `/api/tunneling/${port}/connections/7`, {}, alice.auth)).toMatchObject({status: 200, body: {closed: false}});
+            const goneAudit = sink.events.find((event: any) => event.type === "tunnel_connection_closed") as any;
+            expect(goneAudit.detail).toEqual({port, id: 7, closed: false});
+            runtime.closeTunnelConnection.mockResolvedValueOnce({result: "other-port"});
+            expect(await request("DELETE", `/api/tunneling/${port}/connections/9`, {}, alice.auth))
+                .toMatchObject({status: 404, body: {code: "connection_not_found"}});
+            expect((await request("DELETE", `/api/tunneling/${port}/connections/abc`, {}, alice.auth)).status).toBe(400);
+        } finally {
+            runtime.tunnelConnections.mockReturnValue({connections: [], truncated: false, total: 0});
+            AdmissionController.instance.configureGeo({mode: "off", countries: [], applyToAdmin: false, unknownPolicy: "allow"});
+            await request("DELETE", "/api/tunnelingOption", {forwardPort: port,
+                expectedRevision: ServerOptionStore.instance.revisionState.currentRevision}, superuser);
+        }
+    });
+
+    // 이슈 369 FR-6·AC-4 — 상태 응답의 allowedClients 는 그 터널에 걸린 클라이언트만, 표시 이름(없으면 id)과 연결 여부를 담는다.
+    it("이슈 369 상태 응답은 그 터널의 허용 클라이언트만 이름·연결 여부와 함께 준다", async () => {
+        const port = 20081;
+        expect((await request("POST", "/api/tunnelingOption", tunnelBody(port), alice.auth)).status).toBe(200);
+        try {
+            runtime.isClientConnected.mockImplementation((clientId: string) => clientId === TRUSTED_CLIENT);
+            const response = await request("GET", "/api/externalServerStatuses", {}, alice.auth);
+            const status = response.body.statuses.find((entry: any) => entry.port === port);
+            expect(status.allowedClients).toEqual([{clientId: TRUSTED_CLIENT, name: TRUSTED_CLIENT, connected: true}]);
+            // 신뢰 클라이언트를 고르지 않은 옛 터널은 모든 클라이언트다(빈 목록).
+            const migrated = (await request("GET", "/api/externalServerStatuses", {}, superuser)).body.statuses.find((entry: any) => entry.port === MIGRATED_PORT);
+            expect(migrated.allowedClients).toEqual([]);
+        } finally {
+            runtime.isClientConnected.mockReset();
+            runtime.isClientConnected.mockReturnValue(false);
+            await request("DELETE", "/api/tunnelingOption", {forwardPort: port,
+                expectedRevision: ServerOptionStore.instance.revisionState.currentRevision}, superuser);
+        }
     });
 
     // #170 — 본문 포트가 문자열이면 설정 행은 == 비교로 지워지지만 런타임 리스너는 키가 달라 남는다.
@@ -242,11 +429,12 @@ describe("rbac-tunnel-ownership", () => {
         expect({status: withCert.status, code: withCert.body.code}).toEqual({status: 403, code: "forbidden"});
     });
 
+    // 이슈 367 FR-1·AC-6: 목록 응답의 owner 에 사용자의 표시 이름(displayName)이 있다(아이디와 다른 값).
     it("목록은 소유와 가시성으로 걸러지고 owner·editable 이 붙는다", async () => {
         const forAlice = await listTunnels(alice.auth);
         expect(forAlice.map((option: any) => option.forwardPort).sort()).toEqual([20010, 20011]);
         for(const option of forAlice) {
-            expect(option.owner).toEqual({id: alice.id, username: "alice"});
+            expect(option.owner).toEqual({id: alice.id, username: "alice", displayName: ALICE_DISPLAY_NAME});
             expect(option.editable).toBe(true);
             // 저장된 ownerId 도 응답에 그대로 남아야 한다. owner 는 그것을 풀어 보인 것이지 대체가 아니다.
             expect(option.ownerId).toBe(alice.id);
@@ -389,7 +577,7 @@ describe("rbac-tunnel-ownership", () => {
         const reassigned = await request("PUT", "/api/tunnelingOption/20011/owner",
             {ownerId: carol.id, expectedRevision: ServerOptionStore.instance.revisionState.currentRevision}, superuser);
         expect(reassigned.status).toBe(200);
-        expect(reassigned.body.owner).toEqual({id: carol.id, username: "carol"});
+        expect(reassigned.body.owner).toEqual({id: carol.id, username: "carol", displayName: "carol"});
 
         expect((await listTunnels(alice.auth)).map((option: any) => option.forwardPort)).toEqual([20020]);
         expect((await listTunnels(carol.auth)).map((option: any) => option.forwardPort)).toEqual([20011]);
@@ -465,7 +653,7 @@ describe("rbac-tunnel-ownership", () => {
     it("목록이 실어 준 owner·editable 을 그대로 되돌려 보내도 설정 파일에 남지 않는다", async () => {
         // 관리자 UI 는 받은 행을 그대로 PUT 한다. 응답 전용 필드가 server.yaml 에 섞여 들어가면 안 된다.
         const row = (await listTunnels(alice.auth)).find((option: any) => option.forwardPort === 20020);
-        expect(row.owner).toEqual({id: alice.id, username: "alice"});
+        expect(row.owner).toEqual({id: alice.id, username: "alice", displayName: ALICE_DISPLAY_NAME});
         expect(row.editable).toBe(true);
 
         const echoed = await request("POST", "/api/tunnelingOption",

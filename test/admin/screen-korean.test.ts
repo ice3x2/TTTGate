@@ -136,22 +136,22 @@ test("AC-1 ko-KR 에서 로그인부터 모든 화면의 제목과 버튼이 한
     await expectKorean(page, "#/tunnels");
     const time = page.locator('li[data-port="20001"] .tunnel-time');
     await time.waitFor({state: "visible", timeout: UI_WAIT_MS});
-    expect(await time.textContent()).toMatch(/^\d+분 \d{2}초 남음 · (\d+월 \d+일 )?\d{2}:\d{2} 종료$/);
+    expect(await time.textContent()).toMatch(/^\d+분 \d{2}초 남음 · (\d+월 \d+일 )?\d{2}:\d{2}에 꺼짐$/);
 
     // 드로어
     await button(page, "메뉴 열기").click();
     const drawer = page.locator('[role=dialog][aria-label="메뉴"]');
     await drawer.waitFor({state: "visible", timeout: UI_WAIT_MS});
     expect(await drawer.locator(".drawer-item").allTextContents())
-        .toEqual(["터널", "상태", "서버 설정", "신뢰 클라이언트", "사용자", "그룹", "보안", "감사 로그", "세션", "내 계정"]);
+        .toEqual(["터널", "서버 상태", "서버 설정", "신뢰 클라이언트", "사용자", "그룹", "보안", "감사 로그", "세션", "내 계정"]);
     expect(await drawer.getByRole("button", {name: "로그아웃", exact: true}).count()).toBe(1);
     await expectKorean(page, "drawer");
     await page.keyboard.press("Escape");
     await drawer.waitFor({state: "detached", timeout: UI_WAIT_MS});
 
-    // 상태와 시스템 정보 팝업
-    await open(page, "#/status", "상태");
-    await button(page, "정보").click();
+    // 서버 상태와 시스템 정보 팝업. 이슈 370 AC-3: 메뉴와 화면 제목은 "서버 상태"다.
+    await open(page, "#/status", "서버 상태");
+    await button(page, "시스템 정보").click();
     const sysinfo = page.getByRole("dialog", {name: "시스템 정보"});
     await sysinfo.waitFor({state: "visible", timeout: UI_WAIT_MS});
     expect(await sysinfo.locator("h3").allTextContents()).toEqual(["하드웨어 정보", "OS 정보", "네트워크"]);
@@ -163,11 +163,19 @@ test("AC-1 ko-KR 에서 로그인부터 모든 화면의 제목과 버튼이 한
 
     // 터널 편집
     await open(page, "#/tunnels/20001", "터널 20001");
-    await visible(page, "적용하고 다시 시작");
-    await visible(page, "멈추고 삭제");
-    await visible(page, "소유자 변경");
+    await visible(page, "저장하고 다시 시작");
+    await visible(page, "터널 삭제");
+    await visible(page, "소유자 바꾸기");
+    // 이슈 370 AC-3: 터널 편집 화면의 상태 카드 제목은 메뉴 이름("서버 상태")이 아니라 "상태"다.
+    const statusCard = page.locator("#tunnel-status-area .card-label");
+    await statusCard.waitFor({state: "visible", timeout: UI_WAIT_MS});
+    expect(await statusCard.textContent()).toBe("상태");
     await open(page, "#/tunnels/new", "새 터널");
-    await visible(page, "시작");
+    await visible(page, "터널 만들기");
+    // 이슈 370 AC-1·AC-5: 카드 이름은 "연결 횟수 제한"이고, 범위 밖 값의 오류는 번역한 범위 문구다.
+    expect(await page.locator(".card-label", {hasText: /^연결 횟수 제한$/}).count()).toBe(1);
+    await page.locator("#input-rate-window").fill("0");
+    await page.getByText("1~3,600 사이로 입력하세요.", {exact: true}).waitFor({state: "visible", timeout: UI_WAIT_MS});
 
     // 내 계정·비밀번호 변경·세션·감사
     await open(page, "#/me", "내 계정");
@@ -200,7 +208,7 @@ test("AC-1 ko-KR 에서 로그인부터 모든 화면의 제목과 버튼이 한
     await open(page, "#/security", "보안");
     await visible(page, "차단");
     await open(page, "#/clients", "신뢰 클라이언트");
-    await visible(page, "클라이언트 추가");
+    await visible(page, "신뢰 클라이언트 추가");
     await open(page, "#/server", "서버 설정");
     await visible(page, "적용");
     await visible(page, "원래대로");
@@ -234,8 +242,8 @@ test("AC-4 ko-KR 에서 port_not_allowed 는 한국어 문구, 번역 맵에 없
     await page.locator("#input-external-port").fill("25000");
     await page.locator("#input-destination-host").fill("127.0.0.1");
     await page.locator("#input-destination-port").fill("9000");
-    await button(page, "시작").click();
-    await page.getByText("터널 설정을 적용하지 못했습니다: 이 포트는 그룹에 허용된 범위 밖에 있습니다.", {exact: true})
+    await button(page, "터널 만들기").click();
+    await page.getByText("터널을 저장하지 못했습니다: 이 포트는 그룹에 허용된 범위 밖에 있습니다.", {exact: true})
         .waitFor({state: "visible", timeout: UI_WAIT_MS});
 
     // 서버가 화면보다 새 버전이라 화면이 모르는 code 를 보낸 경우다.
@@ -243,8 +251,8 @@ test("AC-4 ko-KR 에서 port_not_allowed 는 한국어 문구, 번역 맵에 없
         if(route.request().method() !== "POST") return route.fallback();
         await fulfillJson(route, 422, {success: false, code: "brand_new_code", message: "The server said no."});
     });
-    await button(page, "시작").click();
-    await page.getByText("터널 설정을 적용하지 못했습니다: The server said no.", {exact: true}).waitFor({state: "visible", timeout: UI_WAIT_MS});
+    await button(page, "터널 만들기").click();
+    await page.getByText("터널을 저장하지 못했습니다: The server said no.", {exact: true}).waitFor({state: "visible", timeout: UI_WAIT_MS});
 }));
 
 test("AC-8 ko-KR 감사 화면은 이벤트 이름을 한국어로, 코드 값을 함께 보이고 모르는 코드는 코드 값만 보인다", () =>

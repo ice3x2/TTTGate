@@ -21,7 +21,9 @@ type Parsed<T> = {ok: true} & T | {ok: false; message: string; values?: Record<s
 export type AddBlocklistRequest = {address?: unknown; port?: unknown; note?: unknown};
 export type AddBlocklistResult =
     {ok: true; entry: BlocklistEntry; entries: BlocklistEntry[]; widenedFrom?: number} |
-    {ok: false; code: 'invalid' | 'duplicate' | 'full'; message: string; values?: Record<string, unknown>};
+    {ok: false; code: 'invalid' | 'full'; message: string; values?: Record<string, unknown>} |
+    /** existing 은 같은 주소의 이미 있는 항목이다. 그 항목에 걸리는 연결만 끊고 센다(이슈 369 L-1). */
+    {ok: false; code: 'duplicate'; message: string; values?: Record<string, unknown>; existing: BlocklistEntry};
 
 /**
  * 주소나 CIDR 대역을 정규화한다. IPv4-mapped 주소와 /96 이상의 그 대역은 표기(점·16진수)와 무관하게 IPv4 로,
@@ -82,7 +84,8 @@ export function addBlocklistEntry(entries: readonly BlocklistEntry[], request: A
         }
         // 적용 범위 문구(all tunnels·port N)는 영어이므로 값으로 보내지 않고 port 를 보낸다(모든 터널이면 null).
         // 화면은 null 값을 문구에 끼우지 않으므로(serverError.ts 의 valuesOf) 지금은 이 code 의 번역 없이 서버 문구를 그대로 보인다.
-        return {ok: false, code: 'duplicate', message: `${address.address} is already blocked on ${scopeOf(existing.port)}`, values: {address: address.address, port: existing.port}};
+        return {ok: false, code: 'duplicate', message: `${address.address} is already blocked on ${scopeOf(existing.port)}`, values: {address: address.address, port: existing.port},
+            existing};
     }
     if(entries.length >= MAX_BLOCKLIST_ENTRIES) {
         return {ok: false, code: 'full', message: `the blocklist already has ${MAX_BLOCKLIST_ENTRIES} entries`, values: {max: MAX_BLOCKLIST_ENTRIES}};
@@ -233,6 +236,16 @@ export class IpBlocklist {
         if(type === undefined) return false;
         return rules.all[type].check(address, type) || (rules.byPort.get(port)?.[type].check(address, type) ?? false);
     }
+}
+
+/**
+ * 이슈 369 L-1: 항목 하나에 걸리는지 보는 판정 함수. 목록의 다른 항목은 보지 않는다.
+ * 차단을 더한 뒤 그 항목에 걸리는 연결만 끊고 세는 데 쓴다. 목록 전체로 세면 다른 항목에 걸리는 연결까지 세어 수가 부푼다.
+ */
+export function blockedBy(entry: BlocklistEntry): (port: number, ip: string) => boolean {
+    const list = new IpBlocklist();
+    list.configure([entry]);
+    return (port, ip) => list.isBlocked(port, ip);
 }
 
 function familyOf(address: string): Family | undefined {

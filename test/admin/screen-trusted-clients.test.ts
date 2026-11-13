@@ -167,7 +167,7 @@ test("#313 the code modal chooses the expiry, including no expiry", () => withAp
     await modal.locator("#enroll-never-warning").waitFor({state: "visible"});
     // 경고는 README 와 같이 코드가 무효가 되는 경우를 모두 알린다.
     const warning = await modal.locator("#enroll-never-warning").textContent();
-    for(const reason of ["used", "new code is issued", "new secret", "client is deleted", "control port settings change", "server restarts"]) expect(warning).toContain(reason);
+    for(const reason of ["used", "new code is issued", "new secret", "client is deleted", "tunnel server settings (port, TLS, key, etc.) change", "server restarts"]) expect(warning).toContain(reason);
     await page.evaluate(() => { const real = Date.now; Date.now = () => real() + 365 * 24 * 3600_000; });
     // 화면은 1초마다 now 를 갱신한다. 그 사이 "Expired" 로 바뀌지 않는지 갱신을 두 번 넘겨 본다.
     await page.waitForFunction(() => { const w = window as any; w.__ticks = (w.__ticks ?? 0) + 1; return w.__ticks > 2; }, undefined, {polling: 1000, timeout: 10_000});

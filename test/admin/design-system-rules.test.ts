@@ -220,3 +220,30 @@ describe("R8: qrcode 의존성과 import 위치", () => {
         expect(typeof pkg.devDependencies?.["@types/qrcode"]).toBe("string");
     });
 });
+
+// 이슈 365 AC-3 — secondary 를 더해도 공용 버튼의 기본값은 ghost 이고, 대화 상자의 "취소"는 모양을 고르지 않아 ghost 로 그려진다.
+describe("R9: 대화 상자 취소 버튼의 모양", () => {
+    const screensDir = path.join(root, "admin/src/screens");
+    const walk = (dir: string): string[] => fs.readdirSync(dir, {withFileTypes: true}).flatMap((entry) => {
+        const full = path.join(dir, entry.name);
+        if(entry.isDirectory()) return walk(full);
+        return entry.name.endsWith(".svelte") ? [full] : [];
+    });
+    const cancelButtons = walk(screensDir).flatMap((file) =>
+        (fs.readFileSync(file, "utf8").match(/<Button\b.*?>\{t\('common\.cancel'\)\}<\/Button>/g) ?? [])
+            .map((tag) => [path.relative(root, file).split(path.sep).join("/"), tag] as const));
+
+    test("Button 의 기본 variant 는 ghost 다", () => {
+        const button = fs.readFileSync(path.join(root, "admin/src/ui/Button.svelte"), "utf8");
+        expect(button).toMatch(/variant = 'ghost'/);
+    });
+
+    test("취소 버튼이 검사 대상에 들어 있다", () => {
+        expect(cancelButtons.length).toBeGreaterThan(10);
+    });
+
+    test.each(cancelButtons)("%s 의 취소 버튼은 variant 를 고르지 않는다", (_file, tag) => {
+        expect(tag).not.toMatch(/variant=/);
+    });
+});
+

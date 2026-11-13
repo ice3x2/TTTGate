@@ -8,6 +8,7 @@
         disabled = false,
         invalid = false,
         class: className = '',
+        ariaLabel,
         oninput,
     }: {
         value?: number | null;
@@ -18,12 +19,14 @@
         disabled?: boolean;
         invalid?: boolean;
         class?: string;
+        /** 이슈 365 FR-9: 라벨 요소가 없는 칸(범위 줄의 시작·끝)의 보조 기술용 이름. */
+        ariaLabel?: string;
         oninput?: (value: number | null) => void;
     } = $props();
 </script>
 
 <input type="number" class="input mono {invalid ? 'err' : ''} {className}" {id} {min} {max} {step} {disabled}
-    aria-invalid={invalid || undefined} bind:value oninput={() => oninput?.(value)}>
+    aria-invalid={invalid || undefined} aria-label={ariaLabel} bind:value oninput={() => oninput?.(value)}>
 
 <style>
     .input{

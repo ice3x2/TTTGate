@@ -151,4 +151,41 @@ describe("tunnel-lifetime-activator", () => {
         expect(listed.active).toBe(true);
         expect("activatedBy" in listed).toBe(false);
     });
+    // 이슈 369 M1 — 켜진 시각(activatedAt)은 꺼짐→켜짐일 때만 잡힌다. 저장(리스너 재시작)·실패 복원·기동·상한 재적용으로 다시 잡히지 않는다.
+    it("이슈 369 켜진 터널을 저장해 리스너를 다시 띄워도 켜진 시각이 그대로다", async () => {
+        expect(await server!.activeExternalPortServer(port, 0, SHORT)).toBe(true);
+        const activatedAt = status().activatedAt;
+        expect(activatedAt).toBeDefined();
+        await tick();
+        await save({destinationPort: 10});
+        expect(status()).toMatchObject({active: true, activatedAt});
+    });
+
+    it("이슈 369 적용 실패를 되돌릴 때도 켜진 시각을 이어받는다", async () => {
+        expect(await server!.activeExternalPortServer(port, 0, SHORT)).toBe(true);
+        const activatedAt = status().activatedAt;
+        const runtime = server!.captureRuntimeState();
+        await tick();
+        await save({destinationPort: 10});
+        expect(await server!.restoreRuntimeState(runtime)).toEqual([]);
+        expect(status()).toMatchObject({active: true, activatedAt});
+    });
+
+    it("이슈 369 켜진 채 기동한 터널은 기동 시각이 켜진 시각이고, 상한을 다시 걸어도 그대로다", async () => {
+        await server!.close();
+        // 상한이 없으면 기동 때 active() 를 부르지 않는다(activateNewListener). 그래도 켜진 시각이 있어야 한다.
+        expect(IdentityStore.instance.updateGroup("g_owner", {attributes: {max_tunnel_duration_ms: 0}}).success).toBe(true);
+        expect(ServerOptionStore.instance.updateTunnelingOption({...stored(), inactiveOnStartup: false})).toBe(true);
+        const before = Date.now();
+        server = TTTServer.create(ServerOptionStore.instance.serverOption);
+        await server.start();
+        const activatedAt = status().activatedAt!;
+        expect(status().active).toBe(true);
+        expect(activatedAt).toBeGreaterThanOrEqual(before);
+        await tick();
+        expect(IdentityStore.instance.updateGroup("g_owner", {attributes: {max_tunnel_duration_ms: HOUR_MS}}).success).toBe(true);
+        server.reapplyActiveCaps();
+        await tick();
+        expect(status()).toMatchObject({active: true, activatedAt});
+    });
 });

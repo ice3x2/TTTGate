@@ -135,7 +135,7 @@ describe("FR-2 ko.ts 와 en.ts 의 키", () => {
     });
 
     test("켜짐 상태는 Online 대신 한국어로 말한다", () => {
-        expect(ko["tunnelEdit.startupHint"]).toBe("서버가 시작할 때, 터널을 만들 때, 켜져 있지 않은 터널을 저장할 때 적용됩니다. 켜진 터널을 저장하면 켜짐 상태와 타이머를 그대로 둡니다.");
+        expect(ko["tunnelEdit.startupHint"]).toBe("서버가 시작할 때, 터널을 만들 때, 포트를 열지 못한 터널을 저장할 때 씁니다. 그 밖에는 저장해도 켜짐·꺼짐 상태와 남은 시간이 그대로입니다. 켜진 터널은 저장하면 지금 연결이 끊길 수 있습니다.");
     });
 
     test("시스템 정보의 내부 인터페이스 여부는 영어 화면에서 지금처럼 true·false, 한국어 화면에서 예·아니요다", () => {
@@ -175,5 +175,34 @@ describe("이슈 349 FR-7 Translator.list — 값 목록을 그 언어의 목록
         expect(translator("en").list([8080, 8443])).toBe("8080 and 8443");
         expect(translator("ko").list([8080])).toBe("8080");
         expect(translator("en").list([])).toBe("");
+    });
+});
+
+// 이슈 365 — 포트 범위 버튼과 허용 범위 칩의 문구.
+describe("이슈 365 문구", () => {
+    test("허용 범위 칩의 묶음 이름·안내·잠금 이유", () => {
+        expect([ko["tunnel.rangeChipsLabel"], en["tunnel.rangeChipsLabel"]]).toEqual(["허용 범위에서 포트 고르기", "Choose a port from an allowed range"]);
+        expect([ko["tunnel.rangeChipsNote"], en["tunnel.rangeChipsNote"]])
+            .toEqual(["범위를 누르면 목록에 있는 터널이 쓰지 않는 첫 포트를 넣습니다.", "Choose a range to fill in the first port no tunnel in your list uses."]);
+        expect(translator("ko").t("tunnel.useFreePort", {range: "20000–20100"})).toBe("20000–20100 범위의 빈 포트 넣기");
+        expect(ko["tunnel.rangeFull"]).toBe("이 범위의 포트를 모두 쓰고 있습니다.");
+    });
+
+    test("범위 줄과 헤더 줄의 버튼 이름", () => {
+        expect([ko["group.rangeStart"], ko["group.rangeEnd"], ko["group.addRange"]]).toEqual(["시작 포트", "끝 포트", "범위 추가"]);
+        expect(translator("ko").t("group.deleteRange", {from: 20000, to: 20100})).toBe("20000–20100 범위 삭제");
+        expect([ko["group.deleteRangeTitle"], en["group.deleteRangeTitle"]]).toEqual(["범위 삭제", "Delete range"]);
+        expect([ko["header.add"], ko["header.remove"], en["header.remove"]]).toEqual(["헤더 추가", "헤더 삭제", "Remove header"]);
+    });
+});
+
+
+describe("이슈 369 연결 버튼의 보조 기술용 이름", () => {
+    test("연결 수에 따라 단수·복수를 고른다", () => {
+        const english = translator("en");
+        const korean = translator("ko");
+        expect(english.plural("tunnel.connectionsOpen", 1, {title: "ssh-office"})).toBe("Show the 1 connection to ssh-office");
+        expect(english.plural("tunnel.connectionsOpen", 2, {title: "ssh-office"})).toBe("Show the 2 connections to ssh-office");
+        expect(korean.plural("tunnel.connectionsOpen", 1, {title: "ssh-office"})).toBe("ssh-office의 연결 1개 보기");
     });
 });

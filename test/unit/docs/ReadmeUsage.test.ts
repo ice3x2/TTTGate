@@ -234,4 +234,30 @@ describe("README in English and Korean (#310)", () => {
         const missingCommands = commandLines.filter((command) => !rows.some((row) => row.includes(`\`${command}`)));
         expect(missingCommands).toEqual([]);
     });
+
+    // 이슈 369: 목록 줄의 가동 정보·연결 창(끊기·차단)과, 차단을 더하면 기존 연결도 끊긴다는 운영 변화를 적는다.
+    it.each([["English", () => english, /\*\*Connections:\*\*[^\n]*Disconnect[^\n]*Block/, /new block also ends the connections that are already open/],
+        ["한국어", () => korean, /\*\*연결:\*\*[^\n]*끊기[^\n]*차단/, /차단을 더하면 이미 들어와 있는 연결도 끊는다/]])(
+        "documents the connection list on the tunnel list in %s (issue 369)", (_label, section, bullet, blocking) => {
+        expect(section()).toMatch(bullet);
+        expect(section()).toMatch(blocking);
+    });
+
+    // 이슈 369: 연결 수는 상태 줄이 아니라 가동 정보 줄의 연결 버튼이 보인다. 상태 줄 설명에 연결 수를 두지 않는다.
+    it.each([["English", () => english, /^- \*\*Status line:\*\*[^\n]*$/m], ["한국어", () => korean, /^- \*\*상태 줄:\*\*[^\n]*$/m]])(
+        "does not list the connection count on the status line in %s (issue 369)", (_label, section, statusLine) => {
+        const line = section().match(statusLine)?.[0] ?? "";
+        expect(line.length).toBeGreaterThan(0);
+        expect(line).not.toContain("N connections");
+    });
+});
+
+// 설계 최종 대조 N4 — README 의 터널 편집 상태 영역 설명은 지금 화면 이름(이슈 368: "Turns off in" / "자동 꺼짐까지")을 쓴다.
+describe("README 의 켜 둘 시간 화면 이름", () => {
+    const readme = fs.readFileSync(Path.join(__dirname, "../../../README.md"), "utf8");
+    test("옛 이름 Time limit 타이머를 쓰지 않고 지금 이름을 쓴다", () => {
+        expect(readme).not.toMatch(/\*\*Time limit\*\* (timer|타이머)/);
+        expect(readme).toContain("**Turns off in**");
+        expect(readme).toContain("**자동 꺼짐까지**");
+    });
 });
