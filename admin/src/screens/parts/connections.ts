@@ -1,6 +1,7 @@
 import type {TunnelingStatus} from '../../controller/Options';
 import {i18n, type Translator} from '../../i18n';
 import {byteToUnit, startupTime} from './units';
+import {errorMessageOf} from '../../i18n/serverError';
 
 // 이슈 369: 터널 목록 줄의 가동 정보·허용 클라이언트와 연결 창의 줄 순서(순수 함수). 화면은 그리기만 한다.
 
@@ -186,4 +187,12 @@ export function blockBodyText(input: {count: number; scope: 'tunnel' | 'all'}, t
 /** 차단 뒤 알림. 끊은 연결이 없으면 수를 말하지 않는다. */
 export function blockedDoneText(address: string, closed: number, tr: Translator = i18n()): string {
     return closed > 0 ? tr.plural('connections.blockedDone', closed, {address}) : tr.t('connections.blockedDoneNone', {address});
+}
+
+/**
+ * 차단이 실패했을 때의 알림. 차단 목록이 가득 찼으면(code full) 보안 화면과 같은 안내(다른 주소의 차단을 풀라)를 쓴다.
+ * 그 밖의 실패는 서버 오류 문구다.
+ */
+export function blockFailureText(failure: {code?: unknown; message?: string; [field: string]: unknown}, tr: Translator = i18n()): string {
+    return failure.code === 'full' ? tr.t('security.blocklistFull') : errorMessageOf(failure, undefined, tr);
 }

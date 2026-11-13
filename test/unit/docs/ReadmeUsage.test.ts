@@ -242,4 +242,12 @@ describe("README in English and Korean (#310)", () => {
         expect(section()).toMatch(bullet);
         expect(section()).toMatch(blocking);
     });
+
+    // 이슈 369: 연결 수는 상태 줄이 아니라 가동 정보 줄의 연결 버튼이 보인다. 상태 줄 설명에 연결 수를 두지 않는다.
+    it.each([["English", () => english, /^- \*\*Status line:\*\*[^\n]*$/m], ["한국어", () => korean, /^- \*\*상태 줄:\*\*[^\n]*$/m]])(
+        "does not list the connection count on the status line in %s (issue 369)", (_label, section, statusLine) => {
+        const line = section().match(statusLine)?.[0] ?? "";
+        expect(line.length).toBeGreaterThan(0);
+        expect(line).not.toContain("N connections");
+    });
 });

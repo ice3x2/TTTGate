@@ -196,3 +196,13 @@ describe("이슈 365 문구", () => {
     });
 });
 
+
+describe("이슈 369 연결 버튼의 보조 기술용 이름", () => {
+    test("연결 수에 따라 단수·복수를 고른다", () => {
+        const english = translator("en");
+        const korean = translator("ko");
+        expect(english.plural("tunnel.connectionsOpen", 1, {title: "ssh-office"})).toBe("Show the 1 connection to ssh-office");
+        expect(english.plural("tunnel.connectionsOpen", 2, {title: "ssh-office"})).toBe("Show the 2 connections to ssh-office");
+        expect(korean.plural("tunnel.connectionsOpen", 1, {title: "ssh-office"})).toBe("ssh-office의 연결 1개 보기");
+    });
+});

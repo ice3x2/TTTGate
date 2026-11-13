@@ -1,5 +1,5 @@
 import type {TunnelingStatus} from "../../admin/src/controller/Options";
-import {addedConnections, announcement, blockBodyText, blockedDoneText, clientsView, closingFailure, closingFailureText, connectionsSupported, duplicateBlockText,
+import {addedConnections, announcement, blockBodyText, blockedDoneText, blockFailureText, clientsView, closingFailure, closingFailureText, connectionsSupported, duplicateBlockText,
     duplicateCoversTunnel,
     mergeConnections, MAX_KEPT_ENDED, statsView, summaryCount, type ConnectionRow, type FetchedConnection} from "../../admin/src/screens/parts/connections";
 import {isTopModal, closeModal, openModal} from "../../admin/src/ui/modalStack";
@@ -265,5 +265,15 @@ describe("modalStack (설계 반영: 겹친 창의 Esc)", () => {
         expect(isTopModal(lower)).toBe(true);
         closeModal(lower);
         expect(isTopModal(lower)).toBe(false);
+    });
+});
+
+describe("blockFailureText (설계 예외 표: 차단 목록이 가득 참)", () => {
+    test("가득 찼으면(code full) 보안 화면과 같은 안내 문구를 쓴다", () => {
+        expect(blockFailureText({code: "full", max: 1000}, en)).toBe("The blocklist is full. Unblock an address to add another.");
+        expect(blockFailureText({code: "full", max: 1000}, ko)).toBe("차단 목록이 가득 찼습니다. 주소를 더하려면 다른 주소의 차단을 푸세요.");
+    });
+    test("그 밖의 실패는 서버 오류 문구를 그대로 쓴다", () => {
+        expect(blockFailureText({code: "unknown_code", message: "server said no"}, en)).toBe("server said no");
     });
 });

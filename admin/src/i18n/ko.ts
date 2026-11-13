@@ -112,6 +112,8 @@ export const ko: Messages = {
     'tunnel.clientWithState': '{name} ({state})',
     'tunnel.connectionsButton': '연결 {count}',
     'tunnel.connectionsOpen': '{title}의 연결 {count}개 보기',
+    'tunnel.connectionsOpen_one': '{title}의 연결 {count}개 보기',
+    'tunnel.connectionsOpen_other': '{title}의 연결 {count}개 보기',
     'tunnel.connections_one': '연결 {count}개',
     'tunnel.connections_other': '연결 {count}개',
     'tunnel.applyFailed': '터널을 저장하지 못했습니다: {reason}',

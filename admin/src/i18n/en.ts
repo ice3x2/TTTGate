@@ -61,6 +61,8 @@ export const en = {
     'tunnel.clientWithState': '{name} ({state})',
     'tunnel.connectionsButton': 'Connections {count}',
     'tunnel.connectionsOpen': 'Show the {count} connections to {title}',
+    'tunnel.connectionsOpen_one': 'Show the {count} connection to {title}',
+    'tunnel.connectionsOpen_other': 'Show the {count} connections to {title}',
     'tunnel.connections_one': '{count} connection',
     'tunnel.connections_other': '{count} connections',
     'tunnel.applyFailed': 'Fail to apply tunneling option: {reason}',
