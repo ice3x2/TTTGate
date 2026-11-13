@@ -251,3 +251,13 @@ describe("README in English and Korean (#310)", () => {
         expect(line).not.toContain("N connections");
     });
 });
+
+// 설계 최종 대조 N4 — README 의 터널 편집 상태 영역 설명은 지금 화면 이름(이슈 368: "Turns off in" / "자동 꺼짐까지")을 쓴다.
+describe("README 의 켜 둘 시간 화면 이름", () => {
+    const readme = fs.readFileSync(Path.join(__dirname, "../../../README.md"), "utf8");
+    test("옛 이름 Time limit 타이머를 쓰지 않고 지금 이름을 쓴다", () => {
+        expect(readme).not.toMatch(/\*\*Time limit\*\* (timer|타이머)/);
+        expect(readme).toContain("**Turns off in**");
+        expect(readme).toContain("**자동 꺼짐까지**");
+    });
+});
