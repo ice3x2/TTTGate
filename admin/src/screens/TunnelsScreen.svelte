@@ -268,7 +268,7 @@
                         <span class="tunnel-stats">
                             <!-- 옛 서버(상태 응답에 allowedClients 없음)는 연결 목록 API 가 없으므로 연결 수를 글자로 둔다(스펙 §8). -->
                             {#if option.editable !== false && connectionsSupported(statuses[option.forwardPort])}
-                                <button type="button" class="tunnel-conn" aria-label={t('tunnel.connectionsOpen', {count: stats.sessions, title})}
+                                <button type="button" class="tunnel-conn" aria-label={plural('tunnel.connectionsOpen', stats.sessions, {title})}
                                     onclick={() => openConnections(option)}>{t('tunnel.connectionsButton', {count: stats.sessions})}<span aria-hidden="true">›</span></button>
                             {:else}
                                 <span class="tunnel-conn-text">{t('tunnel.connectionsButton', {count: stats.sessions})}</span>
@@ -281,7 +281,7 @@
                         <span class="tunnel-clients" title={clients.title}>
                             <span class="clients-label" aria-hidden="true">{clients.label}:</span>
                             {#each clients.items as item, index (index)}
-                                <span aria-hidden="true" class="client" class:offline={item.connected === false}>{#if item.connected !== undefined}<span class="dot" aria-hidden="true">{item.connected ? '●' : '○'}</span>{/if}{item.name}</span>
+                                <span aria-hidden="true" class="client" class:offline={item.connected === false}>{#if item.connected !== undefined}<span class="dot" aria-hidden="true">{item.connected ? '●' : '○'}</span>{/if}{item.name}{#if index < clients.items.length - 1},{/if}</span>
                             {/each}
                             {#if clients.more}<span class="client more" aria-hidden="true">{clients.more}</span>{/if}
                             <span class="sr-only">{clients.label}: {clients.title}</span>
@@ -377,11 +377,16 @@
 
 <style>
     /* 이슈 369: 가동 정보·연결 버튼·허용 클라이언트 줄. 좁은 화면에서는 줄을 바꾼다. */
-    .tunnel-meta-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); min-width: 0; font-size: var(--fs-xs); color: var(--ink-2); }
+    /* 설계 ④ .tmeta: 스위치 오른쪽에 붙지 않고 그 아래 자기 줄을 쓰며, 왼쪽을 터널 이름에 맞춘다(IP 줄과 같다). */
+    .tunnel-meta-row { flex: 1 0 100%; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); min-width: 0;
+        padding: 0 0 var(--s-3) var(--s-4); font-size: var(--fs-xs); color: var(--ink-2); }
     .tunnel-stats { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); min-width: 0; }
-    .tunnel-conn { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 var(--s-3); border: 1px solid var(--line-2);
-        border-radius: 999px; background: var(--bg-2); color: var(--ink-0); font: inherit; font-weight: 600; cursor: pointer; }
-    .tunnel-conn:hover { background: var(--bg-3); }
+    /* 설계 ④ .pill: 연결 버튼은 IP 제한 토글과 같은 알약 모양(보이는 높이 32px, 글자 fs-sm)이고, 누르는 영역만 ::before 로 44px 까지 넓힌다. */
+    .tunnel-conn, .tunnel-ip-toggle { min-height: 32px; display: inline-flex; align-items: center; padding: 0 var(--s-3); border-radius: 999px;
+        border: 1px solid var(--line-1); background: var(--bg-3); font: inherit; font-size: var(--fs-sm); cursor: pointer; }
+    .tunnel-conn { position: relative; gap: 4px; color: var(--ink-1); font-weight: 600; white-space: nowrap; }
+    .tunnel-conn::before { content: ''; position: absolute; inset: -6px -2px; }
+    .tunnel-conn:hover { border-color: var(--line-2); }
     .tunnel-conn:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
     .tunnel-conn-text { font-weight: 600; color: var(--ink-1); }
     .tunnel-stats-line { font-family: var(--ff-mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
@@ -420,9 +425,7 @@
     .empty { color: var(--ink-2); }
     /* 이슈 348: IP 제한 토글과 갱신 버튼은 상태 줄 아래 한 줄을 쓴다. 360px 에서도 넘치지 않게 토글이 줄어들고 IP 는 줄임표로 줄인다. */
     .tunnel-ip-row { flex: 1 0 100%; min-width: 0; display: flex; align-items: center; gap: var(--s-2); padding: 0 0 var(--s-3) var(--s-4); }
-    .tunnel-ip-toggle { min-width: 0; max-width: 100%; min-height: 32px; display: inline-flex; align-items: center; gap: var(--s-1);
-        padding: 0 var(--s-3); border-radius: 999px; border: 1px solid var(--line-1); background: var(--bg-3); color: var(--ink-2);
-        font: inherit; font-size: var(--fs-sm); cursor: pointer; }
+    .tunnel-ip-toggle { min-width: 0; max-width: 100%; gap: var(--s-1); color: var(--ink-2); }
     .tunnel-ip-toggle.on { background: var(--pulse-glow); border-color: var(--pulse-dim); color: var(--pulse); }
     .tunnel-ip-toggle.locked { cursor: default; }
     .tunnel-ip-toggle[aria-disabled='true']:not(.locked) { cursor: progress; }

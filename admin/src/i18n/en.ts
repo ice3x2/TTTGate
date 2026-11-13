@@ -60,7 +60,6 @@ export const en = {
     'tunnel.clientNotConnected': 'not connected',
     'tunnel.clientWithState': '{name} ({state})',
     'tunnel.connectionsButton': 'Connections {count}',
-    'tunnel.connectionsOpen': 'Show the {count} connections to {title}',
     'tunnel.connectionsOpen_one': 'Show the {count} connection to {title}',
     'tunnel.connectionsOpen_other': 'Show the {count} connections to {title}',
     'tunnel.connections_one': '{count} connection',

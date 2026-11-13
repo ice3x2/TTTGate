@@ -111,7 +111,6 @@ export const ko: Messages = {
     'tunnel.clientNotConnected': '연결 안 됨',
     'tunnel.clientWithState': '{name} ({state})',
     'tunnel.connectionsButton': '연결 {count}',
-    'tunnel.connectionsOpen': '{title}의 연결 {count}개 보기',
     'tunnel.connectionsOpen_one': '{title}의 연결 {count}개 보기',
     'tunnel.connectionsOpen_other': '{title}의 연결 {count}개 보기',
     'tunnel.connections_one': '연결 {count}개',
