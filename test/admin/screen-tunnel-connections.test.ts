@@ -448,25 +448,27 @@ test.each([[1280, 900], [360, 800]])("설계 ④ 폭 %ipx 에서 가동 정보 �
     }
 });
 
-// 설계 ④ .pill: 연결 버튼은 IP 제한 토글과 같은 모양으로 보이는 높이 32px, 글자 fs-sm 이고, 누르는 영역은 위아래로 넓혀 44px 이다.
+// 설계 ④ .pill: 연결 버튼은 IP 제한 토글과 같은 모양으로 보이는 높이 32px, 글자 fs-sm 이고, 누르는 영역은 44px 이다.
+// 누름 영역은 ::before 로 넓히면 아래쪽이 감싼 요소에 잡혀(CI 에서 확인) 버튼 자체를 44px 로 두고 안의 알약만 32px 로 보인다.
 test("설계 ④ 연결 버튼은 보이는 높이 32px·글자 fs-sm 이고, 누르는 영역은 44px 이다", async () => {
     const app = await startAdminApp({fixture: "with-tunnels"});
     try {
         await stubStatus(app.page);
         await openList(app.page, app.url);
         const button = row(app.page, PORT).locator(".tunnel-conn");
-        const box = (await button.boundingBox())!;
-        expect(Math.round(box.height)).toBe(32);
-        expect(await button.evaluate((element) => getComputedStyle(element).fontSize
+        const pill = button.locator(".pill");
+        expect(Math.round((await pill.boundingBox())!.height)).toBe(32);
+        expect(Math.round((await button.boundingBox())!.height)).toBe(44);
+        expect(await pill.evaluate((element) => getComputedStyle(element).fontSize
             === getComputedStyle(document.documentElement).getPropertyValue("--fs-sm").trim())).toBe(true);
-        // 보이는 테두리보다 5px 위·아래를 눌러도 이 버튼이 받는다(누르는 영역 44px).
-        const hits = await button.evaluate((element) => {
+        // 보이는 알약보다 5px 위·아래를 눌러도 이 버튼이 받는다. 받지 않으면 그 지점을 받은 요소를 적는다.
+        const hits = await pill.evaluate((element) => {
             const rect = element.getBoundingClientRect();
             const x = rect.left + rect.width / 2;
-            // 이 버튼이 받지 않으면 그 지점을 받은 요소를 적어, 실패 메시지에서 무엇이 덮었는지 보이게 한다.
+            const target = element.closest("button")!;
             return [rect.top - 5, rect.bottom + 5].map((y) => {
                 const hit = document.elementFromPoint(x, y);
-                return element.contains(hit) ? "button" : `${hit ? `${hit.tagName}.${hit.className}` : "none"} at y=${Math.round(y)} (button ${Math.round(rect.top)}-${Math.round(rect.bottom)}, viewport ${innerHeight})`;
+                return target.contains(hit) ? "button" : `${hit ? `${hit.tagName}.${hit.className}` : "none"} at y=${Math.round(y)}`;
             });
         });
         expect(hits).toEqual(["button", "button"]);
