@@ -1,0 +1,1322 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>관리 화면 사용성 2.4.0</title>
+<style>
+/* hidden 속성이 display 지정에 덮이지 않게 한다(상한이 있으면 "자동으로 끄지 않기"를 숨기는 규칙 등). */
+[hidden] { display: none !important; }
+/* ── 문서 틀 색 ─ 문서 자체는 밝은·어두운 테마를 따른다. 목업(.app)은 제품처럼 밝은 테마만 쓴다. */
+:root {
+  --d-bg:#F2F3F6; --d-surface:#FFFFFF; --d-line:#E1E4EA; --d-ink:#111317; --d-ink2:#5B6270; --d-ink3:#8E95A1;
+  --d-accent:#A53424; --d-ok:#1A7F5E; --d-warn:#B5580E; --d-chip:#EEF0F5;
+  --d-ui:system-ui,-apple-system,"Segoe UI",Roboto,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;
+  --d-serif:Georgia,"Times New Roman","Apple SD Gothic Neo","Malgun Gothic","Noto Serif KR",serif;
+  --d-mono:ui-monospace,"SF Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --d-bg:#0F1114; --d-surface:#171A1F; --d-line:#2A2F37; --d-ink:#E8E9EC; --d-ink2:#AEB4BE; --d-ink3:#7F8792; --d-accent:#E08A7A; --d-ok:#5FC9A4; --d-warn:#E7A15E; --d-chip:#222730; }
+}
+:root[data-theme="dark"] { --d-bg:#0F1114; --d-surface:#171A1F; --d-line:#2A2F37; --d-ink:#E8E9EC; --d-ink2:#AEB4BE; --d-ink3:#7F8792; --d-accent:#E08A7A; --d-ok:#5FC9A4; --d-warn:#E7A15E; --d-chip:#222730; }
+
+* { box-sizing:border-box; }
+body { margin:0; background:var(--d-bg); color:var(--d-ink); font:15px/1.7 var(--d-ui); -webkit-font-smoothing:antialiased; }
+.doc { max-width:1120px; margin:0 auto; padding:40px 16px 96px; }
+.doc > header h1 { margin:0 0 8px; font:600 30px/1.25 var(--d-serif); letter-spacing:-.2px; }
+.doc > header .lede { margin:0 0 14px; max-width:760px; color:var(--d-ink2); font-size:16px; }
+.meta { display:flex; flex-wrap:wrap; gap:6px 10px; font-size:13px; color:var(--d-ink2); }
+.meta span { background:var(--d-chip); border-radius:999px; padding:2px 10px; }
+nav.toc { margin:28px 0 8px; display:flex; flex-wrap:wrap; gap:8px; }
+nav.toc a { color:var(--d-ink); text-decoration:none; border:1px solid var(--d-line); background:var(--d-surface); border-radius:999px; padding:6px 14px; font-size:14px; min-height:36px; display:inline-flex; align-items:center; }
+nav.toc a:hover { border-color:var(--d-ink3); }
+h2.sec { margin:64px 0 6px; font:600 24px/1.3 var(--d-serif); scroll-margin-top:16px; }
+h2.sec small { display:block; font:500 13px var(--d-ui); color:var(--d-accent); letter-spacing:.04em; margin-bottom:4px; }
+h3 { margin:32px 0 8px; font:600 17px/1.4 var(--d-ui); }
+h4 { margin:20px 0 6px; font:600 15px var(--d-ui); }
+p, li { max-width:780px; }
+p { margin:0 0 10px; }
+ul, ol { margin:0 0 12px; padding-left:22px; }
+code, .code { font-family:var(--d-mono); font-size:.88em; background:var(--d-chip); border-radius:4px; padding:1px 5px; }
+.muted { color:var(--d-ink2); }
+.callout { border-left:3px solid var(--d-accent); background:var(--d-surface); padding:12px 16px; border-radius:0 8px 8px 0; margin:14px 0; max-width:820px; }
+.callout.ok { border-left-color:var(--d-ok); }
+.callout b { font-weight:600; }
+.tbl-wrap { overflow-x:auto; margin:10px 0 18px; border:1px solid var(--d-line); border-radius:10px; background:var(--d-surface); }
+table { border-collapse:collapse; width:100%; font-size:14px; line-height:1.55; }
+th, td { text-align:left; vertical-align:top; padding:10px 12px; border-bottom:1px solid var(--d-line); }
+th { font-weight:600; background:var(--d-chip); white-space:nowrap; }
+tr:last-child td { border-bottom:0; }
+td.k { white-space:nowrap; font-family:var(--d-mono); font-size:12.5px; }
+.pri { display:inline-block; font-size:12px; font-weight:600; border-radius:4px; padding:0 6px; margin-right:4px; }
+.pri.h { background:#F6DAD4; color:#7A0D04; } .pri.m { background:#F8E5CF; color:#7A3A06; } .pri.l { background:#DCEBE4; color:#155C45; }
+.grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px 28px; }
+.box { background:var(--d-surface); border:1px solid var(--d-line); border-radius:10px; padding:14px 16px; }
+.box h4 { margin-top:0; }
+
+/* 목업 배치 */
+.stage { margin:16px 0 8px; }
+.stage-ctl { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:0 0 12px; font-size:14px; }
+.stage-ctl .lbl { color:var(--d-ink2); margin-right:4px; }
+.stage-ctl button { font:inherit; font-size:13px; min-height:36px; padding:4px 12px; border-radius:999px; border:1px solid var(--d-line); background:var(--d-surface); color:var(--d-ink); cursor:pointer; }
+.stage-ctl button[aria-pressed="true"] { background:var(--d-ink); color:var(--d-bg); border-color:var(--d-ink); }
+.mocks { display:flex; flex-wrap:wrap; gap:28px; align-items:flex-start; }
+.mock { display:flex; flex-direction:column; gap:10px; min-width:0; max-width:100%; }
+.scroll-x { overflow-x:auto; max-width:100%; padding-bottom:4px; }
+.cap { font-size:13.5px; line-height:1.55; color:var(--d-ink2); max-width:400px; }
+.cap b { color:var(--d-ink); font-weight:600; }
+.tag { display:inline-block; font-size:11.5px; font-weight:700; letter-spacing:.06em; border-radius:4px; padding:1px 7px; margin-right:6px; vertical-align:1px; }
+.tag.before { background:#E6E8EE; color:#4A515C; } .tag.after { background:#D7EDE4; color:#155C45; }
+.sent { font:12.5px var(--d-mono); color:var(--d-ink2); margin:0; min-height:1.6em; }
+
+/* ── 목업: 제품 토큰(admin/src/app.css 그대로). Noto 글꼴은 묶음 파일이라 여기서는 시스템 글꼴로 대신한다. ── */
+.app {
+  --bg-0:#FFFFFF; --bg-1:#FAFBFC; --bg-2:#FFFFFF; --bg-3:#F3F5F9; --bg-mute:#EEF0F5;
+  --line-0:#ECEEF3; --line-1:#D7DBE4; --line-2:#8A94A3;
+  --ink-0:#0E1218; --ink-1:#363D47; --ink-2:#6A7381; --ink-3:#A8B0BD;
+  --signal:#A53424; --signal-fill:#C24A36; --signal-glow:rgba(165,52,36,.14); --signal-dim:#E3B6AE;
+  --pulse:#1A7F5E; --pulse-fill:#27A584; --pulse-glow:rgba(26,127,94,.14); --pulse-dim:#9AD2BE;
+  --alarm:#7A0D04; --alarm-fill:#B21208; --alarm-glow:rgba(122,13,4,.18); --alarm-dim:#D8A69F;
+  --trace:#1E4F8A; --warn:#B5580E; --ink-on-signal:#FFF5F0;
+  --ff-display:"Noto Serif",Georgia,"Times New Roman","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",serif;
+  --ff-ui:"Noto Sans",system-ui,-apple-system,"Segoe UI",Roboto,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;
+  --ff-mono:"JetBrains Mono",ui-monospace,"SF Mono",Consolas,monospace;
+  --fs-xs:11px; --fs-sm:12px; --fs-md:14px; --fs-lg:16px; --fs-xl:20px;
+  --s-1:4px; --s-2:8px; --s-3:12px; --s-4:16px; --s-5:20px; --s-6:24px;
+  --r-1:2px; --r-2:4px; --r-3:8px;
+  --ease-out:cubic-bezier(.2,.8,.2,1); --dur-1:120ms; --dur-2:220ms;
+  position:relative; background:var(--bg-0); color:var(--ink-0); font:var(--fs-md)/1.55 var(--ff-ui); color-scheme:light;
+  border:1px solid var(--d-line); overflow:hidden;
+}
+.app * { box-sizing:border-box; }
+.app button, .app input { font:inherit; color:inherit; }
+.app .mono { font-family:var(--ff-mono); font-variant-numeric:tabular-nums; }
+.phone { width:360px; height:720px; border-radius:28px; display:flex; flex-direction:column; box-shadow:0 0 0 8px #111317, 0 18px 40px rgba(0,0,0,.18); margin:8px; }
+.phone.short { height:auto; min-height:420px; }
+.desk { width:780px; border-radius:10px; display:flex; flex-direction:column; min-height:420px; box-shadow:0 10px 30px rgba(16,24,40,.10); }
+.app .hdr { flex:none; height:56px; display:flex; align-items:center; gap:var(--s-3); padding:0 var(--s-2) 0 var(--s-1); background:var(--bg-1); border-bottom:1px solid var(--line-0); }
+.app .hdr-btn { width:44px; height:44px; display:inline-flex; align-items:center; justify-content:center; color:var(--ink-0); }
+.app .hdr-title { flex:1; font:500 var(--fs-xl) var(--ff-display); margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.app .main { flex:1; overflow-y:auto; padding:var(--s-4) var(--s-4) 40px; }
+.desk .main { padding:var(--s-6); }
+
+/* Button (ui/Button.svelte) + 제안하는 secondary */
+.app .btn { display:inline-flex; align-items:center; justify-content:center; gap:var(--s-2); font-family:var(--ff-ui); font-size:13px; font-weight:500; letter-spacing:.02em; color:var(--ink-0); background:transparent; border:1px solid var(--line-2); padding:9px 16px; border-radius:var(--r-2); cursor:pointer; user-select:none; white-space:nowrap; transition:background var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out); }
+.app .btn:hover { border-color:var(--ink-2); }
+.app .btn:focus-visible, .app .chipbtn:focus-visible, .app .pill:focus-visible, .app .seg button:focus-visible, .app .tv-step:focus-visible, .app .sw:focus-visible { outline:2px solid var(--trace); outline-offset:2px; }
+.app .btn.primary { background:var(--signal); color:var(--ink-on-signal); border-color:var(--signal); }
+.app .btn.primary:hover { background:var(--signal-fill); border-color:var(--signal-fill); }
+.app .btn.ghost { border-color:transparent; color:var(--ink-1); }
+.app .btn.danger { color:var(--alarm); border-color:var(--alarm-dim); }
+.app .btn.danger:hover { background:rgba(255,107,91,.08); border-color:var(--alarm); }
+.app .btn.sm { padding:5px 10px; font-size:12px; }
+.app .btn.secondary { min-height:44px; background:var(--bg-2); color:var(--ink-0); border-color:var(--line-2); }
+.app .btn.secondary:hover { background:var(--bg-3); border-color:var(--ink-2); }
+.app .btn.icon { width:44px; padding:0; }
+.app .btn[disabled] { opacity:.42; cursor:not-allowed; }
+
+/* Field·Input·Card (ui/*.svelte) */
+.app .field { display:flex; flex-direction:column; gap:var(--s-2); }
+.app .field > .flabel { font-family:var(--ff-mono); font-size:10px; letter-spacing:.22em; text-transform:uppercase; color:var(--ink-2); }
+.app .hint { font-family:var(--ff-mono); font-size:11px; color:var(--ink-2); }
+.app .err-msg { font-family:var(--ff-mono); font-size:11px; color:var(--alarm); display:flex; align-items:center; gap:6px; }
+.app .err-msg::before { content:'!'; display:inline-flex; justify-content:center; align-items:center; width:14px; height:14px; flex:none; border:1px solid var(--alarm); border-radius:50%; font-size:10px; }
+.app .input { font-family:var(--ff-mono); font-size:13px; color:var(--ink-0); background:var(--bg-mute); border:1px solid var(--line-1); border-radius:var(--r-1); padding:10px 12px; outline:none; width:100%; min-width:0; }
+.app .input:focus { border-color:var(--signal); box-shadow:0 0 0 3px var(--signal-glow); }
+.app .input.err { border-color:var(--alarm-dim); }
+.app .input.h44 { min-height:44px; }
+.app .card { position:relative; background:linear-gradient(180deg,var(--bg-2),var(--bg-1)); border:1px solid var(--line-1); border-radius:var(--r-2); padding:var(--s-5); }
+.app .card-label { font-family:var(--ff-mono); font-size:10px; letter-spacing:.22em; text-transform:uppercase; color:var(--ink-2); margin-bottom:var(--s-3); display:flex; align-items:center; gap:var(--s-2); }
+.app .stack { display:flex; flex-direction:column; gap:var(--s-4); }
+.app .two-col { display:grid; grid-template-columns:1fr 1fr; gap:var(--s-4); }
+.app .notes { margin:var(--s-3) 0 0; padding-left:18px; font-size:12px; color:var(--ink-2); }
+.app .notes li { margin:2px 0; }
+.app .note-warn { margin:var(--s-3) 0 0; padding:10px 12px; border-radius:var(--r-2); background:#FBF1E6; border:1px solid #EBC9A6; color:#7A3A06; font-size:12.5px; line-height:1.5; }
+.app .cap-line { font-size:12.5px; color:var(--ink-2); margin:-4px 0 var(--s-3); }
+.app .cap-line b { color:var(--ink-1); font-weight:600; }
+
+/* Switch lg (ui/Switch.svelte) */
+.app .sw { position:relative; display:inline-block; width:51px; height:31px; background:var(--bg-mute); border:1px solid var(--line-2); border-radius:999px; cursor:pointer; padding:0; flex:none; }
+.app .sw::after { content:''; position:absolute; top:2px; left:2px; width:25px; height:25px; border-radius:50%; background:var(--bg-2); box-shadow:0 1px 3px rgba(14,18,24,.25); transition:transform var(--dur-2) var(--ease-out); }
+.app .sw[aria-checked="true"] { background:var(--pulse-fill); border-color:var(--pulse-fill); }
+.app .sw[aria-checked="true"]::after { transform:translateX(20px); }
+.app .sw.md { width:38px; height:20px; } .app .sw.md::after { width:14px; height:14px; } .app .sw.md[aria-checked="true"]::after { transform:translateX(18px); }
+
+/* Modal (ui/Modal.svelte) — 목업에서는 화면 틀 안에 띄운다 */
+.app .ov { position:absolute; inset:0; z-index:20; display:flex; justify-content:center; align-items:center; padding:var(--s-4); }
+.app .ov::before { content:''; position:absolute; inset:0; background:var(--ink-0); opacity:.72; }
+.app .ov.top { z-index:30; }
+.app .ov.top::before { opacity:.35; }
+.app .ov.static { position:relative; inset:auto; padding:0; }
+.app .ov.static::before { display:none; }
+.app .mm { position:relative; width:100%; max-width:480px; max-height:85%; display:flex; flex-direction:column; border:1px solid var(--line-2); border-radius:var(--r-3); background:linear-gradient(180deg,var(--bg-2),var(--bg-1)); box-shadow:0 24px 60px rgba(16,24,40,.14),0 2px 4px rgba(16,24,40,.05); overflow:hidden; }
+.app .mm.wide { max-width:640px; }
+.app .mm-head { flex:none; padding:var(--s-4) var(--s-5); border-bottom:1px solid var(--line-1); }
+.app .mm-head h2 { margin:0; font:400 18px/1.3 var(--ff-display); overflow-wrap:anywhere; }
+.app .mm-body { flex:1 1 auto; min-height:0; overflow-y:auto; padding:var(--s-6); color:var(--ink-1); }
+.app .mm-foot { flex:none; padding:var(--s-4) var(--s-5); border-top:1px solid var(--line-1); display:flex; justify-content:flex-end; gap:var(--s-3); background:var(--bg-mute); }
+.app .mm-sub { margin:-8px 0 14px; font-size:12px; color:var(--ink-2); }
+
+/* 목록 (TunnelsScreen.svelte) */
+.app .tunnels-bar { margin-bottom:var(--s-4); }
+.app .summary { margin:0 0 var(--s-3); font-size:var(--fs-sm); color:var(--ink-2); }
+.app .tlist { list-style:none; margin:0; padding:0; background:var(--bg-2); border-radius:var(--r-3); overflow:hidden; }
+.app .tlist > li { display:flex; flex-wrap:wrap; align-items:center; gap:0 var(--s-3); min-height:64px; padding:0 var(--s-3) 0 0; }
+.app .tlist > li + li { box-shadow:0 -1px 0 var(--line-0); }
+.app .tlink { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; padding:var(--s-3) 0 var(--s-3) var(--s-4); color:inherit; text-decoration:none; }
+.app .ttitle { font-size:var(--fs-lg); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.app .tstatus { font-size:var(--fs-sm); color:var(--ink-2); }
+.app .tstatus .warn { color:var(--warn); }
+.app .ttime { display:flex; align-items:center; gap:var(--s-2); font-size:var(--fs-sm); color:var(--ink-2); font-variant-numeric:tabular-nums; }
+.app .clock { width:18px; height:18px; flex:none; color:var(--pulse); }
+.app .tswitch { flex:none; min-width:52px; min-height:44px; display:inline-flex; align-items:center; justify-content:center; }
+.app .tlock { flex:none; width:52px; min-height:44px; display:inline-flex; align-items:center; justify-content:center; color:var(--ink-3); }
+.app .tclients { font-size:var(--fs-sm); color:var(--ink-2); display:flex; align-items:center; gap:6px; min-width:0; }
+.app .tclients .names { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.app .tclients .off { color:var(--ink-3); }
+.app .dot { width:7px; height:7px; border-radius:50%; flex:none; display:inline-block; vertical-align:1px; margin-right:4px; background:var(--pulse-fill); }
+.app .dot.hollow { background:transparent; border:1.5px solid var(--ink-3); }
+/* 새 줄: 링크 밖의 가동 정보 줄. 이슈 348 IP 줄과 같은 모양을 쓴다 */
+.app .tmeta { flex:1 0 100%; min-width:0; display:flex; flex-wrap:wrap; align-items:center; gap:4px var(--s-2); padding:0 0 var(--s-3) var(--s-4); }
+.app .pill { min-height:32px; display:inline-flex; align-items:center; gap:4px; padding:0 var(--s-3); border-radius:999px; border:1px solid var(--line-1); background:var(--bg-3); color:var(--ink-1); font-size:var(--fs-sm); cursor:pointer; position:relative; white-space:nowrap; }
+.app .pill::before { content:''; position:absolute; inset:-6px -2px; } /* 누르는 영역을 44px 로 넓힌다 */
+.app .pill:hover { border-color:var(--line-2); }
+.app .pill b { font-weight:600; color:var(--ink-0); font-variant-numeric:tabular-nums; }
+.app .pill svg { color:var(--ink-3); }
+.app .pill-text { font-size:var(--fs-sm); color:var(--ink-1); }
+.app .stats { font-family:var(--ff-mono); font-size:var(--fs-xs); color:var(--ink-2); font-variant-numeric:tabular-nums; }
+.app .ipchip { min-height:32px; display:inline-flex; align-items:center; padding:0 var(--s-3); border-radius:999px; border:1px solid var(--pulse-dim); background:var(--pulse-glow); color:var(--pulse); font:var(--fs-sm) var(--ff-mono); }
+
+/* 묶음 (5번) */
+.app .grp + .grp { margin-top:var(--s-6); }
+.app .grp-head { display:flex; align-items:baseline; gap:var(--s-2); margin:0 0 var(--s-2) var(--s-1); min-width:0; }
+.app .grp-head h2 { margin:0; font:600 13px/1.4 var(--ff-ui); color:var(--ink-1); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.app .grp-head h2 .dn { font-weight:400; color:var(--ink-2); }
+.app .grp-head .me { flex:none; font-size:11px; font-weight:600; color:var(--pulse); background:var(--pulse-glow); border-radius:999px; padding:0 7px; }
+.app .grp-head .cnt { margin-left:auto; flex:none; font-size:var(--fs-sm); color:var(--ink-2); }
+.app .grp .tlist { border:1px solid var(--line-0); }
+.app .grp-note { margin:var(--s-2) var(--s-1) 0; font-size:12px; color:var(--ink-2); }
+
+/* 슬라이더 창 (1번) */
+.app .seg { display:flex; padding:2px; border-radius:var(--r-3); background:var(--bg-mute); border:1px solid var(--line-1); margin:0 0 var(--s-5); }
+.app .seg button { flex:1; min-height:40px; border:0; border-radius:6px; background:transparent; color:var(--ink-1); font-size:13px; font-weight:500; cursor:pointer; }
+.app .seg button[aria-checked="true"] { background:var(--bg-2); color:var(--ink-0); box-shadow:0 1px 3px rgba(14,18,24,.16); }
+.app .seg button:disabled { cursor:not-allowed; opacity:.5; }
+.app .tv-val { display:block; text-align:center; font:600 30px/1.2 var(--ff-ui); color:var(--ink-0); font-variant-numeric:tabular-nums; letter-spacing:-.3px; }
+.app .tv-val.off { color:var(--ink-2); font-size:22px; }
+.app .tv-ends { text-align:center; margin:6px 0 var(--s-5); font-size:13px; color:var(--ink-2); min-height:1.55em; }
+.app .tv-row { display:flex; align-items:center; gap:var(--s-2); }
+.app .tv-step { flex:none; width:44px; height:44px; border-radius:50%; border:1px solid var(--line-1); background:var(--bg-2); color:var(--ink-0); font-size:22px; line-height:1; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; }
+.app .tv-step:disabled { opacity:.4; cursor:not-allowed; }
+.app .tv-range { flex:1; min-width:0; height:44px; margin:0; background:transparent; -webkit-appearance:none; appearance:none; cursor:pointer; --p:50%; }
+.app .tv-range:disabled { cursor:not-allowed; opacity:.45; }
+.app .tv-range::-webkit-slider-runnable-track { height:4px; border-radius:2px; background:linear-gradient(90deg,var(--signal) var(--p),var(--line-1) var(--p)); }
+.app .tv-range::-moz-range-track { height:4px; border-radius:2px; background:var(--line-1); }
+.app .tv-range::-moz-range-progress { height:4px; border-radius:2px; background:var(--signal); }
+.app .tv-range::-webkit-slider-thumb { -webkit-appearance:none; width:28px; height:28px; margin-top:-12px; border-radius:50%; background:#fff; border:1px solid var(--line-1); box-shadow:0 2px 6px rgba(14,18,24,.22); }
+.app .tv-range::-moz-range-thumb { width:28px; height:28px; border-radius:50%; background:#fff; border:1px solid var(--line-1); box-shadow:0 2px 6px rgba(14,18,24,.22); }
+.app .tv-range:focus-visible { outline:2px solid var(--trace); outline-offset:2px; border-radius:6px; }
+.app .tv-scale { display:flex; justify-content:space-between; padding:0 52px; margin-top:-4px; font-size:11px; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+.app .tv-fixed { margin:0; text-align:center; font-size:12.5px; color:var(--ink-2); }
+.app .tv-cap { margin:var(--s-4) 0 0; font-size:12.5px; color:var(--ink-2); text-align:center; }
+.app .tv-noauto { margin-top:var(--s-5); padding-top:var(--s-4); border-top:1px solid var(--line-0); display:flex; align-items:center; justify-content:space-between; gap:var(--s-3); min-height:44px; font-size:14px; color:var(--ink-0); }
+.app .old3 { display:grid; grid-template-columns:repeat(3,1fr); gap:var(--s-3); }
+
+/* 포트 범위 (2번) */
+.app .rng { display:flex; align-items:center; gap:var(--s-2); }
+.app .rng .dash { color:var(--ink-3); flex:none; }
+.app .empty-box { border:1px dashed var(--line-1); border-radius:var(--r-2); padding:var(--s-4); display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--s-3); font-size:13px; color:var(--ink-2); }
+.app .chips { display:flex; flex-wrap:wrap; gap:var(--s-2); align-items:center; }
+.app .chips .lead { font-family:var(--ff-mono); font-size:11px; color:var(--ink-2); margin-right:2px; }
+.app .chipbtn { min-height:36px; display:inline-flex; align-items:center; gap:6px; padding:0 var(--s-3); border:1px solid var(--line-2); border-radius:999px; background:var(--bg-2); color:var(--ink-0); font:12.5px var(--ff-mono); cursor:pointer; position:relative; }
+.app .chipbtn::before { content:''; position:absolute; inset:-4px -2px; }
+.app .chipbtn:hover { background:var(--bg-3); }
+.app .chipbtn[aria-pressed="true"] { border-color:var(--signal); color:var(--signal); background:var(--signal-glow); }
+.app .tinytext { font-family:var(--ff-mono); font-size:11px; color:var(--ink-2); }
+.app .ghostlink { background:none; border:0; padding:5px 10px; font-size:12px; color:var(--ink-1); cursor:pointer; }
+
+/* 연결 창 (4번) */
+.app .conn-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:var(--s-2); }
+.app .conn { border:1px solid var(--line-1); border-radius:var(--r-3); background:var(--bg-2); padding:var(--s-3); display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; column-gap:var(--s-3); row-gap:4px; }
+.app .conn-addr { font-family:var(--ff-mono); font-size:13px; color:var(--ink-0); overflow-wrap:anywhere; }
+.app .conn-addr .me-ip { font-family:var(--ff-ui); font-size:11px; font-weight:600; color:var(--warn); margin-left:6px; white-space:nowrap; }
+.app .conn-meta { font-size:12px; color:var(--ink-2); font-variant-numeric:tabular-nums; }
+/* 주소와 설명은 늘 첫째 칸. 끝난 줄에서 버튼이 숨겨져도 둘째 칸으로 밀리지 않는다. */
+.app .conn-addr, .app .conn-meta { grid-column:1; }
+.app .conn-act { grid-column:2; grid-row:1 / span 2; display:flex; gap:4px; }
+/* 연결 줄의 작은 아이콘 버튼: 보이는 크기 32px(WCAG 2.5.8 최소 24px 이상), 글자 대신 아이콘, 이름은 aria-label·title 로 준다. */
+.app .ibtn { width:32px; height:32px; display:inline-grid; place-items:center; padding:0; border:1px solid var(--line-1); border-radius:var(--r-2, 8px); background:var(--bg-1, #fff); color:var(--ink-1); cursor:pointer; }
+.app .ibtn:hover { background:var(--bg-2); color:var(--ink-0); }
+.app .ibtn:focus-visible { outline:2px solid var(--signal); outline-offset:2px; }
+.app .ibtn.danger { color:var(--alarm, #c62828); }
+.app .ibtn.danger:hover { border-color:var(--alarm, #c62828); }
+.app .ibtn svg { width:16px; height:16px; }
+.app .conn.ended { opacity:.55; }
+.app .conn.ended .conn-act { display:none; }
+.app .conn .ended-tag { font-size:11px; font-weight:600; color:var(--ink-2); }
+.app .conn.new { border-color:var(--pulse-dim); }
+.app .mm.wide .conn { column-gap:var(--s-4); }
+.app .scope { display:flex; flex-direction:column; gap:var(--s-2); margin:var(--s-4) 0; }
+.app .scope label { display:flex; align-items:center; gap:10px; min-height:44px; padding:0 var(--s-3); border:1px solid var(--line-1); border-radius:var(--r-3); background:var(--bg-2); cursor:pointer; font-size:14px; color:var(--ink-0); }
+.app .scope label:has(input:checked) { border-color:var(--signal); background:var(--signal-glow); }
+.app .scope input { accent-color:var(--signal); width:18px; height:18px; margin:0; }
+.app .scope small { color:var(--ink-2); font-size:12px; }
+.app .warnbox { margin:0 0 var(--s-4); padding:10px 12px; border-radius:var(--r-2); background:#FBF1E6; border:1px solid #EBC9A6; color:#7A3A06; font-size:12.5px; line-height:1.5; }
+.app .toast { position:absolute; left:12px; right:12px; bottom:16px; z-index:40; display:flex; align-items:center; gap:10px; padding:12px 16px; border-radius:var(--r-3); background:rgba(14,18,24,.94); color:#fff; font-size:13.5px; transform:translateY(160%); transition:transform .28s var(--ease-out); }
+.app .toast.show { transform:none; }
+.desk .toast { left:auto; right:16px; width:380px; }
+@media (prefers-reduced-motion: reduce) { .app .toast, .app .sw::after { transition:none; } }
+</style>
+</head>
+<body>
+<div class="doc">
+
+<header>
+  <h1>관리 화면 사용성 개선 — 2.4.0 설계안</h1>
+  <p class="lede">범범님이 요청하신 다섯 가지를 사용자 관점에서 조사하고 설계했습니다. 항목마다 문제, 사용 상황, 원칙, 권장 설계, 검토한 대안, 예외 상황, 접근성, 문구, 스펙 대응을 차례로 적었습니다. 목업은 실제 디자인 토큰(<code>admin/src/app.css</code>)으로 그렸고, 슬라이더와 연결 창은 직접 눌러 볼 수 있습니다.</p>
+  <div class="meta">
+    <span>작성 2026-11-13</span><span>기준 코드 origin/develop 8400fd5 (2.3.0)</span><span>입력: 스펙 초안 1~5</span><span>책임자 사전 승인: 권장안 채택</span>
+  </div>
+  <nav class="toc" aria-label="목차">
+    <a href="#summary">한눈에 보기</a><a href="#research">공통 근거</a><a href="#i1">① 켜 둘 시간</a><a href="#i2">② 포트 범위 버튼</a><a href="#i3">③ 버퍼 상한</a><a href="#i4">④ 목록의 연결 정보</a><a href="#i5">⑤ 소유자별 묶음</a><a href="#changes">스펙 변경 제안</a><a href="#sources">출처</a>
+  </nav>
+</header>
+
+<!-- ───────────────────────── 요약 ───────────────────────── -->
+<h2 class="sec" id="summary"><small>SUMMARY</small>한눈에 보기</h2>
+<p>스펙 초안의 방향에는 대부분 동의합니다. 다만 아래 표의 "스펙 영향" 열처럼 몇 가지를 고치거나 더하시기를 권합니다. 가장 중요한 것은 ①의 정밀 조정 버튼, ④의 "가동 시간" 의미 문제와 겹친 창의 Esc 문제, 그리고 ②의 어두운 테마 기준 삭제(앱에 어두운 테마가 없음)입니다.</p>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>항목</th><th>권장 설계</th><th>이 문서에서 정한 것</th><th>스펙 영향</th></tr></thead>
+  <tbody>
+  <tr><td><b>① 켜 둘 시간</b><br><span class="muted">스펙 1</span></td>
+    <td>숫자 칸 세 개를 없애고 <b>시간|일 분할 버튼 + 슬라이더 + −/+ 버튼</b>으로 바꾼다. 고른 값을 크게 보이고 바로 아래에 "지금부터 … 뒤, 오후 4:35에 꺼집니다."를 보인다.</td>
+    <td>휴대폰에서 1분 정밀도를 끌기로만 맞추기 어려워 −/+ 1분 버튼을 둔다(WCAG 2.5.7). 일 단위 최대가 1일이면 슬라이더 대신 "1일"을 고정해 보인다. 상한 안내는 "그룹" 대신 "이 터널" 기준으로 쓴다.</td>
+    <td><span class="pri m">중간</span> FR 2개 추가(−/+ 버튼, 단일 값·1분 미만 상한), FR-14 문구 1개 수정, 관련 문구 3개 정리</td></tr>
+  <tr><td><b>② 포트 범위 버튼</b><br><span class="muted">스펙 2</span></td>
+    <td><code>secondary</code> 모양(흰 바탕, 테두리, 44px)을 더한다. "＋ 범위 추가"는 글자 버튼, 줄 삭제는 44px 아이콘 버튼으로 둔다. 터널 편집의 허용 범위는 눌러서 고르는 칩으로 바꾼다.</td>
+    <td>줄 삭제는 저장 전이라 되돌릴 수 있으므로 빨간색과 확인 창을 쓰지 않는다. 포트 입력 두 칸에 보조 기술용 이름이 없어 함께 붙인다. 칩은 내 터널이 쓰지 않는 첫 포트를 넣는다.</td>
+    <td><span class="pri h">높음</span> FR-7·AC-5의 "어두운 테마" 삭제, <span class="pri m">중간</span> 입력 이름 FR 추가, 칩 동작 보강</td></tr>
+  <tr><td><b>③ 버퍼 상한</b><br><span class="muted">스펙 3</span></td>
+    <td>그룹 편집 "제한" 카드에 숫자 칸을 둔다. 터널 편집 버퍼 카드에는 상한을 <b>입력 전부터</b> 보이고, 넘으면 그 칸 아래에 오류를 보인다.</td>
+    <td>서버 오류 문구에 어느 칸인지 적는다. "세션당"은 관리 화면의 로그인 세션과 겹치므로 "연결당"으로 바꾼다.</td>
+    <td><span class="pri m">중간</span> FR-13 문구를 칸 이름 포함으로 수정, 카드 이름 변경 제안</td></tr>
+  <tr><td><b>④ 목록의 연결 정보</b><br><span class="muted">스펙 4</span></td>
+    <td>줄 링크 밖에 <b>[연결 3 ›] 알약 버튼 + 가동 정보</b> 한 줄을 둔다. 허용 클라이언트는 연결 상태 점과 함께 보인다. 연결 창은 휴대폰에서 카드, 데스크톱에서 표처럼 보인다. 차단은 확인 창을 거친다.</td>
+    <td>목록에서는 "가동 시간"이 "켠 지 얼마"로 읽히는데 실제 값은 서버가 포트를 연 시각이다. 새 필드로 "켜진 지"를 보인다. 연결 창 위에 확인 창을 겹치면 Esc 한 번에 둘 다 닫히므로 고친다. 창이 열린 동안 줄 순서를 고정한다.</td>
+    <td><span class="pri h">높음</span> 겹친 창 Esc FR 추가, "켜진 지" 필드 추가(결정 3 변경), <span class="pri m">중간</span> 줄 순서 고정·내 IP 경고 FR 추가, 문구의 조사 수정</td></tr>
+  <tr><td><b>⑤ 소유자별 묶음</b><br><span class="muted">스펙 5</span></td>
+    <td>소유자마다 목록 카드 하나와 머리글 "alice (앨리스)"를 둔다. 머리글 오른쪽에 "3개 중 1개 켜짐"을 보인다. 내 묶음이 맨 위에 온다.</td>
+    <td>스펙에 동의한다. 이름이 같은 터널을 구분하도록 스위치 이름에 소유자를 붙인다. "소유자 없음" 묶음에는 정리 방법을 한 줄로 안내한다.</td>
+    <td><span class="pri l">낮음</span> 스위치 보조 이름 FR 추가, 안내 문구 1개</td></tr>
+  </tbody>
+</table></div>
+
+<!-- ───────────────────────── 공통 근거 ───────────────────────── -->
+<h2 class="sec" id="impl"><small>IMPLEMENTED</small>구현하며 바뀐 결정</h2>
+<div class="callout"><b>아래 결정은 구현과 검토를 거치며 이 문서의 본문보다 나중에 정했다. 본문과 다르면 이 절을 따른다.</b>
+<ul>
+<li>② 칩은 "내 터널이 쓰지 않는" 포트가 아니라 <b>목록에 보이는 터널(공유받은 터널 포함)이 쓰지 않는</b> 가장 작은 포트를 넣는다. 남이 쓰는 포트를 넣으면 어차피 "포트 사용 중"으로 실패하기 때문이다. 범위의 포트를 모두 쓰고 있으면 첫 포트를 넣지 않고 칩을 잠그며 이유를 <code>title</code>에 둔다(이슈 365 설계 반영 절).</li>
+<li>③ 그룹 편집 화면의 카드 이름은 2.3.0부터 "한도"(<code>group.limits</code>)다. 본문의 "'제한' 카드"는 이 카드를 가리킨다.</li>
+<li>① 꺼지는 시각은 목록 시계(이슈 344)와 같은 24시간제로 보인다. 본문 예시의 "오후 4:35"는 화면에서 "16:35"다.</li>
+<li>④ 이미 차단된 주소를 다시 차단할 때 기존 차단의 범위에 따라 문구와 줄 표시를 나눈다(④의 예외 상황 표). 창이 열린 동안 권한이 읽기 전용으로 바뀌어(403) 연결 목록을 볼 수 없게 되면 창을 닫고 "이제 이 터널을 볼 수만 있어 연결 목록을 닫았습니다."를 알린다. 그 밖에 다시 읽기가 실패하면 옛 목록 위에 "연결 목록을 새로 고치지 못했습니다. 다시 시도하는 중입니다."를 보인다.</li>
+<li>④ 연결이 500개를 넘으면 서버가 최근 500개와 전체 수(<code>total</code>)를 준다. 요약은 전체 수로 세고, 받은 목록보다 오래된 줄은 살아 있는지 알 수 없으므로 숨긴다. 창이 열린 동안 한 번 본 연결은 다시 보여도 "새"로 알리지 않는다.</li>
+<li>④ 끝난·끊은·차단한 줄의 끊기·차단 버튼은 숨기지 않고 <code>aria-disabled</code>로 남긴다. 버튼이 사라지면 키보드 초점이 창 밖으로 빠지기 때문이다.</li>
+<li>④ [연결 N ›] 버튼의 보조 기술용 이름에 터널 제목을 넣는다("{title}의 연결 N개 보기"). 줄마다 같은 이름이 되풀이되지 않게 한다.</li>
+<li>④ 옛 서버인지는 연결 목록의 404가 아니라 상태 응답에 <code>allowedClients</code>가 있는지로 판단한다. 새 서버도 볼 수 없게 된 터널에는 404를 주기 때문이다.</li>
+<li>④ 이번 버전은 목업과 달리 허용 클라이언트를 가동 정보와 같은 줄(시계 아래)에 두고, 겹친 창의 오버레이를 두 창 모두 같은 농도로 그리며, 차단 확인 창은 <code>role="dialog"</code>에 첫 초점을 "이 터널만"에 둔다. 동작에는 영향이 없어 다음 버전에서 다시 본다.</li>
+</ul></div>
+
+<h2 class="sec" id="research"><small>RESEARCH</small>공통 근거</h2>
+<p>다섯 항목에 두루 쓰는 판단 기준입니다. 출처는 문서 끝에 모았습니다.</p>
+<div class="grid2">
+  <div class="box"><h4>누르는 영역은 44px</h4>
+    <p>WCAG 2.2의 2.5.8(최소 목표 크기, AA)은 24×24 CSS px를 요구하고, 2.5.5(AAA)는 44×44를 요구합니다. Apple HIG는 44×44pt, Material은 48×48dp를 권합니다. TTTGate는 이미 목록 스위치와 IP 갱신 버튼을 44px로 맞췄으므로(<code>TunnelsScreen.svelte</code>의 <code>.tunnel-switch</code>, <code>.tunnel-ip-refresh</code>) 새 조작도 <b>44px</b>을 기준으로 삼습니다. 모양이 작아야 하면 투명한 확장 영역(<code>::before</code>)으로 누르는 영역만 넓힙니다.</p></div>
+  <div class="box"><h4>끌기에는 대안이 있어야 한다</h4>
+    <p>WCAG 2.2의 2.5.7(끌기 동작, AA)은 끌어서 하는 조작에 한 번 누르기 대안을 요구합니다. Apple HIG도 정확한 값이 중요하면 슬라이더 옆에 스테퍼나 입력 칸을 두라고 권합니다. 24시간(1,440분)을 폭 약 260px 막대에 펴면 1px이 5분이 넘으므로, 끌기만으로는 "1분 단위"를 맞출 수 없습니다.</p></div>
+  <div class="box"><h4>슬라이더 접근성</h4>
+    <p>WAI-ARIA APG의 슬라이더 패턴은 화살표 한 칸, PageUp·PageDown 큰 칸, Home·End 양 끝을 정하고, 값이 숫자만으로 뜻을 갖지 않으면 <code>aria-valuetext</code>로 "1시간 30분"처럼 읽히게 하라고 합니다. 브라우저 기본 <code>input type="range"</code>가 대부분을 거저 주지만, PageUp·PageDown 폭은 브라우저마다 달라서 직접 정해야 합니다.</p></div>
+  <div class="box"><h4>대비</h4>
+    <p>WCAG 1.4.11(비텍스트 대비)은 버튼 경계처럼 조작을 알아보는 데 필요한 모양에 3:1, 1.4.3은 본문 글자에 4.5:1을 요구합니다. <code>--line-2</code>(#8A94A3)는 흰 바탕에서 약 3.0:1로 기준을 겨우 넘습니다. <b>관리 화면에는 어두운 테마가 없습니다</b>(<code>app.css</code>에 <code>prefers-color-scheme</code> 규칙이 없음). 그래서 목업은 밝은 테마만 그렸습니다.</p></div>
+  <div class="box"><h4>확인 창은 아껴 쓴다</h4>
+    <p>NN/g는 확인 창을 자주 띄우면 사용자가 읽지 않고 누르는 습관이 생긴다고 경고합니다. 되돌리기 어렵고 결과가 큰 동작에만 묻고, 버튼은 "확인"이 아니라 동작 이름("차단")으로 적으라고 합니다. Apple HIG의 경고창도 파괴적 동작 버튼을 따로 표시하고 취소를 함께 둡니다. 그래서 다시 연결할 수 있는 "끊기"는 묻지 않고, 계속 남는 설정인 "차단"만 묻습니다.</p></div>
+  <div class="box"><h4>점진적 공개와 Fitts 법칙</h4>
+    <p>자주 쓰는 정보는 첫 화면에, 드물게 쓰는 조작은 한 번 더 눌러서 보이게 합니다(NN/g 점진적 공개). 목록 줄에는 숫자만 두고, 연결 목록과 차단은 창으로 미룹니다. Fitts 법칙에 따라 자주 누르는 대상은 크고 가깝게 둡니다. 연결 수 버튼을 줄 왼쪽 시작점, 엄지가 닿는 높이에 둔 이유입니다.</p></div>
+  <div class="box"><h4>오류는 칸 옆에서, 미리</h4>
+    <p>WCAG 3.3.1(오류 식별)과 3.3.3(오류 수정 제안), NN/g 오류 메시지 지침은 오류를 문제가 난 칸 가까이에, 무엇이 왜 틀렸고 어떻게 고치는지 적으라고 합니다. 오류보다 나은 것은 예방이므로, 상한을 입력 전부터 보입니다.</p></div>
+  <div class="box"><h4>구조와 360px</h4>
+    <p>WCAG 1.3.1(정보와 관계)과 2.4.6(제목과 이름)은 묶음을 제목으로 드러내라고 합니다. Apple HIG의 묶음 목록, Material 목록의 소제목과 같은 형태입니다. 폭 360px은 안드로이드 휴대폰에서 가장 흔한 CSS 폭 가운데 하나라서 모든 목업의 최소 폭으로 삼았습니다.</p></div>
+</div>
+
+<!-- ───────────────────────── ① ───────────────────────── -->
+<h2 class="sec" id="i1"><small>ITEM 1 · 스펙 1</small>① 켜 둘 시간 — 슬라이더로 고르기</h2>
+
+<h3>문제</h3>
+<ul>
+  <li>일·시간·분 숫자 칸 세 개(<code>Timer.svelte:63-70</code>)는 휴대폰에서 칸마다 키보드를 열고 닫아야 하고, "2시간 반"을 머릿속에서 칸별로 나눠야 합니다.</li>
+  <li>창을 열면 <b>남은 시간이 아니라 처음에 건 전체 시간</b>이 보입니다(<code>Timer.svelte:27-32</code>). 남은 1시간을 늘리려고 연 창에 "8시간"이 보이면 사용자는 무엇을 바꾸는 것인지 헷갈립니다.</li>
+  <li>그룹 상한보다 긴 값을 넣어도 서버가 말없이 자릅니다(<code>ExternalPortServerPool.ts:763-765</code>). 고른 값과 실제 값이 다릅니다.</li>
+  <li>제목 "터널 사용 시간 제한"은 벌칙처럼 들리고, 사용자가 실제로 하는 일("얼마나 켜 둘지 정하기")과 거리가 있습니다.</li>
+</ul>
+
+<h3>사용 상황</h3>
+<div class="grid2">
+  <div class="box"><h4>휴대폰 · 엄지 하나</h4><p>회의에 들어가기 직전, 집 NAS 터널이 20분 뒤 꺼지는 것을 보고 1시간 더 켜 두려 합니다. 창을 열면 지금 남은 20분이 이미 골라져 있고, 막대를 오른쪽으로 밀어 대략 맞춘 뒤 ＋를 두세 번 눌러 "1시간 20분"을 맞춥니다.</p></div>
+  <div class="box"><h4>데스크톱 · 키보드</h4><p>오후 내내 원격 작업을 하려고 8시간을 고릅니다. 슬라이더에 초점을 두고 PageUp을 여섯 번 누르면 1시간씩 늘어납니다. 화면 읽기 프로그램은 "켜 둘 시간, 8시간"이라고 읽습니다.</p></div>
+  <div class="box"><h4>며칠 켜 두기</h4><p>상한이 없는 관리자가 출장 사흘 동안 사무실 터널을 켜 둡니다. "일"을 누르고 3일을 고르면 "11월 16일 오후 3:10에 꺼집니다."가 보입니다.</p></div>
+  <div class="box"><h4>상한이 짧은 그룹</h4><p>상한이 12시간인 그룹의 사용자에게는 "일" 버튼이 없습니다. 막대 끝이 12시간이고, 아래에 "이 터널은 최대 12시간까지 켜 둘 수 있습니다."가 보입니다. 서버가 자를 값은 처음부터 고를 수 없습니다.</p></div>
+</div>
+
+<h3>원칙</h3>
+<ol>
+  <li><b>조작 하나, 결과 바로 보기.</b> 막대를 움직이는 순간 값과 꺼지는 시각이 함께 바뀝니다. 사용자는 계산하지 않습니다.</li>
+  <li><b>서버가 받아들일 값만 고를 수 있다.</b> 막대의 끝이 곧 실제 상한입니다(스펙 FR-1의 <code>timeoutCapSeconds</code>).</li>
+  <li><b>대략은 끌기로, 정확히는 누르기로.</b> 끌기와 −/+ 버튼, 키보드가 같은 값을 움직입니다.</li>
+  <li><b>지금에서 출발한다.</b> 창은 지금 남은 시간으로 열립니다. 확인은 "지금부터 다시 센다"는 뜻입니다.</li>
+</ol>
+
+<h3>권장 설계 · 눌러 보기</h3>
+<p>아래 버튼으로 상한 상황을 바꿔 보세요. 두 화면(데스크톱 창, 360px 휴대폰)은 같은 규칙으로 움직입니다. 확인을 누르면 서버로 보낼 <code>timeout</code> 값이 아래에 찍힙니다.</p>
+<div class="stage" id="timer-stage">
+  <div class="stage-ctl" role="group" aria-label="상한 상황">
+    <span class="lbl">상황</span>
+    <button type="button" data-sc="none" aria-pressed="true">상한 없음 · 1시간 30분 남음</button>
+    <button type="button" data-sc="noauto" aria-pressed="false">상한 없음 · 자동으로 끄지 않는 중</button>
+    <button type="button" data-sc="h2" aria-pressed="false">상한 2시간</button>
+    <button type="button" data-sc="h12" aria-pressed="false">상한 12시간</button>
+    <button type="button" data-sc="d1h12" aria-pressed="false">상한 1일 12시간</button>
+    <button type="button" data-sc="d3" aria-pressed="false">상한 3일 · 2일 5시간 남음</button>
+  </div>
+  <div class="mocks">
+    <div class="mock"><div class="scroll-x">
+      <div class="app desk" style="min-height:720px">
+        <div class="hdr"><span class="hdr-btn" aria-hidden="true">☰</span><h1 class="hdr-title">ssh-office</h1></div>
+        <div class="main" style="position:relative; min-height:664px">
+          <div class="card" style="max-width:520px"><div class="card-label">STATUS</div>
+            <div class="stats">가동 시간 1일 2시간 · 연결 2 · RX 58.1KiB · TX 59.5KiB</div>
+            <div style="display:flex;align-items:center;gap:12px;margin-top:12px;font-size:12px;color:var(--ink-2)">자동 꺼짐까지 <span class="mono" style="color:var(--ink-0);font-size:14px;text-decoration:underline">1시간 30분 0초</span></div>
+          </div>
+          <div class="ov" style="padding-top:24px"><div class="mm" data-timer="desk"></div></div>
+        </div>
+      </div></div>
+      <p class="sent" data-sent="desk"></p>
+      <div class="cap"><b>데스크톱 · 편집 화면 상태 영역에서 연 창</b><br>상태 영역의 이름도 "시간 제한"에서 "자동 꺼짐까지"로 바뀝니다.</div>
+    </div>
+    <div class="mock"><div class="scroll-x">
+      <div class="app phone">
+        <div class="hdr"><span class="hdr-btn" aria-hidden="true">☰</span><h1 class="hdr-title">ssh-office</h1></div>
+        <div class="main" style="position:relative">
+          <div class="ov" style="padding:12px"><div class="mm" data-timer="phone"></div></div>
+        </div>
+      </div></div>
+      <p class="sent" data-sent="phone"></p>
+      <div class="cap"><b>휴대폰 · 360px</b><br>막대 양옆의 −/+는 44px 원형 버튼입니다. 엄지로 대략 끌고 버튼으로 1분씩 맞춥니다.</div>
+    </div>
+  </div>
+</div>
+
+<h4>바뀌기 전</h4>
+<div class="mocks">
+  <div class="mock"><div class="scroll-x"><div class="app" style="width:400px;border-radius:10px;padding:16px;background:#5f6670">
+    <div class="ov static"><div class="mm">
+      <div class="mm-head"><h2>터널 사용 시간 제한</h2></div>
+      <div class="mm-body"><div class="old3">
+        <div class="field"><span class="flabel">일</span><input class="input" value="0" aria-label="일"></div>
+        <div class="field"><span class="flabel">시간</span><input class="input" value="8" aria-label="시간"></div>
+        <div class="field"><span class="flabel">분</span><input class="input" value="0" aria-label="분"></div>
+      </div></div>
+      <div class="mm-foot"><button class="btn ghost" type="button">취소</button><button class="btn primary" type="button">확인</button></div>
+    </div></div>
+  </div></div>
+  <div class="cap"><span class="tag before">전</span><b>남은 시간은 1시간 30분인데 창은 "8시간"으로 열립니다.</b> 상한을 넘는 값도 넣을 수 있고, 서버가 말없이 자릅니다.</div></div>
+</div>
+
+<h3>단위와 범위 규칙</h3>
+<p>"적용 상한"은 소유자 그룹 상한과 켜는 사람의 그룹 상한 중 짧은 값입니다(스펙 1 §3). 상한별로 화면이 이렇게 달라집니다.</p>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>적용 상한</th><th>시간|일 버튼</th><th>시간 단위 범위</th><th>일 단위 범위</th><th>"자동으로 끄지 않기"</th></tr></thead>
+  <tbody>
+    <tr><td>없음(슈퍼유저, 0)</td><td>보임</td><td>1분 ~ 24시간</td><td>1 ~ 30일</td><td>보임</td></tr>
+    <tr><td>1분 미만(예: 59초)</td><td>숨김</td><td colspan="2"><b>슬라이더 없음</b>. "59초"를 고정해 보이고 확인하면 59를 보낸다 <span class="pri m">추가</span></td><td>숨김</td></tr>
+    <tr><td>2시간</td><td>숨김</td><td>1분 ~ 2시간</td><td>—</td><td>숨김</td></tr>
+    <tr><td>12시간</td><td>숨김</td><td>1분 ~ 12시간</td><td>—</td><td>숨김</td></tr>
+    <tr><td>1일 ~ 2일 미만(예: 1일 12시간)</td><td>보임</td><td>1분 ~ 24시간</td><td><b>"1일" 고정</b>, 슬라이더 없음 <span class="pri m">추가</span></td><td>숨김</td></tr>
+    <tr><td>3일</td><td>보임</td><td>1분 ~ 24시간</td><td>1 ~ 3일</td><td>숨김</td></tr>
+    <tr><td>90일</td><td>보임</td><td>1분 ~ 24시간</td><td>1 ~ 30일</td><td>숨김</td></tr>
+  </tbody>
+</table></div>
+<p class="muted">최솟값과 최댓값이 같은 슬라이더는 움직이지 않는 손잡이만 남아 고장 난 것처럼 보입니다. 그래서 값이 하나뿐이면 슬라이더 대신 값을 고정해 보이고, 이유를 한 줄로 적습니다.</p>
+
+<h3>검토한 대안</h3>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>대안</th><th>장점</th><th>쓰지 않은 이유</th></tr></thead>
+  <tbody>
+    <tr><td>슬라이더 하나로 1분 ~ 30일</td><td>단위 버튼이 없다</td><td>1px이 수십 분이 되어 짧은 시간을 고를 수 없다. 책임자 지시(단위 전환)와도 다르다.</td></tr>
+    <tr><td>로그 눈금(짧은 쪽을 넓게)</td><td>짧은 시간을 고르기 쉽다</td><td>손잡이 위치와 값이 비례하지 않아 예측하기 어렵다. −/+ 버튼으로 정밀도 문제를 더 단순하게 푼다.</td></tr>
+    <tr><td>프리셋 칩(30분·1시간·8시간)</td><td>한 번에 고른다</td><td>요청 범위 밖이고 고를 것이 늘어난다. 실제 사용 값을 본 뒤 다시 판단한다.</td></tr>
+    <tr><td>분·시간·일 세 단위</td><td>짧은 시간이 정밀하다</td><td>책임자 지시가 "일 또는 시간만"이다. 시간 단위가 이미 1분씩 움직인다.</td></tr>
+    <tr><td>iOS 타이머 같은 휠 선택기</td><td>휴대폰에서 익숙하다</td><td>웹에서는 키보드와 보조 기술 동작을 모두 직접 만들어야 한다. 기본 range 입력이 더 안전하다.</td></tr>
+    <tr><td>숫자 칸을 남기고 슬라이더를 더함</td><td>정확히 타이핑할 수 있다</td><td>같은 값을 바꾸는 진입점이 둘이 되고 화면이 복잡해진다. −/+와 키보드로 충분하다.</td></tr>
+  </tbody>
+</table></div>
+
+<h3>예외 상황</h3>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>상황</th><th>동작</th></tr></thead>
+  <tbody>
+    <tr><td>창을 연 동안 남은 시간이 흐름</td><td>처음 값은 연 순간의 남은 시간이다. 창을 연 채로 두어도 고른 값은 그대로이고, "꺼지는 시각"만 지금 기준으로 다시 계산한다(1초마다).</td></tr>
+    <tr><td>남은 시간 1분 미만</td><td>1분으로 연다(스펙 FR-12).</td></tr>
+    <tr><td>남은 시간이 하루 이상이고 일 단위를 쓸 수 있음</td><td>일 단위로 열고 일 수는 반올림한다. 예: 2일 5시간 → 2일.</td></tr>
+    <tr><td>자동으로 끄지 않는 터널(상한 없음)</td><td>"자동으로 끄지 않기"가 켜진 채로 열린다. 막대와 단위 버튼은 흐리게 잠기고 값 자리에 "자동으로 끄지 않음"이 보인다.</td></tr>
+    <tr><td>켜기만 할 수 있는 사용자</td><td>지금처럼 상태 영역에 시간 변경 창이 없다(스펙 1 결정 7, <code>TunnelStatusArea.svelte:66</code>의 <code>editable</code>). 목록의 시계는 보기만 한다.</td></tr>
+    <tr><td>꺼진 터널</td><td>시간 변경 창을 열 수 없다(지금과 같음).</td></tr>
+    <tr><td>창을 연 동안 관리자가 그룹 상한을 줄임</td><td>서버가 상한으로 자르는 기존 동작이 최종 판정이다. 창은 다음에 열 때 새 상한을 쓴다.</td></tr>
+    <tr><td>옛 서버(<code>timeoutCapSeconds</code> 없음)</td><td>내 그룹 상한(<code>/api/me</code>)으로 계산한다(스펙 1 §7).</td></tr>
+  </tbody>
+</table></div>
+
+<h3>접근성</h3>
+<ul>
+  <li>기본 <code>input type="range"</code>를 쓰고 <code>aria-label="켜 둘 시간"</code>, <code>aria-valuetext="1시간 30분"</code>을 둡니다. 꺼지는 시각 문장은 <code>aria-describedby</code>로 잇습니다. 값이 바뀔 때마다 알리는 실시간 영역은 두지 않습니다(슬라이더 값을 이미 읽어 주므로 두 번 읽힘).</li>
+  <li>키보드: 화살표 ±1분(일 단위 ±1일), PageUp·PageDown ±1시간(일 단위에서는 ±1일), Home·End 양 끝. PageUp·PageDown은 브라우저마다 폭이 달라 직접 처리합니다.</li>
+  <li>−/+ 버튼은 44px, 이름은 "1분 줄이기"·"1분 늘리기"(일 단위에서 "1일 …"). 끝에 닿으면 그쪽 버튼만 잠급니다.</li>
+  <li>시간|일 버튼은 <code>role="radiogroup"</code>과 <code>role="radio"</code>로 두고, 높이 40px에 바깥 여백 2px를 더해 누르는 영역이 44px입니다.</li>
+  <li>손잡이는 28px로 그리지만 입력 요소 높이가 44px라 그 안 어디를 눌러도 됩니다. 막대를 한 번 누르면 그 지점으로 이동하므로 2.5.7의 한 번 누르기 대안도 만족합니다.</li>
+</ul>
+
+<h3>문구</h3>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>키</th><th>한국어</th><th>영어</th><th>스펙 대비</th></tr></thead>
+  <tbody>
+    <tr><td class="k">timer.title</td><td>켜 둘 시간</td><td>Keep it on for</td><td>동의</td></tr>
+    <tr><td class="k">tunnelStatus.timeLimit</td><td>자동 꺼짐까지</td><td>Turns off in</td><td>동의</td></tr>
+    <tr><td class="k">timer.endsAt</td><td>지금부터 {duration} 뒤, {time}에 꺼집니다.</td><td>Turns off at {time} ({duration} from now).</td><td>동의</td></tr>
+    <tr><td class="k">timer.unitHours / unitDays</td><td>시간 / 일</td><td>Hours / Days</td><td>동의</td></tr>
+    <tr><td class="k">timer.noAutoOff</td><td>자동으로 끄지 않기</td><td>Don't turn off automatically</td><td>동의</td></tr>
+    <tr><td class="k">timer.capNote</td><td><b>이 터널은 최대 {max}까지 켜 둘 수 있습니다.</b></td><td>This tunnel can stay on for up to {max}.</td><td><span class="pri m">수정</span> 상한은 소유자와 켜는 사람 그룹 중 짧은 값이라, 슈퍼유저가 남의 터널을 볼 때 "그룹"이 누구의 그룹인지 알 수 없다</td></tr>
+    <tr><td class="k">timer.noAutoOffEnds</td><td>직접 끌 때까지 켜 둡니다.</td><td>Stays on until you turn it off.</td><td><span class="pri l">추가</span></td></tr>
+    <tr><td class="k">timer.less / timer.more</td><td>{step} 줄이기 / {step} 늘리기</td><td>{step} less / {step} more</td><td><span class="pri l">추가</span> −/+ 버튼 이름</td></tr>
+    <tr><td class="k">timer.onlyOneDay</td><td>일 단위로는 1일만 고를 수 있습니다.</td><td>Only 1 day is available in days.</td><td><span class="pri l">추가</span></td></tr>
+    <tr><td class="k">clock.noLimit</td><td>시간 제한 없음 → <b>자동으로 끄지 않음</b></td><td>No time limit → Stays on</td><td><span class="pri l">정리</span> 목록의 같은 개념</td></tr>
+    <tr><td class="k">tunnelStatus.timeLimitFailed</td><td>시간 제한을 바꾸지 못했습니다. → <b>켜 둘 시간을 바꾸지 못했습니다.</b></td><td>Couldn't change how long it stays on.</td><td><span class="pri l">정리</span></td></tr>
+    <tr><td class="k">group.maxDuration</td><td>최대 터널 사용 시간(시간) → <b>한 번에 켜 둘 수 있는 최대 시간(시간)</b></td><td>Longest time a tunnel can stay on (hours)</td><td><span class="pri l">정리</span> 같은 개념의 관리자 쪽 이름</td></tr>
+  </tbody>
+</table></div>
+
+<h3>스펙 1 대응</h3>
+<ul>
+  <li>FR-3·FR-4·FR-5·FR-6·FR-7·FR-9·FR-10·FR-11·FR-12·FR-13·FR-16·FR-17은 목업 그대로입니다.</li>
+  <li>FR-8: 일 단위의 PageUp·PageDown 폭(±1일)을 적어 주세요.</li>
+  <li><b>새 FR(−/+ 버튼)</b>: 슬라이더 양옆에 44px −/+ 버튼을 두고 단위 한 칸씩 움직인다. 끝에서는 그쪽 버튼을 잠근다. 근거는 WCAG 2.5.7과 Apple HIG.</li>
+  <li><b>새 FR(값이 하나뿐인 범위)</b>: 일 단위 최대가 1일이면 슬라이더 대신 "1일"을 고정해 보이고 <code>timer.onlyOneDay</code>를 보인다. 적용 상한이 1분 미만이면 시간 단위도 슬라이더 없이 상한 초를 고정해 보인다.</li>
+  <li>FR-14: <code>timer.capNote</code> 문구를 위 표처럼 바꾸고 정리 문구 세 개를 범위에 넣어 주세요.</li>
+</ul>
+
+<!-- ───────────────────────── ② ───────────────────────── -->
+<h2 class="sec" id="i2"><small>ITEM 2 · 스펙 2</small>② 포트 범위 버튼 — 버튼답게</h2>
+
+<h3>문제</h3>
+<ul>
+  <li>공용 버튼의 기본 모양 <code>ghost</code>는 테두리가 투명이고(<code>Button.svelte:63</code>), <code>size="sm"</code>은 12px 글자에 위아래 여백 5px입니다. 그래서 "범위 추가"와 "삭제"는 높이 약 28px의 회색 글자로 보입니다.</li>
+  <li>범위가 없을 때는 "허용된 포트가 없습니다." 문장 아래에 이 글자 버튼만 남아 문장의 일부처럼 읽힙니다.</li>
+  <li>범위 줄의 포트 입력 두 칸에는 보이는 이름도 보조 기술용 이름도 없습니다(<code>GroupEditScreen.svelte:233-236</code>). 화면 읽기 프로그램은 "편집, 1"만 읽습니다.</li>
+  <li>터널 편집의 "허용 범위: 20000–20100, 30000–30010"은 안내 글자라서 눌러서 고를 수 없습니다.</li>
+</ul>
+
+<h3>사용 상황</h3>
+<div class="grid2">
+  <div class="box"><h4>관리자 · 데스크톱</h4><p>새 그룹에 "20000–20100" 범위를 주려고 "허용 포트 범위"를 찾습니다. 비어 있는 상자 안에 테두리 있는 "＋ 범위 추가" 버튼이 바로 보입니다. 누르면 줄이 생기고 첫 칸에 초점이 갑니다.</p></div>
+  <div class="box"><h4>일반 사용자 · 휴대폰</h4><p>새 터널을 만들면서 외부 포트를 정해야 합니다. 칸 아래의 "20000–20100" 칩을 누르면 내 터널이 아직 쓰지 않는 첫 포트(예: 20002)가 들어갑니다.</p></div>
+</div>
+
+<h3>권장 설계</h3>
+<ul>
+  <li><b><code>secondary</code> 모양을 더합니다.</b> 흰 바탕(<code>--bg-2</code>), 테두리 <code>--line-2</code>, 글자 <code>--ink-0</code>, 최소 높이 44px. 기존 <code>.btn</code> 기본 규칙과 같은 테두리를 쓰므로 새 색은 없습니다. 기본값 <code>ghost</code>는 그대로라 대화 상자의 "취소"는 바뀌지 않습니다.</li>
+  <li><b>"＋ 범위 추가"</b>는 아이콘과 글자를 함께 둔 <code>secondary</code>입니다. 범위가 없으면 점선 상자 안에 문장과 나란히 둡니다.</li>
+  <li><b>줄 삭제</b>는 44px 정사각 아이콘 버튼(×)입니다. 보조 기술용 이름은 "20000–20100 범위 삭제"입니다. 360px에서 입력 두 칸에 폭을 더 줄 수 있고, 같은 줄에 "삭제" 글자가 반복되지 않습니다.</li>
+  <li><b>삭제는 빨간색과 확인 창을 쓰지 않습니다.</b> 저장 전에는 되돌릴 수 있는 편집이기 때문입니다. 빨간색은 저장된 것을 지우는 동작(터널 삭제 등)에만 씁니다.</li>
+  <li>포트 입력 두 칸 사이에 "–"를 두고, 보조 기술용 이름 "시작 포트"·"끝 포트"를 붙입니다.</li>
+  <li>터널 편집 화면에서는 허용 범위를 <b>칩 버튼</b>으로 보입니다. 누르면 그 범위에서 내 터널이 쓰지 않는 가장 작은 포트를 넣고, 모두 쓰고 있으면 첫 포트를 넣습니다. 칩 높이는 36px이고 누르는 영역은 44px까지 넓힙니다.</li>
+</ul>
+
+<div class="mocks">
+  <div class="mock"><div class="scroll-x"><div class="app desk" style="width:560px;min-height:0"><div class="main">
+    <div class="card"><div class="card-label">TUNNEL PERMISSIONS</div>
+      <div class="field"><span class="flabel">허용 포트 범위</span>
+        <div class="stack" style="gap:8px">
+          <div class="rng"><input class="input" value="20000" aria-label="시작 포트"><input class="input" value="20100" aria-label="끝 포트"><button class="ghostlink" type="button">삭제</button></div>
+          <div class="rng"><input class="input" value="30000" aria-label="시작 포트"><input class="input" value="30010" aria-label="끝 포트"><button class="ghostlink" type="button">삭제</button></div>
+          <div><button class="ghostlink" type="button">범위 추가</button></div>
+        </div></div>
+      <div class="field" style="margin-top:20px"><span class="flabel">허용 포트 범위 · 비어 있을 때</span>
+        <p style="margin:0">허용된 포트가 없습니다.</p><div><button class="ghostlink" type="button">범위 추가</button></div></div>
+    </div></div></div></div>
+    <div class="cap"><span class="tag before">전</span><b>버튼이 회색 글자처럼 보입니다.</b> 누르는 영역은 약 28px입니다.</div></div>
+
+  <div class="mock"><div class="scroll-x"><div class="app desk" style="width:560px;min-height:0"><div class="main">
+    <div class="card"><div class="card-label">TUNNEL PERMISSIONS</div>
+      <div class="field"><span class="flabel">허용 포트 범위</span>
+        <div class="stack" style="gap:8px">
+          <div class="rng"><input class="input h44" value="20000" aria-label="시작 포트"><span class="dash">–</span><input class="input h44" value="20100" aria-label="끝 포트"><button class="btn secondary icon" type="button" aria-label="20000–20100 범위 삭제" title="범위 삭제"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+          <div class="rng"><input class="input h44" value="30000" aria-label="시작 포트"><span class="dash">–</span><input class="input h44" value="30010" aria-label="끝 포트"><button class="btn secondary icon" type="button" aria-label="30000–30010 범위 삭제" title="범위 삭제"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+          <div><button class="btn secondary" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>범위 추가</button></div>
+        </div></div>
+      <div class="field" style="margin-top:20px"><span class="flabel">허용 포트 범위 · 비어 있을 때</span>
+        <div class="empty-box"><span>허용된 포트가 없습니다.</span><button class="btn secondary" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>범위 추가</button></div></div>
+    </div></div></div></div>
+    <div class="cap"><span class="tag after">후</span><b>테두리 있는 44px 버튼.</b> 화면의 다른 보조 버튼("소유자 바꾸기" 등 <code>.btn</code> 기본 테두리)과 같은 모양입니다.</div></div>
+
+  <div class="mock"><div class="scroll-x"><div class="app phone short">
+    <div class="hdr"><span class="hdr-btn" aria-hidden="true">‹</span><h1 class="hdr-title">새 터널</h1></div>
+    <div class="main">
+      <div class="card stack">
+        <div class="field"><label class="flabel" for="port-in">외부 포트</label>
+          <input class="input h44" id="port-in" inputmode="numeric" placeholder="포트 번호" value="">
+          <div class="chips" role="group" aria-label="허용 범위에서 포트 고르기"><span class="lead">허용 범위</span>
+            <button class="chipbtn" type="button" data-from="20000" data-to="20100" aria-pressed="false">20000–20100</button>
+            <button class="chipbtn" type="button" data-from="30000" data-to="30010" aria-pressed="false">30000–30010</button>
+          </div>
+          <span class="tinytext" id="port-note">칩을 누르면 내 터널이 쓰지 않는 첫 포트를 넣습니다.</span>
+        </div>
+        <div class="field"><span class="flabel">대상 호스트</span><input class="input" value="192.168.0.10" aria-label="대상 호스트"></div>
+      </div>
+      <div class="card" style="margin-top:16px"><div class="card-label">HTTP HEADERS</div>
+        <div class="rng"><input class="input h44" placeholder="이름" aria-label="헤더 이름"><span class="dash">:</span><input class="input h44" placeholder="값" aria-label="헤더 값"><button class="btn secondary icon" type="button" aria-label="헤더 추가"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div>
+      </div>
+    </div></div></div>
+    <div class="cap"><span class="tag after">후</span><b>터널 편집 · 360px · 칩을 눌러 보세요.</b> 내 터널이 20000·20001을 이미 쓴다고 가정했습니다. 아래는 같은 규칙을 HTTP 헤더 추가에 적용한 모습입니다(스펙 2 FR-5).</div></div>
+</div>
+
+<h3>검토한 대안</h3>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>대안</th><th>쓰지 않은 이유</th></tr></thead>
+  <tbody>
+    <tr><td>기본 모양을 <code>ghost</code>에서 테두리 있는 모양으로 일괄 변경</td><td>모든 대화 상자의 "취소"까지 바뀌어 회귀 범위가 커진다(스펙 2 결정 2에 동의).</td></tr>
+    <tr><td>"범위 추가"를 <code>primary</code>(빨간 바탕)로</td><td>한 화면의 주 버튼은 "저장" 하나여야 한다. 둘이면 무엇이 주 동작인지 흐려진다.</td></tr>
+    <tr><td>밑줄 친 링크 모양</td><td>링크는 "다른 곳으로 이동"으로 읽힌다. 지금 문제(글자처럼 보임)가 그대로 남는다.</td></tr>
+    <tr><td>"＋" 아이콘만</td><td>무엇을 더하는지 알 수 없다. 처음 쓰는 관리자에게는 글자가 필요하다. 줄 안의 삭제(×)는 줄 문맥이 있어 아이콘만으로 충분하다.</td></tr>
+    <tr><td>칩을 누르면 범위의 첫 포트(스펙 FR-6 원안)</td><td>같은 범위에 터널을 둘째로 만들 때 바로 "포트 사용 중"이 난다. 내 터널 목록으로 빈 포트를 고르는 편이 실패가 적다. 다른 사용자가 쓰는 포트는 화면이 모르므로 서버 검사가 최종이다.</td></tr>
+  </tbody>
+</table></div>
+
+<h3>예외 상황 · 접근성</h3>
+<ul>
+  <li>보기 전용(<code>readOnly</code>) 그룹: 버튼은 <code>disabled</code>이고 테두리는 흐리게(42% 불투명) 보입니다. 지금 규칙과 같습니다.</li>
+  <li>허용 범위가 없는 일반 사용자: 칩 대신 "그룹에 허용된 포트가 없습니다."를 보입니다(<code>tunnel.noPortsAllowed</code>).</li>
+  <li>범위가 많을 때(예: 8개): 칩은 줄을 바꿔 감깁니다. 칩 사이 간격은 8px로 2.5.8의 간격 조건도 만족합니다.</li>
+  <li>대비: <code>secondary</code> 테두리 #8A94A3는 흰 바탕에서 약 3.0:1로 1.4.11을 만족합니다. 앱에 어두운 테마가 없으므로 스펙 2의 FR-7·AC-5에서 "어두운 테마"는 빼고 "밝은 테마에서 3:1 이상"으로 고쳐야 합니다.</li>
+  <li>"범위 추가"를 누르면 새 줄의 시작 포트 칸에 초점을 옮깁니다. 삭제하면 다음 줄의 삭제 버튼, 마지막이었다면 "범위 추가"로 초점을 옮깁니다.</li>
+</ul>
+
+<h3>스펙 2 대응</h3>
+<ul>
+  <li>FR-1·FR-2·FR-4·FR-5·FR-8은 동의합니다.</li>
+  <li>FR-3: "제거" 글자 버튼 대신 44px 아이콘 버튼(이름 "{from}–{to} 범위 삭제")을 권합니다. 지금 문구 키 <code>common.remove</code>는 "삭제"이므로 "제거"라는 새 낱말을 만들지 않습니다.</li>
+  <li>FR-6: "첫 포트" 대신 "내 터널이 쓰지 않는 가장 작은 포트, 없으면 첫 포트"로 바꿔 주세요. AC-4는 내 터널이 그 범위를 쓰지 않는다는 전제를 적어 두면 그대로 성립합니다.</li>
+  <li>FR-7·AC-5: "밝은·어두운 테마 모두" → "밝은 테마에서"로 고칩니다.</li>
+  <li><b>새 FR</b>: 범위 줄의 두 입력에 보조 기술용 이름 "시작 포트"·"끝 포트"를 붙이고, 그 사이에 "–"를 보인다. 범위를 더하거나 지우면 위 규칙대로 초점을 옮긴다.</li>
+</ul>
+
+<!-- ───────────────────────── ③ ───────────────────────── -->
+<h2 class="sec" id="i3"><small>ITEM 3 · 스펙 3</small>③ 연결당 버퍼 — 그룹 최대치</h2>
+
+<h3>문제</h3>
+<ul>
+  <li>일반 사용자는 버퍼를 아주 크게 잡아 서버 메모리를 혼자 쓸 수 있습니다. 지금은 서버 버퍼만 전역 캐시 한도로 검사하고, 클라이언트 버퍼는 검사하지 않습니다(<code>AttributeEnforcer.ts:169-174</code>).</li>
+  <li>상한을 넣더라도 사용자가 그 숫자를 모르면, 저장을 눌러야 비로소 실패를 알게 됩니다.</li>
+</ul>
+
+<h3>사용 상황</h3>
+<div class="grid2">
+  <div class="box"><h4>관리자</h4><p>"외부 협력사" 그룹의 연결당 버퍼를 16 MiB로 묶습니다. 그룹 편집의 "제한" 카드, 최대 동시 연결 바로 아래에서 숫자를 넣습니다.</p></div>
+  <div class="box"><h4>일반 사용자</h4><p>새 터널을 만들면 버퍼 기본값이 이미 10(상한이 8이면 8)으로 들어가 있습니다. 큰 파일을 보내려고 128을 넣는 순간 칸 아래에 "그룹 최대 16 MiB 이하로 정하세요."가 보이고 저장 버튼이 잠깁니다.</p></div>
+  <div class="box"><h4>상한을 낮춘 뒤</h4><p>예전에 64로 저장해 둔 터널을 열면 버퍼 카드에 주황색 안내가 보입니다. 이름만 고쳐 저장하는 것은 됩니다. 버퍼를 바꾸려면 16 이하로 정해야 합니다.</p></div>
+  <div class="box"><h4>옛 화면 · API 직접 호출</h4><p>화면 검사를 거치지 않은 요청은 서버가 422로 거부하고, 알림에 "서버 버퍼는 그룹 최대인 16 MiB 이하여야 합니다."가 보입니다.</p></div>
+</div>
+
+<h3>권장 설계 · 눌러 보기</h3>
+<p>오른쪽 터널 편집 카드의 숫자를 바꿔 보세요. 상한은 64 MiB, 전역 캐시 한도는 128 MiB로 가정했습니다.</p>
+<div class="mocks">
+  <div class="mock"><div class="scroll-x"><div class="app desk" style="width:520px;min-height:0"><div class="main">
+    <div class="card"><div class="card-label">LIMITS</div>
+      <div class="stack">
+        <div class="field"><span class="flabel">최대 동시 연결</span><input class="input" value="0" aria-label="최대 동시 연결"><span class="hint">0은 무제한입니다.</span></div>
+        <div class="field"><label class="flabel" for="g-buf">연결당 버퍼 최대(MiB)</label><input class="input" id="g-buf" value="64"><span class="hint">0이면 그룹 최대가 없습니다. 서버·클라이언트 버퍼에 모두 적용되고, 터널을 저장할 때만 검사합니다.</span></div>
+        <div class="field"><span class="flabel">대역폭</span><input class="input" value="제한 없음" aria-label="대역폭"></div>
+      </div></div></div></div></div>
+    <div class="cap"><span class="tag after">후</span><b>그룹 편집 · "제한" 카드.</b> 같은 카드의 다른 상한(최대 동시 연결)과 나란히 둡니다. 스펙 3 FR-9.</div></div>
+
+  <div class="mock"><div class="scroll-x"><div class="app phone short">
+    <div class="hdr"><span class="hdr-btn" aria-hidden="true">‹</span><h1 class="hdr-title">ssh-office</h1></div>
+    <div class="main">
+      <div class="card" id="buf-card"><div class="card-label">연결당 버퍼 한도(MiB)</div>
+        <p class="cap-line">그룹 최대 <b>64 MiB</b></p>
+        <div class="two-col">
+          <div class="field"><label class="flabel" for="b-srv">서버</label><input class="input" id="b-srv" inputmode="decimal" value="10" max="64" aria-describedby="b-srv-err"><span class="err-msg" id="b-srv-err" hidden></span></div>
+          <div class="field"><label class="flabel" for="b-cli">클라이언트</label><input class="input" id="b-cli" inputmode="decimal" value="10" max="64" aria-describedby="b-cli-err"><span class="err-msg" id="b-cli-err" hidden></span></div>
+        </div>
+        <ul class="notes">
+          <li>서버 버퍼: 1 MiB 이상이며 소수도 쓸 수 있습니다.</li>
+          <li>클라이언트 버퍼: 1 이상 64 이하로 정합니다.</li>
+          <li>버퍼가 차면 디스크로 넘깁니다.</li>
+        </ul>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:16px"><button class="btn primary" type="button" id="b-save">저장</button></div>
+      <div class="card" style="margin-top:20px"><div class="card-label">기존 값이 상한보다 클 때</div>
+        <p class="cap-line">그룹 최대 <b>64 MiB</b></p>
+        <div class="two-col">
+          <div class="field"><span class="flabel">서버</span><input class="input" value="128" aria-label="서버 버퍼"></div>
+          <div class="field"><span class="flabel">클라이언트</span><input class="input" value="32" aria-label="클라이언트 버퍼"></div>
+        </div>
+        <p class="note-warn" role="note">서버 버퍼 128 MiB는 지금 그룹 최대(64 MiB)보다 큽니다. 바꾸지 않으면 그대로 둘 수 있지만, 바꾸려면 64 이하로 정해야 합니다.</p>
+      </div>
+    </div></div></div>
+    <div class="cap"><span class="tag after">후</span><b>터널 편집 · 360px.</b> 상한을 입력 전부터 카드 머리에 보입니다. 넘으면 그 칸만 빨갛게 표시하고 저장을 잠급니다(지금 서버 버퍼 오류가 저장을 잠그는 <code>updatable</code> 규칙과 같음).</div></div>
+</div>
+
+<h3>용어 — "세션당"보다 "연결당"</h3>
+<div class="callout"><b>권장: 카드 이름을 "세션당 버퍼 한도(MiB)"에서 "연결당 버퍼 한도(MiB)"로 바꿉니다.</b> 관리 화면에는 이미 "세션" 화면이 있고, 거기서 세션은 관리자 로그인 세션입니다(<code>sessions.*</code>: "세션 끝내기", "활성 세션이 없습니다"). 이 버퍼는 터널로 들어온 TCP 연결 하나에 걸리며, ④에서 그 단위를 화면 문구로 "연결"이라 부르기로 했습니다(스펙 4 결정 1). 같은 대상을 화면마다 다른 이름으로 부르면 사용자는 다른 것으로 읽습니다. 책임자 표현의 "세션당 버퍼 한도"는 지금 카드 이름을 가리킨 것이므로 뜻은 그대로입니다.</div>
+
+<h3>검토한 대안</h3>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>대안</th><th>쓰지 않은 이유</th></tr></thead>
+  <tbody>
+    <tr><td>넘으면 서버가 상한으로 잘라서 저장</td><td>사용자가 모르는 사이에 값이 바뀐다. ①에서 고치려는 "말없이 자르기"와 같은 문제다. 책임자 지시도 "저장되지 않는다"이다.</td></tr>
+    <tr><td>화면이 입력값을 상한으로 자동 고정</td><td>입력한 숫자가 몰래 바뀌어 사용자가 무엇이 틀렸는지 배우지 못한다. 오류를 보여 주고 고치게 한다.</td></tr>
+    <tr><td>서버·클라이언트 상한을 따로</td><td>스펙 3 결정 2에 동의한다. 카드 하나에 숫자 하나가 관리자에게 쉽다.</td></tr>
+    <tr><td>슬라이더</td><td>MiB는 정확한 숫자를 넣는 값이고 범위가 넓다. 숫자 칸이 맞다.</td></tr>
+    <tr><td>저장을 잠그지 않고 누르면 오류로 이동</td><td>지금 버퍼 화면은 오류가 있으면 저장을 잠근다(<code>updatable</code>). 같은 화면 안에서 규칙을 둘로 나누지 않는다. 오류 문구가 늘 보이므로 왜 잠겼는지 알 수 있다.</td></tr>
+  </tbody>
+</table></div>
+
+<h3>예외 상황</h3>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>상황</th><th>동작</th></tr></thead>
+  <tbody>
+    <tr><td>그룹 상한 0(없음)</td><td>카드 머리 안내를 보이지 않는다. 지금과 같다.</td></tr>
+    <tr><td>슈퍼유저</td><td>검사를 받지 않는다(FR-7). 남의 터널을 열면 "소유자 그룹 최대 64 MiB · 슈퍼유저는 넘겨도 저장됩니다"를 참고로 보이기를 권한다 <span class="pri l">선택</span>.</td></tr>
+    <tr><td>클라이언트 0 이하(제한 없음)</td><td>상한이 있으면 오류 "1 이상 64 이하로 정하세요. 그룹 최대가 있으면 '제한 없음'은 쓸 수 없습니다."</td></tr>
+    <tr><td>전역 캐시 한도가 그룹 상한보다 작음(예: 128 vs 512)</td><td>서버 버퍼 칸은 둘 중 작은 값을 안내한다. 화면이 전역 한도를 모르면 그룹 상한만 보이고, 서버의 <code>buffer_limit_exceeded</code>가 최종 판정이다(FR-5).</td></tr>
+    <tr><td>상한을 낮춘 뒤 기존 값</td><td>주황색 안내만 보이고 저장은 막지 않는다(FR-6·FR-12). 그 칸을 바꾸는 순간부터 상한 검사를 한다.</td></tr>
+    <tr><td>소수 입력(예: 64.5, 상한 64)</td><td>상한보다 크면 오류. 상한은 정수, 버퍼 값은 소수 가능.</td></tr>
+  </tbody>
+</table></div>
+
+<h3>접근성 · 문구</h3>
+<ul>
+  <li>오류 칸에는 <code>aria-invalid="true"</code>를 두고 오류 문장을 <code>aria-describedby</code>로 잇습니다. 색만으로 알리지 않고 "!" 표시와 문장을 함께 둡니다(지금 <code>Field</code>의 <code>err-msg</code>와 같음).</li>
+  <li>입력 칸의 <code>max</code> 속성을 상한으로 둡니다. 숫자 키패드의 위아래 버튼이 상한을 넘지 않습니다.</li>
+</ul>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>키</th><th>한국어</th><th>영어</th><th>스펙 대비</th></tr></thead>
+  <tbody>
+    <tr><td class="k">tunnelEdit.bufferLimit</td><td><b>연결당 버퍼 한도(MiB)</b></td><td>Buffer limit per connection (MiB)</td><td><span class="pri m">수정</span> 용어</td></tr>
+    <tr><td class="k">group.maxSessionBuffer</td><td><b>연결당 버퍼 최대(MiB)</b></td><td>Max buffer per connection (MiB)</td><td><span class="pri m">수정</span> 용어</td></tr>
+    <tr><td class="k">group.maxSessionBufferHint</td><td>0이면 그룹 최대가 없습니다. 서버·클라이언트 버퍼에 모두 적용되고, 터널을 저장할 때만 검사합니다.</td><td>0 means no group maximum. Applies to both server and client buffers and is checked only when a tunnel is saved.</td><td>동의(다듬음)</td></tr>
+    <tr><td class="k">tunnelEdit.groupBufferMax</td><td>그룹 최대 {max} MiB</td><td>Group maximum {max} MiB</td><td>동의</td></tr>
+    <tr><td class="k">tunnelEdit.bufferOverGroup</td><td>그룹 최대 {max} MiB 이하로 정하세요.</td><td>Set {max} MiB or less (group maximum).</td><td><span class="pri l">추가</span> 칸 오류</td></tr>
+    <tr><td class="k">serverError.group_buffer_limit_exceeded</td><td><b>{field}는 그룹 최대인 {max} MiB 이하여야 합니다.</b><br><span class="muted">{field}: "서버 버퍼" / "클라이언트 버퍼"</span></td><td>The {field} can be at most {max} MiB for your group.</td><td><span class="pri m">수정</span> 응답의 <code>field</code>를 문구에 쓴다. 두 이름 모두 받침이 없어 "는"이 맞다</td></tr>
+  </tbody>
+</table></div>
+
+<h3>스펙 3 대응</h3>
+<ul>
+  <li>FR-1~FR-12는 동의합니다. FR-10의 "저장 버튼을 막는다"는 지금 화면 규칙(<code>updatable</code>)과 같으므로 유지합니다.</li>
+  <li>FR-13: 실패 문구에 <code>field</code>를 넣어 어느 칸인지 알리도록 고쳐 주세요(AC-8 문장도 "서버 버퍼는 그룹 최대인 64 MiB 이하여야 합니다."로).</li>
+  <li>용어: 카드 이름과 그룹 칸 이름을 "연결당"으로 바꾸는 것을 범위에 넣어 주세요. 속성 이름 <code>max_session_buffer_mib</code>는 내부 이름이라 그대로 두어도 됩니다.</li>
+  <li>FR-10 보강: 상한 안내는 칸 오류와 별개로 카드 머리에 늘 보인다(예방).</li>
+</ul>
+
+<!-- ───────────────────────── ④ ───────────────────────── -->
+<h2 class="sec" id="i4"><small>ITEM 4 · 스펙 4</small>④ 목록에서 연결 보기 · 끊기 · 차단</h2>
+
+<h3>문제</h3>
+<ul>
+  <li>목록 줄은 "켜짐 · 연결 2개"까지만 보입니다. 주고받은 양과 연결된 주소를 보려면 편집 화면으로 들어가야 하고, 거기서도 주소 목록은 볼 수 없습니다.</li>
+  <li>수상한 연결을 끊는 방법은 터널 전체를 끄는 것뿐입니다. 차단은 보안 화면에서 주소를 직접 타이핑해야 합니다.</li>
+  <li>어느 클라이언트가 이 터널을 이어 주는지 목록에서 보이지 않습니다. "클라이언트 연결 끊김"이 떠도 어느 PC를 켜야 하는지 모릅니다.</li>
+</ul>
+
+<h3>사용 상황</h3>
+<div class="grid2">
+  <div class="box"><h4>소유자 · 휴대폰</h4><p>알림을 받고 목록을 엽니다. ssh-office 줄의 "연결 3"을 누르면 주소 세 개가 보입니다. 모르는 주소 하나를 "끊기"로 바로 끊습니다. 소유자에게는 차단 버튼이 없으므로 관리자에게 주소를 전달합니다.</p></div>
+  <div class="box"><h4>슈퍼유저 · 데스크톱</h4><p>같은 주소에서 연결이 계속 들어옵니다. "차단"을 누르면 확인 창이 뜹니다. "이 터널만"이 기본으로 골라져 있고, 차단하면 그 주소의 연결 두 개가 함께 끊깁니다.</p></div>
+  <div class="box"><h4>켜기만 하는 사용자</h4><p>"연결 3"은 버튼이 아닌 글자입니다. 주소(개인정보)는 보이지 않고, 가동 정보와 허용 클라이언트는 보입니다.</p></div>
+  <div class="box"><h4>클라이언트가 꺼짐</h4><p>"클라이언트: ○ 사무실 PC"가 흐리게 보이고 상태 줄에는 "클라이언트 연결 끊김"이 보입니다. 사무실 PC를 켜야 한다는 것을 바로 압니다.</p></div>
+</div>
+
+<h3>"가동 시간"의 뜻 — 스펙 결정 3을 바꾸기를 권합니다</h3>
+<div class="callout"><b>목록에서 "가동 시간"은 "이 터널을 켠 지 얼마"로 읽힙니다.</b> 그런데 지금 <code>uptime</code>은 서버가 그 포트를 연 시각입니다(<code>ExternalPortServerPool.ts:208</code>). 터널을 꺼도 포트는 열려 있으므로(<code>inactive</code>는 상태만 바꿈), 방금 켠 터널의 줄에 "가동 시간 3일"이 보입니다. 스펙 결정 3이 짚은 대로 <code>activeStart</code>는 켜 둘 시간을 바꿀 때마다 다시 잡혀 쓸 수 없습니다.<br><br>
+<b>권장:</b> 상태 응답에 <code>activatedAt</code>(꺼짐→켜짐으로 바뀐 시각, 켜 둘 시간을 바꿔도 그대로)을 더하고, 목록과 편집 화면 모두 "켜진 지 {duration}"을 보입니다. 서버가 다시 시작해 상태를 이어받으면 이어받은 값을 씁니다. 옛 서버(필드 없음)면 지금처럼 "가동 시간 {uptime}"을 보입니다. 두 화면이 같은 함수로 이 줄을 만드는 스펙 FR-1의 원칙은 그대로입니다.</div>
+
+<h3>권장 설계 · 눌러 보기</h3>
+<ul>
+  <li>줄 구조(위에서 아래): 제목 → 상태("켜짐", 경고) → <b>클라이언트 줄</b> → 시계 줄 → <b>가동 정보 줄</b> → IP 제한 줄(이슈 348). 가동 정보 줄은 줄 링크 <b>밖</b>에 두어 IP 줄과 같은 규칙을 따릅니다.</li>
+  <li>가동 정보 줄은 <b>[연결 3 ›] 알약 버튼</b>으로 시작합니다. IP 제한 토글과 같은 모양(32px, 누르는 영역 44px)이라 "눌리는 것"이 한눈에 보입니다. 뒤에 "켜진 지 1일 2시간 · RX 58.1KiB · TX 59.5KiB"를 작은 고정폭 글자로 둡니다. 연결 수가 버튼 안에 있으므로 상태 줄의 "연결 N개"는 뺍니다(스펙 FR-1).</li>
+  <li>클라이언트 줄은 "클라이언트: ● 사무실 PC"입니다. 초록 점은 연결됨, 빈 점과 흐린 글자는 연결 안 됨입니다. 색만으로 알리지 않도록 보조 기술용 이름에 "연결 안 됨"을 붙입니다.</li>
+  <li>연결 창: 휴대폰에서는 연결 하나가 카드 한 장, 데스크톱(창 폭 640px)에서는 주소·정보 왼쪽, 버튼 오른쪽의 표 모양입니다. 맨 위에 "연결 3개 · 2초마다 새로 고침"을 둡니다.</li>
+  <li><b>창이 열린 동안 줄 순서를 고정합니다.</b> 2초마다 다시 읽을 때 새 연결은 맨 아래에 "새" 표시와 함께 붙이고, 끝난 연결은 흐리게 "끝남"으로 남깁니다. 누르려던 버튼이 손가락 밑에서 움직이면 엉뚱한 연결을 끊거나 차단하게 되기 때문입니다. 다음에 열 때는 최근 순으로 다시 정렬합니다.</li>
+  <li>차단 확인 창은 연결 창 <b>위에 겹쳐</b> 띄웁니다. 제목은 질문("… 주소를 차단할까요?"), 범위는 큰 라디오 두 개("이 터널만"이 기본), 메모는 선택, 버튼은 "취소"와 빨간 "차단"입니다.</li>
+</ul>
+
+<div class="stage" id="conn-stage">
+  <div class="stage-ctl" role="group" aria-label="역할">
+    <span class="lbl">보는 사람</span>
+    <button type="button" data-role="super" aria-pressed="true">슈퍼유저</button>
+    <button type="button" data-role="owner" aria-pressed="false">소유자(일반 사용자)</button>
+    <button type="button" data-role="toggle" aria-pressed="false">켜기만 가능</button>
+    <span class="lbl" style="margin-left:12px">시연</span>
+    <button type="button" data-act="newconn" aria-pressed="false">새 연결 들어오기</button>
+  </div>
+  <div class="mocks">
+    <div class="mock"><div class="scroll-x"><div class="app phone" data-conn="phone"></div></div>
+      <div class="cap"><b>휴대폰 · 360px.</b> "연결 4"를 누르고, 줄 오른쪽의 작은 아이콘 ×(연결 끊기)와 ⊘(차단)를 눌러 보세요. 아이콘에 마우스를 올리면 이름이 보이고, 화면 낭독기는 "주소 + 연결 끊기/차단"으로 읽습니다. 198.51.100.23은 지금 이 관리 화면에 접속한 주소라고 가정했습니다.</div></div>
+    <div class="mock"><div class="scroll-x"><div class="app desk" data-conn="desk" style="height:720px"></div></div>
+      <div class="cap"><b>데스크톱.</b> 같은 데이터입니다. 연결 창이 640px로 넓어지고 줄마다 버튼이 오른쪽에 섭니다.</div></div>
+  </div>
+</div>
+
+<h4>바뀌기 전</h4>
+<div class="mocks">
+  <div class="mock"><div class="scroll-x"><div class="app phone short" style="min-height:0">
+    <div class="hdr"><span class="hdr-btn" aria-hidden="true">☰</span><h1 class="hdr-title">터널</h1></div>
+    <div class="main">
+      <p class="summary">3개 중 2개 켜짐</p>
+      <ul class="tlist">
+        <li><a class="tlink"><span class="ttitle">ssh-office</span><span class="tstatus">켜짐 · 연결 3개</span><span class="ttime"><svg class="clock" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="#8A94A3" stroke-width="2"/><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2.5" pathLength="100" stroke-dasharray="60 100" transform="rotate(-90 12 12)"/></svg>1시간 20분 남음 · 오후 4:35 종료</span></a><span class="tswitch"><button class="sw" role="switch" aria-checked="true" aria-label="ssh-office" type="button"></button></span></li>
+        <li><a class="tlink"><span class="ttitle">nas-web</span><span class="tstatus">꺼짐</span></a><span class="tswitch"><button class="sw" role="switch" aria-checked="false" aria-label="nas-web" type="button"></button></span></li>
+      </ul>
+    </div></div></div>
+    <div class="cap"><span class="tag before">전</span><b>연결 수만 보입니다.</b> 주고받은 양, 허용 클라이언트, 연결 주소를 보려면 편집 화면으로 가야 합니다.</div></div>
+</div>
+
+<h3>검토한 대안</h3>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>대안</th><th>쓰지 않은 이유</th></tr></thead>
+  <tbody>
+    <tr><td>책임자 예시 그대로 한 줄 글자("가동 시간 … · 세션 2 · …")에서 숫자만 링크</td><td>글자 사이의 작은 링크는 누르는 영역이 좁고(2.5.8), 줄 링크(편집 화면 이동)와 겹친다. 알약 버튼으로 분리한다.</td></tr>
+    <tr><td>줄을 펼쳐 연결 목록을 목록 안에 보이기</td><td>여러 줄이 펼쳐지면 스위치 위치가 계속 움직인다. 목록은 "켜고 끄는 곳"이라는 이슈 338의 원칙을 지킨다.</td></tr>
+    <tr><td>차단 확인을 같은 창 안 다음 단계로 바꾸기</td><td>겹침 문제는 사라지지만 "되돌아가기" 버튼이 하나 더 생기고, 책임자 지시("확인 모달")와 다르다. 대신 Modal을 겹침에 맞게 고친다.</td></tr>
+    <tr><td>끊기에도 확인 창</td><td>상대가 다시 연결할 수 있어 되돌릴 수 있다. 자주 묻는 확인 창은 습관적으로 누르게 만든다(NN/g).</td></tr>
+    <tr><td>소유자에게도 차단 허용</td><td>차단 목록은 서버 전체 설정이고 항목 수 상한(1,000)을 나눠 쓴다(스펙 4 결정 6에 동의).</td></tr>
+    <tr><td>RX·TX 대신 "받음·보냄"과 화살표</td><td>편집 화면·상태 화면이 이미 RX·TX를 쓴다. 두 화면이 같은 함수로 줄을 만드는 원칙을 따른다.</td></tr>
+  </tbody>
+</table></div>
+
+<h3>예외 상황</h3>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>상황</th><th>동작</th></tr></thead>
+  <tbody>
+    <tr><td>꺼진 터널</td><td>가동 정보 줄 없음. 클라이언트 줄은 보인다(스펙 FR-3).</td></tr>
+    <tr><td>연결 0</td><td>"연결 0"도 누를 수 있고, 창에는 "지금 연결이 없습니다."와 2초마다 새로 고침이 이어진다. 기다리는 동안 들어온 연결이 바로 보인다.</td></tr>
+    <tr><td>연결이 많음</td><td>창 본문만 스크롤한다(Modal 85% 높이 규칙). 500개에서 자르고 맨 아래에 "최근 연결 500개만 보입니다."를 보인다.</td></tr>
+    <tr><td>긴 IPv6</td><td>고정폭 글자로 보이고 칸 폭을 넘으면 아무 곳에서나 줄을 바꾼다(<code>overflow-wrap:anywhere</code>). 줄임표로 자르지 않는다. 차단할 주소를 눈으로 확인해야 하기 때문이다. IPv4-mapped 주소는 IPv4로 보인다.</td></tr>
+    <tr><td>같은 주소의 연결이 여럿</td><td>차단 확인 문장에 "이 주소의 연결 2개를 바로 끊고"처럼 실제 수를 적는다. 차단 뒤 그 주소의 줄은 모두 "차단됨"으로 흐려진다.</td></tr>
+    <tr><td>내 IP를 차단</td><td>확인 창에 주황 안내: "지금 이 관리 화면에 접속한 주소입니다. 차단하면 이 주소에서는 터널을 쓸 수 없습니다. 관리 화면은 영향을 받지 않습니다." 상태 응답의 <code>requesterIp</code>(이슈 348)로 비교한다.</td></tr>
+    <tr><td>끊기 직전에 연결이 끝남</td><td>서버가 <code>{closed:false}</code>를 주면 오류가 아니다. 줄을 "끝남"으로 바꾸고 알림은 띄우지 않는다.</td></tr>
+    <tr><td>이미 차단된 주소(409 <code>duplicate</code>)</td><td>기존 차단이 고른 범위를 덮으면(모든 터널이거나 같은 포트에 "이 터널만") "이미 차단된 주소입니다."를 알리고 그 주소의 줄을 "차단됨"으로 바꾼다. 다른 포트에만 걸려 있으면 "이 주소는 이미 포트 {port}에만 차단되어 있습니다. 범위를 바꾸려면 보안 화면의 '차단한 주소'에서 차단을 해제한 뒤 다시 차단하세요."를 알리고 줄은 그대로 둔다. 어느 쪽이든 확인 창을 닫는다.</td></tr>
+    <tr><td>차단 목록 가득 참</td><td>기존 문구 <code>security.blocklistFull</code>를 보이고 확인 창은 연 채로 둔다.</td></tr>
+    <tr><td>허용 클라이언트 3개 이상</td><td>"클라이언트: ● NAS, ○ 집 PC 외 1". 전체는 <code>title</code>과 보조 기술용 이름에 둔다.</td></tr>
+    <tr><td>옛 이름 규칙만 있음</td><td>"클라이언트: 이름 규칙 office-*". 둘 다 비면 "클라이언트: 모두".</td></tr>
+    <tr><td>보기 전용(자물쇠) 줄</td><td>가동 정보와 클라이언트 줄은 보이고 연결 수는 글자다.</td></tr>
+    <tr><td>옛 서버</td><td><code>allowedClients</code>가 없으면 클라이언트 줄을 숨기고, 연결 목록 API가 404면 연결 수를 글자로 둔다(스펙 4 §8).</td></tr>
+  </tbody>
+</table></div>
+
+<h3>접근성</h3>
+<ul>
+  <li><b>겹친 창의 Esc.</b> 지금 <code>Modal.svelte</code>는 창마다 <code>window</code>의 keydown을 듣고 Esc면 닫습니다. 확인 창을 연결 창 위에 띄우면 Esc 한 번에 둘 다 닫힙니다. <b>맨 위 창만 Esc에 반응</b>하고, 닫으면 초점이 그 창을 연 "차단" 버튼으로 돌아가야 합니다. 오버레이를 누를 때도 맨 위 창만 닫습니다.</li>
+  <li>알약 버튼의 보조 기술용 이름은 "연결 3개 보기"입니다. 버튼 안의 "›"는 숨깁니다.</li>
+  <li>연결 창의 "끊기"·"차단" 버튼 이름에 주소를 붙입니다: "203.0.113.7 연결 끊기". 같은 이름의 버튼이 줄마다 반복되면 화면 읽기 프로그램 사용자가 어느 줄인지 모릅니다.</li>
+  <li>끊거나 차단한 결과는 알림(토스트)으로 알리고, 알림 영역은 <code>role="status"</code>입니다.</li>
+  <li>2초 새로 고침은 화면 읽기 프로그램에 매번 알리지 않습니다. 새 연결이 붙을 때만 "새 연결 1개"를 조용히 알립니다.</li>
+</ul>
+
+<h3>문구</h3>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>키</th><th>한국어</th><th>영어</th><th>스펙 대비</th></tr></thead>
+  <tbody>
+    <tr><td class="k">tunnelStatus.stats</td><td><b>켜진 지 {since} · 연결 {count} · RX {rx} · TX {tx}</b><br><span class="muted">옛 서버: 가동 시간 {uptime} · …</span></td><td>On for {since} · Connections {count} · RX {rx} · TX {tx}</td><td><span class="pri h">수정</span> "가동 시간" 의미</td></tr>
+    <tr><td class="k">tunnel.connectionsButton</td><td>연결 {count} <span class="muted">(보조 이름: 연결 {count}개 보기)</span></td><td>{count} connections (View {count} connections)</td><td><span class="pri l">추가</span></td></tr>
+    <tr><td class="k">tunnel.clients / clientsAll</td><td>클라이언트: {names} / 클라이언트: 모두</td><td>Clients: {names} / Clients: any</td><td>동의</td></tr>
+    <tr><td class="k">tunnel.clientsMore</td><td>외 {count}</td><td>+{count} more</td><td><span class="pri l">추가</span></td></tr>
+    <tr><td class="k">tunnel.clientDisconnected</td><td>연결 안 됨</td><td>not connected</td><td><span class="pri l">추가</span> 보조 이름</td></tr>
+    <tr><td class="k">connections.title</td><td>{title}의 연결</td><td>Connections to {title}</td><td>동의</td></tr>
+    <tr><td class="k">connections.summary</td><td>연결 {count}개 · 2초마다 새로 고침</td><td>{count} connections · Refreshes every 2 seconds</td><td><span class="pri l">추가</span></td></tr>
+    <tr><td class="k">connections.connectedAgo</td><td>{ago} 연결</td><td>Connected {ago}</td><td><span class="pri l">추가</span></td></tr>
+    <tr><td class="k">connections.close / closed</td><td>끊기 / 연결을 끊었습니다.</td><td>Disconnect / Disconnected.</td><td>동의</td></tr>
+    <tr><td class="k">connections.ended / blocked / new</td><td>끝남 / 차단됨 / 새</td><td>Ended / Blocked / New</td><td><span class="pri l">추가</span> 줄 순서 고정</td></tr>
+    <tr><td class="k">connections.blockTitle</td><td><b>{address} 주소를 차단할까요?</b></td><td>Block {address}?</td><td><span class="pri m">수정</span> "{address}를"은 숫자로 끝나는 주소에서 조사가 어긋난다("…7를"). 기존 <code>security.blocked</code>처럼 "주소를"을 쓴다</td></tr>
+    <tr><td class="k">connections.blockBody</td><td>이 주소의 연결 {count}개를 바로 끊고, 앞으로 들어오는 연결도 받지 않습니다.</td><td>Its {count} connections end now, and new ones will be refused.</td><td><span class="pri m">수정</span> 실제 수를 적는다</td></tr>
+    <tr><td class="k">connections.scopeTunnel / scopeAll</td><td>이 터널만 / 모든 터널</td><td>This tunnel only / All tunnels</td><td>동의</td></tr>
+    <tr><td class="k">connections.note</td><td>메모(선택)</td><td>Note (optional)</td><td>동의</td></tr>
+    <tr><td class="k">connections.selfWarning</td><td>지금 이 관리 화면에 접속한 주소입니다. 차단하면 이 주소에서는 터널을 쓸 수 없습니다. 관리 화면은 영향을 받지 않습니다.</td><td>This is the address you're using now. Tunnels won't be reachable from it; the admin screen is not affected.</td><td><span class="pri m">추가</span></td></tr>
+    <tr><td class="k">connections.blockedDone</td><td>{address} 주소를 차단하고 연결 {count}개를 끊었습니다.</td><td>Blocked {address} and ended {count} connections.</td><td><span class="pri l">추가</span> 응답의 <code>closedConnections</code></td></tr>
+    <tr><td class="k">connections.empty / capped</td><td>지금 연결이 없습니다. / 최근 연결 500개만 보입니다.</td><td>No connections right now. / Showing the latest 500.</td><td>동의 / <span class="pri l">추가</span></td></tr>
+  </tbody>
+</table></div>
+
+<h3>스펙 4 대응</h3>
+<ul>
+  <li>FR-1~FR-18의 권한·API·차단 동작은 동의합니다. 특히 "연결"로 통일(결정 1)은 관리 화면의 로그인 "세션"과 구분하기 위해 꼭 필요합니다.</li>
+  <li><b>결정 3 변경</b>: 상태 응답에 <code>activatedAt</code>을 더하고 "켜진 지"를 보인다. 옛 서버면 지금 문구로 돌아간다.</li>
+  <li><b>새 FR(겹친 창)</b>: <code>Modal</code>은 여러 개가 열려 있으면 맨 위 창만 Esc와 오버레이 누르기에 반응하고, 닫힐 때 연 요소로 초점을 돌린다. AC: 연결 창 위의 확인 창에서 Esc를 누르면 확인 창만 닫힌다.</li>
+  <li><b>새 FR(줄 순서 고정)</b>: 연결 창이 열린 동안 기존 줄의 순서와 위치를 바꾸지 않는다. 새 연결은 맨 아래에 붙이고, 끝난 연결은 "끝남"으로 흐리게 남긴다. FR-15의 "그 줄을 지운다"는 "끊음으로 흐리게 남긴다"로 바꾼다.</li>
+  <li><b>새 FR(내 IP 경고)</b>: 차단할 주소가 요청자 IP와 같으면 확인 창에 경고를 보인다.</li>
+  <li>FR-16: 확인 문장에 실제 연결 수를 넣고, 조사를 "주소를"로 고친다. 버튼 이름에 주소를 붙인다(접근성).</li>
+  <li>FR-17: 데스크톱에서는 창 폭을 640px로 넓힌다(<code>Modal</code>의 <code>class</code>로 <code>max-width</code>만 바꿈).</li>
+</ul>
+
+<!-- ───────────────────────── ⑤ ───────────────────────── -->
+<h2 class="sec" id="i5"><small>ITEM 5 · 스펙 5</small>⑤ 소유자별로 묶어 보기</h2>
+
+<h3>문제</h3>
+<ul>
+  <li>슈퍼유저 목록은 설정 파일 순서대로 모든 사용자의 터널이 섞여 있습니다. 누구의 터널인지는 상태 줄 끝의 작은 <code>@alice</code>로만 알 수 있습니다(<code>tunnelRow.ts:76-81</code>).</li>
+  <li>공유를 여럿 받은 일반 사용자도 같은 문제를 겪습니다.</li>
+</ul>
+
+<h3>권장 설계</h3>
+<p>스펙 5에 동의합니다. 소유자가 둘 이상일 때만 묶고, 묶음마다 목록 카드 하나와 머리글을 둡니다. 머리글 왼쪽은 "아이디 (이름)", 오른쪽은 그 묶음의 "3개 중 1개 켜짐"입니다. 내 묶음은 맨 위, 초록 "나" 표시가 붙습니다. 묶을 때는 줄마다 붙던 <code>@아이디</code>를 뺍니다.</p>
+<div class="mocks">
+  <div class="mock"><div class="scroll-x"><div class="app phone">
+    <div class="hdr"><span class="hdr-btn" aria-hidden="true">☰</span><h1 class="hdr-title">터널</h1></div>
+    <div class="main">
+      <p class="summary">6개 중 3개 켜짐</p>
+      <ul class="tlist">
+        <li><a class="tlink"><span class="ttitle">admin-panel</span><span class="tstatus">켜짐</span></a><span class="tswitch"><button class="sw" role="switch" aria-checked="true" aria-label="admin-panel" type="button"></button></span></li>
+        <li><a class="tlink"><span class="ttitle">ssh</span><span class="tstatus">켜짐 · @alice</span></a><span class="tswitch"><button class="sw" role="switch" aria-checked="true" aria-label="ssh" type="button"></button></span></li>
+        <li><a class="tlink"><span class="ttitle">grafana</span><span class="tstatus">꺼짐</span></a><span class="tswitch"><button class="sw" role="switch" aria-checked="false" aria-label="grafana" type="button"></button></span></li>
+        <li><a class="tlink"><span class="ttitle">ssh</span><span class="tstatus">꺼짐 · @bob</span></a><span class="tswitch"><button class="sw" role="switch" aria-checked="false" aria-label="ssh" type="button"></button></span></li>
+        <li><a class="tlink"><span class="ttitle">nas-web</span><span class="tstatus">켜짐 · @alice</span></a><span class="tswitch"><button class="sw" role="switch" aria-checked="true" aria-label="nas-web" type="button"></button></span></li>
+        <li><a class="tlink"><span class="ttitle">legacy-8080</span><span class="tstatus">꺼짐 · 업그레이드 전 터널</span></a><span class="tswitch"><button class="sw" role="switch" aria-checked="false" aria-label="legacy-8080" type="button"></button></span></li>
+      </ul>
+    </div></div></div>
+    <div class="cap"><span class="tag before">전</span><b>섞여 있습니다.</b> 이름이 같은 "ssh" 두 개가 누구의 것인지 줄 끝 작은 글자로만 압니다.</div></div>
+
+  <div class="mock"><div class="scroll-x"><div class="app phone">
+    <div class="hdr"><span class="hdr-btn" aria-hidden="true">☰</span><h1 class="hdr-title">터널</h1></div>
+    <div class="main">
+      <p class="summary">6개 중 3개 켜짐</p>
+      <section class="grp" aria-labelledby="g1"><div class="grp-head"><h2 id="g1">root <span class="dn">(관리자)</span></h2><span class="me">나</span><span class="cnt">2개 중 1개 켜짐</span></div>
+        <ul class="tlist" aria-labelledby="g1">
+          <li><a class="tlink"><span class="ttitle">admin-panel</span><span class="tstatus">켜짐</span></a><span class="tswitch"><button class="sw" role="switch" aria-checked="true" aria-label="admin-panel" type="button"></button></span></li>
+          <li><a class="tlink"><span class="ttitle">grafana</span><span class="tstatus">꺼짐</span></a><span class="tswitch"><button class="sw" role="switch" aria-checked="false" aria-label="grafana" type="button"></button></span></li>
+        </ul></section>
+      <section class="grp" aria-labelledby="g2"><div class="grp-head"><h2 id="g2">alice <span class="dn">(앨리스)</span></h2><span class="cnt">2개 중 2개 켜짐</span></div>
+        <ul class="tlist" aria-labelledby="g2">
+          <li><a class="tlink"><span class="ttitle">ssh</span><span class="tstatus">켜짐</span></a><span class="tswitch"><button class="sw" role="switch" aria-checked="true" aria-label="ssh, alice" type="button"></button></span></li>
+          <li><a class="tlink"><span class="ttitle">nas-web</span><span class="tstatus">켜짐</span></a><span class="tswitch"><button class="sw" role="switch" aria-checked="true" aria-label="nas-web, alice" type="button"></button></span></li>
+        </ul></section>
+      <section class="grp" aria-labelledby="g3"><div class="grp-head"><h2 id="g3">bob</h2><span class="cnt">1개 중 0개 켜짐</span></div>
+        <ul class="tlist" aria-labelledby="g3">
+          <li><a class="tlink"><span class="ttitle">ssh</span><span class="tstatus">꺼짐</span></a><span class="tswitch"><button class="sw" role="switch" aria-checked="false" aria-label="ssh, bob" type="button"></button></span></li>
+        </ul></section>
+      <section class="grp" aria-labelledby="g4"><div class="grp-head"><h2 id="g4">업그레이드 전 터널</h2><span class="cnt">1개 중 0개 켜짐</span></div>
+        <ul class="tlist" aria-labelledby="g4">
+          <li><a class="tlink"><span class="ttitle">legacy-8080</span><span class="tstatus">꺼짐</span></a><span class="tswitch"><button class="sw" role="switch" aria-checked="false" aria-label="legacy-8080, 업그레이드 전 터널" type="button"></button></span></li>
+        </ul></section>
+    </div></div></div>
+    <div class="cap"><span class="tag after">후</span><b>휴대폰 · 360px.</b> 내 묶음 → 다른 사용자(아이디 순) → 업그레이드 전 터널 → 소유자 없음. 이름이 같은 "ssh"도 묶음으로 구분됩니다.</div></div>
+
+  <div class="mock"><div class="scroll-x"><div class="app desk" style="min-height:0">
+    <div class="hdr"><span class="hdr-btn" aria-hidden="true">☰</span><h1 class="hdr-title">터널</h1></div>
+    <div class="main">
+      <div class="tunnels-bar"><button class="btn primary" type="button">터널 추가</button></div>
+      <p class="summary">4개 중 2개 켜짐</p>
+      <section class="grp" aria-labelledby="h1x"><div class="grp-head"><h2 id="h1x">kim.minseo-platform-team <span class="dn">(김민서 · 플랫폼팀 인프라 파트 장기 프로젝트 담당)</span></h2><span class="me">나</span><span class="cnt">2개 중 1개 켜짐</span></div>
+        <ul class="tlist" aria-labelledby="h1x">
+          <li><a class="tlink"><span class="ttitle">ssh-office</span><span class="tstatus">켜짐</span></a><span class="tswitch"><button class="sw" role="switch" aria-checked="true" aria-label="ssh-office" type="button"></button></span></li>
+          <li><a class="tlink"><span class="ttitle">rdp-home</span><span class="tstatus">꺼짐</span></a><span class="tswitch"><button class="sw" role="switch" aria-checked="false" aria-label="rdp-home" type="button"></button></span></li>
+        </ul></section>
+      <section class="grp" aria-labelledby="h2x"><div class="grp-head"><h2 id="h2x">alice <span class="dn">(앨리스)</span></h2><span class="cnt">1개 중 1개 켜짐</span></div>
+        <ul class="tlist" aria-labelledby="h2x">
+          <li><a class="tlink"><span class="ttitle">wiki</span><span class="tstatus">켜짐 · 보기 전용</span></a><span class="tlock" title="보기 전용"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span></li>
+        </ul></section>
+      <section class="grp" aria-labelledby="h3x"><div class="grp-head"><h2 id="h3x">소유자 없음</h2><span class="cnt">1개 중 0개 켜짐</span></div>
+        <ul class="tlist" aria-labelledby="h3x">
+          <li><a class="tlink"><span class="ttitle">old-camera</span><span class="tstatus">꺼짐</span></a><span class="tswitch"><button class="sw" role="switch" aria-checked="false" aria-label="old-camera, 소유자 없음" type="button"></button></span></li>
+        </ul>
+        <p class="grp-note">소유자 사용자가 지워진 터널입니다. 터널 편집의 "소유자 바꾸기"로 넘겨줄 수 있습니다.</p></section>
+    </div></div></div>
+    <div class="cap"><span class="tag after">후</span><b>데스크톱 · 긴 이름과 소유자 없음.</b> 긴 아이디·이름은 머리글 안에서 줄임표로 줄이고 전체는 <code>title</code>에 둡니다. 켜진 수와 "나" 표시는 줄지 않습니다.</div></div>
+</div>
+
+<h3>검토한 대안</h3>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>대안</th><th>쓰지 않은 이유</th></tr></thead>
+  <tbody>
+    <tr><td>소유자 순으로 정렬만(머리글 없음)</td><td>묶음의 경계가 보이지 않는다. 결국 줄마다 <code>@아이디</code>를 읽어야 한다.</td></tr>
+    <tr><td>소유자 고르기 드롭다운·탭</td><td>한 번에 전체를 보지 못한다. 켜진 터널을 훑어보는 이 화면의 쓰임과 맞지 않는다. 사용자 수만큼 탭을 둘 수도 없다.</td></tr>
+    <tr><td>묶음 접기</td><td>접힌 상태를 기억하는 규칙까지 정해야 한다(스펙 5 결정 4에 동의). 사용자가 많아지면 따로 다룬다.</td></tr>
+    <tr><td>슈퍼유저에게만 묶기</td><td>공유를 받은 일반 사용자도 같은 문제를 겪는다. "소유자 수"라는 한 규칙이 더 단순하다(결정 1에 동의).</td></tr>
+    <tr><td>머리글 고정(스크롤해도 위에 붙음)</td><td>긴 목록에서 유용하지만 화면 셸의 스크롤 구조에 따라 동작이 달라진다. <span class="pri l">선택</span>으로 남긴다.</td></tr>
+  </tbody>
+</table></div>
+
+<h3>예외 상황 · 접근성 · 문구</h3>
+<ul>
+  <li>표시 이름이 없거나 아이디와 같으면 괄호를 뺍니다(<code>bob</code>). 소유자가 하나뿐이면(일반 사용자 대부분, 내 터널만 있는 슈퍼유저) 지금처럼 머리글이 없습니다.</li>
+  <li>머리글은 <code>h2</code>, 목록은 <code>aria-labelledby</code>로 그 머리글을 이름으로 갖습니다(스펙 FR-6). 머리글 단계는 화면 제목(셸의 <code>h1</code>) 바로 아래입니다.</li>
+  <li><b>스위치 이름에 소유자를 붙입니다.</b> 화면 읽기 프로그램 사용자는 스위치만 차례로 건너뛰는 일이 많습니다. "ssh 스위치"가 둘이면 구분할 수 없으므로, 묶어 볼 때는 "ssh, alice"처럼 소유자를 붙입니다. 내 묶음에는 붙이지 않습니다.</li>
+  <li>④의 가동 정보 줄과 함께 써도 구조는 같습니다. 묶음은 줄 바깥 틀만 바꿉니다.</li>
+</ul>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>키</th><th>한국어</th><th>영어</th><th>스펙 대비</th></tr></thead>
+  <tbody>
+    <tr><td class="k">tunnels.groupMe</td><td>나</td><td>You</td><td><span class="pri l">수정</span> 머리글 글자에 " · 나"를 붙이는 대신 따로 표시로 둔다. 긴 이름이 줄어도 "나"가 남는다</td></tr>
+    <tr><td class="k">tunnels.groupOwnerName</td><td>{username} ({displayName})</td><td>{username} ({displayName})</td><td>동의</td></tr>
+    <tr><td class="k">tunnels.groupUnknownOwner</td><td>소유자 없음</td><td>No owner</td><td>동의</td></tr>
+    <tr><td class="k">tunnels.groupUnknownOwnerNote</td><td>소유자 사용자가 지워진 터널입니다. 터널 편집의 "소유자 바꾸기"로 넘겨줄 수 있습니다.</td><td>The owner was deleted. Use "Change owner" in the tunnel's settings to hand it over.</td><td><span class="pri l">추가</span> 슈퍼유저에게만</td></tr>
+    <tr><td class="k">tunnels.switchLabelOwned</td><td>{title}, {owner}</td><td>{title}, {owner}</td><td><span class="pri l">추가</span> 스위치 보조 이름</td></tr>
+  </tbody>
+</table></div>
+
+<h3>스펙 5 대응</h3>
+<ul>
+  <li>FR-1~FR-10 동의합니다.</li>
+  <li>FR-4: "나"를 머리글 글자에 붙이지 말고 별도 표시로 두기를 권합니다(줄임표에 잘리지 않음).</li>
+  <li><b>새 FR(스위치 이름)</b>: 묶어 볼 때 다른 사람 묶음의 스위치 보조 이름에 소유자 표시를 붙인다.</li>
+  <li><b>새 FR(소유자 없음 안내)</b>: "소유자 없음" 묶음 아래에 정리 방법 한 줄. 슈퍼유저에게만 보인다.</li>
+</ul>
+
+<!-- ───────────────────────── 변경 제안 ───────────────────────── -->
+<h2 class="sec" id="changes"><small>SPEC CHANGES</small>스펙 초안 변경 제안</h2>
+<p>책임자 사전 승인에 따라 모두 권장안으로 정했습니다. 우선순위는 <span class="pri h">높음</span> 구현 전에 반드시 고칠 것, <span class="pri m">중간</span> 품질에 직접 영향, <span class="pri l">낮음</span> 다듬기입니다.</p>
+<div class="tbl-wrap"><table>
+  <thead><tr><th>스펙</th><th>우선</th><th>바꿀 곳</th><th>내용</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td><span class="pri m">중간</span></td><td>새 FR</td><td>슬라이더 양옆에 44px −/+ 버튼(단위 한 칸). 끝에서 그쪽 버튼 잠금. 근거 WCAG 2.5.7, Apple HIG.</td></tr>
+    <tr><td>1</td><td><span class="pri m">중간</span></td><td>새 FR</td><td>값이 하나뿐인 범위: 일 단위 최대 1일이면 "1일" 고정 표시와 안내, 적용 상한 1분 미만이면 상한 초 고정 표시.</td></tr>
+    <tr><td>1</td><td><span class="pri m">중간</span></td><td>FR-14</td><td><code>timer.capNote</code> → "이 터널은 최대 {max}까지 켜 둘 수 있습니다." 새 키 <code>timer.noAutoOffEnds</code>, <code>timer.less/more</code>, <code>timer.onlyOneDay</code>.</td></tr>
+    <tr><td>1</td><td><span class="pri l">낮음</span></td><td>FR-8</td><td>일 단위의 PageUp·PageDown은 ±1일.</td></tr>
+    <tr><td>1</td><td><span class="pri l">낮음</span></td><td>범위</td><td>같은 개념 문구 정리: <code>clock.noLimit</code>, <code>tunnelStatus.timeLimitFailed</code>, <code>group.maxDuration</code>.</td></tr>
+    <tr><td>2</td><td><span class="pri h">높음</span></td><td>FR-7·AC-5</td><td>"밝은·어두운 테마 모두" → "밝은 테마에서". 관리 화면에 어두운 테마가 없어 검증할 수 없는 기준이다.</td></tr>
+    <tr><td>2</td><td><span class="pri m">중간</span></td><td>FR-3</td><td>줄 삭제를 44px 아이콘 버튼(×), 보조 이름 "{from}–{to} 범위 삭제"로. "제거" 대신 기존 낱말 "삭제".</td></tr>
+    <tr><td>2</td><td><span class="pri m">중간</span></td><td>새 FR</td><td>범위 입력 두 칸에 보조 이름 "시작 포트"·"끝 포트", 사이에 "–". 더하기·지우기 뒤 초점 이동 규칙.</td></tr>
+    <tr><td>2</td><td><span class="pri m">중간</span></td><td>FR-6·AC-4</td><td>칩은 내 터널이 쓰지 않는 가장 작은 포트(없으면 첫 포트)를 넣는다. 칩 높이 36px, 누르는 영역 44px.</td></tr>
+    <tr><td>3</td><td><span class="pri m">중간</span></td><td>FR-13·AC-8</td><td>실패 문구에 칸 이름: "{field}는 그룹 최대인 {max} MiB 이하여야 합니다."</td></tr>
+    <tr><td>3</td><td><span class="pri m">중간</span></td><td>FR-9·화면 문구</td><td>"세션당" → "연결당"(카드 이름과 그룹 칸 이름). 내부 속성 이름은 그대로.</td></tr>
+    <tr><td>3</td><td><span class="pri l">낮음</span></td><td>FR-10</td><td>상한 안내("그룹 최대 {max} MiB")는 오류와 별개로 카드 머리에 늘 보인다. 슈퍼유저가 남의 터널을 볼 때 참고 표시는 선택.</td></tr>
+    <tr><td>4</td><td><span class="pri h">높음</span></td><td>새 FR</td><td><code>Modal</code> 겹침: 맨 위 창만 Esc·오버레이에 반응, 닫으면 연 요소로 초점 복귀. AC 추가.</td></tr>
+    <tr><td>4</td><td><span class="pri h">높음</span></td><td>결정 3·FR-1·FR-18</td><td>상태 응답에 <code>activatedAt</code> 추가, "켜진 지 {since}"로 표시. 옛 서버면 "가동 시간 {uptime}".</td></tr>
+    <tr><td>4</td><td><span class="pri m">중간</span></td><td>새 FR·FR-15</td><td>연결 창이 열린 동안 줄 순서 고정: 새 연결은 맨 아래 "새", 끝난·끊은·차단한 연결은 흐리게 남김.</td></tr>
+    <tr><td>4</td><td><span class="pri m">중간</span></td><td>새 FR</td><td>차단 주소가 요청자 IP와 같으면 확인 창에 경고.</td></tr>
+    <tr><td>4</td><td><span class="pri m">중간</span></td><td>FR-16·FR-18</td><td>확인 문장 "{address} 주소를 차단할까요?", 본문에 실제 연결 수. "끊기"·"차단" 버튼 보조 이름에 주소.</td></tr>
+    <tr><td>4</td><td><span class="pri l">낮음</span></td><td>FR-17</td><td>데스크톱에서 연결 창 폭 640px.</td></tr>
+    <tr><td>5</td><td><span class="pri l">낮음</span></td><td>FR-4</td><td>"나"는 머리글 글자가 아니라 별도 표시.</td></tr>
+    <tr><td>5</td><td><span class="pri l">낮음</span></td><td>새 FR</td><td>묶어 볼 때 다른 사람 묶음의 스위치 보조 이름에 소유자 표시. "소유자 없음" 묶음 안내 한 줄.</td></tr>
+  </tbody>
+</table></div>
+
+<!-- ───────────────────────── 출처 ───────────────────────── -->
+<h2 class="sec" id="sources"><small>SOURCES</small>출처</h2>
+<p class="muted">이 문서는 인터넷 검색 없이, 아래 공개 지침의 잘 알려진 내용에 기대어 썼습니다. 숫자 기준은 각 문서의 해당 항목 이름으로 확인할 수 있습니다.</p>
+<ul>
+  <li>W3C, <i>WCAG 2.2</i> — 1.3.1 Info and Relationships, 1.4.3 Contrast (Minimum), 1.4.11 Non-text Contrast, 2.4.6 Headings and Labels, 2.5.5 Target Size (Enhanced), 2.5.7 Dragging Movements, 2.5.8 Target Size (Minimum), 3.3.1 Error Identification, 3.3.3 Error Suggestion.</li>
+  <li>W3C, <i>WAI-ARIA Authoring Practices Guide</i> — Slider Pattern, Radio Group Pattern, Dialog (Modal) Pattern.</li>
+  <li>Apple, <i>Human Interface Guidelines</i> — Layout(최소 누르는 영역 44×44pt), Sliders, Steppers, Segmented controls, Alerts, Lists and tables.</li>
+  <li>Google, <i>Material Design 3</i> — Sliders, Segmented buttons, Lists, Dialogs, Accessibility(48×48dp).</li>
+  <li>Nielsen Norman Group — Confirmation Dialogs Can Prevent User Errors (If Not Overused), Progressive Disclosure, Error-Message Guidelines, Fitts's Law and Its Applications in UX.</li>
+  <li>P. M. Fitts (1954), <i>The information capacity of the human motor system in controlling the amplitude of movement</i>.</li>
+  <li>저장소 코드(origin/develop 8400fd5): <code>admin/src/app.css</code>, <code>admin/src/ui/{Button,Timer,Modal,Switch,Chip,Card,Field,NumberInput,Clock}.svelte</code>, <code>admin/src/screens/{TunnelsScreen,TunnelEditScreen,GroupEditScreen,SecurityScreen}.svelte</code>, <code>screens/parts/{TunnelStatusArea.svelte,tunnelRow.ts,tunnelPolicy.ts,units.ts}</code>, <code>src/server/ExternalPortServerPool.ts</code>, <code>admin/src/i18n/ko.ts</code>.</li>
+  <li>앞선 설계 문서: <code>docs/design/2026-11-09-tunnel-quick-toggle.html</code>.</li>
+</ul>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+  /* ───────── ① 켜 둘 시간 ───────── */
+  const DAY = 86400;
+  const fmtMin = (m) => { if (m < 60) return m + '분'; const h = Math.floor(m / 60), r = m % 60; return r ? h + '시간 ' + r + '분' : h + '시간'; };
+  const fmtSpan = (sec) => { const m = Math.floor(sec / 60); const d = Math.floor(m / 1440), rest = m % 1440; if (d > 0) return rest ? d + '일 ' + fmtMin(rest) : d + '일'; return m > 0 ? fmtMin(m) : sec + '초'; };
+  const fmtAt = (sec) => {
+    const t = new Date(Date.now() + sec * 1000), n = new Date();
+    const time = t.toLocaleTimeString('ko-KR', {hour: 'numeric', minute: '2-digit'});
+    return t.toDateString() === n.toDateString() ? time : (t.getMonth() + 1) + '월 ' + t.getDate() + '일 ' + time;
+  };
+  const SCENARIOS = {
+    none:  {cap: null, remaining: 5400, noAuto: false},
+    noauto:{cap: null, remaining: 0, noAuto: true},
+    h2:    {cap: 7200, remaining: 5400, noAuto: false},
+    h12:   {cap: 43200, remaining: 5400, noAuto: false},
+    d1h12: {cap: 129600, remaining: 5400, noAuto: false},
+    d3:    {cap: 259200, remaining: 2 * DAY + 5 * 3600, noAuto: false},
+  };
+  const timers = [];
+
+  function mountTimer(host, sentEl) {
+    let sc, state;
+    const uid = 'tv' + Math.random().toString(36).slice(2, 7);
+    host.innerHTML =
+      '<div class="mm-head"><h2 id="' + uid + '-t">켜 둘 시간</h2></div>' +
+      '<div class="mm-body">' +
+        '<div class="seg" role="radiogroup" aria-label="단위"><button type="button" role="radio" data-u="h">시간</button><button type="button" role="radio" data-u="d">일</button></div>' +
+        '<output class="tv-val" for="' + uid + '-r"></output>' +
+        '<p class="tv-ends" id="' + uid + '-e"></p>' +
+        '<div class="tv-row"><button type="button" class="tv-step" data-step="-1">−</button>' +
+        '<input type="range" class="tv-range" id="' + uid + '-r" aria-label="켜 둘 시간" aria-describedby="' + uid + '-e">' +
+        '<button type="button" class="tv-step" data-step="1">+</button></div>' +
+        '<div class="tv-scale" aria-hidden="true"><span class="lo"></span><span class="hi"></span></div>' +
+        '<p class="tv-fixed" hidden></p>' +
+        '<p class="tv-cap" hidden></p>' +
+        '<div class="tv-noauto"><span id="' + uid + '-n">자동으로 끄지 않기</span><button type="button" class="sw md" role="switch" aria-checked="false" aria-labelledby="' + uid + '-n"></button></div>' +
+      '</div>' +
+      '<div class="mm-foot"><button class="btn ghost" type="button" data-x="cancel">취소</button><button class="btn primary" type="button" data-x="ok">확인</button></div>';
+    host.setAttribute('role', 'dialog'); host.setAttribute('aria-labelledby', uid + '-t');
+    const seg = host.querySelector('.seg'), val = host.querySelector('.tv-val'), ends = host.querySelector('.tv-ends');
+    const range = host.querySelector('.tv-range'), steps = $$('.tv-step', host), scale = host.querySelector('.tv-scale');
+    const fixed = host.querySelector('.tv-fixed'), capP = host.querySelector('.tv-cap'), noRow = host.querySelector('.tv-noauto'), noSw = noRow.querySelector('.sw');
+    const row = host.querySelector('.tv-row');
+
+    const limits = () => {
+      const cap = sc.cap;
+      const hMax = cap === null ? 1440 : Math.min(1440, Math.floor(cap / 60));
+      const dMax = cap === null ? 30 : Math.min(30, Math.floor(cap / DAY));
+      return {hMax, dMax, showToggle: cap === null || cap >= DAY, subMinute: cap !== null && cap < 60};
+    };
+    const secondsOf = () => state.noAuto ? 0 : limits().subMinute ? sc.cap : state.unit === 'd' ? state.days * DAY : state.minutes * 60;
+
+    function load(key) {
+      sc = SCENARIOS[key];
+      const L = limits();
+      state = {unit: 'h', minutes: 60, days: 1, noAuto: false};
+      if (sc.noAuto && sc.cap === null) { state.noAuto = true; }
+      else if (sc.remaining >= DAY && L.showToggle) { state.unit = 'd'; state.days = Math.min(Math.max(Math.round(sc.remaining / DAY), 1), L.dMax); }
+      else { state.minutes = Math.min(Math.max(Math.floor(sc.remaining / 60), 1), Math.max(L.hMax, 1)); }
+      sentEl.textContent = '';
+      layout();
+    }
+    function layout() {
+      const L = limits();
+      seg.hidden = !L.showToggle;
+      $$('button', seg).forEach((b) => { const on = b.dataset.u === state.unit; b.setAttribute('aria-checked', on); b.tabIndex = on ? 0 : -1; b.disabled = state.noAuto; });
+      const single = L.subMinute || (state.unit === 'd' && L.dMax <= 1);
+      row.hidden = single; scale.hidden = single;
+      fixed.hidden = !single;
+      if (single) fixed.textContent = L.subMinute ? '그룹 최대가 1분보다 짧아 이 값으로만 켤 수 있습니다.' : '일 단위로는 1일만 고를 수 있습니다.';
+      if (state.unit === 'd') { state.days = Math.min(Math.max(state.days, 1), Math.max(L.dMax, 1)); range.min = 1; range.max = Math.max(L.dMax, 1); range.value = state.days; }
+      else { range.min = 1; range.max = Math.max(L.hMax, 1); range.value = state.minutes; }
+      scale.querySelector('.lo').textContent = state.unit === 'd' ? '1일' : '1분';
+      scale.querySelector('.hi').textContent = state.unit === 'd' ? range.max + '일' : fmtMin(+range.max);
+      capP.hidden = sc.cap === null;
+      if (sc.cap !== null) capP.textContent = '이 터널은 최대 ' + fmtSpan(sc.cap) + '까지 켜 둘 수 있습니다.';
+      noRow.hidden = sc.cap !== null;
+      noSw.setAttribute('aria-checked', state.noAuto);
+      range.disabled = state.noAuto;
+      update();
+    }
+    function update() {
+      const L = limits();
+      const text = state.noAuto ? '자동으로 끄지 않음' : L.subMinute ? fmtSpan(sc.cap) : state.unit === 'd' ? state.days + '일' : fmtMin(state.minutes);
+      val.textContent = text; val.classList.toggle('off', state.noAuto);
+      ends.textContent = state.noAuto ? '직접 끌 때까지 켜 둡니다.' : '지금부터 ' + text + ' 뒤, ' + fmtAt(secondsOf()) + '에 꺼집니다.';
+      range.setAttribute('aria-valuetext', text);
+      const min = +range.min, max = +range.max, v = +range.value;
+      range.style.setProperty('--p', (max > min ? (v - min) / (max - min) * 100 : 100) + '%');
+      const unitWord = state.unit === 'd' ? '1일' : '1분';
+      steps[0].setAttribute('aria-label', unitWord + ' 줄이기'); steps[1].setAttribute('aria-label', unitWord + ' 늘리기');
+      steps[0].disabled = state.noAuto || v <= min; steps[1].disabled = state.noAuto || v >= max;
+    }
+    const setVal = (v) => {
+      v = Math.min(Math.max(v, +range.min), +range.max);
+      range.value = v;
+      if (state.unit === 'd') state.days = v; else state.minutes = v;
+      update();
+    };
+    range.addEventListener('input', () => setVal(+range.value));
+    range.addEventListener('keydown', (e) => {
+      if (e.key !== 'PageUp' && e.key !== 'PageDown') return;
+      e.preventDefault();
+      const big = state.unit === 'd' ? 1 : 60;
+      setVal(+range.value + (e.key === 'PageUp' ? big : -big));
+    });
+    steps.forEach((b) => b.addEventListener('click', () => setVal(+range.value + (+b.dataset.step))));
+    const pickUnit = (u) => {
+      if (u === state.unit || state.noAuto) return;
+      const L = limits();
+      if (u === 'd') state.days = Math.min(Math.max(Math.ceil(state.minutes / 1440), 1), Math.max(L.dMax, 1));
+      else state.minutes = Math.min(1440, L.hMax);
+      state.unit = u; layout();
+      seg.querySelector('[aria-checked="true"]').focus();
+    };
+    seg.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) pickUnit(b.dataset.u); });
+    seg.addEventListener('keydown', (e) => { if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)) { e.preventDefault(); pickUnit(state.unit === 'h' ? 'd' : 'h'); } });
+    noSw.addEventListener('click', () => { state.noAuto = !state.noAuto; layout(); });
+    host.querySelector('[data-x="ok"]').addEventListener('click', () => { sentEl.textContent = 'POST /api/tunneling/active/22022  { timeout: ' + secondsOf() + ' }   // ' + val.textContent; });
+    host.querySelector('[data-x="cancel"]').addEventListener('click', () => { sentEl.textContent = '취소: 요청을 보내지 않습니다.'; });
+    setInterval(() => { if (!state.noAuto) update(); }, 1000);
+    return {load};
+  }
+  $$('[data-timer]').forEach((el) => timers.push(mountTimer(el, document.querySelector('[data-sent="' + el.dataset.timer + '"]'))));
+  const tStage = document.getElementById('timer-stage');
+  $$('[data-sc]', tStage).forEach((b) => b.addEventListener('click', () => {
+    $$('[data-sc]', tStage).forEach((x) => x.setAttribute('aria-pressed', x === b));
+    timers.forEach((t) => t.load(b.dataset.sc));
+  }));
+  timers.forEach((t) => t.load('none'));
+
+  /* ───────── ② 칩 ───────── */
+  const usedPorts = new Set([20000, 20001]);
+  const portIn = document.getElementById('port-in'), portNote = document.getElementById('port-note');
+  $$('.chipbtn').forEach((c) => c.addEventListener('click', () => {
+    const from = +c.dataset.from, to = +c.dataset.to;
+    let p = from; while (p <= to && usedPorts.has(p)) p++;
+    if (p > to) p = from;
+    portIn.value = p;
+    $$('.chipbtn').forEach((x) => x.setAttribute('aria-pressed', x === c));
+    portNote.textContent = p === from && !usedPorts.has(from) ? from + '–' + to + ' 범위의 첫 포트를 넣었습니다.' : '내 터널이 쓰는 포트(' + Array.from(usedPorts).filter((u) => u >= from && u <= to).join(', ') + ')를 건너뛰고 ' + p + ' 포트를 넣었습니다.';
+  }));
+
+  /* ───────── ③ 버퍼 ───────── */
+  const CAP = 64;
+  const bSrv = document.getElementById('b-srv'), bCli = document.getElementById('b-cli'), bSave = document.getElementById('b-save');
+  const checkBuf = (input, isClient) => {
+    const err = document.getElementById(input.id + '-err');
+    const raw = input.value.trim(), v = Number(raw);
+    let msg = '';
+    if (raw === '' || !isFinite(v)) msg = '숫자를 넣으세요.';
+    else if (isClient && v < 1) msg = '1 이상 ' + CAP + ' 이하로 정하세요. 그룹 최대가 있으면 \'제한 없음\'은 쓸 수 없습니다.';
+    else if (!isClient && v < 1) msg = '1 MiB 이상으로 정하세요.';
+    else if (v > CAP) msg = '그룹 최대 ' + CAP + ' MiB 이하로 정하세요.';
+    err.hidden = !msg; err.textContent = msg;
+    input.classList.toggle('err', !!msg);
+    input.setAttribute('aria-invalid', msg ? 'true' : 'false');
+    return !msg;
+  };
+  const bufAll = () => { const a = checkBuf(bSrv, false), b = checkBuf(bCli, true); bSave.disabled = !(a && b); };
+  [bSrv, bCli].forEach((i) => i.addEventListener('input', bufAll));
+  bufAll();
+
+  /* ───────── ④ 목록 · 연결 창 ───────── */
+  const MY_IP = '198.51.100.23';
+  const baseConns = () => [
+    {id: 1, addr: '203.0.113.7', cc: 'KR', ago: '3분 전', rx: '1.2KiB', tx: '3.4KiB'},
+    {id: 2, addr: '2001:db8:85a3:0000:0000:8a2e:0370:7334', cc: 'JP', ago: '12분 전', rx: '18.6KiB', tx: '22.0KiB'},
+    {id: 3, addr: '203.0.113.7', cc: 'KR', ago: '41분 전', rx: '35.3KiB', tx: '31.9KiB'},
+    {id: 4, addr: MY_IP, cc: 'KR', ago: '1시간 전', rx: '3.0KiB', tx: '2.2KiB'},
+  ];
+  const ICON_CLOCK = '<svg class="clock" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="#8A94A3" stroke-width="2"/><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2.5" pathLength="100" stroke-dasharray="60 100" transform="rotate(-90 12 12)"/></svg>';
+  const ICON_INF = '<svg class="clock" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="#8A94A3" stroke-width="2"/><line x1="12" y1="12" x2="12" y2="5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+  // 연결 끊기: 줄이 끊긴 플러그. 차단: 금지 표시(원과 사선).
+  const ICON_UNPLUG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7l10 10"/><path d="M17 7L7 17"/></svg>';
+  const ICON_BAN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>';
+  const ICON_CHEV = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
+  const connViews = [];
+  let role = 'super', nextId = 10;
+
+  function mountConn(root, wide) {
+    const st = {conns: baseConns(), open: false, confirm: null, scope: 'tunnel'};
+    root.innerHTML = '<div class="hdr"><span class="hdr-btn" aria-hidden="true">☰</span><h1 class="hdr-title">터널</h1></div><div class="main"></div><div class="ov-host"></div><div class="toast" role="status"></div>';
+    const main = root.querySelector('.main'), ovHost = root.querySelector('.ov-host'), toastEl = root.querySelector('.toast');
+    let toastT;
+    const toast = (m) => { toastEl.textContent = m; toastEl.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove('show'), 2600); };
+    const live = () => st.conns.filter((c) => !c.state).length;
+
+    const clientsHtml = (list) => {
+      if (list === 'all') return '<span class="tclients">클라이언트: 모두</span>';
+      const shown = list.slice(0, 2).map((c) => '<span class="' + (c.on ? '' : 'off') + '"><span class="dot' + (c.on ? '' : ' hollow') + '" aria-hidden="true"></span>' + esc(c.name) + '</span>').join(', ');
+      const more = list.length > 2 ? ' 외 ' + (list.length - 2) : '';
+      const full = list.map((c) => c.name + (c.on ? '' : '(연결 안 됨)')).join(', ');
+      return '<span class="tclients" title="' + esc(full) + '" aria-label="클라이언트: ' + esc(full) + '"><span class="names" aria-hidden="true">클라이언트: ' + shown + more + '</span></span>';
+    };
+    function renderList() {
+      const n = live();
+      const pill = role === 'toggle'
+        ? '<span class="pill-text">연결 <b>' + n + '</b></span>'
+        : '<button type="button" class="pill" data-open aria-label="연결 ' + n + '개 보기">연결 <b>' + n + '</b>' + ICON_CHEV + '</button>';
+      main.innerHTML =
+        '<div class="tunnels-bar"><button class="btn primary" type="button">터널 추가</button></div>' +
+        '<p class="summary">3개 중 2개 켜짐</p>' +
+        '<ul class="tlist">' +
+          '<li><a class="tlink" href="#i4" onclick="return false"><span class="ttitle">ssh-office</span><span class="tstatus">켜짐</span>' + clientsHtml([{name: '사무실 PC', on: true}]) +
+            '<span class="ttime">' + ICON_CLOCK + '1시간 20분 남음 · 오후 4:35 종료</span></a>' +
+            '<span class="tswitch"><button class="sw" role="switch" aria-checked="true" aria-label="ssh-office" type="button"></button></span>' +
+            '<div class="tmeta">' + pill + '<span class="stats">켜진 지 1일 2시간 · RX 58.1KiB · TX 59.5KiB</span></div>' +
+            (role !== 'toggle' ? '<div class="tmeta" style="padding-top:0"><span class="ipchip">내 IP만 · 198.51.100.23</span></div>' : '') + '</li>' +
+          '<li><a class="tlink" href="#i4" onclick="return false"><span class="ttitle">rdp-home</span><span class="tstatus">켜짐 · <span class="warn">클라이언트 연결 끊김</span></span>' + clientsHtml([{name: '집 PC', on: false}]) +
+            '<span class="ttime">' + ICON_INF + '자동으로 끄지 않음</span></a>' +
+            '<span class="tswitch"><button class="sw" role="switch" aria-checked="true" aria-label="rdp-home" type="button"></button></span>' +
+            '<div class="tmeta">' + (role === 'toggle' ? '<span class="pill-text">연결 <b>0</b></span>' : '<button type="button" class="pill" data-empty aria-label="연결 0개 보기">연결 <b>0</b>' + ICON_CHEV + '</button>') + '<span class="stats">켜진 지 5분 · RX 0B · TX 0B</span></div></li>' +
+          '<li><a class="tlink" href="#i4" onclick="return false"><span class="ttitle">nas-web</span><span class="tstatus">꺼짐</span>' + clientsHtml([{name: 'NAS', on: true}, {name: '집 PC', on: false}, {name: '노트북', on: true}]) + '</a>' +
+            '<span class="tswitch"><button class="sw" role="switch" aria-checked="false" aria-label="nas-web" type="button"></button></span></li>' +
+          '<li><a class="tlink" href="#i4" onclick="return false"><span class="ttitle">wiki</span><span class="tstatus">꺼짐</span><span class="tclients">클라이언트: 이름 규칙 office-*</span></a>' +
+            '<span class="tswitch"><button class="sw" role="switch" aria-checked="false" aria-label="wiki" type="button"></button></span></li>' +
+        '</ul>';
+      const o = main.querySelector('[data-open]'); if (o) o.addEventListener('click', () => { st.open = 'ssh'; renderOv(); });
+      const e = main.querySelector('[data-empty]'); if (e) e.addEventListener('click', () => { st.open = 'empty'; renderOv(); });
+    }
+    function connRow(c) {
+      const tag = c.state === 'ended' ? '끊음' : c.state === 'blocked' ? '차단됨' : '';
+      const me = c.addr === MY_IP ? '<span class="me-ip">내 IP</span>' : '';
+      return '<li class="conn' + (c.state ? ' ended' : '') + (c.isNew ? ' new' : '') + '">' +
+        '<div class="conn-addr">' + esc(c.addr) + me + '</div>' +
+        '<div class="conn-meta">' + (tag ? '<span class="ended-tag">' + tag + '</span> · ' : '') + (c.isNew ? '<span class="ended-tag" style="color:var(--pulse)">새</span> · ' : '') + c.cc + ' · ' + c.ago + ' 연결 · RX ' + c.rx + ' · TX ' + c.tx + '</div>' +
+        '<div class="conn-act"><button class="ibtn" type="button" data-close="' + c.id + '" aria-label="' + esc(c.addr) + ' 연결 끊기" title="연결 끊기">' + ICON_UNPLUG + '</button>' +
+        (role === 'super' ? '<button class="ibtn danger" type="button" data-block="' + c.id + '" aria-label="' + esc(c.addr) + ' 차단" title="차단">' + ICON_BAN + '</button>' : '') + '</div></li>';
+    }
+    function renderOv() {
+      if (!st.open) { ovHost.innerHTML = ''; return; }
+      const empty = st.open === 'empty';
+      const title = empty ? 'rdp-home의 연결' : 'ssh-office의 연결';
+      const body = empty
+        ? '<p class="mm-sub">연결 0개 · 2초마다 새로 고침</p><p style="text-align:center;color:var(--ink-2);margin:28px 0">지금 연결이 없습니다.</p>'
+        : '<p class="mm-sub">연결 ' + live() + '개 · 2초마다 새로 고침</p><ul class="conn-list">' + st.conns.map(connRow).join('') + '</ul>';
+      let html = '<div class="ov"><div class="mm' + (wide ? ' wide' : '') + '" role="dialog" aria-modal="true"><div class="mm-head"><h2>' + title + '</h2></div><div class="mm-body">' + body + '</div><div class="mm-foot"><button class="btn ghost" type="button" data-dismiss>닫기</button></div></div></div>';
+      if (st.confirm) {
+        const c = st.confirm, same = st.conns.filter((x) => x.addr === c.addr && !x.state).length;
+        html += '<div class="ov top"><div class="mm" role="alertdialog" aria-modal="true"><div class="mm-head"><h2><span class="mono" style="font-size:16px">' + esc(c.addr) + '</span> 주소를 차단할까요?</h2></div><div class="mm-body">' +
+          (c.addr === MY_IP ? '<p class="warnbox">지금 이 관리 화면에 접속한 주소입니다. 차단하면 이 주소에서는 터널을 쓸 수 없습니다. 관리 화면은 영향을 받지 않습니다.</p>' : '') +
+          '<p style="margin:0">이 주소의 연결 ' + same + '개를 바로 끊고, 앞으로 들어오는 연결도 받지 않습니다.</p>' +
+          '<div class="scope" role="radiogroup" aria-label="차단 범위">' +
+            '<label><input type="radio" name="scope-' + (wide ? 'd' : 'p') + '" value="tunnel"' + (st.scope === 'tunnel' ? ' checked' : '') + '><span>이 터널만 <small>ssh-office</small></span></label>' +
+            '<label><input type="radio" name="scope-' + (wide ? 'd' : 'p') + '" value="all"' + (st.scope === 'all' ? ' checked' : '') + '><span>모든 터널</span></label></div>' +
+          '<div class="field"><label class="flabel">메모(선택)</label><input class="input" placeholder="ssh-office의 연결 목록에서 차단"></div>' +
+          '</div><div class="mm-foot"><button class="btn ghost" type="button" data-cancel>취소</button><button class="btn danger" type="button" data-doblock style="min-height:40px">차단</button></div></div></div>';
+      }
+      ovHost.innerHTML = html;
+      ovHost.querySelector('[data-dismiss]').addEventListener('click', () => { st.open = false; st.confirm = null; st.conns.forEach((c) => { c.isNew = false; }); st.conns = st.conns.filter((c) => !c.state); renderList(); renderOv(); });
+      $$('[data-close]', ovHost).forEach((b) => b.addEventListener('click', () => { const c = st.conns.find((x) => x.id === +b.dataset.close); c.state = 'ended'; toast('연결을 끊었습니다.'); renderList(); renderOv(); }));
+      $$('[data-block]', ovHost).forEach((b) => b.addEventListener('click', () => { st.confirm = st.conns.find((x) => x.id === +b.dataset.block); st.scope = 'tunnel'; renderOv(); const ok = ovHost.querySelector('[data-cancel]'); if (ok) ok.focus(); }));
+      const cancel = ovHost.querySelector('[data-cancel]');
+      if (cancel) {
+        cancel.addEventListener('click', () => { const id = st.confirm.id; st.confirm = null; renderOv(); const back = ovHost.querySelector('[data-block="' + id + '"]'); if (back) back.focus(); });
+        $$('.scope input', ovHost).forEach((r) => r.addEventListener('change', () => { st.scope = r.value; }));
+        ovHost.querySelector('[data-doblock]').addEventListener('click', () => {
+          const addr = st.confirm.addr; let n = 0;
+          st.conns.forEach((x) => { if (x.addr === addr && !x.state) { x.state = 'blocked'; n++; } });
+          st.confirm = null; toast(addr + ' 주소를 차단하고 연결 ' + n + '개를 끊었습니다.'); renderList(); renderOv();
+        });
+      }
+    }
+    root.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || !st.open) return;
+      e.stopPropagation();
+      if (st.confirm) { const id = st.confirm.id; st.confirm = null; renderOv(); const back = ovHost.querySelector('[data-block="' + id + '"]'); if (back) back.focus(); }
+      else { st.open = false; st.conns = st.conns.filter((c) => !c.state); renderList(); renderOv(); }
+    });
+    renderList();
+    return {
+      rerender() { if (role !== 'super') st.confirm = null; if (role === 'toggle') st.open = false; renderList(); renderOv(); },
+      addConn() {
+        st.conns.push({id: nextId++, addr: '192.0.2.' + (40 + nextId), cc: 'US', ago: '방금', rx: '0B', tx: '0B', isNew: true});
+        renderList(); if (st.open === 'ssh') renderOv();
+        toast(st.open === 'ssh' ? '새 연결 1개 — 맨 아래에 붙였습니다.' : 'ssh-office에 새 연결 1개');
+      },
+    };
+  }
+  $$('[data-conn]').forEach((el) => connViews.push(mountConn(el, el.dataset.conn === 'desk')));
+  const cStage = document.getElementById('conn-stage');
+  $$('[data-role]', cStage).forEach((b) => b.addEventListener('click', () => {
+    role = b.dataset.role;
+    $$('[data-role]', cStage).forEach((x) => x.setAttribute('aria-pressed', x === b));
+    connViews.forEach((v) => v.rerender());
+  }));
+  cStage.querySelector('[data-act="newconn"]').addEventListener('click', () => connViews.forEach((v) => v.addConn()));
+})();
+</script>
+</body>
+</html>
