@@ -29,6 +29,7 @@
     import ShareUsersField from './parts/ShareUsersField.svelte';
     import type {SharedUser} from './parts/shareUsers';
     import {PROTOCOLS, tunnelPolicy} from './parts/tunnelPolicy';
+    import {trustedClientLabel, type AllowedClient} from './parts/connections';
     import PortRangeChips from './parts/PortRangeChips.svelte';
     import {RATE_RANGES, rateRangeError} from './parts/rateLimitRange';
     import {bufferIssue, defaultBuffer, groupBufferCap, type BufferIssue} from './parts/bufferPolicy';
@@ -339,6 +340,8 @@
     let loadedOutsideIds = $state<string[]>([]);
     const outsideGroupClientIds = $derived((option?.allowedClientIds ?? []).filter((id) => !(policy?.trustedClients ?? []).includes(id)));
     const restrictedClientIds = $derived([...(policy?.trustedClients ?? []), ...loadedOutsideIds]);
+    // 상태 영역이 읽은 이 터널의 allowedClients. 표시 이름을 보이는 데만 쓴다. 옛 서버와 새 터널은 없다(id 를 보인다).
+    let statusClients = $state<AllowedClient[] | undefined>(undefined);
     const trusted = (clientId: string): boolean => option?.allowedClientIds?.includes(clientId) === true;
     const setTrusted = (clientId: string, on: boolean) => {
         if(!option || !policy) return;
@@ -473,7 +476,8 @@
 
 {#if option}
 {#if !isNew}
-    <TunnelStatusArea port={option.originalForwardPort ?? option.forwardPort} editable={toggleable} onsessionout={sessionOut} />
+    <TunnelStatusArea port={option.originalForwardPort ?? option.forwardPort} editable={toggleable} onsessionout={sessionOut}
+        onstatus={(status) => { if(status?.allowedClients) statusClients = status.allowedClients; }} />
 {/if}
 {#if readOnly}
     <!-- 이슈 347: 켤 수는 있지만 고칠 수 없는 사용자(toggle 소유자·공유받은 사용자)에게는 켜고 끌 수 있다고 알린다. -->
@@ -543,8 +547,9 @@
                 <Field label={t('tunnelEdit.trustedClientIds')} error={trustedError || undefined}>
                     <div style="display: flex; flex-wrap: wrap; gap: var(--s-4);">
                         {#each restrictedClientIds as clientId (clientId)}
+                            {@const name = trustedClientLabel(clientId, statusClients)}
                             <Checkbox id={`tunnel-trusted-${clientId}`}
-                                label={loadedOutsideIds.includes(clientId) ? t('tunnelEdit.clientNotAllowed', {clientId}) : clientId}
+                                label={loadedOutsideIds.includes(clientId) ? t('tunnelEdit.clientNotAllowed', {clientId: name}) : name}
                                 bind:checked={() => trusted(clientId), (on) => setTrusted(clientId, on)} />
                         {:else}
                             <p>{t('tunnelEdit.noTrustedClientsForGroup')}</p>

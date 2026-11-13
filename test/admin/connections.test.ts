@@ -1,7 +1,7 @@
 import type {TunnelingStatus} from "../../admin/src/controller/Options";
 import {addedConnections, announcement, blockBodyText, blockedDoneText, clientsView, closingFailure, closingFailureText, connectionsSupported, duplicateBlockText,
     duplicateCoversTunnel,
-    mergeConnections, MAX_KEPT_ENDED, statsView, summaryCount, type ConnectionRow, type FetchedConnection} from "../../admin/src/screens/parts/connections";
+    mergeConnections, MAX_KEPT_ENDED, statsView, summaryCount, trustedClientLabel, type ConnectionRow, type FetchedConnection} from "../../admin/src/screens/parts/connections";
 import {isTopModal, closeModal, openModal} from "../../admin/src/ui/modalStack";
 import {translator} from "../../admin/src/i18n";
 
@@ -45,6 +45,21 @@ describe("clientsView (FR-3·AC-3)", () => {
     });
     test("옛 서버(allowedClients 없음)는 보이지 않는다", () => {
         expect(clientsView({}, en)).toBeUndefined();
+    });
+});
+
+describe("trustedClientLabel (이슈 370 C-3: 편집 화면 신뢰 클라이언트 칸의 이름)", () => {
+    const clients = [{clientId: "client-a", name: "Client A", connected: true}, {clientId: "client-b", name: "client-b", connected: false}];
+    test("상태 응답에 그 id 의 표시 이름이 있으면 이름을 보인다", () => {
+        expect(trustedClientLabel("client-a", clients)).toBe("Client A");
+    });
+    test("이름이 id 와 같거나(표시 이름 없음) 목록에 없으면 id 를 보인다", () => {
+        expect(trustedClientLabel("client-b", clients)).toBe("client-b");
+        expect(trustedClientLabel("client-c", clients)).toBe("client-c");
+    });
+    test("옛 서버(allowedClients 없음)와 빈 이름은 id 를 보인다", () => {
+        expect(trustedClientLabel("client-a", undefined)).toBe("client-a");
+        expect(trustedClientLabel("client-a", [{clientId: "client-a", name: "", connected: true}])).toBe("client-a");
     });
 });
 

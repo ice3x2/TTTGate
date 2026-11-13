@@ -307,6 +307,21 @@ test("admin 이 소유자를 바꾼 뒤 같은 화면에서 저장해도 revisio
     expect(await ownerHeadingOf(page, 20003)).toBe("bob (Bob)");
 }, 3));
 
+// 이슈 370 C-3 — 일반 사용자 편집 화면의 신뢰 클라이언트 칸도 상태 응답의 allowedClients 에 있는 표시 이름을 보인다.
+test("alice 의 기존 터널 편집 화면에서 상태 응답의 allowedClients 에 이름이 있는 신뢰 클라이언트는 그 이름으로 보인다", () => withTunnels("alice", async ({page}) => {
+    await page.route("**/api/externalServerStatuses", async (route) => {
+        const response = await route.fetch();
+        const body = await response.json();
+        const statuses = (body.statuses as Array<Record<string, unknown>>).map((status) => status.port === 20001
+            ? {...status, allowedClients: [{clientId: "client-a", name: "Client A", connected: true}]} : status);
+        await route.fulfill({response, json: {...body, statuses}});
+    });
+    await openTunnel(page, 20001);
+    const label = page.locator("label", {has: page.locator("#tunnel-trusted-client-a")});
+    await label.getByText("Client A", {exact: true}).waitFor({state: "visible", timeout: 10_000});
+    expect(await label.textContent()).not.toContain("client-a");
+}, 2));
+
 // #178 — 슈퍼유저가 소유자 그룹이 허용하지 않은 id 를 넣으면 소유자는 자기 터널을 저장하지 못한다.
 test("admin 이 소유자 그룹이 허용하지 않은 신뢰 클라이언트 id 를 고르면 저장 전에 경고를 본다", () => withTunnels("admin", async ({page}) => {
     await openTunnel(page, 20001);

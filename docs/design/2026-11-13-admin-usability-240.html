@@ -326,7 +326,7 @@ td.k { white-space:nowrap; font-family:var(--d-mono); font-size:12.5px; }
 <li>④ 이번 버전은 목업과 달리 허용 클라이언트를 가동 정보와 같은 줄(시계 아래)에 두고, 겹친 창의 오버레이를 두 창 모두 같은 농도로 그리며, 차단 확인 창은 <code>role="dialog"</code>에 첫 초점을 "이 터널만"에 둔다. 동작에는 영향이 없어 다음 버전에서 다시 본다.</li>
 <li>④ 연결 창이 열린 동안 터널이 지워지거나 볼 수 없게 되어 연결 목록이 404를 주면 창을 닫고 "이 터널의 연결을 더 볼 수 없습니다."를 알린다(403과 같은 처리, 문구만 다르다).</li>
 <li>④ [연결 N ›] 버튼은 <code>::before</code>로 누르는 영역을 넓히지 않고, 버튼 자체를 높이 44px의 투명한 영역으로 두고 안쪽 알약만 32px로 보인다. <code>::before</code>로 넓힌 아래쪽을 감싼 요소가 받아 버렸기 때문이다(PR 379 의 CI 실행 43356984891 진단: 버튼 아래 5px 을 <code>.tunnel-stats</code> 가 받음). 그래서 가동 정보 줄이 목업보다 12px 높다.</li>
-<li>④ 이번 버전은 허용 클라이언트 글자를 가동 정보 줄과 같은 <code>fs-xs</code>로 둔다(목업은 <code>fs-sm</code>). 터널 편집 화면의 신뢰 클라이언트 칸은 일반 사용자에게 id를, 목록은 표시 이름을 보인다. 상태 응답의 <code>allowedClients</code>에는 걸리지 않은 클라이언트가 없어 칸 전체를 이름으로 바꾸지 못했다. 둘 다 다음 버전에서 다시 본다.</li>
+<li>④ 이번 버전은 허용 클라이언트 글자를 가동 정보 줄과 같은 <code>fs-xs</code>로 둔다(목업은 <code>fs-sm</code>). 다음 버전에서 다시 본다. 터널 편집 화면의 신뢰 클라이언트 칸은 상태 응답 <code>allowedClients</code>의 이름을 쓴다(이슈 370 C-3, PR 383). 그 터널에 걸리지 않은 클라이언트, 저장 전 새로 고른 클라이언트, 새 터널, 옛 서버는 이름을 알 수 없어 id 로 보인다.</li>
 </ul></div>
 
 <h2 class="sec" id="audit"><small>AUDIT</small>구현 반영 감사표 (최종 develop 5e9c908 대조)</h2>
@@ -346,9 +346,9 @@ td.k { white-space:nowrap; font-family:var(--d-mono); font-size:12.5px; }
 <tr><td>8</td><td>옛 서버 판단은 allowedClients 유무</td><td>④·이슈 369 §8 "404 면 글자"</td><td>B1</td><td>새 서버의 404 를 옛 서버로 오판하지 않는다</td></tr>
 <tr><td>11</td><td>버튼 자체 44px, 안쪽 알약 32px(줄 12px 높음)</td><td>공통 근거 "::before 로 넓힘", 이슈 369 FR-5 44px</td><td>B1</td><td>44px 요구는 지키고 방법만 바뀜</td></tr>
 <tr><td>9a·9b·9c·12a</td><td>클라이언트 줄 위치, 겹친 창 농도, 확인 창 역할·첫 초점, 클라이언트 글자 크기</td><td>목업</td><td>C</td><td>동작 영향 없음</td></tr>
-<tr><td>12b</td><td>편집 화면 신뢰 클라이언트 칸은 일반 사용자에게 id</td><td>이슈 370 C-3 "allowedClients 이름이 생기면 쓴다"</td><td>C</td><td>상태 응답에 걸리지 않은 클라이언트 이름이 없다</td></tr>
+<tr><td>12b</td><td>편집 화면 신뢰 클라이언트 칸은 상태 응답의 이름을 쓴다(걸리지 않은 클라이언트 등은 id)</td><td>이슈 370 C-3 "allowedClients 이름이 생기면 쓴다"</td><td>A2</td><td>처음 대조에서는 C 로 미뤘으나, 닫힌 이슈의 요구를 약화한 것(B2)이라는 재확인 지적에 따라 PR 383 으로 구현해 원래 요구대로 충족했다. 이름을 알 수 없는 경우만 id</td></tr>
 </table>
-<p>결과: A1 2, A2 1, B1 10, C 4, <b>B2 0</b>. 이 대조에서 기록되지 않은 MEDIUM 이상 불일치는 0건이다. 새로 찾은 LOW 는 다음 버전에서 본다: 공용 <code>Field</code> 가 오류 문장을 입력 칸과 <code>aria-describedby</code> 로 잇지 않는다(③ 접근성), ①의 −/+ 는 목업의 원형이 아니라 정사각 secondary 버튼이다. ④ 본문의 "IP 제한 토글(누르는 영역 44px)"은 사실과 달라 고쳤다(토글의 누르는 영역은 2.3.0부터 32px, 이슈 348 소관).</p>
+<p>결과: A1 2, A2 2, B1 10, C 4, <b>B2 0</b>(18줄). 처음 집계는 12b 를 C 로 셌으나(C 는 실제 5줄이었다) 재확인에서 B2 로 지적되어 구현했다. 이 대조에서 기록되지 않은 MEDIUM 이상 불일치는 0건이다. 새로 찾은 LOW 는 다음 버전에서 본다: 공용 <code>Field</code> 가 오류 문장을 입력 칸과 <code>aria-describedby</code> 로 잇지 않는다(③ 접근성), ①의 −/+ 는 목업의 원형이 아니라 정사각 secondary 버튼이다. ④ 본문의 "IP 제한 토글(누르는 영역 44px)"은 사실과 달라 고쳤다(토글의 누르는 영역은 2.3.0부터 32px, 이슈 348 소관).</p>
 <p>E2E 근거: 개발 PC(WSL)의 Chromium 은 헤드리스·일반·Xvfb 모두 rAF 가 돌지 않아 브라우저 테스트를 직접 돌리지 못했다. 각 PR 과 최종 develop 의 CI "Admin, tunnel and browser end-to-end tests" 작업 결과가 근거다.</p>
 
 <h2 class="sec" id="research"><small>RESEARCH</small>공통 근거</h2>
