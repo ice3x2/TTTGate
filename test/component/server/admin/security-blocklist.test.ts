@@ -58,6 +58,8 @@ describe("security-blocklist", () => {
     let su: Auth;
     let ru: Auth;
     const applied: any[] = [];
+    // 이슈 369 FR-12: 차단을 더하면 걸리는 기존 연결을 끊고 끊은 수를 돌려준다.
+    const runtime = {applyConnectionSecurity: jest.fn((next: unknown) => { applied.push(next); }), closeBlockedConnections: jest.fn(async (_entry: unknown) => 2)};
 
     const eventsOf = (type: string): AuditEvent[] => sink.events.filter((event) => event.type === type);
     const storedBlocklist = async (): Promise<any[]> => {
@@ -88,7 +90,6 @@ describe("security-blocklist", () => {
         applyTestRoot(testRoot.rootDir);
         await CertificationStore.instance.load();
 
-        const runtime = {applyConnectionSecurity: jest.fn((next: unknown) => { applied.push(next); })};
         api = new AdminServer(runtime as any, false);
         const port = await api.listen(0, "127.0.0.1");
         request = async (method, target, body = {}, auth = {}) => {
@@ -175,13 +176,17 @@ describe("security-blocklist", () => {
         expect(applied).toHaveLength(1);
         expect(applied[0].blocklist).toEqual([entry]);
         expect(applied[0].geo).toEqual({mode: "off", countries: [], applyToAdmin: true, unknownPolicy: "allow"});
+        // 이슈 369 FR-12·AC-9: 차단에 걸리는 기존 연결을 끊은 수가 응답과 감사에 있다.
+        expect(response.body.closedConnections).toBe(2);
+        // L-1: 끊고 세는 것은 방금 더한 항목에 걸리는 연결뿐이다. 목록 전체가 아니다.
+        expect(runtime.closeBlockedConnections).toHaveBeenLastCalledWith(entry);
 
         const events = eventsOf("security_block_added");
         expect(events[events.length - 1]).toMatchObject({
             outcome: "success",
             // 대상 id 는 정규화한 주소다. 풀 때와 같은 id 로 이어서 찾을 수 있다.
             target: {kind: "security", id: "198.51.100.0/24"},
-            detail: {address: "198.51.100.0/24", port: 18080, note: "scanner"}
+            detail: {address: "198.51.100.0/24", port: 18080, note: "scanner", closedConnections: 2}
         });
         expect((await request("GET", "/api/security/blocklist", {}, su)).body.entries).toEqual([entry]);
     });
@@ -217,6 +222,10 @@ describe("security-blocklist", () => {
         expect(response.status).toBe(409);
         expect(response.body).toMatchObject({success: false, code: "duplicate", message: "203.0.113.7 is already blocked on port 18080"});
         expect(await addresses()).toEqual(["203.0.113.7"]);
+        // L-3: 이미 막힌 주소라도 그 차단에 걸리는 연결이 남아 있으면 끊는다(차단을 더하기 전에 들어온 연결 등).
+        expect(response.body.closedConnections).toBe(2);
+        // L-1: 이미 있는 항목(포트 18080)에 걸리는 연결만 끊고 센다.
+        expect(runtime.closeBlockedConnections).toHaveBeenLastCalledWith(expect.objectContaining({address: "203.0.113.7", port: 18080}));
     });
 
     it("상한에 이르면 409 full 이다 (REQ-4 AC-3)", async () => {

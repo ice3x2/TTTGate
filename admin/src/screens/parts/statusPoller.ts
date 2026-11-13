@@ -9,9 +9,10 @@ import type {TunnelingStatus} from '../../controller/Options';
 // 이슈 348: requesterIp 는 서버가 본 지금 내 IP 다(갱신 버튼 강조에 쓴다). 옛 서버면 없다.
 export type StatusSnapshot = {serverTime: number; requesterIp?: string | null; statuses: TunnelingStatus[]};
 
-export type StatusPollerOptions = {
-    load: (signal: AbortSignal) => Promise<StatusSnapshot>;
-    onSnapshot: (snapshot: StatusSnapshot) => void;
+/** 이슈 369: 읽는 값의 형(T)은 고를 수 있다. 기본은 터널 상태 응답이고, 연결 창은 연결 목록 응답을 읽는다. */
+export type StatusPollerOptions<T = StatusSnapshot> = {
+    load: (signal: AbortSignal) => Promise<T>;
+    onSnapshot: (snapshot: T) => void;
     onSessionOut: () => void;
     isSessionOut: (error: unknown) => boolean;
     onFailure?: () => void;
@@ -24,14 +25,14 @@ export type StatusPollerOptions = {
 
 type Read = {controller: AbortController; done: Promise<void>};
 
-export class StatusPoller {
-    private readonly _options: StatusPollerOptions;
+export class StatusPoller<T = StatusSnapshot> {
+    private readonly _options: StatusPollerOptions<T>;
     private _timer: ReturnType<typeof setInterval> | undefined;
     private _current: Read | undefined;
     private _generation = 0;
     private _stopped = false;
 
-    public constructor(options: StatusPollerOptions) {
+    public constructor(options: StatusPollerOptions<T>) {
         this._options = options;
     }
 
@@ -79,7 +80,7 @@ export class StatusPoller {
     }
 
     private async settle(controller: AbortController, generation: number): Promise<void> {
-        let snapshot: StatusSnapshot;
+        let snapshot: T;
         // fetch 는 실패를 예외로만 알린다(고를 수 없는 계약이다). 여기서 받아 실패 알림으로 바꾼다.
         try {
             snapshot = await this._options.load(controller.signal);

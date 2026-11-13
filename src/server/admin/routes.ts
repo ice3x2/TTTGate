@@ -324,6 +324,10 @@ export const ADMIN_ROUTES: ReadonlyArray<RouteEntry> = [
         handler: 'onSetActivatorIpOnly'},
     {method: 'POST', pattern: new RegExp('^/api/tunneling/(?<port>[^/]*)/activatorIp$'), action: 'tunnel:activate', target: tunnelTarget,
         audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.tunnel_ip_refreshed, tunnelAuditTarget(ctx)), handler: 'onRefreshActivatorIp'},
+    // 이슈 369: 연결 목록과 연결 하나 끊기. 원격 IP 는 개인정보라 고치기 권한(tunnel:update)이 필요하다.
+    {method: 'GET', pattern: new RegExp('^/api/tunneling/(?<port>[^/]*)/connections$'), action: 'tunnel:update', target: tunnelTarget, handler: 'onGetTunnelConnections'},
+    {method: 'DELETE', pattern: new RegExp('^/api/tunneling/(?<port>[^/]*)/connections/(?<id>[^/]*)$'), action: 'tunnel:update', target: tunnelTarget,
+        audit: (ctx) => auditMeta(AUDIT_EVENT_TYPES.tunnel_connection_closed, tunnelAuditTarget(ctx)), handler: 'onCloseTunnelConnection'},
     {method: 'GET', pattern: new RegExp('^/api/externalServerStatuses$'), action: 'tunnel:list', target: tunnelTarget, handler: 'onGetExternalServerStatuses'},
     {method: 'GET', pattern: new RegExp('^/api/externalCert/(?<port>[^/]*)$'), action: 'tunnel:cert', target: tunnelTarget, handler: 'onGetExternalServerCert'},
     {method: 'POST', pattern: new RegExp('^/api/externalCert/(?<port>[^/]*)$'), action: 'tunnel:cert', target: tunnelTarget, audit: tunnelCertAudit, handler: 'onUpdateExternalServerCert'},

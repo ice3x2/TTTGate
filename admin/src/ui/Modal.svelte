@@ -1,5 +1,6 @@
 <script lang="ts">
     import type {Snippet} from 'svelte';
+    import {closeModal, isTopModal, openModal} from './modalStack';
 
     let {
         open = $bindable(false),
@@ -19,6 +20,14 @@
 
     const titleId = $props.id();
     let dialog: HTMLDivElement | undefined = $state();
+    // 이슈 369(설계 반영): 겹쳐 연 창은 맨 위 창만 Esc 를 받는다. 닫히면 아래 창이 다시 맨 위가 된다.
+    let token: symbol | undefined;
+    $effect(() => {
+        if(!open) return;
+        const mine = openModal();
+        token = mine;
+        return () => closeModal(mine);
+    });
 
     $effect(() => {
         if(!open) return;
@@ -38,7 +47,11 @@
     });
 
     const onkeydown = (e: KeyboardEvent) => {
-        if(open && e.key === 'Escape') open = false;
+        if(open && e.key === 'Escape' && token !== undefined && isTopModal(token)) {
+            // 아래 창의 같은 처리기가 같은 키를 받으면 맨 위가 바뀐 뒤라 함께 닫힌다. 처리기 순서와 상관없이 한 번만 닫는다.
+            e.stopImmediatePropagation();
+            open = false;
+        }
     };
 </script>
 

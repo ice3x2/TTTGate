@@ -1,5 +1,6 @@
 import {
     addBlocklistEntry,
+    blockedBy,
     dropBlocklistPort,
     dropOrphanBlocklistEntries,
     moveBlocklistPort,
@@ -52,6 +53,19 @@ describe("parseBlockedAddress (#286 REQ-1·REQ-4 AC-2)", () => {
     it("문자열이 아니면 거부한다", () => {
         expect(parseBlockedAddress(123)).toMatchObject({ok: false});
         expect(parseBlockedAddress(undefined)).toMatchObject({ok: false});
+    });
+});
+
+describe("blockedBy (이슈 369 L-1: 방금 더한 항목에 걸리는 연결만 고른다)", () => {
+    it("그 항목의 주소·대역과 포트에 걸리는 연결만 참이다. 목록의 다른 항목은 보지 않는다", () => {
+        const scoped = blockedBy(entryOf("198.51.100.0/24", 18080));
+        expect(scoped(18080, "198.51.100.9")).toBe(true);
+        expect(scoped(18080, "::ffff:198.51.100.9")).toBe(true);
+        expect(scoped(1111, "198.51.100.9")).toBe(false);
+        expect(scoped(18080, "203.0.113.7")).toBe(false);
+        const all = blockedBy(entryOf("203.0.113.7"));
+        expect(all(1111, "203.0.113.7")).toBe(true);
+        expect(all(18080, "203.0.113.8")).toBe(false);
     });
 });
 
@@ -152,10 +166,13 @@ describe("addBlocklistEntry (#286 REQ-4·REQ-5)", () => {
     });
 
     it("같은 주소가 이미 있으면 포트가 달라도 duplicate 이고, 메시지에 기존 적용 범위를 쓴다", () => {
+        // 이슈 369 L-1: 이미 있는 항목(existing)을 함께 돌려준다. 그 항목에 걸리는 연결만 끊고 센다.
         expect(addBlocklistEntry([entryOf("203.0.113.7", 18080)], {address: "::ffff:203.0.113.7"}, meta))
-            .toEqual({ok: false, code: "duplicate", message: "203.0.113.7 is already blocked on port 18080", values: {address: "203.0.113.7", port: 18080}});
+            .toEqual({ok: false, code: "duplicate", message: "203.0.113.7 is already blocked on port 18080", values: {address: "203.0.113.7", port: 18080},
+                existing: entryOf("203.0.113.7", 18080)});
         expect(addBlocklistEntry([entryOf("203.0.113.7")], {address: "203.0.113.7", port: 18080}, meta))
-            .toEqual({ok: false, code: "duplicate", message: "203.0.113.7 is already blocked on all tunnels", values: {address: "203.0.113.7", port: null}});
+            .toEqual({ok: false, code: "duplicate", message: "203.0.113.7 is already blocked on all tunnels", values: {address: "203.0.113.7", port: null},
+                existing: entryOf("203.0.113.7")});
     });
 
     // REQ-5 AC-1: 일시 차단에서 옮기면 All tunnels 항목이 된다. 포트 하나에만 걸린 항목은 그 자리에서 넓힌다.
@@ -173,7 +190,8 @@ describe("addBlocklistEntry (#286 REQ-4·REQ-5)", () => {
 
     it("widen 이어도 이미 All tunnels 이면 duplicate 이고, 목록이 가득 차도 넓힐 수 있다", () => {
         expect(addBlocklistEntry([entryOf("203.0.113.7")], {address: "203.0.113.7"}, {...meta, widen: true}))
-            .toEqual({ok: false, code: "duplicate", message: "203.0.113.7 is already blocked on all tunnels", values: {address: "203.0.113.7", port: null}});
+            .toEqual({ok: false, code: "duplicate", message: "203.0.113.7 is already blocked on all tunnels", values: {address: "203.0.113.7", port: null},
+                existing: entryOf("203.0.113.7")});
         const full = Array.from({length: MAX_BLOCKLIST_ENTRIES}, (_, i) => entryOf(`10.0.${Math.floor(i / 256)}.${i % 256}`, 9000));
         expect(addBlocklistEntry(full, {address: "10.0.0.5"}, {...meta, widen: true})).toMatchObject({ok: true, entry: {address: "10.0.0.5", port: null}});
     });

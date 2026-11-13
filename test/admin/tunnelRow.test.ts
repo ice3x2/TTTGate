@@ -294,3 +294,13 @@ describe("isTunnelOn", () => {
         expect(isTunnelOn(undefined)).toBe(false);
     });
 });
+
+// 이슈 369 FR-1 — 가동 정보 줄이 연결 수를 보이면 상태 글자의 "연결 N개"는 빼서 같은 값을 두 번 보이지 않는다.
+describe("이슈 369 가동 정보 줄과 연결 수", () => {
+    test("withStats 면 연결 수를 상태 글자에 붙이지 않는다", () => {
+        const busy = status({sessions: 2});
+        expect(tunnelRowView({option: option(), status: busy, loaded: true, meId: ME, serverTime: NOW, withStats: true}).parts.map((part) => part.text))
+            .toEqual(["On"]);
+        expect(text(option(), busy)).toBe("On · 2 connections");
+    });
+});

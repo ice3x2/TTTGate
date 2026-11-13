@@ -7,6 +7,7 @@ import {CertificationStore} from "../../../../src/server/CertificationStore";
 import {BOOTSTRAP_TOKEN_FILE_NAME, IdentityMigration} from "../../../../src/server/rbac/IdentityMigration";
 import {IdentityStore} from "../../../../src/server/rbac/IdentityStore";
 import {AuditEvent, AuditSink, AuditSinkRegistry} from "../../../../src/server/audit/AuditSink";
+import {AdmissionController} from "../../../../src/server/security/AdmissionController";
 import UsablePortChecker from "../../../../src/util/UsablePortChecker";
 import {getFreePort} from "../../../helpers/network";
 import {httpRequest} from "../../../helpers/http";
@@ -127,6 +128,10 @@ describe("rbac-tunnel-ownership", () => {
             inactiveExternalPortServer: jest.fn(async () => true),
             applyExternalServerCert: jest.fn(async () => true),
             captureRuntimeState: jest.fn(() => ({external: {}})),
+            // 이슈 369: 연결 목록·끊기·허용 클라이언트 연결 여부.
+            tunnelConnections: jest.fn(() => ({connections: [], truncated: false, total: 0})),
+            closeTunnelConnection: jest.fn(async () => ({result: "gone"})),
+            isClientConnected: jest.fn(() => false),
             reapplyActiveCaps: jest.fn()
         };
         api = new AdminServer(runtime as any, false);
@@ -298,6 +303,82 @@ describe("rbac-tunnel-ownership", () => {
             await setGroupAttributes(groupOne, groupAttributes("group_read"));
             await setGroupAttributes(groupTwo, groupAttributes("private"));
             await request("DELETE", "/api/tunnelingOption", {forwardPort: 20071,
+                expectedRevision: ServerOptionStore.instance.revisionState.currentRevision}, superuser);
+        }
+    });
+
+    // 이슈 369 FR-8·FR-10·AC-5·AC-6 — 연결 목록과 끊기는 고치기 권한(tunnel:update)이다. 볼 수만 있으면 403 read_only, 볼 수 없으면 404.
+    it("이슈 369 연결 목록·끊기는 소유자만 쓰고, 끊은 연결은 감사에 남으며, 끝난 연결은 closed:false, 다른 포트 연결은 404 다", async () => {
+        const port = 20080;
+        const created = await request("POST", "/api/tunnelingOption", tunnelBody(port), alice.auth);
+        expect(created.status).toBe(200);
+        try {
+            const connection = {id: 7, remoteAddress: "203.0.113.7", remotePort: 51000, connectedAt: Date.now() - 1000, rx: 10, tx: 20};
+            runtime.tunnelConnections.mockReturnValue({connections: [connection], truncated: false, total: 1});
+            const listed = await request("GET", `/api/tunneling/${port}/connections`, {}, alice.auth);
+            expect(listed.status).toBe(200);
+            expect(typeof listed.body.serverTime).toBe("number");
+            // FR-8: 국가 필터가 꺼져 있으면 국가를 보이지 않는다(/api/security/denials 와 같은 규칙).
+            expect(listed.body).toMatchObject({countryLookup: false, truncated: false});
+            expect(listed.body.connections).toEqual([{...connection, country: null}]);
+            expect(runtime.tunnelConnections).toHaveBeenCalledWith(port);
+
+            // FR-8: 국가 필터가 켜져 있으면 연결마다 국가를 싣는다. 서버가 잘라 준 목록이면 truncated 를 그대로 알린다(M4).
+            AdmissionController.instance.configureGeo({mode: "deny", countries: ["US"], applyToAdmin: false, unknownPolicy: "allow"});
+            runtime.tunnelConnections.mockReturnValue({connections: [{...connection, remoteAddress: "8.8.8.8"}], truncated: true, total: 812});
+            const shown = await request("GET", `/api/tunneling/${port}/connections`, {}, alice.auth);
+            // M-1: 화면 요약은 잘라 준 목록이 아니라 서버의 전체 연결 수로 센다.
+            expect(shown.body).toMatchObject({countryLookup: true, truncated: true, total: 812});
+            expect(shown.body.connections).toEqual([{...connection, remoteAddress: "8.8.8.8", country: "US"}]);
+            AdmissionController.instance.configureGeo({mode: "off", countries: [], applyToAdmin: false, unknownPolicy: "allow"});
+
+            // bob 은 같은 그룹 공유(group_read)로 볼 수만 있다. carol 은 볼 수 없다.
+            expect((await request("GET", `/api/tunneling/${port}/connections`, {}, bob.auth))).toMatchObject({status: 403, body: {code: "read_only"}});
+            expect((await request("GET", `/api/tunneling/${port}/connections`, {}, carol.auth)).status).toBe(404);
+            expect((await request("DELETE", `/api/tunneling/${port}/connections/7`, {}, bob.auth)).status).toBe(403);
+
+            sink.events.length = 0;
+            runtime.closeTunnelConnection.mockResolvedValueOnce({result: "closed", remoteAddress: "203.0.113.7"});
+            const closed = await request("DELETE", `/api/tunneling/${port}/connections/7`, {}, alice.auth);
+            expect(closed).toMatchObject({status: 200, body: {closed: true}});
+            expect(runtime.closeTunnelConnection).toHaveBeenLastCalledWith(port, 7);
+            const audit = sink.events.find((event: any) => event.type === "tunnel_connection_closed");
+            expect(audit).toMatchObject({detail: {port, id: 7, closed: true, remoteAddress: "203.0.113.7"}});
+
+            // M3: 이미 끝난 연결은 끊은 것이 아니다. 감사 detail 의 closed:false 로 구분한다.
+            sink.events.length = 0;
+            runtime.closeTunnelConnection.mockResolvedValueOnce({result: "gone"});
+            expect(await request("DELETE", `/api/tunneling/${port}/connections/7`, {}, alice.auth)).toMatchObject({status: 200, body: {closed: false}});
+            const goneAudit = sink.events.find((event: any) => event.type === "tunnel_connection_closed") as any;
+            expect(goneAudit.detail).toEqual({port, id: 7, closed: false});
+            runtime.closeTunnelConnection.mockResolvedValueOnce({result: "other-port"});
+            expect(await request("DELETE", `/api/tunneling/${port}/connections/9`, {}, alice.auth))
+                .toMatchObject({status: 404, body: {code: "connection_not_found"}});
+            expect((await request("DELETE", `/api/tunneling/${port}/connections/abc`, {}, alice.auth)).status).toBe(400);
+        } finally {
+            runtime.tunnelConnections.mockReturnValue({connections: [], truncated: false, total: 0});
+            AdmissionController.instance.configureGeo({mode: "off", countries: [], applyToAdmin: false, unknownPolicy: "allow"});
+            await request("DELETE", "/api/tunnelingOption", {forwardPort: port,
+                expectedRevision: ServerOptionStore.instance.revisionState.currentRevision}, superuser);
+        }
+    });
+
+    // 이슈 369 FR-6·AC-4 — 상태 응답의 allowedClients 는 그 터널에 걸린 클라이언트만, 표시 이름(없으면 id)과 연결 여부를 담는다.
+    it("이슈 369 상태 응답은 그 터널의 허용 클라이언트만 이름·연결 여부와 함께 준다", async () => {
+        const port = 20081;
+        expect((await request("POST", "/api/tunnelingOption", tunnelBody(port), alice.auth)).status).toBe(200);
+        try {
+            runtime.isClientConnected.mockImplementation((clientId: string) => clientId === TRUSTED_CLIENT);
+            const response = await request("GET", "/api/externalServerStatuses", {}, alice.auth);
+            const status = response.body.statuses.find((entry: any) => entry.port === port);
+            expect(status.allowedClients).toEqual([{clientId: TRUSTED_CLIENT, name: TRUSTED_CLIENT, connected: true}]);
+            // 신뢰 클라이언트를 고르지 않은 옛 터널은 모든 클라이언트다(빈 목록).
+            const migrated = (await request("GET", "/api/externalServerStatuses", {}, superuser)).body.statuses.find((entry: any) => entry.port === MIGRATED_PORT);
+            expect(migrated.allowedClients).toEqual([]);
+        } finally {
+            runtime.isClientConnected.mockReset();
+            runtime.isClientConnected.mockReturnValue(false);
+            await request("DELETE", "/api/tunnelingOption", {forwardPort: port,
                 expectedRevision: ServerOptionStore.instance.revisionState.currentRevision}, superuser);
         }
     });

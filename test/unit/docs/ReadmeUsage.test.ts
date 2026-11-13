@@ -234,4 +234,12 @@ describe("README in English and Korean (#310)", () => {
         const missingCommands = commandLines.filter((command) => !rows.some((row) => row.includes(`\`${command}`)));
         expect(missingCommands).toEqual([]);
     });
+
+    // 이슈 369: 목록 줄의 가동 정보·연결 창(끊기·차단)과, 차단을 더하면 기존 연결도 끊긴다는 운영 변화를 적는다.
+    it.each([["English", () => english, /\*\*Connections:\*\*[^\n]*Disconnect[^\n]*Block/, /new block also ends the connections that are already open/],
+        ["한국어", () => korean, /\*\*연결:\*\*[^\n]*끊기[^\n]*차단/, /차단을 더하면 이미 들어와 있는 연결도 끊는다/]])(
+        "documents the connection list on the tunnel list in %s (issue 369)", (_label, section, bullet, blocking) => {
+        expect(section()).toMatch(bullet);
+        expect(section()).toMatch(blocking);
+    });
 });
