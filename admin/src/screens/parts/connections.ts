@@ -54,7 +54,16 @@ export function clientsView(input: {allowedClients?: AllowedClient[]; allowedCli
     };
 }
 
-export type ConnectionState = 'live' | 'ended' | 'closed' | 'blocked';
+/**
+ * 이슈 370 C-3: 편집 화면 신뢰 클라이언트 칸에 보일 글자. 상태 응답의 allowedClients 에 표시 이름이 있으면 그 이름, 아니면 id 다.
+ * allowedClients 는 그 터널에 걸린 클라이언트만 담으므로 고르지 않은 클라이언트와 옛 서버는 id 로 남는다.
+ */
+export function trustedClientLabel(clientId: string, allowedClients: readonly AllowedClient[] | undefined): string {
+    const name = allowedClients?.find((client) => client.clientId === clientId)?.name;
+    return name ? name : clientId;
+}
+
+export type ConnectionState ='live' | 'ended' | 'closed' | 'blocked';
 export type ConnectionRow = {id: number; remoteAddress: string | undefined; remotePort: number | undefined; connectedAt: number;
     rx: number; tx: number; country?: string | null; state: ConnectionState; isNew: boolean};
 export type FetchedConnection = Omit<ConnectionRow, 'state' | 'isNew'>;
