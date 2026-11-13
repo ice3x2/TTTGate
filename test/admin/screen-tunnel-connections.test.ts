@@ -463,9 +463,13 @@ test("설계 ④ 연결 버튼은 보이는 높이 32px·글자 fs-sm 이고, �
         const hits = await button.evaluate((element) => {
             const rect = element.getBoundingClientRect();
             const x = rect.left + rect.width / 2;
-            return [rect.top - 5, rect.bottom + 5].map((y) => element.contains(document.elementFromPoint(x, y)));
+            // 이 버튼이 받지 않으면 그 지점을 받은 요소를 적어, 실패 메시지에서 무엇이 덮었는지 보이게 한다.
+            return [rect.top - 5, rect.bottom + 5].map((y) => {
+                const hit = document.elementFromPoint(x, y);
+                return element.contains(hit) ? "button" : `${hit ? `${hit.tagName}.${hit.className}` : "none"} at y=${Math.round(y)} (button ${Math.round(rect.top)}-${Math.round(rect.bottom)}, viewport ${innerHeight})`;
+            });
         });
-        expect(hits).toEqual([true, true]);
+        expect(hits).toEqual(["button", "button"]);
         expect(app.errors).toEqual([]);
     } finally {
         await app.close();
