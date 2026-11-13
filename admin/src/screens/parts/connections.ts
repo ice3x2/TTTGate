@@ -63,7 +63,7 @@ export function trustedClientLabel(clientId: string, allowedClients: readonly Al
     return name ? name : clientId;
 }
 
-export type ConnectionState ='live' | 'ended' | 'closed' | 'blocked';
+export type ConnectionState = 'live' | 'ended' | 'closed' | 'blocked';
 export type ConnectionRow = {id: number; remoteAddress: string | undefined; remotePort: number | undefined; connectedAt: number;
     rx: number; tx: number; country?: string | null; state: ConnectionState; isNew: boolean};
 export type FetchedConnection = Omit<ConnectionRow, 'state' | 'isNew'>;
