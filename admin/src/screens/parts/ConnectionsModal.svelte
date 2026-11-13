@@ -11,7 +11,7 @@
     import SecurityCtrl from '../../controller/SecurityCtrl';
     import InvalidSession from '../../controller/InvalidSession';
     import {StatusPoller} from './statusPoller';
-    import {addedConnections, announcement, blockBodyText, blockedDoneText, closingFailureText, duplicateCoversTunnel, mergeConnections, summaryCount,
+    import {addedConnections, announcement, blockBodyText, blockedDoneText, closingFailure, duplicateBlockText, duplicateCoversTunnel, mergeConnections, summaryCount,
         type ConnectionRow, type FetchedConnection} from './connections';
     import {byteToUnit} from './units';
     import {relativeTime} from '../../util/relativeTime';
@@ -84,12 +84,14 @@
                 const result = await ServerOptionCtrl.instance.tunnelConnections(port);
                 // 옛 서버는 목록이 버튼을 보이지 않으므로(connectionsSupported) 여기의 404 는 이 터널을 더 볼 수 없다는 뜻이다
                 // (권한이 바뀌었거나 지운 터널). 403 은 볼 수만 있게 된 것이다. 다시 읽어도 나아지지 않으므로 알리고 이 창만 닫는다.
-                // 다른 터널의 연결 버튼은 그대로다.
-                const closing = result.success ? undefined : closingFailureText(result.status);
+                // 다른 터널의 연결 버튼은 그대로다. 위에 떠 있던 차단 확인 창도 함께 닫는다.
+                // 2단계 인증 등록이 필요하면(403 mfa_enrollment_required) 등록 화면으로 옮겨 가므로 알림 없이 닫기만 한다.
+                const closing = result.success ? undefined : closingFailure(result);
                 if(closing !== undefined) {
                     stop();
+                    blockOpen = false;
                     open = false;
-                    toast.push({tone: 'warn', message: closing});
+                    if(closing.notice !== undefined) toast.push({tone: 'warn', message: closing.notice});
                 }
                 if(!result.success) throw new Error('connections');
                 return {serverTime: result.serverTime, truncated: result.truncated === true, total: result.total, connections: result.connections};
@@ -164,9 +166,10 @@
     const confirmBlock = async () => {
         const target = blockTarget;
         if(!target?.remoteAddress) return;
+        const scope = blockScope;
         blocking = true;
         try {
-            const result = await SecurityCtrl.instance.block({address: target.remoteAddress, port: blockScope === 'tunnel' ? port : null,
+            const result = await SecurityCtrl.instance.block({address: target.remoteAddress, port: scope === 'tunnel' ? port : null,
                 note: blockNote.trim() === '' ? t('connections.defaultNote', {title}) : blockNote.trim()});
             if(result.success) {
                 mark((row) => row.remoteAddress === target.remoteAddress && row.state === 'live', 'blocked');
@@ -174,8 +177,9 @@
                 blockOpen = false;
             } else if(result.code === 'duplicate') {
                 // 이미 있는 차단이 이 터널에 걸리면 서버가 그 연결을 끊었다. 줄도 "차단됨"으로 바꾼다.
+                // 서버는 주소마다 차단을 하나만 두므로, 그 차단이 요청한 범위를 덮지 못하면 이미 걸린 포트를 밝혀 알린다.
                 if(duplicateCoversTunnel(result, port)) mark((row) => row.remoteAddress === target.remoteAddress && row.state === 'live', 'blocked');
-                toast.push({tone: 'warn', message: t('connections.alreadyBlocked')});
+                toast.push({tone: 'warn', message: duplicateBlockText(result, {port, scope})});
                 blockOpen = false;
             } else {
                 toast.push({tone: 'alarm', message: errorMessageOf(result)});
