@@ -287,7 +287,6 @@ export const ko: Messages = {
     'serverError.invalid_address': '주소가 올바르지 않습니다.',
     'serverError.invalid_ip': 'IP가 올바르지 않습니다.',
     'serverError.invalid_client_id': '클라이언트 ID가 올바르지 않습니다.',
-    'serverError.full': '차단 목록이 가득 찼습니다(최대 {max}개).',
     'serverError.audit_unavailable': '감사 로그를 읽을 수 없습니다.',
     'serverError.CLIENT_EXISTS': '이미 있는 신뢰 클라이언트입니다: {clientId}',
     'serverError.CLIENT_NOT_FOUND': '신뢰 클라이언트가 없습니다: {clientId}',

@@ -388,7 +388,7 @@
     .tunnel-conn::before { content: ''; position: absolute; inset: -6px -2px; }
     .tunnel-conn:hover { border-color: var(--line-2); }
     .tunnel-conn:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
-    .tunnel-conn-text { font-weight: 600; color: var(--ink-1); }
+    .tunnel-conn-text { font-size: var(--fs-sm); font-weight: 600; color: var(--ink-1); }
     .tunnel-stats-line { font-family: var(--ff-mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
     .tunnel-clients { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px var(--s-2); min-width: 0; }
     .tunnel-clients .client { overflow-wrap: anywhere; }

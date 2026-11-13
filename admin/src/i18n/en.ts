@@ -236,7 +236,6 @@ export const en = {
     'serverError.invalid_address': 'invalid address',
     'serverError.invalid_ip': 'invalid ip',
     'serverError.invalid_client_id': 'Invalid client ID',
-    'serverError.full': 'the blocklist already has {max} entries',
     'serverError.audit_unavailable': 'Audit log unavailable',
     'serverError.CLIENT_EXISTS': "trusted client '{clientId}' already exists",
     'serverError.CLIENT_NOT_FOUND': "trusted client '{clientId}' does not exist",

@@ -11,7 +11,7 @@
     import SecurityCtrl from '../../controller/SecurityCtrl';
     import InvalidSession from '../../controller/InvalidSession';
     import {StatusPoller} from './statusPoller';
-    import {addedConnections, announcement, blockBodyText, blockedDoneText, blockFailureText, closingFailure, duplicateBlockText, duplicateCoversTunnel, mergeConnections, summaryCount,
+    import {addedConnections, announcement, blockBodyText, blockedDoneText, closingFailure, duplicateBlockText, duplicateCoversTunnel, mergeConnections, summaryCount,
         type ConnectionRow, type FetchedConnection} from './connections';
     import {byteToUnit} from './units';
     import {relativeTime} from '../../util/relativeTime';
@@ -183,7 +183,7 @@
                 blockOpen = false;
             } else {
                 // 차단 목록이 가득 차면 보안 화면과 같은 안내를 보인다. 창은 연 채로 두어 다른 범위를 고르거나 취소할 수 있다.
-                toast.push({tone: 'alarm', message: blockFailureText(result)});
+                toast.push({tone: 'alarm', message: errorMessageOf(result)});
             }
         } catch(e) {
             if(e instanceof InvalidSession) { blockOpen = false; open = false; onsessionout(); return; }
@@ -241,7 +241,7 @@
         <p class="warnbox" role="alert">{t('connections.selfWarning')}</p>
     {/if}
     <div class="scope" role="radiogroup" aria-label={t('connections.scope')}>
-        <label><input type="radio" name={`block-scope-${port}`} value="tunnel" bind:group={blockScope} />{t('connections.scopeTunnel')}<small>{title}</small></label>
+        <label><input type="radio" name={`block-scope-${port}`} value="tunnel" bind:group={blockScope} />{t('connections.scopeTunnel')}{' '}<small>{title}</small></label>
         <label><input type="radio" name={`block-scope-${port}`} value="all" bind:group={blockScope} />{t('connections.scopeAll')}</label>
     </div>
     <label class="note-label" for={`block-note-${port}`}>{t('connections.note')}</label>
