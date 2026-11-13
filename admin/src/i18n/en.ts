@@ -80,7 +80,7 @@ export const en = {
     'tunnel.allowedRangesLabel': 'Allowed ranges',
     'tunnel.useFreePort': 'Use a free port in {range}',
     'tunnel.rangeChipsLabel': 'Choose a port from an allowed range',
-    'tunnel.rangeChipsNote': "Choose a range to fill in the first port your tunnels don't use.",
+    'tunnel.rangeChipsNote': "Choose a range to fill in the first port no tunnel in your list uses.",
     'tunnel.rangeFull': 'Every port in this range is already in use.',
 
     'ipLimit.off': 'IP limit off',
