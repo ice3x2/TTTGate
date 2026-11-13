@@ -140,8 +140,9 @@ test("등록 창은 응답마다 정한 문구를 보이고, 성공하면 닫히
             undefined, {timeout: 10_000});
 
         await page.locator("#passkey-add button").click();
-        // 기기 종류로 이름을 미리 채운다(헤드리스 Chromium 은 Linux).
-        expect(await page.locator("#passkey-name").inputValue()).toBe("Linux");
+        // 기기 종류로 이름을 미리 채운다. 테스트 브라우저는 이 테스트를 돌리는 운영체제의 이름을 알린다(CI 는 Linux).
+        const expectedDevice = process.platform === "win32" ? "Windows" : process.platform === "darwin" ? "Mac" : "Linux";
+        expect(await page.locator("#passkey-name").inputValue()).toBe(expectedDevice);
         await page.locator("#passkey-password").fill(RBAC_PASSWORDS.alice);
         const error = page.locator("#passkey-error");
         const attempt = async (expected: string) => {

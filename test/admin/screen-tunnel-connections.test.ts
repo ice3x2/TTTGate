@@ -243,9 +243,10 @@ test("M-3 새 서버가 연결 목록에 404 를 주면 더 볼 수 없다고 �
         await app.page.route(`**/api/tunneling/${PORT}/connections`, (route) =>
             route.fulfill({status: 404, json: {success: false, code: "not_found", message: "Not Found"}}));
         await openList(app.page, app.url);
-        const dialog = await openDialog(app.page);
+        // 404 는 바로 오므로 창이 열리자마자 닫힐 수 있다. 창이 보이기를 기다리지 않고 알림과 닫힌 상태를 본다(Windows 에서 확인한 경쟁).
+        await row(app.page, PORT).getByRole("button", {name: /^Show the 2 connections to /}).click();
         await app.page.getByText("You can no longer see the connections to this tunnel.", {exact: true}).waitFor({state: "visible", timeout: 10_000});
-        await dialog.waitFor({state: "hidden", timeout: 5_000});
+        await app.page.getByRole("dialog", {name: /^Connections to /}).waitFor({state: "hidden", timeout: 5_000});
         expect(await row(app.page, PORT).locator(".tunnel-conn").count()).toBe(1);
         expect(await row(app.page, PORT).locator(".tunnel-conn-text").count()).toBe(0);
         expect(app.errors).toEqual([]);
