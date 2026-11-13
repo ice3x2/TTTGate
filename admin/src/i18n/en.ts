@@ -500,7 +500,7 @@ export const en = {
     'connections.newAnnounce_other': '{count} new connections',
     'connections.capped': 'Showing the latest 500.',
     'connections.alreadyBlocked': 'This address is already blocked.',
-    'connections.alreadyBlockedOnPort': 'This address is already blocked on port {port} only. Change its scope under Blocked addresses on the Security screen.',
+    'connections.alreadyBlockedOnPort': 'This address is already blocked on port {port} only. To change that, unblock it under Blocked addresses on the Security screen, then block it again.',
     'connections.notVisible': 'You can no longer see the connections to this tunnel.',
     'connections.notAllowed': 'You can now only view this tunnel, so its connection list was closed.',
     'connections.refreshFailed': 'Unable to refresh the connection list. Trying again.',

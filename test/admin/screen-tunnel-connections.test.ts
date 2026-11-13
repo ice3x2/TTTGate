@@ -337,7 +337,7 @@ test("M-1 이미 있는 차단이 다른 포트 하나에만 걸리면(409 dupli
         await confirm.waitFor({state: "visible", timeout: 10_000});
         await confirm.getByRole("button", {name: "Block", exact: true}).click();
         await confirm.waitFor({state: "hidden", timeout: 10_000});
-        await app.page.getByText("This address is already blocked on port 3333 only. Change its scope under Blocked addresses on the Security screen.", {exact: true})
+        await app.page.getByText("This address is already blocked on port 3333 only. To change that, unblock it under Blocked addresses on the Security screen, then block it again.", {exact: true})
             .waitFor({state: "visible", timeout: 10_000});
         expect(await app.page.getByText("This address is already blocked.", {exact: true}).count()).toBe(0);
         expect(await dialog.locator('li[data-connection="2"] .tag').count()).toBe(0);

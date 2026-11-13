@@ -206,11 +206,11 @@ describe("L-2 이미 차단된 주소(409 duplicate)", () => {
     });
     test("M-1: 이미 있는 차단이 다른 포트 하나에만 걸리거나 '모든 터널' 요청을 덮지 못하면 그 범위를 밝힌다", () => {
         expect(duplicateBlockText({code: "duplicate", port: 3333}, {port: 2222, scope: "tunnel"}, ko))
-            .toBe("이 주소는 이미 포트 3333에만 차단되어 있습니다. 보안 화면의 '차단한 주소'에서 범위를 바꾸세요.");
+            .toBe("이 주소는 이미 포트 3333에만 차단되어 있습니다. 범위를 바꾸려면 보안 화면의 '차단한 주소'에서 차단을 해제한 뒤 다시 차단하세요.");
         expect(duplicateBlockText({code: "duplicate", port: 3333}, {port: 2222, scope: "all"}, en))
-            .toBe("This address is already blocked on port 3333 only. Change its scope under Blocked addresses on the Security screen.");
+            .toBe("This address is already blocked on port 3333 only. To change that, unblock it under Blocked addresses on the Security screen, then block it again.");
         expect(duplicateBlockText({code: "duplicate", port: 2222}, {port: 2222, scope: "all"}, ko))
-            .toBe("이 주소는 이미 포트 2222에만 차단되어 있습니다. 보안 화면의 '차단한 주소'에서 범위를 바꾸세요.");
+            .toBe("이 주소는 이미 포트 2222에만 차단되어 있습니다. 범위를 바꾸려면 보안 화면의 '차단한 주소'에서 차단을 해제한 뒤 다시 차단하세요.");
     });
 });
 

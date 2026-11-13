@@ -551,7 +551,7 @@ export const ko: Messages = {
     'connections.newAnnounce_other': '새 연결 {count}개',
     'connections.capped': '최근 연결 500개만 보입니다.',
     'connections.alreadyBlocked': '이미 차단된 주소입니다.',
-    'connections.alreadyBlockedOnPort': "이 주소는 이미 포트 {port}에만 차단되어 있습니다. 보안 화면의 '차단한 주소'에서 범위를 바꾸세요.",
+    'connections.alreadyBlockedOnPort': "이 주소는 이미 포트 {port}에만 차단되어 있습니다. 범위를 바꾸려면 보안 화면의 '차단한 주소'에서 차단을 해제한 뒤 다시 차단하세요.",
     'connections.notVisible': '이 터널의 연결을 더 볼 수 없습니다.',
     'connections.notAllowed': '이제 이 터널을 볼 수만 있어 연결 목록을 닫았습니다.',
     'connections.refreshFailed': '연결 목록을 새로 고치지 못했습니다. 다시 시도하는 중입니다.',
