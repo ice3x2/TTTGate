@@ -82,3 +82,11 @@ describe("ownerGroups", () => {
         ]);
     });
 });
+
+// 설계 대조 — 소유자 없음 안내는 터널 편집 화면의 실제 버튼 이름을 가리킨다(이슈 370 이 버튼 이름을 "소유자 바꾸기"로 바꿨다).
+describe("소유자 없음 안내", () => {
+    test.each(["ko", "en"] as const)("%s 안내는 '소유자 바꾸기' 버튼 이름을 그대로 쓴다", (locale) => {
+        const tr = translator(locale);
+        expect(tr.t("tunnels.groupNoOwnerHint")).toContain(`'${tr.t("tunnelEdit.changeOwner")}'`);
+    });
+});
