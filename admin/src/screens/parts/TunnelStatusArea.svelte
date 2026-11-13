@@ -17,7 +17,9 @@
 
     // 이슈 338 REQ-18: 편집 화면의 Status 영역. 목록에서 뺀 가동 정보·거절 수·사용 시간 Timer 를 여기서 보인다.
     // 열려 있는 동안 1초마다 상태를 읽는다. 앞의 읽기가 끝나지 않았으면 건너뛰고, 실패하면 영역을 숨긴 채 다시 읽는다.
-    let {port, editable, onsessionout}: {port: number; editable: boolean; onsessionout: () => void} = $props();
+    // onstatus: 읽은 이 터널의 상태를 편집 화면에 넘긴다(신뢰 클라이언트 이름). 상태를 두 번 읽지 않으려고 여기서 받은 것을 나눈다.
+    let {port, editable, onsessionout, onstatus}: {port: number; editable: boolean; onsessionout: () => void;
+        onstatus?: (status: TunnelingStatus | undefined) => void} = $props();
 
     let status = $state<TunnelingStatus | undefined>(undefined);
     let serverTime = $state(0);
@@ -30,6 +32,7 @@
         onSnapshot: (result) => {
             serverTime = result.serverTime;
             status = result.statuses.find((entry) => entry.port === port);
+            onstatus?.(status);
         }
     });
 
