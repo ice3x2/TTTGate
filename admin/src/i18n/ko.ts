@@ -520,7 +520,7 @@ export const ko: Messages = {
     'tunnels.groupMigrated': '업그레이드 전 터널',
     'tunnels.groupUnknownOwner': '소유자 없음',
     'tunnels.groupMe': '나',
-    'tunnels.groupNoOwnerHint': "터널 편집 화면의 '소유자 변경'으로 새 소유자를 정하세요.",
+    'tunnels.groupNoOwnerHint': "터널 편집 화면의 '소유자 바꾸기'로 새 소유자를 정하세요.",
     'tunnels.switchWithOwner': '{title}, {owner}',
     'tunnels.stale': '상태를 새로 고치지 못함 · 다시 시도 중',
     'tunnels.empty': '아직 터널이 없습니다.',
