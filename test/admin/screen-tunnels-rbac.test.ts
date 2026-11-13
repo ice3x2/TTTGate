@@ -352,7 +352,7 @@ test("alice 가 허용 범위 칩을 누르면 쓰지 않은 가장 작은 포�
     const group = page.getByRole("group", {name: "Choose a port from an allowed range", exact: true});
     expect(await group.count()).toBe(1);
     expect(await group.getByText("Allowed ranges", {exact: true}).count()).toBe(1);
-    const note = page.getByText("Choose a range to fill in the first port your tunnels don't use.", {exact: true});
+    const note = page.getByText("Choose a range to fill in the first port no tunnel in your list uses.", {exact: true});
     expect(await note.count()).toBe(1);
     expect(await group.getAttribute("aria-describedby")).toBe(await note.getAttribute("id"));
     // alice 의 목록에는 20001(자기)·20002(bob, 그룹 공유)가 있다. 새 터널의 처음 값은 쓰지 않은 20000 이다.
