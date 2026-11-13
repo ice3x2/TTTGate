@@ -131,7 +131,7 @@ export const ko: Messages = {
     'tunnel.allowedRangesLabel': '허용 범위',
     'tunnel.useFreePort': '{range} 범위의 빈 포트 넣기',
     'tunnel.rangeChipsLabel': '허용 범위에서 포트 고르기',
-    'tunnel.rangeChipsNote': '범위를 누르면 내 터널이 쓰지 않는 첫 포트를 넣습니다.',
+    'tunnel.rangeChipsNote': '범위를 누르면 목록에 있는 터널이 쓰지 않는 첫 포트를 넣습니다.',
     'tunnel.rangeFull': '이 범위의 포트를 모두 쓰고 있습니다.',
 
     'ipLimit.off': 'IP 제한 꺼짐',

@@ -358,7 +358,7 @@ After you sign in, the console opens the **Tunnels** list. This is the same for 
 - **Name:** give a tunnel a name in its edit screen (**Name**, optional, up to 40 characters). Without a name, the row shows the port and the destination. Saving only a new name does not restart the tunnel, so open connections stay.
 - **IP limit:** the button below the status line shows whether the tunnel accepts only the IPs of the people who turned it on, and the refresh button next to it updates your IP. See [Limit a Tunnel to the IPs That Turned It On](#limit-a-tunnel-to-the-ips-that-turned-it-on).
 - **Connections:** below the status line, a tunnel that is on shows its connection count, how long it has been on and its traffic (`On for 2h, 5m · RX 58.1KiB · TX 59.5KiB`, sizes in bytes). If you can change the tunnel, the **Connections N** button opens the list of open connections with their addresses; the × button disconnects one (**Disconnect**, no question asked), and a superuser can **Block** an address after a confirmation (this tunnel only, or all tunnels). The row also shows which clients may serve the tunnel (`Clients: Office PC`; ● connected, ○ not connected; `Any` when no client is chosen). A new block also ends the connections that are already open from that address, here and in **Security**.
-- **Details:** tap a row to open its edit screen. Its **Status** area shows how long the tunnel has been on, its connections, traffic, rejected connections and the **Time limit** timer. Only tunnels that you can change open an edit screen.
+- **Details:** tap a row to open its edit screen. Its **Status** area shows how long the tunnel has been on, its connections, traffic, rejected connections and the **Turns off in** timer. Only tunnels that you can change open an edit screen.
 
 #### Sign In with a Passkey
 
@@ -415,7 +415,7 @@ Share a tunnel with other users:
 - Only users who can change the tunnel see its share list.
 - Saving only a new share list does not restart the tunnel, so open connections stay.
 - When you delete a user, the server removes the user from every share list.
-- Time limit: when someone turns on a tunnel, the server uses the shorter limit of the owner's group and of that person's group. A superuser, a group with no limit and a `system:migrated` owner add no limit. The limit stays when the owner saves the tunnel later. When another user turns the tunnel on again, for example with the **Time limit** timer, the limit of that user applies.
+- Time limit: when someone turns on a tunnel, the server uses the shorter limit of the owner's group and of that person's group. A superuser, a group with no limit and a `system:migrated` owner add no limit. The limit stays when the owner saves the tunnel later. When another user turns the tunnel on again, for example with the **Turns off in** timer, the limit of that user applies.
 - The audit log records the owner as `ownerId` for `tunnel_activated` and `tunnel_deactivated`. For a changed share list, `tunnel_updated` records `sharedUsersAdded` and `sharedUsersRemoved`.
 
 #### Limit a Tunnel to the IPs That Turned It On
@@ -423,7 +423,7 @@ Share a tunnel with other users:
 Tunnels that stay open for a long time, such as RDP, get many password-guessing attempts. With the IP limit on, a tunnel accepts connections only from the IP address of each person who turned it on. The server closes connections from other addresses before it reads any data.
 
 - **Setting:** each tunnel has the setting `activatorIpOnly`. In the edit screen, it is **Allowed IP** → **Only from the IP of whoever turned it on**. New tunnels have it on. Tunnels that you saved with an earlier version have it off, so an upgrade does not cut connections that are open. Turn it on for each tunnel.
-- **Allowed IPs:** the server keeps one IP address for each user of a tunnel (`activatorIps` in `config/server.yaml`). When you turn a tunnel on in the console, the server sets your entry to the address of your browser. The entries of other users stay. This also applies when you turn on a tunnel that is already on, for example with the **Time limit** timer. Turning a tunnel off, the end of its time limit and a server restart do not clear the list.
+- **Allowed IPs:** the server keeps one IP address for each user of a tunnel (`activatorIps` in `config/server.yaml`). When you turn a tunnel on in the console, the server sets your entry to the address of your browser. The entries of other users stay. This also applies when you turn on a tunnel that is already on, for example with the **Turns off in** timer. Turning a tunnel off, the end of its time limit and a server restart do not clear the list.
 - **In the tunnel list:** each row that you can turn on shows the IP limit button below the status line. Gray **IP limit off** means the limit is off. Green shows your allowed IP, with `+N` when other users have entries. An orange `My IP not set` means that the list has no entry for you. The refresh button next to it (**Update to my IP**) sets your entry to your current address. It works while the tunnel is off. The console highlights it when your current address is not your allowed IP. The buttons stay available when the tunnel is off.
 - **Who can change it:** everyone who can turn the tunnel on can turn the limit on and update their own IP. Only users who can change the tunnel can turn the limit off. A shared user sees a limit that is on with a small lock and cannot turn it off. One shared user cannot remove the protection for all users.
 - **Refused connections:** on a TLS tunnel, the server closes the connection before the TLS handshake. The denial shows as `activator-ip` (**IP limit**) in [Denied Connections](#denied-connections). The server uses the address of the TCP connection. It does not use `X-Forwarded-For` or other request headers, because the client sets them.
@@ -1341,7 +1341,7 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 - **이름:** 터널 편집 화면의 **Name**(선택, 40자까지)에 이름을 넣는다. 이름이 없으면 포트와 목적지를 보인다. 이름만 바꿔 저장하면 터널을 다시 시작하지 않으므로 진행 중인 연결이 남는다.
 - **IP 제한:** 상태 줄 아래 버튼은 그 터널이 켠 사람의 IP 에서만 연결을 받는지 보이고, 옆의 갱신 버튼은 내 IP 를 지금 주소로 바꾼다. [켠 사람의 IP 에서만 연결 받기](#켠-사람의-ip-에서만-연결-받기)를 읽는다.
 - **연결:** 켜진 터널은 상태 줄 아래에 연결 수, 켜진 지 얼마인지, 주고받은 양을 보인다(`켜진 지 2시간 5분 · RX 58.1KiB · TX 59.5KiB`, 크기는 바이트 단위). 고칠 수 있는 터널이면 **연결 N** 버튼이 열린 연결의 주소 목록을 연다. × 버튼은 그 연결을 바로 끊고(**연결 끊기**, 묻지 않음), 슈퍼유저는 확인 창을 거쳐 그 주소를 **차단**한다(이 터널만, 또는 모든 터널). 줄에는 이 터널을 맡을 수 있는 클라이언트도 보인다(`클라이언트: 사무실 PC`, ● 연결됨, ○ 연결 안 됨, 고른 클라이언트가 없으면 `모두`). 차단을 더하면 이미 들어와 있는 연결도 끊는다. **Security** 화면에서 더한 차단도 같다.
-- **자세히:** 줄을 누르면 편집 화면이 열린다. **Status** 영역에 켜진 지 얼마인지, 연결 수, 트래픽, 거절 수, **Time limit** 타이머가 있다. 편집 화면은 고칠 수 있는 터널에서만 열린다.
+- **자세히:** 줄을 누르면 편집 화면이 열린다. **Status** 영역에 켜진 지 얼마인지, 연결 수, 트래픽, 거절 수, **자동 꺼짐까지** 타이머가 있다. 편집 화면은 고칠 수 있는 터널에서만 열린다.
 
 #### 패스키로 로그인
 
@@ -1398,7 +1398,7 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 - 공유 목록은 그 터널을 고칠 수 있는 사용자에게만 보인다.
 - 공유 목록만 바꿔 저장하면 터널을 다시 시작하지 않으므로 진행 중인 연결이 남는다.
 - 사용자를 지우면 서버가 모든 공유 목록에서 그 사용자를 뺀다.
-- 사용 시간 상한: 터널을 켜면 소유자 그룹 상한과 켠 사람 그룹 상한 가운데 짧은 값을 쓴다. 슈퍼유저, 상한이 없는 그룹, `system:migrated` 소유자는 비교에서 빠진다. 나중에 소유자가 터널을 저장해도 이 상한은 그대로다. 다른 사용자가 다시 켜면(예: **Time limit** 타이머) 그 사용자의 상한을 쓴다.
+- 사용 시간 상한: 터널을 켜면 소유자 그룹 상한과 켠 사람 그룹 상한 가운데 짧은 값을 쓴다. 슈퍼유저, 상한이 없는 그룹, `system:migrated` 소유자는 비교에서 빠진다. 나중에 소유자가 터널을 저장해도 이 상한은 그대로다. 다른 사용자가 다시 켜면(예: **자동 꺼짐까지** 타이머) 그 사용자의 상한을 쓴다.
 - 감사 로그의 `tunnel_activated`·`tunnel_deactivated` 에는 소유자가 `ownerId` 로 남는다. 공유 목록이 바뀌면 `tunnel_updated` 에 `sharedUsersAdded`·`sharedUsersRemoved` 가 남는다.
 
 #### 켠 사람의 IP 에서만 연결 받기
@@ -1406,7 +1406,7 @@ SSH 터널이나 역방향 프록시를 거치면 관리 화면에는 모든 연
 RDP 처럼 오래 열어 두는 터널에는 비밀번호를 무작위로 넣어 보는 공격이 계속 들어온다. IP 제한을 켜면 터널을 켠 사람의 IP 주소에서 오는 연결만 받는다. 다른 주소의 연결은 데이터를 읽기 전에 닫는다.
 
 - **설정:** 터널마다 `activatorIpOnly` 설정이 있다. 편집 화면에서는 **Allowed IP** → **Only from the IP of whoever turned it on** 이다. 새 터널은 켜진 채 만들어진다. 이전 버전에서 저장한 터널은 꺼져 있으므로, 업그레이드해도 열려 있는 연결이 끊기지 않는다. 터널마다 직접 켠다.
-- **허용 IP:** 서버는 터널마다 사용자별로 IP 주소를 하나씩 둔다(`config/server.yaml` 의 `activatorIps`). 관리 화면에서 터널을 켜면 내 항목이 지금 브라우저의 주소로 바뀐다. 다른 사용자의 항목은 그대로다. 이미 켜진 터널을 다시 켤 때(예: **Time limit** 타이머)도 같다. 터널을 끄거나, 사용 시간이 끝나거나, 서버를 다시 시작해도 목록은 지워지지 않는다.
+- **허용 IP:** 서버는 터널마다 사용자별로 IP 주소를 하나씩 둔다(`config/server.yaml` 의 `activatorIps`). 관리 화면에서 터널을 켜면 내 항목이 지금 브라우저의 주소로 바뀐다. 다른 사용자의 항목은 그대로다. 이미 켜진 터널을 다시 켤 때(예: **자동 꺼짐까지** 타이머)도 같다. 터널을 끄거나, 사용 시간이 끝나거나, 서버를 다시 시작해도 목록은 지워지지 않는다.
 - **터널 목록:** 켤 수 있는 터널의 줄에는 상태 줄 아래에 IP 제한 버튼이 있다. 회색 **IP limit off** 는 꺼진 상태다. 초록색은 내 허용 IP 를 보이고, 다른 사용자의 항목이 있으면 `+N` 을 붙인다. 주황색 `My IP not set` 은 목록에 내 항목이 없다는 뜻이다. 옆의 갱신 버튼(**Update to my IP**)을 누르면 내 항목이 지금 주소로 바뀐다. 터널이 꺼져 있어도 된다. 지금 주소가 내 허용 IP 와 다르면 갱신 버튼이 강조된다. 터널이 꺼져도 두 버튼은 그대로 쓸 수 있다.
 - **바꿀 수 있는 사람:** 터널을 켤 수 있는 사람은 누구나 IP 제한을 켜고 자기 IP 를 갱신할 수 있다. IP 제한을 끄는 것은 터널을 고칠 수 있는 사람만 할 수 있다. 공유받은 사용자에게는 켜진 IP 제한이 작은 자물쇠와 함께 보이고, 끌 수 없다. 공유받은 사용자 한 명이 모두의 보호를 풀지 못하게 하기 위해서다.
 - **거절된 연결:** TLS 터널에서는 TLS 핸드셰이크 전에 연결을 닫는다. 거절은 [거절된 연결](#거절된-연결)에 `activator-ip`(**IP limit**)로 남는다. 서버는 TCP 연결의 주소를 쓴다. `X-Forwarded-For` 같은 요청 헤더는 접속하는 쪽이 마음대로 정할 수 있으므로 쓰지 않는다.
