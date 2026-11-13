@@ -381,7 +381,7 @@ test("AC-7·AC-8·AC-12 차단은 확인 창을 먼저 띄우고, Esc 는 확인
         // L5: "모든 터널"을 고르면 다른 터널의 연결도 끊긴다는 문장으로 바뀐다.
         await other.getByRole("radio", {name: "All tunnels"}).check();
         expect(await other.locator(".block-body").textContent())
-            .toBe("Its 1 connection to this tunnel and its connections to other tunnels end now, and new ones to every tunnel will be refused.");
+            .toBe("Its 1 connection to this tunnel ends now, as do its connections to other tunnels, if any, and new ones to every tunnel will be refused.");
         await other.getByRole("button", {name: "Cancel", exact: true}).click();
         await other.waitFor({state: "hidden"});
         expect(posted).toEqual([]);
