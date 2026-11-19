@@ -40,7 +40,6 @@ const EXPECTED: Readonly<Record<string, string>> = {
     "tunnelEdit.removed": "터널을 삭제하고 외부 포트를 닫았습니다.",
     "tunnelEdit.removeConfirm": "{port} 터널을 삭제할까요? 외부 포트를 닫고 지금 연결을 모두 끊습니다. 되돌릴 수 없습니다.",
     "tunnelEdit.removeFailed": "터널을 삭제하지 못했습니다: {reason}",
-    "tunnelEdit.startupHint": "서버가 시작할 때, 터널을 만들 때, 포트를 열지 못한 터널을 저장할 때 씁니다. 그 밖에는 저장해도 켜짐·꺼짐 상태와 남은 시간이 그대로입니다. 켜진 터널은 저장하면 지금 연결이 끊길 수 있습니다.",
     "server.closeStall": "남은 데이터 전송 대기 시간(ms)",
     "server.closeStallHint": "닫는 중인 연결에서 남은 데이터가 이 시간 동안 하나도 나가지 않으면 연결을 끊습니다. 1,000~600,000ms. 적용한 뒤 닫히기 시작하는 연결부터 씁니다.",
     "server.closeGrace": "상대가 닫을 때까지 기다리는 시간(ms)",
@@ -105,7 +104,6 @@ const EXPECTED: Readonly<Record<string, string>> = {
     "status.clientList": "연결된 클라이언트",
     "tunnelEdit.externalPort": "외부 포트",
     "tunnelEdit.startup": "시작 상태",
-    "tunnelEdit.inactiveOnStartup": "꺼진 채로 시작",
     "tunnelEdit.allowedIpHint": "이 터널을 켠 사람과 \"내 IP로 바꾸기\"를 누른 사람의 IP에서 온 연결만 받습니다. 터널 앞에 CDN이나 리버스 프록시가 있으면 끄세요.",
     "security.promoteFull": "차단 목록이 가득 찼습니다. 이 주소가 이미 목록에 특정 포트로 올라 있을 때만 영구 차단할 수 있습니다. 아니면 다른 주소의 차단을 먼저 푸세요.",
     "password.minHint": "8자 이상 입력하세요.",
@@ -174,6 +172,8 @@ const OWNED_BY_OTHER_ISSUES: ReadonlySet<string> = new Set([
     "tunnelStatus.timeLimitFailed", "clock.noLimit", "group.maxDuration", "serverError.timeout_invalid", "auditEvent.tunnel_autoexpire",
     // 이슈 368 이 clock.ends·clock.dateTime 으로 나눴다. "{time}에 꺼짐" 은 tunnelRow.test.ts 가 확인한다.
     "clock.endsToday", "clock.endsOtherDay",
+    // 이슈 389 가 적용 시점을 드러내도록 칸 이름과 안내를 바꿨다. 값은 test/admin/i18n.test.ts 가 확인한다.
+    "tunnelEdit.inactiveOnStartup", "tunnelEdit.startupHint",
 ]);
 
 /** 최종 권장 칸이 코드 변경을 함께 설명하는 줄. 값은 아래 따로 확인한다. */
