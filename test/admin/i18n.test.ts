@@ -135,7 +135,21 @@ describe("FR-2 ko.ts 와 en.ts 의 키", () => {
     });
 
     test("켜짐 상태는 Online 대신 한국어로 말한다", () => {
-        expect(ko["tunnelEdit.startupHint"]).toBe("서버가 시작할 때, 터널을 만들 때, 포트를 열지 못한 터널을 저장할 때 씁니다. 그 밖에는 저장해도 켜짐·꺼짐 상태와 남은 시간이 그대로입니다. 켜진 터널은 저장하면 지금 연결이 끊길 수 있습니다.");
+        expect(ko["tunnelEdit.startupHint"]).not.toMatch(/Online/);
+    });
+
+    // 이슈 389 FR-1·FR-2·FR-3·FR-5: 적용 시점이 칸 이름과 안내에 드러나고, 저장 뒤 알림이 영어·한국어 모두에 있다.
+    test("서버 시작 시 꺼진 채로 칸의 이름·안내·저장 뒤 알림", () => {
+        expect([ko["tunnelEdit.inactiveOnStartup"], en["tunnelEdit.inactiveOnStartup"]])
+            .toEqual(["서버 시작 시 꺼진 채로", "Off when the server starts"]);
+        expect([ko["tunnelEdit.startupHint"], en["tunnelEdit.startupHint"]]).toEqual([
+            "서버를 시작하거나 터널을 새로 만들 때 꺼진 채로 둡니다. 지금 켜진 터널은 저장해도 켜진 채로 남습니다.",
+            "Keeps the tunnel off when the server starts or when the tunnel is created. A tunnel that is on now stays on when you save.",
+        ]);
+        expect([ko["tunnelEdit.startupOffLater"], en["tunnelEdit.startupOffLater"]]).toEqual([
+            "지금은 켜진 채로 둡니다. 다음에 서버를 시작할 때부터 꺼진 채로 시작합니다.",
+            "The tunnel stays on for now. It starts off from the next server start.",
+        ]);
     });
 
     test("시스템 정보의 내부 인터페이스 여부는 영어 화면에서 지금처럼 true·false, 한국어 화면에서 예·아니요다", () => {
