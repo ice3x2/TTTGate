@@ -615,11 +615,13 @@ class TTTServer {
 
     /**
      * #338 이름과 이슈 347 공유 목록은 런타임이 쓰지 않는다. 이슈 348 의 IP 제한과 허용 IP 목록은 판정이 저장소에서 바로 읽는다.
+     * 이슈 389 의 inactiveOnStartup 은 리스너를 새로 띄울 때만 쓴다(startServer). 돌고 있는 리스너는 지금 상태를 이어받으므로
+     * 저장한 값은 다음 기동부터 쓰인다. 리스너 쪽 옵션에 남은 옛 값은 다시 읽히지 않는다(다시 띄우는 경로는 저장소나 _appliedExternal 의 옵션을 넘긴다).
      * 이것들만 다르면 리스너를 다시 시작하지 않는다.
      */
     private static sameExceptName(a: TunnelingOption, b: TunnelingOption): boolean {
-        const {name: _a, sharedUserIds: _sharedA, activatorIpOnly: _onlyA, activatorIps: _ipsA, ...restA} = a;
-        const {name: _b, sharedUserIds: _sharedB, activatorIpOnly: _onlyB, activatorIps: _ipsB, ...restB} = b;
+        const {name: _a, sharedUserIds: _sharedA, activatorIpOnly: _onlyA, activatorIps: _ipsA, inactiveOnStartup: _startupA, ...restA} = a;
+        const {name: _b, sharedUserIds: _sharedB, activatorIpOnly: _onlyB, activatorIps: _ipsB, inactiveOnStartup: _startupB, ...restB} = b;
         return ObjectUtil.canonicalEquals(restA, restB);
     }
 

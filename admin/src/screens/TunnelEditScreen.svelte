@@ -32,6 +32,7 @@
     import {trustedClientLabel, type AllowedClient} from './parts/connections';
     import PortRangeChips from './parts/PortRangeChips.svelte';
     import {RATE_RANGES, rateRangeError} from './parts/rateLimitRange';
+    import {showsStartupOffLater, type StartupNoticeStatus} from './parts/startupNotice';
     import {bufferIssue, defaultBuffer, groupBufferCap, type BufferIssue} from './parts/bufferPolicy';
     import {t} from '../i18n';
     import {errorMessageOf} from '../i18n/serverError';
@@ -91,6 +92,9 @@
     const NAME_MAX = 40;
     let nameInput = $state('');
     let nameError = $state('');
+    // 이슈 389: 불러온 "서버 시작 시 꺼진 채로" 값과 상태 영역이 읽은 지금 상태. 저장 뒤 알림을 정하는 데 쓴다.
+    let loadedInactiveOnStartup: boolean | undefined;
+    let liveStatus: StartupNoticeStatus | undefined;
 
     let alertOpen = $state(false);
     let alertMessage = $state('');
@@ -230,6 +234,8 @@
                     fresh.allowedClientIds = [...policy.trustedClients];
                 }
                 option = fresh;
+                loadedInactiveOnStartup = undefined;
+                liveStatus = undefined;
                 nameInput = '';
                 sharedUsers = [];
                 syncRateInputs();
@@ -252,6 +258,7 @@
             // 서버가 늘 채워 주지만, 없으면 프로토콜 기본값으로 시작한다.
             if(!found.rateLimit) found.rateLimit = defaultRateLimit(found.protocol);
             option = found;
+            loadedInactiveOnStartup = found.inactiveOnStartup;
             nameInput = found.name ?? '';
             sharedUsers = found.sharedUsers ?? [];
             loadedOutsideIds = (found.allowedClientIds ?? []).filter((id) => !(policy?.trustedClients ?? []).includes(id));
@@ -419,6 +426,9 @@
             loading = false;
             if(result.success) {
                 toast.push({tone: 'pulse', message: t('tunnelEdit.applied')});
+                if(showsStartupOffLater(loadedInactiveOnStartup, payload.inactiveOnStartup, liveStatus)) {
+                    toast.push({tone: 'pulse', message: t('tunnelEdit.startupOffLater')});
+                }
                 navigate('#/tunnels');
             } else {
                 // 접두어는 유지한다(configuration-editor 테스트가 /Fail/ 로 기다린다).
@@ -477,7 +487,7 @@
 {#if option}
 {#if !isNew}
     <TunnelStatusArea port={option.originalForwardPort ?? option.forwardPort} editable={toggleable} onsessionout={sessionOut}
-        onstatus={(status) => { if(status?.allowedClients) statusClients = status.allowedClients; }} />
+        onstatus={(status) => { liveStatus = status; if(status?.allowedClients) statusClients = status.allowedClients; }} />
 {/if}
 {#if readOnly}
     <!-- 이슈 347: 켤 수는 있지만 고칠 수 없는 사용자(toggle 소유자·공유받은 사용자)에게는 켜고 끌 수 있다고 알린다. -->

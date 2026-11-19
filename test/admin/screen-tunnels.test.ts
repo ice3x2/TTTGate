@@ -474,6 +474,58 @@ test("목적지 호스트를 바꿔 저장하면 본문 전체가 그대로 나�
     }
 }, ADMIN_APP_TEST_TIMEOUT_MS);
 
+// 이슈 389: 시작 상태 칸의 이름이 적용 시점을 말하고, 켜진 터널에서 이 값을 켜고 저장하면 지금은 켜진 채로 둔다고 알린다.
+const STARTUP_OFF_LABEL = "Off when the server starts";
+const STARTUP_OFF_LATER = "The tunnel stays on for now. It will be off when the server next starts.";
+
+/** 편집 화면을 열고 상태 영역이 그 포트의 상태를 받을 때까지 기다린 뒤, 시작 상태 칸을 켜고 저장한다. */
+const saveWithStartupOff = async (page: Page, port: number) => {
+    const status = page.waitForResponse(isPath("GET", "/api/externalServerStatuses"), {timeout: 10_000});
+    await openEdit(page, port);
+    await status;
+    await nextStatusResponse(page);
+    const box = page.getByLabel(STARTUP_OFF_LABEL, {exact: true});
+    expect(await box.getAttribute("id")).toBe("input-inactive-on-startup");
+    expect(await box.isChecked()).toBe(false);
+    await box.check();
+    await page.getByRole("button", {name: "Apply and Restart", exact: true}).click();
+    await page.waitForFunction(() => document.querySelector(".toast.pulse .msg")?.textContent === "Success to apply tunneling option",
+        undefined, {timeout: 10_000});
+};
+
+test("이슈 389 켜진 터널에서 서버 시작 시 꺼진 채로를 켜고 저장하면 지금은 켜진 채로 둔다고 알리고 목록에서도 켜져 있다 (AC-1, AC-2)", async () => {
+    const app = await startAdminApp({fixture: "with-tunnels"});
+    try {
+        await saveWithStartupOff(app.page, 20001);
+        await app.page.locator(".toast").filter({hasText: STARTUP_OFF_LATER}).waitFor({state: "visible", timeout: 10_000});
+        await app.page.waitForFunction(() => location.hash === "#/tunnels", undefined, {timeout: 10_000});
+        await waitStatus(app.page, 20001, /^On/);
+        await waitChecked(app.page, 20001, true);
+        const applied = (await app.calls()).filter((call) => call.method === "applyTunnelingOption");
+        expect(applied[applied.length - 1].args[0]).toMatchObject({forwardPort: 20001, inactiveOnStartup: true});
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, ADMIN_APP_TEST_TIMEOUT_MS);
+
+test("이슈 389 꺼진 터널에서 같은 저장을 하면 그 알림이 없다 (AC-3)", async () => {
+    const app = await startAdminApp({fixture: "with-tunnels"});
+    try {
+        await openTunnels(app.page);
+        await waitStatus(app.page, 20001, /^On/);
+        await switchOf(app.page, 20001).click();
+        await waitChecked(app.page, 20001, false);
+        await waitStatus(app.page, 20001, /^Off/);
+        await saveWithStartupOff(app.page, 20001);
+        await app.page.waitForFunction(() => location.hash === "#/tunnels", undefined, {timeout: 10_000});
+        expect(await app.page.locator(".toast").filter({hasText: STARTUP_OFF_LATER}).count()).toBe(0);
+        expect(app.errors).toEqual([]);
+    } finally {
+        await app.close();
+    }
+}, ADMIN_APP_TEST_TIMEOUT_MS);
+
 // #280: TLS 를 켜면 대상 서버의 자체 서명 인증서 허용 체크 상자가 나오고, 체크하면 저장 본문에 실린다.
 test("TLS 를 켜면 자체 서명 인증서 허용 체크 상자가 보이고 체크한 값이 저장 본문에 실린다 (AC-3)", async () => {
     const app = await startAdminApp({fixture: "with-tunnels"});
