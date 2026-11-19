@@ -818,7 +818,7 @@ export const en = {
     'tunnelEdit.startup': 'Startup',
     'tunnelEdit.startupHint': 'Keeps the tunnel off when the server starts or when the tunnel is created. A tunnel that is on now stays on when you save.',
     'tunnelEdit.inactiveOnStartup': 'Off when the server starts',
-    'tunnelEdit.startupOffLater': 'The tunnel stays on for now. It starts off from the next server start.',
+    'tunnelEdit.startupOffLater': 'The tunnel stays on for now. It will be off when the server next starts.',
     'tunnelEdit.allowedIp': 'Allowed IP',
     'tunnelEdit.allowedIpHint': 'Accepts connections only from the IP of each person who turned this tunnel on or updated their IP. Turn it off when a CDN or reverse proxy sits in front of this tunnel.',
     'tunnelEdit.activatorIpOnly': 'Only from the IP of whoever turned it on',

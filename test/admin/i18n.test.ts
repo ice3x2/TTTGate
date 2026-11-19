@@ -148,7 +148,7 @@ describe("FR-2 ko.ts 와 en.ts 의 키", () => {
         ]);
         expect([ko["tunnelEdit.startupOffLater"], en["tunnelEdit.startupOffLater"]]).toEqual([
             "지금은 켜진 채로 둡니다. 다음에 서버를 시작할 때부터 꺼진 채로 시작합니다.",
-            "The tunnel stays on for now. It starts off from the next server start.",
+            "The tunnel stays on for now. It will be off when the server next starts.",
         ]);
     });
 

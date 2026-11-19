@@ -476,7 +476,7 @@ test("목적지 호스트를 바꿔 저장하면 본문 전체가 그대로 나�
 
 // 이슈 389: 시작 상태 칸의 이름이 적용 시점을 말하고, 켜진 터널에서 이 값을 켜고 저장하면 지금은 켜진 채로 둔다고 알린다.
 const STARTUP_OFF_LABEL = "Off when the server starts";
-const STARTUP_OFF_LATER = "The tunnel stays on for now. It starts off from the next server start.";
+const STARTUP_OFF_LATER = "The tunnel stays on for now. It will be off when the server next starts.";
 
 /** 편집 화면을 열고 상태 영역이 그 포트의 상태를 받을 때까지 기다린 뒤, 시작 상태 칸을 켜고 저장한다. */
 const saveWithStartupOff = async (page: Page, port: number) => {
